@@ -100,6 +100,8 @@ async function run() {
   assert.strictEqual(fallback.safety.externalProviderUsed, false);
   assert.strictEqual(fallback.fallbackReason, "NETWORK_UNAVAILABLE");
   assert.strictEqual(fallback.metrics.canonicalIntent, "conversational_help");
+  assert.strictEqual(fallback.status, "degraded", "offline envelope must be uniformly marked degraded");
+  assert.ok(!fallback.runId, "offline greeting must not fabricate a runId");
 
   const cachedContext = Object.assign({}, context, {
     currentTeachingWeek: 2,
@@ -125,7 +127,28 @@ async function run() {
   assert.strictEqual(cached.intent, "get_today_courses");
   assert.match(cached.answer, /本机缓存/);
   assert.match(JSON.stringify(cached.cards), /高等数学/);
-  assert.strictEqual(cached.evidence.complete, true);
+  // 离线降级应答不得伪造核验语义：degraded 标注、无伪造 runId/steps、证据不标 verified/complete
+  assert.strictEqual(cached.status, "degraded", "offline cached answer must be marked degraded");
+  assert.ok(!cached.runId, "offline answer must not fabricate a runId");
+  assert.deepStrictEqual(cached.steps, [], "offline answer must not fabricate run steps");
+  assert.strictEqual(cached.evidence.verified, false, "offline cache must not claim verified evidence");
+  assert.strictEqual(cached.evidence.complete, false, "offline cache must not claim complete evidence");
+  assert.match(JSON.stringify(cached.cards), /离线降级/, "degraded disclosure badge must stay");
+
+  // 提醒语义收回服务端：离线路径不得本地改写偏好，不得伪造提醒类工具结果
+  storage[aiAssistantService.USER_PREFERENCES_KEY] = { defaultReminderLeadMinutes: 20 };
+  const reminderOffline = await aiAssistantService.chat("默认提前45分钟提醒我", context);
+  assert.strictEqual(reminderOffline.fallback, true, "reminder request offline stays a degraded fallback");
+  assert.ok(
+    !JSON.stringify(reminderOffline.toolCalls || []).includes("update_user_preference"),
+    "offline path must not fabricate preference tool calls"
+  );
+  assert.strictEqual(
+    (storage[aiAssistantService.USER_PREFERENCES_KEY] || {}).defaultReminderLeadMinutes,
+    20,
+    "offline path must not rewrite local reminder preferences"
+  );
+  delete storage[aiAssistantService.USER_PREFERENCES_KEY];
 
   aiTransportRouter.chat = async () => ({ protocolVersion: "agent.v9", answer: "bad protocol" });
   const incompatible = await aiAssistantService.chat("你好", context);

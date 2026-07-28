@@ -5,38 +5,10 @@
  * Cards / actionCommands travel as STATE_SNAPSHOT / custom payload.
  */
 
-const EVENT_MAP = Object.freeze({
-  "run.accepted": "RUN_STARTED",
-  "request.sanitized": "STEP_STARTED",
-  "understanding.started": "STEP_STARTED",
-  "understanding.completed": "STEP_FINISHED",
-  "understanding.fallback": "STEP_FINISHED",
-  "intent.resolved": "STEP_FINISHED",
-  "skill.selected": "STEP_FINISHED",
-  "plan.created": "STEP_FINISHED",
-  "plan.replan": "STEP_STARTED",
-  "planner.started": "STEP_STARTED",
-  "planner.completed": "STEP_FINISHED",
-  "planner.failed": "STEP_FINISHED",
-  "tool.started": "TOOL_CALL_START",
-  "tool.completed": "TOOL_CALL_END",
-  "tool.failed": "TOOL_CALL_END",
-  "provider.selected": "STEP_STARTED",
-  "provider.started": "STEP_STARTED",
-  "provider.completed": "STEP_FINISHED",
-  "provider.failed": "STEP_FINISHED",
-  "provider.shadow.started": "STEP_STARTED",
-  "provider.shadow.completed": "STEP_FINISHED",
-  "provider.shadow.failed": "STEP_FINISHED",
-  "response.composing": "TEXT_MESSAGE_START",
-  "result.verifying": "STEP_STARTED",
-  "verification.started": "STEP_STARTED",
-  "verification.completed": "STEP_FINISHED",
-  "run.completed": "RUN_FINISHED",
-  "run.degraded": "RUN_FINISHED",
-  "run.failed": "RUN_ERROR",
-  "run.cancelled": "RUN_ERROR",
-});
+// EVENT_MAP single source: generated from runEventCatalog.js EVENT_TYPES + this
+// adapter's former hand-written baseline (frozen in M5-T1, verified entry-equal).
+// Regenerate / guard: node tools/generate-agent-event-map.js --check
+const { EVENT_MAP } = require("../../shared/aguiEventMap.generated");
 
 function safeId(value, fallback = "") {
   return String(value == null ? fallback : value).slice(0, 120);

@@ -12,6 +12,12 @@ const { retrieveUserMemories } = require("./memoryRetriever");
 const { filterAndMergeCandidates } = require("./memoryPolicy");
 const safetyGuard = require("../safetyGuard");
 
+// 允许通过 ActionReceipt 提交记忆变更的命令白名单（与 routes/ai.js action-receipts 端点一致）：
+// setCurrentSchedule + manifest 已定义的提醒类命令 createCourseReminder/deleteReminder。
+// 白名单扩大不等于校验放松：pendingAction 的 command/runId/expiresAt/target 绑定对全部命令同样生效。
+const RECEIPT_COMMANDS = ["setCurrentSchedule", "createCourseReminder", "deleteReminder"];
+const REMINDER_RECEIPT_COMMANDS = ["createCourseReminder", "deleteReminder"];
+
 class MemoryController {
   constructor(options = {}) {
     this.conversationMemory = options.conversationMemory || defaultMemoryService;
@@ -375,13 +381,15 @@ class MemoryController {
   }
 
   /**
-   * 提交客户端 Action Receipt 带来的记忆变更（当前仅 setCurrentSchedule）。
+   * 提交客户端 Action Receipt 带来的记忆变更（setCurrentSchedule + 提醒类命令）。
    * 调用前提：路由层已完成 command/status 校验与目标存在性验证。
    * 持久化仅在 cloud_sync 模式生效；local_only 模式工作记忆由客户端本地持有，
    * 服务端返回规范化结果但不落盘。
    */
   commitActionReceipt(input = {}) {
     const memoryMode = input.memoryMode === "cloud_sync" ? "cloud_sync" : "local_only";
+    const command = String(input.command || "");
+    const isReminderCommand = REMINDER_RECEIPT_COMMANDS.indexOf(command) >= 0;
     const target = input.appliedTarget && typeof input.appliedTarget === "object"
       ? input.appliedTarget
       : null;
@@ -406,8 +414,7 @@ class MemoryController {
       if (!pending || pending.status !== "awaiting_receipt") {
         return { committed: false, reason: "ACTION_RECEIPT_NOT_PENDING", workingMemory: prevWorking };
       }
-      const command = String(input.command || "");
-      if (pending.command !== "setCurrentSchedule" || command !== pending.command) {
+      if (RECEIPT_COMMANDS.indexOf(pending.command) < 0 || command !== pending.command) {
         return { committed: false, reason: "ACTION_RECEIPT_COMMAND_MISMATCH", workingMemory: prevWorking };
       }
       const runId = String(input.runId || "");
@@ -425,28 +432,45 @@ class MemoryController {
         return { committed: false, reason: "ACTION_RECEIPT_TARGET_MISMATCH", workingMemory: prevWorking };
       }
     }
-    const workingMemory = updateWorkingMemory(prevWorking, {
-      message: "",
-      currentScheduleTarget: {
-        type: target.type === "class" ? "class" : "class",
-        detailId: String(target.detailId).slice(0, 128),
-        name: String(target.name).slice(0, 120),
-        term: String(target.term || "").slice(0, 40),
-      },
-      pendingAction: null,
-      lastResolvedEntity: {
-        type: "class",
-        id: String(target.detailId).slice(0, 128),
-        name: String(target.name).slice(0, 120),
-      },
-    });
-    const contextSlots = Object.assign({}, workingMemoryToSlots(workingMemory), {
-      lastTargetType: "class",
-      lastTargetName: workingMemory.currentScheduleTarget.name,
-      className: workingMemory.currentScheduleTarget.name,
-      preferredClassName: workingMemory.currentScheduleTarget.name,
-      q: workingMemory.currentScheduleTarget.name,
-    });
+    // 提醒类回执不改写 currentScheduleTarget（提醒目标不是课表目标）；
+    // 仅清除 pendingAction 并记录 lastResolvedEntity。课表回执维持既有语义。
+    const workingMemory = isReminderCommand
+      ? updateWorkingMemory(prevWorking, {
+        message: "",
+        pendingAction: null,
+        lastResolvedEntity: {
+          type: "reminder",
+          id: String(target.detailId).slice(0, 128),
+          name: String(target.name).slice(0, 120),
+        },
+      })
+      : updateWorkingMemory(prevWorking, {
+        message: "",
+        currentScheduleTarget: {
+          type: target.type === "class" ? "class" : "class",
+          detailId: String(target.detailId).slice(0, 128),
+          name: String(target.name).slice(0, 120),
+          term: String(target.term || "").slice(0, 40),
+        },
+        pendingAction: null,
+        lastResolvedEntity: {
+          type: "class",
+          id: String(target.detailId).slice(0, 128),
+          name: String(target.name).slice(0, 120),
+        },
+      });
+    const contextSlots = isReminderCommand
+      ? Object.assign({}, workingMemoryToSlots(workingMemory), {
+        lastTargetType: "reminder",
+        lastTargetName: String(target.name).slice(0, 120),
+      })
+      : Object.assign({}, workingMemoryToSlots(workingMemory), {
+        lastTargetType: "class",
+        lastTargetName: workingMemory.currentScheduleTarget.name,
+        className: workingMemory.currentScheduleTarget.name,
+        preferredClassName: workingMemory.currentScheduleTarget.name,
+        q: workingMemory.currentScheduleTarget.name,
+      });
     if (memoryMode !== "cloud_sync") {
       return {
         committed: false,
@@ -463,7 +487,7 @@ class MemoryController {
       cloudSyncEnabled: true,
       message: "",
       answer: "",
-      intentName: "set_current_schedule",
+      intentName: isReminderCommand ? "manage_course_reminders" : "set_current_schedule",
       context: input.context || {},
       runId: input.runId || "",
       status: "completed",

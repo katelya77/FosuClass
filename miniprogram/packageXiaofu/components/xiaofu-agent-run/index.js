@@ -1,29 +1,10 @@
-const PUBLIC_TOOL_LABELS = {
-  search_empty_rooms: "查询空教室",
-  get_today_courses: "查询今日课程",
-  get_tomorrow_courses: "查询明日课程",
-  get_next_course: "查询下一节课",
-  get_week_schedule: "查询本周课表",
-  get_teaching_week: "查询教学周",
-  get_term_calendar: "查询校历",
-  search_continuous_empty_rooms: "查询连续空教室",
-  search_school_index: "查询全校课程",
-  get_schedule_detail: "查询课表详情",
-  diagnose_data_status: "检查数据状态",
-  explain_personal_import: "说明个人课表导入",
-  recommend_meeting_time: "推荐空闲时间",
-  clarify_missing_slot: "补充查询条件",
-  get_campus_weather: "查询校区天气",
-  get_course_weather_advice: "查询天气建议",
-  search_campus_place: "查询校园地图",
-  get_campus_route: "查询校园地图",
-  get_classroom_location: "查询校园地图",
-  safety_guard: "安全检查",
-};
+// Tool Chinese labels are single-sourced from the capability manifest via
+// tools/generate-agent-event-map.js. Do not re-add a hand-maintained table.
+const { TOOL_LABELS } = require("../../../shared/agentLabels.generated.js");
 
 function publicToolLabel(name) {
   const key = String(name || "").toLowerCase();
-  if (PUBLIC_TOOL_LABELS[key]) return PUBLIC_TOOL_LABELS[key];
+  if (TOOL_LABELS[key]) return TOOL_LABELS[key];
   if (/查询|课程|教室|课表|教学周|导入|数据|天气|地图/.test(String(name || ""))) {
     return String(name || "").slice(0, 24);
   }

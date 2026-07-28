@@ -845,7 +845,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         ], value)),
     toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
     evidence: {
-      verified: true,
+      verified: false,
       checkedAt: new Date().toISOString(),
       source: "local-xiaofu-help",
     },
@@ -890,7 +890,7 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
     suggestions: ["可以查询什么", "课表数据是否最新"],
     toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
     evidence: {
-      verified: true,
+      verified: false,
       checkedAt: new Date().toISOString(),
       source: "local-app-navigation",
     },
@@ -955,17 +955,11 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
   };
 }
 
-function reportPipelineStatus(callbacks, text, type) {
-  if (callbacks && typeof callbacks.onStatus === "function" && text) {
-    const normalizedType = type || "status";
-    const friendlyText = normalizedType === "schedule"
-      ? "正在查询课表"
-      : normalizedType === "compose"
-        ? "已生成卡片"
-      : normalizedType === "tool-used"
-          ? "已核验课表数据"
-          : "正在处理本机结果";
-    callbacks.onStatus({ type: normalizedType, text: friendlyText });
+// 离线/降级链路的状态披露：只允许如实说明“正在处理本机结果”，
+// 不得按本地阶段伪造“正在查询课表/已生成卡片/已核验课表数据”等运行事件文案。
+function reportLocalDegradedStatus(callbacks) {
+  if (callbacks && typeof callbacks.onStatus === "function") {
+    callbacks.onStatus({ type: "status", text: "正在处理本机结果" });
   }
 }
 
@@ -1286,18 +1280,13 @@ function buildWeatherCard(weatherPayload) {
 
 async function buildWeatherResponse(message, clientContext = {}, route = {}, callbacks = {}) {
   const entities = route.entities || {};
-  reportPipelineStatus(callbacks, "正在查询天气…", "weather");
   const nextCourse = entities.needsPersonalSchedule ? findNextCourseForWeather(clientContext) : null;
-  if (entities.needsPersonalSchedule) {
-    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
-  }
   const weather = await weatherProvider.getCampusWeather({
     campus: entities.campus || entities.location || "",
     message,
     dateHint: entities.dateHint || "",
     topic: entities.topic || "",
   });
-  reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
   const weatherPayload = normalizeWeatherForCard(weather, route, nextCourse);
   return {
     answer: buildWeatherAnswerText(weatherPayload, route, nextCourse),
@@ -1492,26 +1481,12 @@ function resolveOfflineCanonicalIntent(message, route = {}, response = {}) {
   return agentCapabilityCompat.toCanonicalIntent(route.canonicalIntent || route.intent);
 }
 
-function normalizeClientFallbackSteps(response = {}) {
-  const taskSteps = Array.isArray(response.taskSteps) ? response.taskSteps : [];
-  if (taskSteps.length) {
-    return taskSteps.slice(0, 6).map((item, index) => ({
-      id: safeText(item.key || `offline-${index + 1}`, 48),
-      status: item.status === "failed" ? "failed" : "done",
-      tool: "",
-      durationMs: 0,
-      errorCode: "",
-      retried: false,
-    }));
-  }
-  return (Array.isArray(response.toolCalls) ? response.toolCalls : []).slice(0, 6).map((item, index) => ({
-    id: `offline-tool-${index + 1}`,
-    status: item.status === "failed" ? "failed" : "done",
-    tool: safeText(item.name, 80),
-    durationMs: 0,
-    errorCode: item.status === "failed" ? safeText(item.code, 80) : "",
-    retried: false,
-  }));
+// 离线/降级应答的证据标注：本机结果从未经过服务端核验，
+// 保留 term/week/checkedAt/sources 等事实字段，但绝不声称 verified/complete。
+function normalizeOfflineEvidence(evidence) {
+  const source = evidence && typeof evidence === "object" && !Array.isArray(evidence) ? evidence : null;
+  if (!source) return null;
+  return Object.assign({}, source, { verified: false, complete: false });
 }
 
 function canonicalizeFallbackCards(cards, canonicalIntent) {
@@ -1574,15 +1549,16 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
     protocolVersion: "agent.v2",
     requestId: meta.requestId,
     conversationId: meta.conversationId,
-    runId: createClientRunId("offline"),
-    status: source.success === false ? "failed" : (plain ? "completed" : "degraded"),
+    // 离线应答没有真实 Run：不得伪造 runId，也不得伪造 run 步骤列表。
+    runId: "",
+    status: source.success === false ? "failed" : "degraded",
     success: source.success !== false,
     fallback: true,
     fallbackLayer: "client",
     fallbackReason,
     // Product UX: plain offline greetings must not show task Evidence chrome
     presentationMode: plain ? "plain" : (source.presentationMode || ""),
-    evidence: plain ? null : (source.evidence || null),
+    evidence: plain ? null : normalizeOfflineEvidence(source.evidence),
     externalProviderUsed: false,
     intent: canonicalIntent,
     confidence: Number(route && route.confidence || 0),
@@ -1591,8 +1567,8 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
       id: OFFLINE_SKILL_BY_INTENT[canonicalIntent] || "knowledge_search",
       version: "1.0.0",
     },
-    plan: plain ? [] : (source.plan || []),
-    steps: plain ? [] : normalizeClientFallbackSteps(source),
+    plan: [],
+    steps: [],
     observations: [],
     cards: plain ? [] : canonicalizeFallbackCards(source.cards, canonicalIntent),
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2) : [],
@@ -1670,8 +1646,9 @@ function buildCachedPersonalScheduleResponse(message, clientContext = {}, route 
     suggestions: ["查看本周课表", "下一节课在哪里", "打开个人课表同步"],
     toolCalls: [{ name: canonicalIntent, status: "success", summary: "读取本机脱敏课表缓存" }],
     evidence: {
-      verified: true,
-      complete: true,
+      // 本机缓存未经过服务端核验：如实标注，不绕过证据标签降级守卫。
+      verified: false,
+      complete: false,
       term: clientContext.term || clientContext.selectedTerm || summary.term || "",
       currentWeek: targetWeek || "",
       releaseVersion: clientContext.releaseVersion || "",
@@ -1728,85 +1705,9 @@ async function callServerAgent(message, resolvedContext, options = {}) {
 }
 
 
-function parseLeadMinutesFromMessage(message, fallback) {
-  const text = String(message || "");
-  if (/半(?:个)?小时/.test(text)) return 30;
-  const hour = text.match(/提前\s*(\d+(?:\.\d+)?)\s*(?:个)?小时/);
-  if (hour) return Math.min(180, Math.max(5, Math.round(Number(hour[1]) * 60)));
-  const minutes = text.match(/(?:上课前|提前|默认)\s*(\d{1,3})\s*分钟/);
-  if (minutes) return Math.min(180, Math.max(5, Number(minutes[1]) || fallback || 20));
-  const alt = text.match(/(\d{1,3})\s*分钟(?:后)?(?:提醒|上课前提醒)/);
-  if (alt) return Math.min(180, Math.max(5, Number(alt[1]) || fallback || 20));
-  return fallback || 0;
-}
-
-function isReminderAssistMessage(message) {
-  const text = String(message || "");
-  return /提醒|通知/.test(text) || /默认提醒|上课提醒|课程提醒|提醒时间/.test(text);
-}
-
-function buildLocalReminderAssistResponse(message, clientContext = {}) {
-  const text = String(message || "").trim();
-  const prefs = getUserPreferences();
-  const lead = parseLeadMinutesFromMessage(text, Number(prefs.defaultReminderLeadMinutes || 20) || 20);
-  const wantsDefaultOnly = /默认提醒|提醒时间|设置.*提醒|设定.*提醒|调整.*提醒时间/.test(text)
-    && !/创建|以后上课|以后每|每节课|教室变化|取消|删除|关闭/.test(text);
-  if (wantsDefaultOnly) {
-    const appliedLead = lead >= 5 ? lead : 20;
-    saveUserPreferences(Object.assign({}, prefs, { defaultReminderLeadMinutes: appliedLead }));
-    return standardizeClientFallback({
-      answer: lead >= 5
-        ? `已把默认提醒时间设为上课前 ${appliedLead} 分钟。点「一键创建并授权通知」可直接按该时间创建上课提醒；也可说“以后上课前${appliedLead}分钟提醒我”。`
-        : `已智能设为上课前 ${appliedLead} 分钟（常用默认）。点「一键创建并授权通知」可立刻创建；想改成 30/45/60 分钟直接告诉我即可。`,
-      cards: [{
-        type: "reminder",
-        title: "默认提醒已更新",
-        subtitle: `上课前 ${appliedLead} 分钟`,
-        actions: [
-          {
-            label: "一键创建并授权通知",
-            type: "confirmReminder",
-            payload: { operation: "create", leadMinutes: appliedLead, scope: "all_courses" },
-          },
-          { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
-          { label: "默认改成30分钟", type: "retry", payload: { message: "默认提前30分钟提醒我" } },
-        ],
-      }],
-      suggestions: [`以后上课前${appliedLead}分钟提醒我`, "默认提前30分钟提醒我", "查看今日课表"],
-      toolCalls: [{ name: "update_user_preference", status: "success", summary: `defaultReminderLeadMinutes=${appliedLead}` }],
-      metrics: { intentName: "update_user_preference", fallback: true },
-      presentationMode: "single_card",
-    }, message, { intent: "update_user_preference" }, "LOCAL_REMINDER_PREF", {});
-  }
-
-  const summary = clientContext.currentScheduleSummary || {};
-  const hasSchedule = summary.enabled === true && Array.isArray(summary.courses) && summary.courses.length > 0;
-  return standardizeClientFallback({
-    answer: hasSchedule
-      ? `可以按你的课表创建上课前提醒（默认提前 ${lead >= 5 ? lead : 20} 分钟）。点“配置课程提醒”可直接完成创建与微信服务通知授权。`
-      : "创建上课提醒需要先导入个人课表。导入后可一键配置提前提醒，并可选微信服务通知。",
-    cards: [{
-      type: "reminder",
-      title: hasSchedule ? "智能课程提醒" : "需要个人课表",
-      subtitle: hasSchedule ? "确定性工具创建，不依赖增强表达层" : "导入后即可配置提醒",
-      actions: hasSchedule
-        ? [
-          { label: "配置课程提醒", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
-          { label: "管理已有提醒", type: "manageReminders", payload: { sheet: "reminders" } },
-        ]
-        : [
-          { label: "导入课表", type: "navigate", url: "/pages/personal-sync/personal-sync", payload: {} },
-          { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
-        ],
-    }],
-    suggestions: hasSchedule
-      ? ["打开智能课程提醒", "查看今日课表", "默认提前30分钟提醒我"]
-      : ["如何导入个人课表", "打开智能课程提醒"],
-    toolCalls: [{ name: "manage_course_reminders", status: hasSchedule ? "success" : "need_context", summary: "local-reminder-assist" }],
-    metrics: { intentName: "manage_course_reminders", fallback: true },
-    presentationMode: "single_card",
-  }, message, { intent: "manage_course_reminders" }, "LOCAL_REMINDER_ASSIST", {});
-}
+// 提醒语义已收回服务端：客户端不再本地解析提醒分钟数、不改写本机偏好、
+// 不伪造偏好更新或提醒管理的工具结果。
+// 提醒类消息一律走服务端链；离线时按普通降级应答处理（见 offlineChat 兜底）。
 
 async function offlineChat(message, context, options = {}) {
   const resolvedContext = context || buildClientContext();
@@ -1817,22 +1718,13 @@ async function offlineChat(message, context, options = {}) {
   });
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
-  reportPipelineStatus(callbacks, "正在匹配查询内容…", "understand");
-
-  if (isReminderAssistMessage(message)) {
-    reportPipelineStatus(callbacks, "正在整理提醒方案…", "compose");
-    return buildLocalReminderAssistResponse(message, localContext);
-  }
+  reportLocalDegradedStatus(callbacks);
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
-    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
-    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildScheduleStatusResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
-    reportPipelineStatus(callbacks, "正在查找使用说明…", "help");
-    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildHelpResponse(message, localContext, route);
   }
 
@@ -1841,24 +1733,19 @@ async function offlineChat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
-    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
       return buildCachedPersonalScheduleResponse(message, localContext, route);
     }
-    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildPersonalScheduleClarificationResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.APP_NAVIGATION) {
-    reportPipelineStatus(callbacks, "正在查找入口…", "navigation");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
-    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildAppNavigationResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_QUERY) {
-    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
       return buildCachedPersonalScheduleResponse(message, localContext, route);
     }
@@ -1867,7 +1754,6 @@ async function offlineChat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHOOL_KNOWLEDGE) {
-    reportPipelineStatus(callbacks, "正在查询校园信息…", "knowledge");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
     const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
@@ -1876,17 +1762,11 @@ async function offlineChat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) {
-    reportPipelineStatus(callbacks, "正在查找入口…", "navigation");
     const navigationResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext, {
       preferredEntryType: "navigation",
       intentName: "navigation",
     });
     if (navigationResponse) return navigationResponse;
-  }
-
-  if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
-    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
-    return buildSmalltalkResponse(message, localContext, route);
   }
 
   return buildSmalltalkResponse(message, localContext, route);
@@ -1978,7 +1858,7 @@ async function chat(message, context, options = {}) {
     // Only transport/network/5xx fall into offline tools; client/server 4xx must surface.
     if (!isClientFallbackTransportError(error)) throw error;
     const reason = safeText(error && (error.code || error.reasonCode || error.legacyCode), 120) || "NETWORK_UNAVAILABLE";
-    // Offline path still smart-handles reminder preference / create assists.
+    // 提醒等写语义不在离线路径本地处理；统一走纯降级缓存应答。
     return buildClientFallback(message, resolvedContext, options, metadata, reason);
   }
 
@@ -2014,8 +1894,6 @@ module.exports = {
   buildClientContext,
   buildProactiveWorkspace,
   buildSmalltalkResponse,
-  buildLocalReminderAssistResponse,
-  isReminderAssistMessage,
   standardizeClientFallback,
   chat,
   clearPendingClarification,

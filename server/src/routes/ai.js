@@ -22,6 +22,7 @@ const agentReadinessService = require("../services/ai/agentReadinessService");
 const agentRunEventService = require("../services/ai/agentRunEventService");
 const agentProtocol = require("../services/ai/agentProtocol");
 const aguiAdapter = require("../services/ai/aguiAdapter");
+const actionCommandContract = require("../services/ai/actionCommandContract");
 
 const router = express.Router();
 
@@ -345,16 +346,26 @@ router.post("/agent/agui", scheduleLimiter, optionalSessionGuard, validateJsonBo
 /**
  * 客户端 Action 执行回执（Receipt）。
  * 闭环约定：Action 在客户端真实执行后回报结果；仅当服务端验证通过
- * （command 合法 + status=success + appliedTarget 仍存在于当前激活索引）
- * 才提交工作记忆（cloud_sync 持久化）。失败回执仅记录，不提交记忆。
+ * （command 合法 + status=success + appliedTarget 达成态校验：课表目标须仍在当前激活索引，
+ * 提醒目标须在服务端提醒存储达成对应状态）才提交工作记忆（cloud_sync 持久化）。
+ * 失败回执仅记录，不提交记忆。
  */
+// 提醒类回执命令：以 manifest/actionCommandContract 为权威源（receiptRequired 的提醒动作）。
+// 白名单扩大不等于校验放松：runId/target/过期/principal 校验对新增命令同样生效；
+// 未在契约内的 command 仍拒绝（COMMAND_UNKNOWN）。
+const REMINDER_RECEIPT_COMMANDS = ["createCourseReminder", "deleteReminder"].filter((command) => {
+  const definition = actionCommandContract.getActionDefinition(command);
+  return Boolean(definition && definition.receiptRequired === true);
+});
 router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, validateJsonBody(["command", "runId", "conversationId", "status", "appliedTarget", "errorCode", "memoryMode", "cloudSyncEnabled"]), (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const body = req.body || {};
     const command = String(body.command || "").slice(0, 40);
     const status = String(body.status || "").slice(0, 24);
-    if (command !== "setCurrentSchedule") {
+    const isScheduleReceipt = command === "setCurrentSchedule";
+    const isReminderReceipt = REMINDER_RECEIPT_COMMANDS.indexOf(command) >= 0;
+    if (!isScheduleReceipt && !isReminderReceipt) {
       return res.status(400).json({
         success: false,
         code: "COMMAND_UNKNOWN",
@@ -385,17 +396,75 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
         serverTime: new Date().toISOString(),
       });
     }
-    // 目标必须仍存在于当前激活课表索引（防伪造回执/防过期数据）。
-    const index = releaseService.readActiveIndex("class") || {};
-    const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
-    const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
-    if (!found) {
-      return res.status(409).json({
-        success: false,
-        code: "SCHEDULE_TARGET_NOT_FOUND",
-        message: "目标课表已不在当前版本中。",
-        serverTime: new Date().toISOString(),
-      });
+    let receiptTarget;
+    if (isScheduleReceipt) {
+      // 目标必须仍存在于当前激活课表索引（防伪造回执/防过期数据）。
+      const index = releaseService.readActiveIndex("class") || {};
+      const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+      const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
+      if (!found) {
+        return res.status(409).json({
+          success: false,
+          code: "SCHEDULE_TARGET_NOT_FOUND",
+          message: "目标课表已不在当前版本中。",
+          serverTime: new Date().toISOString(),
+        });
+      }
+      receiptTarget = {
+        type: "class",
+        detailId,
+        name: String(found.name || found.className || name).slice(0, 120),
+        term: String(appliedTarget.term || "").slice(0, 40),
+      };
+    } else {
+      // 提醒类目标校验：以服务端提醒存储的达成态为准（防伪造回执）。
+      // createCourseReminder 要求提醒已按 idempotencyKey 真实落库；
+      // deleteReminder 要求目标提醒已不存在（幂等删除达成态）。
+      const reminderPrincipal = resolveReminderPrincipal(req);
+      if (!reminderPrincipal || reminderPrincipal.authenticated !== true) {
+        return res.status(401).json({
+          success: false,
+          code: "PRINCIPAL_REQUIRED",
+          message: "需要有效小程序会话才能回传提醒执行回执。",
+          serverTime: new Date().toISOString(),
+        });
+      }
+      if (command === "createCourseReminder") {
+        const appliedReminder = defaultCourseReminderService.findByIdempotencyKey({
+          principal: reminderPrincipal,
+          idempotencyKey: detailId,
+        });
+        if (!appliedReminder) {
+          return res.status(409).json({
+            success: false,
+            code: "REMINDER_TARGET_NOT_FOUND",
+            message: "目标提醒未在服务端落库。",
+            serverTime: new Date().toISOString(),
+          });
+        }
+      } else {
+        let reminderStillExists = false;
+        try {
+          defaultCourseReminderService.get({ principal: reminderPrincipal, reminderId: detailId });
+          reminderStillExists = true;
+        } catch (lookupError) {
+          if (!lookupError || lookupError.code !== "REMINDER_NOT_FOUND") throw lookupError;
+        }
+        if (reminderStillExists) {
+          return res.status(409).json({
+            success: false,
+            code: "REMINDER_TARGET_STILL_EXISTS",
+            message: "目标提醒尚未删除。",
+            serverTime: new Date().toISOString(),
+          });
+        }
+      }
+      receiptTarget = {
+        type: "reminder",
+        detailId,
+        name,
+        term: "",
+      };
     }
     const principal = defaultMemoryService.resolvePrincipal({
       serverSession: req.fosuSession,
@@ -434,12 +503,7 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
       memoryMode,
       command,
       runId: String(body.runId || "").slice(0, 100),
-      appliedTarget: {
-        type: "class",
-        detailId,
-        name: String(found.name || found.className || name).slice(0, 120),
-        term: String(appliedTarget.term || "").slice(0, 40),
-      },
+      appliedTarget: receiptTarget,
     });
     if (memoryMode === "cloud_sync" && commitResult.committed !== true) {
       return res.status(409).json({

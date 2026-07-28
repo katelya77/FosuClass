@@ -52,6 +52,10 @@ const {
   QUICK_ACTIONS,
 } = require("../../../shared/aiCapabilityRegistry.generated.js");
 
+// Tool/card Chinese labels are single-sourced from the capability manifest via
+// tools/generate-agent-event-map.js. Do not re-add hand-maintained label tables.
+const { TOOL_LABELS, CARD_TYPE_LABELS } = require("../../../shared/agentLabels.generated.js");
+
 const WELCOME_EXAMPLES = [
   "查班级本周课表",
   "今天有什么课",
@@ -273,48 +277,6 @@ const SAFETY_MODE_LABELS = {
   "tool-grounded": "已核验",
   fallback: "降级模式",
   "fallback-mock": "已降级",
-};
-
-const TOOL_LABELS = {
-  search_empty_rooms: "空教室",
-  get_today_courses: "今日课表",
-  get_campus_weather: "天气",
-  get_course_weather_advice: "天气建议",
-  search_campus_place: "校园地图",
-  get_campus_route: "校园地图",
-  get_classroom_location: "校园地图",
-  search_school_index: "全校索引",
-  search_school_schedule_local: "全校课表",
-  fosu_rag_retrieve: "校园信息",
-  get_schedule_detail: "课表详情",
-  diagnose_data_status: "数据状态",
-  explain_personal_import: "导入指引",
-  recommend_meeting_time: "时间推荐",
-  clarify_missing_slot: "追问",
-  safety_guard: "安全拦截",
-};
-
-const CARD_TYPE_LABELS = {
-  empty_room: "空教室",
-  schedule_result: "课表",
-  schedule: "课表",
-  schedule_status: "数据状态",
-  clarification: "追问",
-  schedule_candidate: "候选",
-  personal_schedule: "个人课表",
-  school_knowledge: "校园信息",
-  navigation: "常用入口",
-  help: "使用说明",
-  import_guide: "导入指引",
-  not_found: "暂未匹配",
-  teacher: "教师",
-  course: "课程",
-  weather: "校区天气",
-  weather_card: "校区天气",
-  diagnosis: "数据状态",
-  guide: "指引",
-  reminder: "提醒",
-  generic: "结果",
 };
 
 const CARD_TITLE_FALLBACKS = {
@@ -578,8 +540,17 @@ function mapToolName(name) {
   return "校园工具";
 }
 
+// Offline-only card types that are exact aliases of manifest card types resolve
+// to the manifest key before lookup (M5-T4 key consolidation, labels unchanged).
+const CARD_TYPE_LABEL_ALIASES = {
+  weather_card: "weather",
+  schedule_result: "schedule",
+  schedule_status: "diagnosis",
+};
+
 function mapCardTypeLabel(type) {
-  return CARD_TYPE_LABELS[String(type || "generic").toLowerCase()] || "结果";
+  const key = String(type || "generic").toLowerCase();
+  return CARD_TYPE_LABELS[CARD_TYPE_LABEL_ALIASES[key] || key] || "结果";
 }
 
 function inferEvidenceLabel(source = {}) {
@@ -4005,15 +3976,18 @@ Page({
   },
 
   // 回传 Action 执行回执（Receipt）。服务端验证通过后才会提交记忆变更；
-  // 失败静默（不影响用户已完成的本地切换，下次会话会以本地目标为准）。
+  // 返回 Promise：resolve 为服务端应答（无通道/异常时为 null），调用方可据此
+  // 决定是否在 UI 标注「已创建/已回执」；setCurrentSchedule 链忽略返回值，行为不变。
   postAgentActionReceipt(receipt) {
-    if (!agentRunClient || typeof agentRunClient.postActionReceipt !== "function") return;
-    agentRunClient.postActionReceipt(Object.assign({}, receipt, {
+    if (!agentRunClient || typeof agentRunClient.postActionReceipt !== "function") {
+      return Promise.resolve(null);
+    }
+    return agentRunClient.postActionReceipt(Object.assign({}, receipt, {
       runId: receipt.runId || this._responseActionRunId || "",
       conversationId: this.data.activeConversationId || "",
       memoryMode: this.data.memoryMode || "local_only",
       cloudSyncEnabled: this.data.memoryMode === "cloud_sync",
-    })).catch(() => {});
+    })).then((ack) => ack || null).catch(() => null);
   },
 
   buildActionBusInput(command, type, action, payload) {
@@ -4146,6 +4120,35 @@ Page({
     });
   },
 
+  // 回执未获服务端确认时的如实降级：提醒写入已落库（configure 成功），
+  // 但不得伪造「已创建」已回执状态；徽标明确标注「已创建未回执」。
+  markReminderCardReceiptUnconfirmed(context, result) {
+    const messageIndex = Number(context && context.messageIndex);
+    const cardIndex = Number(context && context.cardIndex);
+    const actionIndex = Number(context && context.actionIndex);
+    if (!Number.isFinite(messageIndex) || !Number.isFinite(cardIndex) || !Number.isFinite(actionIndex)) return;
+    const base = `messages[${messageIndex}].displayCards[${cardIndex}]`;
+    const badges = ((context.card && context.card.badges) || []).filter((item) => item !== "未执行写入");
+    if (badges.indexOf("已创建未回执") < 0) badges.unshift("已创建未回执");
+    if (result && result.duplicate && badges.indexOf("已存在") < 0) badges.unshift("已存在");
+    this.setData({
+      [`${base}.badges`]: badges,
+      [`${base}.actions[${actionIndex}]`]: {
+        label: "管理提醒",
+        type: "manageReminders",
+        url: "",
+        payload: { sheet: "reminders" },
+      },
+      [`${base}.primaryActions`]: [{
+        label: "管理提醒",
+        type: "manageReminders",
+        url: "",
+        payload: { sheet: "reminders" },
+        originalIndex: actionIndex,
+      }],
+    });
+  },
+
   async performReminderCreateFromConfig(source) {
     const leadMinutes = Math.max(5, Math.min(180, Number(source.leadMinutes || 20) || 20));
     const scope = safeText(source.scope, 32) || "all_courses";
@@ -4231,19 +4234,48 @@ Page({
         this.showActionFallback(errText);
         return;
       }
-      const channelText = result.reminder && result.reminder.channel === "wechat_subscription"
-        ? "已创建微信服务通知提醒"
-        : "已创建应用内提醒";
-      wx.showToast({ title: result.duplicate ? "提醒已经存在" : channelText, icon: "none", duration: 2400 });
-      this.setData({
-        agentActivityState: "complete",
-        statusCapsuleText: result.duplicate ? "完成 · 提醒已经存在" : "完成 · 提醒已创建",
-        statusCapsuleDetail: result.reminder && result.reminder.channel === "wechat_subscription"
-          ? "已记录本次微信订阅授权；额度按平台一次性规则消耗。"
-          : "当前使用应用内提醒；可在提醒面板补充微信服务通知授权。",
-        statusCapsuleExpanded: false,
+      // ActionReceipt 闭环：写入已真实落库，回传执行回执；仅回执被服务端接受后
+      // 才在卡片/胶囊标注「已创建」，回传失败如实降级（不伪造已回执）。
+      const receiptLeadMinutes = Math.max(5, Math.min(180, Number(source.leadMinutes || 20) || 20));
+      const receiptAck = await this.postAgentActionReceipt({
+        command: "createCourseReminder",
+        status: "success",
+        runId: String(this.data.activeRunId || ""),
+        appliedTarget: {
+          type: "reminder",
+          detailId: String(source.idempotencyKey || "").slice(0, 128),
+          name: `课程提醒（提前${receiptLeadMinutes}分钟）`.slice(0, 120),
+        },
       });
-      this.markReminderCardCreated(context || {}, result);
+      const receiptAccepted = Boolean(receiptAck && receiptAck.success === true);
+      if (receiptAccepted) {
+        const channelText = result.reminder && result.reminder.channel === "wechat_subscription"
+          ? "已创建微信服务通知提醒"
+          : "已创建应用内提醒";
+        wx.showToast({ title: result.duplicate ? "提醒已经存在" : channelText, icon: "none", duration: 2400 });
+        this.setData({
+          agentActivityState: "complete",
+          statusCapsuleText: result.duplicate ? "完成 · 提醒已经存在" : "完成 · 提醒已创建",
+          statusCapsuleDetail: result.reminder && result.reminder.channel === "wechat_subscription"
+            ? "已记录本次微信订阅授权；额度按平台一次性规则消耗。"
+            : "当前使用应用内提醒；可在提醒面板补充微信服务通知授权。",
+          statusCapsuleExpanded: false,
+        });
+        this.markReminderCardCreated(context || {}, result);
+      } else {
+        wx.showToast({
+          title: result.duplicate ? "提醒已经存在，回执未确认" : "提醒已创建，回执未确认",
+          icon: "none",
+          duration: 2400,
+        });
+        this.setData({
+          agentActivityState: "complete",
+          statusCapsuleText: result.duplicate ? "完成 · 提醒已经存在（回执未确认）" : "完成 · 提醒已创建（回执未确认）",
+          statusCapsuleDetail: "提醒已生效；执行回执未获服务端确认，可在提醒面板查看。",
+          statusCapsuleExpanded: false,
+        });
+        this.markReminderCardReceiptUnconfirmed(context || {}, result);
+      }
       this.scheduleStatusCapsuleReset();
     } catch (error) {
       try { wx.hideLoading(); } catch (_) { /* ignore */ }
