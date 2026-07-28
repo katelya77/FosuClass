@@ -10,7 +10,6 @@ const CLOUDBASE_CLIENT_CONFIG_PATH = path.resolve(SERVER_ROOT, "..", "miniprogra
 
 const ENVIRONMENTS = ["public", "trial", "dev"];
 const EXTERNAL_PROVIDERS = ["cloudbase-openai", "deepseek", "coze"];
-const RUNTIME_SECRET_OVERRIDE_KEYS = new Set(["COZE_API_KEY"]);
 
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
@@ -242,8 +241,14 @@ function readRuntimeValuesResult() {
   }
 }
 
+// 进程级紧急开关：这些键允许运维用 process.env 显式覆盖运行时存储（kill switch），
+// 其余键一律以持久化运行时存储（后台保存的配置文件）为准。
+// 背景：历史上 process.env 优先会导致容器外写入（如配置脚本）被服务进程里的
+// 陈旧 env 遮盖，后台切换 Provider 必须重启才生效——存储必须是唯一权威源。
+const PROCESS_ENV_PRIORITY_KEYS = new Set(["AI_AGENT_ENABLED", "AI_UNDERSTANDING_ENABLED"]);
+
 function getEffectiveValue(envFileValues, runtimeValues, key) {
-  if (RUNTIME_SECRET_OVERRIDE_KEYS.has(key) && runtimeValues[key]) return runtimeValues[key];
+  if (runtimeValues[key] && !PROCESS_ENV_PRIORITY_KEYS.has(key)) return runtimeValues[key];
   return process.env[key] || runtimeValues[key] || envFileValues[key] || DEFAULTS[key] || "";
 }
 
