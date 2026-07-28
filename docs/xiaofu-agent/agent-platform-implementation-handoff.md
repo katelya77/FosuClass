@@ -1,111 +1,65 @@
-# 小佛助手 Agent 平台化迁移：实施交接文档
+# 小佛助手 Agent 平台化迁移：实施交接文档（最终版）
 
-> 本文是**安全收口检查点**的交接记录，不是完成报告。所有"已完成"均附验证证据；未验证项明确标注。禁止把本文未标验证的内容当作已完成。
+> 本文是 `refactor/xiaofu-agent-platform-v2` 分支 M0–M7 全部里程碑的交接记录。所有"已完成"均附验证证据（进度文件 / 测试套件实跑结果）；未验证项明确标注。禁止把本文未标验证的内容当作已完成。
+> 任务书与里程碑定义：`docs/xiaofu-agent/agent-platform-migration-plan.md`；最终交付报告：`output/agent-platform-final-delivery.md`。
 
 ## 1. 分支与基线
 
-- 基线：`main @ 33ae65fc`（"feat: unify Xiaofu model-first task agent chain (#35)"），工作区干净起步
-- 当前分支：`refactor/xiaofu-agent-platform-v2`（基于含全部改动的工作区创建，未合并 main、未推送）
-- 检查点提交：本分支 HEAD（`chore(xiaofu): checkpoint agent platform migration phases 1-6`，hash 以 `git log --oneline -1` 为准）
+- 基线：`main @ 33ae65fc`（"feat: unify Xiaofu model-first task agent chain (#35)"）
+- 工作分支：`refactor/xiaofu-agent-platform-v2`（未合并 main、未推送、未部署）
+- 里程碑提交链（每个里程碑独立 commit，含验收证据文件）：
 
-## 2. 全部变更文件（36 个路径）
-
-**Modified（27）**：
-| 文件 | 归属阶段 | 改动内容 |
+| 里程碑 | Commit | 内容 |
 |---|---|---|
-| `miniprogram/config/cloudbase.js` | 1 | `AI_AGENT_RUNS_TRANSPORT_ENABLED` 回滚开关（默认 true=runs 传输） |
-| `miniprogram/services/aiAssistantService.js` | 1 | `callServerAgent` 移除客户端合成状态文案 |
-| `miniprogram/services/aiTransportRouter.js` | 1 | 生产链切 runs+RunEvent 轮询；`oracleChat` 仅在开关关闭时生效；提交文案改中性"正在建立校园任务" |
-| `package.json` | 1+2 | 4 个新脚本（generate/check/test goal-contract-v2、test:xiaofu-runs-transport） |
-| `server/config/agent-capability-manifest.json` | 5 | 16 个事实工具的 verification 策略字段（outputSchema/successPostconditions/emptyResultPolicy 等） |
-| `server/src/modules/ai-provider/routes.js` | 4 | `POST /ai-provider/probe` 真实探测端点；diagnose 接 probe |
-| `server/src/routes/admin.js` | 4 | status API 输出 `authoritative` 五元组 |
-| `server/src/routes/adminPages.js` | 4 | 阶段分配下拉、readiness-matrix 表（含"已配置未验证"徽标）、立即探测按钮 |
-| `server/src/routes/ai.js` | 4 | readiness 错误分支补 `configuredAvailable/providerVerified:false`（不再常量化） |
-| `server/src/services/ai/agentReadinessService.js` | 4 | readiness verified 语义 |
-| `server/src/services/ai/agentService.js` | 2+3 | 2642→733 行薄编排；goalContractV2 转换接入 |
-| `server/src/services/ai/capabilityManifestService.js` | 5 | manifest verification 策略字段加载校验 |
-| `server/src/services/ai/memory/workingMemory.js` | 2 | `normalizeStoredGoalContract`（V2 存储 + V1 升级 + 垃圾丢弃） |
-| `server/src/services/ai/planner/plannerModelAdapter.js` | 4 | Planner 阶段链显式化 |
-| `server/src/services/ai/providerChainService.js` | 4 | `resolveStageChain`、`probeProvider` 复活、`isProviderVerified` |
-| `server/src/services/ai/providerConfigService.js` | 4 | 五元组 `getAuthoritativeProviderConfig`、阶段字段、`recomputeChainForPrimary`（单选=链首） |
-| `server/src/services/ai/providerReadinessService.js` | 4 | `configuredAvailable`/`verified` 分离 |
-| `server/src/services/ai/providerRuntimeConfigStore.js` | 4 | 阶段字段持久化白名单 |
-| `server/src/services/ai/structuredInferenceService.js` | 4 | structured 调用走阶段链 |
-| `server/src/services/ai/understanding/goalContract.js` | 2 | V1 标注兼容层 |
-| `server/src/services/ai/understanding/understandingService.js` | 4 | Understanding 阶段链显式化 |
-| `tools/run-agent-foundation-tests.js` | 2 | 加入 goal-contract-v2 测试 |
-| `tools/test-agent-model-first-understanding.js` | 2 | 断言更新为 V2 升级结果 |
-| `tools/test-cloudbase-ai-router.js` | 1 | 显式置 runs 开关=false（测 legacy 回滚路径） |
-| `tools/test-planner-model-adapter.js` | 3 | 静态断言跟随 runtime/plannerCoordinator.js 新边界（强度未减） |
-| `tools/test-xiaofu-memory-integration.js` | 1 | 文案断言跟随中性提交文案 |
+| M0 | `064de232` | 基线认证：五门禁全绿记录，失败分类规则（A 本分支引入 / B 环境受限 / C 旧测试断言过期 / D 旧测试逻辑缺陷） |
+| M1 | `c6c2b301` | Provider 控制面专项认证：`tools/test-provider-control-plane.js` 11 组（五元组权威配置 / 单选=链首 / 三阶段显式链 / probe / verified 语义 / public 恒零外部调用），接入 foundation 套件 |
+| M2 | `cdf1b276` | Verification 运行时化：`toolResultVerifier` + `departureChainVerifier` 落盘并接线 `verificationCoordinator`，`verification.started/completed` RunEvent 入 catalog；15 组新测试入 phase3 |
+| M3 | `64a00347` | 搜索契约统一：school-search 契约单源生成 + 服务端统一 service + `/release-pack/search` 路由 + Agent 工具同源 + 客户端切换（离线 local-fallback 真实降级标识）+ URL 单实现；15 组测试入守卫 |
+| M4 | `52e93424` | FollowUpResolver 收敛：唯一 V2 实现（11 组测试），三处旧解析器退役，working state 八字段对齐（pendingClarification 5 键统一形态） |
+| M5 | `e7f31eaf` | AG-UI 事件层：事件映射单源生成（--check 守卫）+ 网关无 session 提权收紧 + 客户端五处伪造状态清除 + 提醒 ActionReceipt 全链闭环（21 项新测试）+ 卡片标签单源化 |
+| M6 | `356014df` | 单源工具规划 + Durable 层：意图→工具映射五因子交集单源、kernel 旧链移除（单一 PlannerCoordinator）、恢复逻辑下放 skill、MAX_REPLAN 口径一致（=2）、`durable/`（哈希 token、跨进程 resume、提醒 receipt_wait 接线） |
+| M7 | 见 §7 状态表 | 终验与交付：release-gate 首跑分类、本文档、最终交付报告、敏感信息终扫 |
 
-**Untracked（9）**：`docs/xiaofu-agent/agent-platform-reorientation-audit.md`（审计）、`output/phase5-verification-progress.md`（阶段5 coder 进度）、`server/config/school-search-contract.json`（阶段6契约设计稿）、`server/src/services/ai/runtime/`（阶段3：13 文件）、`server/src/services/ai/understanding/goalContractV2{,.generated}.js`（阶段2）、`server/src/services/ai/verification/verificationPolicy.js`（阶段5）、`tools/generate-goal-contract-v2.js`、`tools/test-goal-contract-v2.js`（阶段2）、`tools/test-xiaofu-runs-transport.js`（阶段1）
+## 2. 架构现状（模块边界）
 
-## 3. 阶段状态
+**服务端 Agent Runtime 协调层** `server/src/services/ai/runtime/`（13 文件）：`agentService.chat` → `requestContextAssembler` → `understandingCoordinator` → `goalContractResolver`（V2 转换+槽位回填）→ `plannerCoordinator`（唯一规划入口）→ `skillRouter` / `toolExecutor` → `verificationCoordinator` → `providerOrchestrator` → `responseComposerBridge` → `memoryCoordinator`；`runEventPublisher` / `actionReceiptCoordinator` / `shared` 横向支撑。agentService 为薄编排（2642→733 行），对外 19 个导出签名不变。
 
-| 阶段 | 状态 | 验证证据 |
-|---|---|---|
-| 0 方向级审计 | ✅ 完成 | 文档已交付 |
-| 1 传输真相（RunEvent 接入生产链） | ✅ 完成 | 全量回归 120/120、foundation 31/31（当时运行）；收口时定向复测 PASS |
-| 2 GoalContract V2 | ✅ 完成 | foundation 31/31 含新测试；收口复测 `test-goal-contract-v2` PASS |
-| 3 agentService 拆 12 模块 | ✅ 完成（附保留项） | phase3 套件全绿、final-convergence 全绿；**ai-competition 与全量 regression 在阶段 3 后未重跑** |
-| 4 Provider 权威控制面 | 🟡 代码基本落地、**缺专项测试与全量验证** | 五元组/单选=链首/阶段链/probe/verified/后台 UI 均在代码中；收口定向测试（readiness、runtime-matrix、policy、shadow-eval、admin 四项）全 PASS；`tools/test-provider-control-plane.js` **未创建**（coder 超时） |
-| 5 Verification 语义化 | 🟡 部分完成 | 已落盘：`verification/verificationPolicy.js`、manifest 16 工具策略、加载校验（load smoke 过）；**未落盘**：`toolResultVerifier.js`、verificationCoordinator 接线、verification RunEvent、出发链核验、全部专项测试 |
-| 6 搜索统一 Search Contract | 🔴 仅契约设计稿 | 仅 `school-search-contract.json`（school-search.v1：entityTypes/requestFields/responseFields/decision/navigation/migrationNote）；生成器、服务端统一实现、客户端去重、测试全部未做 |
-| 7-12 | ⬜ 未开始 | — |
+**关键子系统**：
+- `understanding/goalContractV2.js` + `.generated.js`：V2 契约手写核心 + manifest 单源生成（`tools/generate-goal-contract-v2.js`，--check 守卫）
+- `verification/`：`verificationPolicy`（manifest 策略加载校验）+ `toolResultVerifier`（运行时消费者）+ `departureChainVerifier`（出发链六项核验）
+- `durable/`：`taskStore` / `waitForEvent` / `resume`——轻量持久任务（哈希 token、跨进程 resume、提醒 receipt_wait）；无定期 sweep，惰性过期
+- Provider 控制面：`providerConfigService.getAuthoritativeProviderConfig`（五元组）→ admin status/API/UI；`providerChainService.resolveStageChain` ← understanding/planner/structured 三调用点；`probeProvider` ← `/api/admin/ai-provider/probe`；单选保存即重算链首
+- 搜索统一：`server/config/school-search-contract.json` 单源生成链 → 服务端 service → `/release-pack/search` → Agent 工具与全校页同源
+- FollowUpResolver：`server/src/services/ai/understanding/followUpResolver.js` 唯一实现，旧三处解析器已退役（grep 唯一性证据见 M4 进度文件）
+- 小程序 AG-UI 事件消费：事件映射由 runEventCatalog 单源生成，客户端只渲染服务端真实状态（十态）；`AI_AGENT_RUNS_TRANSPORT_ENABLED` 为 runs 传输回滚开关
 
-## 4. 新增模块用途与调用关系
+## 3. 测试与验证状态
 
-**`server/src/services/ai/runtime/`（阶段 3，13 文件）**：agentService.chat 的协调层。`chat()` → `requestContextAssembler`（请求准备）→ `understandingCoordinator`（理解+规则兜底）→ `goalContractResolver`（V2 转换+槽位回填）→ `plannerCoordinator`（modelGenerate 注入+kernel）→ `toolExecutor`/`skillRouter` → `verificationCoordinator` → `providerOrchestrator`（Provider 链+降级）→ `responseComposerBridge`（响应组装）→ `memoryCoordinator`（记忆提交）；`runEventPublisher`/`actionReceiptCoordinator`/`shared` 横向支撑。对外 API 19 个导出签名不变。
+**M6 收尾（全部实际运行，全绿）**：五门禁（foundation 33/33、regression 126/126、ai-competition、final-convergence、phase3）+ phase2（conversation-memory/kb-control-plane/kb-mcp）+ unified-chain 守卫。
 
-**阶段 2**：`goalContractV2.js`（手写核心：normalize/validate/fromV1Contract/fromIntent/toLegacyV2 适配器族）+ `goalContractV2.generated.js`（manifest 生成：GOAL_IDS/ENTITY_ROLES/GOAL_EFFECTS/SCHEMA）。agentService 在 understanding 后经 `fromV1Contract` 转 V2 存入 working memory；协议输出形态不变。
+**M7 release-gate 首跑**：`npm run test:agent-release-gate`（14 步 fail-fast）首跑结果与 A/B/C/D 分类见 `output/agent-platform-final-delivery.md` 测试矩阵节。已知历史存量（M3 对照 main @33ae65fc 确认非本分支引入）：11 个 school/cache 链测试基线红（test-school-cache-schema、test-school-last-known-good、test-school-release-key、test-school-request-timeout、test-teacher-static-search、test-teacher-static-search-real-index、test-empty-room-cache、test-static-release-manifest-first、test-startup-last-good-first、test-semester-lifecycle、test-static-detail-first）。
 
-**阶段 4**：`getAuthoritativeProviderConfig(env)`（providerConfigService）→ admin status API + adminPages UI；`resolveStageChain(stage, runtimeConfig)`（providerChainService）← understandingService/plannerModelAdapter/structuredInferenceService 三个调用点；`probeProvider` ← `POST /api/admin/ai-provider/probe`；`saveConfig` 内 `recomputeChainForPrimary` 保证单选=链首。
+**未验证（如实分级）**：三 Provider staging live test（需真实凭据环境，未做）；真机验证（未做）；体验版（未上传）；生产（未发布）。`release:preflight` / docker smoke 等环境依赖项以 gate 实测分类为准。
 
-**阶段 5（已落盘部分）**：`verification/verificationPolicy.js`（策略 normalize/校验）← capabilityManifestService 加载 manifest 时校验。**尚无运行时消费者**——策略字段目前是"死配置"，这是阶段 5 最关键的未完成点。
+## 4. 已知遗留（全部记录，未静默）
 
-## 5. 多 coder 重叠修改的文件
+1. `get_course_route` manifest `emptyResultPolicy.codes` 缺口（M2 冻结，留 manifest 负责方裁定）
+2. `parseDateOffset` "大后天"分支顺序、legacy 空教室 inherited/replaced 双列（M4 锁定未修，标【疑似缺陷】）
+3. `request.js` GET dedupe 竞态隐患（搜索链已 `dedupe:false` 规避，其余页面链未动）
+4. `responseComposer` TOOL_PUBLIC_LABELS 第三份手工进度文案表（未收口）
+5. `xiaofu-reminder-sheet` 删除提醒未接 receipt（端点与派生已就绪）
+6. durable 层无定期 sweep（惰性过期正确性已保证）
+7. 跨 run 旧卡边界（M5 记录）
 
-- `package.json`：阶段 1（主会话）+ 阶段 2 coder 各加脚本，均为追加式，无冲突
-- `server/src/routes/ai.js`：阶段 4 coder 独占（readiness verified），与阶段 1 的 runs 路由无交集
-- `understandingService.js`、`plannerModelAdapter.js`、`structuredInferenceService.js`：阶段 4 独占（阶段链），与阶段 3 的 runtime 拆分无交集（阶段 3 未改这三文件内部）
-- 无同一函数被两个 coder 修改的情况；所有重叠均为文件级追加
+## 5. 回滚路径
 
-## 6. 已运行测试及真实结果
+- 逐里程碑 revert：M6 `356014df` → M5 `e7f31eaf` → M4 `52e93424` → M3 `64a00347` → M2 `cdf1b276` → M1 `c6c2b301` → M0 `064de232`（逆序 revert 可回到 `main @ 33ae65fc`）
+- runs 传输开关：`miniprogram/config/cloudbase.js` `AI_AGENT_RUNS_TRANSPORT_ENABLED=false` 回退 legacy 轮询链（`tools/test-cloudbase-ai-router.js` 覆盖该回滚路径）
+- Release Pack / last-known-good 机制全程未改动
 
-**收口时运行（2026-07-28 00:1x，全部实际运行）**：
-- 语法检查：全部变更 JS `node --check` 通过；7 个核心模块 `require` 加载冒烟通过
-- 定向测试 10/10 PASS：test-provider-readiness、test-provider-runtime-matrix、test-ai-provider-policy、test-provider-shadow-eval、test-planner-model-adapter、test-agent-model-first-understanding、test-goal-contract-v2、test-xiaofu-runs-transport、test-agent-run-events、test-agent-terminal-truth
-- admin 4/4 PASS：check-admin-inline-script、check-admin-page、test-admin-ai-provider-ux、test-admin-api-contract
-- `check:teacher-search-contract`：current
-- 敏感信息扫描：git diff + 全部未跟踪文件，Token/Key/Cookie/OpenID/密码模式零命中
+## 6. 安全纪律
 
-**此前运行（阶段 1-3 验收时）**：全量 regression 120/120、foundation 31/31、phase3 套件全绿、final-convergence 全绿、ai-competition 通过（阶段 1 时）
-
-**未运行**：阶段 3 之后的 ai-competition 与全量 regression；阶段 4/5/6 改动后的任何重型套件。`test:agent-release-gate` 从未运行。
-
-## 7. 当前失败测试
-
-无已知失败——收口时运行的定向测试全部通过。但这**不代表全量套件绿**（见上节"未运行"）。复现命令：`npm run test:agent-regression`（约 10 分钟）、`npm run test:ai-competition`。
-
-## 8. Provider / Verification / Search Contract 完成度
-
-- **Provider（阶段 4）**：代码 ~90% 落地。已验证：既有 provider 测试全 PASS、admin UI 静态检查过。未验证：单选=第一跳的端到端保存→调用链实测（缺 test-provider-control-plane.js）、probe 的真实网络行为（需凭据环境）、阶段链在 trial 的真实调用顺序
-- **Verification（阶段 5）**：~30%。策略定义与加载校验完成但无运行时消费者；核验事件、出发链核验、测试全部未做
-- **Search Contract（阶段 6）**：~10%。仅契约 JSON 设计稿，无任何代码消费者
-
-## 9. 下一会话的最小续作入口（按序）
-
-1. **先跑门禁确认基线**：`npm run test:agent-foundation && npm run test:agent-phase3 && npm run test:agent-final-convergence && npm run test:ai-competition && npm run test:agent-regression`——若有失败，先区分"本分支引入"还是"基线已有"，修本分支引入的
-2. **补阶段 4 专项测试**：新建 `tools/test-provider-control-plane.js`（设计已在代码中：保存单选→`getProviderChain` 链首断言、`getAuthoritativeProviderConfig` 五元组形态、`resolveStageChain` 三阶段、probe 桩测试、public 恒 mock），跑通后阶段 4 才算完成
-3. **阶段 5 续作**：实现 `verification/toolResultVerifier.js`（消费 verificationPolicy.js 已 normalize 的策略）→ 接线 `runtime/verificationCoordinator.js` → runEventCatalog 加 `verification.started/completed` + `agentActivityState.js` 映射 → `test-agent-verification.js`
-4. **阶段 6 续作**：`tools/generate-school-search-contract.js` 生成器 → 全校页四类搜索走服务端 → 删客户端重复过滤 → URL 构建统一 → `test-search-contract-unified.js`
-5. 阶段 7-12 按原任务书推进；**coder 委派必须要求写进度文件**（本次 3 个 coder 均出现 20-40 分钟静默停滞，进度文件机制只在最后恢复的 coder 上生效过一次）
-
-## 10. 已知风险与注意事项
-
-- manifest 的 verification 策略字段已生效于加载校验：若策略 JSON 有误服务会启动失败——目前 load smoke 通过，但改 manifest 后必须重跑加载冒烟
-- `school-search-contract.json` 尚无消费者，删除它不影响任何运行代码
-- 三个后台 coder（agent-7/8/9）已停止且不再 resume；其上下文保留在会话档案中，如需可凭 agent_id 恢复，但建议按第 9 节重做未完成部分（更小、更可验证）
-- 本检查点不保证全量回归绿；发布/合并前必须过 `test:agent-release-gate`
+- 全分支敏感信息扫描（diff vs main + 新增文件）：Token/Key/Cookie/OpenID/学号/密码模式零命中（M7 终扫结果见交付报告）
+- public 模式外部 Provider 调用恒为 0（M1 控制面测试锁定）
+- fixture 全部为无凭据形态字符串
+- 未 push、未 PR、未 merge、未部署、未上传体验版

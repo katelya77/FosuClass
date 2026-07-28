@@ -6,7 +6,7 @@
 - `unified-model-first-architecture.md`：当前架构、协议、状态树、Provider、搜索、语音与 UI 边界。
 - `runtime-truth-layer.md`：Run Event、Readiness 与前端展示真相。
 - `capability-contract-design.md` / `capability-contract.generated.md`：唯一 Capability Manifest 及生成物。
-- `planner-and-observation-loop.md`：受约束计划、验证与最多一次 Replan。
+- `planner-and-observation-loop.md`：受约束计划、验证与有界 Replan（MAX_REPLAN ≤ 2，口径以 `server/src/services/ai/runtime/plannerCoordinator.js` 为准）。
 - `conversation-memory.md`：Principal、记忆模式与会话隔离。
 - `provider-readiness.md`：Provider 可用性和客户端安全状态。
 - `course-task-agent-v1.md`：课程提醒等既有任务能力的运行与配置说明。
