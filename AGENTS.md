@@ -80,7 +80,7 @@ npm run test:xiaofu-memory-integration
 ## Final Convergence（Agent V2 RC）
 
 - 在线决策核心仍是服务端 Agent Kernel；Planner 为受约束结构化计划（public 确定性，trial/dev 可模型规划且失败回退）。
-- Observation → Verify → Replan 最多 1 次；不得伪造 Thinking / Replan / Tool 状态。
+- Observation → Verify → Replan 最多 2 次（以代码现实为准：实际生效上限为 `planSchema.MAX_REPLAN = 2`）；不得伪造 Thinking / Replan / Tool 状态。
 - Hybrid RAG 仅覆盖公开知识，禁止向量化课表事实；Embedding 不可用时自动 Lexical 退化。
 - Response Composer 决定展示层级：普通对话不得出现 generic「小佛助手」卡与 Evidence 堆叠。
 - 首次开启 session_state/cloud_sync 必须 Upsert 服务端会话；用户错误一律中文映射。
