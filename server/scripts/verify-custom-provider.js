@@ -24,12 +24,17 @@ async function main() {
   const statusBefore = providerConfigService.getStatus();
   const trialBefore = Object.assign({}, (statusBefore.environmentProfiles || {}).trial || {});
   const activeBefore = statusBefore.activeEnvironment || "trial";
+  const ENTRY_LABEL = "DeepSeek 兼容端点（e2e）";
+  const existingEntry = (statusBefore.customProviders || []).find(
+    (item) => item && item.label === ENTRY_LABEL && item.protocol === "openai"
+  );
 
   try {
-    // 1) 注册自定义条目（OpenAI 协议，DeepSeek 端点）
+    // 1) 注册自定义条目（OpenAI 协议，DeepSeek 端点；幂等：同标签复用已有 id）
     const saved = providerConfigService.saveCustomProvider({
       entry: {
-        label: "DeepSeek 兼容端点（e2e）",
+        id: existingEntry && existingEntry.id || undefined,
+        label: ENTRY_LABEL,
         protocol: "openai",
         baseUrl: "https://api.deepseek.com",
         apiKey,
@@ -39,11 +44,21 @@ async function main() {
       },
       setActive: true,
     });
-    const entries = (saved.customProviders || []).map((item) => ({
+    // 清理历史重复同标签条目（早期版本脚本重复创建过）
+    const keptId = (existingEntry && existingEntry.id)
+      || ((saved.customProviders || []).find((item) => item && item.label === ENTRY_LABEL) || {}).id
+      || "";
+    for (const item of saved.customProviders || []) {
+      if (item && item.label === ENTRY_LABEL && item.protocol === "openai" && item.id !== keptId) {
+        providerConfigService.deleteCustomProvider({ id: item.id });
+      }
+    }
+    const statusAfterDedupe = providerConfigService.getStatus();
+    const entries = (statusAfterDedupe.customProviders || []).map((item) => ({
       id: item.id, label: item.label, protocol: item.protocol, usable: item.usable, hasKey: item.apiKeyConfigured === true,
     }));
-    summary.steps.saved = { count: entries.length, entries, activeCustomId: saved.activeCustomId || "" };
-    const entryId = saved.activeCustomId || (entries[0] && entries[0].id) || "";
+    summary.steps.saved = { count: entries.length, entries, activeCustomId: statusAfterDedupe.activeCustomId || "" };
+    const entryId = keptId || statusAfterDedupe.activeCustomId || (entries[0] && entries[0].id) || "";
 
     // 2) 真实 GET /models
     try {
