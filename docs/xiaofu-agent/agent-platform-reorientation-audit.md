@@ -161,7 +161,7 @@
 | `miniprogram/services/cloudbaseHunyuanService.js` | 仅 `tools/test-cloudbase-ai-router.js:9` 引用（399 行客户端直连混元） |
 | `ai-assistant.js:262-270` `PROVIDER_LABELS` 死代码 + :1388-1389 未渲染的默认 providerLabel | 潜伏假象 |
 | `providerChainService.js:337-389` `probeProvider` 死代码 | 改造为真实 probe 或删除（本方案选择改造，见重构方案） |
-| docs/xiaofu-agent 下 6 篇旧基线审计快照（`capability-truth-matrix.md`、`final-product-convergence-audit.md`、`goal-action-runtime-audit.md`、`core-experience-root-cause.md`、`memory-autonomy-audit.md`、`product-experience-audit.md` + `product-experience/`） | 已被 unified-model-first 两篇吸收，README 已声明替代但未删除 |
+| docs/xiaofu-agent 下 6 篇旧基线审计快照（`capability-truth-matrix.md`、`final-product-convergence-audit.md`、`goal-action-runtime-audit.md`、`core-experience-root-cause.md`、`memory-autonomy-audit.md`、`product-experience-audit.md` + `product-experience/`） | 已被 unified-model-first 两篇吸收，README 已声明替代但未删除（**已于 M7 收口经用户二次授权执行删除**，Git 历史可恢复） |
 
 ### 6.2 收敛为单一路径（保留能力，消灭平行）
 

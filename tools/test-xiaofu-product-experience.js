@@ -26,7 +26,7 @@ const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxm
 const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 const pageJs = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 const tokens = read("miniprogram/packageXiaofu/styles/xiaofu-tokens.wxss");
-const audit = read("docs/xiaofu-agent/product-experience-audit.md");
+const audit = read("docs/xiaofu-agent/unified-model-first-root-cause.md");
 
 // --- 1–3: no default feedback-row / thumbs ---
 assert.ok(!/class="[^"]*feedback-row/.test(wxml), "default page must not render feedback-row");
@@ -316,7 +316,11 @@ assert.ok(
 assert.ok(tokens.includes("--xf-primary") && tokens.includes("--xf-bg"), "design tokens defined");
 assert.ok(wxss.includes("xiaofu-tokens.wxss"), "page imports tokens");
 assert.ok(audit.includes("信息架构") || audit.includes("根因"), "audit document present");
-assert.ok(audit.includes("max-width: 40%") || audit.includes("max-width"), "audit covers more-menu truncation");
+const headerMenuMetaRule = getRule(wxss, ".header-menu-row-meta");
+assert.ok(
+  headerMenuMetaRule && !/max-width:\s*40%/.test(headerMenuMetaRule) && !/text-overflow:\s*ellipsis/.test(headerMenuMetaRule),
+  "deprecated header-menu truncation contract removed from WXSS"
+);
 
 // --- package hygiene: main package gate still wired ---
 const pkg = JSON.parse(read("package.json"));
