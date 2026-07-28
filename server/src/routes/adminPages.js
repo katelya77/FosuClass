@@ -14362,7 +14362,7 @@ const adminConsoleHtml = `<!doctype html>
             strictJsonMode: document.getElementById("cpStrictJson") ? document.getElementById("cpStrictJson").checked : true
           }
         };
-        if (!payload.entry.baseUrl || !/^https:\/\//i.test(payload.entry.baseUrl)) {
+        if (!payload.entry.baseUrl || !/^https:\\/\\//i.test(payload.entry.baseUrl)) {
           showToast("Base URL 必须是 https 地址。", "warning");
           return;
         }
@@ -14384,7 +14384,7 @@ const adminConsoleHtml = `<!doctype html>
 
       function deleteCustomProviderEntry(id) {
         var entry = apcFindEntry(id);
-        if (!window.confirm("确认删除自定义 Provider「" + (entry ? entry.label : id) + "」？\n该操作会立即生效。")) return;
+        if (!window.confirm("确认删除自定义 Provider「" + (entry ? entry.label : id) + "」？\\n该操作会立即生效。")) return;
         api("/api/admin/ai-provider/custom-provider/delete", { method: "POST", body: JSON.stringify({ id: id }) })
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
