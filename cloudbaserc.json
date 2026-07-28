@@ -44,6 +44,20 @@
         "FOSU_AGENT_API_BASE": "https://class.katelya.eu.org"
       },
       "installDependency": true
+    },
+    {
+      "name": "hunyuanRelay",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 60,
+      "memorySize": 256,
+      "description": "OpenAI-compatible Hunyuan relay (growth-plan compliant, hunyuan-v3 group)",
+      "envVariables": {
+        "NODE_ENV": "production",
+        "HUNYUAN_GROUP": "hunyuan-v3",
+        "HUNYUAN_DEFAULT_MODEL": "hy3-preview"
+      },
+      "installDependency": true
     }
   ]
 }
