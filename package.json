@@ -601,6 +601,7 @@
     "check:agent-event-map": "node tools/generate-agent-event-map.js --check",
     "test:provider-readiness": "node tools/test-provider-readiness.js",
     "test:provider-shadow-eval": "node tools/test-provider-shadow-eval.js",
+    "test:custom-providers": "node tools/test-custom-providers.js",
     "test:provider-runtime-matrix": "node tools/test-provider-runtime-matrix.js",
     "test:provider-control-plane": "node tools/test-provider-control-plane.js",
     "test:coze-provider-v3": "node tools/test-coze-provider-v3.js",

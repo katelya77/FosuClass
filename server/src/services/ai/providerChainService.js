@@ -2,17 +2,27 @@ const mockProvider = require("./providers/mockProvider");
 const deepseekProvider = require("./providers/deepseekProvider");
 const cozeProvider = require("./providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("./providers/cloudbaseOpenaiProvider");
+const customOpenaiProvider = require("./providers/customOpenaiProvider");
+const customAnthropicProvider = require("./providers/customAnthropicProvider");
+const customProviderStore = require("./customProviderStore");
 
 const PROVIDERS = {
   mock: mockProvider,
   deepseek: deepseekProvider,
   coze: cozeProvider,
   "cloudbase-openai": cloudbaseOpenaiProvider,
+  "custom-openai": customOpenaiProvider,
+  "custom-anthropic": customAnthropicProvider,
 };
 const PROVIDER_ALIASES = Object.freeze({
   hunyuan3: "cloudbase-openai",
   "hunyuan-3": "cloudbase-openai",
   "tencent-hunyuan3": "cloudbase-openai",
+  "openai-compatible": "custom-openai",
+  "custom-openai-compatible": "custom-openai",
+  anthropic: "custom-anthropic",
+  claude: "custom-anthropic",
+  "custom-claude": "custom-anthropic",
 });
 
 // trial/dev 推荐：Coze Agent → CloudBase 内置模型 → DeepSeek → 确定性 mock
@@ -163,6 +173,9 @@ function isProviderConfigured(name, runtimeConfig = {}) {
   }
   if (name === "cloudbase-openai") {
     return configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false") === "true" && Boolean(cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig));
+  }
+  if (name === "custom-openai" || name === "custom-anthropic") {
+    return Boolean(customProviderStore.resolveEntry(runtimeConfig, name === "custom-openai" ? "openai" : "anthropic"));
   }
   return false;
 }
