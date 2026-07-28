@@ -1,4 +1,4 @@
-﻿@import "../../styles/xiaofu-tokens.wxss";
+@import "../../styles/xiaofu-tokens.wxss";
 
 .reminder-mask {
   position: fixed;
