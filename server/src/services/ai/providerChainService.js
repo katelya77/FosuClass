@@ -185,7 +185,7 @@ function isCircuitOpen(name) {
   return true;
 }
 
-function markSuccess(name, latencyMs) {
+function markSuccess(name, latencyMs, meta = {}) {
   const item = readState(name);
   item.health = "ok";
   item.lastSuccessAt = nowIso();
@@ -195,6 +195,13 @@ function markSuccess(name, latencyMs) {
   item.circuitBreaker = { state: "closed", openedAt: "", nextProbeAt: "" };
   item.callCount += 1;
   item.latencies = item.latencies.concat(latencyMs).slice(-100);
+  recordCallEvent({
+    provider: publicProviderName(name),
+    ok: true,
+    latencyMs: Math.max(0, Math.round(Number(latencyMs) || 0)),
+    kind: String(meta.kind || "").slice(0, 24),
+    stage: String(meta.stage || "").slice(0, 24),
+  });
 }
 
 function classifyFailure(error = {}) {
@@ -210,7 +217,19 @@ function classifyFailure(error = {}) {
   return code || "provider_failed";
 }
 
-function markFailure(name, reason) {
+/**
+ * 瞬时网络错误允许同 Provider 立即重试一次（不断线重试会让链抖动直接降级到下一 Provider）。
+ * 只对连接级错误重试；4xx/鉴权/限流/超时（已等满超时预算）不重试。
+ */
+const TRANSIENT_RETRY_REASONS = new Set(["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "UND_ERR_SOCKET", "socket"]);
+
+function isTransientRetryable(reason) {
+  const code = String(reason || "");
+  if (TRANSIENT_RETRY_REASONS.has(code)) return true;
+  return /socket hang up|ECONNRESET|EAI_AGAIN/i.test(code);
+}
+
+function markFailure(name, reason, meta = {}) {
   const item = readState(name);
   const cfg = getCircuitConfig();
   item.health = reason === "not_configured" ? "disabled" : "degraded";
@@ -226,6 +245,28 @@ function markFailure(name, reason) {
       nextProbeAt: new Date(openedAt + cfg.cooldownMs).toISOString(),
     };
   }
+  recordCallEvent({
+    provider: publicProviderName(name),
+    ok: false,
+    latencyMs: Math.max(0, Math.round(Number(meta.latencyMs) || 0)),
+    reason: String(reason || "").slice(0, 80),
+    kind: String(meta.kind || "").slice(0, 24),
+    stage: String(meta.stage || "").slice(0, 24),
+  });
+}
+
+const CALL_LOG_LIMIT = 120;
+const callLog = [];
+
+/** 进程内调用日志（环形缓冲）：只记录元信息（provider/阶段/耗时/成败分类），绝不记录消息内容。 */
+function recordCallEvent(entry) {
+  callLog.push(Object.assign({ at: new Date().toISOString() }, entry));
+  if (callLog.length > CALL_LOG_LIMIT) callLog.splice(0, callLog.length - CALL_LOG_LIMIT);
+}
+
+function getRecentCallEvents(limit = 60) {
+  const size = Math.max(1, Math.min(CALL_LOG_LIMIT, Number(limit) || 60));
+  return callLog.slice(-size).reverse();
 }
 
 function emitProviderEvent(options, event) {
@@ -389,7 +430,7 @@ async function probeProvider(name, input = {}) {
   }
   const runtimeConfig = input.providerRuntimeConfig || {};
   if (typeof input.probeGenerate !== "function" && !isProviderConfigured(canonical, runtimeConfig)) {
-    markFailure(canonical, "not_configured");
+    markFailure(canonical, "not_configured", { kind: "probe" });
     return { provider: displayName, health: "disabled", latencyMs: 0, reasonCode: "NOT_CONFIGURED" };
   }
   const started = Date.now();
@@ -421,12 +462,12 @@ async function probeProvider(name, input = {}) {
       throw error;
     }
     const latencyMs = Date.now() - started;
-    markSuccess(canonical, latencyMs);
+    markSuccess(canonical, latencyMs, { kind: "probe" });
     return { provider: displayName, health: "ok", latencyMs, reasonCode: "" };
   } catch (error) {
     const reasonCode = classifyFailure(error);
     const latencyMs = Date.now() - started;
-    markFailure(canonical, reasonCode);
+    markFailure(canonical, reasonCode, { kind: "probe", latencyMs });
     return { provider: displayName, health: "degraded", latencyMs, reasonCode };
   }
 }
@@ -461,7 +502,6 @@ async function generateWithChain(input = {}, options = {}) {
       });
     }
     const provider = getProviderModule(name);
-    const started = Date.now();
     emitProviderEvent(options, {
       type: "provider.selected",
       status: "selected",
@@ -469,50 +509,63 @@ async function generateWithChain(input = {}, options = {}) {
       purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
       reasonCode: name === "coze" ? "PROVIDER_TEMPORARY" : "PROVIDER_SELECTED",
     });
-    emitProviderEvent(options, {
-      type: "provider.started",
-      status: "started",
-      provider: name === "cloudbase-openai" ? "hunyuan3" : name,
-      purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
-      providerUsed: true,
-    });
-    try {
-      const generate = options.structured === true && typeof provider.generateStructured === "function"
-        ? provider.generateStructured
-        : provider.generate;
-      const payload = await generate(Object.assign({}, input, {
-        providerRuntimeConfig: runtimeConfig,
-        principal: input.principal || options.principal || null,
-      }));
-      const latencyMs = Date.now() - started;
-      markSuccess(name, latencyMs);
+    // 瞬时连接错误（ECONNRESET/socket hang up）同 Provider 原地重试一次，避免链路抖动直接降级。
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const started = Date.now();
       emitProviderEvent(options, {
-        type: "provider.completed",
-        status: "success",
+        type: "provider.started",
+        status: "started",
         provider: name === "cloudbase-openai" ? "hunyuan3" : name,
         purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
-        latencyMs,
         providerUsed: true,
       });
-      const shadowEvaluation = scheduleShadowEvaluation(input, options, name);
-      return Object.assign({}, payload, {
-        provider: payload.provider || name,
-        providerChain: attempts.concat({ provider: name, status: "success", latencyMs }),
-        shadowEvaluation,
-      });
-    } catch (error) {
-      const reason = classifyFailure(error);
-      markFailure(name, reason);
-      attempts.push({ provider: name, status: "failed", reason });
-      emitProviderEvent(options, {
-        type: "provider.failed",
-        status: "failed",
-        provider: name === "cloudbase-openai" ? "hunyuan3" : name,
-        purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
-        latencyMs: Date.now() - started,
-        reasonCode: String(reason || "provider_failed").slice(0, 80),
-        providerUsed: false,
-      });
+      try {
+        const generate = options.structured === true && typeof provider.generateStructured === "function"
+          ? provider.generateStructured
+          : provider.generate;
+        const payload = await generate(Object.assign({}, input, {
+          providerRuntimeConfig: runtimeConfig,
+          principal: input.principal || options.principal || null,
+        }));
+        const latencyMs = Date.now() - started;
+        markSuccess(name, latencyMs, {
+          kind: options.structured === true ? "structured" : "generate",
+          stage: String(options.stage || options.purpose || input.purpose || ""),
+        });
+        emitProviderEvent(options, {
+          type: "provider.completed",
+          status: "success",
+          provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+          purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+          latencyMs,
+          providerUsed: true,
+        });
+        const shadowEvaluation = scheduleShadowEvaluation(input, options, name);
+        return Object.assign({}, payload, {
+          provider: payload.provider || name,
+          providerChain: attempts.concat({ provider: name, status: "success", latencyMs }),
+          shadowEvaluation,
+        });
+      } catch (error) {
+        const reason = classifyFailure(error);
+        markFailure(name, reason, {
+          kind: options.structured === true ? "structured" : "generate",
+          stage: String(options.stage || options.purpose || input.purpose || ""),
+          latencyMs: Date.now() - started,
+        });
+        emitProviderEvent(options, {
+          type: "provider.failed",
+          status: "failed",
+          provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+          purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+          latencyMs: Date.now() - started,
+          reasonCode: String(reason || "provider_failed").slice(0, 80),
+          providerUsed: false,
+        });
+        if (attempt === 1 && isTransientRetryable(reason)) continue;
+        attempts.push({ provider: name, status: "failed", reason });
+        break;
+      }
     }
   }
   const fallback = mockProvider.generate(input);
@@ -550,6 +603,7 @@ function getStatus(runtimeMode = "competition", runtimeConfig = {}) {
 
 function resetForTest() {
   state.clear();
+  callLog.length = 0;
 }
 
 /**
@@ -571,6 +625,7 @@ module.exports = {
   getLastExternalCall,
   getProviderChain,
   getProviderModule,
+  getRecentCallEvents,
   getStatus,
   isCircuitOpen,
   isProviderConfigured,
