@@ -10,7 +10,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(os.tmpdir(), `fosu-custom-providers-test-${process.pid}.json`);
+// 放在独立子目录内：runtimeStore 会 chmod 配置目录，直接落 /tmp 在 CI 会 EPERM。
+const TEST_CONFIG_DIR = path.join(os.tmpdir(), `fosu-custom-providers-test-${process.pid}`);
+process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(TEST_CONFIG_DIR, "ai-provider-config.json");
 process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY = "a".repeat(64);
 
 const customProviderStore = require("../server/src/services/ai/customProviderStore");
@@ -20,7 +22,7 @@ const customOpenaiProvider = require("../server/src/services/ai/providers/custom
 const customAnthropicProvider = require("../server/src/services/ai/providers/customAnthropicProvider");
 
 function cleanup() {
-  try { fs.unlinkSync(process.env.FOSU_AI_PROVIDER_CONFIG_PATH); } catch (error) { /* ignore */ }
+  try { fs.rmSync(TEST_CONFIG_DIR, { recursive: true, force: true }); } catch (error) { /* ignore */ }
 }
 
 async function main() {
