@@ -458,5 +458,6 @@
 |---|---|---|
 | M0 | ✅ 完成（064de232） | `output/agent-platform-m0-baseline.md`，五门禁全绿 |
 | M1 | ✅ 完成（c6c2b301） | `output/agent-platform-m1-progress.md`，`tools/test-provider-control-plane.js` 11/11 PASS，已接入 foundation 套件；未发现真实缺陷，M1-T3 跳过 |
-| M2 | ✅ 代码与测试完成（待 commit，需用户确认） | `output/agent-platform-m2-progress.md`；toolResultVerifier + departureChainVerifier 落盘并接线；`test-agent-verification` 6 组 + `test-agent-departure-chain-verification` 9 组全绿，均接入 phase3 套件；phase3 26 文件 / foundation 32/32 / final-convergence 全绿；`runEventCatalog.js` diff 主 Agent 已审（纯追加）。遗留：`get_course_route` manifest `emptyResultPolicy.codes` 缺口冻结留 M3 裁定 |
-| M3–M7 | 未开始 | — |
+| M2 | ✅ 完成（cdf1b276） | `output/agent-platform-m2-progress.md`；toolResultVerifier + departureChainVerifier 落盘并接线；`test-agent-verification` 6 组 + `test-agent-departure-chain-verification` 9 组全绿，均接入 phase3 套件；phase3 26 文件 / foundation 32/32 / final-convergence 全绿；`runEventCatalog.js` diff 主 Agent 已审（纯追加）。遗留：`get_course_route` manifest `emptyResultPolicy.codes` 缺口冻结留 M3 裁定 |
+| M3 | ✅ 代码与测试完成（待 commit，需用户确认） | `output/agent-platform-m3-progress.md`；school-search 契约单源生成链 + 服务端统一 service + `/release-pack/search` 路由 + Agent 工具同源 + 客户端切换（离线 local-fallback 真实降级标识）+ URL 单实现 + classroomSearch 单源；`test-search-contract-unified` 15 组全绿并入 unified-chain/foundation 守卫；unified-chain 全绿、foundation 33/33。遗留：11 个 school/cache 链测试基线红（HEAD 对照确认非本分支引入，留 M7 分类）；request.js GET dedupe 竞态隐患（搜索链已规避，其余未动）；M2 遗留 `get_course_route` manifest `emptyResultPolicy.codes` 缺口待本里程碑后由 manifest 负责方裁定 |
+| M4–M7 | 未开始（M4-T1 已在并行窗口完成：followUpResolver V2 唯一实现 + 10 组测试绿，调用点退役待 M4-T2） | `output/agent-platform-m4-progress.md` |

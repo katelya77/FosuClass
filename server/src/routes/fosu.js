@@ -8,6 +8,7 @@ const appConfigService = require("../services/appConfigService");
 const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
 const releaseService = require("../services/releaseService");
+const schoolSearchContractService = require("../services/schoolSearchContractService");
 const termRegistryService = require("../services/termRegistryService");
 const runtimePointerService = require("../services/runtimePointerService");
 const teachingCalendarService = require("../services/teachingCalendarService");
@@ -803,6 +804,30 @@ router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
     return sendReleasePackJson(req, res, payload, releaseVersion, 3600);
   } catch (error) {
     handleRouteError(res, error, "get-release-pack-empty-room-failed");
+  }
+});
+
+/**
+ * M3-T3：全校搜索统一契约入口（school-search.v1）
+ * GET /api/fosu/release-pack/search?type=teacher&q=...&term=...&releaseVersion=...
+ * query 字段对齐契约 requestFields（type/q/term/releaseVersion/collegeCode/collegeName/
+ * titleCode/grade/majorCode/majorName/campus/limit/offset，别名 keyword/semester/version/
+ * college/title/campusName 由契约层归一化）；响应为契约 responseFields 超集 + decision。
+ * 与 Agent search_school_index 共用 schoolSearchContractService.search 唯一实现，
+ * 本路由不做第二份过滤/决策逻辑。非法 type 与既有 release-pack 路由族一致返回 400。
+ */
+router.get("/release-pack/search", scheduleLimiter, (req, res) => {
+  try {
+    const result = schoolSearchContractService.search(req.query);
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      const code = result.code || result.reasonCode || "";
+      return res.status(code === "INVALID_TYPE" ? 400 : 200).json(result);
+    }
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
+    return sendReleasePackJson(req, res, result, releaseVersion, 120);
+  } catch (error) {
+    handleRouteError(res, error, "get-release-pack-search-failed");
   }
 });
 
