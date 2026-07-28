@@ -14080,6 +14080,10 @@ const adminConsoleHtml = `<!doctype html>
         var map = status.campusMap || {};
         var image = status.imageGeneration || {};
         var tools = Array.isArray(status.enabledTools) ? status.enabledTools : [];
+        var auth = status.authoritative || {};
+        var authStages = auth.stageAssignments || {};
+        var lastExternal = status.lastExternalCall || null;
+        var naMetric = function(v) { return v === null || v === undefined ? "暂无统计" : String(v); };
         var lastSuccess = chain.map(function(item) { return item.lastSuccessAt; }).filter(Boolean).sort().pop() || "-";
         var lastFailure = chain.map(function(item) { return item.lastFailureAt; }).filter(Boolean).sort().pop() || "-";
         var p50 = chain.reduce(function(max, item) { return Math.max(max, Number(item.p50LatencyMs || 0)); }, 0);
@@ -14088,14 +14092,18 @@ const adminConsoleHtml = `<!doctype html>
           renderHealthItem("Agent Protocol", "<code>" + escapeHtml(status.protocolVersion || "agent.v1") + "</code>"),
           renderHealthItem("Runtime Mode", status.runtimeMode === "competition" ? "<span class='badge warning'>trial enhanced</span>" : "<span class='badge success'>public</span>"),
           renderHealthItem("已启用工具", "<strong>" + tools.length + "</strong>"),
+          renderHealthItem("权威配置链", "<code>" + escapeHtml(Array.isArray(auth.effectiveChain) && auth.effectiveChain.length ? auth.effectiveChain.join(" → ") : "-") + "</code>"),
+          renderHealthItem("阶段分配", "<span>理解 " + escapeHtml(authStages.understanding || "-") + " / 规划 " + escapeHtml(authStages.planner || "-") + " / 回复 " + escapeHtml(authStages.response || "-") + "</span>"),
+          renderHealthItem("配置版本", "<code>" + escapeHtml(auth.configVersion || "-") + "</code>"),
+          renderHealthItem("最近真实外部调用", lastExternal && lastExternal.provider ? "<span class='badge success'>" + escapeHtml(lastExternal.provider) + "</span> <span>" + escapeHtml(lastExternal.at || "") + "</span>" : "<span class='badge muted'>本进程暂无真实调用</span>"),
           renderHealthItem("Provider Chain", renderProviderChain(chain)),
           renderHealthItem("最近成功", "<span>" + escapeHtml(lastSuccess) + "</span>"),
           renderHealthItem("最近失败", "<span>" + escapeHtml(lastFailure) + "</span>"),
           renderHealthItem("P50 / P95", "<span>" + escapeHtml(String(p50)) + "ms / " + escapeHtml(String(p95)) + "ms</span>"),
           renderHealthItem("fallback 次数", "<strong>" + escapeHtml(String(metrics.fallbackCount || 0)) + "</strong>"),
-          renderHealthItem("工具调用量", "<strong>" + escapeHtml(String(metrics.toolCallCount || 0)) + "</strong>"),
-          renderHealthItem("事实类 / 说明类", "<span>" + escapeHtml(String(metrics.factualQuestionCount || 0)) + " / " + escapeHtml(String(metrics.generativeQuestionCount || 0)) + "</span>"),
-          renderHealthItem("安全拦截", "<strong>" + escapeHtml(String(metrics.safetyInterceptCount || 0)) + "</strong>"),
+          renderHealthItem("工具调用量", "<span>" + escapeHtml(naMetric(metrics.toolCallCount)) + "</span>"),
+          renderHealthItem("事实类 / 说明类", "<span>" + (metrics.factualQuestionCount === null || metrics.factualQuestionCount === undefined ? "暂无统计" : escapeHtml(String(metrics.factualQuestionCount)) + " / " + escapeHtml(String(metrics.generativeQuestionCount || 0))) + "</span>"),
+          renderHealthItem("安全拦截", "<span>" + escapeHtml(naMetric(metrics.safetyInterceptCount)) + "</span>"),
           renderHealthItem("知识库", "<span>" + escapeHtml(String(knowledge.documentCount || 0)) + " docs / " + escapeHtml(String(knowledge.chunkCount || 0)) + " chunks</span>"),
           renderHealthItem("校园地图", "<span>" + escapeHtml(String(map.placeCount || 0)) + " places</span>"),
           renderHealthItem("体验版生图", image.enabled ? "<span class='badge warning'>enabled</span>" : "<span class='badge muted'>disabled</span>"),
@@ -14480,6 +14488,7 @@ const adminConsoleHtml = `<!doctype html>
             state.aiProviderSelectedProvider = state.aiProviderSelectedProvider || (envStatus && envStatus.provider) || "mock";
             renderAiProviderConfig();
             ignoreLoadError(loadAiAgentStatus());
+            ignoreLoadError(loadAiReadinessMatrix());
             return state.aiProviderConfig;
           })
           .catch(function(error) {
@@ -14561,17 +14570,11 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function aiProviderActualUseLabel() {
-        var trialEnv = findAiEnvironment("trial") || {};
-        var devEnv = findAiEnvironment("dev") || {};
-        var trialProfile = trialEnv.profile || {};
-        var devProfile = devEnv.profile || {};
-        var profile = trialProfile.enabled !== false && isExperienceProvider(trialProfile.provider) ? trialProfile : devProfile;
-        var provider = String(profile.provider || "mock").toLowerCase();
-        if (!isExperienceProvider(provider) || profile.enabled === false) return "公开发布=正式版本地规则；体验/开发=增强未启用";
-        if (provider === "cloudbase-openai") return "公开发布=正式版本地规则；体验/开发=体验版混元";
-        if (provider === "deepseek") return "公开发布=正式版本地规则；体验/开发=体验版 deepseek";
-        if (provider === "coze") return "公开发布=正式版本地规则；体验/开发=体验版 coze";
-        return "公开发布=正式版本地规则；体验/开发=增强未启用";
+        var last = state.aiAgentStatus && state.aiAgentStatus.lastExternalCall || null;
+        var experience = last && last.provider
+          ? (AI_PROVIDER_LABELS[last.provider] || last.provider) + "（最近真实调用 " + (last.at || "-") + "）"
+          : "本进程暂无真实调用";
+        return "公开发布=正式版本地规则；体验/开发=" + experience;
       }
 
       function aiExperienceEnvironment() {
@@ -14593,6 +14596,88 @@ const adminConsoleHtml = `<!doctype html>
           var checked = selectedProvider === name ? " checked" : "";
           return "<label class='provider-radio-row'><input type='radio' name='aiExperienceProvider' value='" + escapeHtml(name) + "'" + checked + " data-experience-provider='" + escapeHtml(name) + "'><span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</span></label>";
         }).join("");
+      }
+
+      var AI_STAGE_PROVIDER_OPTIONS = [
+        ["", "跟随主 Provider"],
+        ["cloudbase-openai", "混元 cloudbase-openai"],
+        ["deepseek", "deepseek"],
+        ["coze", "coze"],
+        ["mock", "mock 本地规则（强制本阶段 deterministic）"]
+      ];
+
+      function renderStageAssignSelect(id, label, current) {
+        var value = String(current || "");
+        return "<div><label>" + escapeHtml(label) + "</label><select id='" + id + "'>" +
+          AI_STAGE_PROVIDER_OPTIONS.map(function(pair) {
+            return "<option value='" + pair[0] + "'" + (value === pair[0] ? " selected" : "") + ">" + escapeHtml(pair[1]) + "</option>";
+          }).join("") + "</select></div>";
+      }
+
+      function renderAiReadinessMatrix() {
+        var box = $("aiReadinessMatrixBox");
+        if (!box) return;
+        var matrix = state.aiReadinessMatrix || {};
+        var envs = matrix.environments || {};
+        var envName = aiExperienceEnvironment();
+        var snapshot = envs[envName] || envs.trial || {};
+        var items = Array.isArray(snapshot.chainStatus) ? snapshot.chainStatus : [];
+        if (!items.length) {
+          box.innerHTML = "<span class='badge muted'>当前环境暂无链路数据</span>";
+          return;
+        }
+        var rows = items.map(function(item) {
+          var circuit = item.circuitBreaker && item.circuitBreaker.state || "closed";
+          var availBadge = item.configuredAvailable ? "<span class='badge success'>是</span>" : "<span class='badge muted'>否</span>";
+          var verifiedBadge = item.verified ? "<span class='badge success'>已验证</span>" : "<span class='badge muted'>已配置未验证</span>";
+          return "<tr>" +
+            "<td><code>" + escapeHtml(item.name || "-") + "</code></td>" +
+            "<td>" + availBadge + "</td>" +
+            "<td>" + verifiedBadge + "</td>" +
+            "<td>" + escapeHtml(circuit) + "</td>" +
+            "<td>" + Number(item.p50LatencyMs || 0) + "ms</td>" +
+            "<td>" + Number(item.p95LatencyMs || 0) + "ms</td>" +
+            "<td>" + escapeHtml(item.lastSuccessAt || "-") + "</td>" +
+            "<td>" + escapeHtml(item.lastFailureAt ? (item.fallbackReason || "failed") : "-") + "</td>" +
+            "<td><button type='button' class='ghost' data-probe-provider='" + escapeHtml(item.name || "") + "'>立即探测</button></td>" +
+          "</tr>";
+        }).join("");
+        box.innerHTML = "<table style='width:100%;border-collapse:collapse;font-size:12px;'><thead><tr>" +
+          ["Provider", "配置可用", "已验证", "熔断", "P50", "P95", "最近成功", "最近失败分类", "操作"].map(function(head) {
+            return "<th style='text-align:left;padding:4px 6px;border-bottom:1px solid rgba(128,128,128,.3);'>" + head + "</th>";
+          }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>";
+        box.querySelectorAll("[data-probe-provider]").forEach(function(btn) {
+          btn.addEventListener("click", function() { probeAiProvider(btn.dataset.probeProvider); });
+        });
+      }
+
+      function loadAiReadinessMatrix() {
+        return api("/api/admin/ai-provider/readiness-matrix")
+          .then(function(res) {
+            state.aiReadinessMatrix = res.data || {};
+            renderAiReadinessMatrix();
+            return state.aiReadinessMatrix;
+          })
+          .catch(function(error) {
+            var box = $("aiReadinessMatrixBox");
+            if (box) box.innerHTML = "<span class='badge danger'>" + escapeHtml(error.message || "加载失败") + "</span>";
+          });
+      }
+
+      function probeAiProvider(name) {
+        if (!name) return;
+        var box = $("aiReadinessMatrixBox");
+        api("/api/admin/ai-provider/probe", { method: "POST", body: JSON.stringify({ provider: name, environment: aiExperienceEnvironment() }) })
+          .then(function(res) {
+            var data = res.data || {};
+            showToast("探测 " + name + "：" + (data.health === "ok" ? "成功" : "失败") + "（" + (data.reasonCode || "ok") + "，" + Number(data.latencyMs || 0) + "ms）", data.health === "ok" ? "success" : "warning");
+            ignoreLoadError(loadAiReadinessMatrix());
+            ignoreLoadError(loadAiAgentStatus());
+          })
+          .catch(function(error) {
+            if (box) renderAiReadinessMatrix();
+            showToast(error.message, "error");
+          });
       }
 
       function renderAiProviderConfig() {
@@ -14633,9 +14718,17 @@ const adminConsoleHtml = `<!doctype html>
               "<div class='env-tabs provider-experience-tabs'><button type='button' class='" + (experienceEnvName === "trial" ? "active" : "") + "' data-ai-experience-env='trial'>体验版</button><button type='button' class='" + (experienceEnvName === "dev" ? "active" : "") + "' data-ai-experience-env='dev'>开发版</button></div>" +
               "<label class='provider-switch-row'><span>启用增强理解能力</span><select id='aiExperienceEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></label>" +
               "<input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiEnabled' type='hidden' value='" + (experienceEnabled ? "true" : "false") + "'><input id='aiProviderPolicy' type='hidden' value='auto'><input id='aiRuntimeMode' type='hidden' value='" + (experienceEnabled ? "competition" : "public") + "'>" +
-              (experienceEnabled ? "<div class='provider-radio-group'>" + renderExperienceProviderRadios(selectedProvider) + "</div><div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
+              (experienceEnabled ? "<div class='provider-radio-group'>" + renderExperienceProviderRadios(selectedProvider) + "</div>" +
+                "<div class='form-row'>" + renderStageAssignSelect("aiUnderstandingProvider", "理解阶段 Provider（意图识别）", experienceProfile.understandingProvider) + renderStageAssignSelect("aiPlannerProvider", "规划阶段 Provider（Planner）", experienceProfile.plannerProvider) + renderStageAssignSelect("aiResponseProvider", "回复阶段 Provider（Response）", experienceProfile.responseProvider) + "</div>" +
+                "<div class='ai-secret-note'>阶段默认「跟随主 Provider」：后台选哪个主 Provider，该阶段第一跳就用哪个；这里可单独覆盖某个阶段（含强制本地规则）。保存后主链会重算为 [主 Provider, ...其余 fallback]。</div>" +
+                "<div class='form-row'>" + aiConfigInput("aiUnderstandingModel", "理解模型（AI_UNDERSTANDING_MODEL）", experienceProfile.understandingModel, "留空 = 跟随主模型") + aiConfigInput("aiPlannerModel", "规划模型（AI_PLANNER_MODEL）", experienceProfile.plannerModel, "留空 = 跟随主模型") + "</div>" +
+                "<div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
             "</section>" +
           "</div>" +
+          "<section class='provider-mode-card' style='margin-top:16px;'>" +
+            "<div class='provider-card-head'><div><div class='provider-card-title'>Provider 就绪矩阵（真实指标）</div><div class='ai-secret-note'>配置可用 = 已配置且未熔断；已验证 = 本进程内有真实成功调用或探测成功。未验证的 Provider 不会标记为「真实可用/已就绪」，只显示「已配置未验证」。</div></div><button id='reloadAiReadinessMatrixBtn' class='ghost'>刷新矩阵</button></div>" +
+            "<div id='aiReadinessMatrixBox' style='padding:0 12px 12px;'><span class='badge muted'>尚未加载</span></div>" +
+          "</section>" +
           "<details class='diagnostic-panel'><summary>高级诊断</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未测试。运行后会显示 resolvedProvider、latencyMs、fallback、toolCalls、answerSnippet。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行真实测试</button><button id='forceAiProviderChatBtn' class='secondary'>测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details>" +
         "</div>";
         setSelectValue("aiExperienceEnabled", experienceEnabled ? "true" : "false");
@@ -14646,6 +14739,7 @@ const adminConsoleHtml = `<!doctype html>
         bindAiProviderConsoleEvents();
         syncCozeModeFields();
         renderAiAgentStatus();
+        renderAiReadinessMatrix();
       }
 
       function bindAiProviderConsoleEvents() {
@@ -14671,6 +14765,7 @@ const adminConsoleHtml = `<!doctype html>
         safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
         safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
         safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
+        safeBind("reloadAiReadinessMatrixBtn", "click", loadAiReadinessMatrix);
         safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
         safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
         safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
@@ -14714,6 +14809,11 @@ const adminConsoleHtml = `<!doctype html>
           runtimeMode: "competition",
           mirrorEnvironments: []
         };
+        payload.understandingProvider = value("aiUnderstandingProvider");
+        payload.plannerProvider = value("aiPlannerProvider");
+        payload.responseProvider = value("aiResponseProvider");
+        payload.understandingModel = value("aiUnderstandingModel");
+        payload.plannerModel = value("aiPlannerModel");
         if (provider === "deepseek") {
           Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
           if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
@@ -14780,6 +14880,7 @@ const adminConsoleHtml = `<!doctype html>
             if (isExperienceProvider(payload.provider)) state.aiProviderSelectedProvider = payload.provider;
             renderAiProviderConfig();
             ignoreLoadError(loadAiAgentStatus());
+            ignoreLoadError(loadAiReadinessMatrix());
             showToast("配置已保存并立即生效。", "success");
             setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
             var saveAndVerifyEl = $("aiSaveAndVerify");

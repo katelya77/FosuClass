@@ -6,23 +6,16 @@
  * 环境变量：
  *   FOSU_AGENT_API_BASE  例如 https://api.example.com
  *   FOSU_AGENT_TIMEOUT_MS  默认 25000
+ *
+ * 鉴权/环境裁决：与主入口 server/src/routes/ai.js 同一语义——仅透传客户端上报的
+ * envVersion 与 session，不做任何默认注入或提权；客户端未上报时省略对应头，
+ * 由上游 runtimeModeService.resolveRuntimeMode 按空 envVersion fail-closed 裁决为
+ * public（无 session 绝不提升 trial）。
  */
 
 const https = require("https");
 const http = require("http");
 const { URL } = require("url");
-
-const EVENT_MAP = {
-  "run.accepted": "RUN_STARTED",
-  "tool.started": "TOOL_CALL_START",
-  "tool.completed": "TOOL_CALL_END",
-  "tool.failed": "TOOL_CALL_END",
-  "response.composing": "TEXT_MESSAGE_START",
-  "run.completed": "RUN_FINISHED",
-  "run.degraded": "RUN_FINISHED",
-  "run.failed": "RUN_ERROR",
-  "run.cancelled": "RUN_ERROR",
-};
 
 function safeText(value, max = 400) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, max);
@@ -195,13 +188,23 @@ exports.main = async (event, context) => {
 
   try {
     const path = wantAgui ? "/api/ai/agent/agui" : "/api/ai/agent/chat";
+    // 与主入口 resolveRequestRuntimeDecision 同一来源与语义：envVersion 只透传客户端
+    // 显式上报值（body.envVersion 或入站 X-Fosu-Env-Version 头），缺省不注入——上游
+    // 对空 envVersion fail-closed 为 public；session 只透传客户端持有票据，缺省省略头，
+    // 由上游 optionalSessionGuard/runtimeModeService 裁决，无 session 不提升 trial。
+    const clientEnvVersion = String(body.envVersion
+      || (event.headers && (event.headers["x-fosu-env-version"] || event.headers["X-Fosu-Env-Version"]))
+      || "").trim();
+    const clientSessionToken = String(body.sessionToken
+      || (event.headers && (event.headers["x-fosu-session"] || event.headers["X-Fosu-Session"]))
+      || "").trim();
+    const upstreamHeaders = {};
+    if (clientEnvVersion) upstreamHeaders["X-Fosu-Env-Version"] = clientEnvVersion;
+    if (clientSessionToken) upstreamHeaders["X-Fosu-Session"] = clientSessionToken;
     const upstream = await requestJson(`${base}${path}`, {
       method: "POST",
       timeoutMs,
-      headers: {
-        "X-Fosu-Env-Version": String(body.envVersion || "trial"),
-        "X-Fosu-Session": String(body.sessionToken || event.headers && (event.headers["x-fosu-session"] || event.headers["X-Fosu-Session"]) || ""),
-      },
+      headers: upstreamHeaders,
       body: {
         message,
         context: body.context || {},

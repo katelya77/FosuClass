@@ -19,6 +19,10 @@ const AI_ENV_KEYS = [
   "AI_PROVIDER_CHAIN",
   "AI_UNDERSTANDING_ENABLED",
   "AI_UNDERSTANDING_MODEL",
+  "AI_PLANNER_MODEL",
+  "AI_UNDERSTANDING_PROVIDER",
+  "AI_PLANNER_PROVIDER",
+  "AI_RESPONSE_PROVIDER",
   "AI_STRUCTURED_TIMEOUT_MS",
   "AI_STRUCTURED_MAX_TOKENS",
   "AI_PROVIDER_SHADOW_ENABLED",
@@ -73,6 +77,10 @@ const DEFAULTS = {
   AI_PROVIDER_CHAIN: "",
   AI_UNDERSTANDING_ENABLED: "true",
   AI_UNDERSTANDING_MODEL: "",
+  AI_PLANNER_MODEL: "",
+  AI_UNDERSTANDING_PROVIDER: "",
+  AI_PLANNER_PROVIDER: "",
+  AI_RESPONSE_PROVIDER: "",
   AI_STRUCTURED_TIMEOUT_MS: "8000",
   AI_STRUCTURED_MAX_TOKENS: "800",
   AI_PROVIDER_SHADOW_ENABLED: "false",
@@ -120,6 +128,10 @@ const PROFILE_FIELD_TO_ENV = {
   providerChain: "AI_PROVIDER_CHAIN",
   understandingEnabled: "AI_UNDERSTANDING_ENABLED",
   understandingModel: "AI_UNDERSTANDING_MODEL",
+  plannerModel: "AI_PLANNER_MODEL",
+  understandingProvider: "AI_UNDERSTANDING_PROVIDER",
+  plannerProvider: "AI_PLANNER_PROVIDER",
+  responseProvider: "AI_RESPONSE_PROVIDER",
   structuredTimeoutMs: "AI_STRUCTURED_TIMEOUT_MS",
   structuredMaxTokens: "AI_STRUCTURED_MAX_TOKENS",
   shadowEnabled: "AI_PROVIDER_SHADOW_ENABLED",
@@ -253,6 +265,36 @@ function normalizeProviderPolicy(value) {
   return ["auto", "always", "tool-only"].includes(policy) ? policy : "auto";
 }
 
+// Strict chain-name normalizer: unknown names become "" (unlike normalizeProvider,
+// which falls back to "mock"). Empty string is a valid stage assignment meaning
+// "跟随主 Provider".
+function normalizeChainName(value) {
+  const provider = String(value == null ? "" : value).trim().toLowerCase();
+  if (!provider) return "";
+  if (["hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(provider)) {
+    return "cloudbase-openai";
+  }
+  return ["mock", "deepseek", "coze", "cloudbase-openai"].includes(provider) ? provider : "";
+}
+
+function parseChainNames(value) {
+  const items = String(value || "")
+    .split(",")
+    .map((item) => normalizeChainName(item))
+    .filter(Boolean);
+  return Array.from(new Set(items));
+}
+
+const STAGE_PROVIDER_FIELDS = ["understandingProvider", "plannerProvider", "responseProvider"];
+
+// 单选 == 第一跳：选哪个 Provider，就把持久化链重算为 [primary, ...旧链剔除 primary]，
+// 保持其余 fallback 顺序。不允许出现"单选 A 但链首是 B"的持久态。
+function recomputeChainForPrimary(provider, previousChainValue) {
+  const primary = normalizeChainName(provider) || "mock";
+  const rest = parseChainNames(previousChainValue).filter((name) => name !== primary);
+  return [primary].concat(rest).join(",");
+}
+
 function normalizeBoolean(value) {
   return value === true || String(value).toLowerCase() === "true" ? "true" : "false";
 }
@@ -282,6 +324,10 @@ function defaultProfile(environment) {
     providerChain: env === "public" ? "mock" : (env === "trial" || env === "dev" ? "hunyuan3,deepseek,coze,mock" : ""),
     understandingEnabled: true,
     understandingModel: DEFAULTS.AI_UNDERSTANDING_MODEL,
+    plannerModel: DEFAULTS.AI_PLANNER_MODEL,
+    understandingProvider: "",
+    plannerProvider: "",
+    responseProvider: "",
     structuredTimeoutMs: DEFAULTS.AI_STRUCTURED_TIMEOUT_MS,
     structuredMaxTokens: DEFAULTS.AI_STRUCTURED_MAX_TOKENS,
     shadowEnabled: false,
@@ -343,10 +389,17 @@ function normalizeProfile(profile = {}, environment = "public") {
     }
   });
   base.cozeApiMode = base.cozeApiMode === "workload" ? "workload" : "bot";
+  STAGE_PROVIDER_FIELDS.forEach((field) => {
+    base[field] = normalizeChainName(base[field]);
+  });
   if (env === "public") {
     base.enabled = false;
     base.provider = "mock";
     base.providerPolicy = "tool-only";
+    base.providerChain = "mock";
+    base.understandingProvider = "";
+    base.plannerProvider = "";
+    base.responseProvider = "";
     base.allowPersonalContext = false;
     base.thinkingEnabled = false;
     base.shadowEnabled = false;
@@ -751,6 +804,10 @@ function saveConfig(payload = {}) {
   ), environment);
   profile = applyPreset(profile, payload.preset, payload);
   environment = normalizeEnvironment(profile.environment || environment);
+  if (Object.prototype.hasOwnProperty.call(payload, "provider")) {
+    const previousChain = (current.profiles[environment] || {}).providerChain;
+    profile.providerChain = recomputeChainForPrimary(profile.provider, previousChain);
+  }
   current.profiles[environment] = normalizeProfile(profile, environment);
   normalizeMirrorEnvironments(payload.mirrorEnvironments || payload.applyToEnvironments, environment).forEach((env) => {
     current.profiles[env] = normalizeProfile(Object.assign({}, profile, { environment: env }), env);
@@ -830,17 +887,64 @@ function resolveRuntimeProviderConfig(input = {}) {
   return getRuntimeConfigForEnvironment(env);
 }
 
+/**
+ * 权威 Provider 配置五元组：后台选哪个 Provider，实际第一跳就用哪个。
+ * - primaryProvider = profile.provider（单选）
+ * - fallbackProviders = 链中除 primary 外的有序余项
+ * - effectiveChain = [primary, ...fallbacks]（public 恒 ["mock"]）
+ * - stageAssignments = 各阶段（understanding/planner/response）解析后的第一跳 Provider；
+ *   阶段字段为空表示"跟随主 Provider"，解析结果即 primaryProvider。
+ * - configVersion = 每次保存都会变化的 runtime version。
+ */
+function getAuthoritativeProviderConfig(environment) {
+  const status = getStatus(environment);
+  const env = normalizeEnvironment(environment || status.activeEnvironment);
+  const profile = normalizeProfile(
+    status.environmentProfiles && status.environmentProfiles[env] || defaultProfile(env),
+    env
+  );
+  const configVersion = String(status.runtimeVersion || "");
+  if (env === "public") {
+    return {
+      environment: "public",
+      primaryProvider: "mock",
+      fallbackProviders: [],
+      effectiveChain: ["mock"],
+      stageAssignments: { understanding: "mock", planner: "mock", response: "mock" },
+      configVersion,
+    };
+  }
+  const primaryProvider = normalizeProvider(profile.provider);
+  const fallbackProviders = parseChainNames(profile.providerChain).filter((name) => name !== primaryProvider);
+  const resolveStage = (value) => normalizeChainName(value) || primaryProvider;
+  return {
+    environment: env,
+    primaryProvider,
+    fallbackProviders,
+    effectiveChain: [primaryProvider].concat(fallbackProviders),
+    stageAssignments: {
+      understanding: resolveStage(profile.understandingProvider),
+      planner: resolveStage(profile.plannerProvider),
+      response: resolveStage(profile.responseProvider),
+    },
+    configVersion,
+  };
+}
+
 module.exports = {
   AI_ENV_KEYS,
   DEFAULTS,
   ENVIRONMENTS,
   ENV_PATH,
   buildUpdates,
+  getAuthoritativeProviderConfig,
   getEnvironmentForContext,
   getRuntimeConfigForEnvironment,
   getStatus,
   normalizeEnvironment,
+  parseChainNames,
   parseEnv,
+  recomputeChainForPrimary,
   resolveRuntimeProviderConfig,
   saveConfig,
   setEnvLines,

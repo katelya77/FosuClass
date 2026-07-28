@@ -6,6 +6,7 @@ const appConfigService = require("./appConfigService");
 const platformDataService = require("./platformDataService");
 const staticOriginService = require("./staticOriginService");
 const teacherSearchContract = require("../shared/teacherSearchContract.generated");
+const schoolSearchContract = require("../shared/schoolSearchContract.generated");
 
 const DEFAULT_TERM = "";
 const CACHE_PREFIX = "fosu:v8";
@@ -1461,6 +1462,258 @@ function searchIndex(type, params = {}, options = {}) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// school-search.v1 统一搜索（M3-T4）
+// 在线：GET /api/fosu/release-pack/search，契约响应（含 decision）原样透传。
+// 失败/超时/断网/响应形态非法：回退本地缓存索引搜索（readCachedSearchIndex →
+// filterIndexPayload 既有本地过滤实现，last-known-good，批准决定第 6 条），
+// 返回同构降级响应；本地缓存也不存在时抛出原始错误（调用方走既有错误态）。
+// ---------------------------------------------------------------------------
+
+/**
+ * 降级响应的契约版本标识。降级结果必须有真实状态标识，不得用
+ * schoolSearchContract.CONTRACT_VERSION 冒充服务端在线响应。
+ */
+const LOCAL_FALLBACK_CONTRACT_VERSION = "local-fallback";
+
+function localSearchDisplayName(type, item) {
+  const source = item && typeof item === "object" ? item : {};
+  if (type === "teacher") return String(source.teacherName || source.name || source.displayName || "").trim();
+  if (type === "class") return String(source.className || source.name || source.displayName || "").trim();
+  if (type === "classroom") return String(source.roomName || source.classroomName || source.name || source.displayName || "").trim();
+  return String(source.courseName || source.displayCourseName || source.canonicalCourseName || source.name || source.displayName || "").trim();
+}
+
+// detailId 只取条目真实 id 字段；缺失时不得用名称伪造（交由 navigation reason code 兜底）。
+function localSearchDetailId(item) {
+  const source = item && typeof item === "object" ? item : {};
+  return String(
+    source.detailId || source.id || source.scheduleId
+      || source.teacherId || source.classroomId || source.courseId || source.classId
+      || ""
+  ).trim();
+}
+
+function buildLocalSchoolUrl(type, q) {
+  const base = `${schoolSearchContract.NAVIGATION.schoolPath}?type=${encodeURIComponent(type)}`;
+  const keyword = String(q || "").trim();
+  return keyword ? `${base}&q=${encodeURIComponent(keyword)}` : base;
+}
+
+function buildLocalScheduleUrl(type, detailId, name, context) {
+  const params = [
+    `type=${encodeURIComponent(type)}`,
+    `id=${encodeURIComponent(detailId)}`,
+  ];
+  if (name) params.push(`name=${encodeURIComponent(name)}`);
+  if (context.term) params.push(`term=${encodeURIComponent(context.term)}`);
+  if (context.releaseVersion) params.push(`releaseVersion=${encodeURIComponent(context.releaseVersion)}`);
+  return `${schoolSearchContract.NAVIGATION.scheduleViewPath}?${params.join("&")}`;
+}
+
+function buildLocalItemNavigation(type, item, context) {
+  const detailId = localSearchDetailId(item);
+  const name = localSearchDisplayName(type, item);
+  if (!detailId) {
+    return {
+      detailId: "",
+      name,
+      canOpen: false,
+      reasonCode: schoolSearchContract.NAVIGATION_REASON_CODES.detailIdMissing,
+      path: schoolSearchContract.NAVIGATION.schoolPath,
+      url: buildLocalSchoolUrl(type, context.q),
+    };
+  }
+  if (!context.releaseVersion) {
+    return {
+      detailId,
+      name,
+      canOpen: false,
+      reasonCode: schoolSearchContract.NAVIGATION_REASON_CODES.releaseVersionMissing,
+      path: schoolSearchContract.NAVIGATION.schoolPath,
+      url: buildLocalSchoolUrl(type, context.q),
+    };
+  }
+  return {
+    detailId,
+    name,
+    canOpen: true,
+    reasonCode: "",
+    path: schoolSearchContract.NAVIGATION.scheduleViewPath,
+    url: buildLocalScheduleUrl(type, detailId, name, context),
+  };
+}
+
+function buildLocalNoneDecision(total) {
+  return {
+    kind: "none",
+    total: Math.max(0, Number(total) || 0),
+    item: null,
+    detailId: "",
+    canOpen: false,
+    navigation: null,
+    candidates: [],
+    actions: [],
+  };
+}
+
+/**
+ * 离线唯一/多候选/无结果决策，与服务端 schoolSearchContractService.buildDecision
+ * 同语义；决策常数唯一来源是生成物 DECISION：候选列表按 offlineCandidateMax 截断，
+ * 直开预算 candidateOpenMax，单候选动作数 actionCap。
+ */
+function buildLocalSearchDecision(type, result, context) {
+  const ctx = context && typeof context === "object" ? context : {};
+  const items = Array.isArray(result && result.items) ? result.items : [];
+  const total = Math.max(0, Number(result && result.total) || 0);
+  if (!total || !items.length) return buildLocalNoneDecision(total);
+
+  if (total === 1) {
+    const navigation = buildLocalItemNavigation(type, items[0], ctx);
+    const actions = navigation.canOpen
+      ? [{ name: "open_detail", url: navigation.url, detailId: navigation.detailId }]
+      : [{ name: "open_school_page", url: navigation.url }];
+    return {
+      kind: "unique",
+      total: 1,
+      item: items[0],
+      detailId: navigation.detailId,
+      canOpen: navigation.canOpen,
+      navigation,
+      candidates: [],
+      actions: actions.slice(0, schoolSearchContract.clampDecisionLimit("actionCap", actions.length)),
+    };
+  }
+
+  const listCap = schoolSearchContract.clampDecisionLimit("offlineCandidateMax", items.length);
+  const actionCap = schoolSearchContract.clampDecisionLimit("actionCap", schoolSearchContract.DECISION.actionCap);
+  let openBudget = schoolSearchContract.clampDecisionLimit("candidateOpenMax", schoolSearchContract.DECISION.candidateOpenMax);
+  const candidates = items.slice(0, listCap).map((item) => {
+    const navigation = buildLocalItemNavigation(type, item, ctx);
+    const actions = [];
+    if (navigation.canOpen && openBudget > 0) {
+      openBudget -= 1;
+      actions.push({ name: "open_detail", url: navigation.url, detailId: navigation.detailId });
+    }
+    actions.push({ name: "open_school_page", url: buildLocalSchoolUrl(type, ctx.q) });
+    return {
+      type,
+      detailId: navigation.detailId,
+      name: navigation.name,
+      canOpen: navigation.canOpen,
+      reasonCode: navigation.reasonCode,
+      navigation,
+      item,
+      actions: actions.slice(0, actionCap),
+    };
+  });
+  return {
+    kind: "candidate",
+    total,
+    item: null,
+    detailId: "",
+    canOpen: false,
+    navigation: null,
+    candidates,
+    actions: [],
+  };
+}
+
+/** 在线响应必须是真实 school-search.v1 契约形态，否则不得冒充、转入降级链。 */
+function isServerContractSearchResponse(payload, type) {
+  if (!payload || typeof payload !== "object") return false;
+  if (payload.success !== true) return false;
+  if (payload.contractVersion !== schoolSearchContract.CONTRACT_VERSION) return false;
+  if (schoolSearchContract.normalizeEntityType(payload.type) !== type) return false;
+  if (!Array.isArray(payload.items)) return false;
+  const decision = payload.decision;
+  if (!decision || typeof decision !== "object") return false;
+  return decision.kind === "unique" || decision.kind === "candidate" || decision.kind === "none";
+}
+
+function buildLocalFallbackResponse(type, query, filtered, error) {
+  const term = filtered.term || query.term || "";
+  const releaseVersion = filtered.releaseVersion || query.releaseVersion || "";
+  const decision = buildLocalSearchDecision(type, filtered, {
+    q: query.q || "",
+    term,
+    releaseVersion,
+    offline: true,
+  });
+  return Object.assign({}, filtered, {
+    success: true,
+    type,
+    contractVersion: LOCAL_FALLBACK_CONTRACT_VERSION,
+    term,
+    semester: filtered.semester || term,
+    releaseVersion,
+    version: filtered.version || releaseVersion,
+    decision,
+    degraded: true,
+    source: "local_cache",
+    stale: true,
+    offline: true,
+    fromStorage: true,
+    searchFallback: true,
+    cachedAt: filtered.updatedAt || filtered.generatedAt || "",
+    fallbackReason: String(error && (error.code || error.reasonCode) || "NETWORK"),
+  });
+}
+
+/**
+ * 全校页统一搜索入口（school-search.v1）。
+ * @param {string} type teacher/class/classroom/course（非法 type 直接拒绝，不发网络）
+ * @param {object} params 契约 requestFields（q/term/releaseVersion/collegeCode/collegeName/
+ *   titleCode/grade/majorCode/majorName/campus/limit/offset；别名 keyword/semester/version）
+ * @param {object} [options] { timeout, retries, skipSession }（默认单次尝试：降级走本地缓存，
+ *   快速失败优于重试后降级）
+ * @returns {Promise<object>} 在线透传契约响应；降级时返回带
+ *   degraded/source:"local_cache"/stale/offline/cachedAt/fallbackReason 标识的同构响应。
+ */
+function searchSchoolContract(type, params = {}, options = {}) {
+  const normalizedType = schoolSearchContract.normalizeEntityType(type);
+  if (!normalizedType) {
+    const error = new Error("INVALID_TYPE");
+    error.code = "INVALID_TYPE";
+    error.reasonCode = "INVALID_TYPE";
+    return Promise.reject(error);
+  }
+  const source = params && typeof params === "object" ? params : {};
+  const query = {
+    type: normalizedType,
+    q: String(source.q || source.keyword || "").trim(),
+    term: String(source.term || source.semester || "").trim(),
+    releaseVersion: String(source.releaseVersion || source.version || "").trim(),
+  };
+  ["collegeCode", "collegeName", "titleCode", "grade", "majorCode", "majorName", "campus"].forEach((field) => {
+    const value = String(source[field] || "").trim();
+    if (value) query[field] = value;
+  });
+  if (source.limit != null && source.limit !== "") query.limit = source.limit;
+  if (source.offset != null && source.offset !== "") query.offset = source.offset;
+
+  return request.get("/api/fosu/release-pack/search", query, {
+    showLoading: false,
+    silentError: true,
+    timeout: options.timeout || 7500,
+    retries: options.retries === undefined ? 0 : options.retries,
+    // 调用方（全校页 executeSearch）按请求代际（seq）判定新旧，相同查询不得合并到
+    // 上一代的 inflight 响应，否则新一代会渲染上一代的旧结果（竞态）。
+    dedupe: options.dedupe === undefined ? false : options.dedupe,
+    skipSession: options.skipSession === true,
+  }).then((payload) => {
+    if (isServerContractSearchResponse(payload, normalizedType)) return payload;
+    const error = new Error("INVALID_CONTRACT_RESPONSE");
+    error.code = "INVALID_CONTRACT_RESPONSE";
+    error.reasonCode = "INVALID_CONTRACT_RESPONSE";
+    throw error;
+  }).catch((error) => {
+    const filtered = readCachedSearchIndex(normalizedType, query);
+    if (!filtered) throw error;
+    return buildLocalFallbackResponse(normalizedType, query, filtered, error);
+  });
+}
+
 function normalizeDetailPayload(type, id, payload, fallback = {}) {
   const source = payload && payload.data ? payload.data : payload;
   if (!source || source.success === false) {
@@ -2043,6 +2296,8 @@ module.exports = {
   readCachedDetail,
   readCachedEmptyRoom,
   searchIndex,
+  searchSchoolContract,
+  LOCAL_FALLBACK_CONTRACT_VERSION,
   resolveClassroomDetail,
   warmupIndex,
   switchReleaseSafely,

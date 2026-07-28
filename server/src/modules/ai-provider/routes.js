@@ -9,6 +9,7 @@ const agentService = require("../../services/ai/agentService");
 const providerReadinessService = require("../../services/ai/providerReadinessService");
 const agentReadinessService = require("../../services/ai/agentReadinessService");
 const providerConfigService = require("../../services/ai/providerConfigService");
+const providerChainService = require("../../services/ai/providerChainService");
 const cozeProvider = require("../../services/ai/providers/cozeProvider");
 
 const router = express.Router();
@@ -38,6 +39,54 @@ router.get("/ai-provider/readiness-matrix", adminAuth.verifyAdminAccess, (req, r
     success: true,
     data: providerReadinessService.getAdminMatrix(),
   });
+});
+
+/**
+ * 真实最小探测：短超时 + 极小 maxTokens 的 structured ping。
+ * 结果写入与真实调用同一个进程内指标存储（lastSuccess/lastFailure/p50/p95/熔断）。
+ * public 环境一律拒绝——正式版外部 Provider 调用恒为 0。
+ */
+router.post("/ai-provider/probe", adminAuth.verifyAdminAccess, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const environment = providerConfigService.normalizeEnvironment(req.body && req.body.environment || "trial");
+  const provider = String(req.body && req.body.provider || "").trim().toLowerCase().slice(0, 40);
+  if (!provider) {
+    return res.status(400).json({
+      success: false,
+      code: "PROBE_PROVIDER_REQUIRED",
+      message: "请指定要探测的 Provider。",
+    });
+  }
+  if (environment === "public") {
+    return res.status(400).json({
+      success: false,
+      code: "PROBE_PUBLIC_FORBIDDEN",
+      message: "正式版禁止探测外部 Provider；请在 trial/dev 配置中探测。",
+    });
+  }
+  try {
+    const timeoutMs = Math.max(1000, Math.min(5000, Number(req.body && req.body.timeoutMs || 2500) || 2500));
+    const result = await providerChainService.probeProvider(provider, {
+      runtimeMode: environment,
+      providerRuntimeConfig: providerConfigService.getRuntimeConfigForEnvironment(environment),
+      timeoutMs,
+    });
+    return res.json({
+      success: true,
+      data: Object.assign({}, result, {
+        environment,
+        verified: providerChainService.isProviderVerified(provider),
+        checkedAt: new Date().toISOString(),
+      }),
+    });
+  } catch (error) {
+    safeLog("ai-provider-probe-failed", { code: String(error && error.code || "PROBE_FAILED").slice(0, 80) });
+    return res.status(200).json({
+      success: false,
+      code: error.code || "PROBE_FAILED",
+      message: "Provider 探测失败。",
+    });
+  }
 });
 
 router.post("/ai-provider/test-coze", adminAuth.verifyAdminAccess, async (req, res) => {

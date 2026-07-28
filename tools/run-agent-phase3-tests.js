@@ -6,6 +6,9 @@ const root = path.resolve(__dirname, "..");
 const tests = [
   "tools/test-agent-run-events.js",
   "tools/test-agent-activity-state.js",
+  "tools/test-agent-verification.js",
+  "tools/test-agent-departure-chain-verification.js",
+  "tools/test-agent-event-map-contract.js",
   "tools/test-agent-terminal-truth.js",
   "tools/test-voice-state-sequence.js",
   "tools/test-provider-readiness.js",

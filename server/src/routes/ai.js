@@ -22,6 +22,8 @@ const agentReadinessService = require("../services/ai/agentReadinessService");
 const agentRunEventService = require("../services/ai/agentRunEventService");
 const agentProtocol = require("../services/ai/agentProtocol");
 const aguiAdapter = require("../services/ai/aguiAdapter");
+const actionCommandContract = require("../services/ai/actionCommandContract");
+const { resumeDurableTask, completeReminderReceiptWait } = require("../services/ai/durable/resume");
 
 const router = express.Router();
 
@@ -85,6 +87,26 @@ function resolveReminderPrincipal(req) {
   return defaultMemoryService.resolvePrincipal({
     serverSession: req.fosuSession,
     runtimeMode: resolveMemoryRuntimeMode(req),
+  });
+}
+
+function handleDurableError(res, error) {
+  const status = Math.max(400, Math.min(503, Number(error && error.statusCode) || 400));
+  const code = String(error && error.code || "DURABLE_ERROR").slice(0, 80);
+  const messages = {
+    PRINCIPAL_REQUIRED: "需要有效小程序会话才能恢复等待中的任务。",
+    DURABLE_TASK_NOT_FOUND: "没有找到对应的等待任务，可能已完成或过期。",
+    DURABLE_TOKEN_INVALID: "恢复凭证无效，请重新发起操作。",
+    DURABLE_TASK_EXPIRED: "等待任务已过期，请重新发起操作。",
+    DURABLE_STATUS_CONFLICT: "任务当前状态不允许恢复。",
+    DURABLE_PRINCIPAL_MISMATCH: "该任务不属于当前会话主体。",
+  };
+  safeLog("ai-agent-durable-operation-failed", { code });
+  return res.status(status).json({
+    success: false,
+    code,
+    message: messages[code] || "等待任务操作失败，请稍后重试。",
+    serverTime: new Date().toISOString(),
   });
 }
 
@@ -345,16 +367,26 @@ router.post("/agent/agui", scheduleLimiter, optionalSessionGuard, validateJsonBo
 /**
  * 客户端 Action 执行回执（Receipt）。
  * 闭环约定：Action 在客户端真实执行后回报结果；仅当服务端验证通过
- * （command 合法 + status=success + appliedTarget 仍存在于当前激活索引）
- * 才提交工作记忆（cloud_sync 持久化）。失败回执仅记录，不提交记忆。
+ * （command 合法 + status=success + appliedTarget 达成态校验：课表目标须仍在当前激活索引，
+ * 提醒目标须在服务端提醒存储达成对应状态）才提交工作记忆（cloud_sync 持久化）。
+ * 失败回执仅记录，不提交记忆。
  */
+// 提醒类回执命令：以 manifest/actionCommandContract 为权威源（receiptRequired 的提醒动作）。
+// 白名单扩大不等于校验放松：runId/target/过期/principal 校验对新增命令同样生效；
+// 未在契约内的 command 仍拒绝（COMMAND_UNKNOWN）。
+const REMINDER_RECEIPT_COMMANDS = ["createCourseReminder", "deleteReminder"].filter((command) => {
+  const definition = actionCommandContract.getActionDefinition(command);
+  return Boolean(definition && definition.receiptRequired === true);
+});
 router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, validateJsonBody(["command", "runId", "conversationId", "status", "appliedTarget", "errorCode", "memoryMode", "cloudSyncEnabled"]), (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const body = req.body || {};
     const command = String(body.command || "").slice(0, 40);
     const status = String(body.status || "").slice(0, 24);
-    if (command !== "setCurrentSchedule") {
+    const isScheduleReceipt = command === "setCurrentSchedule";
+    const isReminderReceipt = REMINDER_RECEIPT_COMMANDS.indexOf(command) >= 0;
+    if (!isScheduleReceipt && !isReminderReceipt) {
       return res.status(400).json({
         success: false,
         code: "COMMAND_UNKNOWN",
@@ -385,17 +417,75 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
         serverTime: new Date().toISOString(),
       });
     }
-    // 目标必须仍存在于当前激活课表索引（防伪造回执/防过期数据）。
-    const index = releaseService.readActiveIndex("class") || {};
-    const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
-    const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
-    if (!found) {
-      return res.status(409).json({
-        success: false,
-        code: "SCHEDULE_TARGET_NOT_FOUND",
-        message: "目标课表已不在当前版本中。",
-        serverTime: new Date().toISOString(),
-      });
+    let receiptTarget;
+    if (isScheduleReceipt) {
+      // 目标必须仍存在于当前激活课表索引（防伪造回执/防过期数据）。
+      const index = releaseService.readActiveIndex("class") || {};
+      const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+      const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
+      if (!found) {
+        return res.status(409).json({
+          success: false,
+          code: "SCHEDULE_TARGET_NOT_FOUND",
+          message: "目标课表已不在当前版本中。",
+          serverTime: new Date().toISOString(),
+        });
+      }
+      receiptTarget = {
+        type: "class",
+        detailId,
+        name: String(found.name || found.className || name).slice(0, 120),
+        term: String(appliedTarget.term || "").slice(0, 40),
+      };
+    } else {
+      // 提醒类目标校验：以服务端提醒存储的达成态为准（防伪造回执）。
+      // createCourseReminder 要求提醒已按 idempotencyKey 真实落库；
+      // deleteReminder 要求目标提醒已不存在（幂等删除达成态）。
+      const reminderPrincipal = resolveReminderPrincipal(req);
+      if (!reminderPrincipal || reminderPrincipal.authenticated !== true) {
+        return res.status(401).json({
+          success: false,
+          code: "PRINCIPAL_REQUIRED",
+          message: "需要有效小程序会话才能回传提醒执行回执。",
+          serverTime: new Date().toISOString(),
+        });
+      }
+      if (command === "createCourseReminder") {
+        const appliedReminder = defaultCourseReminderService.findByIdempotencyKey({
+          principal: reminderPrincipal,
+          idempotencyKey: detailId,
+        });
+        if (!appliedReminder) {
+          return res.status(409).json({
+            success: false,
+            code: "REMINDER_TARGET_NOT_FOUND",
+            message: "目标提醒未在服务端落库。",
+            serverTime: new Date().toISOString(),
+          });
+        }
+      } else {
+        let reminderStillExists = false;
+        try {
+          defaultCourseReminderService.get({ principal: reminderPrincipal, reminderId: detailId });
+          reminderStillExists = true;
+        } catch (lookupError) {
+          if (!lookupError || lookupError.code !== "REMINDER_NOT_FOUND") throw lookupError;
+        }
+        if (reminderStillExists) {
+          return res.status(409).json({
+            success: false,
+            code: "REMINDER_TARGET_STILL_EXISTS",
+            message: "目标提醒尚未删除。",
+            serverTime: new Date().toISOString(),
+          });
+        }
+      }
+      receiptTarget = {
+        type: "reminder",
+        detailId,
+        name,
+        term: "",
+      };
     }
     const principal = defaultMemoryService.resolvePrincipal({
       serverSession: req.fosuSession,
@@ -434,12 +524,7 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
       memoryMode,
       command,
       runId: String(body.runId || "").slice(0, 100),
-      appliedTarget: {
-        type: "class",
-        detailId,
-        name: String(found.name || found.className || name).slice(0, 120),
-        term: String(appliedTarget.term || "").slice(0, 40),
-      },
+      appliedTarget: receiptTarget,
     });
     if (memoryMode === "cloud_sync" && commitResult.committed !== true) {
       return res.status(409).json({
@@ -455,6 +540,22 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
       toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
       memoryMode,
     }));
+    // M6-T4 durable 兜底：提醒回执被接受后，将对应 receipt_wait 持久任务置 done。
+    // 纯附加、best-effort：找不到任务或置 done 失败均不改变 M5 回执语义与响应。
+    if (isReminderReceipt) {
+      try {
+        completeReminderReceiptWait({
+          principal,
+          command,
+          runId: String(body.runId || "").slice(0, 100),
+          detailId,
+        });
+      } catch (durableError) {
+        safeLog("ai-agent-durable-complete-failed", {
+          code: String(durableError && durableError.code || "DURABLE_COMPLETE_FAILED").slice(0, 60),
+        });
+      }
+    }
     return res.json({
       success: true,
       committed: commitResult.committed === true,
@@ -464,6 +565,29 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
     });
   } catch (error) {
     return handleMemoryError(res, error);
+  }
+});
+
+// M6-T4 轻量 Durable Execution：凭 resumeToken + 会话 Principal 恢复等待中的任务
+// （提醒回执等待 / 审批 / 通用等待事件）。无有效会话不得 resume（requireSessionGuard）。
+router.post("/agent/durable/resume", scheduleLimiter, requireSessionGuard, validateJsonBody(["taskId", "resumeToken"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const body = req.body || {};
+    const principal = resolveReminderPrincipal(req);
+    const result = resumeDurableTask({
+      taskId: String(body.taskId || "").slice(0, 64),
+      resumeToken: String(body.resumeToken || ""),
+      principal,
+    });
+    return res.json({
+      success: true,
+      task: result.task,
+      context: result.context,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    return handleDurableError(res, error);
   }
 });
 
@@ -1141,6 +1265,8 @@ router.get("/agent/readiness", scheduleLimiter, optionalSessionGuard, (req, res)
       enhancedMode: "disabled",
       authorization: "allowed",
       providerConfigured: false,
+      configuredAvailable: false,
+      providerVerified: false,
       providerReachable: false,
       memoryAvailable: false,
       runEventsSupported: true,

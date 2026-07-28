@@ -331,7 +331,10 @@ const payload = {
 {
   const js = fs.readFileSync(path.join(ROOT, "miniprogram/pages/school/school.js"), "utf8");
   check("js 跳过空学院缓存", /collegeActive/.test(js) && /cached\s*=\s*null/.test(js));
-  check("js college 时 forceServerSearch", /forceServerSearch:\s*collegeActive/.test(js));
+  // M3-T4：teacher+college 的服务端优先语义由统一端点 /release-pack/search 继承
+  // （原 forceServerSearch: collegeActive 选项随旧 /search-index 链一并移除，
+  //  现在所有类型的网络搜索都经服务端契约过滤，语义更强）。
+  check("js college 时服务端统一搜索", /releasePackService\.searchSchoolContract\(type, query/.test(js));
   check("resetFilters 班级学院回到 -1", /resetFilters\s*\(\)\s*\{[\s\S]*?selectedCollegeIndex:\s*-1/.test(js));
   check("restore 缺学院时 selectedCollegeIndex:-1", /selectedCollegeIndex:\s*-1/.test(js));
   check(

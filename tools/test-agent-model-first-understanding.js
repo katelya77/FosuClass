@@ -8,6 +8,7 @@ const {
   intentToGoalContract,
 } = require("../server/src/services/ai/understanding/goalContract");
 const { resolveGoalContract } = require("../server/src/services/ai/understanding/goalResolver");
+const { fromV1Contract } = require("../server/src/services/ai/understanding/goalContractV2");
 const { UnderstandingService } = require("../server/src/services/ai/understanding/understandingService");
 const {
   normalizeWorkingMemory,
@@ -364,7 +365,11 @@ async function testWorkingStateAndRunEvents() {
   const normalized = normalizeWorkingMemory(updated);
   assert.strictEqual(normalized.providerUsed, "hunyuan3");
   assert.strictEqual(normalized.understandingSource, "model");
-  assert.deepStrictEqual(normalized.lastGoalContract, goal);
+  // Working memory stores the unified GoalContract V2; V1 inputs upgrade via the adapter.
+  assert.deepStrictEqual(
+    normalized.lastGoalContract,
+    fromV1Contract(goal, { source: "adapter", understandingSource: "legacy_v1_working_memory" })
+  );
   assert.strictEqual(normalized.pendingAction.status, "awaiting_receipt");
 
   ["understanding.started", "understanding.completed", "understanding.fallback"].forEach((type) => {

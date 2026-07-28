@@ -418,6 +418,22 @@ class CourseReminderService {
     });
   }
 
+  // 只读查找：按 idempotencyKey 定位 create 操作已落库的提醒（ActionReceipt 目标校验用）。
+  // 找不到返回 null，不抛错；空 key 直接返回 null（不触发 IDEMPOTENCY_KEY_REQUIRED）。
+  findByIdempotencyKey(input = {}) {
+    const principalKey = this.assertPrincipal(input.principal);
+    const key = String(input.idempotencyKey || "").trim();
+    if (!key || key.length > 160) return null;
+    const idempotencyHash = this.idempotencyHash(principalKey, key);
+    return this.withLock(principalKey, (filePath, shard) => {
+      const state = this.readUnlocked(filePath, shard, principalKey);
+      const operation = this.findOperation(state, idempotencyHash, "create");
+      if (!operation) return null;
+      const reminder = state.reminders.find((item) => item.id === operation.reminderId);
+      return reminder ? publicReminder(reminder) : null;
+    });
+  }
+
   grantSubscriptionAuthorization(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     const authorizationState = normalizeSubscriptionStatus(input.subscriptionStatus);

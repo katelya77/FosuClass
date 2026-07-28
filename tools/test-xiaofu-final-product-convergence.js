@@ -356,7 +356,7 @@ function mockWx(script) {
 
   // main package size soft check (miniprogram dir listing)
   {
-    check("audit written", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/final-product-convergence-audit.md")));
+    check("audit written", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/agent-platform-reorientation-audit.md")));
   }
 
   const summary = `\n${pass} passed, ${fail} failed\n`;

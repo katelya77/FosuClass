@@ -8,6 +8,10 @@ async function generateStructured(input = {}) {
     error.code = "PUBLIC_PROVIDER_FORBIDDEN";
     throw error;
   }
+  // 阶段显式链路：显式 input.stage 优先，其次按 purpose 映射；不再整条链隐式重来。
+  const purpose = String(input.purpose || "structured");
+  const stage = String(input.stage || "").trim().toLowerCase()
+    || (purpose === "planning" ? "planner" : purpose === "understanding" ? "understanding" : "");
   return providerChainService.generateWithChain({
     messages: input.messages || [],
     message: input.message || "",
@@ -27,6 +31,7 @@ async function generateStructured(input = {}) {
     principal: input.principal || null,
     onEvent: input.onEvent,
     purpose: input.purpose || "structured",
+    stage,
     structured: true,
   });
 }
