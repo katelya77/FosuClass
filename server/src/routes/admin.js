@@ -638,6 +638,19 @@ router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
   });
 });
 
+// 进程内调用日志（仅元信息：provider/阶段/耗时/成败分类），供后台"调用日志"窗口实时展示。
+router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const limit = Math.max(1, Math.min(120, Number(req.query && req.query.limit) || 60));
+  return res.json({
+    success: true,
+    data: {
+      events: providerChainService.getRecentCallEvents(limit),
+      checkedAt: new Date().toISOString(),
+    },
+  });
+});
+
 router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
   const status = aiProviderConfigService.getStatus();
   const runtimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(status.activeEnvironment);
