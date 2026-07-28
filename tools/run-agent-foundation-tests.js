@@ -16,6 +16,7 @@ const tests = [
   "tools/test-provider-request-scope.js",
   "tools/test-provider-shadow-eval.js",
   "tools/test-provider-control-plane.js",
+  "tools/test-custom-providers.js",
   "tools/test-agent-model-first-integration.js",
   "tools/test-teacher-search-contract-unified.js",
   "tools/test-search-contract-unified.js",

@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const runtimeStore = require("./providerRuntimeConfigStore");
 const runtimeModeService = require("./runtimeModeService");
+const customProviderStore = require("./customProviderStore");
 
 const SERVER_ROOT = path.resolve(__dirname, "../../..");
 const ENV_PATH = path.join(SERVER_ROOT, ".env");
@@ -9,7 +10,7 @@ const ENV_EXAMPLE_PATH = path.join(SERVER_ROOT, ".env.example");
 const CLOUDBASE_CLIENT_CONFIG_PATH = path.resolve(SERVER_ROOT, "..", "miniprogram", "config", "cloudbase.js");
 
 const ENVIRONMENTS = ["public", "trial", "dev"];
-const EXTERNAL_PROVIDERS = ["cloudbase-openai", "deepseek", "coze"];
+const EXTERNAL_PROVIDERS = ["cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"];
 
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
@@ -67,6 +68,8 @@ const AI_ENV_KEYS = [
   "CLOUDBASE_OPENAI_TEXT_MODEL",
   "CLOUDBASE_OPENAI_TIMEOUT_MS",
   "CLOUDBASE_OPENAI_MAX_TOKENS",
+  "AI_CUSTOM_PROVIDERS",
+  "AI_CUSTOM_ACTIVE_ID",
 ];
 
 const DEFAULTS = {
@@ -118,6 +121,8 @@ const DEFAULTS = {
   CLOUDBASE_OPENAI_TEXT_MODEL: "hy3-preview",
   CLOUDBASE_OPENAI_TIMEOUT_MS: "15000",
   CLOUDBASE_OPENAI_MAX_TOKENS: "1200",
+  AI_CUSTOM_PROVIDERS: "",
+  AI_CUSTOM_ACTIVE_ID: "",
 };
 
 const PROFILE_FIELD_TO_ENV = {
@@ -167,6 +172,7 @@ const PROFILE_FIELD_TO_ENV = {
   cloudbaseOpenaiTextModel: "CLOUDBASE_OPENAI_TEXT_MODEL",
   cloudbaseOpenaiTimeoutMs: "CLOUDBASE_OPENAI_TIMEOUT_MS",
   cloudbaseOpenaiMaxTokens: "CLOUDBASE_OPENAI_MAX_TOKENS",
+  activeCustomId: "AI_CUSTOM_ACTIVE_ID",
 };
 
 const BOOLEAN_PROFILE_FIELDS = new Set([
@@ -262,7 +268,13 @@ function normalizeProvider(value) {
   if (["hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(provider)) {
     return "cloudbase-openai";
   }
-  return ["mock", "deepseek", "coze", "cloudbase-openai"].includes(provider) ? provider : "mock";
+  if (["openai-compatible", "custom-openai-compatible"].includes(provider)) {
+    return "custom-openai";
+  }
+  if (["anthropic", "claude", "custom-claude"].includes(provider)) {
+    return "custom-anthropic";
+  }
+  return ["mock", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "mock";
 }
 
 function normalizeProviderPolicy(value) {
@@ -279,7 +291,13 @@ function normalizeChainName(value) {
   if (["hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(provider)) {
     return "cloudbase-openai";
   }
-  return ["mock", "deepseek", "coze", "cloudbase-openai"].includes(provider) ? provider : "";
+  if (["openai-compatible", "custom-openai-compatible"].includes(provider)) {
+    return "custom-openai";
+  }
+  if (["anthropic", "claude", "custom-claude"].includes(provider)) {
+    return "custom-anthropic";
+  }
+  return ["mock", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "";
 }
 
 function parseChainNames(value) {
@@ -369,6 +387,7 @@ function defaultProfile(environment) {
     cloudbaseOpenaiTextModel: DEFAULTS.CLOUDBASE_OPENAI_TEXT_MODEL,
     cloudbaseOpenaiTimeoutMs: DEFAULTS.CLOUDBASE_OPENAI_TIMEOUT_MS,
     cloudbaseOpenaiMaxTokens: DEFAULTS.CLOUDBASE_OPENAI_MAX_TOKENS,
+    activeCustomId: "",
   };
   if (env === "dev") {
     base.thinkingEnabled = true;
@@ -643,6 +662,9 @@ function getCloudbaseHunyuanStatus() {
 
 function getKeyStatus(envFileValues, runtimeValues) {
   const cozeKey = runtimeValues.COZE_API_KEY || process.env.COZE_API_KEY || envFileValues.COZE_API_KEY || "";
+  const customList = customProviderStore.parseList(
+    runtimeValues.AI_CUSTOM_PROVIDERS || process.env.AI_CUSTOM_PROVIDERS || envFileValues.AI_CUSTOM_PROVIDERS || ""
+  );
   return {
     deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues, runtimeValues),
     deepseekKeyLast4: keyLast4(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || runtimeValues.AI_API_KEY || runtimeValues.DEEPSEEK_API_KEY || envFileValues.AI_API_KEY || envFileValues.DEEPSEEK_API_KEY),
@@ -650,6 +672,8 @@ function getKeyStatus(envFileValues, runtimeValues) {
     cozeKeyLast4: keyLast4(cozeKey),
     cloudbaseOpenaiKeyConfigured: hasCloudbaseOpenAiKey(envFileValues, runtimeValues),
     cloudbaseOpenaiKeyLast4: keyLast4(process.env.CLOUDBASE_OPENAI_API_KEY || runtimeValues.CLOUDBASE_OPENAI_API_KEY || envFileValues.CLOUDBASE_OPENAI_API_KEY),
+    customOpenaiConfigured: customList.some((entry) => entry.protocol === "openai" && customProviderStore.isEntryUsable(entry)),
+    customAnthropicConfigured: customList.some((entry) => entry.protocol === "anthropic" && customProviderStore.isEntryUsable(entry)),
   };
 }
 
@@ -661,6 +685,9 @@ function providerCompleteness(provider, profile, keyStatus) {
     checks.push(["baseUrl", Boolean(profile.baseUrl)], ["apiKey", Boolean(keyStatus.deepseekKeyConfigured)], ["model", Boolean(profile.model)], ["timeout", Boolean(profile.timeoutMs)]);
   } else if (provider === "cloudbase-openai") {
     checks.push(["enabled", profile.cloudbaseOpenaiEnabled === true], ["baseUrl", Boolean(profile.cloudbaseOpenaiBaseUrl)], ["apiKey", Boolean(keyStatus.cloudbaseOpenaiKeyConfigured)], ["model", Boolean(profile.cloudbaseOpenaiTextModel)]);
+  } else if (provider === "custom-openai" || provider === "custom-anthropic") {
+    const usable = provider === "custom-openai" ? keyStatus.customOpenaiConfigured : keyStatus.customAnthropicConfigured;
+    checks.push(["entry", usable], ["apiKey", usable], ["model", usable]);
   } else if (provider === "coze") {
     if (profile.cozeApiMode === "workload") {
       checks.push(["workloadEndpoint", Boolean(profile.cozeWorkloadEndpoint)], ["projectId", Boolean(profile.cozeProjectId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)]);
@@ -679,25 +706,31 @@ function providerCompleteness(provider, profile, keyStatus) {
 
 function buildEnvironmentStatus(env, profile, keyStatus) {
   const normalized = normalizeProfile(profile, env);
-  const providers = ["mock", "cloudbase-openai", "deepseek", "coze"].map((name) => ({
+  const keyFlagFor = (name) => (name === "deepseek"
+    ? keyStatus.deepseekKeyConfigured
+    : name === "coze"
+      ? keyStatus.cozeKeyConfigured
+      : name === "cloudbase-openai"
+        ? keyStatus.cloudbaseOpenaiKeyConfigured
+        : name === "custom-openai"
+          ? keyStatus.customOpenaiConfigured
+          : name === "custom-anthropic"
+            ? keyStatus.customAnthropicConfigured
+            : true);
+  const keyLast4For = (name) => (name === "deepseek"
+    ? keyStatus.deepseekKeyLast4
+    : name === "coze"
+      ? keyStatus.cozeKeyLast4
+      : name === "cloudbase-openai"
+        ? keyStatus.cloudbaseOpenaiKeyLast4
+        : "");
+  const providers = ["mock", "cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].map((name) => ({
     name,
     enabled: normalized.provider === name && normalized.enabled !== false,
     configured: providerCompleteness(name, normalized, keyStatus).percent === 100,
     completeness: providerCompleteness(name, normalized, keyStatus),
-    keyConfigured: name === "deepseek"
-      ? keyStatus.deepseekKeyConfigured
-      : name === "coze"
-        ? keyStatus.cozeKeyConfigured
-        : name === "cloudbase-openai"
-          ? keyStatus.cloudbaseOpenaiKeyConfigured
-          : true,
-    keyLast4: name === "deepseek"
-      ? keyStatus.deepseekKeyLast4
-      : name === "coze"
-        ? keyStatus.cozeKeyLast4
-        : name === "cloudbase-openai"
-          ? keyStatus.cloudbaseOpenaiKeyLast4
-          : "",
+    keyConfigured: keyFlagFor(name),
+    keyLast4: keyLast4For(name),
   }));
   return {
     environment: env,
@@ -776,6 +809,9 @@ function getStatus(requestedEnvironment) {
     cloudbaseOpenaiTextModel: activeProfile.cloudbaseOpenaiTextModel,
     cloudbaseOpenaiTimeoutMs: activeProfile.cloudbaseOpenaiTimeoutMs,
     cloudbaseOpenaiMaxTokens: activeProfile.cloudbaseOpenaiMaxTokens,
+    // 自定义 Provider：仅脱敏视图（id/label/协议/baseUrl/模型/key 尾号），永不回传明文密钥。
+    customProviders: customProviderStore.publicView(value("AI_CUSTOM_PROVIDERS")),
+    activeCustomId: activeProfile.activeCustomId || "",
     encryptionConfigured: runtimeStore.hasEncryptionKey(),
     encryptionReady: runtimeStore.hasEncryptionKey() && !runtimeRead.error,
     encryptionBlocker: runtimeRead.error && (runtimeRead.error.code || "AI_PROVIDER_RUNTIME_CONFIG_READ_FAILED") || "",
@@ -895,6 +931,70 @@ function resolveRuntimeProviderConfig(input = {}) {
   return getRuntimeConfigForEnvironment(env);
 }
 
+function writeCustomProviderUpdates(updates) {
+  runtimeStore.writeRuntimeConfig(updates);
+  applyUpdatesToProcessEnv(updates);
+  // 配置变更即时生效：清熔断，避免旧失败态遮盖新配置。
+  require("./providerChainService").resetCircuitState();
+}
+
+/**
+ * 新增/更新一条自定义 Provider（CCSwitch 式）。
+ * payload: { entry: {id?, label, protocol, baseUrl, apiKey?, model, enabled?, strictJsonMode?}, setActive?, activeCustomId? }
+ * apiKey 留空 = 编辑时保留旧密钥；"__clear__" = 清除密钥。
+ */
+function saveCustomProvider(payload = {}) {
+  const runtimeValues = readRuntimeValues();
+  const entry = customProviderStore.sanitizeEntry(payload.entry || {});
+  if (!entry.protocol || !entry.baseUrl) {
+    const error = new Error("自定义 Provider 需要合法的 protocol（openai/anthropic）与 https baseUrl。");
+    error.code = "CUSTOM_PROVIDER_INVALID";
+    throw error;
+  }
+  const list = customProviderStore.upsertEntry(runtimeValues.AI_CUSTOM_PROVIDERS || "", payload.entry || {});
+  const updates = { AI_CUSTOM_PROVIDERS: customProviderStore.serializeList(list) };
+  if (payload.activeCustomId !== undefined) {
+    updates.AI_CUSTOM_ACTIVE_ID = String(payload.activeCustomId || "").trim();
+  } else if (payload.setActive === true) {
+    updates.AI_CUSTOM_ACTIVE_ID = entry.id;
+  }
+  writeCustomProviderUpdates(updates);
+  return getStatus();
+}
+
+/** 删除一条自定义 Provider；若它是当前 active，则清空 active。 */
+function deleteCustomProvider(payload = {}) {
+  const runtimeValues = readRuntimeValues();
+  const id = String(payload.id || "").trim();
+  if (!id) {
+    const error = new Error("缺少要删除的自定义 Provider id。");
+    error.code = "CUSTOM_PROVIDER_INVALID";
+    throw error;
+  }
+  const list = customProviderStore.removeEntry(runtimeValues.AI_CUSTOM_PROVIDERS || "", id);
+  const updates = { AI_CUSTOM_PROVIDERS: customProviderStore.serializeList(list) };
+  if (String(runtimeValues.AI_CUSTOM_ACTIVE_ID || "").trim() === id) {
+    updates.AI_CUSTOM_ACTIVE_ID = "";
+  }
+  writeCustomProviderUpdates(updates);
+  return getStatus();
+}
+
+/** 获取模型列表：apiKey 留空且给了 id 时，回退用已存储条目的密钥（不明文出仓）。 */
+async function fetchCustomProviderModels(payload = {}) {
+  let apiKey = String(payload.apiKey || "").trim();
+  if (!apiKey && payload.id) {
+    const existing = customProviderStore.findEntry(readRuntimeValues().AI_CUSTOM_PROVIDERS || "", payload.id);
+    if (existing) apiKey = existing.apiKey;
+  }
+  return customProviderStore.fetchModelList({
+    protocol: payload.protocol,
+    baseUrl: payload.baseUrl,
+    apiKey,
+    timeoutMs: payload.timeoutMs,
+  });
+}
+
 /**
  * 权威 Provider 配置五元组：后台选哪个 Provider，实际第一跳就用哪个。
  * - primaryProvider = profile.provider（单选）
@@ -945,6 +1045,8 @@ module.exports = {
   ENVIRONMENTS,
   ENV_PATH,
   buildUpdates,
+  deleteCustomProvider,
+  fetchCustomProviderModels,
   getAuthoritativeProviderConfig,
   getEnvironmentForContext,
   getRuntimeConfigForEnvironment,
@@ -955,5 +1057,6 @@ module.exports = {
   recomputeChainForPrimary,
   resolveRuntimeProviderConfig,
   saveConfig,
+  saveCustomProvider,
   setEnvLines,
 };

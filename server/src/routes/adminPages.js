@@ -924,12 +924,6 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text);
       box-shadow: var(--shadow);
     }
-    .provider-main-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-      gap: 16px;
-      align-items: start;
-    }
     .provider-mode-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -954,8 +948,7 @@ const adminConsoleHtml = `<!doctype html>
       display: none;
     }
     .provider-switch-row,
-    .provider-checkbox-row,
-    .provider-radio-row {
+    .provider-checkbox-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -967,13 +960,120 @@ const adminConsoleHtml = `<!doctype html>
       font-size: 13px;
       color: var(--text);
     }
-    .provider-radio-group {
+    /* Provider 选择器（卡片网格） */
+    .apc-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+    .apc-pick-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 8px;
     }
-    .provider-radio-row {
-      justify-content: flex-start;
+    .apc-pick-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--panel-2);
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .apc-pick-card:hover {
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow);
+    }
+    .apc-pick-card:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+    }
+    .apc-pick-card.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+    }
+    .apc-pick-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+    }
+    .apc-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: none;
+      display: inline-block;
+    }
+    .apc-dot.ok { background: var(--success); }
+    .apc-dot.off { background: var(--border-strong); }
+    .apc-pick-sub {
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .apc-proto-badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    /* 自定义 Provider 管理 */
+    .apc-cp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .apc-cp-table th {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .apc-cp-table td {
+      padding: 8px;
+      border-bottom: 1px solid var(--surface-muted);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+    .apc-cp-table tbody tr {
+      transition: background 0.15s ease;
+    }
+    .apc-cp-table tbody tr:hover {
+      background: var(--surface-muted);
+    }
+    .apc-row-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+      margin-right: 4px;
+    }
+    .apc-danger {
+      color: var(--danger);
+    }
+    .apc-cp-form {
+      border: 1px dashed var(--border-strong);
+      border-radius: 10px;
+      padding: 14px;
+      background: var(--panel-2);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .apc-fetch-cell {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .provider-console button {
       cursor: pointer;
     }
     .provider-selected-form {
@@ -1100,15 +1200,10 @@ const adminConsoleHtml = `<!doctype html>
       margin-bottom: 12px;
     }
     @media (max-width: 980px) {
-      .provider-main-grid,
       .provider-mode-grid,
       .kb-two-column {
         grid-template-columns: 1fr;
       }
-      .provider-radio-group {
-        grid-template-columns: 1fr;
-      }
-      .provider-config-panel,
       .kb-editor-panel {
         position: static;
       }
@@ -7266,222 +7361,6 @@ const adminConsoleHtml = `<!doctype html>
             </section>
           </div>
         </div>
-        <div class="ai-provider-grid">
-          <div class="card form-box">
-            <h3 class="card-title">校园查询 Provider</h3>
-            <div class="ai-secret-note">
-              auto 模式下，确定性课表查询默认走本地工具；项目说明和复杂解释会调用 DeepSeek/Coze。课程事实仍以工具结果为准。
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>调用模式</label>
-                <select id="aiEnabled">
-                  <option value="false">mock 演示模式（本地规则）</option>
-                  <option value="true">启用外部 Provider</option>
-                </select>
-              </div>
-              <div>
-                <label>运行版本</label>
-                <select id="aiRuntimeMode">
-                  <option value="public">公众版（强制工具 / mock）</option>
-                  <option value="competition">体验版增强（授权账号 / 短期凭证）</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>Provider</label>
-                <select id="aiProvider">
-                  <option value="mock">mock</option>
-                  <option value="cloudbase-openai">腾讯混元 hy3-preview</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="coze">Coze</option>
-                </select>
-              </div>
-              <div>
-                <label>Provider Policy</label>
-                <select id="aiProviderPolicy">
-                  <option value="auto">auto</option>
-                  <option value="tool-only">tool-only</option>
-                  <option value="always">always</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>DeepSeek 快速配置</label>
-                <input id="aiModel" placeholder="deepseek-v4-flash">
-              </div>
-              <div>
-                <label>DeepSeek 增强配置</label>
-                <input id="aiReasoningModel" placeholder="deepseek-v4-pro">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>Base URL</label>
-                <input id="aiBaseUrl" placeholder="https://api.deepseek.com">
-              </div>
-              <div>
-                <label>DeepSeek API Key</label>
-                <input id="aiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
-                <div class="ai-secret-note">密钥只写入本机 server/.env，保存响应和日志不会回显。</div>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>超时 / ms</label>
-                <input id="aiTimeoutMs" inputmode="numeric" placeholder="15000">
-              </div>
-              <div>
-                <label>最大输出 tokens</label>
-                <input id="aiMaxTokens" inputmode="numeric" placeholder="1200">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>Temperature</label>
-                <input id="aiTemperature" inputmode="decimal" placeholder="0.1">
-              </div>
-              <div>
-                <label>增强模式</label>
-                <select id="aiThinkingEnabled">
-                  <option value="false">关闭（小程序快速响应）</option>
-                  <option value="true">开启（仅 pro 配置）</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>推理强度</label>
-                <select id="aiReasoningEffort">
-                  <option value="medium">medium</option>
-                  <option value="low">low</option>
-                  <option value="high">high</option>
-                </select>
-              </div>
-              <div>
-                <label>个人课表摘要</label>
-                <select id="aiAllowPersonalContext">
-                  <option value="false">默认关闭</option>
-                  <option value="true">允许最小字段摘要</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>JSON 修复</label>
-                <select id="aiJsonRepair">
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>腾讯混元兼容网关 Base URL</label>
-                <input id="cloudbaseOpenaiBaseUrl" placeholder="https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase">
-              </div>
-              <div>
-                <label>腾讯混元兼容网关 API Key</label>
-                <input id="cloudbaseOpenaiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
-                <div class="ai-secret-note">不要把 Key 粘贴到查询框；后台保存时不回显完整密钥。</div>
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label>混元文本配置</label>
-                <input id="cloudbaseOpenaiTextModel" placeholder="hy3-preview">
-              </div>
-              <div>
-                <label>混元 Provider 开关</label>
-                <select id="cloudbaseOpenaiEnabled">
-                  <option value="false">关闭</option>
-                  <option value="true">开启</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label>混元超时 / ms</label>
-                <input id="cloudbaseOpenaiTimeoutMs" inputmode="numeric" placeholder="15000">
-              </div>
-              <div>
-                <label>混元最大 tokens</label>
-                <input id="cloudbaseOpenaiMaxTokens" inputmode="numeric" placeholder="1200">
-              </div>
-            </div>
-
-            <div class="ai-provider-actions">
-              <button id="saveAiProviderBtn" class="primary">保存查询服务配置</button>
-              <button id="verifyAiProviderBtn" class="secondary">Provider 真实测试</button>
-              <button id="forceAiProviderChatBtn" class="secondary">强制测试 Provider 链路</button>
-              <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
-            </div>
-          </div>
-
-          <div class="card form-box">
-            <h3 class="card-title">运行状态与 Coze 配置向导</h3>
-            <p class="ai-secret-note">Coze 只需要服务端 PAT/API Token 和已发布 Bot ID。不要填写学校账号密码、浏览器 Cookie 或 User ID；Token 加密保存且不明文回显。</p>
-            <div class="ai-provider-status" id="aiProviderStatusGrid"></div>
-
-            <div class="form-row" style="margin-top: 14px;">
-              <div>
-                <label>已发布 Bot ID</label>
-                <input id="cozeBotId" autocomplete="off" placeholder="从 Bot 构建页 URL 获取">
-              </div>
-              <div>
-                <label>PAT / API Token</label>
-                <input id="cozeApiKey" type="password" autocomplete="off" placeholder="留空则保留现有 Token，不回显明文">
-              </div>
-            </div>
-            <p class="ai-secret-note">匿名 user_id 由服务端按会话 Principal 自动生成。Bot 列表接口还需要 Workspace/Space ID，因此这里不伪造只凭 PAT 的选择器。</p>
-            <div class="form-row full">
-              <div>
-                <label>Token 到期时间（可选 ISO，到期自动跳过）</label>
-                <input id="cozeTokenExpiresAt" placeholder="2026-12-31T00:00:00.000Z">
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label>轮询开关</label>
-                <select id="cozePollEnabled">
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
-                </select>
-              </div>
-              <div>
-                <label>轮询间隔 / ms</label>
-                <input id="cozePollIntervalMs" inputmode="numeric" placeholder="1000">
-              </div>
-            </div>
-            <div class="form-row full">
-              <div>
-                <label>最大轮询次数</label>
-                <input id="cozePollMaxAttempts" inputmode="numeric" placeholder="8">
-              </div>
-            </div>
-            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会同时测试确定性工具、项目知识查询和强制 Provider 链路，不会打印 prompt 或密钥。</div>
-            <div class="ai-provider-actions">
-              <button id="runAiGoldenEvalBtn" class="secondary">运行黄金测试</button>
-              <button id="exportAiEvalReportBtn" class="ghost">导出脱敏报告</button>
-              <button id="clearAiLocalMetricsBtn" class="ghost">清除本地匿名指标</button>
-            </div>
-            <div class="ai-secret-note">公众界面不会显示 Provider、Token、Oracle、CloudBase、比赛模式或内部 Prompt；这里仅管理员可见，密钥只展示脱敏状态。</div>
-            <h4 class="card-title" style="margin-top: 8px;">查询链路状态</h4>
-            <div class="ai-provider-status" id="aiAgentStatusGrid"></div>
-            <div id="aiAgentEvalResult" class="ai-verify-box">黄金测试尚未运行。</div>
-          </div>
-        </div>
       </section>
 
       <section id="section-assistant-kb" class="section">
@@ -11815,21 +11694,6 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      // 生成发布版本号
-      function getAutoGeneratedVersion(term) {
-        var now = new Date();
-        var yyyy = now.getFullYear();
-        var mm = String(now.getMonth() + 1).padStart(2, "0");
-        var dd = String(now.getDate()).padStart(2, "0");
-        var hh = String(now.getHours()).padStart(2, "0");
-        var min = String(now.getMinutes()).padStart(2, "0");
-        var sec = String(now.getSeconds()).padStart(2, "0");
-        
-        // 比如 2026-2027-1 -> 202620271
-        var termClean = (term || "2026-2027-1").replace(/-/g, "");
-        return termClean + "-" + yyyy + mm + dd + "-" + hh + min + sec;
-      }
-
       // 当前选中的 Shell，默认是 powershell
       state.currentShell = "powershell";
       state.activeStep = 1;
@@ -13951,96 +13815,9 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
-      function loadAiProviderConfig() {
-        return api("/api/admin/ai-provider/config")
-          .then(function(res) {
-            state.aiProviderConfig = res.data || {};
-            renderAiProviderConfig();
-            ignoreLoadError(loadAiAgentStatus());
-            return state.aiProviderConfig;
-          })
-          .catch(function(error) {
-            showModuleError("ai-provider", error);
-            throw error;
-          });
-      }
-
       function setSelectValue(id, val) {
         var el = $(id);
         if (el) el.value = val == null ? "" : String(val);
-      }
-
-      function renderAiProviderConfig() {
-        var cfg = state.aiProviderConfig || {};
-        setSelectValue("aiEnabled", cfg.enabled ? "true" : "false");
-        setSelectValue("aiRuntimeMode", cfg.runtimeMode || "public");
-        setSelectValue("aiProvider", cfg.provider || "mock");
-        setSelectValue("aiProviderPolicy", cfg.providerPolicy || "auto");
-        setValue("aiModel", cfg.model || "deepseek-v4-flash");
-        setValue("aiReasoningModel", cfg.reasoningModel || "deepseek-v4-pro");
-        setValue("aiBaseUrl", cfg.baseUrl || "https://api.deepseek.com");
-        setValue("aiTimeoutMs", cfg.timeoutMs || "15000");
-        setValue("aiMaxTokens", cfg.maxTokens || "1200");
-        setValue("aiTemperature", cfg.temperature || "0.1");
-        setSelectValue("aiThinkingEnabled", cfg.thinkingEnabled ? "true" : "false");
-        setSelectValue("aiReasoningEffort", cfg.reasoningEffort || "medium");
-        setSelectValue("aiJsonRepair", cfg.jsonRepair === false ? "false" : "true");
-        setSelectValue("aiAllowPersonalContext", cfg.allowPersonalContext ? "true" : "false");
-        setValue("cozeBaseUrl", cfg.cozeBaseUrl || "https://api.coze.cn");
-        setValue("cozeBotId", cfg.cozeBotIdConfigured ? "已配置" : "");
-        setValue("cozeChatEndpoint", cfg.cozeChatEndpoint || "/v3/chat");
-        setSelectValue("cozePollEnabled", cfg.cozePollEnabled === false ? "false" : "true");
-        setValue("cozePollIntervalMs", cfg.cozePollIntervalMs || "1000");
-        setValue("cozePollMaxAttempts", cfg.cozePollMaxAttempts || "8");
-        setSelectValue("cloudbaseOpenaiEnabled", cfg.cloudbaseOpenaiEnabled ? "true" : "false");
-        setValue("cloudbaseOpenaiBaseUrl", cfg.cloudbaseOpenaiBaseUrl || "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase");
-        setValue("cloudbaseOpenaiTextModel", cfg.cloudbaseOpenaiTextModel || "hy3-preview");
-        setValue("cloudbaseOpenaiTimeoutMs", cfg.cloudbaseOpenaiTimeoutMs || "15000");
-        setValue("cloudbaseOpenaiMaxTokens", cfg.cloudbaseOpenaiMaxTokens || "1200");
-        setValue("aiApiKey", "");
-        setValue("cozeApiKey", "");
-        setValue("cloudbaseOpenaiApiKey", "");
-
-        var grid = $("aiProviderStatusGrid");
-        if (grid) {
-          var hunyuan = cfg.cloudbaseHunyuan || {};
-          var trialAuth = cfg.trialAuthorization || {};
-          var hunyuanStatus = "<span class='badge muted'>未配置</span>";
-          if (hunyuan.warningLevel === "expired") {
-            hunyuanStatus = "<span class='badge danger'>已到期</span>";
-          } else if (hunyuan.warningLevel === "7d" || hunyuan.warningLevel === "30d") {
-            hunyuanStatus = "<span class='badge warning'>剩余 " + escapeHtml(String(hunyuan.daysUntilPromoExpires)) + " 天</span>";
-          } else if (hunyuan.warningLevel === "ok") {
-            hunyuanStatus = "<span class='badge success'>剩余 " + escapeHtml(String(hunyuan.daysUntilPromoExpires)) + " 天</span>";
-          }
-          var enhancedMode = trialAuth.trialEnhancedMode
-            ? "<span class='badge warning'>已开启</span>"
-            : "<span class='badge success'>公众工具模式</span>";
-          var authReady = trialAuth.sessionAuthorizationConfigured || (trialAuth.shortCredentialConfigured && !trialAuth.shortCredentialExpired);
-          var authStatus = authReady
-            ? "<span class='badge success'>已配置</span>"
-            : "<span class='badge warning'>未配置授权</span>";
-          var expiryText = trialAuth.shortCredentialConfigured
-            ? (trialAuth.shortCredentialExpired
-              ? "<span class='badge danger'>已过期或无效</span>"
-              : "<span class='badge success'>" + escapeHtml(trialAuth.shortCredentialExpiresAt || "未设置") + "</span>")
-            : "<span class='badge muted'>未使用短期凭证</span>";
-          grid.innerHTML = [
-            renderHealthItem("外部 Provider", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
-            renderHealthItem("体验增强", enhancedMode),
-            renderHealthItem("授权状态", authStatus),
-            renderHealthItem("授权到期", expiryText),
-            renderHealthItem("运行版本", cfg.runtimeMode === "competition" ? "<span class='badge warning'>trial enhanced</span>" : "<span class='badge success'>public</span>"),
-            renderHealthItem("Provider", "<code>" + escapeHtml(cfg.provider || "mock") + "</code>"),
-            renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured)) + (cfg.deepseekKeyLast4 ? " ****" + escapeHtml(cfg.deepseekKeyLast4) : "")),
-            renderHealthItem("混元网关", cfg.cloudbaseOpenaiEnabled && cfg.cloudbaseOpenaiKeyConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cloudbaseOpenaiKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
-            renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cozeKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
-            renderHealthItem("混元权益", hunyuanStatus),
-            renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
-            renderHealthItem("密钥加密", cfg.encryptionConfigured ? "<span class='badge success'>AES-256-GCM</span>" : "<span class='badge warning'>需设置 FOSU_AI_CONFIG_ENCRYPTION_KEY</span>"),
-            renderHealthItem("Runtime Store", cfg.runtimeConfigExists ? "<span class='badge success'>storage</span>" : "<span class='badge muted'>未生成</span>"),
-          ].join("");
-        }
       }
 
       function loadAiAgentStatus() {
@@ -14174,147 +13951,6 @@ const adminConsoleHtml = `<!doctype html>
         showToast("本地匿名指标已清除", "success");
       }
 
-      function aiProviderPayload() {
-        var payload = {
-          enabled: boolValue("aiEnabled"),
-          runtimeMode: value("aiRuntimeMode"),
-          provider: value("aiProvider"),
-          providerPolicy: value("aiProviderPolicy"),
-          model: value("aiModel"),
-          reasoningModel: value("aiReasoningModel"),
-          baseUrl: value("aiBaseUrl"),
-          timeoutMs: value("aiTimeoutMs"),
-          maxTokens: value("aiMaxTokens"),
-          temperature: value("aiTemperature"),
-          thinkingEnabled: boolValue("aiThinkingEnabled"),
-          reasoningEffort: value("aiReasoningEffort"),
-          jsonRepair: boolValue("aiJsonRepair"),
-          allowPersonalContext: boolValue("aiAllowPersonalContext"),
-          cozeBaseUrl: value("cozeBaseUrl"),
-          cozeChatEndpoint: value("cozeChatEndpoint"),
-          cozePollEnabled: boolValue("cozePollEnabled"),
-          cozePollIntervalMs: value("cozePollIntervalMs"),
-          cozePollMaxAttempts: value("cozePollMaxAttempts"),
-          cloudbaseOpenaiEnabled: boolValue("cloudbaseOpenaiEnabled"),
-          cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"),
-          cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"),
-          cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"),
-          cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens")
-        };
-        var apiKey = value("aiApiKey");
-        var cozeApiKey = value("cozeApiKey");
-        var cozeBotId = value("cozeBotId");
-        var cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
-        if (apiKey) payload.apiKey = apiKey;
-        if (cozeApiKey) payload.cozeApiKey = cozeApiKey;
-        if (cozeBotId && cozeBotId !== "已配置") payload.cozeBotId = cozeBotId;
-        if (cloudbaseOpenaiApiKey) payload.cloudbaseOpenaiApiKey = cloudbaseOpenaiApiKey;
-        return payload;
-      }
-
-      function saveAiProviderConfig() {
-        var payload = aiProviderPayload();
-        var previousMode = state.aiProviderConfig && state.aiProviderConfig.runtimeMode || "public";
-        if (previousMode !== "competition" && payload.runtimeMode === "competition") {
-          var confirmed = window.confirm("competition 模式仅限开发版/体验版和服务端授权会话使用。正式版配置会 fail-closed。确认继续保存？");
-          if (!confirmed) return;
-        }
-        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
-          .then(function(res) {
-            state.aiProviderConfig = res.data || {};
-            renderAiProviderConfig();
-            ignoreLoadError(loadAiAgentStatus());
-            showToast("查询服务配置已保存。", "success");
-            setStatus("查询服务配置已保存：" + (state.aiProviderConfig.provider || "mock"));
-          })
-          .catch(function(error) { showToast(error.message, "error"); });
-      }
-
-      function verifyAiProviderConfig() {
-        var box = $("aiVerifyResult");
-        if (box) box.textContent = "正在验证当前 Provider...";
-        api("/api/admin/ai-provider/verify", { method: "POST", body: "{}" })
-          .then(function(res) {
-            var data = res.data || {};
-            var badRequestHint = /provider_bad_request|invalid_model|invalid_payload/.test(data.fallbackReason || "")
-              ? "Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。"
-              : "";
-            var lines = [
-              "Key configured: " + (data.keyConfigured ? "true" : "false"),
-              "Provider: " + (data.provider || "-"),
-              "Configured: " + (data.configuredProvider || "-"),
-              "Desired: " + (data.desiredProvider || "-"),
-              "Resolved: " + (data.resolvedProvider || "-"),
-              "External: " + (data.externalProviderUsed ? "yes" : "no"),
-              "Policy: " + (data.providerPolicy || "-"),
-              "Reason: " + (data.providerDecisionReason || "-"),
-              "Fallback: " + (data.fallbackReason || "-"),
-              "Deterministic tool: " + (data.deterministicToolLocal ? "local" : "external"),
-              "Project QA DeepSeek: " + (data.projectQaUsesDeepSeek ? "yes" : "no"),
-              "Mode: " + (data.mode || "-"),
-              "Elapsed: " + (data.elapsedMs || 0) + "ms",
-              "Answer: " + (data.answerPreview || "-")
-            ];
-            if (badRequestHint) lines.push(badRequestHint);
-            ["deterministicToolTest", "projectQaProviderTest", "forceProviderTest"].forEach(function(key) {
-              var item = data[key];
-              if (!item) return;
-              lines.push("");
-              lines.push(key + ": " + (item.externalProviderUsed ? "external" : "local") + " / " + (item.providerDecisionReason || "-"));
-              lines.push("  provider: " + (item.resolvedProvider || item.provider || "-"));
-              lines.push("  fallback: " + (item.fallbackReason || "-"));
-              lines.push("  answer: " + (item.answerPreview || "-"));
-            });
-            if (data.releaseBlockTest) {
-              lines.push("");
-              lines.push("releaseBlockTest: " + (data.releaseBlockTest.passed ? "passed" : "failed"));
-              lines.push("  runtime: " + (data.releaseBlockTest.runtimeMode || "-"));
-              lines.push("  external: " + (data.releaseBlockTest.externalProviderUsed ? "yes" : "no"));
-              lines.push("  fallback: " + (data.releaseBlockTest.fallbackReason || "-"));
-            }
-            if (Array.isArray(data.toolCalls) && data.toolCalls.length) {
-              lines.push("Tools: " + data.toolCalls.map(function(item) {
-                return (item.name || "-") + "/" + (item.status || "-");
-              }).join(", "));
-            }
-            if (box) box.textContent = lines.join("\\n");
-            showToast("Provider 验证完成。", "success");
-          })
-          .catch(function(error) {
-            if (box) box.textContent = "验证失败：" + error.message;
-            showToast(error.message, "error");
-          });
-      }
-
-      function forceAiProviderChatTest() {
-        var box = $("aiVerifyResult");
-        if (box) box.textContent = "正在测试项目知识查询...";
-        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify({ mode: "project_qa" }) })
-          .then(function(res) {
-            var data = res.data || {};
-            var project = data.projectQaProviderTest || data;
-            var lines = [
-              "强制项目知识查询测试",
-              "Key configured: " + (data.keyConfigured ? "true" : "false"),
-              "Provider: " + (project.resolvedProvider || project.provider || "-"),
-              "External: " + (project.externalProviderUsed ? "yes" : "no"),
-              "Policy: " + (project.providerPolicy || data.providerPolicy || "-"),
-              "Reason: " + (project.providerDecisionReason || data.providerDecisionReason || "-"),
-              "Fallback: " + (project.fallbackReason || data.fallbackReason || "-"),
-              "Answer: " + (project.answerPreview || data.answerPreview || "-")
-            ];
-            if (/provider_bad_request|invalid_model|invalid_payload/.test(project.fallbackReason || data.fallbackReason || "")) {
-              lines.push("Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。");
-            }
-            if (box) box.textContent = lines.join("\\n");
-            showToast("Provider 链路测试完成。", "success");
-          })
-          .catch(function(error) {
-            if (box) box.textContent = "项目知识查询测试失败：" + error.message;
-            showToast(error.message, "error");
-          });
-      }
-
       var AI_ENV_LABELS = {
         public: "正式版",
         trial: "体验版",
@@ -14324,7 +13960,9 @@ const adminConsoleHtml = `<!doctype html>
         mock: "mock 本地规则",
         "cloudbase-openai": "混元 cloudbase-openai",
         deepseek: "deepseek",
-        coze: "coze"
+        coze: "coze",
+        "custom-openai": "自定义 OpenAI 兼容",
+        "custom-anthropic": "自定义 Anthropic 兼容"
       };
 
       function findAiEnvironment(env) {
@@ -14336,28 +13974,6 @@ const adminConsoleHtml = `<!doctype html>
       function activeAiProfile() {
         var env = findAiEnvironment(state.aiProviderEnvironment || "public");
         return env && env.profile || {};
-      }
-
-      function providerCompletenessText(provider) {
-        var completeness = provider && provider.completeness || {};
-        return (completeness.percent || 0) + "% (" + (completeness.passed || 0) + "/" + (completeness.total || 0) + ")";
-      }
-
-      function renderProviderCard(provider) {
-        var name = provider.name || "mock";
-        var active = state.aiProviderSelectedProvider === name ? " active" : "";
-        var enabledBadge = provider.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>未启用</span>";
-        var healthClass = provider.health === "ok" ? "success" : (provider.health === "degraded" ? "warning" : "muted");
-        return "<div class='provider-card" + active + "' data-provider='" + escapeHtml(name) + "'>" +
-          "<div class='provider-card-head'><div><div class='provider-card-title'>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</div><div class='ai-secret-note'>" + escapeHtml(name) + "</div></div>" + enabledBadge + "</div>" +
-          "<div class='provider-metrics'>" +
-            "<div class='provider-metric'>配置完整度<br><strong>" + escapeHtml(providerCompletenessText(provider)) + "</strong></div>" +
-            "<div class='provider-metric'>最近测试<br><span class='badge " + healthClass + "'>" + escapeHtml(provider.health || "unknown") + "</span></div>" +
-            "<div class='provider-metric'>延迟<br><strong>" + escapeHtml(String(provider.latencyMs || provider.p50LatencyMs || 0)) + "ms</strong></div>" +
-            "<div class='provider-metric'>fallback<br><strong>" + escapeHtml(String(provider.fallbackCount || 0)) + "</strong></div>" +
-          "</div>" +
-          (provider.keyConfigured ? "<div class='ai-secret-note'>密钥 configured true" + (provider.keyLast4 ? " / ****" + escapeHtml(provider.keyLast4) : "") + "</div>" : "<div class='ai-secret-note'>密钥 configured false</div>") +
-        "</div>";
       }
 
       function aiConfigInput(id, label, valueText, placeholder, type) {
@@ -14372,6 +13988,17 @@ const adminConsoleHtml = `<!doctype html>
             renderHealthItem("知识库版本", "<code>" + escapeHtml(kb.version || kb.currentVersion || "-") + "</code>") +
             renderHealthItem("规则数量", "<strong>" + escapeHtml(String(kb.ruleCount || 0)) + "</strong>") +
             renderHealthItem("chunk 数量", "<strong>" + escapeHtml(String(kb.chunkCount || 0)) + "</strong>") +
+          "</div>";
+        }
+        if (providerName === "custom-openai" || providerName === "custom-anthropic") {
+          var selectedEntry = apcSelectedEntry();
+          if (!selectedEntry) {
+            return "<div class='ai-secret-note'>该协议暂无可用自定义条目，请先在下方「自定义 Provider」中添加并配齐 Base URL、密钥与模型。</div>";
+          }
+          return "<div class='provider-switch-row' style='flex-direction:column;align-items:flex-start;gap:6px;'>" +
+            "<div><strong>" + escapeHtml(selectedEntry.label) + "</strong> <span class='apc-proto-badge'>" + escapeHtml(selectedEntry.protocol) + "</span> " + (selectedEntry.usable ? "<span class='badge success'>可用</span>" : "<span class='badge warning'>待完善</span>") + "</div>" +
+            "<div class='ai-secret-note'>" + escapeHtml(selectedEntry.baseUrl) + " · 模型 <code>" + escapeHtml(selectedEntry.model || "-") + "</code> · 密钥 " + (selectedEntry.apiKeyConfigured ? "****" + escapeHtml(selectedEntry.apiKeyLast4 || "") : "未配置") + "</div>" +
+            "<div class='ai-secret-note'>在下方「自定义 Provider」中可编辑条目、拉取模型列表或切换其他条目。阶段模型（上方理解/规划模型）留空时使用该条目模型。</div>" +
           "</div>";
         }
         if (providerName === "cloudbase-openai") {
@@ -14421,63 +14048,6 @@ const adminConsoleHtml = `<!doctype html>
         if (bot) bot.style.display = mode === "bot" ? "block" : "none";
       }
 
-      function renderAiProviderConfig() {
-        var cfg = state.aiProviderConfig || {};
-        if (!state.aiProviderEnvironment) state.aiProviderEnvironment = cfg.activeEnvironment || "public";
-        var envStatus = findAiEnvironment(state.aiProviderEnvironment) || {};
-        var profile = envStatus.profile || {};
-        if (!state.aiProviderSelectedProvider) state.aiProviderSelectedProvider = profile.provider || "mock";
-        var providers = Array.isArray(envStatus.providers) ? envStatus.providers : [];
-        if (!providers.some(function(item) { return item.name === state.aiProviderSelectedProvider; })) state.aiProviderSelectedProvider = profile.provider || "mock";
-        var section = $("section-ai-provider");
-        if (!section) return;
-        var envTabs = ["public", "trial", "dev"].map(function(env) {
-          return "<button type='button' class='" + (state.aiProviderEnvironment === env ? "active" : "") + "' data-ai-env='" + env + "'>" + AI_ENV_LABELS[env] + "</button>";
-        }).join("");
-        var selectedProvider = state.aiProviderSelectedProvider || "mock";
-        section.innerHTML = "<div class='provider-console'>" +
-          "<div class='provider-hero'><div><h3>查询服务 / Provider 控制台</h3><p>正式版保持本地规则；体验版和开发版可启用外部理解能力。课程、教师、教室、空教室等事实仍必须由工具和 Release Pack 核验。</p></div><div class='env-tabs' id='aiEnvTabs'>" + envTabs + "</div></div>" +
-          "<div class='provider-actions-row'><button id='aiPresetPublicSafeBtn' class='secondary'>一键切换为正式安全模式</button><button id='aiPresetTrialBtn' class='secondary'>一键切换为体验增强模式</button><button id='aiPresetMockBtn' class='ghost'>一键恢复 mock</button><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
-          "<div class='provider-main-grid'><div><div class='provider-card-grid' id='aiProviderCards'>" + providers.map(renderProviderCard).join("") + "</div>" +
-          "<details class='diagnostic-panel' style='margin-top:16px;'><summary>诊断抽屉 / 链路日志 / 黄金测试</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未验证。运行测试后会显示 resolved provider、fallback、工具链和延迟。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行 Provider 测试</button><button id='forceAiProviderChatBtn' class='secondary'>强制测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>运行黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出脱敏报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details></div>" +
-          "<div class='provider-config-panel'><h3 class='card-title'>" + escapeHtml(AI_PROVIDER_LABELS[selectedProvider] || selectedProvider) + "</h3><div class='form-row'><div><label>启用状态</label><select id='aiEnabled'><option value='false'>关闭 / mock fallback</option><option value='true'>启用</option></select></div><div><label>Provider Policy</label><select id='aiProviderPolicy'><option value='tool-only'>tool-only</option><option value='auto'>auto</option><option value='always'>always</option></select></div></div><input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiRuntimeMode' type='hidden' value='" + escapeHtml(profile.runtimeMode || "public") + "'>" + renderProviderConfigFields(selectedProvider, profile) + "<div class='ai-secret-note'>密钥不会回显明文；留空表示保留原密钥。保存会立即更新 runtime config，兼容写 .env 的逻辑仅在服务器显式开启时生效。</div><div class='provider-actions-row' style='margin-top:14px;'><button id='saveAiProviderBtn' class='primary'>保存当前环境配置</button></div></div></div></div>";
-        setSelectValue("aiEnabled", profile.enabled ? "true" : "false");
-        setSelectValue("aiProviderPolicy", profile.providerPolicy || "auto");
-        setSelectValue("cozePollEnabled", profile.cozePollEnabled === false ? "false" : "true");
-        setSelectValue("aiJsonRepair", profile.jsonRepair === false ? "false" : "true");
-        setSelectValue("aiThinkingEnabled", profile.thinkingEnabled ? "true" : "false");
-        bindAiProviderConsoleEvents();
-        renderAiAgentStatus();
-      }
-
-      function bindAiProviderConsoleEvents() {
-        document.querySelectorAll("[data-ai-env]").forEach(function(btn) {
-          btn.addEventListener("click", function() {
-            state.aiProviderEnvironment = btn.dataset.aiEnv || "public";
-            var env = findAiEnvironment(state.aiProviderEnvironment);
-            state.aiProviderSelectedProvider = env && env.provider || "mock";
-            renderAiProviderConfig();
-          });
-        });
-        document.querySelectorAll("[data-provider]").forEach(function(card) {
-          card.addEventListener("click", function() {
-            state.aiProviderSelectedProvider = card.dataset.provider || "mock";
-            renderAiProviderConfig();
-          });
-        });
-        safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
-        safeBind("cozeTestConnectionBtn", "click", testCozeConnection);
-        safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
-        safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
-        safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
-        safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
-        safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
-        safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
-        safeBind("aiPresetPublicSafeBtn", "click", function() { saveAiProviderPreset("public-safe", "public"); });
-        safeBind("aiPresetTrialBtn", "click", function() { saveAiProviderPreset("trial-enhanced", "trial"); });
-        safeBind("aiPresetMockBtn", "click", function() { saveAiProviderPreset("mock", state.aiProviderEnvironment || "public"); });
-      }
-
       function loadAiProviderConfig() {
         var env = state.aiProviderEnvironment || "";
         return api("/api/admin/ai-provider/config" + (env ? "?environment=" + encodeURIComponent(env) : ""))
@@ -14497,78 +14067,6 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function aiProviderPayload() {
-        var profile = activeAiProfile();
-        var provider = state.aiProviderSelectedProvider || value("aiProvider") || profile.provider || "mock";
-        var payload = {
-          environment: state.aiProviderEnvironment || "public",
-          activeEnvironment: state.aiProviderEnvironment || "public",
-          enabled: boolValue("aiEnabled"),
-          provider: provider,
-          providerPolicy: value("aiProviderPolicy") || profile.providerPolicy || "auto",
-          runtimeMode: (state.aiProviderEnvironment === "public") ? "public" : "competition"
-        };
-        if (provider === "deepseek") {
-          Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
-          if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
-        } else if (provider === "cloudbase-openai") {
-          Object.assign(payload, { cloudbaseOpenaiEnabled: boolValue("aiEnabled"), cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
-          if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
-        } else if (provider === "coze") {
-          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn", cozeBotId: value("cozeBotId"), cozeChatEndpoint: "/v3/chat", cozePollEnabled: true, cozePollIntervalMs: profile.cozePollIntervalMs || "1000", cozePollMaxAttempts: profile.cozePollMaxAttempts || "12" });
-          if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
-        }
-        return payload;
-      }
-
-      function describeAiProviderChanges(payload) {
-        var profile = activeAiProfile();
-        var fields = ["enabled", "provider", "providerPolicy", "model", "reasoningModel", "baseUrl", "temperature", "maxTokens", "cloudbaseOpenaiBaseUrl", "cloudbaseOpenaiTextModel", "cozeBaseUrl", "cozeBotId", "cozeChatEndpoint"];
-        var lines = ["将保存到：" + (AI_ENV_LABELS[payload.environment] || payload.environment)];
-        fields.forEach(function(key) {
-          if (!Object.prototype.hasOwnProperty.call(payload, key)) return;
-          var beforeValue = profile[key] == null ? "" : String(profile[key]);
-          var afterValue = payload[key] == null ? "" : String(payload[key]);
-          if (beforeValue !== afterValue) lines.push(key + ": " + beforeValue + " -> " + afterValue);
-        });
-        ["apiKey", "cozeApiKey", "cloudbaseOpenaiApiKey"].forEach(function(key) {
-          if (payload[key]) lines.push(key + ": configured false/true -> configured true (不显示明文)");
-        });
-        return lines;
-      }
-
-      function saveAiProviderConfig() {
-        var payload = aiProviderPayload();
-        var lines = describeAiProviderChanges(payload);
-        if (!window.confirm(lines.join("\\n") || "确认保存当前 Provider 配置？")) return;
-        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
-          .then(function(res) {
-            state.aiProviderConfig = res.data || {};
-            state.aiProviderEnvironment = state.aiProviderConfig.activeEnvironment || payload.environment;
-            state.aiProviderSelectedProvider = payload.provider || "mock";
-            renderAiProviderConfig();
-            ignoreLoadError(loadAiAgentStatus());
-            showToast("查询服务配置已保存。", "success");
-            setStatus("查询服务配置已保存：" + (payload.environment || "public") + " / " + (payload.provider || "mock"));
-          })
-          .catch(function(error) { showToast(error.message, "error"); });
-      }
-
-      function saveAiProviderPreset(preset, environment) {
-        var payload = { preset: preset, environment: environment, activeEnvironment: environment, provider: state.aiProviderSelectedProvider || "deepseek" };
-        if (!window.confirm(["将应用预设：" + preset, "目标环境：" + (AI_ENV_LABELS[environment] || environment)].join("\\n"))) return;
-        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
-          .then(function(res) {
-            state.aiProviderConfig = res.data || {};
-            state.aiProviderEnvironment = environment;
-            var envStatus = findAiEnvironment(environment);
-            state.aiProviderSelectedProvider = envStatus && envStatus.provider || "mock";
-            renderAiProviderConfig();
-            showToast("预设已应用。", "success");
-          })
-          .catch(function(error) { showToast(error.message, "error"); });
-      }
-
       function aiProviderActualUseLabel() {
         var last = state.aiAgentStatus && state.aiAgentStatus.lastExternalCall || null;
         var experience = last && last.provider
@@ -14584,25 +14082,20 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function isExperienceProvider(name) {
-        return ["cloudbase-openai", "deepseek", "coze"].indexOf(String(name || "").toLowerCase()) >= 0;
+        return ["cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].indexOf(String(name || "").toLowerCase()) >= 0;
       }
 
       function aiModeMetric(label, valueText, foot) {
         return "<div class='provider-metric'><span>" + escapeHtml(label) + "</span><strong>" + valueText + "</strong>" + (foot ? "<small>" + escapeHtml(foot) + "</small>" : "") + "</div>";
       }
 
-      function renderExperienceProviderRadios(selectedProvider) {
-        return ["cloudbase-openai", "deepseek", "coze"].map(function(name) {
-          var checked = selectedProvider === name ? " checked" : "";
-          return "<label class='provider-radio-row'><input type='radio' name='aiExperienceProvider' value='" + escapeHtml(name) + "'" + checked + " data-experience-provider='" + escapeHtml(name) + "'><span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</span></label>";
-        }).join("");
-      }
-
       var AI_STAGE_PROVIDER_OPTIONS = [
         ["", "跟随主 Provider"],
-        ["cloudbase-openai", "混元 cloudbase-openai"],
-        ["deepseek", "deepseek"],
         ["coze", "coze"],
+        ["deepseek", "deepseek"],
+        ["cloudbase-openai", "混元 cloudbase-openai"],
+        ["custom-openai", "自定义 OpenAI 兼容"],
+        ["custom-anthropic", "自定义 Anthropic 兼容"],
         ["mock", "mock 本地规则（强制本阶段 deterministic）"]
       ];
 
@@ -14739,6 +14232,230 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
+      function apcCustomEntries() {
+        var cfg = state.aiProviderConfig || {};
+        return Array.isArray(cfg.customProviders) ? cfg.customProviders : [];
+      }
+
+      function apcProtocolOfProvider(name) {
+        if (name === "custom-openai") return "openai";
+        if (name === "custom-anthropic") return "anthropic";
+        return "";
+      }
+
+      function apcFindEntry(id) {
+        return apcCustomEntries().find(function(item) { return item.id === id; }) || null;
+      }
+
+      function apcSelectedEntry() {
+        var protocol = apcProtocolOfProvider(state.aiProviderSelectedProvider);
+        if (!protocol) return null;
+        var list = apcCustomEntries();
+        var byId = apcFindEntry(state.aiProviderSelectedCustomId);
+        if (byId && byId.protocol === protocol) return byId;
+        return list.find(function(item) { return item.protocol === protocol && item.usable; }) || list.find(function(item) { return item.protocol === protocol; }) || null;
+      }
+
+      // Provider 选择器：内置 + 自定义条目卡片网格（点击即选，保存生效）。
+      function renderExperienceProviderPicker(selectedProvider) {
+        var envStatus = findAiEnvironment(aiExperienceEnvironment()) || {};
+        var providers = Array.isArray(envStatus.providers) ? envStatus.providers : [];
+        var statusByName = {};
+        providers.forEach(function(item) { statusByName[item.name] = item; });
+        var builtin = ["coze", "deepseek", "cloudbase-openai"].map(function(name) {
+          var st = statusByName[name] || {};
+          var configured = st.configured || st.keyConfigured;
+          var active = selectedProvider === name ? " active" : "";
+          return "<div class='apc-pick-card" + active + "' data-apc-pick='" + escapeHtml(name) + "' role='button' tabindex='0'>" +
+            "<div class='apc-pick-title'><span class='apc-dot " + (configured ? "ok" : "off") + "'></span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</div>" +
+            "<div class='apc-pick-sub'>" + escapeHtml(name) + (configured ? " · 已配置" : " · 未配置") + "</div>" +
+          "</div>";
+        }).join("");
+        var custom = apcCustomEntries().map(function(entry) {
+          var canonical = entry.protocol === "anthropic" ? "custom-anthropic" : "custom-openai";
+          var active = selectedProvider === canonical && state.aiProviderSelectedCustomId === entry.id ? " active" : "";
+          return "<div class='apc-pick-card" + active + "' data-apc-pick='" + canonical + "' data-apc-custom-id='" + escapeHtml(entry.id) + "' role='button' tabindex='0'>" +
+            "<div class='apc-pick-title'><span class='apc-dot " + (entry.usable ? "ok" : "off") + "'></span>" + escapeHtml(entry.label) + "<span class='apc-proto-badge'>" + escapeHtml(entry.protocol) + "</span></div>" +
+            "<div class='apc-pick-sub'>" + escapeHtml(entry.model || "未设模型") + (entry.usable ? "" : " · 待完善") + "</div>" +
+          "</div>";
+        }).join("");
+        return builtin + custom ||
+          "<div class='ai-secret-note'>暂无可用 Provider。</div>";
+      }
+
+      function renderCustomProviderManager() {
+        var list = apcCustomEntries();
+        var rows = list.map(function(entry) {
+          var canonical = entry.protocol === "anthropic" ? "custom-anthropic" : "custom-openai";
+          var statusBadge = entry.usable
+            ? "<span class='badge success'>可用</span>"
+            : "<span class='badge warning'>待完善</span>";
+          var activeMark = state.aiProviderSelectedCustomId === entry.id ? " <span class='badge muted'>当前选中</span>" : "";
+          return "<tr>" +
+            "<td><strong>" + escapeHtml(entry.label) + "</strong>" + activeMark + "</td>" +
+            "<td><span class='apc-proto-badge'>" + escapeHtml(entry.protocol) + "</span></td>" +
+            "<td style='word-break:break-all;max-width:220px;'>" + escapeHtml(entry.baseUrl) + "</td>" +
+            "<td><code>" + escapeHtml(entry.model || "-") + "</code></td>" +
+            "<td>" + (entry.apiKeyConfigured ? "****" + escapeHtml(entry.apiKeyLast4 || "") : "<span class='badge danger'>未配置</span>") + "</td>" +
+            "<td>" + statusBadge + "</td>" +
+            "<td style='white-space:nowrap;'>" +
+              "<button type='button' class='ghost apc-row-btn' data-cp-primary='" + escapeHtml(entry.id) + "' data-cp-canonical='" + canonical + "'>设为主 Provider</button>" +
+              "<button type='button' class='ghost apc-row-btn' data-cp-edit='" + escapeHtml(entry.id) + "'>编辑</button>" +
+              "<button type='button' class='ghost apc-row-btn apc-danger' data-cp-delete='" + escapeHtml(entry.id) + "'>删除</button>" +
+            "</td>" +
+          "</tr>";
+        }).join("");
+        var table = list.length
+          ? "<table class='apc-cp-table'><thead><tr>" +
+            ["名称", "协议", "Base URL", "模型", "密钥", "状态", "操作"].map(function(head) { return "<th>" + head + "</th>"; }).join("") +
+            "</tr></thead><tbody>" + rows + "</tbody></table>"
+          : "<div class='ai-secret-note' style='padding:4px 0;'>尚未添加自定义 Provider。支持任何 OpenAI / Anthropic 协议兼容端点（如 OpenRouter、OneAPI、NewAPI、自建网关、Anthropic 官方等）。</div>";
+        var form = state.cpFormOpen
+          ? "<div class='apc-cp-form'>" +
+            "<div class='form-row'>" +
+              aiConfigInput("cpLabel", "名称", state.cpFormLabel || "", "例如：OpenRouter 主力") +
+              "<div><label>协议</label><select id='cpProtocol'><option value='openai'>OpenAI 兼容（/chat/completions）</option><option value='anthropic'>Anthropic 兼容（/messages）</option></select></div>" +
+            "</div>" +
+            "<div class='form-row full'>" + aiConfigInput("cpBaseUrl", "Base URL", state.cpFormBaseUrl || "", "https://api.example.com/v1（Anthropic 会自动补 /v1）") + "</div>" +
+            "<div class='form-row full'>" + aiConfigInput("cpApiKey", "API Key", "", state.cpEditingId ? "留空表示保留原密钥" : "必填，仅加密存储", "password") + "</div>" +
+            "<div class='form-row'>" +
+              "<div><label>模型</label><input id='cpModel' list='cpModelOptions' autocomplete='off' value='" + escapeHtml(state.cpFormModel || "") + "' placeholder='点「获取模型」自动拉取，或手动填写'><datalist id='cpModelOptions'></datalist></div>" +
+              "<div class='apc-fetch-cell'><label>&nbsp;</label><button id='cpFetchModelsBtn' type='button' class='secondary'>获取模型</button></div>" +
+            "</div>" +
+            "<div id='cpFetchResult' class='ai-secret-note'></div>" +
+            "<div class='form-row'>" +
+              "<label class='provider-checkbox-row' style='flex:1;'><input id='cpStrictJson' type='checkbox' checked><span>严格 JSON 模式（端点支持 response_format 时开启）</span></label>" +
+              "<label class='provider-checkbox-row' style='flex:1;'><input id='cpEnabled' type='checkbox' checked><span>启用该条目</span></label>" +
+            "</div>" +
+            "<div class='provider-actions-row'><button id='cpSaveBtn' class='primary'>" + (state.cpEditingId ? "保存修改" : "添加 Provider") + "</button><button id='cpCancelBtn' class='ghost'>取消</button></div>" +
+          "</div>"
+          : "";
+        return "<section class='provider-mode-card' style='margin-top:16px;'>" +
+          "<div class='provider-card-head'><div><div class='provider-card-title'>自定义 Provider（OpenAI / Anthropic 协议）</div><div class='ai-secret-note'>CCSwitch 式管理：添加多个第三方端点，一键把任意条目设为当前环境主 Provider。密钥只加密存储，永不回显。</div></div><button id='cpFormToggleBtn' class='secondary'>" + (state.cpFormOpen ? "收起" : "＋ 添加 Provider") + "</button></div>" +
+          "<div style='padding:0 12px 12px;display:flex;flex-direction:column;gap:12px;'>" + table + form + "</div>" +
+        "</section>";
+      }
+
+      function openCustomProviderForm(editId) {
+        var entry = editId ? apcFindEntry(editId) : null;
+        state.cpFormOpen = true;
+        state.cpEditingId = entry ? entry.id : "";
+        state.cpFormLabel = entry ? entry.label : "";
+        state.cpFormBaseUrl = entry ? entry.baseUrl : "";
+        state.cpFormModel = entry ? entry.model : "";
+        state.cpFormProtocol = entry ? entry.protocol : "openai";
+        state.cpFormEnabled = entry ? entry.enabled !== false : true;
+        state.cpFormStrictJson = entry ? entry.strictJsonMode !== false : true;
+        renderAiProviderConfig();
+      }
+
+      function submitCustomProviderForm() {
+        var payload = {
+          entry: {
+            id: state.cpEditingId || undefined,
+            label: value("cpLabel"),
+            protocol: value("cpProtocol") || "openai",
+            baseUrl: value("cpBaseUrl"),
+            apiKey: value("cpApiKey"),
+            model: value("cpModel"),
+            enabled: document.getElementById("cpEnabled") ? document.getElementById("cpEnabled").checked : true,
+            strictJsonMode: document.getElementById("cpStrictJson") ? document.getElementById("cpStrictJson").checked : true
+          }
+        };
+        if (!payload.entry.baseUrl || !/^https:\/\//i.test(payload.entry.baseUrl)) {
+          showToast("Base URL 必须是 https 地址。", "warning");
+          return;
+        }
+        if (!state.cpEditingId && !payload.entry.apiKey) {
+          showToast("新条目必须填写 API Key。", "warning");
+          return;
+        }
+        api("/api/admin/ai-provider/custom-provider/save", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.cpFormOpen = false;
+            state.cpEditingId = "";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiReadinessMatrix());
+            showToast("自定义 Provider 已保存并即时生效。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function deleteCustomProviderEntry(id) {
+        var entry = apcFindEntry(id);
+        if (!window.confirm("确认删除自定义 Provider「" + (entry ? entry.label : id) + "」？\n该操作会立即生效。")) return;
+        api("/api/admin/ai-provider/custom-provider/delete", { method: "POST", body: JSON.stringify({ id: id }) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            if (state.aiProviderSelectedCustomId === id) state.aiProviderSelectedCustomId = "";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiReadinessMatrix());
+            showToast("已删除。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function fetchCustomProviderModels() {
+        var box = $("cpFetchResult");
+        var payload = {
+          protocol: value("cpProtocol") || "openai",
+          baseUrl: value("cpBaseUrl"),
+          apiKey: value("cpApiKey"),
+          id: state.cpEditingId || undefined
+        };
+        if (box) box.textContent = "正在拉取模型列表…";
+        api("/api/admin/ai-provider/fetch-models", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            var data = res.data || {};
+            var models = Array.isArray(data.models) ? data.models : [];
+            var datalist = $("cpModelOptions");
+            if (datalist) {
+              datalist.innerHTML = models.map(function(model) { return "<option value='" + escapeHtml(model) + "'></option>"; }).join("");
+            }
+            if (box) box.textContent = models.length
+              ? "拉取成功（" + Number(data.latencyMs || 0) + "ms）：共 " + models.length + " 个模型，点击模型输入框下拉选择。"
+              : "端点未返回模型列表，请手动填写模型名。";
+            if (models.length) showToast("已获取 " + models.length +  " 个模型。", "success");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "获取失败：" + error.message;
+            showToast(error.message, "error");
+          });
+      }
+
+      function setPrimaryCustomProvider(id, canonical) {
+        var environment = aiExperienceEnvironment();
+        var entry = apcFindEntry(id);
+        if (!entry || !entry.usable) {
+          showToast("该条目还未配齐（需要 baseUrl + 密钥 + 模型），请先编辑完善。", "warning");
+          return;
+        }
+        api("/api/admin/ai-provider/config", {
+          method: "POST",
+          body: JSON.stringify({
+            environment: environment,
+            activeEnvironment: environment,
+            enabled: true,
+            provider: canonical,
+            activeCustomId: id,
+            providerPolicy: "auto",
+            runtimeMode: "competition"
+          })
+        })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderSelectedProvider = canonical;
+            state.aiProviderSelectedCustomId = id;
+            state.aiProviderDraftExperienceEnabled = false;
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiReadinessMatrix());
+            ignoreLoadError(loadAiAgentStatus());
+            showToast("已切换主 Provider：" + (entry ? entry.label : id) + "（" + environment + "，立即生效）。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
       function renderAiProviderConfig() {
         var cfg = state.aiProviderConfig || {};
         var publicEnv = findAiEnvironment("public") || {};
@@ -14750,12 +14467,16 @@ const adminConsoleHtml = `<!doctype html>
         var toolCount = cfg.toolCount || cfg.enabledToolCount || cfg.protocolToolCount || 0;
         var selectedProvider = state.aiProviderSelectedProvider;
         if (!isExperienceProvider(selectedProvider)) selectedProvider = experienceProfile.provider;
-        if (!isExperienceProvider(selectedProvider)) selectedProvider = "cloudbase-openai";
+        if (!isExperienceProvider(selectedProvider)) selectedProvider = "coze";
         state.aiProviderSelectedProvider = selectedProvider;
         state.aiProviderEnvironment = experienceEnvName;
+        if (!state.aiProviderSelectedCustomId) state.aiProviderSelectedCustomId = experienceProfile.activeCustomId || cfg.activeCustomId || "";
         var formalActive = publicEnv.safePublic === true || ((publicProfile.provider || "mock") === "mock" && publicProfile.enabled === false);
         var experienceEnabled = state.aiProviderDraftExperienceEnabled === true || (experienceProfile.enabled !== false && isExperienceProvider(experienceProfile.provider));
-        var experienceLaneLabel = experienceEnabled ? (AI_PROVIDER_LABELS[selectedProvider] || selectedProvider) : "增强未启用";
+        var selectedLabel = AI_PROVIDER_LABELS[selectedProvider] || selectedProvider;
+        var selectedEntry = apcSelectedEntry();
+        if (selectedEntry) selectedLabel = selectedEntry.label + "（" + selectedEntry.protocol + "）";
+        var experienceLaneLabel = experienceEnabled ? selectedLabel : "增强未启用";
         var section = $("section-ai-provider");
         if (!section) return;
         section.innerHTML = "<div class='provider-console'>" +
@@ -14777,13 +14498,14 @@ const adminConsoleHtml = `<!doctype html>
               "<div class='env-tabs provider-experience-tabs'><button type='button' class='" + (experienceEnvName === "trial" ? "active" : "") + "' data-ai-experience-env='trial'>体验版</button><button type='button' class='" + (experienceEnvName === "dev" ? "active" : "") + "' data-ai-experience-env='dev'>开发版</button></div>" +
               "<label class='provider-switch-row'><span>启用增强理解能力</span><select id='aiExperienceEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></label>" +
               "<input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiEnabled' type='hidden' value='" + (experienceEnabled ? "true" : "false") + "'><input id='aiProviderPolicy' type='hidden' value='auto'><input id='aiRuntimeMode' type='hidden' value='" + (experienceEnabled ? "competition" : "public") + "'>" +
-              (experienceEnabled ? "<div class='provider-radio-group'>" + renderExperienceProviderRadios(selectedProvider) + "</div>" +
+              (experienceEnabled ? "<div class='apc-section-label'>主 Provider（第一跳）</div><div class='apc-pick-grid'>" + renderExperienceProviderPicker(selectedProvider) + "</div>" +
                 "<div class='form-row'>" + renderStageAssignSelect("aiUnderstandingProvider", "理解阶段 Provider（意图识别）", experienceProfile.understandingProvider) + renderStageAssignSelect("aiPlannerProvider", "规划阶段 Provider（Planner）", experienceProfile.plannerProvider) + renderStageAssignSelect("aiResponseProvider", "回复阶段 Provider（Response）", experienceProfile.responseProvider) + "</div>" +
                 "<div class='ai-secret-note'>阶段默认「跟随主 Provider」：后台选哪个主 Provider，该阶段第一跳就用哪个；这里可单独覆盖某个阶段（含强制本地规则）。保存后主链会重算为 [主 Provider, ...其余 fallback]。</div>" +
                 "<div class='form-row'>" + aiConfigInput("aiUnderstandingModel", "理解模型（AI_UNDERSTANDING_MODEL）", experienceProfile.understandingModel, "留空 = 跟随主模型") + aiConfigInput("aiPlannerModel", "规划模型（AI_PLANNER_MODEL）", experienceProfile.plannerModel, "留空 = 跟随主模型") + "</div>" +
                 "<div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
             "</section>" +
           "</div>" +
+          renderCustomProviderManager() +
           "<section class='provider-mode-card' style='margin-top:16px;'>" +
             "<div class='provider-card-head'><div><div class='provider-card-title'>Provider 就绪矩阵（真实指标）</div><div class='ai-secret-note'>配置可用 = 已配置且未熔断；已验证 = 本进程内有真实成功调用或探测成功。未验证的 Provider 不会标记为「真实可用/已就绪」，只显示「已配置未验证」。</div></div><button id='reloadAiReadinessMatrixBtn' class='ghost'>刷新矩阵</button></div>" +
             "<div id='aiReadinessMatrixBox' style='padding:0 12px 12px;'><span class='badge muted'>尚未加载</span></div>" +
@@ -14799,6 +14521,13 @@ const adminConsoleHtml = `<!doctype html>
         setSelectValue("cozePollEnabled", experienceProfile.cozePollEnabled === false ? "false" : "true");
         setSelectValue("aiJsonRepair", experienceProfile.jsonRepair === false ? "false" : "true");
         setSelectValue("aiThinkingEnabled", experienceProfile.thinkingEnabled ? "true" : "false");
+        if (state.cpFormOpen) {
+          setSelectValue("cpProtocol", state.cpFormProtocol || "openai");
+          var cpEnabledEl = document.getElementById("cpEnabled");
+          if (cpEnabledEl) cpEnabledEl.checked = state.cpFormEnabled !== false;
+          var cpStrictEl = document.getElementById("cpStrictJson");
+          if (cpStrictEl) cpStrictEl.checked = state.cpFormStrictJson !== false;
+        }
         bindAiProviderConsoleEvents();
         syncCozeModeFields();
         renderAiAgentStatus();
@@ -14811,16 +14540,50 @@ const adminConsoleHtml = `<!doctype html>
             var environment = button.dataset.aiExperienceEnv === "dev" ? "dev" : "trial";
             state.aiProviderEnvironment = environment;
             state.aiProviderDraftExperienceEnabled = false;
+            state.aiProviderSelectedCustomId = "";
             var envStatus = findAiEnvironment(environment) || {};
             if (isExperienceProvider(envStatus.provider)) state.aiProviderSelectedProvider = envStatus.provider;
             renderAiProviderConfig();
           });
         });
-        document.querySelectorAll("[data-experience-provider]").forEach(function(input) {
-          input.addEventListener("change", function() {
-            state.aiProviderSelectedProvider = input.value || "cloudbase-openai";
+        document.querySelectorAll("[data-apc-pick]").forEach(function(card) {
+          var pick = function() {
+            state.aiProviderSelectedProvider = card.dataset.apcPick || "coze";
+            state.aiProviderSelectedCustomId = card.dataset.apcCustomId || "";
             renderAiProviderConfig();
+          };
+          card.addEventListener("click", pick);
+          card.addEventListener("keydown", function(event) {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              pick();
+            }
           });
+        });
+        safeBind("cpFormToggleBtn", "click", function() {
+          if (state.cpFormOpen) {
+            state.cpFormOpen = false;
+            state.cpEditingId = "";
+            renderAiProviderConfig();
+          } else {
+            openCustomProviderForm("");
+          }
+        });
+        safeBind("cpSaveBtn", "click", submitCustomProviderForm);
+        safeBind("cpCancelBtn", "click", function() {
+          state.cpFormOpen = false;
+          state.cpEditingId = "";
+          renderAiProviderConfig();
+        });
+        safeBind("cpFetchModelsBtn", "click", fetchCustomProviderModels);
+        document.querySelectorAll("[data-cp-edit]").forEach(function(btn) {
+          btn.addEventListener("click", function() { openCustomProviderForm(btn.dataset.cpEdit); });
+        });
+        document.querySelectorAll("[data-cp-delete]").forEach(function(btn) {
+          btn.addEventListener("click", function() { deleteCustomProviderEntry(btn.dataset.cpDelete); });
+        });
+        document.querySelectorAll("[data-cp-primary]").forEach(function(btn) {
+          btn.addEventListener("click", function() { setPrimaryCustomProvider(btn.dataset.cpPrimary, btn.dataset.cpCanonical); });
         });
         safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
         safeBind("cozeTestConnectionBtn", "click", testCozeConnection);
@@ -14845,7 +14608,7 @@ const adminConsoleHtml = `<!doctype html>
           if (value("aiExperienceEnabled") === "true") {
             state.aiProviderDraftExperienceEnabled = true;
             state.aiProviderEnvironment = aiExperienceEnvironment();
-            if (!state.aiProviderSelectedProvider || state.aiProviderSelectedProvider === "mock") state.aiProviderSelectedProvider = "cloudbase-openai";
+            if (!state.aiProviderSelectedProvider || state.aiProviderSelectedProvider === "mock") state.aiProviderSelectedProvider = "coze";
             renderAiProviderConfig();
           } else {
             state.aiProviderDraftExperienceEnabled = false;
@@ -14885,6 +14648,10 @@ const adminConsoleHtml = `<!doctype html>
         payload.responseProvider = value("aiResponseProvider");
         payload.understandingModel = value("aiUnderstandingModel");
         payload.plannerModel = value("aiPlannerModel");
+        if (provider === "custom-openai" || provider === "custom-anthropic") {
+          var pickedEntry = apcSelectedEntry();
+          payload.activeCustomId = pickedEntry ? pickedEntry.id : (state.aiProviderSelectedCustomId || "");
+        }
         if (provider === "deepseek") {
           Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
           if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
