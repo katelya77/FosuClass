@@ -354,6 +354,21 @@ async function chat(input = {}) {
     });
   }
 
+  // M2-T2: consume the manifest per-tool verification policies over the
+  // executed tool results (additive). Emits verification.started/completed
+  // RunEvents and folds the verdict into execution.verification /
+  // execution.partialCompletion, so deriveExecutionOutcome's existing
+  // verification/partial outputs and the terminal run event reflect the real
+  // policy checks. Never throws; tools without a declared policy keep their
+  // existing kernel-verification behavior.
+  const toolVerificationContract = verificationCoordinator.resolveVerificationGoalContract(execution)
+    || goalContractV2
+    || null;
+  verificationCoordinator.verifyToolResults(execution, intent, toolVerificationContract, {
+    eventInput,
+    runtimeMode: runtimeDecision.runtimeMode,
+  });
+
   if (runtimeDecision.runtimeMode === "public" &&
     !isFactToolIntent(intent) &&
     !isProjectKnowledgeIntent(intent) &&

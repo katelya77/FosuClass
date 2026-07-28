@@ -30,6 +30,8 @@ const EVENT_MAP = Object.freeze({
   "provider.shadow.failed": "STEP_FINISHED",
   "response.composing": "TEXT_MESSAGE_START",
   "result.verifying": "STEP_STARTED",
+  "verification.started": "STEP_STARTED",
+  "verification.completed": "STEP_FINISHED",
   "run.completed": "RUN_FINISHED",
   "run.degraded": "RUN_FINISHED",
   "run.failed": "RUN_ERROR",
