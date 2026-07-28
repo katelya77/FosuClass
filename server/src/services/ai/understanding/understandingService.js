@@ -175,6 +175,7 @@ class UnderstandingService {
     try {
       generated = await this.structuredGenerate({
         purpose: "understanding",
+        stage: "understanding",
         messages: buildUnderstandingMessages(input.message, input.conversationState || {}),
         message: input.message,
         runtimeMode,

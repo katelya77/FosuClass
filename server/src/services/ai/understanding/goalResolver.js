@@ -56,12 +56,38 @@ function resolveClarificationType(contract, deterministicHint = {}) {
   return normalizeGoalContract(Object.assign({}, contract, { entityType: hintedType }));
 }
 
-function mergeConstraints(contract, state) {
+const INHERITABLE_ENTITY_ROLES = new Set(["teacher", "class", "classroom", "course"]);
+
+function mergeConstraints(contract, state, followUpResolution) {
   const current = contract.constraints || {};
   if (["inherit_active_goal", "inherit_last_entity", "replace_constraints", "fill_pending_clarification"].includes(contract.followUpMode)) {
-    return Object.assign({}, state.lastConstraints || {}, current);
+    // M4-T2: the follow-up merge base (working-state constraints overlaid by
+    // the contract, plus message-declared constraint switches) is decided by
+    // the single follow-up resolver. The raw contract constraints still
+    // overlay last so V1-only keys (detailId/sections/college…) and explicit
+    // values keep their exact legacy semantics.
+    const inherited = followUpResolution && followUpResolution.constraints && typeof followUpResolution.constraints === "object"
+      ? followUpResolution.constraints
+      : state.lastConstraints || {};
+    return Object.assign({}, inherited, current);
   }
   return Object.assign({}, current);
+}
+
+// Project the single follow-up resolver's inheritance decision back into V1
+// entity fields. The resolver's order (lastResolvedEntity > lastEntity >
+// stored contract > current contract) is the authority; this helper only
+// picks the first inheritable entity it returned.
+function inheritedEntityFromResolution(resolution) {
+  if (!resolution || typeof resolution !== "object") return null;
+  const candidates = (Array.isArray(resolution.entities) ? resolution.entities : [])
+    .concat(Array.isArray(resolution.inheritedEntities) ? resolution.inheritedEntities : []);
+  const hit = candidates.find((item) => item
+    && INHERITABLE_ENTITY_ROLES.has(String(item.role || "").toLowerCase())
+    && String(item.value == null ? "" : item.value).trim());
+  return hit
+    ? { role: String(hit.role).toLowerCase(), value: String(hit.value) }
+    : null;
 }
 
 function commonSlots(constraints = {}) {
@@ -124,19 +150,25 @@ function resolveGoalContract(input = {}) {
   const state = workingStateFrom(input);
   contract = resolveClarificationType(contract, input.deterministicHint || {});
   contract = resolvePendingEntityContract(contract, state, input.message || "");
-  const constraints = mergeConstraints(contract, state);
+  // M4-T2: follow-up constraint merge + entity inheritance delegate to the
+  // single implementation (planner/followUpResolver.resolve). The V1 contract
+  // is upgraded through the resolver's V2 adapter; resolution never throws.
+  const followUpResolution = followUpResolver.resolve({
+    message: input.message || "",
+    goalContractV2: contract,
+    workingState: state,
+  });
+  const constraints = mergeConstraints(contract, state, followUpResolution);
   const slots = commonSlots(constraints);
   let entityType = contract.entityType;
   let entity = compact(contract.normalizedEntity || contract.entity);
   let inheritedEntity = null;
   if (!entity && ["inherit_last_entity", "inherit_active_goal", "fill_pending_clarification"].includes(contract.followUpMode)) {
     inheritedEntity = state.lastResolvedEntity || null;
-    if (inheritedEntity && inheritedEntity.name) {
-      entity = compact(inheritedEntity.name);
-      entityType = inheritedEntity.type || entityType;
-    } else if (state.lastEntity) {
-      entity = compact(state.lastEntity);
-      entityType = state.lastEntityType || entityType;
+    const inherited = inheritedEntityFromResolution(followUpResolution);
+    if (inherited) {
+      entity = compact(inherited.value);
+      entityType = inherited.role || entityType;
     }
   }
 

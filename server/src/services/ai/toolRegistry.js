@@ -1,4 +1,6 @@
 const releaseService = require("../releaseService");
+const schoolSearchContractService = require("../schoolSearchContractService");
+const { DECISION: SCHOOL_SEARCH_DECISION } = require("../../shared/schoolSearchContract.generated");
 const { sanitizeToolResult } = require("./safetyGuard");
 const {
   getCourseTimeRange,
@@ -14,6 +16,7 @@ const classroomSearch = require("./classroomSearch");
 const knowledgeBaseService = require("./knowledgeBaseService");
 const imageGenerationGateService = require("./imageGenerationGateService");
 const agentProtocol = require("./agentProtocol");
+const capabilityManifestService = require("./capabilityManifestService");
 const generatedPayloadContract = require("./generatedPayloadContract");
 const { planCourseReminder } = require("./reminders/courseReminderPlanner");
 const { defaultCourseReminderService } = require("./reminders/courseReminderService");
@@ -825,106 +828,54 @@ function resolveModernChineseIntent(message, context = {}) {
   return null;
 }
 
-function weekdayFromFollowUpText(text) {
-  const map = {
-    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
-    1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7,
-  };
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  const match = compact.match(/周([一二三四五六日天1-7])/) || compact.match(/星期([一二三四五六日天])/);
-  return match && map[match[1]] != null ? map[match[1]] : null;
-}
-
-function weekFromFollowUpText(text) {
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  const match = compact.match(/第(\d{1,2})周/) || compact.match(/换成(\d{1,2})周/) || compact.match(/(\d{1,2})周/);
-  if (!match) return null;
-  const week = Number(match[1]);
-  return Number.isFinite(week) && week >= 1 && week <= 30 ? week : null;
-}
-
-function periodFromFollowUpText(text) {
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  if (/上午|早上/.test(compact)) return "morning";
-  if (/下午/.test(compact)) return "afternoon";
-  if (/晚上|夜间/.test(compact)) return "evening";
-  return "";
-}
-
-function isFollowUpModifierMessage(message) {
-  const compact = normalizeText(message).replace(/\s+/g, "");
-  if (!compact || compact.length > 28) return false;
-  // Short slot refinements only — not full new questions.
-  if (/^(那|换成|改成|还是|继续|再)?(周[一二三四五六日天1-7]|星期[一二三四五六日天]|第?\d{1,2}周|上午|下午|晚上|早上)(呢|啊|呀)?[？?！!。.]?$/.test(compact)) {
-    return true;
-  }
-  if (/^(那)?(周[一二三四五六日天1-7]|下午|上午|晚上)呢[？?]?$/.test(compact)) return true;
-  if (/^换成第?\d{1,2}周$/.test(compact)) return true;
-  return false;
-}
-
 /**
- * Multi-turn follow-ups: “那周三呢 / 下午呢 / 换成第17周”
- * inherit last schedule/index task entities from working memory / slots.
+ * Multi-turn follow-ups (“那周三呢 / 下午呢 / 换成第17周 / 换成江湾 / 不是A，是B …”)
+ * are resolved by the single implementation: planner/followUpResolver.resolve
+ * (M4-T2). The legacy week/period parser that used to live here was retired;
+ * this adapter only folds legacy context shapes (conversationSlots/lastIntent)
+ * into the working-state input the resolver consumes.
  */
-function resolveFollowUpIntent(message, context = {}) {
-  if (!isFollowUpModifierMessage(message)) return null;
-  const wm = context.workingMemory && typeof context.workingMemory === "object" ? context.workingMemory : {};
+function resolveUnifiedFollowUpIntent(message, context = {}) {
+  const workingMemory = context.conversationWorkingState && typeof context.conversationWorkingState === "object"
+    ? context.conversationWorkingState
+    : (context.workingMemory && typeof context.workingMemory === "object" ? context.workingMemory : {});
   const conversationSlots = context.conversationSlots && typeof context.conversationSlots === "object"
     ? context.conversationSlots
     : {};
-  const lastIntent = String(
-    wm.currentGoal || conversationSlots.lastIntent || context.lastIntent || ""
-  );
-  const className = String(wm.className || conversationSlots.className || "").replace(/\s+/g, "");
-  const teacherName = String(wm.teacherName || conversationSlots.teacherName || "").replace(/\s+/g, "");
-  const lastTarget = String(conversationSlots.lastTargetName || conversationSlots.q || "").replace(/\s+/g, "");
-  const q = className || teacherName || lastTarget;
-  const type = className || /班/.test(lastTarget)
-    ? "class"
-    : (teacherName || conversationSlots.lastTargetType === "teacher" ? "teacher" : (conversationSlots.lastTargetType || "class"));
-
-  const weekday = weekdayFromFollowUpText(message);
-  const week = weekFromFollowUpText(message);
-  const periodHint = periodFromFollowUpText(message);
-  const inheritedWeek = week != null
-    ? week
-    : (Number(wm.teachingWeek || conversationSlots.lastWeek || conversationSlots.week) || null);
-  const inheritedWeekday = weekday != null
-    ? weekday
-    : (Number(wm.weekday || conversationSlots.lastWeekday || conversationSlots.weekday) || null);
-  const inheritedPeriod = periodHint || wm.periodHint || "";
-
-  const scheduleLike = /search_school_index|get_schedule_detail|get_week_schedule|get_today|get_tomorrow|search_class|课表/.test(lastIntent)
-    || Boolean(q);
-  if (!scheduleLike || !q) return null;
-
-  const personalScheduleIntent = /get_today_courses|get_tomorrow_courses|get_week_schedule|get_next_course/.test(lastIntent);
-  if (personalScheduleIntent && !className) {
-    return {
-      name: lastIntent,
-      slots: {
-        week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
-        weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
-        periodHint: inheritedPeriod || undefined,
-      },
-      followUp: true,
-      confidence: 0.92,
-    };
+  const workingState = Object.assign({}, workingMemory);
+  // Legacy parity: conversationSlots/lastIntent only fill gaps the working
+  // memory does not already cover.
+  if (!workingState.activeGoal && !workingState.currentGoal) {
+    workingState.activeGoal = String(conversationSlots.lastIntent || context.lastIntent || "");
   }
-
-  return {
-    name: "search_school_index",
-    slots: {
-      type: type || "class",
-      q,
-      week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
-      weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
-      periodHint: inheritedPeriod || undefined,
-    },
-    followUp: true,
-    confidence: 0.94,
-  };
+  if (!workingState.lastEntity && !workingState.lastResolvedEntity
+    && !workingState.className && !workingState.teacherName) {
+    const slotClass = String(conversationSlots.className || "").replace(/\s+/g, "");
+    const slotTeacher = String(conversationSlots.teacherName || "").replace(/\s+/g, "");
+    const slotTarget = String(conversationSlots.lastTargetName || conversationSlots.q || "").replace(/\s+/g, "");
+    if (slotClass || slotTeacher || slotTarget) {
+      workingState.lastEntity = slotClass || slotTeacher || slotTarget;
+      workingState.lastEntityType = slotClass || /班/.test(slotTarget)
+        ? "class"
+        : (slotTeacher || conversationSlots.lastTargetType === "teacher"
+          ? "teacher"
+          : (conversationSlots.lastTargetType || "class"));
+    }
+  }
+  if (workingState.teachingWeek == null) {
+    const week = Number(conversationSlots.lastWeek || conversationSlots.week);
+    if (Number.isFinite(week) && week >= 1) workingState.teachingWeek = week;
+  }
+  if (workingState.weekday == null) {
+    const weekday = Number(conversationSlots.lastWeekday || conversationSlots.weekday);
+    if (Number.isFinite(weekday) && weekday >= 1) workingState.weekday = weekday;
+  }
+  const resolution = followUpResolver.resolve({
+    message,
+    workingState,
+    pendingClarification: context.pendingClarification || null,
+  });
+  return resolution && resolution.resolvedIntent ? resolution.resolvedIntent : null;
 }
 
 function resolveIntent(message, context = {}) {
@@ -944,13 +895,10 @@ function resolveIntent(message, context = {}) {
   }
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
-  // Unified follow-up (campus swap / continuous rooms / bare entity fill) before modern multi-step & RAG.
-  const unifiedFollowUp = followUpResolver.resolveFollowUp(text, context.conversationWorkingState || context.workingMemory || {}, context);
-  if (unifiedFollowUp && unifiedFollowUp.intent) {
-    return unifiedFollowUp.intent;
-  }
-  // Legacy week/period follow-ups.
-  const followUpIntent = resolveFollowUpIntent(text, context);
+  // Unified follow-up (single implementation: planner/followUpResolver.resolve)
+  // before modern multi-step & RAG. Covers constraint switches, pending slot
+  // fills, corrections, anaphora and week/period modifiers.
+  const followUpIntent = resolveUnifiedFollowUpIntent(text, context);
   if (followUpIntent) return followUpIntent;
   const modernIntent = resolveModernChineseIntent(text, context);
   if (modernIntent) return modernIntent;
@@ -1272,14 +1220,24 @@ function searchSchoolIndex(input = {}, context = {}) {
   }
   const preferredId = normalizeText(input.preferredId || input.detailId || "");
   const classroomQuery = type === "classroom" ? classroomSearch.parseClassroomQuery(query) : null;
-  const result = releaseService.searchActiveIndex(type, query, {
+  // M3-T3：数据层切换到 school-search.v1 统一契约服务（进程内调用）。过滤谓词、
+  // 教师精确命中隔离、唯一/多候选决策由 schoolSearchContractService 唯一实现，
+  // 工具内不再重复；列表上限默认消费生成物 DECISION.candidateListMax。
+  // 保留本层职责：lockedEntityType、教师称谓剥离、classroom NL 解析与排序、preferredId 权威命中。
+  const listCap = Number(input.limit || SCHOOL_SEARCH_DECISION.candidateListMax) || SCHOOL_SEARCH_DECISION.candidateListMax;
+  const result = schoolSearchContractService.search({
+    type,
+    q: query,
     term: input.term || context.term || getDefaultTerm(),
-    semester: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
     collegeCode: input.collegeCode || "",
     collegeName: input.collegeName || "",
     titleCode: input.titleCode || "",
-    limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : (input.limit || 8),
+    limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : listCap,
+  }, {
+    offline: input.offline === true || context.offline === true,
+    // 测试注入通道（同 releaseService.searchActiveIndex 的 _items 约定）：不进入契约字段与响应
+    _items: Array.isArray(input._items) ? input._items : undefined,
   });
   let rawItems = asArray(result.items);
   // preferredId：别名解析后的权威 detailId，强制唯一命中
@@ -1309,12 +1267,15 @@ function searchSchoolIndex(input = {}, context = {}) {
     buildingCode: classroomQuery && classroomQuery.buildingCode || "",
     roomNumber: classroomQuery && classroomQuery.roomNumber || "",
     normalizedQuery: classroomQuery && classroomQuery.normalizedQuery || query,
-    items: filteredItems.slice(0, Number(input.limit || 8) || 8),
-    total: preferredId && filteredItems.length ? filteredItems.length : filteredItems.length,
+    items: filteredItems.slice(0, listCap),
+    total: filteredItems.length,
     updatedAt: result.updatedAt || "",
     releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
     actionUrl: buildActionUrl("/pages/school/school", { type, q: query }),
     code: result.code || result.reasonCode || "",
+    // M3-T3 追加字段（不改既有字段语义）：契约版本与唯一/多候选/无结果决策透传
+    contractVersion: result.contractVersion || "",
+    decision: result.decision || null,
   };
 }
 
@@ -1941,68 +1902,149 @@ function isHighConfidenceIndexHit(result = {}) {
   return itemName === q || q.length >= 2;
 }
 
+// 执行层硬性要求已认证 Principal 的工具（createCourseReminder 的 PRINCIPAL_REQUIRED
+// 与 courseReminderService / userPreferenceService 的 assertPrincipal）。
+// 计划期仅在调用方显式携带 context.principal 时按此收窄；未携带时维持
+// 执行层鉴权语义（登录/确认 UX 由工具结果驱动），不在这里推断缺省身份。
+const PRINCIPAL_REQUIRED_TOOLS = new Set([
+  "create_course_reminder",
+  "update_course_reminder",
+  "delete_course_reminder",
+  "list_course_reminders",
+  "update_user_preference",
+]);
+
+/**
+ * M6-T1：意图→工具映射单源化。规划候选工具集 = Intent ∩ Skill ∩ Runtime ∩ Principal ∩ Environment，
+ * 五因子全部求交集（只收不放的收窄语义），不以并集放宽：
+ * - Intent：capability manifest 的 intent.allowedTools（唯一映射权威源，manifest 本体只读）；
+ * - Skill：manifest 中 intent.skill 指向 skill 的 allowedTools；
+ * - Runtime：TOOL_HANDLERS 内真实注册可执行；
+ * - Principal：context.principal 显式存在且未认证时，剔除执行需认证 Principal 的工具；
+ * - Environment：context.runtimeMode 对应的工具 runtimeModes 政策（缺省 public，最严口径）。
+ * 交集为空返回 []，调用方按空计划回退（与原实现对 generic/无工具意图的空计划语义一致）。
+ */
+function resolveManifestAllowedTools(intent, context = {}) {
+  const manifestIntent = capabilityManifestService.getIntent(intent && intent.name);
+  if (!manifestIntent || !Array.isArray(manifestIntent.allowedTools) || !manifestIntent.allowedTools.length) {
+    return [];
+  }
+  const manifestSkill = capabilityManifestService.getManifest().skills[manifestIntent.skill];
+  const skillTools = new Set((manifestSkill && Array.isArray(manifestSkill.allowedTools)) ? manifestSkill.allowedTools : []);
+  const runtimeMode = capabilityManifestService.normalizeRuntimeMode(
+    context.runtimeMode || context.assistantEnvironment || "public"
+  );
+  const principal = context.principal && typeof context.principal === "object" ? context.principal : null;
+  const principalRestricted = Boolean(principal) && principal.authenticated !== true;
+  return manifestIntent.allowedTools
+    .map((toolName) => String(toolName))
+    .filter((toolName) => {
+      if (!skillTools.has(toolName)) return false;
+      if (!Object.prototype.hasOwnProperty.call(TOOL_HANDLERS, toolName)) return false;
+      if (!capabilityManifestService.isToolAllowedForRuntime(toolName, runtimeMode)) return false;
+      if (principalRestricted && PRINCIPAL_REQUIRED_TOOLS.has(toolName)) return false;
+      return true;
+    });
+}
+
 function buildPlanForIntent(intent, message, context = {}) {
   const slots = Object.assign({}, intent && intent.slots || {}, {
     message,
     term: context.term,
     releaseVersion: context.releaseVersion,
   });
-  if (intent && intent.name === "campus_multi_step_advice") {
-    const scheduleTool = /明天|明日/.test(message) ? "get_tomorrow_courses" : "get_today_courses";
-    const steps = [
-      agentProtocol.buildPlanStep(scheduleTool, slots, scheduleTool === "get_tomorrow_courses" ? "读取明日个人课程" : "读取今日个人课程"),
-      agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"),
-    ];
-    if (/天气|下雨|降雨|带伞|高温|雷暴/.test(message)) {
+  // 候选工具集唯一来源：capability manifest 五因子交集；以下分支只做
+  // 消息/槽位驱动的步骤编排，任何步骤都不会超出该交集。
+  const allowed = resolveManifestAllowedTools(intent, context);
+  if (!allowed.length) return [];
+  const has = (toolName) => allowed.includes(toolName);
+  const intentName = intent && intent.name || "";
+
+  if (intentName === "campus_multi_step_advice") {
+    const preferTomorrow = /明天|明日/.test(message);
+    const scheduleTool = (preferTomorrow
+      ? ["get_tomorrow_courses", "get_today_courses"]
+      : ["get_today_courses", "get_tomorrow_courses"]).find(has);
+    const steps = [];
+    if (scheduleTool) {
+      steps.push(agentProtocol.buildPlanStep(scheduleTool, slots, scheduleTool === "get_tomorrow_courses" ? "读取明日个人课程" : "读取今日个人课程"));
+    }
+    if (has("search_empty_rooms")) {
+      steps.push(agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"));
+    }
+    if (has("get_campus_weather") && /天气|下雨|降雨|带伞|高温|雷暴/.test(message)) {
       steps.push(agentProtocol.buildPlanStep("get_campus_weather", slots, "查询校区天气"));
     }
-    if (/附近|位置|地点|路线|哪里/.test(message) || slots.building) {
+    if (has("search_campus_place") && (/附近|位置|地点|路线|哪里/.test(message) || slots.building)) {
       steps.push(agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"));
     }
     return steps;
   }
-  if (intent && intent.name === "next_course_location") {
-    return [
-      agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"),
-      agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"),
-    ];
+  if (intentName === "next_course_location") {
+    const steps = [];
+    if (has("get_next_course")) {
+      steps.push(agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"));
+    }
+    if (has("get_classroom_location")) {
+      steps.push(agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"));
+    }
+    return steps;
   }
-  if (intent && intent.name === "update_user_preference") {
-    return [agentProtocol.buildPlanStep("update_user_preference", Object.assign({}, slots, { message }), "更新用户提醒/称呼偏好")];
+  if (intentName === "update_user_preference") {
+    return has("update_user_preference")
+      ? [agentProtocol.buildPlanStep("update_user_preference", Object.assign({}, slots, { message }), "更新用户提醒/称呼偏好")]
+      : [];
   }
-  if (intent && intent.name === "manage_course_reminders") {
+  if (intentName === "manage_course_reminders") {
+    // 槽位 operation 在 manifest 允许集内分派具体提醒工具；目标工具被交集剔除时不做替代放大。
     const operation = intent.slots && intent.slots.operation || "create";
     const toolName = operation === "list"
       ? "list_course_reminders"
       : (operation === "delete" ? "delete_course_reminder"
         : (operation === "update" ? "update_course_reminder" : "create_course_reminder"));
-    return [agentProtocol.buildPlanStep(toolName, slots, operation === "list" ? "读取课程提醒" : "生成待确认提醒操作")];
+    return has(toolName)
+      ? [agentProtocol.buildPlanStep(toolName, slots, operation === "list" ? "读取课程提醒" : "生成待确认提醒操作")]
+      : [];
   }
-  if (intent && intent.name === "course_action_advice") {
+  if (intentName === "course_action_advice") {
     const tomorrow = intent.slots && intent.slots.dateHint === "tomorrow" || /明天/.test(message);
-    const steps = [
-      agentProtocol.buildPlanStep(tomorrow ? "get_tomorrow_courses" : "get_next_course", slots, tomorrow ? "读取明日课程" : "读取下一节课程"),
-      agentProtocol.buildPlanStep("get_course_route", slots, "定位课程并计算带假设的出发缓冲"),
-    ];
-    if (intent.slots && intent.slots.wantsWeather || /天气|下雨|降雨|带伞/.test(message)) {
+    const courseTool = (tomorrow
+      ? ["get_tomorrow_courses", "get_next_course"]
+      : ["get_next_course", "get_tomorrow_courses"]).find(has);
+    const steps = [];
+    if (courseTool) {
+      steps.push(agentProtocol.buildPlanStep(courseTool, slots, courseTool === "get_tomorrow_courses" ? "读取明日课程" : "读取下一节课程"));
+    }
+    if (has("get_course_route")) {
+      steps.push(agentProtocol.buildPlanStep("get_course_route", slots, "定位课程并计算带假设的出发缓冲"));
+    }
+    if (has("get_course_weather_advice") && (intent.slots && intent.slots.wantsWeather || /天气|下雨|降雨|带伞/.test(message))) {
       steps.push(agentProtocol.buildPlanStep("get_course_weather_advice", slots, "查询校区天气并调整出发建议"));
     }
-    steps.push(agentProtocol.buildPlanStep("navigate_miniprogram_page", {
-      url: "/packageMaps/pages/campus-map/campus-map",
-    }, "校验校园地图入口"));
+    if (has("navigate_miniprogram_page")) {
+      steps.push(agentProtocol.buildPlanStep("navigate_miniprogram_page", {
+        url: "/packageMaps/pages/campus-map/campus-map",
+      }, "校验校园地图入口"));
+    }
     return steps;
   }
-  if (intent && intent.name === "inspect_schedule_health") {
-    return [agentProtocol.buildPlanStep("inspect_schedule_conflicts", slots, "检查课表冲突与异常")];
+  if (intentName === "inspect_schedule_health") {
+    return has("inspect_schedule_conflicts")
+      ? [agentProtocol.buildPlanStep("inspect_schedule_conflicts", slots, "检查课表冲突与异常")]
+      : [];
   }
-  if (intent && intent.name === "detect_schedule_changes") {
-    return [agentProtocol.buildPlanStep("detect_schedule_changes", slots, "对比受控个人课表摘要")];
+  if (intentName === "detect_schedule_changes") {
+    return has("detect_schedule_changes")
+      ? [agentProtocol.buildPlanStep("detect_schedule_changes", slots, "对比受控个人课表摘要")]
+      : [];
   }
-  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
-  if (intent.name === "clarify_missing_slot") {
-    return [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")];
+  if (intentName === "clarify_missing_slot") {
+    return has("clarify_missing_slot")
+      ? [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")]
+      : [];
   }
-  return [agentProtocol.buildPlanStep(intent.name, slots, "执行权威工具")];
+  // 单工具意图：取交集首个工具（manifest allowedTools 以主工具在前排序）。
+  return [agentProtocol.buildPlanStep(allowed[0], slots, "执行权威工具")];
 }
 
 function runToolsForIntent(intent, message, context) {

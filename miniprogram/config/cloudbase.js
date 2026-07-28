@@ -20,6 +20,9 @@ const AI_VOICE_INPUT_ENABLED = true;
 const AI_VOICE_PROVIDER = "cloudbase-function";
 const AI_VOICE_MAX_DURATION_MS = 15000;
 const AI_VOICE_DAILY_LIMIT = 30;
+// 生产聊天传输：true = runs API + RunEvent 轮询（UI 状态全部来自服务端真实事件）；
+// false = 回滚到直连 /api/ai/agent/chat（无实时事件，仅兼容/回滚用途）。
+const AI_AGENT_RUNS_TRANSPORT_ENABLED = true;
 
 module.exports = {
   ENV_ID,
@@ -41,4 +44,5 @@ module.exports = {
   AI_VOICE_PROVIDER,
   AI_VOICE_MAX_DURATION_MS,
   AI_VOICE_DAILY_LIMIT,
+  AI_AGENT_RUNS_TRANSPORT_ENABLED,
 };

@@ -63,6 +63,23 @@ function run() {
   assert.strictEqual(unverifiedSuccess.agentActivityState, "complete");
   assert.ok(!/核验/.test(unverifiedSuccess.statusCapsuleText), "an unverified response must not claim verification");
 
+  // M2-T2: verification.* run events map to the verifying activity state.
+  assert.strictEqual(
+    activityPatchForRunEvent({ type: "verification.started", text: "正在核验结果" }).agentActivityState,
+    "verifying",
+    "verification.started must map to verifying"
+  );
+  const verificationDone = activityPatchForRunEvent({ type: "verification.completed", text: "结果已核验" });
+  assert.strictEqual(
+    verificationDone.agentActivityState,
+    "verifying",
+    "verification.completed must map to verifying"
+  );
+  assert.ok(
+    !/Thinking/.test(verificationDone.statusCapsuleText),
+    "verification events must never masquerade as Thinking"
+  );
+
   console.log("test-agent-activity-state: PASS");
 }
 

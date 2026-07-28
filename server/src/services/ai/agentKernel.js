@@ -58,12 +58,8 @@ class AgentKernel {
     this.skillRegistry = options.skillRegistry || defaultSkillRegistry;
     this.intentResolver = options.intentResolver || toolRegistry.resolveIntent;
     this.toolExecutor = options.toolExecutor || toolRegistry.executeToolAsync;
-    this.toolChainExecutor = options.toolChainExecutor || toolRegistry.runToolChainForIntentAsync;
     this.runtimeModeResolver = options.runtimeModeResolver || runtimeModeService.resolveRuntimeMode;
     this.traceRecorder = options.traceRecorder || agentTraceRecorder;
-    // Default: use constrained planner + observation loop.
-    // Explicit useToolChain=true keeps legacy tool-chain path for specialized callers.
-    this.useToolChain = options.useToolChain === true;
   }
 
   resolveRuntime(input, context) {
@@ -124,6 +120,8 @@ class AgentKernel {
   async executePlan(plan, context, input = {}) {
     const calls = [];
     const steps = [];
+    // Skill-declared recovery rules (see skillRegistry); the kernel only executes them generically.
+    const recoveryRules = (input.skill && Array.isArray(input.skill.recoveryRules)) ? input.skill.recoveryRules : [];
     const pushCall = (toolName, result, label, durationMs = 0) => {
       const failed = !result || result.success === false;
       const index = calls.length;
@@ -164,73 +162,22 @@ class AgentKernel {
       const durationMs = Date.now() - started;
       pushCall(toolName, result, item.reason || item.label || `Execute ${toolName}`, durationMs);
 
-      // Preserve tool-chain side observations for recommend / empty-room recovery.
-      if (toolName === "recommend_meeting_time" && result && result.emptyRoomResult) {
-        pushCall("search_empty_rooms", result.emptyRoomResult, "附带空教室候选", 0);
-      }
-      if ((toolName === "search_empty_rooms" || toolName === "search_continuous_empty_rooms")
-        && result && (result.success === false
+      // Skill-declared recovery: attach side results / run recovery tools on empty-or-failed results.
+      for (const rule of recoveryRules) {
+        if (!rule || !rule.when || !(rule.when.tools || []).includes(toolName)) continue;
+        if (rule.attachResult && result && result[rule.attachResult.resultKey]) {
+          pushCall(rule.attachResult.tool, result[rule.attachResult.resultKey], rule.attachResult.label, 0);
+        }
+        if (rule.callOnEmptyOrFailure && result && (result.success === false
           || !(Array.isArray(result.rooms) ? result.rooms.length : Number(result.total || 0)))) {
-        const diagnosis = await withTimeout(
-          this.toolExecutor("diagnose_data_status", item.args || item.input || {}, context),
-          this.toolTimeoutMs
-        );
-        pushCall("diagnose_data_status", diagnosis, "诊断课表数据状态", 0);
+          const recovery = await withTimeout(
+            this.toolExecutor(rule.callOnEmptyOrFailure.tool, item.args || item.input || {}, context),
+            this.toolTimeoutMs
+          );
+          pushCall(rule.callOnEmptyOrFailure.tool, recovery, rule.callOnEmptyOrFailure.label, 0);
+        }
       }
     }
-    return { toolCalls: calls, steps };
-  }
-
-  async executeToolChain(intent, message, context, skill, input = {}) {
-    const planPreview = skill.planBuilder
-      ? skill.planBuilder({ message, context, intent, runtimeMode: context.runtimeMode || "public" })
-      : [];
-    (Array.isArray(planPreview) ? planPreview : []).forEach((item) => {
-      const toolName = String(item.toolName || item.name || "");
-      if (toolName) {
-        this.emit(input, {
-          type: "tool.started",
-          tool: toolName,
-          status: "started",
-        });
-      }
-    });
-    const started = Date.now();
-    const toolCalls = await withTimeout(
-      this.toolChainExecutor(intent, message, context),
-      this.toolTimeoutMs * this.maxPlanSteps
-    );
-    const calls = Array.isArray(toolCalls) ? toolCalls : [];
-    if (calls.length > this.maxPlanSteps) {
-      throw codedError("PLAN_STEP_LIMIT_EXCEEDED", `Tool chain exceeds ${this.maxPlanSteps} steps`);
-    }
-    calls.forEach((call) => {
-      const toolName = String(call && call.name || "");
-      if (!skill.allowedTools.includes(toolName)) {
-        throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${toolName} is not allowed for ${skill.id}`, { toolName });
-      }
-    });
-    const duration = Date.now() - started;
-    const perStep = calls.length ? Math.max(0, Math.round(duration / calls.length)) : 0;
-    const steps = calls.map((call, index) => {
-      const result = call && call.result || {};
-      const failed = call.status === "failed" || result.success === false;
-      this.emit(input, {
-        type: failed ? "tool.failed" : "tool.completed",
-        tool: String(call.name || ""),
-        status: failed ? "failed" : "success",
-        reasonCode: failed ? String(result.code || "TOOL_FAILED").slice(0, 80) : "",
-      });
-      return {
-        id: `step-${index + 1}`,
-        label: String(call.summary || call.name || "").slice(0, 120),
-        tool: String(call.name || "").slice(0, 80),
-        status: failed ? "failed" : (call.status || "success"),
-        durationMs: Number(call.durationMs || perStep) || 0,
-        errorCode: failed ? String(result.code || "TOOL_FAILED").slice(0, 80) : "",
-        retried: call.retried === true,
-      };
-    });
     return { toolCalls: calls, steps };
   }
 
@@ -266,44 +213,8 @@ class AgentKernel {
       status: "selected",
     });
 
-    // Final convergence: constrained planner + observation loop (public stays deterministic).
-    // useToolChain remains for backward-compatible tests that inject custom chain executors.
-    if (this.useToolChain && !input.forcePlanner) {
-      const plan = skill.planBuilder({ message, context, intent, runtimeMode });
-      this.validatePlan(skill, plan, runtimeMode);
-      const execution = await this.executeToolChain(intent, message, context, skill, input);
-      this.emit(input, {
-        type: "result.verifying",
-        intentName: String(intent && intent.name || "").slice(0, 80),
-        status: "verifying",
-      });
-      const verification = skill.resultVerifier({ intent, toolCalls: execution.toolCalls, context, runtimeMode });
-      const observations = execution.toolCalls.map(toObservation);
-      return {
-        runId: input.runId || agentProtocol.createRunId(),
-        requestId: input.requestId || agentProtocol.createRequestId(),
-        conversationId: String(input.conversationId || context.conversationId || "").slice(0, 80),
-        runtimeDecision,
-        runtimeMode,
-        message,
-        context,
-        intent,
-        confidence: Number(intent && intent.confidence || 0) || 0,
-        slots,
-        skill,
-        plan,
-        steps: execution.steps,
-        toolCalls: execution.toolCalls,
-        observations,
-        verification,
-        replanUsed: false,
-        evidenceComplete: verification.evidenceComplete === true,
-        usedPersonalContext: Boolean(context.currentScheduleSummary && context.currentScheduleSummary.enabled && context.currentScheduleSummary.courses && context.currentScheduleSummary.courses.length),
-        startedAt,
-        deterministicDurationMs: Date.now() - startedAt,
-      };
-    }
-
+    // Single execution path: constrained planner + observation loop (public stays deterministic),
+    // coordinated upstream by runtime/plannerCoordinator.
     // Capability Router: 1–3 skills, ≤8–12 candidate tools for Planner.
     const conversationState = input.conversationState || {
       conversationSummary: context.conversationSummary || "",
@@ -427,7 +338,7 @@ class AgentKernel {
           args: step.args || {},
           reason: step.reasonCode || step.reason,
         }));
-        return this.executePlan(legacyPlan, context, input);
+        return this.executePlan(legacyPlan, context, Object.assign({}, input, { skill }));
       },
       toObservations: (calls) => (calls || []).map(toObservation),
       verify: ({ toolCalls, plan: verifyPlan }) => {

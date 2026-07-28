@@ -19,7 +19,9 @@ function getPlannerPolicy(runtimeMode, env = process.env) {
   const mode = capabilityManifestService.normalizeRuntimeMode(runtimeMode);
   const limits = capabilityManifestService.getManifest().limits || {};
   const maxPlanSteps = Math.min(5, Math.max(1, Number(env.AI_PLANNER_MAX_STEPS || limits.maxPlanSteps || 5) || 5));
-  const maxReplan = Math.min(1, Math.max(0, Number(env.AI_PLANNER_MAX_REPLAN || 1) || 1));
+  // 以代码现实为准：实际生效的 Replan 上限是 planSchema.MAX_REPLAN（2），
+  // 由 observationLoop / deterministicPlanner 强制执行；该策略字段当前无消费方，口径对齐为 ≤2。
+  const maxReplan = Math.min(2, Math.max(0, Number(env.AI_PLANNER_MAX_REPLAN || 2) || 2));
   const toolTimeoutMs = Math.max(10, Number(env.AI_TOOL_TIMEOUT_MS || limits.toolTimeoutMs || 8000) || 8000);
   const totalRunTimeoutMs = Math.max(toolTimeoutMs, Number(env.AI_RUN_TIMEOUT_MS || 25000) || 25000);
   const agentEnabled = !["false", "0"].includes(String(env.AI_AGENT_ENABLED == null ? "true" : env.AI_AGENT_ENABLED).toLowerCase());

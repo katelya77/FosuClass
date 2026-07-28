@@ -1,6 +1,15 @@
 const request = require("../utils/request");
 const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
 const agentRunClient = require("./agentRunClient");
+const cloudbaseConfig = require("../config/cloudbase");
+
+// Runs transport is the production path: UI states must come from real server
+// Run Events. The legacy direct-chat oracle is kept only as an explicit
+// rollback (AI_AGENT_RUNS_TRANSPORT_ENABLED=false) and as the timeout
+// fallback inside callOracleViaRuns. Read lazily so tests can flip the flag.
+function runsTransportEnabled() {
+  return cloudbaseConfig.AI_AGENT_RUNS_TRANSPORT_ENABLED !== false;
+}
 
 const METRICS_KEY = "FOSU_AI_GENERATIVE_METRICS";
 const INVALID_TEXT_TOKENS = new Set(["[object Object]", "undefined", "null", "NaN"]);
@@ -253,9 +262,9 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
 async function callOracle(oracleChat, safeMessage, context, callbacks = {}, metadata = {}) {
   // Never guess loading from client intent. Prefer real run events.
   if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "request.submitted", text: "正在理解你的问题" });
+    callbacks.onStatus({ type: "request.submitted", text: "正在建立校园任务" });
   }
-  if (oracleChat) return oracleChat(safeMessage, context, metadata);
+  if (oracleChat && !runsTransportEnabled()) return oracleChat(safeMessage, context, metadata);
   try {
     return await callOracleViaRuns(safeMessage, context, callbacks, metadata);
   } catch (error) {
@@ -296,7 +305,7 @@ async function serverFirstChat(input = {}) {
   const metadata = normalizeRequestMetadata(input, context);
 
   if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "request.submitted", text: "正在理解你的问题" });
+    callbacks.onStatus({ type: "request.submitted", text: "正在建立校园任务" });
   }
 
   // Credentials stop before every network/provider boundary. The original

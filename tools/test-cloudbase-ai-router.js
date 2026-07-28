@@ -21,6 +21,10 @@ function futureConfig(extra = {}) {
     AI_COMPETITION_MODE: true,
     AI_TOOL_ONLY_MODE: false,
     AI_CLIENT_EXPRESSION_LAYER_ENABLED: true,
+    // This suite exercises the legacy direct-chat rollback path
+    // (AI_AGENT_RUNS_TRANSPORT_ENABLED=false); the runs production path is
+    // covered by test-xiaofu-runs-transport.js.
+    AI_AGENT_RUNS_TRANSPORT_ENABLED: false,
   }, extra);
 }
 
