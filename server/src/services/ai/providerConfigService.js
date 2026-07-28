@@ -834,6 +834,9 @@ function saveConfig(payload = {}) {
 
   runtimeStore.writeRuntimeConfig(updates);
   applyUpdatesToProcessEnv(updates);
+  // 配置已变更：旧配置时期积累的熔断/失败态不再代表新配置，立即清空，
+  // 保证后台切换 Provider 实时生效（无需等待熔断冷却或重启）。
+  require("./providerChainService").resetCircuitState();
 
   if (String(process.env.FOSU_AI_PROVIDER_WRITE_ENV || "").toLowerCase() === "true") {
     const currentText = ensureEnvFile();
