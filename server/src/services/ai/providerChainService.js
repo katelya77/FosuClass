@@ -552,6 +552,19 @@ function resetForTest() {
   state.clear();
 }
 
+/**
+ * 配置变更后调用：清空各 Provider 的熔断/失败计数，让新配置立即生效。
+ * 保留 lastSuccessAt / 延迟样本等真实成功指标（它们是历史事实，不是陈旧状态）。
+ */
+function resetCircuitState() {
+  state.forEach((item) => {
+    item.failureCount = 0;
+    item.fallbackReason = "";
+    item.circuitBreaker = { state: "closed", openedAt: "", nextProbeAt: "" };
+    if (item.health !== "ok") item.health = "unknown";
+  });
+}
+
 module.exports = {
   classifyFailure,
   generateWithChain,
@@ -564,6 +577,7 @@ module.exports = {
   isProviderVerified,
   normalizeProviderName,
   probeProvider,
+  resetCircuitState,
   resolveStageChain,
   runShadowEvaluation,
   scheduleShadowEvaluation,
