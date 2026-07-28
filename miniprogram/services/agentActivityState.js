@@ -98,6 +98,13 @@ function activityPatchForRunEvent(status) {
       statusCapsuleDetail: "正在调用白名单工具并记录可验证结果。",
     };
   }
+  if (type === "verification.started" || type === "verification.completed") {
+    return {
+      agentActivityState: "verifying",
+      statusCapsuleText: text || "正在核验结果",
+      statusCapsuleDetail: "只有通过验证的工具结果才会进入最终回答。",
+    };
+  }
   if (type === "tool.completed" || type === "result.verifying" || type === "response.composing") {
     return {
       agentActivityState: "composing",

@@ -593,6 +593,7 @@
     "test:agent-phase2": "node tools/run-agent-phase2-tests.js",
     "test:agent-phase3": "node tools/run-agent-phase3-tests.js",
     "test:agent-run-events": "node tools/test-agent-run-events.js",
+    "test:agent-verification": "node tools/test-agent-verification.js && node tools/test-agent-departure-chain-verification.js",
     "test:provider-readiness": "node tools/test-provider-readiness.js",
     "test:provider-shadow-eval": "node tools/test-provider-shadow-eval.js",
     "test:provider-runtime-matrix": "node tools/test-provider-runtime-matrix.js",

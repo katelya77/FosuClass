@@ -32,6 +32,8 @@ const EVENT_TYPES = Object.freeze([
   "run.degraded",
   "run.failed",
   "run.cancelled",
+  "verification.started",
+  "verification.completed",
 ]);
 
 const TOOL_LABELS = Object.freeze({
@@ -125,6 +127,12 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
         : "正在准备回答";
     case "result.verifying":
       return "正在核验结果";
+    case "verification.started":
+      return "正在核验结果";
+    case "verification.completed":
+      if (event.status === "failed") return "结果核验未通过";
+      if (event.status === "partial") return "部分结果已通过核验";
+      return "结果已核验";
     case "run.degraded":
       return "已切换到本地能力";
     case "run.completed":
@@ -160,6 +168,9 @@ function publicEventSummary(event = {}) {
     partialCompletion: event.partialCompletion === true,
     verificationOk: event.verificationOk === false ? false : (event.verificationOk === true ? true : null),
     errorCount: Math.max(0, Number(event.errorCount || 0) || 0),
+    // M2-T2 additive fields for verification.* events; 0 for all other events.
+    toolCount: Math.max(0, Number(event.toolCount || 0) || 0),
+    violationCount: Math.max(0, Number(event.violationCount || 0) || 0),
     label: safeText(event.label || loadingTextForEvent(event, event.runtimeMode || "public"), 120),
   };
 }

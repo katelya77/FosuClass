@@ -458,4 +458,5 @@
 |---|---|---|
 | M0 | ✅ 完成（064de232） | `output/agent-platform-m0-baseline.md`，五门禁全绿 |
 | M1 | ✅ 完成（c6c2b301） | `output/agent-platform-m1-progress.md`，`tools/test-provider-control-plane.js` 11/11 PASS，已接入 foundation 套件；未发现真实缺陷，M1-T3 跳过 |
-| M2–M7 | 未开始 | — |
+| M2 | ✅ 代码与测试完成（待 commit，需用户确认） | `output/agent-platform-m2-progress.md`；toolResultVerifier + departureChainVerifier 落盘并接线；`test-agent-verification` 6 组 + `test-agent-departure-chain-verification` 9 组全绿，均接入 phase3 套件；phase3 26 文件 / foundation 32/32 / final-convergence 全绿；`runEventCatalog.js` diff 主 Agent 已审（纯追加）。遗留：`get_course_route` manifest `emptyResultPolicy.codes` 缺口冻结留 M3 裁定 |
+| M3–M7 | 未开始 | — |
