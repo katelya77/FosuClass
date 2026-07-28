@@ -53,6 +53,14 @@ function run() {
   const subpackageRoots = getSubpackageRoots(appJson);
   assert(subpackageRoots.length >= 1, "AI/map heavy pages should live in subpackages");
 
+  // WeChat upload compiler rejects BOM-prefixed sources (inner upload errcode -80056).
+  const bomFiles = walkFiles(miniprogramRoot, (filePath) => /\.(wxss|wxml|js|json|wxs)$/.test(filePath))
+    .filter((filePath) => {
+      const head = fs.readFileSync(filePath);
+      return head.length >= 3 && head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf;
+    });
+  assert.strictEqual(bomFiles.length, 0, `source files must not carry UTF-8 BOM: ${bomFiles.join(", ")}`);
+
   const usedTags = collectUsedComponentTags();
   const packageFiles = walkFiles(miniprogramRoot);
   const totalBytes = packageFiles.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0);

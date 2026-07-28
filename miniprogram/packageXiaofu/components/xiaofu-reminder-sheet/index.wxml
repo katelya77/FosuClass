@@ -1,4 +1,4 @@
-﻿<view class="reminder-mask" wx:if="{{visible}}" bindtap="close">
+<view class="reminder-mask" wx:if="{{visible}}" bindtap="close">
   <view class="reminder-sheet" catchtap="stopPropagation" role="dialog" aria-label="智能课程提醒">
     <view class="sheet-handle"></view>
     <view class="sheet-head">

@@ -1,4 +1,4 @@
-﻿const reminderClient = require("../../../services/courseReminderClient");
+const reminderClient = require("../../../services/courseReminderClient");
 const aiAssistantService = require("../../../services/aiAssistantService");
 
 function safeText(value, max) {

@@ -1,4 +1,4 @@
-﻿<view class="conversation-sheet" wx:if="{{visible}}">
+<view class="conversation-sheet" wx:if="{{visible}}">
   <view class="sheet-handle"></view>
   <view class="task-panel-head">
     <view class="panel-title-wrap">

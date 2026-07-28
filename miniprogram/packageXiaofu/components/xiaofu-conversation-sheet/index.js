@@ -1,4 +1,4 @@
-﻿Component({
+Component({
   properties: {
     visible: { type: Boolean, value: false },
     conversations: { type: Array, value: [] },
