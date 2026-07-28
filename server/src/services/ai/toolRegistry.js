@@ -827,106 +827,54 @@ function resolveModernChineseIntent(message, context = {}) {
   return null;
 }
 
-function weekdayFromFollowUpText(text) {
-  const map = {
-    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
-    1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7,
-  };
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  const match = compact.match(/周([一二三四五六日天1-7])/) || compact.match(/星期([一二三四五六日天])/);
-  return match && map[match[1]] != null ? map[match[1]] : null;
-}
-
-function weekFromFollowUpText(text) {
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  const match = compact.match(/第(\d{1,2})周/) || compact.match(/换成(\d{1,2})周/) || compact.match(/(\d{1,2})周/);
-  if (!match) return null;
-  const week = Number(match[1]);
-  return Number.isFinite(week) && week >= 1 && week <= 30 ? week : null;
-}
-
-function periodFromFollowUpText(text) {
-  const compact = normalizeText(text).replace(/\s+/g, "");
-  if (/上午|早上/.test(compact)) return "morning";
-  if (/下午/.test(compact)) return "afternoon";
-  if (/晚上|夜间/.test(compact)) return "evening";
-  return "";
-}
-
-function isFollowUpModifierMessage(message) {
-  const compact = normalizeText(message).replace(/\s+/g, "");
-  if (!compact || compact.length > 28) return false;
-  // Short slot refinements only — not full new questions.
-  if (/^(那|换成|改成|还是|继续|再)?(周[一二三四五六日天1-7]|星期[一二三四五六日天]|第?\d{1,2}周|上午|下午|晚上|早上)(呢|啊|呀)?[？?！!。.]?$/.test(compact)) {
-    return true;
-  }
-  if (/^(那)?(周[一二三四五六日天1-7]|下午|上午|晚上)呢[？?]?$/.test(compact)) return true;
-  if (/^换成第?\d{1,2}周$/.test(compact)) return true;
-  return false;
-}
-
 /**
- * Multi-turn follow-ups: “那周三呢 / 下午呢 / 换成第17周”
- * inherit last schedule/index task entities from working memory / slots.
+ * Multi-turn follow-ups (“那周三呢 / 下午呢 / 换成第17周 / 换成江湾 / 不是A，是B …”)
+ * are resolved by the single implementation: planner/followUpResolver.resolve
+ * (M4-T2). The legacy week/period parser that used to live here was retired;
+ * this adapter only folds legacy context shapes (conversationSlots/lastIntent)
+ * into the working-state input the resolver consumes.
  */
-function resolveFollowUpIntent(message, context = {}) {
-  if (!isFollowUpModifierMessage(message)) return null;
-  const wm = context.workingMemory && typeof context.workingMemory === "object" ? context.workingMemory : {};
+function resolveUnifiedFollowUpIntent(message, context = {}) {
+  const workingMemory = context.conversationWorkingState && typeof context.conversationWorkingState === "object"
+    ? context.conversationWorkingState
+    : (context.workingMemory && typeof context.workingMemory === "object" ? context.workingMemory : {});
   const conversationSlots = context.conversationSlots && typeof context.conversationSlots === "object"
     ? context.conversationSlots
     : {};
-  const lastIntent = String(
-    wm.currentGoal || conversationSlots.lastIntent || context.lastIntent || ""
-  );
-  const className = String(wm.className || conversationSlots.className || "").replace(/\s+/g, "");
-  const teacherName = String(wm.teacherName || conversationSlots.teacherName || "").replace(/\s+/g, "");
-  const lastTarget = String(conversationSlots.lastTargetName || conversationSlots.q || "").replace(/\s+/g, "");
-  const q = className || teacherName || lastTarget;
-  const type = className || /班/.test(lastTarget)
-    ? "class"
-    : (teacherName || conversationSlots.lastTargetType === "teacher" ? "teacher" : (conversationSlots.lastTargetType || "class"));
-
-  const weekday = weekdayFromFollowUpText(message);
-  const week = weekFromFollowUpText(message);
-  const periodHint = periodFromFollowUpText(message);
-  const inheritedWeek = week != null
-    ? week
-    : (Number(wm.teachingWeek || conversationSlots.lastWeek || conversationSlots.week) || null);
-  const inheritedWeekday = weekday != null
-    ? weekday
-    : (Number(wm.weekday || conversationSlots.lastWeekday || conversationSlots.weekday) || null);
-  const inheritedPeriod = periodHint || wm.periodHint || "";
-
-  const scheduleLike = /search_school_index|get_schedule_detail|get_week_schedule|get_today|get_tomorrow|search_class|课表/.test(lastIntent)
-    || Boolean(q);
-  if (!scheduleLike || !q) return null;
-
-  const personalScheduleIntent = /get_today_courses|get_tomorrow_courses|get_week_schedule|get_next_course/.test(lastIntent);
-  if (personalScheduleIntent && !className) {
-    return {
-      name: lastIntent,
-      slots: {
-        week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
-        weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
-        periodHint: inheritedPeriod || undefined,
-      },
-      followUp: true,
-      confidence: 0.92,
-    };
+  const workingState = Object.assign({}, workingMemory);
+  // Legacy parity: conversationSlots/lastIntent only fill gaps the working
+  // memory does not already cover.
+  if (!workingState.activeGoal && !workingState.currentGoal) {
+    workingState.activeGoal = String(conversationSlots.lastIntent || context.lastIntent || "");
   }
-
-  return {
-    name: "search_school_index",
-    slots: {
-      type: type || "class",
-      q,
-      week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
-      weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
-      periodHint: inheritedPeriod || undefined,
-    },
-    followUp: true,
-    confidence: 0.94,
-  };
+  if (!workingState.lastEntity && !workingState.lastResolvedEntity
+    && !workingState.className && !workingState.teacherName) {
+    const slotClass = String(conversationSlots.className || "").replace(/\s+/g, "");
+    const slotTeacher = String(conversationSlots.teacherName || "").replace(/\s+/g, "");
+    const slotTarget = String(conversationSlots.lastTargetName || conversationSlots.q || "").replace(/\s+/g, "");
+    if (slotClass || slotTeacher || slotTarget) {
+      workingState.lastEntity = slotClass || slotTeacher || slotTarget;
+      workingState.lastEntityType = slotClass || /班/.test(slotTarget)
+        ? "class"
+        : (slotTeacher || conversationSlots.lastTargetType === "teacher"
+          ? "teacher"
+          : (conversationSlots.lastTargetType || "class"));
+    }
+  }
+  if (workingState.teachingWeek == null) {
+    const week = Number(conversationSlots.lastWeek || conversationSlots.week);
+    if (Number.isFinite(week) && week >= 1) workingState.teachingWeek = week;
+  }
+  if (workingState.weekday == null) {
+    const weekday = Number(conversationSlots.lastWeekday || conversationSlots.weekday);
+    if (Number.isFinite(weekday) && weekday >= 1) workingState.weekday = weekday;
+  }
+  const resolution = followUpResolver.resolve({
+    message,
+    workingState,
+    pendingClarification: context.pendingClarification || null,
+  });
+  return resolution && resolution.resolvedIntent ? resolution.resolvedIntent : null;
 }
 
 function resolveIntent(message, context = {}) {
@@ -946,13 +894,10 @@ function resolveIntent(message, context = {}) {
   }
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
-  // Unified follow-up (campus swap / continuous rooms / bare entity fill) before modern multi-step & RAG.
-  const unifiedFollowUp = followUpResolver.resolveFollowUp(text, context.conversationWorkingState || context.workingMemory || {}, context);
-  if (unifiedFollowUp && unifiedFollowUp.intent) {
-    return unifiedFollowUp.intent;
-  }
-  // Legacy week/period follow-ups.
-  const followUpIntent = resolveFollowUpIntent(text, context);
+  // Unified follow-up (single implementation: planner/followUpResolver.resolve)
+  // before modern multi-step & RAG. Covers constraint switches, pending slot
+  // fills, corrections, anaphora and week/period modifiers.
+  const followUpIntent = resolveUnifiedFollowUpIntent(text, context);
   if (followUpIntent) return followUpIntent;
   const modernIntent = resolveModernChineseIntent(text, context);
   if (modernIntent) return modernIntent;

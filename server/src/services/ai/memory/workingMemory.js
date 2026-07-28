@@ -89,6 +89,27 @@ function normalizeStoredGoalContract(raw) {
   }
 }
 
+// pendingClarification is stored in the unified 5-key shape produced by
+// runtime/verificationCoordinator.buildClarificationPatch and consumed by
+// planner/followUpResolver.pickPendingClarification / resolvePendingFill:
+//   { intentName, type, missing, createdAt, expiresAt }
+// Hydration only normalizes keys/types (extra keys dropped, timestamps coerced
+// to numbers); expiry stays consumer-owned (pickPendingClarification and
+// resolvePendingClarificationPatch both re-check expiresAt), so an expired
+// entry is preserved here exactly as the legacy passthrough kept it, and only
+// malformed payloads degrade to null. Kept semantics-identical with the local
+// normalizer in planner/followUpResolver.js (M4-T3 three-party alignment).
+function normalizeStoredPendingClarification(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return {
+    intentName: safeText(raw.intentName || "search_school_index", 80),
+    type: safeText(raw.type, 40),
+    missing: safeText(raw.missing, 80),
+    createdAt: Math.max(0, Number(raw.createdAt || 0) || 0),
+    expiresAt: Math.max(0, Number(raw.expiresAt || 0) || 0),
+  };
+}
+
 function pickNumber(...values) {
   for (let i = 0; i < values.length; i += 1) {
     const raw = values[i];
@@ -193,7 +214,7 @@ function normalizeWorkingMemory(raw = {}) {
   next.userConstraints = Array.isArray(raw.userConstraints)
     ? raw.userConstraints.map((item) => safeText(item, 80)).filter(Boolean).slice(0, 8)
     : [];
-  next.pendingClarification = raw.pendingClarification || null;
+  next.pendingClarification = normalizeStoredPendingClarification(raw.pendingClarification);
   next.executedTools = Array.isArray(raw.executedTools)
     ? raw.executedTools.map((item) => safeText(item, 80)).filter(Boolean).slice(0, 12)
     : [];

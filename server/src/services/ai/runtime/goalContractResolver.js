@@ -1,4 +1,5 @@
 const { fromV1Contract } = require("../understanding/goalContractV2");
+const followUpResolver = require("../planner/followUpResolver");
 
 // Understanding still emits GoalContract V1 (the model JSON schema is unchanged
 // in this phase). The runtime upgrades it to the unified GoalContract V2 for
@@ -20,6 +21,11 @@ function toRuntimeGoalContractV2(understanding) {
 
 /**
  * Soft-fill intent slots from Working Memory for follow-ups and incomplete queries.
+ *
+ * M4-T2: the follow-up entity inheritance (missing q/type) now consumes the
+ * single follow-up resolver's working-state normalization and its inheritance
+ * order (lastResolvedEntity > lastEntity). The non-follow-up slot backfill
+ * (week/weekday/periodHint/campus) stays here unchanged.
  */
 function enrichIntentFromWorkingMemory(intent, context = {}, conversationState = null) {
   if (!intent || typeof intent !== "object") return intent;
@@ -27,18 +33,25 @@ function enrichIntentFromWorkingMemory(intent, context = {}, conversationState =
     || context.workingMemory
     || {};
   const slots = Object.assign({}, intent.slots || {});
-  const className = String(wm.className || slots.className || "").replace(/\s+/g, "");
-  const teacherName = String(wm.teacherName || slots.teacherName || "").replace(/\s+/g, "");
+  const followUpState = followUpResolver.normalizeConversationWorkingState(wm);
+  const inheritedEntity = followUpState.lastResolvedEntity && followUpState.lastResolvedEntity.name
+    ? { value: followUpState.lastResolvedEntity.name, role: followUpState.lastResolvedEntity.type || "class" }
+    : (followUpState.lastEntity
+      ? { value: followUpState.lastEntity, role: followUpState.lastEntityType || "class" }
+      : null);
+  const slotClassName = String(slots.className || "").replace(/\s+/g, "");
+  const slotTeacherName = String(slots.teacherName || "").replace(/\s+/g, "");
+  const slotEntity = slotClassName
+    ? { value: slotClassName, role: "class" }
+    : (slotTeacherName ? { value: slotTeacherName, role: "teacher" } : null);
 
   if (intent.name === "search_school_index" || intent.followUp === true) {
     if (!slots.q) {
-      if (className) {
-        slots.q = className;
-        slots.type = slots.type || "class";
-        slots.className = className;
-      } else if (teacherName) {
-        slots.q = teacherName;
-        slots.type = slots.type || "teacher";
+      const picked = inheritedEntity || slotEntity;
+      if (picked) {
+        slots.q = String(picked.value).replace(/\s+/g, "");
+        slots.type = slots.type || picked.role;
+        if (picked.role === "class") slots.className = String(picked.value).replace(/\s+/g, "");
       }
     } else {
       slots.q = String(slots.q).replace(/\s+/g, "");
