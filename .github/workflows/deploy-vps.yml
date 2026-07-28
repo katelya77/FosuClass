@@ -598,10 +598,10 @@ jobs:
             sudo docker exec fosuclass-api node -e '
               const store = require("/app/src/services/ai/providerRuntimeConfigStore");
               const cfg = store.readRuntimeConfig() || {};
-              const envs = cfg.environments || {};
+              let profiles = {};
+              try { profiles = JSON.parse(cfg.AI_PROVIDER_ENVIRONMENTS || "{}"); } catch (e) { profiles = { parseError: true }; }
               const out = {};
-              for (const [name, env] of Object.entries(envs)) {
-                const p = (env && env.profile) || {};
+              for (const [name, p] of Object.entries(profiles)) {
                 out[name] = {
                   provider: p.provider || null,
                   enabled: p.enabled !== false,
@@ -609,12 +609,25 @@ jobs:
                   cozeApiMode: p.cozeApiMode || null,
                   hasCozeEndpoint: Boolean(p.cozeWorkloadEndpoint),
                   hasCozeProjectId: Boolean(p.cozeProjectId),
-                  hasCozeApiKey: Boolean(p.cozeApiKey),
                   chain: p.providerChain || null,
                 };
               }
-              console.log(JSON.stringify({ activeEnvironment: cfg.activeEnvironment || null, configVersion: cfg.configVersion || null, environments: out }));
+              console.log(JSON.stringify({
+                activeEnv: cfg.AI_PROVIDER_ACTIVE_ENV || null,
+                runtimeVersion: cfg.AI_PROVIDER_RUNTIME_VERSION || null,
+                flatHasCozeKey: Boolean(cfg.COZE_API_KEY),
+                flatCozeMode: cfg.COZE_API_MODE || null,
+                profiles: out,
+              }));
             '
+            echo "=== fresh-process readiness (trial) ==="
+            sudo docker exec fosuclass-api node -e '
+              const readiness = require("/app/src/services/ai/providerReadinessService");
+              const r = readiness.evaluateEnvironment("trial");
+              console.log(JSON.stringify({ provider: r.provider, keyConfigured: r.keyConfigured, reasonCode: r.reasonCode, coze: r.coze }));
+            '
+            echo "=== container env presence (sanitized) ==="
+            sudo docker exec fosuclass-api sh -lc 'for k in COZE_API_KEY COZE_API_MODE COZE_WORKLOAD_ENDPOINT COZE_PROJECT_ID COZE_BOT_ID COZE_CHAT_ENDPOINT AI_PROVIDER AI_PROVIDER_ACTIVE_ENV CLOUDBASE_OPENAI_API_KEY CLOUDBASE_OPENAI_ENABLED; do if [ -n "$(printenv $k)" ]; then echo "$k=SET"; else echo "$k=unset"; fi; done'
             echo "=== readiness BEFORE restart (develop) ==="
             curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
             echo ""
