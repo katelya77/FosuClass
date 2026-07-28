@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      diagnose_providers:
+        description: Run sanitized provider diagnostics (resolved config + raw deepseek probe)
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -661,3 +666,16 @@ jobs:
             sudo docker exec -e CLOUDBASE_OPENAI_API_KEY='${{ secrets.CLOUDBASE_OPENAI_API_KEY }}' fosuclass-api sh -lc 'node scripts/configure-cloudbase-openai.js'
             echo "=== probe cloudbase-openai gateway (non-fatal) ==="
             sudo docker exec -e CLOUDBASE_OPENAI_API_KEY='${{ secrets.CLOUDBASE_OPENAI_API_KEY }}' fosuclass-api sh -lc 'node scripts/configure-cloudbase-openai.js --verify' || true
+
+      - name: Diagnose provider resolution (sanitized)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnose_providers }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/server'
+            sudo docker exec fosuclass-api sh -lc 'node scripts/diagnose-provider.js --probe'
