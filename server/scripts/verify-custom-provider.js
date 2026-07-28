@@ -33,7 +33,7 @@ async function main() {
         protocol: "openai",
         baseUrl: "https://api.deepseek.com",
         apiKey,
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
         enabled: true,
         strictJsonMode: true,
       },
@@ -57,7 +57,7 @@ async function main() {
       summary.steps.fetchModels = {
         success: true,
         count: models.length,
-        hasDeepseekChat: models.includes("deepseek-chat"),
+        hasEntryModel: models.includes("deepseek-v4-flash"),
         sample: models.slice(0, 5),
       };
     } catch (error) {
@@ -106,8 +106,8 @@ async function main() {
         timeoutMs: 8000,
       });
       summary.steps.probe = {
-        success: probe.success === true,
-        code: probe.code || "",
+        success: probe.health === "ok",
+        code: probe.reasonCode || "",
         latencyMs: probe.latencyMs || 0,
         verified: providerChainService.isProviderVerified("custom-openai"),
       };
@@ -119,6 +119,7 @@ async function main() {
     summary.success = Boolean(
       summary.steps.saved.count >= 1
       && summary.steps.fetchModels.success
+      && summary.steps.fetchModels.count >= 1
       && summary.steps.chat.externalProviderUsed
       && summary.steps.chat.resolvedProvider === "custom-openai"
       && summary.steps.probe.success
