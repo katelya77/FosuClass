@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      configure_deepseek:
+        description: Refresh deepseek API key and pin understanding/planner stages to deepseek
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -679,3 +684,19 @@ jobs:
             set -euo pipefail
             cd '${{ secrets.VPS_APP_DIR }}/server'
             sudo docker exec fosuclass-api sh -lc 'node scripts/diagnose-provider.js --probe'
+
+      - name: Configure and verify deepseek key + stage assignments
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.configure_deepseek }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/server'
+            sudo docker exec -e DEEPSEEK_API_KEY='${{ secrets.DEEPSEEK_API_KEY }}' fosuclass-api sh -lc 'node scripts/configure-deepseek.js --verify'
+            echo "=== readiness after configure (develop) ==="
+            curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
+            echo ""
