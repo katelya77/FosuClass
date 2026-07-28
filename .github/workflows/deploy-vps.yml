@@ -592,4 +592,38 @@ jobs:
           script: |
             set -euo pipefail
             cd '${{ secrets.VPS_APP_DIR }}/server'
+            echo "=== configure ==="
             sudo docker exec -e COZE_WORKLOAD_ENDPOINT='${{ vars.COZE_WORKLOAD_ENDPOINT }}' -e COZE_PROJECT_ID='${{ vars.COZE_PROJECT_ID }}' fosuclass-api sh -lc 'node scripts/configure-coze-workload.js --verify'
+            echo "=== store digest (sanitized, booleans only) ==="
+            sudo docker exec fosuclass-api node -e '
+              const store = require("/app/src/services/ai/providerRuntimeConfigStore");
+              const cfg = store.readRuntimeConfig() || {};
+              const envs = cfg.environments || {};
+              const out = {};
+              for (const [name, env] of Object.entries(envs)) {
+                const p = (env && env.profile) || {};
+                out[name] = {
+                  provider: p.provider || null,
+                  enabled: p.enabled !== false,
+                  runtimeMode: p.runtimeMode || null,
+                  cozeApiMode: p.cozeApiMode || null,
+                  hasCozeEndpoint: Boolean(p.cozeWorkloadEndpoint),
+                  hasCozeProjectId: Boolean(p.cozeProjectId),
+                  hasCozeApiKey: Boolean(p.cozeApiKey),
+                  chain: p.providerChain || null,
+                };
+              }
+              console.log(JSON.stringify({ activeEnvironment: cfg.activeEnvironment || null, configVersion: cfg.configVersion || null, environments: out }));
+            '
+            echo "=== readiness BEFORE restart (develop) ==="
+            curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
+            echo ""
+            echo "=== restart container ==="
+            sudo docker restart fosuclass-api
+            for i in $(seq 1 30); do
+              if curl -sf http://127.0.0.1:18318/api/health >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+            echo "=== readiness AFTER restart (develop) ==="
+            curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
+            echo ""
