@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      configure_cloudbase_openai:
+        description: Write CloudBase Hunyuan (cloudbase-openai) credentials into trial/dev profiles and probe
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -640,3 +645,19 @@ jobs:
             echo "=== readiness AFTER restart (develop) ==="
             curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
             echo ""
+
+      - name: Configure and probe CloudBase Hunyuan (cloudbase-openai)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.configure_cloudbase_openai }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/server'
+            echo "=== configure cloudbase-openai credentials (primary unchanged) ==="
+            sudo docker exec -e CLOUDBASE_OPENAI_API_KEY='${{ secrets.CLOUDBASE_OPENAI_API_KEY }}' fosuclass-api sh -lc 'node scripts/configure-cloudbase-openai.js'
+            echo "=== probe cloudbase-openai gateway (non-fatal) ==="
+            sudo docker exec -e CLOUDBASE_OPENAI_API_KEY='${{ secrets.CLOUDBASE_OPENAI_API_KEY }}' fosuclass-api sh -lc 'node scripts/configure-cloudbase-openai.js --verify' || true
