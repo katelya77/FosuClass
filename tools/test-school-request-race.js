@@ -14,8 +14,11 @@ page.setData({
 });
 
 let requestCount = 0;
+// M3-T4：页面搜索改走统一端点 /release-pack/search（school-search.v1 契约形态，含 decision）；
+// mock 随之对齐新端点，竞态断言（旧响应不得覆盖新渲染）保持不变。
+const CONTRACT_VERSION = require("../miniprogram/shared/schoolSearchContract.generated").CONTRACT_VERSION;
 global.wx.mockRequest = (options) => {
-  if (!options.url.includes("/search-index")) {
+  if (!options.url.includes("/release-pack/search")) {
     options.success({ statusCode: 200, data: { success: true } });
     return;
   }
@@ -28,11 +31,23 @@ global.wx.mockRequest = (options) => {
       statusCode: 200,
       data: {
         success: true,
+        type: "class",
+        contractVersion: CONTRACT_VERSION,
         term: "2025-2026-2",
         releaseVersion: "2026-06-01T23-44-37",
         updatedAt: "2026-06-02T13:43:00.000Z",
         items: [{ id: className, className }],
         total: 1,
+        decision: {
+          kind: "unique",
+          total: 1,
+          item: { id: className, className },
+          detailId: className,
+          canOpen: true,
+          navigation: null,
+          candidates: [],
+          actions: [],
+        },
       },
     });
   }, delay);

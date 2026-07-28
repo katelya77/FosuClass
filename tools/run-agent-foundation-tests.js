@@ -18,6 +18,7 @@ const tests = [
   "tools/test-provider-control-plane.js",
   "tools/test-agent-model-first-integration.js",
   "tools/test-teacher-search-contract-unified.js",
+  "tools/test-search-contract-unified.js",
   "tools/test-agent-protocol-v2.js",
   "tools/test-agent-runtime-boundaries.js",
   "tools/test-agent-kernel-foundation.js",

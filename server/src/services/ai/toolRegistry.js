@@ -1,4 +1,6 @@
 const releaseService = require("../releaseService");
+const schoolSearchContractService = require("../schoolSearchContractService");
+const { DECISION: SCHOOL_SEARCH_DECISION } = require("../../shared/schoolSearchContract.generated");
 const { sanitizeToolResult } = require("./safetyGuard");
 const {
   getCourseTimeRange,
@@ -1272,14 +1274,24 @@ function searchSchoolIndex(input = {}, context = {}) {
   }
   const preferredId = normalizeText(input.preferredId || input.detailId || "");
   const classroomQuery = type === "classroom" ? classroomSearch.parseClassroomQuery(query) : null;
-  const result = releaseService.searchActiveIndex(type, query, {
+  // M3-T3：数据层切换到 school-search.v1 统一契约服务（进程内调用）。过滤谓词、
+  // 教师精确命中隔离、唯一/多候选决策由 schoolSearchContractService 唯一实现，
+  // 工具内不再重复；列表上限默认消费生成物 DECISION.candidateListMax。
+  // 保留本层职责：lockedEntityType、教师称谓剥离、classroom NL 解析与排序、preferredId 权威命中。
+  const listCap = Number(input.limit || SCHOOL_SEARCH_DECISION.candidateListMax) || SCHOOL_SEARCH_DECISION.candidateListMax;
+  const result = schoolSearchContractService.search({
+    type,
+    q: query,
     term: input.term || context.term || getDefaultTerm(),
-    semester: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
     collegeCode: input.collegeCode || "",
     collegeName: input.collegeName || "",
     titleCode: input.titleCode || "",
-    limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : (input.limit || 8),
+    limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : listCap,
+  }, {
+    offline: input.offline === true || context.offline === true,
+    // 测试注入通道（同 releaseService.searchActiveIndex 的 _items 约定）：不进入契约字段与响应
+    _items: Array.isArray(input._items) ? input._items : undefined,
   });
   let rawItems = asArray(result.items);
   // preferredId：别名解析后的权威 detailId，强制唯一命中
@@ -1309,12 +1321,15 @@ function searchSchoolIndex(input = {}, context = {}) {
     buildingCode: classroomQuery && classroomQuery.buildingCode || "",
     roomNumber: classroomQuery && classroomQuery.roomNumber || "",
     normalizedQuery: classroomQuery && classroomQuery.normalizedQuery || query,
-    items: filteredItems.slice(0, Number(input.limit || 8) || 8),
-    total: preferredId && filteredItems.length ? filteredItems.length : filteredItems.length,
+    items: filteredItems.slice(0, listCap),
+    total: filteredItems.length,
     updatedAt: result.updatedAt || "",
     releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
     actionUrl: buildActionUrl("/pages/school/school", { type, q: query }),
     code: result.code || result.reasonCode || "",
+    // M3-T3 追加字段（不改既有字段语义）：契约版本与唯一/多候选/无结果决策透传
+    contractVersion: result.contractVersion || "",
+    decision: result.decision || null,
   };
 }
 

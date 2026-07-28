@@ -2,8 +2,17 @@
  * Shared Schedule Navigation — class / teacher / classroom / course.
  * Reuses /pages/schedule-view/schedule-view; never passes full courses via URL.
  * Used by school page and 小佛助手 Action Bus (navigate whitelist).
+ *
+ * M3-T5 单源：schedule-view URL 构建唯一实现在本文件（buildScheduleViewUrl），
+ * 路径与兜底 reason code 消费契约生成物 NAVIGATION / NAVIGATION_REASON_CODES
+ * （miniprogram/shared/schoolSearchContract.generated.js，与服务端同源同 JSON）。
+ * scheduleNavigator.buildScheduleViewUrl 已改为本文件的委托壳，调用方零改动。
  */
 const scheduleNavigator = require("./scheduleNavigator");
+const {
+  NAVIGATION,
+  NAVIGATION_REASON_CODES,
+} = require("../shared/schoolSearchContract.generated");
 
 const TYPE_LABELS = Object.freeze({
   class: "班级课表",
@@ -37,15 +46,26 @@ function buildScheduleViewParams(input = {}) {
     id: id || name,
     name,
     term,
-    semester: term,
+    // 与收敛前 scheduleNavigator 直调语义一致：semester 缺省时回退 term。
+    semester: String(input.semester || input.term || "").trim(),
     releaseVersion,
     displayType: input.displayType ? String(input.displayType) : "",
     isAggregated: input.isAggregated ? "1" : "",
   };
 }
 
+/** schedule-view URL 组装的唯一落点：路径取自契约 NAVIGATION.scheduleViewPath。 */
+function appendScheduleViewUrl(params) {
+  return scheduleNavigator.appendQuery(NAVIGATION.scheduleViewPath, params);
+}
+
 function buildScheduleViewUrl(input = {}) {
-  return scheduleNavigator.buildScheduleViewUrl(buildScheduleViewParams(input));
+  const params = buildScheduleViewParams(input);
+  // week/weekday 仅进入 URL（scheduleAssistantService 周次卡片既有字段集），
+  // 不进入 buildScheduleViewParams 返回形态，resolveScheduleNavigation 语义不变。
+  params.week = input.week || "";
+  params.weekday = input.weekday || "";
+  return appendScheduleViewUrl(params);
 }
 
 /**
@@ -82,7 +102,7 @@ function resolveScheduleNavigation(input = {}) {
     const params = buildScheduleViewParams(Object.assign({}, input, { id: detailId, name, type }));
     return {
       mode: "schedule-view",
-      url: scheduleNavigator.buildScheduleViewUrl(params),
+      url: appendScheduleViewUrl(params),
       label,
       params,
     };
@@ -95,7 +115,7 @@ function resolveScheduleNavigation(input = {}) {
     url: scheduleNavigator.buildSchoolUrl(pending),
     label: "打开全校查询",
     params: pending,
-    reasonCode: detailId ? "RELEASE_VERSION_MISSING" : "DETAIL_ID_MISSING",
+    reasonCode: detailId ? NAVIGATION_REASON_CODES.releaseVersionMissing : NAVIGATION_REASON_CODES.detailIdMissing,
   };
 }
 
@@ -110,7 +130,7 @@ function buildOpenScheduleAction(input = {}) {
       type: "navigate",
       label: resolved.label,
       input: {
-        url: "/pages/schedule-view/schedule-view",
+        url: NAVIGATION.scheduleViewPath,
         params: {
           type: resolved.params.type,
           id: resolved.params.id,
@@ -127,7 +147,7 @@ function buildOpenScheduleAction(input = {}) {
     type: "navigate",
     label: resolved.label,
     input: {
-      url: "/pages/school/school",
+      url: NAVIGATION.schoolPath,
       params: resolved.params,
     },
     url: resolved.url,

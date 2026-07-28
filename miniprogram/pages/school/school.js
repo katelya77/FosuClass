@@ -28,6 +28,7 @@ const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
+const schoolSearchContract = require("../../shared/schoolSearchContract.generated");
 const startupCoordinator = require("../../services/startupCoordinator");
 const platformUtils = require("../../utils/platform");
 const {
@@ -1161,39 +1162,53 @@ Page({
       
       wx.showLoading({ title: "正在校验新版本...", mask: true });
 
-      // 发起 search-index 请求在新版中搜索该课表项
-      request.get("/api/fosu/search-index", {
-        type,
+      // 统一搜索契约（M3-T4）：服务端过滤/精确命中/唯一-多候选决策，
+      // 离线时由服务层回退本地缓存索引（降级标识透传），页面只消费 decision。
+      releasePackService.searchSchoolContract(type, {
         q: displayName,
         term: semester,
         releaseVersion: activeVersion,
-        limit: 10
-      }, { showLoading: false, silentError: true })
+        limit: schoolSearchContract.DECISION.candidateListMax
+      }, { timeout: SCHOOL_REQUEST_TIMEOUT })
         .then((res) => {
           wx.hideLoading();
-          const items = res.items || [];
-          // 精确匹配
-          const matched = items.find(x => (x.className === displayName || x.name === displayName || x.teacherName === displayName || x.roomName === displayName || x.courseName === displayName));
-          
-          if (matched) {
-            const queryItem = Object.assign({}, matched, {
-              detailId: matched.id,
+          const decision = res && res.decision ? res.decision : { kind: "none", candidates: [] };
+          let hit = null;
+          let hitItem = null;
+          if (decision.kind === "unique") {
+            hit = decision;
+            hitItem = decision.item || {};
+          } else if (decision.kind === "candidate") {
+            // 候选名为契约归一化结果；多候选时按契约候选列表定位同名项
+            const candidate = (decision.candidates || []).find((entry) => entry && entry.name === displayName);
+            if (candidate) {
+              hit = candidate;
+              hitItem = candidate.item || {};
+            }
+          }
+          if (hit && hit.canOpen && hit.detailId) {
+            const queryItem = Object.assign({}, hitItem, {
+              detailId: hit.detailId,
               semester: semester,
               scheduleVersion: activeVersion
             });
             this.openIndexedSchedule(type, queryItem, displayName);
-          } else {
-            wx.showModal({
-              title: "提示",
-              content: "该课表为旧版本数据，新版本中未找到对应班级/课表。",
-              showCancel: false,
-              confirmText: "知道了"
-            });
+            return;
           }
+          // 未命中或缺 detailId：按契约 reason code（如 DETAIL_ID_MISSING）兜底留在全校页
+          if (platformUtils.isDeveloperEnv() && hit && schoolSearchContract.isNavigationReasonCode(hit.reasonCode)) {
+            console.warn("[school] recent schedule fallback by reason code", hit.reasonCode);
+          }
+          wx.showModal({
+            title: "提示",
+            content: "该课表为旧版本数据，新版本中未找到对应班级/课表。",
+            showCancel: false,
+            confirmText: "知道了"
+          });
         })
         .catch((err) => {
           wx.hideLoading();
-          // 如果请求超时或出错，降级尝试直接用原 detailId 打开新版
+          // 服务端与本地缓存索引均不可用（断网且无缓存）：降级尝试直接用原 detailId 打开新版
           const detailId = item.id || item.scheduleId || displayName;
           const queryItem = Object.assign({}, item, {
             detailId,
@@ -2118,12 +2133,8 @@ Page({
       return;
     }
     const keyword = (this.data.keyword || "").trim();
-    const normalize = (value) => String(value || "")
-      .trim()
-      .replace(/[\u3000\s]+/g, "")
-      .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
-      .replace(/\u3002/g, ".")
-      .toLowerCase();
+    // 与服务端契约同源的文本归一化（M3-T4 删除页面内重复实现）
+    const normalize = (value) => releasePackService.normalizeSearchText(value);
     const debug = this.lastTeacherSearchDebug || {};
     const samples = Array.isArray(debug.sampleItems)
       ? debug.sampleItems.map((item) => item.teacherName || item.name || item.id).filter(Boolean).join(" / ")
@@ -3419,8 +3430,8 @@ Page({
       return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
     }
 
-    return releasePackService.searchIndex(type, query, Object.assign({
-      forceNetwork: Boolean(options.forceNetwork),
+    // 统一契约搜索（M3-T4）：服务端过滤/决策；失败由服务层回退本地缓存索引
+    return releasePackService.searchSchoolContract(type, query, Object.assign({
       timeout: SCHOOL_REQUEST_TIMEOUT,
     }, options))
       .then((data) => {
@@ -3431,28 +3442,6 @@ Page({
         }
         writeSameVersionIndexCache(term, releaseVersion, type, data, query);
         return data;
-      })
-      .catch((error) => {
-        if (type === "teacher") {
-          throw error;
-        }
-        return request.get("/api/fosu/search-index", query, Object.assign({
-          showLoading: false,
-          silentError: true,
-          timeout: SCHOOL_REQUEST_TIMEOUT,
-        }, options))
-          .then((data) => {
-            if (seq !== this._schoolRequestSeq) {
-              const stale = new Error("STALE_REQUEST");
-              stale.stale = true;
-              throw stale;
-            }
-            writeSameVersionIndexCache(term, releaseVersion, type, data, query);
-            return data;
-          })
-          .catch(() => {
-            throw error;
-          });
       });
   },
 
@@ -3542,36 +3531,20 @@ Page({
         this.retryFn = () => doNetworkRequest(true);
       }
 
-      // Teacher: college filter → server-first; no college → full index + keyword.
-      const requestIndex = () => {
-        if (type === "teacher") {
-          return releasePackService.searchIndex(type, query, {
-            forceNetwork: true,
-            forceServerSearch: collegeActive,
-            timeout: SCHOOL_REQUEST_TIMEOUT,
-            preferServerSearch: true,
-            allowServerFallback: true,
-          });
-        }
-        return releasePackService.searchIndex(type, query, {
-          forceNetwork: true,
-          timeout: SCHOOL_REQUEST_TIMEOUT,
-        }).catch((packError) => request.get("/api/fosu/search-index", Object.assign({}, query, {
-          type,
-        }), {
-          showLoading: false,
-          silentError: true,
-          timeout: SCHOOL_REQUEST_TIMEOUT,
-        }).catch(() => {
-          throw packError;
-        }));
-      };
+      // 统一契约搜索（M3-T4）：服务端过滤/决策；失败由服务层回退本地缓存索引（降级标识透传）
+      const requestIndex = () => releasePackService.searchSchoolContract(type, query, {
+        timeout: SCHOOL_REQUEST_TIMEOUT,
+      });
 
       requestIndex()
         .then((data) => {
           if (seq !== this._schoolRequestSeq) return;
           this.clearLoadingTimer();
           this.setData({ loadingState: "none" });
+          if (data && data.degraded === true && data.source === "local_cache") {
+            // 降级响应必须有可辨识的离线/缓存标识（沿用 restoreHint 既有降级徽标模式）
+            this.setData({ restoreHint: "当前为本地缓存结果，可能不是最新" });
+          }
           writeSameVersionIndexCache(term, releaseVersion, type, data, query);
 
           if (!data.items || data.items.length === 0) {
