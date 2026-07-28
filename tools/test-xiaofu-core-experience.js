@@ -433,7 +433,7 @@ function mockWx(script) {
     check("app.json record permission", appJson.permission && appJson.permission["scope.record"] && /语音转文字/.test(appJson.permission["scope.record"].desc));
     check("svg files exist", fs.existsSync(path.join(ROOT, "miniprogram/assets/icons/composer/plus.svg")));
     check("scheduleNavigationService exists", fs.existsSync(path.join(ROOT, "miniprogram/services/scheduleNavigationService.js")));
-    check("audit doc exists", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/final-product-convergence-audit.md")));
+    check("audit doc exists", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/agent-platform-reorientation-audit.md")));
   }
 
   // --- 7) public mode zero external provider structural (capability / runtime)
