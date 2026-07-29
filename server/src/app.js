@@ -35,6 +35,11 @@ const fosuApaasImportRouter = require("./routes/fosuApaasImport");
 const relayRouter = require("./routes/relay");
 const aiRouter = require("./routes/ai");
 const cozeToolGatewayRouter = require("./routes/cozeToolGateway");
+const platformComposition = require("./services/ai/platformComposition");
+
+// Integrated deployment composition root: API, Agent Runtime and compatibility
+// transports are bound to one platform singleton before Express mounts routes.
+aiRouter.configureAgentRunHandlers(platformComposition.getRunHandlers());
 
 const app = express();
 

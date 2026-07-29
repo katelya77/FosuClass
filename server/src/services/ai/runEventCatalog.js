@@ -3,6 +3,8 @@
  * Events are summaries only — never include CoT, prompts, secrets, or raw tool args.
  */
 
+const { RUN_EVENT_TYPES: PLATFORM_RUN_EVENT_TYPES } = require("../../../../packages/agent-protocol");
+
 const EVENT_TYPES = Object.freeze([
   "run.accepted",
   "request.sanitized",
@@ -35,6 +37,7 @@ const EVENT_TYPES = Object.freeze([
   "verification.started",
   "verification.completed",
 ]);
+const PUBLIC_EVENT_TYPE_SET = new Set(EVENT_TYPES.concat(PLATFORM_RUN_EVENT_TYPES));
 
 const TOOL_LABELS = Object.freeze({
   get_today_courses: "读取今日课表",
@@ -65,6 +68,16 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
   const enhanced = runtimeMode === "trial" || runtimeMode === "dev";
 
   switch (type) {
+    case "runtime.entered":
+      return "任务已进入 Agent Runtime";
+    case "stage.started":
+      return "正在执行任务阶段";
+    case "stage.completed":
+      return "任务阶段已完成";
+    case "stage.failed":
+      return "任务阶段执行失败";
+    case "runtime.completed":
+      return "Agent Runtime 已完成处理";
     case "run.accepted":
     case "request.sanitized":
       return intent && /weather|天气/.test(intent)
@@ -147,7 +160,7 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
 }
 
 function publicEventSummary(event = {}) {
-  const type = EVENT_TYPES.includes(String(event.type || "")) ? String(event.type) : "run.accepted";
+  const type = PUBLIC_EVENT_TYPE_SET.has(String(event.type || "")) ? String(event.type) : "run.accepted";
   const publicMode = String(event.runtimeMode || "public") === "public";
   return {
     type,
@@ -161,6 +174,10 @@ function publicEventSummary(event = {}) {
     provider: publicMode ? "" : safeText(event.provider || "", 40),
     purpose: publicMode ? "" : safeText(event.purpose || "", 32),
     understandingSource: publicMode ? "" : safeText(event.understandingSource || "", 40),
+    stage: safeText(event.stage || "", 40),
+    runtimePackage: safeText(event.runtimePackage || "", 100),
+    configVersion: safeText(event.configVersion || "", 128),
+    durationMs: Math.max(0, Number(event.durationMs || 0) || 0),
     latencyMs: Math.max(0, Number(event.latencyMs || 0) || 0),
     providerUsed: publicMode ? false : event.providerUsed === true,
     success: event.success !== false,
