@@ -24,7 +24,10 @@ async function generateStructured(options = {}) {
         response_format: { type: "json_object" },
       },
       {
-        timeout: Math.max(1000, Math.min(30000, Number(options.timeoutMs || 8000) || 8000)),
+        timeout: Math.max(50, Math.min(30000, Number(options.timeoutMs || 8000) || 8000)),
+        signal: options.signal || undefined,
+        httpAgent: options.httpAgent || undefined,
+        httpsAgent: options.httpsAgent || undefined,
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",

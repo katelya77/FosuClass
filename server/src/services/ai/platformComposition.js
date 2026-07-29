@@ -15,6 +15,8 @@ const releaseService = require("../releaseService");
 const agentProtocol = require("./agentProtocol");
 const { AgentKernel } = require("./agentKernel");
 const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
+const { createDecisionService } = require("./decision/decisionService");
+const providerRuntimeComposition = require("./providerRuntimeComposition");
 
 const recentPlatformTraces = [];
 let runHandlers = null;
@@ -36,9 +38,17 @@ const platformKernel = new AgentKernel({
   capabilityManifestService,
   intentResolver: toolRegistry.resolveIntent,
 });
+const platformDecisionService = createDecisionService({
+  providerRuntime: providerRuntimeComposition.getProviderRuntime(),
+  skillCatalog: platformSkillCatalog,
+  deterministicResolve(message, context) {
+    return require("./runtime/understandingCoordinator").resolveRuleBackedIntent(message, context).intent;
+  },
+});
 const ports = createFosuTurnPorts({
   agentKernel: platformKernel,
   skillCatalog: platformSkillCatalog,
+  decisionService: platformDecisionService,
 });
 const stages = createFosuStages({ plugin, ports });
 const runtime = createAgentRuntime({
@@ -71,6 +81,7 @@ function getDiagnostics() {
     skillCount: plugin.skills.length,
     toolCount: plugin.tools.length,
     recentTraceCount: recentPlatformTraces.length,
+    providerRuntime: providerRuntimeComposition.getProviderRuntimeDiagnostics(),
   });
 }
 

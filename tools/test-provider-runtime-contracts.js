@@ -192,6 +192,41 @@ async function testProviderRuntime() {
     ok: true,
     provider: "primary",
   });
+
+  let circuitPrimaryCalls = 0;
+  const circuitRuntime = createProviderRuntime({
+    failureThreshold: 1,
+    circuitCooldownMs: 60000,
+    adapters: [
+      {
+        id: "circuit-primary",
+        async generateStructured() {
+          circuitPrimaryCalls += 1;
+          const error = new Error("offline");
+          error.code = "PROVIDER_NETWORK";
+          throw error;
+        },
+      },
+      {
+        id: "circuit-fallback",
+        async generateStructured() { return { content: JSON.stringify(decision()) }; },
+      },
+    ],
+  });
+  const circuitInput = {
+    stage: "decision",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    intendedProvider: "circuit-primary",
+    fallbackProvider: "circuit-fallback",
+    request: {},
+    validate: validator,
+    timeoutMs: 2000,
+  };
+  await circuitRuntime.generateStructured(circuitInput);
+  const afterOpen = await circuitRuntime.generateStructured(circuitInput);
+  assert.strictEqual(circuitPrimaryCalls, 1, "an open circuit must not invoke the adapter again");
+  assert.strictEqual(afterOpen.actualFirstProvider, "circuit-fallback", "actualFirstProvider must name the first adapter really invoked");
   console.log("✓ Provider Runtime owns attempts, fallback, abort, probe, and metrics");
 }
 

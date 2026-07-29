@@ -24,9 +24,15 @@ function detailsForStage(stage, output = {}) {
   }
   if (stage === "decision") {
     return {
-      goal: safeString(output.goal && (output.goal.name || output.goal.id) || output.goal, 100),
-      selectedSkillId: safeString(output.selectedSkillId || output.selectedSkill && output.selectedSkill.id, 120),
+      executionPolicy: safeString(output.executionPolicy, 48),
+      intendedProvider: safeString(output.intendedProvider, 64),
+      actualFirstProvider: safeString(output.actualFirstProvider, 64),
       decisionSource: safeString(output.decisionSource, 48),
+      goal: safeString(output.goal && (output.goal.name || output.goal.id) || output.goal, 100),
+      selectedSkill: safeString(output.selectedSkillId || output.selectedSkill && output.selectedSkill.id, 120),
+      fallbackPath: Object.freeze((Array.isArray(output.fallbackPath) ? output.fallbackPath : [])
+        .slice(0, 2)
+        .map((item) => safeString(item, 120))),
     };
   }
   if (stage === "skill_tool") {

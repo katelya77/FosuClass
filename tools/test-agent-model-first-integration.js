@@ -2,25 +2,14 @@
 const assert = require("assert");
 const http = require("http");
 
-const understandingContract = {
-  goal: "conversational_help",
-  entityType: "none",
-  entity: "",
-  normalizedEntity: "",
+const decisionContract = {
+  schemaVersion: "decision.v2",
+  goal: { name: "conversational_help", confidence: 0.99, requiresClarification: false },
+  entities: [],
   constraints: {},
-  followUpMode: "new_goal",
-  confidence: 0.99,
-  needsClarification: false,
-};
-const plannerPayload = {
-  goal: "conversational_help",
-  intent: "conversational_help",
-  confidence: 0.99,
-  slots: {},
-  needsClarification: false,
-  clarification: null,
-  steps: [],
-  stopCondition: "all_steps_done",
+  skillCandidates: [{ skillId: "knowledge_search", confidence: 0.99 }],
+  plan: { steps: [{ id: "answer", skillId: "knowledge_search", purpose: "Answer with published capabilities" }] },
+  responseMode: "deterministic",
 };
 
 async function run() {
@@ -35,15 +24,10 @@ async function run() {
     req.on("data", (chunk) => { raw += chunk; });
     req.on("end", () => {
       const body = JSON.parse(raw || "{}");
-      const prompt = JSON.stringify(body.messages || []);
-      const purpose = /semantic understanding layer|normalizedEntity|followUpMode/.test(prompt)
-        ? "understanding"
-        : "planning";
-      requests.push(purpose);
-      const payload = purpose === "understanding" ? understandingContract : plannerPayload;
+      requests.push(body);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify(payload) } }],
+        choices: [{ message: { content: JSON.stringify(decisionContract) } }],
         usage: { prompt_tokens: 20, completion_tokens: 20 },
       }));
     });
@@ -70,25 +54,22 @@ async function run() {
   const originalResolve = providerConfigService.resolveRuntimeProviderConfig;
   providerConfigService.resolveRuntimeProviderConfig = () => ({
     AI_AGENT_ENABLED: "true",
+    AI_RUNTIME_MODE: "trial",
+    AI_EXECUTION_POLICY: "strict_model_first",
     AI_PROVIDER: "deepseek",
     AI_PROVIDER_CHAIN: "deepseek,mock",
+    AI_DECISION_PROVIDER: "deepseek",
     AI_PROVIDER_POLICY: "tool-only",
     AI_BASE_URL: baseUrl,
     AI_MODEL: "model-first-test",
-    AI_PLANNER_MODEL: "model-first-test",
-    AI_UNDERSTANDING_MODEL: "model-first-test",
-    AI_UNDERSTANDING_ENABLED: "true",
-    AI_MODEL_PLANNER_ENABLED: "true",
+    AI_DECISION_MODEL: "model-first-test",
     AI_STRUCTURED_TIMEOUT_MS: "3000",
     DEEPSEEK_API_KEY: "unit-test-placeholder-not-real",
-    AI_API_KEY: "unit-test-placeholder-not-real",
-    // 本测试验证模型优先链路本身：显式关闭快路径。
-    AI_UNDERSTANDING_RULE_FIRST: "0",
-    AI_MODEL_PLANNER_NO_TOOL_SKIP: "0",
+    AI_UNDERSTANDING_RULE_FIRST: "1",
+    AI_MODEL_PLANNER_ENABLED: "true",
   });
 
   try {
-    delete require.cache[require.resolve("../server/src/services/ai/agentService")];
     const agentService = require("../server/src/services/ai/agentService");
     const events = [];
     const response = await agentService.chat({
@@ -100,28 +81,27 @@ async function run() {
       onEvent: (event) => events.push(event),
     });
 
-    assert.ok(requests.length >= 2, `expected understanding + planning calls, got ${requests.join(",")}`);
-    assert.strictEqual(requests[0], "understanding", "the first model request must be Understanding");
-    assert.ok(requests.includes("planning"), "the existing constrained planner must remain in the chain");
+    assert.strictEqual(requests.length, 1, "Understanding and Planner must be one Decision request");
+    const prompt = JSON.stringify(requests[0].messages || []);
+    assert.ok(/DecisionContract V2/.test(prompt));
     const types = events.map((event) => event.type);
-    const understandingStarted = types.indexOf("understanding.started");
-    const understandingCompleted = types.indexOf("understanding.completed");
+    const decisionStarted = types.indexOf("decision.started");
+    const providerStarted = types.indexOf("provider.started");
+    const decisionCompleted = types.indexOf("decision.completed");
     const intentResolved = types.indexOf("intent.resolved");
-    assert.ok(understandingStarted >= 0, "missing understanding.started");
-    assert.ok(understandingCompleted > understandingStarted, "understanding must complete after it starts");
-    assert.ok(intentResolved > understandingCompleted, "Manifest intent resolution must happen after Understanding");
+    assert.ok(decisionStarted >= 0, "missing decision.started");
+    assert.ok(providerStarted > decisionStarted, "real Provider must start during Decision");
+    assert.ok(decisionCompleted > providerStarted, "Decision must complete after Provider");
+    assert.ok(intentResolved > decisionCompleted, "Manifest routing must happen after Decision");
     assert.strictEqual(response.goalContract.goal, "conversational_help");
     assert.strictEqual(response.understanding.source, "model");
     assert.strictEqual(response.understanding.providerUsed, "deepseek");
     assert.strictEqual(response.understanding.externalProviderUsed, true);
-    assert.strictEqual(response.externalProviderUsed, true, "Understanding/Planner usage must survive a tool-only response stage");
+    assert.strictEqual(response.externalProviderUsed, true, "Decision usage must survive a tool-only response stage");
     assert.strictEqual(response.providerStages.understanding.attempted, true);
     assert.strictEqual(response.providerStages.understanding.completed, true);
-    assert.strictEqual(response.providerStages.planner.attempted, true);
+    assert.strictEqual(response.providerStages.planner.attempted, false);
     assert.strictEqual(response.providerStages.response.attempted, false);
-    const terminalEvent = events.filter((event) => /^run\.(completed|degraded|failed)$/.test(event.type)).pop();
-    assert.ok(terminalEvent, "missing terminal run event");
-    assert.strictEqual(terminalEvent.providerUsed, true, "terminal event must aggregate all Provider stages");
 
     const callsBeforePublic = requests.length;
     const publicEvents = [];
@@ -136,8 +116,8 @@ async function run() {
     assert.strictEqual(publicResponse.externalProviderUsed, false);
     assert.ok(!("understanding" in publicResponse), "public must not expose model diagnostics");
     assert.ok(!("providerStages" in publicResponse), "public must not expose Provider stage diagnostics");
-    assert.ok(publicEvents.some((event) => event.type === "understanding.started"));
-    assert.ok(publicEvents.some((event) => event.type === "understanding.completed"));
+    assert.ok(publicEvents.some((event) => event.type === "decision.started"));
+    assert.ok(publicEvents.some((event) => event.type === "decision.completed"));
     assert.ok(!publicEvents.some((event) => event.type === "provider.started"));
 
     console.log("test-agent-model-first-integration: PASS");

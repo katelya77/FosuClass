@@ -132,16 +132,21 @@ async function generateStructured(input = {}) {
   return openaiStructuredProvider.generateStructured({
     baseUrl: configuredEnv("CLOUDBASE_OPENAI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig),
     apiKey,
-    model: configuredEnv(
-      input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
-      configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig),
-      runtimeConfig
-    ),
+    model: input.purpose === "decision"
+      ? configuredEnv("AI_DECISION_MODEL", configuredEnv("AI_UNDERSTANDING_MODEL", configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig), runtimeConfig), runtimeConfig)
+      : configuredEnv(
+        input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
+        configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig),
+        runtimeConfig
+      ),
     messages: input.messages,
     maxTokens: input.maxTokens || numberEnv("CLOUDBASE_OPENAI_STRUCTURED_MAX_TOKENS", 800, 128, 2000, runtimeConfig),
     timeoutMs: input.timeoutMs || numberEnv("CLOUDBASE_OPENAI_STRUCTURED_TIMEOUT_MS", 8000, 1000, 30000, runtimeConfig),
     provider: "cloudbase-openai",
     classifyError: classifyHttpError,
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
   });
 }
 

@@ -124,7 +124,7 @@ function createProviderRuntime(options = {}) {
       if (!cancelled) markFailure(provider, code);
       metrics.record(input.stage, { durationMs, outcome: cancelled ? "cancelled" : "failed", fallback });
       emit(input.onEvent, { type: "provider.failed", provider, stage: input.stage, status: "failed", latencyMs: durationMs, reasonCode: code, providerUsed: true, fallback });
-      throw codedError(code, error && error.message, { cause: error });
+      throw codedError(code, error && error.message, { cause: error, attempted: true });
     } finally {
       stageSignal.cleanup();
     }
@@ -152,21 +152,27 @@ function createProviderRuntime(options = {}) {
     });
     const fallbackPath = [];
     let actualFirstProvider = "";
+    let attemptCount = 0;
     let lastError = null;
     for (let index = 0; index < providers.length; index += 1) {
       const provider = providers[index];
-      if (!actualFirstProvider) actualFirstProvider = provider;
       try {
         const result = await invokeAttempt(attemptInput, provider, index > 0);
+        attemptCount += 1;
+        if (!actualFirstProvider) actualFirstProvider = provider;
         fallbackPath.push(`${provider}:success`);
         return Object.freeze(Object.assign({}, result, {
           intendedProvider,
           actualFirstProvider,
           fallbackPath: Object.freeze(fallbackPath.slice()),
-          attemptCount: fallbackPath.length,
+          attemptCount,
         }));
       } catch (error) {
         lastError = error;
+        if (error && error.attempted === true) {
+          attemptCount += 1;
+          if (!actualFirstProvider) actualFirstProvider = provider;
+        }
         fallbackPath.push(`${provider}:${errorCode(error)}`);
         if (errorCode(error) === "ABORTED") throw Object.assign(error, { intendedProvider, actualFirstProvider, fallbackPath });
       }
@@ -176,7 +182,7 @@ function createProviderRuntime(options = {}) {
       intendedProvider,
       actualFirstProvider,
       fallbackPath: Object.freeze(fallbackPath.slice()),
-      attemptCount: fallbackPath.length,
+      attemptCount,
     });
   }
 
