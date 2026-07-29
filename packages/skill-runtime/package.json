@@ -1,0 +1,11 @@
+{
+  "name": "@xiaofu-agent/skill-runtime",
+  "version": "0.1.0",
+  "description": "Declarative, versioned Skill catalog for the Xiaofu Agent runtime.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

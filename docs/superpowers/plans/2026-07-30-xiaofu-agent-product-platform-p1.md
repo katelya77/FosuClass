@@ -167,7 +167,7 @@ npm run test:agent-foundation
 
 Expected: new test PASS; foundation exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```text
 git add package.json package-lock.json packages/agent-protocol packages/ui-schema tools/test-agent-platform-contracts.js
@@ -190,7 +190,7 @@ git commit -m "feat(agent): add executable platform contracts"
 - `toolRuntime.resolveAllowedToolIds({ manifestToolIds, skillToolIds, runtimeToolIds, environmentToolIds, safetyToolIds })` returns an ordered exact intersection.
 - `toolRuntime.execute(toolId, args, context)` rejects unregistered/disallowed IDs before invoking the implementation.
 
-- [ ] **Step 1: Write failing behavior tests**
+- [x] **Step 1: Write failing behavior tests**
 
 Use a real in-process read-only implementation that increments only when authorization succeeds. Assert exact match, Schema rejection, and each factor independently removing the tool.
 
@@ -209,23 +209,23 @@ assert.deepStrictEqual(allowed, ["platform.echo"]);
 assert.throws(() => runtime.assertExecutable("Platform.Echo", allowed), /TOOL_NOT_REGISTERED/);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-platform-capability-runtimes.js`
 
 Expected: FAIL because `skill-runtime` and `tool-runtime` do not exist.
 
-- [ ] **Step 3: Implement catalogs and validation**
+- [x] **Step 3: Implement catalogs and validation**
 
 Skill descriptors are immutable copies. Tool descriptors hold executable functions supplied by code at composition time; no serialized function may be accepted. Schema validation supports required fields, primitive types, enums, additionalProperties false and maximum string/array limits needed by the current Manifest.
 
-- [ ] **Step 4: Run GREEN and mutation cases**
+- [x] **Step 4: Run GREEN and mutation cases**
 
 Run: `node tools/test-agent-platform-capability-runtimes.js`
 
 Expected: all exact-match, missing-factor, malformed-args and output-redaction cases PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add packages/skill-runtime packages/tool-runtime tools/test-agent-platform-capability-runtimes.js
