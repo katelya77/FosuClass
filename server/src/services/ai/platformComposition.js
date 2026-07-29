@@ -3,7 +3,7 @@ const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog } = require("../../../../packages/skill-runtime");
 const { createToolRuntime } = require("../../../../packages/tool-runtime");
-const { createAgentPlatform } = require("../../../../apps/agent-server");
+const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
 
 const capabilityManifestService = require("./capabilityManifestService");
@@ -17,6 +17,7 @@ const { AgentKernel } = require("./agentKernel");
 const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
 
 const recentPlatformTraces = [];
+let runHandlers = null;
 
 const plugin = createFosuCampusPlugin({
   capabilityManifestService,
@@ -77,8 +78,29 @@ function listRecentPlatformTraces() {
   return recentPlatformTraces.slice().reverse();
 }
 
+function getRunHandlers() {
+  if (runHandlers) return runHandlers;
+  // Lazy imports keep the Agent Runtime independent from the integrated
+  // Express shell while still binding every transport to this exact platform
+  // singleton and the existing Run Repository fact source.
+  const agentRunEventService = require("./agentRunEventService");
+  const aguiAdapter = require("./aguiAdapter");
+  const agentService = require("./agentService");
+  const { safeLog } = require("../../utils/safeLogger");
+  runHandlers = createRunHandlers({
+    platform,
+    runRepository: agentRunEventService,
+    protocol: agentProtocol,
+    agui: aguiAdapter,
+    buildFailureResponse: agentService.buildServiceFailureResponse,
+    log: safeLog,
+  });
+  return runHandlers;
+}
+
 module.exports = {
   getDiagnostics,
   getPlatform,
+  getRunHandlers,
   listRecentPlatformTraces,
 };

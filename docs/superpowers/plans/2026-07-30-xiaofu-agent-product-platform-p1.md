@@ -447,21 +447,21 @@ git commit -m "refactor(agent): route Fosu turns through platform runtime"
 - Produces HTTP handlers `createRun`, `getRun`, `cancelRun`, `chatCompat`, `aguiCompat` bound to one platform instance.
 - P1 adapts the existing Run Repository as the single source; durable replacement is P6, but no route may own its own execution closure.
 
-- [ ] **Step 1: Write failing HTTP integration test**
+- [x] **Step 1: Write failing HTTP integration test**
 
 Start the real Express app on an ephemeral port, POST `/api/ai/agent/runs`, poll to terminal, then call `/agent/chat`. Assert both results contain the same platform runtime marker and the Run timeline contains real runtime/stage events. Assert `idempotencyKey` reaches the app service diagnostics even though durable dedupe lands in P6.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-platform-http.js`
 
 Expected: FAIL because routes directly use `agentRunEventService` and `setImmediate(agentService.chat)`.
 
-- [ ] **Step 3: Implement app-bound handlers**
+- [x] **Step 3: Implement app-bound handlers**
 
 Move Run execution closure and terminal event selection into `createRunHandlers()`. Route files perform Express validation/auth only, then delegate. `chatCompat` calls `platform.executeTurn()` directly for synchronous compatibility; `aguiCompat` converts the same emitted events and never runs a second engine.
 
-- [ ] **Step 4: Run GREEN plus existing transport tests**
+- [x] **Step 4: Run GREEN plus existing transport tests**
 
 Run:
 
@@ -472,7 +472,7 @@ npm run test:xiaofu-runs-transport
 node tools/test-agui-adapter.js
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add apps/agent-server/src/createRunHandlers.js server/src/routes/ai.js server/src/app.js tools/test-agent-platform-http.js

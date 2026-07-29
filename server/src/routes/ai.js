@@ -19,15 +19,24 @@ const { defaultCourseReminderDispatchService } = require("../services/ai/reminde
 const { defaultWechatSubscriptionService } = require("../services/ai/reminders/wechatSubscriptionService");
 const scheduleAnalysisService = require("../services/ai/scheduleAnalysisService");
 const agentReadinessService = require("../services/ai/agentReadinessService");
-const agentRunEventService = require("../services/ai/agentRunEventService");
-const agentProtocol = require("../services/ai/agentProtocol");
-const aguiAdapter = require("../services/ai/aguiAdapter");
 const actionCommandContract = require("../services/ai/actionCommandContract");
 const { resumeDurableTask, completeReminderReceiptWait } = require("../services/ai/durable/resume");
 
 const router = express.Router();
+let configuredAgentRunHandlers = null;
 
 router.use(publicFosuGuard);
+
+function getAgentRunHandlers() {
+  if (!configuredAgentRunHandlers) {
+    configuredAgentRunHandlers = require("../services/ai/platformComposition").getRunHandlers();
+  }
+  return configuredAgentRunHandlers;
+}
+
+function bindRuntimeDecision(req) {
+  req.agentRuntimeDecision = resolveRequestRuntimeDecision(req, req.body && req.body.context || {});
+}
 
 function requireSessionGuard(req, res, next) {
   const security = getSecurityMode();
@@ -210,62 +219,9 @@ router.get("/agent/capabilities", scheduleLimiter, optionalSessionGuard, (req, r
   }));
 });
 
-router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled"]), async (req, res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-
-  const message = String(req.body && req.body.message || "").trim();
-  if (!message) {
-    return res.status(400).json({
-      success: false,
-      code: "MESSAGE_REQUIRED",
-      message: "请输入要咨询的问题。",
-      serverTime: new Date().toISOString(),
-    });
-  }
-
-  try {
-    const context = Object.assign({}, req.body.context || {});
-    if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
-    if (req.body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
-    const payload = await agentService.chat({
-      message,
-      context,
-      protocolVersion: req.body.protocolVersion,
-      requestId: req.body.requestId,
-      conversationId: req.body.conversationId,
-      serverSession: req.fosuSession ? {
-        openidHash: req.fosuSession.openidHash || "",
-        sessionIdHash: req.fosuSession.sessionIdHash || "",
-        appid: req.fosuSession.appid || "",
-      } : null,
-    });
-    safeLog("ai-agent-chat", {
-      metrics: payload.metrics || {},
-      provider: payload.safety && payload.safety.provider,
-      toolCalls: payload.toolCalls,
-      memoryMode: payload.memory && payload.memory.mode,
-    });
-    return res.json(payload);
-  } catch (error) {
-    safeLog("ai-agent-chat-failed", buildSafeLogPayload({
-      provider: "mock",
-      toolCalls: [{ name: "agentService", status: "failed", summary: error.message }],
-    }));
-    return res.status(200).json(agentService.buildServiceFailureResponse({
-      message,
-      context: req.body && req.body.context || {},
-      protocolVersion: req.body && req.body.protocolVersion,
-      requestId: req.body && req.body.requestId,
-      conversationId: req.body && req.body.conversationId,
-      serverSession: req.fosuSession ? {
-        openidHash: req.fosuSession.openidHash || "",
-        sessionIdHash: req.fosuSession.sessionIdHash || "",
-        appid: req.fosuSession.appid || "",
-      } : null,
-    }, error));
-  }
+router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled"]), (req, res) => {
+  bindRuntimeDecision(req);
+  return getAgentRunHandlers().chatCompat(req, res);
 });
 
 /**
@@ -273,95 +229,9 @@ router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBo
  * Does not replace custom miniprogram UI; cards/actions travel in STATE_SNAPSHOT.
  * threadId = conversationId; runId = agent runId.
  */
-router.post("/agent/agui", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled", "stream"]), async (req, res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const message = String(req.body && req.body.message || "").trim();
-  if (!message) {
-    return res.status(400).json({
-      success: false,
-      code: "MESSAGE_REQUIRED",
-      message: "请输入要咨询的问题。",
-      serverTime: new Date().toISOString(),
-    });
-  }
-  const conversationId = String(req.body.conversationId || "").slice(0, 120);
-  const wantStream = req.body.stream === true || String(req.headers.accept || "").includes("text/event-stream");
-  const collectedEvents = [];
-  try {
-    const context = Object.assign({}, req.body.context || {});
-    if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
-    if (req.body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
-    const payload = await agentService.chat({
-      message,
-      context,
-      protocolVersion: req.body.protocolVersion,
-      requestId: req.body.requestId,
-      conversationId,
-      serverSession: req.fosuSession ? {
-        openidHash: req.fosuSession.openidHash || "",
-        sessionIdHash: req.fosuSession.sessionIdHash || "",
-        appid: req.fosuSession.appid || "",
-      } : null,
-      onEvent: (event) => {
-        collectedEvents.push(event);
-      },
-    });
-    const runId = String(payload.runId || payload.requestId || req.body.requestId || "").slice(0, 120);
-    const aguiEvents = aguiAdapter.mapRunToAguiEvents({
-      conversationId: conversationId || payload.conversationId,
-      runId: runId || "agui-run",
-      events: collectedEvents,
-      response: payload,
-      answer: payload.answer,
-      cards: payload.cards,
-      actionCommands: payload.actionCommands,
-      runtimeMode: payload.runtimeMode || (payload.safety && payload.safety.runtimeMode),
-    });
-    safeLog("ai-agent-agui", {
-      eventCount: aguiEvents.length,
-      runId: runId || "",
-      provider: payload.safety && payload.safety.provider,
-    });
-    if (wantStream) {
-      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      res.setHeader("X-Accel-Buffering", "no");
-      res.status(200).send(aguiAdapter.serializeSse(aguiEvents));
-      return;
-    }
-    return res.json({
-      success: true,
-      protocol: "ag-ui",
-      threadId: conversationId || payload.conversationId || "",
-      runId: runId || "",
-      events: aguiEvents,
-      // Keep existing custom protocol for miniprogram dual-read
-      response: payload,
-      serverTime: new Date().toISOString(),
-    });
-  } catch (error) {
-    safeLog("ai-agent-agui-failed", { code: String(error && error.code || "AGUI_FAILED").slice(0, 80) });
-    const runId = String(req.body && req.body.requestId || "agui-error").slice(0, 120);
-    const events = aguiAdapter.mapRunToAguiEvents({
-      conversationId,
-      runId,
-      events: collectedEvents,
-      failed: true,
-      error,
-    });
-    if (wantStream) {
-      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      return res.status(200).send(aguiAdapter.serializeSse(events));
-    }
-    return res.status(200).json({
-      success: false,
-      protocol: "ag-ui",
-      threadId: conversationId,
-      runId,
-      events,
-      message: "AG-UI 请求失败，已返回错误事件。",
-      serverTime: new Date().toISOString(),
-    });
-  }
+router.post("/agent/agui", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled", "stream"]), (req, res) => {
+  bindRuntimeDecision(req);
+  return getAgentRunHandlers().aguiCompat(req, res);
 });
 
 /**
@@ -1278,143 +1148,22 @@ router.get("/agent/readiness", scheduleLimiter, optionalSessionGuard, (req, res)
   }
 });
 
-router.post("/agent/runs", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled", "idempotencyKey"]), async (req, res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const message = String(req.body && req.body.message || "").trim();
-  if (!message) {
-    return res.status(400).json({
-      success: false,
-      code: "MESSAGE_REQUIRED",
-      message: "请输入要咨询的问题。",
-      serverTime: new Date().toISOString(),
-    });
-  }
-
-  const context = Object.assign({}, req.body.context || {});
-  if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
-  if (req.body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
-  const runtimeDecision = resolveRequestRuntimeDecision(req, context);
-  const requestId = String(req.body.requestId || agentProtocol.createRequestId()).slice(0, 96);
-  const conversationId = String(req.body.conversationId || "").slice(0, 96);
-  const created = agentRunEventService.createRun({
-    serverSession: req.fosuSession || null,
-    runtimeMode: runtimeDecision.runtimeMode,
-    requestId,
-    conversationId,
-  });
-
-  // Async execution: respond immediately, client polls events.
-  setImmediate(() => {
-    const onEvent = agentRunEventService.createEventEmitter(created.runId, runtimeDecision.runtimeMode);
-    agentService.chat({
-      message,
-      context,
-      protocolVersion: req.body.protocolVersion,
-      requestId,
-      conversationId,
-      runId: created.runId,
-      serverSession: req.fosuSession ? {
-        openidHash: req.fosuSession.openidHash || "",
-        sessionIdHash: req.fosuSession.sessionIdHash || "",
-        appid: req.fosuSession.appid || "",
-      } : null,
-      onEvent,
-    }).then((payload) => {
-      if (agentRunEventService.isCancelled(created.runId)) {
-        agentRunEventService.setResult(created.runId, null, "cancelled");
-        return;
-      }
-      const status = agentRunEventService.statusFromResult(payload || {});
-      const terminalSummary = {
-        runtimeMode: runtimeDecision.runtimeMode,
-        status: payload && payload.status || status,
-        success: payload ? payload.success !== false : status !== "failed",
-        fallback: Boolean(payload && payload.fallback),
-        partialCompletion: Boolean(payload && (payload.partialCompletion === true || payload.status === "partial")),
-        verificationOk: payload && payload.verification && payload.verification.ok === true,
-        errorCount: payload && Array.isArray(payload.errors) ? payload.errors.length : 0,
-      };
-      if (status === "completed") onEvent(Object.assign({ type: "run.completed" }, terminalSummary));
-      else if (status === "degraded") onEvent(Object.assign({ type: "run.degraded", reasonCode: String(payload && payload.fallbackReason || "").slice(0, 80) }, terminalSummary));
-      else if (status === "failed") onEvent(Object.assign({ type: "run.failed" }, terminalSummary));
-      agentRunEventService.setResult(created.runId, payload, status);
-    }).catch((error) => {
-      onEvent({
-        type: "run.failed",
-        runtimeMode: runtimeDecision.runtimeMode,
-        reasonCode: String(error && error.code || "AGENT_SERVICE_UNAVAILABLE").slice(0, 80),
-      });
-      agentRunEventService.setResult(created.runId, agentService.buildServiceFailureResponse({
-        message,
-        context,
-        protocolVersion: req.body.protocolVersion,
-        requestId,
-        conversationId,
-        runId: created.runId,
-        serverSession: req.fosuSession || null,
-      }, error), "failed");
-    });
-  });
-
-  return res.status(202).json({
-    success: true,
-    runId: created.runId,
-    pollToken: created.pollToken,
-    status: created.status,
-    nextPollMs: created.nextPollMs,
-    expiresAt: created.expiresAt,
-    serverTime: new Date().toISOString(),
-  });
+router.post("/agent/runs", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled", "idempotencyKey"]), (req, res) => {
+  bindRuntimeDecision(req);
+  return getAgentRunHandlers().createRun(req, res);
 });
 
 router.get("/agent/runs/:runId", scheduleLimiter, optionalSessionGuard, (req, res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const view = agentRunEventService.getRunView(req.params.runId, {
-    pollToken: req.query.pollToken || req.headers["x-fosu-run-poll-token"] || "",
-    serverSession: req.fosuSession || null,
-    afterSequence: req.query.afterSequence,
-  });
-  if (!view.ok) {
-    return res.status(view.status || 404).json({
-      success: false,
-      code: view.code || "RUN_NOT_FOUND",
-      message: "无法读取该运行任务。",
-      serverTime: new Date().toISOString(),
-    });
-  }
-  return res.json({
-    success: true,
-    runId: view.runId,
-    status: view.status,
-    events: view.events,
-    result: view.result,
-    nextPollMs: view.nextPollMs,
-    checkedAt: view.checkedAt,
-    serverTime: new Date().toISOString(),
-  });
+  return getAgentRunHandlers().getRun(req, res);
 });
 
 router.post("/agent/runs/:runId/cancel", scheduleLimiter, optionalSessionGuard, (req, res) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const result = agentRunEventService.cancelRun(req.params.runId, {
-    pollToken: req.body && req.body.pollToken || req.query.pollToken || req.headers["x-fosu-run-poll-token"] || "",
-    serverSession: req.fosuSession || null,
-  });
-  if (!result.ok) {
-    return res.status(result.status || 404).json({
-      success: false,
-      code: result.code || "RUN_NOT_FOUND",
-      message: "无法取消该运行任务。",
-      serverTime: new Date().toISOString(),
-    });
-  }
-  return res.json({
-    success: true,
-    runId: req.params.runId,
-    status: result.status || "cancelled",
-    alreadyFinished: result.alreadyFinished === true,
-    serverTime: new Date().toISOString(),
-  });
+  return getAgentRunHandlers().cancelRun(req, res);
 });
+
+router.configureAgentRunHandlers = function configureAgentRunHandlers(handlers) {
+  configuredAgentRunHandlers = handlers;
+  return router;
+};
 
 module.exports = router;
