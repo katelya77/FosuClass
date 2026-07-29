@@ -1,0 +1,11 @@
+{
+  "name": "@xiaofu-agent/ui-schema",
+  "version": "0.1.0",
+  "description": "Safe generic UI blocks shared by Agent servers and clients.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

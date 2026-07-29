@@ -102,7 +102,7 @@
 - Produces: `createRunEvent(input)`, `createPlatformTrace(input)`, `normalizeUiBlocks(input)`, `blocksFromAgentResult(result)`.
 - Consumes later: Runtime events and final agent.v2 presentation.
 
-- [ ] **Step 1: Write the failing contract test**
+- [x] **Step 1: Write the failing contract test**
 
 The test must require the package entrypoints, create one event and all 12 block types, reject an unknown type, strip unknown/sensitive fields, and assert that a factual legacy result maps to at least one stable block.
 
@@ -127,13 +127,13 @@ assert.deepStrictEqual(
 );
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-platform-contracts.js`
 
 Expected: FAIL with `Cannot find module '../packages/agent-protocol'`.
 
-- [ ] **Step 3: Implement minimal real contracts**
+- [x] **Step 3: Implement minimal real contracts**
 
 `createRunEvent()` must validate IDs, positive integer sequence, allowlisted event type, ISO timestamp, protocol/config version, and recursively sanitize `publicPayload`. `normalizeUiBlocks()` must use an explicit handler per block type and never pass arbitrary fields through.
 
@@ -152,11 +152,11 @@ function normalizeUiBlocks(blocks) {
 }
 ```
 
-- [ ] **Step 4: Add npm workspaces and refresh lockfile**
+- [x] **Step 4: Add npm workspaces and refresh lockfile**
 
 Set root workspaces to `packages/*`, `plugins/*`, and `apps/*`. Run `npm install --package-lock-only --ignore-scripts`; inspect that only workspace metadata and expected lock entries changed.
 
-- [ ] **Step 5: Run GREEN and package hygiene**
+- [x] **Step 5: Run GREEN and package hygiene**
 
 Run:
 
@@ -380,7 +380,7 @@ git commit -m "feat(agent): add traced generic runtime lifecycle"
 Run a real public factual request through `agentService.chat()` using existing fixtures. Assert:
 
 - response success and agent.v1 fields remain;
-- `platformTrace.runtimePackage === "@fosuclass/agent-runtime"`;
+- `platformTrace.runtimePackage === "@xiaofu-agent/agent-runtime"`;
 - stages include decision, skill_tool, verification, response in order;
 - `pluginIds` contains `fosu-campus`;
 - factual Evidence remains complete;

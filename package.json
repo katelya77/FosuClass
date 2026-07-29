@@ -1,6 +1,12 @@
 {
   "name": "fosuclass",
   "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "plugins/*",
+    "apps/*"
+  ],
   "description": "面向佛山大学的原生微信小程序课表模板。V4 开始把脱敏 HAR 样本沉淀为强智教务接口适配层，产品侧采用“云函数同步 + 小程序读取缓存”的长期架构。",
   "main": "index.js",
   "directories": {
