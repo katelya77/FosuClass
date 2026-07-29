@@ -69,10 +69,13 @@ function extractText(data) {
     .trim();
 }
 
-async function postMessages(entry, body, timeoutMs) {
+async function postMessages(entry, body, timeoutMs, requestOptions = {}) {
   try {
     return await axios.post(`${entry.baseUrl}/messages`, body, {
       timeout: timeoutMs,
+      signal: requestOptions.signal || undefined,
+      httpAgent: requestOptions.httpAgent || undefined,
+      httpsAgent: requestOptions.httpsAgent || undefined,
       headers: {
         "x-api-key": entry.apiKey,
         "anthropic-version": ANTHROPIC_VERSION,
@@ -141,11 +144,11 @@ async function generateStructured(input = {}) {
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
   const timeoutMs = input.timeoutMs || Math.max(1000, Math.min(30000, Number(runtimeConfig.AI_STRUCTURED_TIMEOUT_MS || 8000) || 8000));
-  const model = String(
-    input.purpose === "understanding"
+  const model = String(input.purpose === "decision"
+    ? runtimeConfig.AI_DECISION_MODEL || runtimeConfig.AI_UNDERSTANDING_MODEL || ""
+    : (input.purpose === "understanding"
       ? runtimeConfig.AI_UNDERSTANDING_MODEL || ""
-      : runtimeConfig.AI_PLANNER_MODEL || ""
-  ) || entry.model;
+      : runtimeConfig.AI_PLANNER_MODEL || "")) || entry.model;
   const shaped = toAnthropicMessages(input.messages);
   const started = Date.now();
   const response = await postMessages(entry, {
@@ -156,7 +159,11 @@ async function generateStructured(input = {}) {
       ? `${shaped.system}\n\n只输出一个 JSON 对象，不要输出 Markdown 代码块或任何解释。`
       : "只输出一个 JSON 对象，不要输出 Markdown 代码块或任何解释。",
     messages: shaped.messages,
-  }, timeoutMs);
+  }, timeoutMs, {
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
+  });
   const content = extractText(response.data);
   if (!content) {
     const error = new Error("Custom Anthropic-compatible provider returned an empty response");

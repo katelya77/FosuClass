@@ -3,13 +3,12 @@ const agentProtocol = require("../agentProtocol");
 const agentRunEventService = require("../agentRunEventService");
 const mockProvider = require("../providers/mockProvider");
 const responseComposer = require("../responseComposer");
-const { defaultUnderstandingService } = require("../understanding/understandingService");
 const { isGeneralAssistantEnabled } = require("../planner/plannerPolicy");
 const { stableGeneratedPayload } = require("./shared");
 const { emitChatEvent, recordEarlyTrace } = require("./runEventPublisher");
 const requestContextAssembler = require("./requestContextAssembler");
 const understandingCoordinator = require("./understandingCoordinator");
-const { toRuntimeGoalContractV2, enrichIntentFromWorkingMemory } = require("./goalContractResolver");
+const { enrichIntentFromWorkingMemory } = require("./goalContractResolver");
 const providerOrchestrator = require("./providerOrchestrator");
 const plannerCoordinator = require("./plannerCoordinator");
 const toolExecutor = require("./toolExecutor");
@@ -141,8 +140,10 @@ function cancelledResponse(state, extra = {}) {
 function createFosuTurnPorts(options = {}) {
   const agentKernel = options.agentKernel;
   const skillCatalog = options.skillCatalog;
+  const decisionService = options.decisionService;
   if (!agentKernel || typeof agentKernel.execute !== "function") throw new Error("agentKernel is required");
   if (!skillCatalog || typeof skillCatalog.getSkillForIntent !== "function") throw new Error("skillCatalog is required");
+  if (!decisionService || typeof decisionService.decide !== "function") throw new Error("decisionService is required");
 
   async function context(stageInput = {}) {
     const request = stageInput.request || {};
@@ -191,6 +192,10 @@ function createFosuTurnPorts(options = {}) {
       runtimeMode: state.runtimeDecision.runtimeMode,
     });
     state.providerRuntimeConfig = providerConfigResolution.providerRuntimeConfig;
+    state.executionPolicy = decisionService.resolvePolicy({
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      providerRuntimeConfig: state.providerRuntimeConfig,
+    });
     state.context.assistantEnvironment = providerConfigResolution.assistantEnvironment;
     state.usedPersonalContext = requestContextAssembler.deriveUsedPersonalContext(state.context);
 
@@ -312,10 +317,18 @@ function createFosuTurnPorts(options = {}) {
 
   async function decision(stageInput = {}) {
     const state = stageInput.context || {};
+    const executionPolicy = state.executionPolicy || decisionService.resolvePolicy({
+      runtimeMode: state.runtimeDecision && state.runtimeDecision.runtimeMode,
+      providerRuntimeConfig: state.providerRuntimeConfig || {},
+    });
     if (state.earlyResponse) {
       return {
         skipped: true,
         earlyResponse: state.earlyResponse,
+        executionPolicy,
+        intendedProvider: "",
+        actualFirstProvider: "",
+        fallbackPath: [],
         decisionSource: "guard_rejected",
         goal: { name: state.guardReason || "guard_rejected" },
         selectedSkillId: "",
@@ -323,12 +336,31 @@ function createFosuTurnPorts(options = {}) {
     }
     const mutableContext = cloneMutable(state.context);
     const mutableConversationState = cloneMutable(state.conversationState);
-    const deterministicUnderstanding = defaultUnderstandingService.deterministicResult({
+    const resolvedDecision = await decisionService.decide({
       message: state.safeMessage,
       context: mutableContext,
       conversationState: mutableConversationState,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      executionPolicy,
+      providerRuntimeConfig: state.providerRuntimeConfig,
+      principal: state.memoryBundle.principal,
+      conversationId: state.conversationId,
+      signal: stageInput.signal || null,
       deterministicResolve: (message, safeContext) => understandingCoordinator.resolveRuleBackedIntent(message, safeContext).intent,
-    }, "deterministic_policy", "PERSONAL_MEMORY_SHORT_CIRCUIT");
+      onEvent: (event) => emitChatEvent(state.eventInput, Object.assign({
+        runtimeMode: state.runtimeDecision.runtimeMode,
+      }, event)),
+    });
+    const understanding = resolvedDecision.understanding;
+    const goalContractV2 = resolvedDecision.goalContractV2;
+    const intent = Object.assign({}, enrichIntentFromWorkingMemory(
+      resolvedDecision.intent,
+      mutableContext,
+      mutableConversationState,
+    ));
+    if (understanding && understanding.source && !intent.understandingSource) {
+      intent.understandingSource = String(understanding.source).slice(0, 40);
+    }
     const personalMemoryEarly = memoryCoordinator.handlePersonalMemoryTurn({
       message: state.safeMessage,
       context: mutableContext,
@@ -341,49 +373,23 @@ function createFosuTurnPorts(options = {}) {
       conversationId: state.conversationId,
       eventInput: state.eventInput,
       startTime: state.startTime,
-      understanding: deterministicUnderstanding,
-      goalContractV2: toRuntimeGoalContractV2(deterministicUnderstanding),
+      understanding,
+      goalContractV2,
     });
     if (personalMemoryEarly) {
-      return {
+      return Object.assign({}, resolvedDecision, {
         skipped: true,
         earlyResponse: personalMemoryEarly,
-        decisionSource: "deterministic_memory",
-        goal: { name: personalMemoryEarly.intent || "personal_memory" },
-        selectedSkillId: "",
-      };
+        intent,
+      });
     }
-
-    const understanding = await understandingCoordinator.runUnderstanding({
-      message: state.safeMessage,
-      context: mutableContext,
-      conversationState: mutableConversationState,
-      runtimeMode: state.runtimeDecision.runtimeMode,
-      providerRuntimeConfig: state.providerRuntimeConfig,
-      principal: state.memoryBundle.principal,
-      conversationId: state.conversationId,
-      eventInput: state.eventInput,
-    });
-    const goalContractV2 = toRuntimeGoalContractV2(understanding);
-    const intent = Object.assign({}, enrichIntentFromWorkingMemory(
-      understanding.intent,
-      mutableContext,
-      mutableConversationState,
-    ));
-    if (understanding && understanding.source && !intent.understandingSource) {
-      intent.understandingSource = String(understanding.source).slice(0, 40);
-    }
-    const skill = skillCatalog.getSkillForIntent(intent.name);
-    return {
+    return Object.assign({}, resolvedDecision, {
       skipped: false,
       understanding,
       goalContractV2,
       intent,
-      goal: { name: intent.name, confidence: Number(intent.confidence || 0) || 0 },
-      selectedSkillId: skill && skill.id || "",
-      decisionSource: String(understanding.source || "deterministic"),
       localRuleMatch: resolveRuleBackedIntent(state.safeMessage, mutableContext).ruleMatch,
-    };
+    });
   }
 
   async function skillTool(stageInput = {}) {
@@ -408,6 +414,8 @@ function createFosuTurnPorts(options = {}) {
       onEvent: state.eventInput.onEvent,
       eventInput: state.eventInput,
       agentKernel,
+      unifiedDecision: Boolean(decisionResult.decisionContract),
+      decisionContract: decisionResult.decisionContract || null,
       signal: stageInput.signal,
       principal: state.memoryBundle.principal,
     });

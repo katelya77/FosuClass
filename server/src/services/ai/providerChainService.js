@@ -30,6 +30,7 @@ const DEFAULT_COMPETITION_CHAIN = ["coze", "cloudbase-openai", "deepseek", "mock
 const DEFAULT_PUBLIC_CHAIN = ["mock"];
 // 阶段显式分配：Profile 字段（空 = 跟随主链）对应的运行时配置键。
 const STAGE_CONFIG_KEYS = Object.freeze({
+  decision: "AI_DECISION_PROVIDER",
   understanding: "AI_UNDERSTANDING_PROVIDER",
   planner: "AI_PLANNER_PROVIDER",
   response: "AI_RESPONSE_PROVIDER",

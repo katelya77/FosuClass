@@ -376,16 +376,21 @@ async function generateStructured(input = {}) {
   return openaiStructuredProvider.generateStructured({
     baseUrl: configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig),
     apiKey,
-    model: configuredEnv(
-      input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
-      configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig),
-      runtimeConfig
-    ),
+    model: input.purpose === "decision"
+      ? configuredEnv("AI_DECISION_MODEL", configuredEnv("AI_UNDERSTANDING_MODEL", configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig), runtimeConfig), runtimeConfig)
+      : configuredEnv(
+        input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
+        configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig),
+        runtimeConfig
+      ),
     messages: input.messages,
     maxTokens: input.maxTokens || numberEnv("AI_STRUCTURED_MAX_TOKENS", 800, 128, 2000, runtimeConfig),
     timeoutMs: input.timeoutMs || numberEnv("AI_STRUCTURED_TIMEOUT_MS", 8000, 1000, 30000, runtimeConfig),
     provider: "deepseek",
     classifyError: classifyHttpError,
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
   });
 }
 

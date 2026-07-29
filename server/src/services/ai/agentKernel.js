@@ -325,6 +325,8 @@ class AgentKernel {
             conversationState,
             availableTools: allowedToolIds,
             availableSkills,
+            unifiedDecision: input.unifiedDecision === true,
+            decisionContract: input.decisionContract || null,
           }));
         } catch (error) {
           // Hard policy errors must surface; soft planner failures fall back.
@@ -376,6 +378,8 @@ class AgentKernel {
             conversationState,
             availableTools: allowedToolIds,
             availableSkills,
+            unifiedDecision: input.unifiedDecision === true,
+            decisionContract: input.decisionContract || null,
           }));
           if (structured.steps && structured.steps.length) {
             this.validatePlan(skill, structured.steps, runtimeMode, allowedToolIds);
