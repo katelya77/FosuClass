@@ -152,6 +152,36 @@ class UnderstandingService {
       return result;
     }
 
+    // 规则优先快路径：本地确定性解析已高置信命中（事实类意图由精确模式解析、
+    // project_qa 显式命中、或知识规则 pattern 命中 score≥8）时跳过理解模型调用，
+    // 省一次 ~6s 的模型延迟；兜底 conversational_help 仍走模型。
+    // AI_UNDERSTANDING_RULE_FIRST=0 可关闭，恢复模型优先。
+    const ruleFirstEnabled = String(configValue(runtimeConfig, "AI_UNDERSTANDING_RULE_FIRST", "1")).toLowerCase() !== "0";
+    if (ruleFirstEnabled) {
+      const localIntent = this.deterministicIntent(input);
+      const intentName = localIntent && localIntent.name || "";
+      const manifestIntent = capabilityManifestService.getIntent(intentName);
+      const ruleScore = Number(localIntent && localIntent.ruleScore) || 0;
+      const confident = Boolean(manifestIntent && manifestIntent.factualTask === true)
+        || intentName === "project_qa"
+        || ruleScore >= 8;
+      if (confident) {
+        const result = this.deterministicResult(
+          input,
+          "deterministic_rule_first",
+          ruleScore >= 8 ? `RULE_SCORE_${ruleScore}` : "LOCAL_INTENT_HIGH_CONFIDENCE"
+        );
+        emit(onEvent, {
+          type: "understanding.completed",
+          status: "success",
+          runtimeMode,
+          understandingSource: result.source,
+          providerUsed: false,
+        });
+        return result;
+      }
+    }
+
     const started = Date.now();
     let generated = null;
     const providerAttempts = [];

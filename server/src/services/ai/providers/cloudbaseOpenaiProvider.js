@@ -33,7 +33,7 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
   const runtimeConfig = providerRuntimeConfig || {};
   if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false, runtimeConfig)) {
     const error = new Error("CloudBase OpenAI provider is disabled.");
@@ -52,6 +52,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const maxTokens = numberEnv("CLOUDBASE_OPENAI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
+  const userProfile = deepseekProvider.buildUserProfileText(userMemories);
   const body = {
     model,
     stream: false,
@@ -62,7 +63,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
         role: "system",
         content: deepseekProvider.buildSystemPrompt(
           conversational ? projectKnowledge : "",
-          { useJsonMode, conversational: Boolean(conversational) }
+          { useJsonMode, conversational: Boolean(conversational), userProfile }
         ),
       },
       ...deepseekProvider.buildHistoryMessages(history, message),
@@ -72,6 +73,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
           message,
           intent: intent && intent.name,
           toolResults,
+          userProfile: userProfile || undefined,
         }),
       },
     ],

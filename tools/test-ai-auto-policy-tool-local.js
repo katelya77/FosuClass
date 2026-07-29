@@ -16,6 +16,9 @@ process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "tria
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
 process.env.NODE_ENV = "development";
+// 本测试聚焦模型链 + 响应阶段策略边界：显式关闭快路径，保证 understanding/planning 走模型。
+process.env.AI_UNDERSTANDING_RULE_FIRST = "0";
+process.env.AI_MODEL_PLANNER_NO_TOOL_SKIP = "0";
 process.env.AI_PROVIDER_ENVIRONMENTS = JSON.stringify({
   public: { environment: "public", enabled: false, provider: "mock", providerPolicy: "tool-only" },
   trial: { environment: "trial", enabled: true, provider: "deepseek", providerPolicy: "auto" },

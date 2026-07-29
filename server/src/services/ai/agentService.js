@@ -16,6 +16,7 @@ const { nowIso, stableAction, stableCard, stableGeneratedPayload } = require("./
 const { emitChatEvent, recordEarlyTrace } = require("./runtime/runEventPublisher");
 const requestContextAssembler = require("./runtime/requestContextAssembler");
 const understandingCoordinator = require("./runtime/understandingCoordinator");
+const { defaultUnderstandingService } = require("./understanding/understandingService");
 const { toRuntimeGoalContractV2, enrichIntentFromWorkingMemory } = require("./runtime/goalContractResolver");
 const providerOrchestrator = require("./runtime/providerOrchestrator");
 const plannerCoordinator = require("./runtime/plannerCoordinator");
@@ -299,6 +300,36 @@ async function chat(input = {}) {
     return response;
   }
 
+  // 个人记忆快路径：名字问句/显式偏好指令是纯本地正则判定（不依赖理解结果），
+  // 先于 understanding 模型调用短路，省一次 ~6s 的模型延迟。
+  // 协议字段用确定性 understanding 结果填充；未命中时零副作用继续正常管线。
+  const deterministicUnderstanding = defaultUnderstandingService.deterministicResult(
+    {
+      message: safeMessage,
+      context,
+      conversationState,
+      deterministicResolve: (msg, safeContext) => understandingCoordinator.resolveRuleBackedIntent(msg, safeContext).intent,
+    },
+    "deterministic_policy",
+    "PERSONAL_MEMORY_SHORT_CIRCUIT"
+  );
+  const personalMemoryEarly = memoryCoordinator.handlePersonalMemoryTurn({
+    message: safeMessage,
+    context,
+    memoryBundle,
+    runtimeMode: runtimeDecision.runtimeMode,
+    runtimeDecision,
+    protocolVersion,
+    runId,
+    requestId,
+    conversationId,
+    eventInput,
+    startTime,
+    understanding: deterministicUnderstanding,
+    goalContractV2: toRuntimeGoalContractV2(deterministicUnderstanding),
+  });
+  if (personalMemoryEarly) return personalMemoryEarly;
+
   // The model-first boundary starts only after protocol, empty-input, cancellation,
   // and credential guards. public uses the same GoalContract boundary without any
   // external Provider call; trial/dev use the unified structured Provider chain.
@@ -316,23 +347,6 @@ async function chat(input = {}) {
   // Unified internal goal representation; working memory stores this V2 shape
   // while protocol responses keep the V1 contract unchanged.
   const goalContractV2 = toRuntimeGoalContractV2(understanding);
-
-  const personalMemoryResponse = memoryCoordinator.handlePersonalMemoryTurn({
-    message: safeMessage,
-    context,
-    memoryBundle,
-    runtimeMode: runtimeDecision.runtimeMode,
-    runtimeDecision,
-    protocolVersion,
-    runId,
-    requestId,
-    conversationId,
-    eventInput,
-    startTime,
-    understanding,
-    goalContractV2,
-  });
-  if (personalMemoryResponse) return personalMemoryResponse;
 
   // GoalContract resolves to a Manifest intent before Planner/Router can select a
   // whitelisted capability. Local rules are consulted only after Understanding,
@@ -456,7 +470,7 @@ async function chat(input = {}) {
       resolvedProvider: "mock",
       providerPolicy: "tool-only",
       externalProviderUsed: false,
-      fallbackReason: "AI_RUNTIME_MODE=public",
+      fallbackReason: "",
       requestId,
       conversationId,
       runtimeMode: runtimeDecision.runtimeMode,
@@ -469,14 +483,16 @@ async function chat(input = {}) {
       observations: execution.observations,
       context,
       rawToolCalls: toolCalls,
-      fallback: true,
-      fallbackLayer: "server",
+      // public 的确定性本地答复是设计行为（AGENTS.md：public 永远零外部调用），
+      // 不是降级——标 fallback:true 会让 run 终态恒为 degraded 并触发客户端“降级” UI。
+      fallback: false,
+      fallbackLayer: "none",
       metrics: buildMetrics({
         startTime,
         intentName: intent.name,
         toolCalls,
         externalProviderUsed: false,
-        fallback: true,
+        fallback: false,
         usedPersonalContext,
         plannerType: plan && plan.plannerType || "deterministic",
         plannerProvider: "none",

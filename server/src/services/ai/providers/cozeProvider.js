@@ -4,6 +4,7 @@
  */
 const crypto = require("crypto");
 const axios = require("axios");
+const deepseekProvider = require("./deepseekProvider");
 
 function configuredEnv(name, fallback = "", overrides = {}) {
   if (Object.prototype.hasOwnProperty.call(overrides || {}, name)) {
@@ -270,6 +271,7 @@ function buildSafeUserContent(input = {}) {
     history,
     projectKnowledge: String(input.projectKnowledge || "").slice(0, 1500),
     conversationSummary: String(input.context && input.context.conversationSummary || "").slice(0, 400),
+    userProfile: deepseekProvider.buildUserProfileText(input.userMemories),
   });
 }
 

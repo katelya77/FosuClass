@@ -36,6 +36,7 @@ function scoreMemory(item, query = {}) {
   if (key === "defaultReminderLeadMinutes" && /提醒|上课前/.test(query.message || goal)) score += 5;
   if (key === "preferPersonalSchedule" && /课表|有课|下一节/.test(query.message || goal)) score += 3;
   if (key === "answerDetailLevel") score += 1;
+  if ((key === "college" || key === "major" || key === "grade") && /课表|班级|专业|学院|年级|推荐|课|培养/.test(query.message || goal)) score += 3;
 
   // 2. Explicit corrections
   if (item.correction || item.reasonCode === "user_correction") score += 4;

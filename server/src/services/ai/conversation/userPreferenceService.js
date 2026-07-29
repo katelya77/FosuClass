@@ -21,6 +21,9 @@ const ALLOWED_KEYS = Object.freeze([
   "answerDetailLevel",
   "preferredClassName",
   "preferPersonalSchedule",
+  "college",
+  "major",
+  "grade",
 ]);
 
 function typedError(message, code, statusCode) {
@@ -62,6 +65,21 @@ function normalizeValue(key, value) {
     if (value === true || value === "true" || value === 1) return true;
     if (value === false || value === "false" || value === 0) return false;
     return null;
+  }
+  if (key === "college") {
+    const college = String(value || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 16);
+    return /^[㐀-鿿]{2,16}(学院|学部)$/.test(college) ? college : null;
+  }
+  if (key === "major") {
+    const major = String(value || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 16);
+    if (!/^[㐀-鿿A-Za-z]{2,16}$/.test(major)) return null;
+    // 拒绝明显非专业的误抓：学院/大学机构名、身份词、场景词
+    if (/(学院|大学|学部|学生|校区|老师|同学|专业)$/.test(major)) return null;
+    return major;
+  }
+  if (key === "grade") {
+    const grade = String(value || "").trim();
+    return /^(大[一二三四五六]|20\d{2}级)$/.test(grade) ? grade : null;
   }
   return null;
 }
@@ -206,7 +224,10 @@ class UserPreferenceService {
             : key === "preferredBuilding" ? "常用楼栋"
               : key === "defaultReminderLeadMinutes" ? "默认提醒"
                 : key === "answerDetailLevel" ? "回答偏好"
-                  : "偏好",
+                  : key === "college" ? "学院"
+                    : key === "major" ? "专业"
+                      : key === "grade" ? "年级"
+                        : "偏好",
         updatedAt,
         editable: true,
       })),

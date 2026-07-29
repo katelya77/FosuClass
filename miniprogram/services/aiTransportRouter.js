@@ -237,7 +237,7 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
   }
   // Fallback to legacy chat if run timed out without result.
   if (done.timeout) {
-    if (callbacks.onStatus) callbacks.onStatus({ type: "run.status_unavailable", text: "实时状态中断，正在请求最终结果" });
+    if (callbacks.onStatus) callbacks.onStatus({ type: "run.status_unavailable", text: "处理时间较长，正在等待最终结果" });
     return request.post("/api/ai/agent/chat", {
       message: safeMessage,
       context,
@@ -270,7 +270,7 @@ async function callOracle(oracleChat, safeMessage, context, callbacks = {}, meta
   } catch (error) {
     // Compatibility path if run API unavailable.
     if (callbacks.onStatus) {
-      callbacks.onStatus({ type: "run.status_unavailable", text: "实时状态不可用，正在请求最终结果" });
+      callbacks.onStatus({ type: "run.status_unavailable", text: "实时通道暂不可用，正在直接获取结果" });
     }
     return request.post("/api/ai/agent/chat", {
       message: safeMessage,

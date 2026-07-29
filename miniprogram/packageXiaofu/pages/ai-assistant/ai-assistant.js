@@ -114,6 +114,9 @@ function normalizeMemoryPreferenceItems(items) {
     preferredBuilding: "常用楼栋",
     defaultReminderLeadMinutes: "默认提醒",
     answerDetailLevel: "回答偏好",
+    college: "学院",
+    major: "专业",
+    grade: "年级",
   };
   const scopeLabels = {
     cloud_sync: "跨设备",
@@ -1173,7 +1176,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     metrics,
     metricsText: "",
     fallback: fallback && !isPlain,
-    fallbackBanner: fallback && !isPlain ? "网络暂不可用，已使用本地能力完成本次任务" : "",
+    fallbackBanner: fallback && !isPlain ? "增强推理暂不可用，已使用本地确定性能力完成本次任务" : "",
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
     showCompactFeedback: false,
@@ -2839,7 +2842,7 @@ Page({
     const slowTimer = setTimeout(() => {
       if (!isRequestActive()) return;
       this.setData({ slowRequest: true });
-    }, 7000);
+    }, 12000);
 
     let streamAssistantId = "";
     let streamContent = "";
@@ -3098,6 +3101,7 @@ Page({
           activeRunId: "",
           activePollToken: "",
         }, { save: true });
+        this.scheduleStatusCapsuleReset();
       })
       .finally(() => {
         clearTimeout(slowTimer);
@@ -3436,6 +3440,9 @@ Page({
       preferredBuilding: "修改常用楼栋",
       defaultReminderLeadMinutes: "修改默认提醒（分钟）",
       answerDetailLevel: "修改回答偏好（简洁/详细）",
+      college: "修改学院",
+      major: "修改专业",
+      grade: "修改年级（如：大二/2024级）",
     };
     wx.showModal({
       title: titles[key] || "修改记忆",

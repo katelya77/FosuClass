@@ -87,7 +87,7 @@ async function postMessages(entry, body, timeoutMs) {
   }
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
@@ -95,16 +95,17 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const maxTokens = Math.max(128, Math.min(4096, Number(runtimeConfig.AI_MAX_TOKENS || 1200) || 1200));
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
+  const userProfile = deepseekProvider.buildUserProfileText(userMemories);
   const systemPrompt = deepseekProvider.buildSystemPrompt(
     conversational ? projectKnowledge : "",
-    { useJsonMode, conversational: Boolean(conversational) }
+    { useJsonMode, conversational: Boolean(conversational), userProfile }
   );
   // Anthropic 要求 messages 首条为 user 且角色交替：历史与当前消息逐条按交替规则追加。
   const conversation = [];
   deepseekProvider.buildHistoryMessages(history, message).forEach((item) => appendAlternating(conversation, item));
   appendAlternating(conversation, {
     role: "user",
-    content: JSON.stringify({ message, intent: intent && intent.name, toolResults }),
+    content: JSON.stringify({ message, intent: intent && intent.name, toolResults, userProfile: userProfile || undefined }),
   });
   if (conversation[0].role !== "user") {
     conversation.unshift({ role: "user", content: "（接续对话）" });
