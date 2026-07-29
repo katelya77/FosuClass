@@ -245,17 +245,17 @@ git commit -m "feat(agent): add constrained skill and tool runtimes"
 - Produces `{ id, version, manifestVersion, skills, tools, releaseContext, mapResultToBlocks }`.
 - Tool implementations call the existing authoritative Tool registry; descriptors come from the single existing Manifest.
 
-- [ ] **Step 1: Write a failing plugin integration test**
+- [x] **Step 1: Write a failing plugin integration test**
 
 Require the real server Manifest/registries, construct the plugin, assert every Skill/Tool ID is unique, then execute the real read-only `explain_personal_import` Tool through `packages/tool-runtime`. Verify no copy of `agent-capability-manifest.json` is created under the plugin.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-fosu-campus-plugin.js`
 
 Expected: FAIL with missing plugin module.
 
-- [ ] **Step 3: Implement the plugin factory**
+- [x] **Step 3: Implement the plugin factory**
 
 ```js
 function createFosuCampusPlugin(deps) {
@@ -279,7 +279,7 @@ function createFosuCampusPlugin(deps) {
 
 The plugin must not cache a second mutable Manifest. It reads the authoritative service once per immutable composition/config snapshot.
 
-- [ ] **Step 4: Run GREEN plus existing Manifest/Tool gates**
+- [x] **Step 4: Run GREEN plus existing Manifest/Tool gates**
 
 Run:
 
@@ -289,7 +289,7 @@ node tools/test-agent-capability-manifest.js
 node tools/test-agent-tool-plan-manifest.js
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add plugins/fosu-campus tools/test-fosu-campus-plugin.js
