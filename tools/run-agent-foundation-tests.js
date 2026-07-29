@@ -11,6 +11,7 @@ const tests = [
   "tools/test-agent-platform-production-wiring.js",
   "tools/test-agent-platform-http.js",
   "tools/test-agent-platform-admin.js",
+  "tools/test-agent-generic-package-boundaries.js",
   "tools/test-capability-contract.js",
   "tools/test-xiaofu-action-bus.js",
   "tools/test-coze-tool-gateway.js",

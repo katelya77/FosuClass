@@ -94,6 +94,24 @@ function getRunHandlers() {
     agui: aguiAdapter,
     buildFailureResponse: agentService.buildServiceFailureResponse,
     log: safeLog,
+    runRepositoryId: "agentRunEventService",
+    resolvePrincipal(req) {
+      const session = req && req.fosuSession || null;
+      return {
+        repositoryPrincipal: session,
+        runtimePrincipal: session ? {
+          openidHash: session.openidHash || "",
+          sessionIdHash: session.sessionIdHash || "",
+          appid: session.appid || "",
+        } : null,
+      };
+    },
+    resolvePollCredential(req) {
+      return String(req && req.body && req.body.pollToken
+        || req && req.query && req.query.pollToken
+        || req && req.headers && req.headers["x-fosu-run-poll-token"]
+        || "");
+    },
   });
   return runHandlers;
 }

@@ -19,16 +19,6 @@ function noStore(res) {
   res.setHeader("Expires", "0");
 }
 
-function safeSession(req) {
-  const session = req && req.fosuSession;
-  if (!session) return null;
-  return {
-    openidHash: session.openidHash || "",
-    sessionIdHash: session.sessionIdHash || "",
-    appid: session.appid || "",
-  };
-}
-
 function requestContext(body = {}) {
   const context = Object.assign({}, body.context || {});
   if (body.memoryMode) context.memoryMode = body.memoryMode;
@@ -85,6 +75,13 @@ function createRunHandlers(options = {}) {
   const buildFailureResponse = options.buildFailureResponse;
   const log = typeof options.log === "function" ? options.log : () => {};
   const schedule = typeof options.schedule === "function" ? options.schedule : setImmediate;
+  const resolvePrincipal = typeof options.resolvePrincipal === "function"
+    ? options.resolvePrincipal
+    : () => ({ repositoryPrincipal: null, runtimePrincipal: null });
+  const resolvePollCredential = typeof options.resolvePollCredential === "function"
+    ? options.resolvePollCredential
+    : (req) => String(req && req.query && req.query.pollToken || req && req.body && req.body.pollToken || "");
+  const runRepositoryId = String(options.runRepositoryId || "run-repository").slice(0, 100);
 
   requireMethod(platform, "executeTurn", "platform");
   ["createRun", "createEventEmitter", "getRunView", "cancelRun", "isCancelled", "setResult", "statusFromResult"]
@@ -104,13 +101,14 @@ function createRunHandlers(options = {}) {
 
   function platformInput(req, overrides = {}) {
     const body = req.body || {};
+    const principal = resolvePrincipal(req) || {};
     return Object.assign({
       message: String(body.message || "").trim(),
       context: requestContext(body),
       protocolVersion: body.protocolVersion,
       requestId: String(body.requestId || protocol.createRequestId()).slice(0, 96),
       conversationId: String(body.conversationId || "").slice(0, 96),
-      serverSession: safeSession(req),
+      serverSession: principal.runtimePrincipal || principal.repositoryPrincipal || null,
     }, overrides);
   }
 
@@ -139,13 +137,13 @@ function createRunHandlers(options = {}) {
     try {
       const payload = attachTransport(await platform.executeTurn(Object.assign({}, input, {
         onEvent: ordered.onEvent,
-      })), path, { runRepository: "agentRunEventService" });
+      })), path, { runRepository: runRepositoryId });
       const status = runRepository.statusFromResult(payload);
       events.push(Object.assign({}, ordered.terminal() || {}, terminalSummary(payload, payload.runtimeMode || runtimeModeFor(req), status)));
       return { payload, events, input };
     } catch (error) {
       const failure = attachTransport(buildFailureResponse(input, error), path, {
-        runRepository: "agentRunEventService",
+        runRepository: runRepositoryId,
       });
       events.push(Object.assign({}, ordered.terminal() || {}, terminalSummary(failure, runtimeModeFor(req), "failed")));
       return { payload: failure, events, input, error };
@@ -217,7 +215,7 @@ function createRunHandlers(options = {}) {
     const requestId = String(body.requestId || protocol.createRequestId()).slice(0, 96);
     const conversationId = String(body.conversationId || "").slice(0, 96);
     const created = runRepository.createRun({
-      serverSession: req.fosuSession || null,
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
       runtimeMode,
       requestId,
       conversationId,
@@ -239,7 +237,7 @@ function createRunHandlers(options = {}) {
       });
       try {
         const payload = attachTransport(await platform.executeTurn(input), "run", {
-          runRepository: "agentRunEventService",
+          runRepository: runRepositoryId,
           idempotencyKeyAccepted,
         });
         if (runRepository.isCancelled(created.runId)) {
@@ -255,7 +253,7 @@ function createRunHandlers(options = {}) {
           return;
         }
         const failure = attachTransport(buildFailureResponse(input, error), "run", {
-          runRepository: "agentRunEventService",
+          runRepository: runRepositoryId,
           idempotencyKeyAccepted,
         });
         repositoryEmit(Object.assign({}, ordered.terminal() || {}, terminalSummary(failure, runtimeMode, "failed")));
@@ -275,7 +273,7 @@ function createRunHandlers(options = {}) {
       expiresAt: created.expiresAt,
       diagnostics: {
         idempotencyKeyAccepted,
-        runRepository: "agentRunEventService",
+        runRepository: runRepositoryId,
       },
       serverTime: new Date().toISOString(),
     });
@@ -284,8 +282,8 @@ function createRunHandlers(options = {}) {
   function getRun(req, res) {
     noStore(res);
     const view = runRepository.getRunView(req.params.runId, {
-      pollToken: req.query.pollToken || req.headers["x-fosu-run-poll-token"] || "",
-      serverSession: req.fosuSession || null,
+      pollToken: resolvePollCredential(req),
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
       afterSequence: req.query.afterSequence,
     });
     if (!view.ok) {
@@ -312,8 +310,8 @@ function createRunHandlers(options = {}) {
   function cancelRun(req, res) {
     noStore(res);
     const result = runRepository.cancelRun(req.params.runId, {
-      pollToken: req.body && req.body.pollToken || req.query.pollToken || req.headers["x-fosu-run-poll-token"] || "",
-      serverSession: req.fosuSession || null,
+      pollToken: resolvePollCredential(req),
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
     });
     if (!result.ok) {
       return res.status(result.status || 404).json({
@@ -339,7 +337,7 @@ function createRunHandlers(options = {}) {
     return Object.freeze({
       appService: APP_SERVICE,
       platform: platform.diagnostics ? platform.diagnostics() : {},
-      runRepository: "agentRunEventService",
+      runRepository: runRepositoryId,
       activeRunCount: controllers.size,
     });
   }
