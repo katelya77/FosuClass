@@ -130,12 +130,22 @@ async function plan(input = {}) {
   const noToolSkipEnabled = String(
     plannerEnv.AI_MODEL_PLANNER_NO_TOOL_SKIP || process.env.AI_MODEL_PLANNER_NO_TOOL_SKIP || "1"
   ) !== "0";
-  if (noToolSkipEnabled && manifestIntent
-    && Array.isArray(manifestIntent.allowedTools) && manifestIntent.allowedTools.length === 0
-    && manifestIntent.factualTask !== true) {
+  // 规则高置信理解（deterministic_rule_first）已精确命中意图：与 public 相同，
+  // 确定性规划足够，跳过模型规划再省 ~7s。AI_MODEL_PLANNER_RULE_FIRST_SKIP=0 可关闭。
+  const ruleFirstSkipEnabled = String(
+    plannerEnv.AI_MODEL_PLANNER_RULE_FIRST_SKIP || process.env.AI_MODEL_PLANNER_RULE_FIRST_SKIP || "1"
+  ) !== "0";
+  const ruleFirstUnderstanding = String(
+    (input.intent && input.intent.understandingSource) || ""
+  ) === "deterministic_rule_first";
+  if (manifestIntent && (
+    (noToolSkipEnabled && Array.isArray(manifestIntent.allowedTools)
+      && manifestIntent.allowedTools.length === 0 && manifestIntent.factualTask !== true)
+    || (ruleFirstSkipEnabled && ruleFirstUnderstanding)
+  )) {
     const planResult = deterministicPlanner.plan(input);
     planResult.plannerType = "deterministic";
-    planResult.plannerSkipReason = "no_tool_intent";
+    planResult.plannerSkipReason = ruleFirstUnderstanding ? "rule_first_understanding" : "no_tool_intent";
     return planResult;
   }
 

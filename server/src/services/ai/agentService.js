@@ -352,6 +352,10 @@ async function chat(input = {}) {
   // whitelisted capability. Local rules are consulted only after Understanding,
   // and only as grounded response context; they no longer choose the online goal.
   const intent = enrichIntentFromWorkingMemory(understanding.intent, context, conversationState);
+  // 标记理解来源，供 modelPlanner 对规则高置信命中跳过模型规划（与 public 确定性规划对齐）。
+  if (understanding && understanding.source && !intent.understandingSource) {
+    intent.understandingSource = String(understanding.source).slice(0, 40);
+  }
   const localRuleMatch = resolveRuleBackedIntent(safeMessage, context).ruleMatch;
 
   const planned = await plannerCoordinator.executePlanner({

@@ -1,6 +1,7 @@
 /**
  * 快路径（低延迟）契约测试：
- * 1) 事实类意图本地高置信命中 → 跳过 understanding 模型调用（deterministic_rule_first）
+ * 1) 事实类意图本地高置信命中 → 跳过 understanding 模型调用（deterministic_rule_first），
+ *    且规则命中理解同样跳过模型 planner → 事实链路全程零模型调用
  * 2) project_qa 显式命中 → 同样跳过 understanding；response 仍走外部 Provider
  * 3) 无模式命中的闲聊 → understanding 必须走模型；conversational_help 无工具 → 跳过模型 planner
  * 4) 个人记忆问句 → 理解前短路，全程零模型调用
@@ -100,12 +101,13 @@ function intentNameOf(response) {
 }
 
 async function run() {
-  // 1) 事实类意图：本地高置信 → 跳过 understanding 模型调用；planner 仍有工具要走（stub 强制回退确定性）。
+  // 1) 事实类意图：本地高置信 → 跳过 understanding 模型调用；规则命中理解同样跳过模型 planner，
+  //    事实链路全程零模型调用（与 public 确定性规划对齐），只剩工具执行。
   const fact = await chat("今天有什么课");
   assert.strictEqual(intentNameOf(fact), "get_today_courses", "fact intent resolved locally");
   assert.strictEqual(fact.understanding.source, "deterministic_rule_first", "fact understanding skipped model");
   assert.strictEqual(fact.providerStages.understanding.attempted, false, "no understanding model call for fact");
-  assert.ok(structuredPurposes.length >= 1 && structuredPurposes.every((p) => p === "planning"), "fact path pays only planner calls");
+  assert.deepStrictEqual(structuredPurposes, [], "rule-first fact path pays zero structured model calls (understanding + planner both skipped)");
   assert.strictEqual(responseProviderCalls, 0, "fact response stays deterministic");
 
   // 2) project_qa 显式命中：understanding 跳过；response 走外部 Provider。
