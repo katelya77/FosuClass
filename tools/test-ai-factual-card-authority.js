@@ -9,6 +9,9 @@ process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "deepseek";
 process.env.AI_PROVIDER_POLICY = "always";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
+// 本用例验证 model-first 链路的 Provider truth（Understanding/Planner 尝试记录），
+// 显式关闭规则快路径，恢复模型优先理解；快路径本身由 test-agent-fast-path.js 覆盖。
+process.env.AI_UNDERSTANDING_RULE_FIRST = "0";
 process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(tempRoot, "ai-provider-config.json");
 process.env.AI_API_KEY = "test-provider-key-not-real";
 process.env.AI_RUNTIME_MODE = "competition";
