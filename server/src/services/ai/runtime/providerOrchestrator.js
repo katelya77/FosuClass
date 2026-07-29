@@ -43,6 +43,19 @@ function buildMinimalProviderContext(context = {}) {
   });
 }
 
+// 回复阶段对话历史：最近 6 轮、脱敏截断，供各 Provider 以各自协议注入提示词。
+// context.recentMessages 已在 memoryCoordinator 内经 sanitizeAgentContext 清洗（≤8 条/400 字）。
+function sanitizeResponseHistory(list) {
+  return (Array.isArray(list) ? list : [])
+    .filter((item) => item && (item.role === "user" || item.role === "assistant"))
+    .slice(-6)
+    .map((item) => ({
+      role: item.role,
+      content: String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 400),
+    }))
+    .filter((item) => item.content);
+}
+
 function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtimeMode, runtimeConfig) {
   const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
     ? String(policy).toLowerCase()
@@ -251,6 +264,7 @@ async function generateAssistantResponse(input = {}) {
     projectKnowledge: projectKnowledgeText,
     providerRuntimeConfig,
     toolResults: toolResultsForProvider,
+    history: sanitizeResponseHistory(context.recentMessages),
     contextMeta: {
       contextTokenEstimate: responseContext.contextTokenEstimate,
       contextSections: responseContext.sections,
@@ -367,6 +381,7 @@ async function generateAssistantResponse(input = {}) {
 
 module.exports = {
   buildMinimalProviderContext,
+  sanitizeResponseHistory,
   configValue,
   getProviderPolicy,
   evaluateProviderPolicy,
