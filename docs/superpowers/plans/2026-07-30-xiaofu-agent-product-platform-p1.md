@@ -537,11 +537,11 @@ git commit -m "feat(agent): expose platform runtime truth in admin"
 - Integrated image preserves repository layout under `/app/server`, `/app/packages`, `/app/plugins`, `/app/apps` and starts from `/app/server`.
 - Docker smoke asserts runtime topology endpoint and one public Run, not only legacy chat.
 
-- [ ] **Step 1: Extend gates first**
+- [x] **Step 1: Extend gates first**
 
 Add P1 tests to foundation/release runners and expand CI path filters to `apps/**`, `packages/**`, `plugins/**`, `specs/xiaofu-agent-product-platform/**`, and `docs/superpowers/plans/**`.
 
-- [ ] **Step 2: Run RED for container/module packaging**
+- [x] **Step 2: Run RED for container/module packaging**
 
 Run:
 
@@ -552,11 +552,11 @@ node tools/test-server-docker-smoke.js
 
 Expected locally: module test fails until package copy/load is correct; Docker test either fails for missing workspace files when daemon exists or records the existing explicit non-CI daemon skip.
 
-- [ ] **Step 3: Update Dockerfile and smoke assertions**
+- [x] **Step 3: Update Dockerfile and smoke assertions**
 
 Build from repository root, install server production dependencies, copy only required workspace source/package files, set `WORKDIR /app/server`, and preserve existing data/config paths. Do not copy node_modules, secrets, output, staging or local artifacts.
 
-- [ ] **Step 4: Run targeted GREEN**
+- [x] **Step 4: Run targeted GREEN**
 
 Run:
 
@@ -572,7 +572,7 @@ node tools/test-agent-platform-admin.js
 node tools/test-server-docker-smoke.js
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add server/Dockerfile .github/workflows/xiaofu-agent-ci.yml tools package.json package-lock.json

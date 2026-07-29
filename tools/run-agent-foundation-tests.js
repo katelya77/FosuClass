@@ -4,6 +4,13 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const tests = [
+  "tools/test-agent-platform-contracts.js",
+  "tools/test-agent-platform-capability-runtimes.js",
+  "tools/test-fosu-campus-plugin.js",
+  "tools/test-agent-runtime-lifecycle.js",
+  "tools/test-agent-platform-production-wiring.js",
+  "tools/test-agent-platform-http.js",
+  "tools/test-agent-platform-admin.js",
   "tools/test-capability-contract.js",
   "tools/test-xiaofu-action-bus.js",
   "tools/test-coze-tool-gateway.js",

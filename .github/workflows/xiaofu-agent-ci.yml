@@ -5,6 +5,12 @@ on:
     paths:
       - "server/src/services/ai/**"
       - "server/src/routes/ai.js"
+      - "server/src/routes/admin.js"
+      - "server/src/app.js"
+      - "server/Dockerfile"
+      - "apps/**"
+      - "packages/**"
+      - "plugins/**"
       - "miniprogram/packageXiaofu/**"
       - "miniprogram/services/agentMemoryClient.js"
       - "miniprogram/services/aiAssistantService.js"
@@ -26,12 +32,20 @@ on:
       - "server/package-lock.json"
       - ".github/workflows/xiaofu-agent-ci.yml"
       - "docs/xiaofu-agent/**"
+      - "docs/superpowers/plans/**"
+      - "specs/xiaofu-agent-product-platform/**"
   push:
     branches:
       - main
     paths:
       - "server/src/services/ai/**"
       - "server/src/routes/ai.js"
+      - "server/src/routes/admin.js"
+      - "server/src/app.js"
+      - "server/Dockerfile"
+      - "apps/**"
+      - "packages/**"
+      - "plugins/**"
       - "miniprogram/packageXiaofu/**"
       - "miniprogram/services/agentMemoryClient.js"
       - "miniprogram/services/aiAssistantService.js"
@@ -53,6 +67,8 @@ on:
       - "server/package-lock.json"
       - ".github/workflows/xiaofu-agent-ci.yml"
       - "docs/xiaofu-agent/**"
+      - "docs/superpowers/plans/**"
+      - "specs/xiaofu-agent-product-platform/**"
   workflow_dispatch:
 
 jobs:
