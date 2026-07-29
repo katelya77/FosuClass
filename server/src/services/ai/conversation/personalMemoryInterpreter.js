@@ -66,13 +66,19 @@ function parsePersonalMemoryCommands(message, options = {}) {
   // Fallback legacy name parse if extractor missed
   if (!output.some((item) => item.key === "preferredName")) {
     const nameMatch = explicit
-      ? text.match(/(?:记住(?:我)?(?:的名字)?(?:是|叫)?|以后(?:叫我|称呼我))\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/)
+      ? text.match(/(?:记住(?:我)?(?:的名字)?(?:是|叫)|以后(?:叫我|称呼我))\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/)
       : text.match(/^(?:我的名字(?:是|叫)|我叫)\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})[，。！？,.!?]?$/);
     if (nameMatch) {
-      const value = String(nameMatch[1] || "").replace(/(?:，|,).*/, "").trim();
-      const persist = memoryMode === "cloud_sync";
-      const item = command("preferredName", value, persist, persist ? "preference" : "session_fact");
-      if (item) output.push(item);
+      const value = String(nameMatch[1] || "")
+        .replace(/(?:，|,).*/, "")
+        .replace(/[。！？.!?~～\s]+$/, "")
+        .trim();
+      // 纯语气词不是名字（如“记住我哦”的“哦”）。
+      if (value && !/^(?:哦|啊|呀|吧|呢|了|嘛|吗|哈|呐|咯|喔)+$/.test(value)) {
+        const persist = memoryMode === "cloud_sync";
+        const item = command("preferredName", value, persist, persist ? "preference" : "session_fact");
+        if (item) output.push(item);
+      }
     }
   }
 
@@ -98,9 +104,11 @@ function findRecentName(messages) {
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index] || {};
     if (item.role !== "user") continue;
-    const parsed = parsePersonalMemoryCommands(item.content || item.text || "", { memoryMode: "local_only" });
-    const name = parsed.find((entry) => entry.key === "preferredName");
-    if (name) return name.value;
+    // 只读查找直接走确定性抽取器：parsePersonalMemoryCommands 在 local_only 下会把
+    // user 级候选降级为 working 再被过滤，导致回退正则误抓“记住我哦”的“哦”。
+    const hit = extractFromMessage(String(item.content || item.text || ""))
+      .find((entry) => entry && entry.key === "preferredName" && entry.value);
+    if (hit) return String(hit.value).trim();
   }
   return "";
 }
