@@ -310,7 +310,7 @@ git commit -m "feat(agent): inject campus capabilities as a plugin"
 - `runtime.executeTurn({ request, configSnapshot, stages, emit, signal })` owns `context → decision → skill_tool → verification → response → ui` order.
 - Each stage callback consumes the previous immutable stage output; callbacks cannot skip directly to final result.
 
-- [ ] **Step 1: Write failing lifecycle tests**
+- [x] **Step 1: Write failing lifecycle tests**
 
 Create concrete stage callbacks that append their name, return literal outputs and emit one event. Assert exact order, stage durations, error terminal behavior, abort behavior and final UI blocks.
 
@@ -332,23 +332,23 @@ assert.deepStrictEqual(order, ["context", "decision", "skill_tool", "verificatio
 assert.strictEqual(result.platformTrace.stages[0].stage, "context");
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-runtime-lifecycle.js`
 
 Expected: FAIL with missing runtime module.
 
-- [ ] **Step 3: Implement the lifecycle**
+- [x] **Step 3: Implement the lifecycle**
 
 The implementation must emit `runtime.entered`, real stage started/completed/failed events and `runtime.completed`; it uses `packages/agent-protocol` for events and `packages/ui-schema` for final blocks. Trace details contain IDs/counts only.
 
-- [ ] **Step 4: Run GREEN and abort/error cases**
+- [x] **Step 4: Run GREEN and abort/error cases**
 
 Run: `node tools/test-agent-runtime-lifecycle.js`
 
 Expected: success, stage failure and pre-aborted cases all PASS without emitting a false completed event.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add packages/agent-runtime tools/test-agent-runtime-lifecycle.js
