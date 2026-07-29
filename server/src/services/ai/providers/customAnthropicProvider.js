@@ -27,6 +27,16 @@ function classifyHttpError(error) {
   return String(error && error.code || "PROVIDER_REQUEST_FAILED");
 }
 
+// Anthropic 要求 messages 角色交替：向会话追加一条消息，若与末条同角色则合并内容。
+function appendAlternating(conversation, item) {
+  const last = conversation[conversation.length - 1];
+  if (last && last.role === item.role) {
+    last.content = `${last.content}\n${item.content}`;
+    return;
+  }
+  conversation.push({ role: item.role, content: item.content });
+}
+
 function toAnthropicMessages(messages) {
   const system = [];
   const conversation = [];
@@ -77,7 +87,7 @@ async function postMessages(entry, body, timeoutMs) {
   }
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
@@ -89,16 +99,23 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
     conversational ? projectKnowledge : "",
     { useJsonMode, conversational: Boolean(conversational) }
   );
+  // Anthropic 要求 messages 首条为 user 且角色交替：历史与当前消息逐条按交替规则追加。
+  const conversation = [];
+  deepseekProvider.buildHistoryMessages(history, message).forEach((item) => appendAlternating(conversation, item));
+  appendAlternating(conversation, {
+    role: "user",
+    content: JSON.stringify({ message, intent: intent && intent.name, toolResults }),
+  });
+  if (conversation[0].role !== "user") {
+    conversation.unshift({ role: "user", content: "（接续对话）" });
+  }
   const started = Date.now();
   const response = await postMessages(entry, {
     model: entry.model,
     max_tokens: maxTokens,
     temperature: conversational ? 0.7 : 0.1,
     system: systemPrompt,
-    messages: [{
-      role: "user",
-      content: JSON.stringify({ message, intent: intent && intent.name, toolResults }),
-    }],
+    messages: conversation,
   }, timeout);
   const content = extractText(response.data);
   if (!useJsonMode) {

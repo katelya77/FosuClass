@@ -967,6 +967,22 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text-secondary);
       letter-spacing: 0.02em;
     }
+    .apc-advanced {
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin: 4px 0 10px;
+    }
+    .apc-advanced > summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      user-select: none;
+    }
+    .apc-advanced[open] > summary {
+      margin-bottom: 8px;
+    }
     .apc-pick-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -14101,10 +14117,18 @@ const adminConsoleHtml = `<!doctype html>
 
       function renderStageAssignSelect(id, label, current) {
         var value = String(current || "");
-        return "<div><label>" + escapeHtml(label) + "</label><select id='" + id + "'>" +
+        return "<div><label>" + escapeHtml(label) + "</label><select id='" + id + "' data-apc-stage='" + id + "'>" +
           AI_STAGE_PROVIDER_OPTIONS.map(function(pair) {
             return "<option value='" + pair[0] + "'" + (value === pair[0] ? " selected" : "") + ">" + escapeHtml(pair[1]) + "</option>";
           }).join("") + "</select></div>";
+      }
+
+      // 简化模型：阶段默认全部「跟随主 Provider」（draft 为空即全部跟随）。
+      // 只有用户在高级设置里手动改过某个阶段时才使用 draft；点主 Provider 卡片会重置 draft。
+      function stageCurrentValue(field) {
+        var draft = state.aiProviderStageDraft;
+        if (draft && typeof draft[field] === "string") return draft[field];
+        return "";
       }
 
       function renderAiReadinessMatrix() {
@@ -14498,11 +14522,14 @@ const adminConsoleHtml = `<!doctype html>
               "<div class='env-tabs provider-experience-tabs'><button type='button' class='" + (experienceEnvName === "trial" ? "active" : "") + "' data-ai-experience-env='trial'>体验版</button><button type='button' class='" + (experienceEnvName === "dev" ? "active" : "") + "' data-ai-experience-env='dev'>开发版</button></div>" +
               "<label class='provider-switch-row'><span>启用增强理解能力</span><select id='aiExperienceEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></label>" +
               "<input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiEnabled' type='hidden' value='" + (experienceEnabled ? "true" : "false") + "'><input id='aiProviderPolicy' type='hidden' value='auto'><input id='aiRuntimeMode' type='hidden' value='" + (experienceEnabled ? "competition" : "public") + "'>" +
-              (experienceEnabled ? "<div class='apc-section-label'>主 Provider（第一跳）</div><div class='apc-pick-grid'>" + renderExperienceProviderPicker(selectedProvider) + "</div>" +
-                "<div class='form-row'>" + renderStageAssignSelect("aiUnderstandingProvider", "理解阶段 Provider（意图识别）", experienceProfile.understandingProvider) + renderStageAssignSelect("aiPlannerProvider", "规划阶段 Provider（Planner）", experienceProfile.plannerProvider) + renderStageAssignSelect("aiResponseProvider", "回复阶段 Provider（Response）", experienceProfile.responseProvider) + "</div>" +
-                "<div class='ai-secret-note'>阶段默认「跟随主 Provider」：后台选哪个主 Provider，该阶段第一跳就用哪个；这里可单独覆盖某个阶段（含强制本地规则）。保存后主链会重算为 [主 Provider, ...其余 fallback]。</div>" +
+              (experienceEnabled ? "<div class='apc-section-label'>主 Provider（选一个即可，理解/规划/回复都会用它）</div><div class='apc-pick-grid'>" + renderExperienceProviderPicker(selectedProvider) + "</div>" +
+                "<div class='ai-secret-note' style='margin:4px 0 10px;'>保存后所有阶段都跟随主 Provider，其余已配置 Provider 自动作为降级后备。需要单独指定某个阶段的 Provider 或连接参数时，再展开下面的高级设置。</div>" +
+                "<details class='apc-advanced'><summary>高级设置（通常不用改）</summary>" +
+                "<div class='form-row'>" + renderStageAssignSelect("aiUnderstandingProvider", "理解阶段 Provider（意图识别）", stageCurrentValue("understandingProvider")) + renderStageAssignSelect("aiPlannerProvider", "规划阶段 Provider（Planner）", stageCurrentValue("plannerProvider")) + renderStageAssignSelect("aiResponseProvider", "回复阶段 Provider（Response）", stageCurrentValue("responseProvider")) + "</div>" +
+                "<div class='ai-secret-note'>阶段默认「跟随主 Provider」；这里可单独覆盖某个阶段（含强制本地规则）。保存后主链会重算为 [主 Provider, ...其余 fallback]。</div>" +
                 "<div class='form-row'>" + aiConfigInput("aiUnderstandingModel", "理解模型（AI_UNDERSTANDING_MODEL）", experienceProfile.understandingModel, "留空 = 跟随主模型") + aiConfigInput("aiPlannerModel", "规划模型（AI_PLANNER_MODEL）", experienceProfile.plannerModel, "留空 = 跟随主模型") + "</div>" +
-                "<div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
+                "<div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div></details>" +
+                "<label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
             "</section>" +
           "</div>" +
           renderCustomProviderManager() +
@@ -14541,6 +14568,7 @@ const adminConsoleHtml = `<!doctype html>
             state.aiProviderEnvironment = environment;
             state.aiProviderDraftExperienceEnabled = false;
             state.aiProviderSelectedCustomId = "";
+            state.aiProviderStageDraft = null;
             var envStatus = findAiEnvironment(environment) || {};
             if (isExperienceProvider(envStatus.provider)) state.aiProviderSelectedProvider = envStatus.provider;
             renderAiProviderConfig();
@@ -14550,6 +14578,7 @@ const adminConsoleHtml = `<!doctype html>
           var pick = function() {
             state.aiProviderSelectedProvider = card.dataset.apcPick || "coze";
             state.aiProviderSelectedCustomId = card.dataset.apcCustomId || "";
+            state.aiProviderStageDraft = null;
             renderAiProviderConfig();
           };
           card.addEventListener("click", pick);
@@ -14558,6 +14587,15 @@ const adminConsoleHtml = `<!doctype html>
               event.preventDefault();
               pick();
             }
+          });
+        });
+        document.querySelectorAll("[data-apc-stage]").forEach(function(select) {
+          select.addEventListener("change", function() {
+            state.aiProviderStageDraft = {
+              understandingProvider: value("aiUnderstandingProvider"),
+              plannerProvider: value("aiPlannerProvider"),
+              responseProvider: value("aiResponseProvider")
+            };
           });
         });
         safeBind("cpFormToggleBtn", "click", function() {
@@ -14714,6 +14752,7 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
             state.aiProviderDraftExperienceEnabled = false;
+            state.aiProviderStageDraft = null;
             state.aiProviderEnvironment = aiExperienceEnvironment();
             if (isExperienceProvider(payload.provider)) state.aiProviderSelectedProvider = payload.provider;
             renderAiProviderConfig();

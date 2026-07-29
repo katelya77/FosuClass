@@ -254,10 +254,20 @@ function buildSafeUserContent(input = {}) {
       summary: String(item.summary || "").slice(0, 200),
     })).slice(0, 8)
     : [];
+  // 最近对话历史（≤6 条、400 字截断）：让 Coze bot 能承接上下文，不再自称没有记忆。
+  const history = (Array.isArray(input.history) ? input.history : [])
+    .filter((item) => item && (item.role === "user" || item.role === "assistant"))
+    .slice(-6)
+    .map((item) => ({
+      role: item.role,
+      content: String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 400),
+    }))
+    .filter((item) => item.content);
   return JSON.stringify({
     message: String(input.message || "").slice(0, 1200),
     intent: input.intent && input.intent.name ? String(input.intent.name).slice(0, 80) : "",
     toolResults,
+    history,
     projectKnowledge: String(input.projectKnowledge || "").slice(0, 1500),
     conversationSummary: String(input.context && input.context.conversationSummary || "").slice(0, 400),
   });

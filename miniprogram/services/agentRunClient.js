@@ -24,8 +24,8 @@ async function createRun(payload = {}) {
   }, {
     showLoading: false,
     silentError: true,
-    timeout: 15000,
-    retries: 0,
+    timeout: 20000,
+    retries: 2,
     dedupe: false,
   });
   if (!response || !response.runId) {
@@ -79,6 +79,8 @@ async function pollRunUntilDone(runId, pollToken, options = {}) {
   const started = Date.now();
   let afterSequence = 0;
   let lastStatus = "queued";
+  // 终态但 result 尚未落库的竞态宽限：最多再短轮询几次，避免误判 RUN_FAILED。
+  let terminalGraceLeft = 4;
 
   while (Date.now() - started < maxWaitMs) {
     if (shouldCancel()) {
@@ -111,6 +113,11 @@ async function pollRunUntilDone(runId, pollToken, options = {}) {
       }
     }
     if (["completed", "degraded", "failed", "cancelled"].includes(String(view.status || ""))) {
+      if (!view.result && view.status !== "cancelled" && terminalGraceLeft > 0) {
+        terminalGraceLeft -= 1;
+        await sleep(600);
+        continue;
+      }
       return {
         status: view.status,
         events,

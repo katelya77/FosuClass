@@ -22,7 +22,7 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
@@ -43,6 +43,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
           { useJsonMode, conversational: Boolean(conversational) }
         ),
       },
+      ...deepseekProvider.buildHistoryMessages(history, message),
       {
         role: "user",
         content: JSON.stringify({

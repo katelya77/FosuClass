@@ -33,7 +33,7 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
   const runtimeConfig = providerRuntimeConfig || {};
   if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false, runtimeConfig)) {
     const error = new Error("CloudBase OpenAI provider is disabled.");
@@ -65,6 +65,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
           { useJsonMode, conversational: Boolean(conversational) }
         ),
       },
+      ...deepseekProvider.buildHistoryMessages(history, message),
       {
         role: "user",
         content: JSON.stringify({

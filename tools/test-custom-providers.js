@@ -213,6 +213,99 @@ async function main() {
     console.log("  PASS group7 public safety invariant");
   }
 
+  // group8: 回复阶段对话历史注入（三协议共用 buildHistoryMessages 口径）
+  {
+    const axios = require("../server/node_modules/axios");
+    const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
+    const calls = [];
+    const originalPost = axios.post;
+    axios.post = async (url, body) => {
+      const payload = JSON.stringify({ answer: "ok", cards: [], suggestions: [] });
+      calls.push({ url: String(url), body });
+      if (/\/messages$/.test(String(url))) {
+        return { data: { content: [{ type: "text", text: payload }] } };
+      }
+      return { data: { choices: [{ message: { content: payload } }] } };
+    };
+    try {
+      const openaiConfig = {
+        AI_CUSTOM_PROVIDERS: customProviderStore.serializeList([{
+          id: "cp_h1", label: "H", protocol: "openai",
+          baseUrl: "https://h.example.com/v1", apiKey: "sk-h-1234", model: "mh", enabled: true,
+        }]),
+        AI_CUSTOM_ACTIVE_ID: "cp_h1",
+      };
+      const openaiResult = await customOpenaiProvider.generate({
+        message: "明天呢",
+        intent: { name: "query_courses" },
+        toolResults: [],
+        history: [
+          { role: "user", content: "今天有什么课" },
+          { role: "assistant", content: "今天有三节课" },
+          { role: "user", content: "明天呢" },
+        ],
+        providerRuntimeConfig: openaiConfig,
+      });
+      assert.strictEqual(openaiResult.answer, "ok", "g8 openai answer");
+      const openaiBody = calls[calls.length - 1].body;
+      assert.strictEqual(openaiBody.messages[0].role, "system", "g8 openai system first");
+      assert.deepStrictEqual(
+        openaiBody.messages.slice(1, -1),
+        [
+          { role: "user", content: "今天有什么课" },
+          { role: "assistant", content: "今天有三节课" },
+        ],
+        "g8 openai history injected, trailing duplicate of current message dropped"
+      );
+      const openaiLast = openaiBody.messages[openaiBody.messages.length - 1];
+      assert.strictEqual(openaiLast.role, "user", "g8 openai last is user");
+      assert.ok(openaiLast.content.includes("明天呢"), "g8 openai last user carries current message");
+
+      const anthropicConfig = {
+        AI_CUSTOM_PROVIDERS: customProviderStore.serializeList([{
+          id: "cp_h2", label: "HA", protocol: "anthropic",
+          baseUrl: "https://ha.example.com", apiKey: "sk-ha-1234", model: "claude-x", enabled: true,
+        }]),
+        AI_CUSTOM_ACTIVE_ID: "cp_h2",
+      };
+      await customAnthropicProvider.generate({
+        message: "后天呢",
+        intent: { name: "query_courses" },
+        toolResults: [],
+        history: [
+          { role: "user", content: "u1" },
+          { role: "user", content: "u2" },
+          { role: "assistant", content: "a1" },
+        ],
+        providerRuntimeConfig: anthropicConfig,
+      });
+      const anthBody = calls[calls.length - 1].body;
+      assert.strictEqual(anthBody.messages[0].role, "user", "g8 anthropic first must be user");
+      for (let i = 1; i < anthBody.messages.length; i += 1) {
+        assert.notStrictEqual(anthBody.messages[i].role, anthBody.messages[i - 1].role, "g8 anthropic roles alternate");
+      }
+      assert.ok(anthBody.messages[0].content.includes("u1\nu2"), "g8 anthropic consecutive users merged");
+      assert.ok(anthBody.messages[anthBody.messages.length - 1].content.includes("后天呢"), "g8 anthropic last carries current message");
+
+      await deepseekProvider.generate({
+        message: "大后天呢",
+        intent: { name: "query_courses" },
+        toolResults: [],
+        history: [{ role: "user", content: "u1" }, { role: "assistant", content: "a1" }],
+        providerRuntimeConfig: { AI_API_KEY: "sk-test-1234", AI_BASE_URL: "https://ds.example.com/v1" },
+      });
+      const dsBody = calls[calls.length - 1].body;
+      assert.deepStrictEqual(
+        dsBody.messages.slice(1, -1),
+        [{ role: "user", content: "u1" }, { role: "assistant", content: "a1" }],
+        "g8 deepseek history injected"
+      );
+      console.log("  PASS group8 response-stage history injection");
+    } finally {
+      axios.post = originalPost;
+    }
+  }
+
   cleanup();
   console.log("test-custom-providers: PASS");
 }
