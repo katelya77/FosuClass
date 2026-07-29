@@ -85,6 +85,12 @@ function createAgentPlatform(options = {}) {
       toolRuntimePackage: "@xiaofu-agent/tool-runtime",
       uiSchemaPackage: "@xiaofu-agent/ui-schema",
       pluginIds: Object.freeze([plugin.id]),
+      plugins: Object.freeze([Object.freeze({
+        id: plugin.id,
+        version: String(plugin.version || "unknown"),
+        manifestVersion: String(plugin.manifestVersion || "unknown"),
+      })]),
+      configVersion: String(plugin.manifestVersion ? `manifest:${plugin.manifestVersion}` : plugin.version || "unversioned"),
       legacyWholeChatCallback: false,
       stageOwners: Object.freeze({
         context: "plugins/fosu-campus",
