@@ -588,7 +588,7 @@ git commit -m "build(agent): package integrated platform runtime"
 **Interfaces:**
 - Evidence maps R1/R4/R10/R11 to test output and the exact production import chain.
 
-- [ ] **Step 1: Run all mandatory gates freshly**
+- [x] **Step 1: Run all mandatory gates freshly**
 
 Run:
 
@@ -604,15 +604,15 @@ npm run test:agent-release-gate
 
 Expected: exit 0 for every command. Docker daemon skip remains “container unverified,” never “passed.”
 
-- [ ] **Step 2: Verify architecture and secret boundaries**
+- [x] **Step 2: Verify architecture and secret boundaries**
 
 Run generic-package forbidden-term scan, `git diff --check`, `npm ci` lockfile verification and existing no-secret tests. Confirm every P1 workspace is reached from `server/src/app.js` or final presenter with a runtime test—not only by grep.
 
-- [ ] **Step 3: Write evidence document and mark P1 tasks**
+- [x] **Step 3: Write evidence document and mark P1 tasks**
 
 Record commit IDs, commands, pass/fail counts, Trace example with safe IDs, Docker status, rollback sequence and remaining P2 gaps. Do not claim strict_model_first or durable RunEvent yet.
 
-- [ ] **Step 4: Commit P1 checkpoint**
+- [x] **Step 4: Commit P1 checkpoint**
 
 ```text
 git add specs/xiaofu-agent-product-platform/tasks.md docs/xiaofu-agent/product-platform-p1-evidence.md
