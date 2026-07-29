@@ -8,6 +8,7 @@ const { emitChatEvent } = require("./runEventPublisher");
  * execution, and planner diagnostics reconciliation.
  */
 async function executePlanner(input = {}) {
+  const executionKernel = input.agentKernel || agentKernel;
   const message = input.message;
   const context = input.context;
   const runtimeMode = input.runtimeMode;
@@ -18,6 +19,7 @@ async function executePlanner(input = {}) {
   const requestId = input.requestId;
   const conversationId = input.conversationId;
   const runId = input.runId;
+  const protocolVersion = input.protocolVersion;
   const onEvent = input.onEvent;
   const eventInput = input.eventInput;
   // Dedicated planner model adapter (trial/dev only). public never calls models.
@@ -30,7 +32,7 @@ async function executePlanner(input = {}) {
     }, event)),
   });
 
-  const execution = await agentKernel.execute({
+  const execution = await executionKernel.execute({
     message: message,
     context,
     contextAlreadySanitized: true,
@@ -48,7 +50,10 @@ async function executePlanner(input = {}) {
     requestId,
     conversationId,
     runId,
+    protocolVersion,
     onEvent,
+    signal: input.signal || null,
+    principal: input.principal || null,
     modelGenerate: runtimeMode === "public" ? undefined : plannerGenerate,
     plannerEnv: providerRuntimeConfig,
   });

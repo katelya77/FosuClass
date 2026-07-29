@@ -89,6 +89,29 @@ async function main() {
     assert(Array.isArray(result.steps));
   });
 
+  await test("Campus Tool schemas accept only the trusted Planner envelope and declared slots", async () => {
+    const tools = createToolRuntime({ tools: plugin.tools });
+    const allToolIds = plugin.tools.map((tool) => tool.id);
+    const intent = capabilityManifestService.getIntent("get_today_courses");
+    const skill = plugin.skills.find((item) => item.id === intent.skill);
+    const allowedToolIds = tools.resolveAllowedToolIds({
+      manifestToolIds: intent.allowedTools,
+      skillToolIds: skill.allowedTools,
+      runtimeToolIds: allToolIds,
+      environmentToolIds: allToolIds,
+      safetyToolIds: allToolIds,
+    });
+    const result = await tools.execute("get_today_courses", {
+      message: "今天有什么课",
+      term: "2025-2026-2",
+    }, { runtimeMode: "public" }, { allowedToolIds });
+    assert.strictEqual(result.success, true);
+    await assert.rejects(() => tools.execute("get_today_courses", {
+      message: "今天有什么课",
+      untrustedArbitraryField: "must fail",
+    }, { runtimeMode: "public" }, { allowedToolIds }), (error) => error.code === "TOOL_INPUT_SCHEMA_INVALID");
+  });
+
   await test("Release context and UI mapping expose only stable public data", async () => {
     const context = plugin.getReleaseContext();
     assert.deepStrictEqual(Object.keys(context).sort(), [

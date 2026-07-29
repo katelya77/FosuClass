@@ -375,7 +375,7 @@ git commit -m "feat(agent): add traced generic runtime lifecycle"
 - `createFosuStages(dependencies)` owns the Fosu-specific phase callbacks while importing no app/router state.
 - `agentService.chat(input)` becomes a compatibility export that calls the singleton platform; it is not passed back as a callback.
 
-- [ ] **Step 1: Write the failing production-wiring test**
+- [x] **Step 1: Write the failing production-wiring test**
 
 Run a real public factual request through `agentService.chat()` using existing fixtures. Assert:
 
@@ -388,13 +388,13 @@ Run a real public factual request through `agentService.chat()` using existing f
 
 Also inspect `agentService.__getPlatformForTests()` only if a production lifecycle owner exposes the same read-only diagnostics; do not add a test-only cleanup method to production.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-platform-production-wiring.js`
 
 Expected: FAIL because the response lacks platform Trace and the app composition does not exist.
 
-- [ ] **Step 3: Extract stage ports without changing leaf behavior**
+- [x] **Step 3: Extract stage ports without changing leaf behavior**
 
 Move current `chat()` sections into named Fosu stage functions that retain existing coordinator calls. The generic Runtime invokes them. Do not wrap the old whole chat as one stage. Early safety exits remain `guard_rejected` results inside the Runtime boundary.
 
@@ -414,11 +414,11 @@ const platform = createAgentPlatform({
 });
 ```
 
-- [ ] **Step 4: Make AgentKernel consume generic Skill/Tool runtimes**
+- [x] **Step 4: Make AgentKernel consume generic Skill/Tool runtimes**
 
 Inject the plugin-created catalogs into AgentKernel. Remove default direct registry checks when injected; all paths use exact Tool IDs and the five-factor intersection before execution. Existing capability router may propose candidates but cannot bypass the Tool Runtime.
 
-- [ ] **Step 5: Run GREEN and regressions**
+- [x] **Step 5: Run GREEN and regressions**
 
 Run:
 
@@ -428,7 +428,7 @@ npm run test:agent-regression
 npm run test:agent-final-convergence
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```text
 git add apps/agent-server packages/agent-runtime server/src/services/ai plugins/fosu-campus tools/test-agent-platform-production-wiring.js

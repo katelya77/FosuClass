@@ -40,24 +40,68 @@ function outputSchemaFromManifest(metadata = {}) {
   const source = metadata.outputSchema;
   if (!source || typeof source !== "object") return { type: "object" };
   if (source.type) return cloneJson(source, { type: "object" });
+  const required = stringList(source.required);
   const properties = Object.entries(source.fields || {}).reduce((output, [name, type]) => {
     const normalizedType = schemaType(type);
-    output[name] = normalizedType ? { type: normalizedType } : {};
+    output[name] = normalizedType ? { type: required.includes(name) ? normalizedType : [normalizedType, "null"] } : {};
     return output;
   }, {});
   return {
     type: "object",
-    required: stringList(source.required),
+    required,
     properties,
   };
 }
 
-function toolInputSchema(toolSchemaRegistry, toolId) {
-  if (!toolSchemaRegistry || typeof toolSchemaRegistry.getToolSchema !== "function") {
-    return { type: "object" };
-  }
-  const schema = toolSchemaRegistry.getToolSchema(toolId);
-  return cloneJson(schema && schema.parameters, { type: "object" });
+function toolInputSchema(toolSchemaRegistry, toolId, manifest) {
+  const generated = toolSchemaRegistry && typeof toolSchemaRegistry.getToolSchema === "function"
+    ? toolSchemaRegistry.getToolSchema(toolId)
+    : null;
+  const source = cloneJson(generated && generated.parameters, {
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+  });
+  const properties = Object.assign({
+    message: { type: "string", maxLength: 2000 },
+    term: { type: "string", maxLength: 100 },
+    releaseVersion: { type: "string", maxLength: 160 },
+    confirmed: { type: "boolean" },
+    doubleConfirmed: { type: "boolean" },
+    explicitCommand: { type: "boolean" },
+    wantsWeather: { type: "boolean" },
+    q: { type: "string", maxLength: 240 },
+    type: { type: "string", maxLength: 40 },
+    lockedEntityType: { type: "string", maxLength: 40 },
+    periodHint: { type: "string", maxLength: 32 },
+    durationSections: { type: "integer", minimum: 1, maximum: 12 },
+    continuousSections: { type: "integer", minimum: 1, maximum: 12 },
+    minFreeSections: { type: "integer", minimum: 1, maximum: 12 },
+    sectionStart: { type: "integer", minimum: 1, maximum: 20 },
+    sectionEnd: { type: "integer", minimum: 1, maximum: 20 },
+    teachingWeek: { type: "integer", minimum: 1, maximum: 30 },
+    dateOffset: { type: "integer", minimum: -30, maximum: 180 },
+    dayOffset: { type: "integer", minimum: -30, maximum: 180 },
+    defaultReminderLeadMinutes: { type: "integer", minimum: 5, maximum: 180 },
+    lastTargetId: { type: "string", maxLength: 160 },
+    lastTargetName: { type: "string", maxLength: 160 },
+    lastTargetType: { type: "string", maxLength: 40 },
+    operation: { type: "string", maxLength: 40 },
+  }, source.properties || {});
+  Object.values(manifest && manifest.intents || {}).forEach((intent) => {
+    // Decision produces normalized entity/constraint slots before a Tool is
+    // selected. Every accepted key must therefore come from the Manifest slot
+    // vocabulary (plus the fixed internal envelope above), never arbitrary input.
+    stringList([].concat(intent.requiredSlots || [], intent.optionalSlots || [])).forEach((slot) => {
+      if (!Object.prototype.hasOwnProperty.call(properties, slot)) properties[slot] = {};
+    });
+  });
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: stringList(source.required),
+    properties,
+  };
 }
 
 function toSkillDescriptor(skill) {
@@ -80,7 +124,7 @@ function toSkillDescriptor(skill) {
   });
 }
 
-function toToolDescriptor(toolId, metadata, dependencies) {
+function toToolDescriptor(toolId, metadata, dependencies, manifest) {
   const runtimeModes = stringList(metadata.runtimeModes);
   const generated = dependencies.toolSchemaRegistry
     && typeof dependencies.toolSchemaRegistry.getToolSchema === "function"
@@ -91,7 +135,7 @@ function toToolDescriptor(toolId, metadata, dependencies) {
     id: toolId,
     version: String(metadata.version || "1"),
     description: String(metadata.description || metadata.displayName || toolId),
-    inputSchema: toolInputSchema(dependencies.toolSchemaRegistry, toolId),
+    inputSchema: toolInputSchema(dependencies.toolSchemaRegistry, toolId, manifest),
     outputSchema: outputSchemaFromManifest(metadata),
     runtimeModes,
     environments: ["integrated", "standalone"],
@@ -151,7 +195,7 @@ function createFosuCampusPlugin(dependencies = {}) {
   const tools = deepFreeze(dependencies.toolRegistry.listToolNames().map((toolId) => {
     const metadata = manifest.tools && manifest.tools[toolId];
     if (!metadata) throw codedError("FOSU_PLUGIN_TOOL_NOT_IN_MANIFEST", toolId);
-    return toToolDescriptor(toolId, metadata, dependencies);
+    return toToolDescriptor(toolId, metadata, dependencies, manifest);
   }));
 
   return deepFreeze({

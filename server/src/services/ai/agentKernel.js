@@ -58,8 +58,41 @@ class AgentKernel {
     this.skillRegistry = options.skillRegistry || defaultSkillRegistry;
     this.intentResolver = options.intentResolver || toolRegistry.resolveIntent;
     this.toolExecutor = options.toolExecutor || toolRegistry.executeToolAsync;
+    this.toolRuntime = options.toolRuntime || null;
+    this.capabilityManifest = options.capabilityManifestService || capabilityManifestService;
     this.runtimeModeResolver = options.runtimeModeResolver || runtimeModeService.resolveRuntimeMode;
     this.traceRecorder = options.traceRecorder || agentTraceRecorder;
+  }
+
+  resolveAllowedToolIds(intent, skill, runtimeMode, candidateTools, context = {}) {
+    if (!this.toolRuntime) {
+      return Array.from(new Set((skill && skill.allowedTools || []).concat(candidateTools || [])));
+    }
+    const manifestIntent = this.capabilityManifest.getIntent(intent && intent.name || intent);
+    const descriptors = this.toolRuntime.listDescriptors();
+    const runtimeToolIds = descriptors
+      .filter((descriptor) => !descriptor.runtimeModes.length || descriptor.runtimeModes.includes(runtimeMode))
+      .map((descriptor) => descriptor.id);
+    const environmentToolIds = Array.isArray(candidateTools) ? candidateTools.slice() : [];
+    const principal = context && context.principal;
+    const safetyToolIds = descriptors
+      .filter((descriptor) => {
+        const operation = String(descriptor.safety && descriptor.safety.operation || "read");
+        if ((operation === "write" || operation === "delete")
+          && descriptor.safety && descriptor.safety.requiresConfirmation !== true
+          && (!principal || principal.authenticated !== true)) {
+          return false;
+        }
+        return true;
+      })
+      .map((descriptor) => descriptor.id);
+    return this.toolRuntime.resolveAllowedToolIds({
+      manifestToolIds: manifestIntent && manifestIntent.allowedTools || [],
+      skillToolIds: skill && skill.allowedTools || [],
+      runtimeToolIds,
+      environmentToolIds,
+      safetyToolIds,
+    });
   }
 
   resolveRuntime(input, context) {
@@ -83,17 +116,16 @@ class AgentKernel {
     if (plan.length > this.maxPlanSteps) {
       throw codedError("PLAN_STEP_LIMIT_EXCEEDED", `Plan exceeds ${this.maxPlanSteps} steps`);
     }
-    // Union of primary skill tools and Capability Router candidates.
-    const allow = new Set((skill && skill.allowedTools) || []);
-    if (Array.isArray(allowedToolsOverride)) {
-      allowedToolsOverride.forEach((tool) => allow.add(tool));
-    }
+    const allow = this.toolRuntime && Array.isArray(allowedToolsOverride)
+      ? new Set(allowedToolsOverride)
+      : new Set((skill && skill.allowedTools || []).concat(Array.isArray(allowedToolsOverride) ? allowedToolsOverride : []));
     plan.forEach((step) => {
       const toolName = String(step.toolName || step.name || "");
       if (!allow.has(toolName)) {
         throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${toolName} is not allowed for ${skill && skill.id || "route"}`, { toolName });
       }
-      if (this.skillRegistry === defaultSkillRegistry && !capabilityManifestService.isToolAllowedForRuntime(toolName, runtimeMode)) {
+      const manifestTool = this.capabilityManifest.getTool(toolName);
+      if (manifestTool && !this.capabilityManifest.isToolAllowedForRuntime(toolName, runtimeMode)) {
         throw codedError("TOOL_NOT_ALLOWED_FOR_RUNTIME", `Tool ${toolName} is not available in ${runtimeMode}`, { toolName });
       }
       // Level 3–4 write/delete tools must not auto-execute without confirmation flag in args/context.
@@ -105,6 +137,23 @@ class AgentKernel {
         }
       }
     });
+  }
+
+  async invokeTool(toolName, args, context, input = {}) {
+    if (!this.toolRuntime) return this.toolExecutor(toolName, args, context);
+    try {
+      return await this.toolRuntime.execute(toolName, args, context, {
+        allowedToolIds: input.allowedToolIds || [],
+        signal: input.signal || null,
+      });
+    } catch (error) {
+      if (error && ["TOOL_NOT_ALLOWED", "TOOL_NOT_REGISTERED"].includes(error.code)) throw error;
+      return {
+        success: false,
+        code: String(error && error.code || "TOOL_RUNTIME_FAILED").slice(0, 80),
+        message: String(error && error.message || "Tool execution failed").slice(0, 160),
+      };
+    }
   }
 
   emit(input, event) {
@@ -123,7 +172,9 @@ class AgentKernel {
     // Skill-declared recovery rules (see skillRegistry); the kernel only executes them generically.
     const recoveryRules = (input.skill && Array.isArray(input.skill.recoveryRules)) ? input.skill.recoveryRules : [];
     const pushCall = (toolName, result, label, durationMs = 0) => {
-      const failed = !result || result.success === false;
+      const missingContextIsFailure = result && result.needContext === true
+        && agentProtocol.normalizeProtocolVersion(input.protocolVersion) === agentProtocol.PROTOCOL_V2;
+      const failed = !result || result.success === false || missingContextIsFailure;
       const index = calls.length;
       calls.push({
         name: toolName,
@@ -158,7 +209,7 @@ class AgentKernel {
         label: safetyGuard.redactSensitiveText(String(item.reason || item.label || `Execute ${toolName}`)).slice(0, 120),
       });
       const started = Date.now();
-      const result = await withTimeout(this.toolExecutor(toolName, item.args || item.input || {}, context), this.toolTimeoutMs);
+      const result = await withTimeout(this.invokeTool(toolName, item.args || item.input || {}, context, input), this.toolTimeoutMs);
       const durationMs = Date.now() - started;
       pushCall(toolName, result, item.reason || item.label || `Execute ${toolName}`, durationMs);
 
@@ -170,8 +221,10 @@ class AgentKernel {
         }
         if (rule.callOnEmptyOrFailure && result && (result.success === false
           || !(Array.isArray(result.rooms) ? result.rooms.length : Number(result.total || 0)))) {
+          const recoveryTool = rule.callOnEmptyOrFailure.tool;
+          if (this.toolRuntime && !(input.allowedToolIds || []).includes(recoveryTool)) continue;
           const recovery = await withTimeout(
-            this.toolExecutor(rule.callOnEmptyOrFailure.tool, item.args || item.input || {}, context),
+            this.invokeTool(recoveryTool, item.args || item.input || {}, context, input),
             this.toolTimeoutMs
           );
           pushCall(rule.callOnEmptyOrFailure.tool, recovery, rule.callOnEmptyOrFailure.label, 0);
@@ -248,6 +301,8 @@ class AgentKernel {
     const availableSkills = capabilityRoute.skillIds && capabilityRoute.skillIds.length
       ? capabilityRoute.skillIds
       : [skill.id];
+    const authorizationContext = Object.assign({}, context, { principal: input.principal || context.principal });
+    const allowedToolIds = this.resolveAllowedToolIds(intent, skill, runtimeMode, candidateTools, authorizationContext);
 
     const loop = await runObservationLoop({
       message,
@@ -257,7 +312,7 @@ class AgentKernel {
       skill,
       context,
       conversationState,
-      availableTools: candidateTools,
+      availableTools: allowedToolIds,
       availableSkills,
       modelGenerate: input.modelGenerate,
       plannerEnv: input.plannerEnv,
@@ -268,7 +323,7 @@ class AgentKernel {
           structured = await planner.plan(Object.assign({}, args, {
             skill,
             conversationState,
-            availableTools: candidateTools,
+            availableTools: allowedToolIds,
             availableSkills,
           }));
         } catch (error) {
@@ -282,7 +337,7 @@ class AgentKernel {
             throw error;
           }
           const fallbackPlan = skill.planBuilder({ message, context, intent, runtimeMode });
-          this.validatePlan(skill, fallbackPlan, runtimeMode, candidateTools);
+          this.validatePlan(skill, fallbackPlan, runtimeMode, allowedToolIds);
           structured = {
             goal: intent.name,
             intent: intent.name,
@@ -310,27 +365,44 @@ class AgentKernel {
             args: step.args,
             reason: step.reasonCode,
           }));
-          if (structured.intent === "campus_multi_step_advice"
-            || structured.plannerType === "deterministic" && structured.steps.length > 1
-              && structured.steps.some((s) => !(skill.allowedTools || []).includes(s.toolName))) {
-            structured.steps.forEach((step) => {
-              if (!capabilityManifestService.isToolAllowedForRuntime(step.toolName, runtimeMode)) {
-                throw codedError("TOOL_NOT_ALLOWED_FOR_RUNTIME", `Tool ${step.toolName} not in ${runtimeMode}`);
-              }
-              // Cross-skill tools must still be inside capability route whitelist.
-              if (!candidateTools.includes(step.toolName)
-                && !(skill.allowedTools || []).includes(step.toolName)) {
-                throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${step.toolName} not in capability route`);
-              }
-            });
-            if (legacyPlan.length > this.maxPlanSteps) {
-              throw codedError("PLAN_STEP_LIMIT_EXCEEDED", `Plan exceeds ${this.maxPlanSteps} steps`);
-            }
-          } else {
-            this.validatePlan(skill, legacyPlan, runtimeMode, candidateTools);
-          }
+          this.validatePlan(skill, legacyPlan, runtimeMode, allowedToolIds);
         }
         return structured;
+      },
+      replanFn: async (args) => {
+        try {
+          const structured = await planner.replan(Object.assign({}, args, {
+            skill,
+            conversationState,
+            availableTools: allowedToolIds,
+            availableSkills,
+          }));
+          if (structured.steps && structured.steps.length) {
+            this.validatePlan(skill, structured.steps, runtimeMode, allowedToolIds);
+          }
+          return structured;
+        } catch (error) {
+          if (!error || ![
+            "TOOL_NOT_ALLOWED_FOR_SKILL",
+            "TOOL_NOT_ALLOWED_FOR_RUNTIME",
+            "PLAN_STEP_LIMIT_EXCEEDED",
+            "PLAN_ARGS_FORBIDDEN",
+          ].includes(error.code)) {
+            throw error;
+          }
+          this.emit(input, {
+            type: "planner.failed",
+            status: "rejected",
+            reasonCode: error.code,
+          });
+          return Object.assign({}, args.previousPlan || {}, {
+            steps: [],
+            replanCount: Math.min(2, Number(args.previousPlan && args.previousPlan.replanCount || 0) + 1),
+            stopCondition: args.previousPlan && args.previousPlan.needsClarification
+              ? "clarification_needed"
+              : "tool_failure",
+          });
+        }
       },
       executePlan: async (steps) => {
         const legacyPlan = (steps || []).map((step) => ({
@@ -338,11 +410,11 @@ class AgentKernel {
           args: step.args || {},
           reason: step.reasonCode || step.reason,
         }));
-        return this.executePlan(legacyPlan, context, Object.assign({}, input, { skill }));
+        return this.executePlan(legacyPlan, context, Object.assign({}, input, { skill, allowedToolIds }));
       },
       toObservations: (calls) => (calls || []).map(toObservation),
       verify: ({ toolCalls, plan: verifyPlan }) => {
-        const routeAllowed = new Set(candidateTools.concat(skill.allowedTools || []));
+        const routeAllowed = new Set(allowedToolIds);
         // Recovery tools from replan may sit outside primary skill but inside route.
         const scopedCalls = (Array.isArray(toolCalls) ? toolCalls : []).filter((call) => {
           const name = String(call && call.name || "");
@@ -355,10 +427,22 @@ class AgentKernel {
           runtimeMode,
           allowedTools: Array.from(routeAllowed),
         });
+        const intentMeta = capabilityManifestService.getIntent(intent && intent.name);
+        const missingContextEvidence = agentProtocol.normalizeProtocolVersion(input.protocolVersion) === agentProtocol.PROTOCOL_V2
+          && intentMeta && intentMeta.factualTask
+          && scopedCalls.some((call) => call && call.result && call.result.needContext === true);
+        if (missingContextEvidence) {
+          const errors = (base.errors || []).filter((error) => error && error.code !== "FACT_TOOL_EVIDENCE_REQUIRED");
+          errors.push({ code: "FACT_TOOL_EVIDENCE_REQUIRED" });
+          return {
+            ok: false,
+            errors,
+            evidenceComplete: false,
+          };
+        }
         if (verifyPlan && Number(verifyPlan.replanCount || 0) > 0 && !base.evidenceComplete) {
           const errors = (base.errors || []).slice();
           if (!errors.some((e) => e.code === "FACT_TOOL_EVIDENCE_REQUIRED")) {
-            const intentMeta = capabilityManifestService.getIntent(intent && intent.name);
             if (intentMeta && intentMeta.factualTask) {
               errors.push({ code: "FACT_TOOL_EVIDENCE_REQUIRED" });
             }

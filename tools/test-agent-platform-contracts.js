@@ -59,6 +59,24 @@ test("RunEvent rejects unknown event types and invalid sequence", () => {
   );
 });
 
+test("RunEvent accepts every production lifecycle event", () => {
+  [
+    "understanding.fallback",
+    "plan.created",
+    "plan.replan",
+    "planner.started",
+    "planner.completed",
+    "planner.failed",
+    "provider.selected",
+    "provider.shadow.started",
+    "provider.shadow.completed",
+    "provider.shadow.failed",
+  ].forEach((type, index) => {
+    assert(protocol.RUN_EVENT_TYPES.includes(type), `${type} must be a protocol event`);
+    assert.strictEqual(protocol.createRunEvent({ runId: "run_catalog", sequence: index + 1, type }).type, type);
+  });
+});
+
 test("PlatformTrace exposes package ownership without secrets", () => {
   const trace = protocol.createPlatformTrace({
     runId: "run_contract_1",

@@ -32,6 +32,7 @@ async function main() {
     const order = [];
     const events = [];
     const traces = [];
+    const callerContext = { nested: { value: 1 } };
     const runtime = createAgentRuntime({
       protocol,
       uiSchema,
@@ -39,7 +40,7 @@ async function main() {
       traceSink: (trace) => traces.push(trace),
     });
     const result = await runtime.executeTurn({
-      request: { runId: "run_success", runtimeMode: "public" },
+      request: { runId: "run_success", runtimeMode: "public", context: callerContext },
       configSnapshot: { configVersion: "cfg_1", pluginIds: ["fosu-campus"] },
       stages: {
         context: async ({ request }) => {
@@ -91,6 +92,8 @@ async function main() {
     assert.strictEqual(events.some((event) => event.type === "stage.failed"), false);
     assert.deepStrictEqual(events.map((event) => event.sequence), events.map((_, index) => index + 1));
     assert(!JSON.stringify(events).includes("hi"));
+    assert.strictEqual(Object.isFrozen(callerContext), false, "runtime must not freeze caller-owned input");
+    assert.strictEqual(Object.isFrozen(callerContext.nested), false, "runtime must clone nested caller input");
   });
 
   await test("A stage failure is terminal and never emits false completion", async () => {

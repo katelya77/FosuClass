@@ -1,0 +1,783 @@
+const safetyGuard = require("../safetyGuard");
+const agentProtocol = require("../agentProtocol");
+const agentRunEventService = require("../agentRunEventService");
+const mockProvider = require("../providers/mockProvider");
+const responseComposer = require("../responseComposer");
+const { defaultUnderstandingService } = require("../understanding/understandingService");
+const { isGeneralAssistantEnabled } = require("../planner/plannerPolicy");
+const { stableGeneratedPayload } = require("./shared");
+const { emitChatEvent, recordEarlyTrace } = require("./runEventPublisher");
+const requestContextAssembler = require("./requestContextAssembler");
+const understandingCoordinator = require("./understandingCoordinator");
+const { toRuntimeGoalContractV2, enrichIntentFromWorkingMemory } = require("./goalContractResolver");
+const providerOrchestrator = require("./providerOrchestrator");
+const plannerCoordinator = require("./plannerCoordinator");
+const toolExecutor = require("./toolExecutor");
+const skillRouter = require("./skillRouter");
+const verificationCoordinator = require("./verificationCoordinator");
+const memoryCoordinator = require("./memoryCoordinator");
+const actionReceiptCoordinator = require("./actionReceiptCoordinator");
+const { registerReminderReceiptWaitBestEffort } = require("../durable/waitForEvent");
+const responseComposerBridge = require("./responseComposerBridge");
+
+const { isFactToolIntent, isProjectKnowledgeIntent, resolveRuleBackedIntent } = understandingCoordinator;
+const { deriveProviderRunTruth, getProviderPolicy } = providerOrchestrator;
+const { attachMemory } = memoryCoordinator;
+const {
+  deriveActionCommands,
+  deriveLastResolvedEntity,
+  derivePendingAction,
+  attachReminderConfirmation,
+} = actionReceiptCoordinator;
+const {
+  buildResponse,
+  buildMetrics,
+  buildContextSlots,
+  sensitiveCredentialResponse,
+  mergeGeneratedPayloads,
+  deriveFinalResponseOutcome,
+  applyFinalResponseOutcome,
+  maybeAttachProactive,
+} = responseComposerBridge;
+
+function cloneMutable(value, seen = new WeakMap()) {
+  if (value == null || typeof value !== "object") return value;
+  if (seen.has(value)) return seen.get(value);
+  if (value instanceof Date) return new Date(value.getTime());
+  const output = Array.isArray(value) ? [] : {};
+  seen.set(value, output);
+  Object.entries(value).forEach(([key, item]) => {
+    output[key] = cloneMutable(item, seen);
+  });
+  return output;
+}
+
+function countMemories(memoryBundle) {
+  const state = memoryBundle && memoryBundle.state || {};
+  return (Array.isArray(state.userMemories) ? state.userMemories.length : 0)
+    + (Array.isArray(state.episodicMemories) ? state.episodicMemories.length : 0);
+}
+
+function deriveReminderPendingAction(toolCalls, principal, metadata = {}) {
+  if (!principal || principal.authenticated !== true) return undefined;
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const createCall = calls.find((item) => item && item.name === "create_course_reminder");
+  const deleteCall = calls.find((item) => item && item.name === "delete_course_reminder");
+  let command = "";
+  let operation = "";
+  let payload = null;
+  let reminderId = "";
+  if (createCall && createCall.result && createCall.result.success === true
+    && createCall.result.requiresConfirmation === true) {
+    command = "createCourseReminder";
+    operation = "create";
+    payload = createCall.result;
+  } else if (deleteCall && deleteCall.result && deleteCall.result.requiresConfirmation === true
+    && Array.isArray(deleteCall.result.matches) && deleteCall.result.matches.length === 1) {
+    command = "deleteReminder";
+    operation = "delete";
+    payload = {};
+    reminderId = String(deleteCall.result.matches[0].id || "");
+  }
+  if (!command || (operation === "delete" && !reminderId)) return undefined;
+  const detailId = operation === "create"
+    ? actionReceiptCoordinator.reminderIdempotencyKey(principal, operation, payload, "")
+    : reminderId;
+  if (!detailId) return undefined;
+  const createdAt = Date.now();
+  return {
+    command,
+    status: "awaiting_receipt",
+    runId: String(metadata.runId || "").slice(0, 100),
+    createdAt,
+    expiresAt: createdAt + Math.max(60000, Math.min(3600000, Number(metadata.ttlMs || 15 * 60 * 1000) || 15 * 60 * 1000)),
+    target: {
+      type: "reminder",
+      detailId: String(detailId).slice(0, 128),
+      name: "课程提醒",
+      term: "",
+    },
+  };
+}
+
+function cancelledResponse(state, extra = {}) {
+  const providerTruth = extra.providerTruth || { externalProviderUsed: false, stages: {} };
+  return buildResponse({
+    protocolVersion: state.protocolVersion,
+    runId: state.runId,
+    requestId: state.requestId,
+    conversationId: state.conversationId,
+    runtimeMode: state.runtimeDecision.runtimeMode,
+    requestedRuntimeMode: state.runtimeDecision.requestedMode,
+    competitionAuthorized: state.runtimeDecision.authorized,
+    answer: "",
+    cards: [],
+    suggestions: [],
+    toolCalls: extra.publicToolCalls || [],
+    provider: "mock",
+    providerPolicy: "tool-only",
+    externalProviderUsed: providerTruth.externalProviderUsed === true,
+    providerStages: providerTruth.stages || {},
+    fallback: false,
+    fallbackLayer: "none",
+    success: true,
+    status: "cancelled",
+    intent: extra.intent || { name: "conversational_help", slots: {} },
+    plan: extra.plan || [],
+    steps: extra.execution && extra.execution.steps || [],
+    understanding: extra.understanding,
+    goalContract: extra.understanding && extra.understanding.contract,
+    metrics: buildMetrics({
+      startTime: state.startTime,
+      intent: extra.intent,
+      intentName: extra.intent ? undefined : "cancelled",
+      toolCalls: extra.toolCalls || [],
+      externalProviderUsed: providerTruth.externalProviderUsed === true,
+      fallback: providerTruth.fallback === true,
+    }),
+  });
+}
+
+function createFosuTurnPorts(options = {}) {
+  const agentKernel = options.agentKernel;
+  const skillCatalog = options.skillCatalog;
+  if (!agentKernel || typeof agentKernel.execute !== "function") throw new Error("agentKernel is required");
+  if (!skillCatalog || typeof skillCatalog.getSkillForIntent !== "function") throw new Error("skillCatalog is required");
+
+  async function context(stageInput = {}) {
+    const request = stageInput.request || {};
+    const prepared = requestContextAssembler.prepareRequest(request);
+    const state = {
+      startTime: prepared.startTime,
+      rawMessage: prepared.rawMessage,
+      safeMessage: prepared.safeMessage,
+      context: prepared.context,
+      runtimeDecision: prepared.runtimeDecision,
+      requestId: prepared.requestId,
+      conversationId: prepared.conversationId,
+      protocolVersion: prepared.protocolVersion,
+      runId: prepared.runId,
+      eventInput: Object.assign({}, prepared.eventInput, {
+        onEvent: (event) => stageInput.emit(event),
+      }),
+      releaseContext: stageInput.releaseContext || {},
+    };
+    emitChatEvent(state.eventInput, {
+      type: "request.sanitized",
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      status: "sanitized",
+    });
+
+    if (request.runId && agentRunEventService.isCancelled(state.runId)) {
+      emitChatEvent(state.eventInput, { type: "run.cancelled", runtimeMode: state.runtimeDecision.runtimeMode });
+      state.earlyResponse = cancelledResponse(state);
+      state.guardReason = "RUN_CANCELLED";
+      return Object.assign(state, { messageCount: 0, memoryCount: 0 });
+    }
+
+    const loadedMemory = memoryCoordinator.loadConversationMemory({
+      serverSession: request.serverSession,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      conversationId: state.conversationId,
+      message: state.safeMessage,
+      context: state.context,
+    });
+    state.memoryBundle = loadedMemory.memoryBundle;
+    state.conversationState = loadedMemory.conversationState;
+    state.context = loadedMemory.context;
+
+    const providerConfigResolution = providerOrchestrator.resolveRuntimeProviderConfig({
+      context: state.context,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+    });
+    state.providerRuntimeConfig = providerConfigResolution.providerRuntimeConfig;
+    state.context.assistantEnvironment = providerConfigResolution.assistantEnvironment;
+    state.usedPersonalContext = requestContextAssembler.deriveUsedPersonalContext(state.context);
+
+    if (!agentProtocol.isSupportedProtocolVersion(request.protocolVersion || state.context.protocolVersion || agentProtocol.PROTOCOL_VERSION)) {
+      recordEarlyTrace({
+        runId: state.runId,
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: "public",
+        startTime: state.startTime,
+        intent: "clarify_missing_slot",
+        fallbackReason: "PROTOCOL_VERSION_UNSUPPORTED",
+        errorCode: "PROTOCOL_VERSION_UNSUPPORTED",
+      });
+      state.earlyResponse = buildResponse({
+        protocolVersion: agentProtocol.PROTOCOL_VERSION,
+        runId: state.runId,
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: "public",
+        requestedRuntimeMode: state.runtimeDecision.requestedMode,
+        competitionAuthorized: false,
+        answer: "当前小佛协议版本不兼容，请刷新小程序后再试。",
+        cards: [],
+        suggestions: ["刷新后重试", "查看使用说明"],
+        toolCalls: [],
+        provider: "mock",
+        providerPolicy: "tool-only",
+        externalProviderUsed: false,
+        fallbackReason: "PROTOCOL_VERSION_UNSUPPORTED",
+        fallback: true,
+        fallbackLayer: "server",
+        fallbackAllowed: true,
+        success: false,
+        errors: [{ code: "PROTOCOL_VERSION_UNSUPPORTED" }],
+        intent: { name: "clarify_missing_slot", slots: {} },
+        plan: [],
+        memory: state.memoryBundle.memory,
+        metrics: buildMetrics({ startTime: state.startTime, intentName: "protocol_version_unsupported", toolCalls: [] }),
+      });
+      state.guardReason = "PROTOCOL_VERSION_UNSUPPORTED";
+    } else if (!state.rawMessage) {
+      const stable = stableGeneratedPayload(mockProvider.generate({ intent: { name: "generic" }, toolResults: [] }));
+      state.earlyResponse = buildResponse(Object.assign({}, stable, {
+        protocolVersion: state.protocolVersion,
+        runId: state.runId,
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        requestedRuntimeMode: state.runtimeDecision.requestedMode,
+        competitionAuthorized: state.runtimeDecision.authorized,
+        toolCalls: [],
+        intent: { name: "conversational_help", slots: {} },
+        plan: [],
+        provider: "mock",
+        usedPersonalContext: state.usedPersonalContext,
+        providerPolicy: getProviderPolicy(state.providerRuntimeConfig),
+        externalProviderUsed: false,
+        fallback: true,
+        fallbackLayer: "server",
+        fallbackReason: "EMPTY_MESSAGE",
+        memory: state.memoryBundle.memory,
+        metrics: buildMetrics({
+          startTime: state.startTime,
+          intentName: "generic",
+          toolCalls: [],
+          externalProviderUsed: false,
+          fallback: true,
+          usedPersonalContext: state.usedPersonalContext,
+        }),
+      }));
+      recordEarlyTrace({
+        runId: state.runId,
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        startTime: state.startTime,
+        intent: "conversational_help",
+        selectedSkill: skillRouter.earlyTraceSkillFor("EMPTY_MESSAGE"),
+        fallbackReason: "EMPTY_MESSAGE",
+        errorCode: "EMPTY_MESSAGE",
+      });
+      state.guardReason = "EMPTY_MESSAGE";
+    } else if (safetyGuard.hasSensitiveCredential(state.rawMessage)) {
+      state.earlyResponse = sensitiveCredentialResponse(
+        state.safeMessage,
+        state.context,
+        state.startTime,
+        state.providerRuntimeConfig,
+        {
+          protocolVersion: state.protocolVersion,
+          requestId: state.requestId,
+          conversationId: state.conversationId,
+          runtimeMode: state.runtimeDecision.runtimeMode,
+          requestedRuntimeMode: state.runtimeDecision.requestedMode,
+          runId: state.runId,
+          memory: state.memoryBundle.memory,
+        },
+      );
+      recordEarlyTrace({
+        runId: state.runId,
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        startTime: state.startTime,
+        intent: "explain_personal_import",
+        selectedSkill: skillRouter.earlyTraceSkillFor("SENSITIVE_CREDENTIAL_BLOCKED"),
+        fallbackReason: "SENSITIVE_CREDENTIAL_BLOCKED",
+        errorCode: "SENSITIVE_CREDENTIAL_BLOCKED",
+      });
+      state.guardReason = "SENSITIVE_CREDENTIAL_BLOCKED";
+    }
+
+    return Object.assign(state, {
+      messageCount: state.safeMessage ? 1 : 0,
+      memoryCount: countMemories(state.memoryBundle),
+    });
+  }
+
+  async function decision(stageInput = {}) {
+    const state = stageInput.context || {};
+    if (state.earlyResponse) {
+      return {
+        skipped: true,
+        earlyResponse: state.earlyResponse,
+        decisionSource: "guard_rejected",
+        goal: { name: state.guardReason || "guard_rejected" },
+        selectedSkillId: "",
+      };
+    }
+    const mutableContext = cloneMutable(state.context);
+    const mutableConversationState = cloneMutable(state.conversationState);
+    const deterministicUnderstanding = defaultUnderstandingService.deterministicResult({
+      message: state.safeMessage,
+      context: mutableContext,
+      conversationState: mutableConversationState,
+      deterministicResolve: (message, safeContext) => understandingCoordinator.resolveRuleBackedIntent(message, safeContext).intent,
+    }, "deterministic_policy", "PERSONAL_MEMORY_SHORT_CIRCUIT");
+    const personalMemoryEarly = memoryCoordinator.handlePersonalMemoryTurn({
+      message: state.safeMessage,
+      context: mutableContext,
+      memoryBundle: state.memoryBundle,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      runtimeDecision: state.runtimeDecision,
+      protocolVersion: state.protocolVersion,
+      runId: state.runId,
+      requestId: state.requestId,
+      conversationId: state.conversationId,
+      eventInput: state.eventInput,
+      startTime: state.startTime,
+      understanding: deterministicUnderstanding,
+      goalContractV2: toRuntimeGoalContractV2(deterministicUnderstanding),
+    });
+    if (personalMemoryEarly) {
+      return {
+        skipped: true,
+        earlyResponse: personalMemoryEarly,
+        decisionSource: "deterministic_memory",
+        goal: { name: personalMemoryEarly.intent || "personal_memory" },
+        selectedSkillId: "",
+      };
+    }
+
+    const understanding = await understandingCoordinator.runUnderstanding({
+      message: state.safeMessage,
+      context: mutableContext,
+      conversationState: mutableConversationState,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      providerRuntimeConfig: state.providerRuntimeConfig,
+      principal: state.memoryBundle.principal,
+      conversationId: state.conversationId,
+      eventInput: state.eventInput,
+    });
+    const goalContractV2 = toRuntimeGoalContractV2(understanding);
+    const intent = Object.assign({}, enrichIntentFromWorkingMemory(
+      understanding.intent,
+      mutableContext,
+      mutableConversationState,
+    ));
+    if (understanding && understanding.source && !intent.understandingSource) {
+      intent.understandingSource = String(understanding.source).slice(0, 40);
+    }
+    const skill = skillCatalog.getSkillForIntent(intent.name);
+    return {
+      skipped: false,
+      understanding,
+      goalContractV2,
+      intent,
+      goal: { name: intent.name, confidence: Number(intent.confidence || 0) || 0 },
+      selectedSkillId: skill && skill.id || "",
+      decisionSource: String(understanding.source || "deterministic"),
+      localRuleMatch: resolveRuleBackedIntent(state.safeMessage, mutableContext).ruleMatch,
+    };
+  }
+
+  async function skillTool(stageInput = {}) {
+    const state = stageInput.context || {};
+    const decisionResult = stageInput.decision || {};
+    if (decisionResult.earlyResponse) {
+      return { skipped: true, earlyResponse: decisionResult.earlyResponse, toolCalls: [], steps: [] };
+    }
+    const mutableContext = cloneMutable(state.context);
+    const planned = await plannerCoordinator.executePlanner({
+      message: state.safeMessage,
+      context: mutableContext,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      runtimeDecision: state.runtimeDecision,
+      intent: cloneMutable(decisionResult.intent),
+      conversationState: cloneMutable(state.conversationState),
+      providerRuntimeConfig: state.providerRuntimeConfig,
+      requestId: state.requestId,
+      conversationId: state.conversationId,
+      runId: state.runId,
+      protocolVersion: state.protocolVersion,
+      onEvent: state.eventInput.onEvent,
+      eventInput: state.eventInput,
+      agentKernel,
+      signal: stageInput.signal,
+      principal: state.memoryBundle.principal,
+    });
+    const publicToolCalls = toolExecutor.toPublicToolCalls(planned.toolCalls);
+    if (agentRunEventService.isCancelled(state.runId)) {
+      const cancelledProviderTruth = deriveProviderRunTruth({
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        understanding: decisionResult.understanding,
+        planner: planned.plannerDiag,
+        response: { provider: "mock", externalProviderUsed: false, providerChain: [], fallbackReason: "" },
+      });
+      emitChatEvent(state.eventInput, { type: "run.cancelled", runtimeMode: state.runtimeDecision.runtimeMode });
+      return {
+        skipped: true,
+        earlyResponse: cancelledResponse(state, {
+          providerTruth: cancelledProviderTruth,
+          publicToolCalls,
+          understanding: decisionResult.understanding,
+          intent: decisionResult.intent,
+          plan: planned.plan,
+          execution: planned.execution,
+          toolCalls: planned.toolCalls,
+        }),
+        toolCalls: planned.toolCalls,
+        publicToolCalls,
+        plan: planned.plan,
+        execution: planned.execution,
+        plannerDiag: planned.plannerDiag,
+      };
+    }
+    return {
+      skipped: false,
+      execution: planned.execution,
+      plan: planned.plan,
+      toolCalls: planned.toolCalls,
+      publicToolCalls,
+      plannerDiag: planned.plannerDiag,
+    };
+  }
+
+  async function verification(stageInput = {}) {
+    const state = stageInput.context || {};
+    const decisionResult = stageInput.decision || {};
+    const skillResult = stageInput.skillTool || {};
+    if (skillResult.earlyResponse) {
+      return {
+        ok: skillResult.earlyResponse.success !== false,
+        skipped: true,
+        earlyResponse: skillResult.earlyResponse,
+      };
+    }
+    const sourceExecution = skillResult.execution || {};
+    const execution = Object.assign({}, sourceExecution, {
+      verification: Object.assign({}, sourceExecution.verification || { ok: true }, {
+        errors: Array.isArray(sourceExecution.verification && sourceExecution.verification.errors)
+          ? sourceExecution.verification.errors.slice()
+          : [],
+      }),
+    });
+    const toolVerificationContract = verificationCoordinator.resolveVerificationGoalContract(execution)
+      || decisionResult.goalContractV2
+      || null;
+    const summary = verificationCoordinator.verifyToolResults(
+      execution,
+      decisionResult.intent,
+      toolVerificationContract,
+      { eventInput: state.eventInput, runtimeMode: state.runtimeDecision.runtimeMode },
+    );
+    return {
+      ok: execution.verification && execution.verification.ok !== false,
+      errors: execution.verification && execution.verification.errors || [],
+      execution,
+      toolResultVerification: summary,
+    };
+  }
+
+  async function response(stageInput = {}) {
+    const state = stageInput.context || {};
+    const decisionResult = stageInput.decision || {};
+    const skillResult = stageInput.skillTool || {};
+    const verificationResult = stageInput.verification || {};
+    if (verificationResult.earlyResponse) return verificationResult.earlyResponse;
+
+    const execution = verificationResult.execution || skillResult.execution;
+    const plan = skillResult.plan;
+    const toolCalls = skillResult.toolCalls || [];
+    // Runtime stage outputs are immutable handoffs; response orchestration appends
+    // provider diagnostics to its own copy instead of mutating the prior stage.
+    const publicToolCalls = (skillResult.publicToolCalls || []).map((call) => Object.assign({}, call));
+    const plannerDiag = skillResult.plannerDiag || {};
+    const intent = decisionResult.intent;
+    const understanding = decisionResult.understanding;
+
+    if (state.runtimeDecision.runtimeMode === "public"
+      && !isFactToolIntent(intent)
+      && !isProjectKnowledgeIntent(intent)
+      && intent.name !== "explain_personal_import"
+      && intent.name !== "clarify_missing_slot") {
+      emitChatEvent(state.eventInput, {
+        type: "response.composing",
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        intentName: intent.name,
+        providerUsed: false,
+      });
+      const publicPlain = responseComposer.compose({
+        answer: intent.name === "conversational_help"
+          ? "你好，我是小佛。正式版里我可以帮你查课表、空教室、教学周和产品使用说明。"
+          : "小佛目前提供课表、课程查询和使用帮助。",
+        cards: [],
+        suggestions: [],
+        intentName: intent.name,
+        intent,
+        runtimeMode: "public",
+        toolCalls: publicToolCalls,
+        steps: [],
+        generalAssistant: false,
+      });
+      const publicResponse = attachMemory(buildResponse({
+        protocolVersion: state.protocolVersion,
+        runId: state.runId,
+        answer: publicPlain.answer,
+        cards: publicPlain.cards,
+        suggestions: publicPlain.suggestions,
+        presentationMode: publicPlain.presentationMode,
+        presentation: publicPlain,
+        runSummary: null,
+        taskTrajectory: null,
+        toolCalls: publicToolCalls,
+        provider: "mock",
+        desiredProvider: "mock",
+        resolvedProvider: "mock",
+        providerPolicy: "tool-only",
+        externalProviderUsed: false,
+        fallbackReason: "",
+        requestId: state.requestId,
+        conversationId: state.conversationId,
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        requestedRuntimeMode: state.runtimeDecision.requestedMode,
+        competitionAuthorized: state.runtimeDecision.authorized,
+        intent,
+        plan,
+        skill: skillRouter.executionSkill(execution),
+        steps: execution.steps,
+        observations: execution.observations,
+        context: state.context,
+        rawToolCalls: toolCalls,
+        fallback: false,
+        fallbackLayer: "none",
+        metrics: buildMetrics({
+          startTime: state.startTime,
+          intentName: intent.name,
+          toolCalls,
+          externalProviderUsed: false,
+          fallback: false,
+          usedPersonalContext: state.usedPersonalContext,
+          plannerType: plan && plan.plannerType || "deterministic",
+          plannerProvider: "none",
+          responseProvider: "mock",
+        }),
+        errors: execution.verification && execution.verification.errors || [],
+        verification: execution.verification || null,
+      }), state.memoryBundle, {
+        message: state.safeMessage,
+        intentName: intent.name,
+        context: state.context,
+        runId: state.runId,
+        status: "completed",
+        stepCount: (execution.steps || []).length,
+        contextSlots: buildContextSlots(intent, intent.slots || {}),
+        pendingClarification: null,
+        clearPendingClarification: true,
+        evidence: null,
+        providerUsed: understanding.providerUsed || "",
+        understandingSource: understanding.source,
+        goalContract: decisionResult.goalContractV2 || undefined,
+      });
+      agentKernel.finalize(execution, {
+        totalDurationMs: Date.now() - state.startTime,
+        providerUsed: false,
+        fallbackLayer: "server",
+        fallbackReason: "AI_RUNTIME_MODE=public",
+        evidenceComplete: publicResponse.evidence && publicResponse.evidence.complete === true,
+      });
+      return publicResponse;
+    }
+
+    const generatedResponse = await providerOrchestrator.generateAssistantResponse({
+      intent,
+      toolCalls,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      providerRuntimeConfig: state.providerRuntimeConfig,
+      principal: state.memoryBundle.principal,
+      context: state.context,
+      message: state.safeMessage,
+      localRuleMatch: decisionResult.localRuleMatch,
+      eventInput: state.eventInput,
+      publicToolCalls,
+      understanding,
+      plannerDiag,
+      execution,
+    });
+    const stable = mergeGeneratedPayloads({
+      intent,
+      providerPolicy: generatedResponse.providerPolicy,
+      deterministicPayload: generatedResponse.deterministicPayload,
+      providerPayload: generatedResponse.providerPayload,
+      externalProviderUsed: generatedResponse.externalProviderUsed,
+    });
+    const pendingPatch = verificationCoordinator.resolvePendingClarificationPatch({ intent, context: state.context });
+    const composed = responseComposer.compose({
+      answer: stable.answer,
+      cards: stable.cards,
+      suggestions: stable.suggestions,
+      intentName: intent.name,
+      intent,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      toolCalls: publicToolCalls,
+      steps: execution.steps,
+      plan: execution.plan || plan,
+      needsClarification: intent.name === "clarify_missing_slot" || (execution.plan && execution.plan.needsClarification),
+      clarification: execution.plan && execution.plan.clarification,
+      generalAssistant: isGeneralAssistantEnabled(state.runtimeDecision.runtimeMode),
+      context: state.context,
+      message: state.safeMessage,
+      userMessage: state.safeMessage,
+      durationMs: Date.now() - state.startTime,
+      replanUsed: execution.replanUsed === true,
+      success: generatedResponse.runOutcome.success,
+      status: generatedResponse.runOutcome.status,
+      errors: generatedResponse.runOutcome.errors,
+    });
+    const actionCommands = deriveActionCommands(toolCalls);
+    const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
+    const pendingAction = derivePendingAction(actionCommands, { runId: state.runId })
+      || deriveReminderPendingAction(toolCalls, state.memoryBundle && state.memoryBundle.principal, { runId: state.runId });
+    registerReminderReceiptWaitBestEffort(pendingAction, state.memoryBundle && state.memoryBundle.principal);
+    const responsePlan = state.protocolVersion === agentProtocol.PROTOCOL_VERSION
+      ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
+      : (execution.plan || plan);
+    const builtResponse = buildResponse(Object.assign({}, stable, {
+      answer: composed.answer,
+      cards: composed.cards,
+      suggestions: composed.suggestions,
+      presentationMode: composed.presentationMode,
+      presentation: composed,
+      evidenceDisplay: composed.evidence,
+      runSummary: composed.runSummary,
+      feedback: composed.feedback,
+      protocolVersion: state.protocolVersion,
+      runId: state.runId,
+      requestId: state.requestId,
+      conversationId: state.conversationId,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      requestedRuntimeMode: state.runtimeDecision.requestedMode,
+      competitionAuthorized: state.runtimeDecision.authorized,
+      toolCalls: publicToolCalls,
+      rawToolCalls: toolCalls,
+      intent,
+      plan: responsePlan,
+      skill: skillRouter.executionSkill(execution),
+      steps: execution.steps,
+      observations: execution.observations,
+      actions: actionCommands,
+      context: state.context,
+      provider: generatedResponse.providerName,
+      desiredProvider: generatedResponse.desiredProviderName,
+      resolvedProvider: generatedResponse.providerName,
+      usedPersonalContext: state.usedPersonalContext,
+      providerPolicy: generatedResponse.providerPolicy,
+      externalProviderUsed: generatedResponse.providerTruth.externalProviderUsed,
+      providerStages: generatedResponse.providerTruth.stages,
+      providerDecisionReason: generatedResponse.providerDecisionReason,
+      fallbackReason: generatedResponse.providerTruth.fallbackReason,
+      fallback: generatedResponse.providerTruth.fallback,
+      fallbackLayer: generatedResponse.providerTruth.fallback ? "server" : "none",
+      success: generatedResponse.runOutcome.success,
+      status: generatedResponse.runOutcome.status,
+      pendingClarification: pendingPatch.pendingClarification,
+      clearPendingClarification: pendingPatch.clearPendingClarification,
+      errors: generatedResponse.runOutcome.errors,
+      verification: execution.verification || null,
+      reusedToolCount: execution.reusedToolCount || 0,
+      avoidedDuplicateCalls: execution.avoidedDuplicateCalls || 0,
+      replanReason: execution.replanReason || "",
+      partialCompletion: execution.partialCompletion === true,
+      goalContract: understanding.contract,
+      verificationGoalContract: verificationCoordinator.resolveVerificationGoalContract(execution),
+      understanding,
+      metrics: buildMetrics({
+        startTime: state.startTime,
+        intent,
+        toolCalls,
+        externalProviderUsed: generatedResponse.providerTruth.externalProviderUsed,
+        fallback: generatedResponse.providerTruth.fallback,
+        usedPersonalContext: state.usedPersonalContext,
+        plannerProvider: plannerDiag.plannerProvider || (plan && plan.plannerProvider) || "none",
+        responseProvider: generatedResponse.providerName,
+        plannerLatency: plannerDiag.plannerLatency || (plan && plan.plannerLatencyMs) || 0,
+        responseLatency: generatedResponse.responseLatencyMs,
+        plannerFallback: generatedResponse.providerTruth.stages.planner.fallback,
+        responseFallback: generatedResponse.providerTruth.stages.response.fallback,
+        plannerType: plannerDiag.inferredPlannerType || (plan && plan.plannerType) || "",
+      }),
+      taskTrajectory: composed.taskTrajectory || null,
+      contextMeta: generatedResponse.contextMeta || null,
+    }));
+    const finalOutcome = deriveFinalResponseOutcome(builtResponse, generatedResponse.providerTruth);
+    applyFinalResponseOutcome(builtResponse, finalOutcome);
+    const finalResponse = attachMemory(builtResponse, state.memoryBundle, {
+      message: state.safeMessage,
+      intentName: intent.name,
+      context: state.context,
+      runId: state.runId,
+      status: finalOutcome.status,
+      stepCount: (execution.steps || []).length,
+      contextSlots: buildContextSlots(intent, intent.slots || {}),
+      pendingClarification: pendingPatch.pendingClarification,
+      clearPendingClarification: pendingPatch.clearPendingClarification,
+      answer: composed.answer,
+      evidence: null,
+      cloudSyncEnabled: state.context.cloudSyncEnabled === true
+        || (state.memoryBundle.memory && state.memoryBundle.memory.mode === "cloud_sync"),
+      allowPartialCommit: finalOutcome.status === "partial",
+      autoMemoryEnabled: state.context.autoMemoryEnabled !== false,
+      providerUsed: understanding.providerUsed || "",
+      understandingSource: understanding.source,
+      goalContract: decisionResult.goalContractV2 || undefined,
+      pendingAction,
+      lastResolvedEntity,
+    });
+    maybeAttachProactive(finalResponse, { context: state.context, proactiveEvent: state.context.proactiveEvent }, state.memoryBundle, toolCalls);
+    attachReminderConfirmation(finalResponse, execution, state.memoryBundle.principal);
+    agentKernel.finalize(execution, {
+      totalDurationMs: Date.now() - state.startTime,
+      providerUsed: generatedResponse.providerTruth.externalProviderUsed,
+      fallbackLayer: generatedResponse.providerTruth.fallback ? "server" : "none",
+      fallbackReason: generatedResponse.providerTruth.fallbackReason,
+      evidenceComplete: finalResponse.evidence && finalResponse.evidence.complete === true,
+      plannerType: plan && plan.plannerType,
+      plannerProvider: plannerDiag.plannerProvider,
+    });
+    emitChatEvent(state.eventInput, {
+      type: finalOutcome.eventType,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      intentName: intent.name,
+      providerUsed: generatedResponse.providerTruth.externalProviderUsed,
+      reasonCode: generatedResponse.providerTruth.fallbackReason
+        ? String(generatedResponse.providerTruth.fallbackReason).slice(0, 80)
+        : "",
+      status: finalOutcome.status,
+      success: finalOutcome.success,
+      fallback: generatedResponse.providerTruth.fallback,
+      partialCompletion: finalOutcome.partialCompletion,
+      verificationOk: finalOutcome.verificationOk,
+      errorCount: finalOutcome.errors.length,
+      plannerType: plan && plan.plannerType || "",
+    });
+    return finalResponse;
+  }
+
+  return Object.freeze({
+    context,
+    decision,
+    skillTool,
+    verification,
+    response,
+  });
+}
+
+module.exports = {
+  createFosuTurnPorts,
+  deriveReminderPendingAction,
+};
