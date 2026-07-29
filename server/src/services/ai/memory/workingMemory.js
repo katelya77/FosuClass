@@ -60,6 +60,10 @@ function emptyWorkingMemory() {
     lastRecommendation: null,
     pendingWriteOps: [],
     preferredName: "",
+    // 低敏身份事实（线程级）：学院/专业/年级，随会话保存；长期持久化仍走 User Memory。
+    college: "",
+    major: "",
+    grade: "",
     // 当前首页课表目标（仅在客户端 Action 执行成功且 Receipt 验证通过后提交）。
     currentScheduleTarget: null,
     // 类型化关系记忆（"我妈妈叫X"）：relation 为机器可读的稳定标识，
@@ -242,6 +246,9 @@ function normalizeWorkingMemory(raw = {}) {
     }))
     : [];
   next.preferredName = safeText(raw.preferredName, 24);
+  next.college = safeText(raw.college, 16);
+  next.major = safeText(raw.major, 16);
+  next.grade = safeText(raw.grade, 8);
   next.currentScheduleTarget = raw.currentScheduleTarget && typeof raw.currentScheduleTarget === "object"
     ? {
       type: safeText(raw.currentScheduleTarget.type, 24),
@@ -381,6 +388,9 @@ function updateWorkingMemory(previous, input = {}) {
   if (weekday != null) next.confirmedEntities.weekday = String(weekday);
 
   if (input.preferredName) next.preferredName = safeText(input.preferredName, 24);
+  if (input.college) next.college = safeText(input.college, 16);
+  if (input.major) next.major = safeText(input.major, 16);
+  if (input.grade) next.grade = safeText(input.grade, 8);
   // 仅在显式给定（Receipt 提交 / 用户纠正）时更新；否则继承 prev。
   if (input.currentScheduleTarget !== undefined) {
     next.currentScheduleTarget = input.currentScheduleTarget;

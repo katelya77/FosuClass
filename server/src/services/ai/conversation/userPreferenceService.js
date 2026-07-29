@@ -68,11 +68,13 @@ function normalizeValue(key, value) {
   }
   if (key === "college") {
     const college = String(value || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 16);
+    if (/^(什么|啥|哪|谁|怎么|如何)/.test(college)) return null;
     return /^[㐀-鿿]{2,16}(学院|学部)$/.test(college) ? college : null;
   }
   if (key === "major") {
     const major = String(value || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 16);
     if (!/^[㐀-鿿A-Za-z]{2,16}$/.test(major)) return null;
+    if (/^(什么|啥|哪|谁|怎么|如何)/.test(major)) return null;
     // 拒绝明显非专业的误抓：学院/大学机构名、身份词、场景词
     if (/(学院|大学|学部|学生|校区|老师|同学|专业)$/.test(major)) return null;
     return major;

@@ -155,6 +155,69 @@ function run() {
   assert.ok(cleared.deleted >= 2);
   assert.deepStrictEqual(preferences.getObject({ principal }), {});
 
+  // 身份事实（学院/专业/年级）：陈述短路 + 问句应答 + 问句不产生陈述候选
+  const identityStatement = resolvePersonalMemoryTurn({
+    message: "我是计算机学院的，大二，专业是软件工程",
+    context: { recentMessages: [], userPreferences: {} },
+    principal,
+    memoryMode: "session_state",
+    preferenceService: preferences,
+  });
+  assert.strictEqual(identityStatement.handled, true);
+  assert.strictEqual(identityStatement.sessionFacts.college, "计算机学院");
+  assert.strictEqual(identityStatement.sessionFacts.major, "软件工程");
+  assert.strictEqual(identityStatement.sessionFacts.grade, "大二");
+
+  const identityLocalOnly = resolvePersonalMemoryTurn({
+    message: "我是计算机学院的，大二",
+    context: { recentMessages: [], userPreferences: {} },
+    principal,
+    memoryMode: "local_only",
+    preferenceService: preferences,
+  });
+  assert.strictEqual(identityLocalOnly.handled, true);
+  assert.strictEqual(identityLocalOnly.sessionFacts.college, "计算机学院");
+  assert.deepStrictEqual(preferences.getObject({ principal }), {}, "local_only/session_state 不得写 User Memory");
+
+  const identityRecall = resolvePersonalMemoryTurn({
+    message: "我是什么学院的？大几？",
+    context: {
+      recentMessages: [
+        { role: "user", content: "我是计算机学院的，大二，专业是软件工程" },
+        { role: "assistant", content: "好的，我记住啦。" },
+      ],
+      userPreferences: {},
+    },
+    principal,
+    memoryMode: "session_state",
+    preferenceService: preferences,
+  });
+  assert.strictEqual(identityRecall.handled, true);
+  assert.ok(identityRecall.answer.includes("计算机学院"), "应召回学院");
+  assert.ok(identityRecall.answer.includes("大二"), "应召回年级");
+
+  // 问句不得被当成陈述抽取（防"什么学院"误存）
+  const questionTurn = resolvePersonalMemoryTurn({
+    message: "我是什么学院的？",
+    context: { recentMessages: [], userPreferences: {} },
+    principal,
+    memoryMode: "cloud_sync",
+    preferenceService: preferences,
+  });
+  assert.strictEqual(questionTurn.handled, true);
+  assert.ok(questionTurn.answer.includes("还不知道"));
+  assert.deepStrictEqual(preferences.getObject({ principal }), {}, "问句不得写入任何记忆");
+
+  // 包含身份词的普通查询不得被短路吞掉
+  const plainQuery = resolvePersonalMemoryTurn({
+    message: "计算机学院的课表在哪里看",
+    context: { recentMessages: [], userPreferences: {} },
+    principal,
+    memoryMode: "session_state",
+    preferenceService: preferences,
+  });
+  assert.strictEqual(plainQuery.handled, false);
+
   const toolContext = {
     runtimeMode: "trial",
     memoryMode: "cloud_sync",

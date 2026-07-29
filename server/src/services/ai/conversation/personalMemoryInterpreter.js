@@ -30,7 +30,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
   const text = safetyGuard.redactSensitiveText(String(message || "")).trim();
   if (!text || safetyGuard.hasSensitiveCredential(String(message || ""))) return [];
   const memoryMode = options.memoryMode || "local_only";
-  if (isNameQuestion(text)) return [];
+  if (isNameQuestion(text) || identityQuestionKeys(text).length) return [];
   const explicit = /(?:请|帮我)?(?:记住|记一下|以后叫我|以后称呼我)/.test(text);
   const reminderPref = /(?:设置|设定|改成|改为|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(text)
     || /默认\s*(?:提前|上课前)\s*\d{1,3}\s*分钟/.test(text)
@@ -48,8 +48,12 @@ function parsePersonalMemoryCommands(message, options = {}) {
   });
 
   const output = [];
+  // local_only 降级为 working 的身份键仍可作为 session_fact 应答（与 local_only 话术分支设计一致）；
+  // 其他 working 候选（提醒、楼栋、班级等）维持原路径，不改变 local_only 既有行为。
+  const WORKING_IDENTITY_KEYS = ["preferredName", "college", "major", "grade"];
   candidates.forEach((c) => {
-    if (c.scope === "working" || c.reasonCode === "one_off_study_spot") return;
+    if (c.reasonCode === "one_off_study_spot") return;
+    if (c.scope === "working" && !WORKING_IDENTITY_KEYS.includes(c.key)) return;
     // Durable User Memory only under cloud_sync (or explicit under cloud_sync).
     const canPersistUser = (explicit || mayAutoPersistUserMemory(memoryMode, c)
       || (reminderPref && c.key === "defaultReminderLeadMinutes"))
@@ -111,6 +115,38 @@ function findRecentName(messages) {
     if (hit) return String(hit.value).trim();
   }
   return "";
+}
+
+// 通用最近事实查找：从对话历史逆向提取指定 key（college/major/grade 等）。
+function findRecentFact(messages, key) {
+  if (key === "preferredName") return findRecentName(messages);
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const item = list[index] || {};
+    if (item.role !== "user") continue;
+    const hit = extractFromMessage(String(item.content || item.text || ""))
+      .find((entry) => entry && entry.key === key && entry.value);
+    if (hit) return String(hit.value).trim();
+  }
+  return "";
+}
+
+// 身份事实问句识别："我是什么学院的？/ 我读什么专业？/ 我大几？"
+// 命中时不得再按陈述句抽取记忆（防止"什么学院"被当成学院名记住）。
+function identityQuestionKeys(message) {
+  const text = String(message || "").replace(/\s+/g, "");
+  const keys = [];
+  if (/(?:我是|我在|我读)(?:什么|啥|哪个|哪所)(?:大学)?学院/.test(text)
+    || /我的学院是(?:什么|啥|哪个)|你(?:还)?记得我(?:是什么|哪个|啥)(?:大学)?学院/.test(text)) {
+    keys.push("college");
+  }
+  if (/(?:我读|我学|我是)(?:什么|啥|哪个)专业|我的专业是(?:什么|啥|哪个)|你(?:还)?记得我(?:的)?专业/.test(text)) {
+    keys.push("major");
+  }
+  if (/我(?:是|读|现在)?大几|我(?:是|读|现在)?几年级|我(?:是|读|现在)?哪个年级|你(?:还)?记得我大几|(?:^|[？?，。！？、,.!?])\s*大几|(?:^|[？?，。！？、,.!?])\s*(?:读|上|念)?几年级/.test(text)) {
+    keys.push("grade");
+  }
+  return keys;
 }
 
 function toMemoryCandidates(commands, memoryMode) {
@@ -231,7 +267,17 @@ function resolvePersonalMemoryTurn(input = {}) {
     };
   }
 
-  if (!isNameQuestion(message)) return { handled: false };
+  if (!isNameQuestion(message)) {
+    const identityKeys = identityQuestionKeys(message);
+    if (!identityKeys.length) return { handled: false };
+    return resolveIdentityQuestionTurn({
+      message,
+      context,
+      memoryMode,
+      principal: input.principal,
+      preferenceService: input.preferenceService,
+    }, identityKeys);
+  }
 
   const contextPreferences = context.userPreferences && typeof context.userPreferences === "object"
     ? context.userPreferences
@@ -270,11 +316,69 @@ function resolvePersonalMemoryTurn(input = {}) {
   };
 }
 
+const IDENTITY_LABELS = { college: "学院", major: "专业", grade: "年级" };
+
+// 身份事实问句应答："我是什么学院的？大几？" → 从偏好/工作记忆/对话历史/云端记忆作答。
+// 解析顺序与名字问句一致：context.userPreferences → workingMemory → recentMessages → cloud。
+function resolveIdentityQuestionTurn(input = {}, keys = []) {
+  const context = input.context && typeof input.context === "object" ? input.context : {};
+  const memoryMode = input.memoryMode || context.memoryMode || "local_only";
+  const contextPreferences = context.userPreferences && typeof context.userPreferences === "object"
+    ? context.userPreferences
+    : {};
+  let cloudValues = {};
+  if (memoryMode === "cloud_sync" && input.preferenceService) {
+    try {
+      cloudValues = input.preferenceService.getObject({ principal: input.principal }) || {};
+    } catch (_) {
+      cloudValues = {};
+    }
+  }
+  const found = [];
+  const missing = [];
+  keys.forEach((key) => {
+    let value = normalizeValue(key, contextPreferences[key]) || "";
+    if (!value && context.workingMemory && context.workingMemory[key]) {
+      value = normalizeValue(key, context.workingMemory[key]) || "";
+    }
+    if (!value) value = normalizeValue(key, findRecentFact(context.recentMessages, key)) || "";
+    if (!value) value = normalizeValue(key, cloudValues[key]) || "";
+    if (value) found.push({ key, value });
+    else missing.push(key);
+  });
+
+  let answer;
+  if (found.length) {
+    const parts = found.map((item) => (item.key === "college" ? `学院是${item.value}`
+      : item.key === "major" ? `专业是${item.value}` : `年级是${item.value}`));
+    answer = `你${parts.join("，")}。`;
+    if (missing.length) {
+      answer += `还不知道你的${missing.map((k) => IDENTITY_LABELS[k]).join("和")}，告诉我就记住啦。`;
+    }
+  } else {
+    const asked = keys.map((k) => IDENTITY_LABELS[k]).join("和");
+    answer = `我还不知道你的${asked}。你可以直接告诉我，比如“我是……学院的大二学生”，开启跨设备同步后会自动记住。`;
+  }
+  return {
+    handled: true,
+    intentName: "conversation_memory",
+    answer,
+    preferencePatch: {},
+    sessionFacts: {},
+    memoryCandidates: [],
+    persisted: false,
+    source: found.length ? "identity_memory" : "none",
+  };
+}
+
 module.exports = {
   findRecentName,
+  findRecentFact,
+  identityQuestionKeys,
   isNameQuestion,
   parsePersonalMemoryCommand,
   parsePersonalMemoryCommands,
+  resolveIdentityQuestionTurn,
   resolvePersonalMemoryTurn,
   toMemoryCandidates,
 };
