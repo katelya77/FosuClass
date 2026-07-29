@@ -63,6 +63,11 @@ class MemoryController {
     if (userLoaded.values && userLoaded.values.campus && !seeded.campus) {
       seeded.campus = userLoaded.values.campus;
     }
+    ["college", "major", "grade"].forEach((key) => {
+      if (userLoaded.values && userLoaded.values[key] && !seeded[key]) {
+        seeded[key] = userLoaded.values[key];
+      }
+    });
 
     // session_state + cloud_sync both expose recent turns when present.
     const serverTurns = state && Array.isArray(state.recentTurns) ? state.recentTurns : [];
@@ -264,6 +269,10 @@ class MemoryController {
     candidates.forEach((c) => {
       if (c.key === "preferredName") workingMemory.preferredName = c.value;
       if (c.key === "campus" && c.scope === "user") workingMemory.campus = c.value;
+      // 身份事实（学院/专业/年级）无论是否可持久化，都先落到线程级 working memory。
+      if (c.key === "college") workingMemory.college = c.value;
+      if (c.key === "major") workingMemory.major = c.value;
+      if (c.key === "grade") workingMemory.grade = c.value;
       if (c.key === "tempStudySpot") {
         workingMemory.classroom = c.value;
         workingMemory.confirmedEntities.tempStudySpot = c.value;
