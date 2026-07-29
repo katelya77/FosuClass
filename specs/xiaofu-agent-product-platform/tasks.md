@@ -18,15 +18,15 @@
 
 ## P1 — 通用包边界与真实生产接线
 
-- [ ] 建立 npm workspace 与 `agent-protocol`、`ui-schema` 的可执行契约。
-- [ ] 建立真实 `skill-runtime`、`tool-runtime`，实现声明式 registry、五因子交集与 exact-match。
-- [ ] 建立 `plugins/fosu-campus`，由 Composition Root 注入现有 Manifest 和校园事实 Tool。
-- [ ] 建立 `packages/agent-runtime`，由它拥有 Context/Decision/Skill-Tool/Verification/Response 阶段顺序和阶段 Trace。
-- [ ] 建立 `apps/agent-server`，让 `/agent/runs`、旧 chat/agui 兼容入口汇入同一 Runtime。
-- [ ] 建立 `apps/agent-admin` 的真实 topology/readiness/trace 接口并由现有 Admin 挂载。
-- [ ] 让 agent.v2 输出通用 UI blocks，同时保持 agent.v1 可观察行为。
-- [ ] 更新 Docker/CI/package hygiene，使生产容器包含并加载 workspaces。
-- [ ] 用 HTTP + Trace 测试证明新 packages/apps/plugin 的真实顺序，运行全部现有门禁并提交 P1。
+- [x] 建立 npm workspace 与 `agent-protocol`、`ui-schema` 的可执行契约。
+- [x] 建立真实 `skill-runtime`、`tool-runtime`，实现声明式 registry、五因子交集与 exact-match。
+- [x] 建立 `plugins/fosu-campus`，由 Composition Root 注入现有 Manifest 和校园事实 Tool。
+- [x] 建立 `packages/agent-runtime`，由它拥有 Context/Decision/Skill-Tool/Verification/Response 阶段顺序和阶段 Trace。
+- [x] 建立 `apps/agent-server`，让 `/agent/runs`、旧 chat/agui 兼容入口汇入同一 Runtime。
+- [x] 建立 `apps/agent-admin` 的真实 topology/readiness/trace 接口并由现有 Admin 挂载。
+- [x] 让 agent.v2 输出通用 UI blocks，同时保持 agent.v1 可观察行为。
+- [x] 更新 Docker/CI/package hygiene，使生产容器包含并加载 workspaces。
+- [x] 用 HTTP + Trace 测试证明新 packages/apps/plugin 的真实顺序，运行全部现有门禁并提交 P1。
   - _Requirements: R1, R4.4–R4.8, R10.4, R11.1, R11.4, R11.7_
 
 ## P2 — strict_model_first、统一 Decision 与性能
