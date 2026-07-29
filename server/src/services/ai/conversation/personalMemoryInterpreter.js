@@ -38,7 +38,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
     || /以后上课前\s*\d{1,3}\s*分钟/.test(text);
 
   if (!explicit && !reminderPref
-    && !/我叫|我的名字|常用|校区|提醒|优先|以后主要|不对|纠正|仙溪|江湾|默认提前|上课前/.test(text)) {
+    && !/我叫|我的名字|常用|校区|提醒|优先|以后主要|不对|纠正|仙溪|江湾|默认提前|上课前|学院|专业|年级|就读|主修|大[一二三四五六]|20\d{2}级/.test(text)) {
     return [];
   }
 
@@ -159,6 +159,9 @@ function resolvePersonalMemoryTurn(input = {}) {
       const all = Object.assign({}, sessionFacts, preferencePatch);
       if (all.preferredName) labels.push(`称呼“${all.preferredName}”`);
       if (all.campus) labels.push(`常用校区“${all.campus}”`);
+      if (all.college) labels.push(`学院“${all.college}”`);
+      if (all.major) labels.push(`专业“${all.major}”`);
+      if (all.grade) labels.push(`年级“${all.grade}”`);
       if (all.defaultReminderLeadMinutes) {
         labels.push(`默认提前 ${all.defaultReminderLeadMinutes} 分钟提醒`);
       }
