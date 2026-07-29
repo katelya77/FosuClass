@@ -144,7 +144,9 @@ function toToolDescriptor(toolId, metadata, dependencies, manifest) {
       operation: String(generatedSafety.operation || "read"),
       requiresConfirmation: Boolean(generatedSafety.confirmation && generatedSafety.confirmation !== "none"),
     },
-    execute: (args, context) => dependencies.toolRegistry.executeToolAsync(toolId, args, context),
+    execute: (args, context, execution = {}) => dependencies.toolRegistry.executeToolAsync(toolId, args, Object.assign({}, context, {
+      abortSignal: execution.signal || null,
+    })),
   });
 }
 

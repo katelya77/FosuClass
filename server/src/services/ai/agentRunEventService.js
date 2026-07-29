@@ -7,7 +7,7 @@ const { publicEventSummary, loadingTextForEvent } = require("./runEventCatalog")
 
 const DEFAULT_TTL_MS = Math.max(30_000, Number(process.env.AI_AGENT_RUN_TTL_MS || 180_000) || 180_000);
 const DEFAULT_MAX_RUNS = Math.max(32, Number(process.env.AI_AGENT_RUN_MAX || 256) || 256);
-const DEFAULT_TOTAL_TIMEOUT_MS = Math.max(5_000, Number(process.env.AI_AGENT_RUN_TOTAL_TIMEOUT_MS || 45_000) || 45_000);
+const DEFAULT_TOTAL_TIMEOUT_MS = Math.min(15_000, Math.max(5_000, Number(process.env.AI_AGENT_RUN_TOTAL_TIMEOUT_MS || 15_000) || 15_000));
 const TERMINAL_EVENT_TYPES = new Set(["run.completed", "run.degraded", "run.failed", "run.cancelled"]);
 const TERMINAL_STATUS_BY_EVENT = Object.freeze({
   "run.completed": "completed",
@@ -65,11 +65,12 @@ function createRun(input = {}) {
     createdAtMs,
     expiresAtMs: createdAtMs + DEFAULT_TTL_MS,
     totalTimeoutMs: DEFAULT_TOTAL_TIMEOUT_MS,
+    deadlineAtMs: createdAtMs + DEFAULT_TOTAL_TIMEOUT_MS,
     requestId: String(input.requestId || "").slice(0, 96),
     conversationId: String(input.conversationId || "").slice(0, 96),
   };
   runs.set(runId, run);
-  appendEvent(runId, {
+  const accepted = appendEvent(runId, {
     type: "run.accepted",
     label: loadingTextForEvent({ type: "run.accepted" }, run.runtimeMode),
     runtimeMode: run.runtimeMode,
@@ -80,6 +81,10 @@ function createRun(input = {}) {
     status: run.status,
     nextPollMs: 400,
     expiresAt: new Date(run.expiresAtMs).toISOString(),
+    createdAt: new Date(createdAtMs).toISOString(),
+    deadlineAt: new Date(run.deadlineAtMs).toISOString(),
+    eventCursor: run.sequence,
+    firstEventLatencyMs: accepted ? Math.max(0, Date.parse(accepted.at) - createdAtMs) : 0,
   };
 }
 
@@ -193,6 +198,8 @@ function getRunView(runId, options = {}) {
     result: ["completed", "degraded", "failed"].includes(run.status) ? run.result : null,
     nextPollMs: ["completed", "degraded", "failed", "cancelled"].includes(run.status) ? 0 : 400,
     checkedAt: nowIso(),
+    eventCursor: run.sequence,
+    deadlineAt: new Date(run.deadlineAtMs).toISOString(),
   };
 }
 

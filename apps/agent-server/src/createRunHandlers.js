@@ -207,6 +207,7 @@ function createRunHandlers(options = {}) {
   }
 
   function createRun(req, res) {
+    const createRunStartedAt = Date.now();
     noStore(res);
     const body = req.body || {};
     const message = String(body.message || "").trim();
@@ -232,6 +233,10 @@ function createRunHandlers(options = {}) {
         requestId,
         conversationId,
         runId: created.runId,
+        runStartedAt: Date.parse(created.createdAt),
+        deadlineAt: created.deadlineAt,
+        totalTimeoutMs: Math.max(1, Date.parse(created.deadlineAt) - Date.parse(created.createdAt)),
+        createRunDurationMs: Math.max(0, Date.now() - createRunStartedAt),
         signal: controller.signal,
         onEvent: ordered.onEvent,
       });
@@ -271,6 +276,9 @@ function createRunHandlers(options = {}) {
       status: created.status,
       nextPollMs: created.nextPollMs,
       expiresAt: created.expiresAt,
+      deadlineAt: created.deadlineAt,
+      eventCursor: created.eventCursor,
+      firstEventLatencyMs: created.firstEventLatencyMs,
       diagnostics: {
         idempotencyKeyAccepted,
         runRepository: runRepositoryId,

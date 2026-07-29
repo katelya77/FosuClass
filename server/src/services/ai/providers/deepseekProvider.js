@@ -265,7 +265,7 @@ function classifyHttpError(error) {
   return code || "PROVIDER_REQUEST_FAILED";
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const apiKey = firstConfiguredKey(runtimeConfig);
   if (!apiKey) {
@@ -278,7 +278,8 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const reasoningModel = configuredEnv("AI_REASONING_MODEL", DEFAULT_REASONING_MODEL, runtimeConfig);
   const thinkingEnabled = boolEnv("AI_THINKING_ENABLED", false, runtimeConfig);
   const model = thinkingEnabled && /pro/i.test(requestedModel) ? requestedModel : requestedModel || reasoningModel;
-  const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
+  const configuredTimeout = numberEnv("AI_TIMEOUT_MS", 15000, 50, 60000, runtimeConfig);
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = numberEnv("AI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
   const conversational = isProjectQaIntent(intent);
   const defaultTemperature = conversational ? 0.7 : 0.1;
@@ -322,6 +323,9 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   try {
     response = await axios.post(`${baseUrl}/chat/completions`, body, {
       timeout,
+      signal: signal || undefined,
+      httpAgent: httpAgent || undefined,
+      httpsAgent: httpsAgent || undefined,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",

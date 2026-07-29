@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@xiaofu-agent/agent-protocol": "0.1.0",
+    "@xiaofu-agent/provider-runtime": "0.1.0",
     "@xiaofu-agent/ui-schema": "0.1.0"
   }
 }

@@ -78,11 +78,16 @@ function createProviderRuntime(options = {}) {
     try { onEvent(Object.freeze(event)); } catch (error) { /* observability cannot change execution */ }
   }
 
-  async function invokeAttempt(input, provider, fallback) {
+  async function invokeAttempt(input, provider, fallback, beforeAttempt = null) {
     const adapter = adapters.get(provider);
     if (!adapter) throw codedError("PROVIDER_NOT_REGISTERED", `Provider is not registered: ${provider}`);
     if (isCircuitOpen(provider)) throw codedError("PROVIDER_CIRCUIT_OPEN", `Provider circuit is open: ${provider}`);
+    const method = input.method === "generate" ? "generate" : "generateStructured";
+    if (typeof adapter[method] !== "function") throw codedError("PROVIDER_METHOD_UNSUPPORTED", `${provider}.${method} is unavailable`);
     const lease = input.deadline.lease(input.stage, input.stageCapMs, input.finishReserveMs);
+    if (typeof beforeAttempt === "function" && beforeAttempt() === false) {
+      throw codedError("PROVIDER_FALLBACK_BUDGET_EXHAUSTED", "The Run fallback budget is exhausted");
+    }
     const stageSignal = createStageSignal(input.signal || null, lease.timeoutMs);
     const startedAt = clock.now();
     emit(input.onEvent, { type: "provider.selected", provider, stage: input.stage, status: "selected", fallback });
@@ -95,7 +100,7 @@ function createProviderRuntime(options = {}) {
         }, { once: true });
       });
       const payload = await Promise.race([
-        Promise.resolve().then(() => adapter.generateStructured(Object.assign({}, input.request || {}, {
+        Promise.resolve().then(() => adapter[method](Object.assign({}, input.request || {}, {
           provider,
           stage: input.stage,
           timeoutMs: lease.timeoutMs,
@@ -105,13 +110,16 @@ function createProviderRuntime(options = {}) {
         abortPromise,
       ]);
       if (stageSignal.signal.aborted) throw codedError(stageSignal.timedOut() ? "PROVIDER_TIMEOUT" : "ABORTED", "Provider call was cancelled");
-      let parsed;
-      try {
-        parsed = parsePayload(payload);
-      } catch (error) {
-        throw codedError("PROVIDER_STRUCTURED_OUTPUT_INVALID", "Provider returned invalid structured JSON");
+      let contract = null;
+      if (method === "generateStructured") {
+        let parsed;
+        try {
+          parsed = parsePayload(payload);
+        } catch (error) {
+          throw codedError("PROVIDER_STRUCTURED_OUTPUT_INVALID", "Provider returned invalid structured JSON");
+        }
+        contract = typeof input.validate === "function" ? input.validate(parsed) : parsed;
       }
-      const contract = typeof input.validate === "function" ? input.validate(parsed) : parsed;
       const durationMs = Math.max(0, clock.now() - startedAt);
       markSuccess(provider);
       metrics.record(input.stage, { durationMs, outcome: "success", fallback });
@@ -130,7 +138,7 @@ function createProviderRuntime(options = {}) {
     }
   }
 
-  async function generateStructured(input = {}) {
+  async function runProviderChain(input = {}, method = "generateStructured") {
     const mode = String(input.runtimeMode || "public").toLowerCase();
     if (mode === "public" || String(input.executionPolicy || "") === "deterministic") {
       throw codedError("PUBLIC_PROVIDER_FORBIDDEN", "External Provider calls are forbidden by deterministic policy");
@@ -145,6 +153,7 @@ function createProviderRuntime(options = {}) {
       ? input.deadline
       : createDeadline({ timeoutMs: input.timeoutMs || 15000 });
     const attemptInput = Object.assign({}, input, {
+      method,
       stage: String(input.stage || "structured").slice(0, 48),
       stageCapMs: Math.max(1, Number(input.stageCapMs || 3500) || 3500),
       finishReserveMs: Math.max(0, Number(input.finishReserveMs || 500) || 0),
@@ -156,8 +165,12 @@ function createProviderRuntime(options = {}) {
     let lastError = null;
     for (let index = 0; index < providers.length; index += 1) {
       const provider = providers[index];
+      const claimFallback = index > 0 && input.providerAttemptLedger
+        && typeof input.providerAttemptLedger.claimFallback === "function"
+        ? () => input.providerAttemptLedger.claimFallback()
+        : null;
       try {
-        const result = await invokeAttempt(attemptInput, provider, index > 0);
+        const result = await invokeAttempt(attemptInput, provider, index > 0, claimFallback);
         attemptCount += 1;
         if (!actualFirstProvider) actualFirstProvider = provider;
         fallbackPath.push(`${provider}:success`);
@@ -184,6 +197,14 @@ function createProviderRuntime(options = {}) {
       fallbackPath: Object.freeze(fallbackPath.slice()),
       attemptCount,
     });
+  }
+
+  async function generateStructured(input = {}) {
+    return runProviderChain(input, "generateStructured");
+  }
+
+  async function generate(input = {}) {
+    return runProviderChain(input, "generate");
   }
 
   async function probe(providerId, input = {}) {
@@ -214,7 +235,7 @@ function createProviderRuntime(options = {}) {
     });
   }
 
-  return Object.freeze({ diagnostics, generateStructured, probe });
+  return Object.freeze({ diagnostics, generate, generateStructured, probe });
 }
 
 module.exports = {

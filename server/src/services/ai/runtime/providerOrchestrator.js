@@ -1,6 +1,6 @@
 const providerFactory = require("../providerFactory");
 const mockProvider = require("../providers/mockProvider");
-const providerChainService = require("../providerChainService");
+const providerRuntimeComposition = require("../providerRuntimeComposition");
 const providerConfigService = require("../providerConfigService");
 const capabilityManifestService = require("../capabilityManifestService");
 const projectKnowledgeService = require("../projectKnowledgeService");
@@ -125,7 +125,32 @@ function summarizeProviderChainFallback(chain = []) {
 function providerChainAttempts(chain = []) {
   return (Array.isArray(chain) ? chain : []).filter((item) => item
     && String(item.provider || "").toLowerCase() !== "mock"
+    && item.attempted !== false
     && ["success", "failed"].includes(String(item.status || "").toLowerCase()));
+}
+
+function providerChainFromRuntimePath(path = []) {
+  const skippedCodes = new Set([
+    "PROVIDER_CIRCUIT_OPEN",
+    "PROVIDER_NOT_REGISTERED",
+    "PROVIDER_METHOD_UNSUPPORTED",
+    "PROVIDER_FALLBACK_BUDGET_EXHAUSTED",
+    "DEADLINE_EXCEEDED",
+  ]);
+  return (Array.isArray(path) ? path : []).map((entry) => {
+    const text = String(entry || "");
+    const separator = text.indexOf(":");
+    const provider = separator >= 0 ? text.slice(0, separator) : text;
+    const reason = separator >= 0 ? text.slice(separator + 1) : "provider_failed";
+    const success = reason === "success";
+    const skipped = !success && skippedCodes.has(reason);
+    return {
+      provider,
+      status: success ? "success" : (skipped ? "skipped" : "failed"),
+      reason,
+      attempted: !skipped,
+    };
+  });
 }
 
 function safeProviderStage(input = {}) {
@@ -266,6 +291,7 @@ async function generateAssistantResponse(input = {}) {
     toolResults: toolResultsForProvider,
     history: sanitizeResponseHistory(context.recentMessages),
     userMemories: (Array.isArray(context.userMemories) ? context.userMemories : []).slice(0, 5),
+    principal,
     contextMeta: {
       contextTokenEstimate: responseContext.contextTokenEstimate,
       contextSections: responseContext.sections,
@@ -285,18 +311,31 @@ async function generateAssistantResponse(input = {}) {
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
     const responseStartedAt = Date.now();
-    const generated = policyDecision.useExternal
-      ? await providerChainService.generateWithChain(providerInput, {
-        runtimeMode: runtimeMode,
-        providerRuntimeConfig,
-        principal: principal,
+    let generated = deterministicGenerated;
+    if (policyDecision.useExternal) {
+      const selection = providerRuntimeComposition.resolveResponseProviders(runtimeMode, providerRuntimeConfig);
+      const runtimeResult = await providerRuntimeComposition.getProviderRuntime().generate({
+        runtimeMode,
+        executionPolicy: input.executionPolicy || "strict_model_first",
+        intendedProvider: selection.intendedProvider,
+        fallbackProvider: selection.fallbackProvider,
+        request: providerInput,
+        deadline: input.deadline,
+        signal: input.signal || null,
         stage: "response",
+        stageCapMs: Math.max(1, Number(input.responseBudgetMs || 1500) || 1500),
+        finishReserveMs: 0,
+        providerAttemptLedger: input.providerAttemptLedger,
         onEvent: (event) => emitChatEvent(eventInput, Object.assign({
           runtimeMode: runtimeMode,
           intentName: intent.name,
         }, event)),
-      })
-      : deterministicGenerated;
+      });
+      generated = Object.assign({}, runtimeResult.payload || {}, {
+        provider: runtimeResult.provider,
+        providerChain: providerChainFromRuntimePath(runtimeResult.fallbackPath),
+      });
+    }
     responseLatencyMs = Date.now() - responseStartedAt;
     if (!policyDecision.useExternal) {
       emitChatEvent(eventInput, {
@@ -322,6 +361,7 @@ async function generateAssistantResponse(input = {}) {
       }
     }
   } catch (error) {
+    if ((input.signal && input.signal.aborted) || String(error && error.code || "") === "ABORTED") throw error;
     providerName = "mock";
     externalProviderUsed = false;
     fallbackReason = classifyProviderFailure(error);
@@ -390,6 +430,7 @@ module.exports = {
   classifyProviderFailure,
   summarizeProviderChainFallback,
   providerChainAttempts,
+  providerChainFromRuntimePath,
   safeProviderStage,
   deriveProviderRunTruth,
   resolveRuntimeProviderConfig,

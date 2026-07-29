@@ -73,6 +73,7 @@ function createAgentPlatform(options = {}) {
     }
     return Object.assign({}, response, {
       runId,
+      deadlineAt: new Date(execution.deadlineAt).toISOString(),
       platformTrace: execution.platformTrace,
       ui: execution.ui,
     });
@@ -93,6 +94,7 @@ function createAgentPlatform(options = {}) {
       })]),
       configVersion: String(plugin.manifestVersion ? `manifest:${plugin.manifestVersion}` : plugin.version || "unversioned"),
       legacyWholeChatCallback: false,
+      runtime: typeof runtime.diagnostics === "function" ? runtime.diagnostics() : {},
       stageOwners: Object.freeze({
         context: pluginOwner,
         decision: pluginOwner,

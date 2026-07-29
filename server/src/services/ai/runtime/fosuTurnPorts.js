@@ -346,6 +346,9 @@ function createFosuTurnPorts(options = {}) {
       principal: state.memoryBundle.principal,
       conversationId: state.conversationId,
       signal: stageInput.signal || null,
+      deadline: stageInput.deadline,
+      decisionBudgetMs: stageInput.budget && stageInput.budget.timeoutMs,
+      providerAttemptLedger: stageInput.providerAttemptLedger,
       deterministicResolve: (message, safeContext) => understandingCoordinator.resolveRuleBackedIntent(message, safeContext).intent,
       onEvent: (event) => emitChatEvent(state.eventInput, Object.assign({
         runtimeMode: state.runtimeDecision.runtimeMode,
@@ -417,6 +420,9 @@ function createFosuTurnPorts(options = {}) {
       unifiedDecision: Boolean(decisionResult.decisionContract),
       decisionContract: decisionResult.decisionContract || null,
       signal: stageInput.signal,
+      deadline: stageInput.deadline,
+      budget: stageInput.budget,
+      providerAttemptLedger: stageInput.providerAttemptLedger,
       principal: state.memoryBundle.principal,
     });
     const publicToolCalls = toolExecutor.toPublicToolCalls(planned.toolCalls);
@@ -616,6 +622,11 @@ function createFosuTurnPorts(options = {}) {
       understanding,
       plannerDiag,
       execution,
+      executionPolicy: decisionResult.executionPolicy,
+      signal: stageInput.signal || null,
+      deadline: stageInput.deadline,
+      responseBudgetMs: stageInput.budget && stageInput.budget.timeoutMs,
+      providerAttemptLedger: stageInput.providerAttemptLedger,
     });
     const stable = mergeGeneratedPayloads({
       intent,

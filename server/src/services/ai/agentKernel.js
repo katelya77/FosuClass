@@ -17,15 +17,23 @@ function codedError(code, message, extra = {}) {
   return error;
 }
 
-function withTimeout(promise, timeoutMs) {
+function withTimeout(promise, timeoutMs, signal = null) {
   let timer = null;
+  let abortHandler = null;
   return Promise.race([
     Promise.resolve(promise),
     new Promise((resolve) => {
       timer = setTimeout(() => resolve({ success: false, code: "TOOL_TIMEOUT", message: "Tool execution timed out" }), timeoutMs);
     }),
+    new Promise((resolve, reject) => {
+      if (!signal) return;
+      abortHandler = () => reject(codedError("ABORTED", "Tool execution was cancelled"));
+      if (signal.aborted) abortHandler();
+      else signal.addEventListener("abort", abortHandler, { once: true });
+    }),
   ]).finally(() => {
     if (timer) clearTimeout(timer);
+    if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
   });
 }
 
@@ -171,6 +179,17 @@ class AgentKernel {
     const steps = [];
     // Skill-declared recovery rules (see skillRegistry); the kernel only executes them generically.
     const recoveryRules = (input.skill && Array.isArray(input.skill.recoveryRules)) ? input.skill.recoveryRules : [];
+    const toolTimeoutMs = () => {
+      const remaining = input.deadline && typeof input.deadline.remainingMs === "function"
+        ? input.deadline.remainingMs()
+        : this.toolTimeoutMs;
+      const stageBudget = input.budget && Number(input.budget.timeoutMs);
+      return Math.max(1, Math.min(
+        this.toolTimeoutMs,
+        Number.isFinite(stageBudget) ? stageBudget : this.toolTimeoutMs,
+        Math.max(1, remaining),
+      ));
+    };
     const pushCall = (toolName, result, label, durationMs = 0) => {
       const missingContextIsFailure = result && result.needContext === true
         && agentProtocol.normalizeProtocolVersion(input.protocolVersion) === agentProtocol.PROTOCOL_V2;
@@ -209,7 +228,11 @@ class AgentKernel {
         label: safetyGuard.redactSensitiveText(String(item.reason || item.label || `Execute ${toolName}`)).slice(0, 120),
       });
       const started = Date.now();
-      const result = await withTimeout(this.invokeTool(toolName, item.args || item.input || {}, context, input), this.toolTimeoutMs);
+      const result = await withTimeout(
+        this.invokeTool(toolName, item.args || item.input || {}, context, input),
+        toolTimeoutMs(),
+        input.signal || null,
+      );
       const durationMs = Date.now() - started;
       pushCall(toolName, result, item.reason || item.label || `Execute ${toolName}`, durationMs);
 
@@ -225,7 +248,8 @@ class AgentKernel {
           if (this.toolRuntime && !(input.allowedToolIds || []).includes(recoveryTool)) continue;
           const recovery = await withTimeout(
             this.invokeTool(recoveryTool, item.args || item.input || {}, context, input),
-            this.toolTimeoutMs
+            toolTimeoutMs(),
+            input.signal || null,
           );
           pushCall(rule.callOnEmptyOrFailure.tool, recovery, rule.callOnEmptyOrFailure.label, 0);
         }
