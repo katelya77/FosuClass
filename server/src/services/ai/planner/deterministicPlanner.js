@@ -171,6 +171,8 @@ function expandMultiStepPlan(message, intent, context) {
 function plan(input = {}) {
   const message = String(input.message || "");
   const runtimeMode = capabilityManifestService.normalizeRuntimeMode(input.runtimeMode || "public");
+  const hasExplicitToolScope = Array.isArray(input.availableTools);
+  const explicitToolScope = new Set(hasExplicitToolScope ? input.availableTools.map(String) : []);
   const intent = input.intent || { name: "conversational_help", slots: {}, confidence: 0 };
   const context = input.context || {};
   const skill = input.skill || skillRegistry.getSkillForIntent(intent.name);
@@ -229,11 +231,9 @@ function plan(input = {}) {
   // Enrich skill plan with multi-step tools within Capability Router candidate set
   // (falls back to primary skill allowlist when availableTools not provided).
   if (rawSteps.length && multi.length) {
-    const routeAllowed = new Set(
-      (Array.isArray(input.availableTools) && input.availableTools.length
-        ? input.availableTools
-        : (skill && skill.allowedTools) || [])
-    );
+    const routeAllowed = new Set(hasExplicitToolScope
+      ? input.availableTools
+      : (skill && skill.allowedTools) || []);
     const existing = new Set(rawSteps.map((s) => s.toolName));
     multi.forEach((step) => {
       if (!existing.has(step.toolName) && (!routeAllowed.size || routeAllowed.has(step.toolName))) {
@@ -253,11 +253,9 @@ function plan(input = {}) {
 
   // Pure multi-goal when skill plan is empty/single but message needs composition.
   if (multi.length > 1 && rawSteps.length <= 1) {
-    const routeAllowed = new Set(
-      (Array.isArray(input.availableTools) && input.availableTools.length
-        ? input.availableTools
-        : multi.map((s) => s.toolName))
-    );
+    const routeAllowed = new Set(hasExplicitToolScope
+      ? input.availableTools
+      : multi.map((s) => s.toolName));
     rawSteps = multi
       .filter((step) => routeAllowed.has(step.toolName))
       .map((step, index) => ({
@@ -279,7 +277,8 @@ function plan(input = {}) {
       confidence: Number(intent.confidence) || 0.5,
       slots: intent.slots || {},
       needsClarification: false,
-      steps: intent.name === "project_qa" || /知识|怎么办|如何|说明/.test(message)
+      steps: (intent.name === "project_qa" || /知识|怎么办|如何|说明/.test(message))
+        && (!hasExplicitToolScope || explicitToolScope.has("rag_search"))
         ? [{
           id: "step-1",
           skillId: "knowledge_search",
@@ -294,19 +293,21 @@ function plan(input = {}) {
     }), {
       runtimeMode,
       skill: skillRegistry.getSkill("knowledge_search") || skill,
-      allowedTools: ["rag_search", "clarify_missing_slot"].concat(skill && skill.allowedTools || []),
+      allowedTools: hasExplicitToolScope
+        ? Array.from(explicitToolScope)
+        : ["rag_search", "clarify_missing_slot"].concat(skill && skill.allowedTools || []),
     });
   }
 
-  // Always include primary skill tools; Capability Router candidates expand, never shrink.
-  const allowed = new Set((skill && skill.allowedTools) || []);
-  if (Array.isArray(input.availableTools)) {
-    input.availableTools.forEach((tool) => allowed.add(tool));
+  // An explicit Capability Router scope is authoritative. Legacy callers without
+  // one retain the historical skill/multi-step expansion behavior.
+  const allowed = new Set(hasExplicitToolScope ? input.availableTools : (skill && skill.allowedTools) || []);
+  if (!hasExplicitToolScope) {
+    multi.forEach((s) => allowed.add(s.toolName));
+    if (rawSteps.some((s) => s.toolName === "rag_search")) allowed.add("rag_search");
   }
-  multi.forEach((s) => allowed.add(s.toolName));
-  if (rawSteps.some((s) => s.toolName === "rag_search")) allowed.add("rag_search");
   // Multi-step study plans may use tools beyond single skill whitelist
-  if (multi.length > 1 || rawSteps.length > 1) {
+  if (!hasExplicitToolScope && (multi.length > 1 || rawSteps.length > 1)) {
     ["get_today_courses", "get_tomorrow_courses", "search_empty_rooms", "search_continuous_empty_rooms",
       "get_campus_weather", "search_campus_place", "clarify_missing_slot"].forEach((t) => allowed.add(t));
   }
@@ -339,6 +340,8 @@ function replan(input = {}) {
   const { MAX_REPLAN } = require("./planSchema");
   const previous = input.previousPlan || emptyPlan();
   const observations = Array.isArray(input.previousObservations) ? input.previousObservations : [];
+  const hasExplicitToolScope = Array.isArray(input.availableTools);
+  const explicitToolScope = new Set(hasExplicitToolScope ? input.availableTools.map(String) : []);
   const replanCount = Math.max(0, Number(previous.replanCount) || 0) + 1;
   if (replanCount > MAX_REPLAN) {
     return validatePlan(normalizePlan({
@@ -363,6 +366,7 @@ function replan(input = {}) {
   });
 
   if (noSchedule) {
+    const canExplainImport = !hasExplicitToolScope || explicitToolScope.has("explain_personal_import");
     return validatePlan(normalizePlan({
       goal: "personal_schedule_import_help",
       intent: "explain_personal_import",
@@ -373,48 +377,56 @@ function replan(input = {}) {
         prompt: "当前没有可用的个人课表。你可以先导入个人课表，或直接告诉我空闲时段（例如「周三下午 3-4 节」）。",
         suggestions: ["怎么导入个人课表", "周三下午空教室", "连续两节空教室"],
       },
-      steps: [{
+      steps: canExplainImport ? [{
         id: "step-1",
         skillId: "personal_schedule_import_help",
         toolName: "explain_personal_import",
         args: {},
         reasonCode: "NEED_PERSONAL_IMPORT_HELP",
         stopOnFailure: false,
-      }],
+      }] : [],
       stopCondition: "clarification_needed",
       replanCount,
       plannerType: "deterministic",
     }), {
       runtimeMode: input.runtimeMode,
-      allowedTools: ["explain_personal_import", "clarify_missing_slot"],
+      allowedTools: hasExplicitToolScope
+        ? Array.from(explicitToolScope)
+        : ["explain_personal_import", "clarify_missing_slot"],
     });
   }
 
   if (emptyRoomFailed) {
     const prevArgs = (previous.steps || []).find((s) => /empty_room/.test(s.toolName));
     const duration = Math.max(2, Number(prevArgs && prevArgs.args && prevArgs.args.duration || 4) - 2);
+    const preferredTool = duration >= 3 ? "search_continuous_empty_rooms" : "search_empty_rooms";
+    const recoveryTool = !hasExplicitToolScope || explicitToolScope.has(preferredTool)
+      ? preferredTool
+      : ["search_empty_rooms", "search_continuous_empty_rooms"].find((tool) => explicitToolScope.has(tool));
     return validatePlan(normalizePlan({
       goal: "expand_empty_room_search",
       intent: previous.intent || "search_empty_rooms",
       confidence: 0.7,
       slots: previous.slots || {},
-      steps: [{
+      steps: recoveryTool ? [{
         id: "step-1",
         skillId: "find_empty_room",
-        toolName: duration >= 3 ? "search_continuous_empty_rooms" : "search_empty_rooms",
+        toolName: recoveryTool,
         args: Object.assign({}, prevArgs && prevArgs.args || {}, {
           duration,
           building: "", // broaden building filter
         }),
         reasonCode: "EXPAND_EMPTY_ROOM_SEARCH",
         stopOnFailure: false,
-      }],
+      }] : [],
       stopCondition: "empty_result_recovery",
       replanCount,
       plannerType: "deterministic",
     }), {
       runtimeMode: input.runtimeMode,
-      allowedTools: ["search_empty_rooms", "search_continuous_empty_rooms", "diagnose_data_status"],
+      allowedTools: hasExplicitToolScope
+        ? Array.from(explicitToolScope)
+        : ["search_empty_rooms", "search_continuous_empty_rooms", "diagnose_data_status"],
     });
   }
 

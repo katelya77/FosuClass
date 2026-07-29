@@ -11,8 +11,16 @@ const agentServiceSource = require("fs").readFileSync(
   require("path").join(__dirname, "../server/src/services/ai/agentService.js"),
   "utf8"
 );
-// Phase-3 runtime split: planner model wiring lives in the runtime
-// PlannerCoordinator; agentService composes it. Assert both layers.
+const platformCompositionSource = require("fs").readFileSync(
+  require("path").join(__dirname, "../server/src/services/ai/platformComposition.js"),
+  "utf8"
+);
+const fosuTurnPortsSource = require("fs").readFileSync(
+  require("path").join(__dirname, "../server/src/services/ai/runtime/fosuTurnPorts.js"),
+  "utf8"
+);
+// Production wiring: compatibility facade -> shared platform composition ->
+// injected Fosu stage ports -> PlannerCoordinator.
 const plannerCoordinatorSource = require("fs").readFileSync(
   require("path").join(__dirname, "../server/src/services/ai/runtime/plannerCoordinator.js"),
   "utf8"
@@ -21,8 +29,16 @@ const plannerCoordinatorSource = require("fs").readFileSync(
 async function run() {
   // Source wiring: the runtime pipeline must inject modelGenerate via plannerModelAdapter
   assert.ok(
-    /plannerCoordinator/.test(agentServiceSource),
-    "agentService must compose the runtime PlannerCoordinator"
+    /platformComposition\.getPlatform\(\)\.executeTurn/.test(agentServiceSource),
+    "agentService must enter the shared Agent Platform"
+  );
+  assert.ok(
+    /createFosuTurnPorts/.test(platformCompositionSource),
+    "platform composition must inject the Fosu stage ports"
+  );
+  assert.ok(
+    /plannerCoordinator\.executePlanner/.test(fosuTurnPortsSource),
+    "the production skill/tool stage must call PlannerCoordinator"
   );
   assert.ok(
     /plannerModelAdapter\.createModelGenerate/.test(plannerCoordinatorSource),

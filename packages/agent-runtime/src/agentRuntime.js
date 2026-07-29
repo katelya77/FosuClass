@@ -13,10 +13,27 @@ function deepFreeze(value, seen = new WeakSet()) {
   return Object.freeze(value);
 }
 
+function cloneForHandoff(value, seen = new WeakMap()) {
+  if (value == null || typeof value !== "object") return value;
+  if (seen.has(value)) return seen.get(value);
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Array.isArray(value)) {
+    const output = [];
+    seen.set(value, output);
+    value.forEach((item) => output.push(cloneForHandoff(item, seen)));
+    return output;
+  }
+  const output = {};
+  seen.set(value, output);
+  Object.entries(value).forEach(([key, item]) => {
+    output[key] = cloneForHandoff(item, seen);
+  });
+  return output;
+}
+
 function immutableCopy(value) {
   if (!value || typeof value !== "object") return deepFreeze({});
-  if (Array.isArray(value)) return deepFreeze(value.slice());
-  return deepFreeze(Object.assign({}, value));
+  return deepFreeze(cloneForHandoff(value));
 }
 
 function normalizeErrorCode(error, fallback = "AGENT_RUNTIME_FAILED") {
