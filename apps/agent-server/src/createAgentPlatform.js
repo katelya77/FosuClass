@@ -38,6 +38,7 @@ function createAgentPlatform(options = {}) {
   const resolveConfigSnapshot = typeof options.resolveConfigSnapshot === "function"
     ? options.resolveConfigSnapshot
     : () => ({ configVersion: plugin.manifestVersion || plugin.version });
+  const pluginOwner = String(options.pluginOwner || `plugins/${plugin.id}`).slice(0, 160);
 
   async function executeTurn(input = {}) {
     const runId = String(input.runId || createRunId()).slice(0, 128);
@@ -93,11 +94,11 @@ function createAgentPlatform(options = {}) {
       configVersion: String(plugin.manifestVersion ? `manifest:${plugin.manifestVersion}` : plugin.version || "unversioned"),
       legacyWholeChatCallback: false,
       stageOwners: Object.freeze({
-        context: "plugins/fosu-campus",
-        decision: "plugins/fosu-campus",
-        skillTool: "plugins/fosu-campus",
-        verification: "plugins/fosu-campus",
-        response: "plugins/fosu-campus",
+        context: pluginOwner,
+        decision: pluginOwner,
+        skillTool: pluginOwner,
+        verification: pluginOwner,
+        response: pluginOwner,
       }),
     });
   }

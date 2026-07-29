@@ -466,7 +466,7 @@
     "test:ai-assistant-demo-data": "node tools/test-ai-assistant-demo-data.js",
     "test:ai-today-card-no-inactive-render": "node tools/test-ai-today-card-no-inactive-render.js",
     "test:server-no-root-shared-require": "node tools/test-server-no-root-shared-require.js",
-    "test:agent-platform-p1": "node tools/test-agent-platform-contracts.js && node tools/test-agent-platform-capability-runtimes.js && node tools/test-fosu-campus-plugin.js && node tools/test-agent-runtime-lifecycle.js && node tools/test-agent-platform-production-wiring.js && node tools/test-agent-platform-http.js && node tools/test-agent-platform-admin.js && node tools/test-server-ai-module-require.js",
+    "test:agent-platform-p1": "node tools/test-agent-platform-contracts.js && node tools/test-agent-platform-capability-runtimes.js && node tools/test-fosu-campus-plugin.js && node tools/test-agent-runtime-lifecycle.js && node tools/test-agent-platform-production-wiring.js && node tools/test-agent-platform-http.js && node tools/test-agent-platform-admin.js && node tools/test-agent-generic-package-boundaries.js && node tools/test-server-ai-module-require.js",
     "test:server-ai-module-require": "node tools/test-server-ai-module-require.js",
     "test:server-docker-smoke": "node tools/test-server-docker-smoke.js",
     "test:deploy-workflow-preserves-ai-env": "node tools/test-deploy-workflow-preserves-ai-env.js",
