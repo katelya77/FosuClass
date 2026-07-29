@@ -13,6 +13,29 @@ const PROVIDER_IDS = Object.freeze([
   "custom-anthropic",
 ]);
 
+function providerBaseUrl(id, provider, runtimeConfig = {}) {
+  if (id === "deepseek") return runtimeConfig.AI_BASE_URL || "https://api.deepseek.com";
+  if (id === "cloudbase-openai") {
+    return runtimeConfig.CLOUDBASE_OPENAI_BASE_URL || "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase";
+  }
+  if ((id === "custom-openai" || id === "custom-anthropic") && typeof provider.resolveEntry === "function") {
+    const entry = provider.resolveEntry(runtimeConfig);
+    return entry && entry.baseUrl || "";
+  }
+  if (id === "coze" && typeof provider.getConfig === "function") {
+    const config = provider.getConfig(runtimeConfig);
+    return config && (config.workloadEndpoint || config.baseUrl) || "";
+  }
+  return "";
+}
+
+function transportOptions(id, provider, input = {}) {
+  const url = providerBaseUrl(id, provider, input.providerRuntimeConfig || {});
+  if (!url) return {};
+  const agent = keepAliveRegistry.getAgent(url);
+  return String(url).startsWith("https:") ? { httpsAgent: agent } : { httpAgent: agent };
+}
+
 function createProviderAdapters(options = {}) {
   const modules = options.providerModules || Object.fromEntries(PROVIDER_IDS.map((id) => [id, providerChainService.getProviderModule(id)]));
   return PROVIDER_IDS.map((id) => {
@@ -20,8 +43,19 @@ function createProviderAdapters(options = {}) {
     if (!provider || typeof provider.generateStructured !== "function") return null;
     return Object.freeze({
       id,
+      async generate(input = {}) {
+        if (typeof provider.generate !== "function") {
+          const error = new Error(`${id}.generate is unavailable`);
+          error.code = "PROVIDER_METHOD_UNSUPPORTED";
+          throw error;
+        }
+        return provider.generate(Object.assign({}, input, transportOptions(id, provider, input), {
+          purpose: "response",
+          stage: "response",
+        }));
+      },
       async generateStructured(input = {}) {
-        return provider.generateStructured(Object.assign({}, input, {
+        return provider.generateStructured(Object.assign({}, input, transportOptions(id, provider, input), {
           purpose: "decision",
           stage: "decision",
         }));
@@ -46,18 +80,11 @@ function createProviderAdapters(options = {}) {
   }).filter(Boolean);
 }
 
-function resolveDecisionProviders(runtimeMode, runtimeConfig = {}) {
+function resolveStageProviders(stage, runtimeMode, runtimeConfig = {}) {
   if (String(runtimeMode || "public") === "public") {
     return Object.freeze({ intendedProvider: "", fallbackProvider: "", chain: Object.freeze([]) });
   }
-  const effectiveConfig = Object.assign({}, runtimeConfig);
-  if (!effectiveConfig.AI_DECISION_PROVIDER && effectiveConfig.AI_UNDERSTANDING_PROVIDER) {
-    effectiveConfig.AI_DECISION_PROVIDER = effectiveConfig.AI_UNDERSTANDING_PROVIDER;
-  }
-  if (effectiveConfig.AI_DECISION_PROVIDER && !effectiveConfig.AI_UNDERSTANDING_PROVIDER) {
-    effectiveConfig.AI_UNDERSTANDING_PROVIDER = effectiveConfig.AI_DECISION_PROVIDER;
-  }
-  const chain = providerChainService.resolveStageChain("decision", effectiveConfig, runtimeMode)
+  const chain = providerChainService.resolveStageChain(stage, runtimeConfig, runtimeMode)
     .map((name) => providerChainService.normalizeProviderName(name))
     .filter((name) => name && name !== "mock" && PROVIDER_IDS.includes(name));
   const unique = Array.from(new Set(chain)).slice(0, 2);
@@ -66,6 +93,21 @@ function resolveDecisionProviders(runtimeMode, runtimeConfig = {}) {
     fallbackProvider: unique[1] || "",
     chain: Object.freeze(unique),
   });
+}
+
+function resolveDecisionProviders(runtimeMode, runtimeConfig = {}) {
+  const effectiveConfig = Object.assign({}, runtimeConfig);
+  if (!effectiveConfig.AI_DECISION_PROVIDER && effectiveConfig.AI_UNDERSTANDING_PROVIDER) {
+    effectiveConfig.AI_DECISION_PROVIDER = effectiveConfig.AI_UNDERSTANDING_PROVIDER;
+  }
+  if (effectiveConfig.AI_DECISION_PROVIDER && !effectiveConfig.AI_UNDERSTANDING_PROVIDER) {
+    effectiveConfig.AI_UNDERSTANDING_PROVIDER = effectiveConfig.AI_DECISION_PROVIDER;
+  }
+  return resolveStageProviders("decision", runtimeMode, effectiveConfig);
+}
+
+function resolveResponseProviders(runtimeMode, runtimeConfig = {}) {
+  return resolveStageProviders("response", runtimeMode, runtimeConfig);
 }
 
 const metrics = createMetricsStore({ sampleLimit: 2000 });
@@ -92,4 +134,6 @@ module.exports = {
   getProviderRuntimeDiagnostics,
   keepAliveRegistry,
   resolveDecisionProviders,
+  resolveResponseProviders,
+  resolveStageProviders,
 };

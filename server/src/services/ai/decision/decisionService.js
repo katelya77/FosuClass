@@ -135,6 +135,7 @@ function createDecisionService(options = {}) {
       deterministicResolve: input.deterministicResolve || deterministicResolve,
     }, source, reasonCode);
     const decisionContract = decisionFromUnderstanding(understanding, skillCatalog, source);
+    const selectedSkill = selectedSkillFor(skillCatalog, decisionContract);
     understanding.decisionContract = decisionContract;
     return {
       executionPolicy: policy,
@@ -143,6 +144,7 @@ function createDecisionService(options = {}) {
       fallbackPath: [],
       decisionSource: source,
       selectedSkillId: decisionContract.skillCandidates[0].skillId,
+      taskComplexity: decisionContract.plan.steps.length > 1 || selectedSkill.allowedTools.length > 1 ? "multi" : "simple",
       goal: decisionContract.goal,
       decisionContract,
       goalContractV2: fromV1Contract(understanding.contract, { source: source === "deterministic_policy" ? "deterministic" : "fallback" }),
@@ -190,6 +192,7 @@ function createDecisionService(options = {}) {
         stageCapMs: Math.max(1, Number(input.decisionBudgetMs || 3500) || 3500),
         finishReserveMs: Math.max(0, Number(input.finishReserveMs || 500) || 0),
         signal: input.signal || null,
+        providerAttemptLedger: input.providerAttemptLedger || null,
         request: {
           purpose: "decision",
           messages: buildDecisionMessages({
@@ -248,6 +251,7 @@ function createDecisionService(options = {}) {
         fallbackPath: generated.fallbackPath,
         decisionSource: "model",
         selectedSkillId: selectedSkill.id,
+        taskComplexity: generated.contract.plan.steps.length > 1 || selectedSkill.allowedTools.length > 1 ? "multi" : "simple",
         goal: generated.contract.goal,
         decisionContract: generated.contract,
         goalContractV2: fromV1Contract(resolved.contract, { source: "model", provider: generated.provider }),

@@ -230,11 +230,106 @@ async function testProviderRuntime() {
   console.log("✓ Provider Runtime owns attempts, fallback, abort, probe, and metrics");
 }
 
+async function testSharedFallbackBudgetAndResponseGeneration() {
+  let fallbackCalls = 0;
+  const ledger = (() => {
+    let used = 0;
+    return {
+      claimFallback() {
+        if (used >= 1) return false;
+        used += 1;
+        return true;
+      },
+      fallbacksUsed() { return used; },
+    };
+  })();
+  const failing = (id) => ({
+    id,
+    async generateStructured() {
+      const error = new Error("offline");
+      error.code = "PROVIDER_NETWORK";
+      throw error;
+    },
+    async generate() {
+      const error = new Error("offline");
+      error.code = "PROVIDER_NETWORK";
+      throw error;
+    },
+  });
+  const runtime = createProviderRuntime({
+    adapters: [
+      failing("decision-primary"),
+      {
+        id: "decision-fallback",
+        async generateStructured() {
+          fallbackCalls += 1;
+          return { content: JSON.stringify(decision()) };
+        },
+        async generate() { return { answer: "unused" }; },
+      },
+      failing("response-primary"),
+      {
+        id: "response-fallback",
+        async generateStructured() { return { content: JSON.stringify(decision()) }; },
+        async generate() {
+          fallbackCalls += 1;
+          return { answer: "must not run" };
+        },
+      },
+    ],
+  });
+  const validator = (value) => normalizeDecisionContract(value, {
+    allowedSkillIds: ["campus.schedule.today"],
+    allowedGoalIds: ["get_today_courses"],
+    skillGoalMap: { "campus.schedule.today": ["get_today_courses"] },
+  });
+  await runtime.generateStructured({
+    stage: "decision",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    intendedProvider: "decision-primary",
+    fallbackProvider: "decision-fallback",
+    providerAttemptLedger: ledger,
+    request: {},
+    validate: validator,
+  });
+  await assertRejectCode(runtime.generate({
+    stage: "response",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    intendedProvider: "response-primary",
+    fallbackProvider: "response-fallback",
+    providerAttemptLedger: ledger,
+    request: {},
+  }), "PROVIDER_CHAIN_EXHAUSTED");
+  assert.strictEqual(fallbackCalls, 1, "Decision and Response must share one Run-level fallback budget");
+  assert.strictEqual(ledger.fallbacksUsed(), 1);
+
+  const responseRuntime = createProviderRuntime({
+    adapters: [{
+      id: "response-only",
+      async generateStructured() { return { content: JSON.stringify(decision()) }; },
+      async generate() { return { answer: "natural response", cards: [], suggestions: [] }; },
+    }],
+  });
+  const response = await responseRuntime.generate({
+    stage: "response",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    intendedProvider: "response-only",
+    request: {},
+  });
+  assert.strictEqual(response.payload.answer, "natural response");
+  assert.deepStrictEqual(response.fallbackPath, ["response-only:success"]);
+  console.log("shared fallback ledger and response generation: PASS");
+}
+
 async function run() {
   testExecutionPolicies();
   testDecisionContract();
   testDeadline();
   await testProviderRuntime();
+  await testSharedFallbackBudgetAndResponseGeneration();
   console.log("\ntest-provider-runtime-contracts: PASS");
 }
 

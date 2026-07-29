@@ -104,6 +104,8 @@ async function run() {
     assert.ok(/DecisionContract V2/.test(calls[2].body.system));
     calls.forEach((call) => {
       assert.ok(call.options.timeout <= 900, "adapter must receive the Provider Runtime lease");
+      assert.ok(call.options.httpsAgent && call.options.httpsAgent.options.keepAlive === true,
+        "adapter must receive a pooled keep-alive transport");
       assert.ok(!JSON.stringify(call).includes("real-secret"));
     });
     console.log("test-provider-adapter-conformance: PASS (DeepSeek, OpenAI-compatible, Anthropic-compatible)");

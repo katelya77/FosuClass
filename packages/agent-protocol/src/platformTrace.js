@@ -34,6 +34,18 @@ function normalizeStage(input = {}) {
   });
 }
 
+function normalizeTimings(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.freeze({
+    createRun: Math.max(0, Number(source.createRun) || 0),
+    decision: Math.max(0, Number(source.decision) || 0),
+    tool: Math.max(0, Number(source.tool) || 0),
+    verification: Math.max(0, Number(source.verification) || 0),
+    response: Math.max(0, Number(source.response) || 0),
+    total: Math.max(0, Number(source.total) || 0),
+  });
+}
+
 function createPlatformTrace(input = {}) {
   const runId = safeString(input.runId, 128);
   if (!runId) throw codedError("PLATFORM_TRACE_RUN_ID_REQUIRED");
@@ -45,6 +57,7 @@ function createPlatformTrace(input = {}) {
     runtimePackage: safeString(input.runtimePackage || "@xiaofu-agent/agent-runtime", 120),
     configVersion: safeString(input.configVersion || "unversioned", 128),
     pluginIds: Object.freeze(pluginIds),
+    timings: normalizeTimings(input.timings),
     stages: Object.freeze((Array.isArray(input.stages) ? input.stages : []).map(normalizeStage)),
   });
 }

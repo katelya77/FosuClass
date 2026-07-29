@@ -33,7 +33,7 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false, runtimeConfig)) {
     const error = new Error("CloudBase OpenAI provider is disabled.");
@@ -48,7 +48,8 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   }
   const baseUrl = String(configuredEnv("CLOUDBASE_OPENAI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig)).replace(/\/+$/, "");
   const model = configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig);
-  const timeout = numberEnv("CLOUDBASE_OPENAI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
+  const configuredTimeout = numberEnv("CLOUDBASE_OPENAI_TIMEOUT_MS", 15000, 50, 60000, runtimeConfig);
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = numberEnv("CLOUDBASE_OPENAI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
@@ -84,6 +85,9 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   try {
     response = await axios.post(`${baseUrl}/chat/completions`, body, {
       timeout,
+      signal: signal || undefined,
+      httpAgent: httpAgent || undefined,
+      httpsAgent: httpsAgent || undefined,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",

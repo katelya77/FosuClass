@@ -90,11 +90,12 @@ async function postMessages(entry, body, timeoutMs, requestOptions = {}) {
   }
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
-  const timeout = Math.max(1000, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const configuredTimeout = Math.max(50, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = Math.max(128, Math.min(4096, Number(runtimeConfig.AI_MAX_TOKENS || 1200) || 1200));
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
@@ -120,7 +121,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
     temperature: conversational ? 0.7 : 0.1,
     system: systemPrompt,
     messages: conversation,
-  }, timeout);
+  }, timeout, { signal, httpAgent, httpsAgent });
   const content = extractText(response.data);
   if (!useJsonMode) {
     const parsedTextMode = deepseekProvider.parseJsonFromText(content);

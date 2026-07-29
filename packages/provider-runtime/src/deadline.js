@@ -4,14 +4,23 @@ function codedError(code, message) {
   return error;
 }
 
+function timestamp(value) {
+  if (value === undefined || value === null || value === "") return NaN;
+  if (Number.isFinite(Number(value))) return Number(value);
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
 function createDeadline(options = {}) {
   const now = typeof options.now === "function" ? options.now : Date.now;
   const hardLimitMs = Math.max(1, Math.min(15000, Number(options.hardLimitMs || 15000) || 15000));
   const requestedMs = Math.max(1, Number(options.timeoutMs || hardLimitMs) || hardLimitMs);
-  const startedAt = Number(options.startedAt || now());
+  const requestedStartedAt = timestamp(options.startedAt);
+  const startedAt = Number.isFinite(requestedStartedAt) ? requestedStartedAt : now();
+  const requestedDeadlineAt = timestamp(options.deadlineAt);
   const deadlineAt = Math.min(
     startedAt + hardLimitMs,
-    Number.isFinite(Number(options.deadlineAt)) ? Number(options.deadlineAt) : startedAt + requestedMs,
+    Number.isFinite(requestedDeadlineAt) ? requestedDeadlineAt : startedAt + requestedMs,
   );
 
   function remainingMs() {
