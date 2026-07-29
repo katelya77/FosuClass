@@ -128,9 +128,9 @@ function activityPatchForRunEvent(status) {
   }
   if (type === "run.status_unavailable") {
     return {
-      agentActivityState: "network_error",
-      statusCapsuleText: text || "任务未能完成",
-      statusCapsuleDetail: "可以检查网络后重试，已取得的本地数据不会丢失。",
+      agentActivityState: "composing",
+      statusCapsuleText: text || "正在等待最终结果",
+      statusCapsuleDetail: "已切换兼容通道继续处理，已取得的进度不会丢失。",
     };
   }
   if (type === "planner.started" || type === "plan.created" || type === "plan.replan") {

@@ -22,7 +22,7 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
@@ -30,6 +30,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const maxTokens = Math.max(128, Math.min(4096, Number(runtimeConfig.AI_MAX_TOKENS || 1200) || 1200));
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = entry.strictJsonMode && deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
+  const userProfile = deepseekProvider.buildUserProfileText(userMemories);
   const body = {
     model: entry.model,
     stream: false,
@@ -40,7 +41,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
         role: "system",
         content: deepseekProvider.buildSystemPrompt(
           conversational ? projectKnowledge : "",
-          { useJsonMode, conversational: Boolean(conversational) }
+          { useJsonMode, conversational: Boolean(conversational), userProfile }
         ),
       },
       ...deepseekProvider.buildHistoryMessages(history, message),
@@ -50,6 +51,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
           message,
           intent: intent && intent.name,
           toolResults,
+          userProfile: userProfile || undefined,
         }),
       },
     ],

@@ -115,9 +115,28 @@ function buildPlannerPrompt(input = {}) {
  */
 async function plan(input = {}) {
   const runtimeMode = capabilityManifestService.normalizeRuntimeMode(input.runtimeMode || "public");
-  const policy = getPlannerPolicy(runtimeMode, input.plannerEnv || input.providerRuntimeConfig || process.env);
+  const plannerEnv = input.plannerEnv || input.providerRuntimeConfig || process.env;
+  const policy = getPlannerPolicy(runtimeMode, plannerEnv);
   if (runtimeMode === "public" || !policy.useModelPlanner) {
     return deterministicPlanner.plan(input);
+  }
+
+  // 无工具对话类意图（manifest allowedTools 为空且非事实任务）不需要模型规划：
+  // 直接产出确定性计划（空步骤或 rag_search 单步），省一次 ~7s 的模型调用。
+  // 与 public 模式行为对齐；AI_MODEL_PLANNER_NO_TOOL_SKIP=0 可关闭。
+  const manifestIntent = input.intent && input.intent.name
+    ? capabilityManifestService.getIntent(input.intent.name)
+    : null;
+  const noToolSkipEnabled = String(
+    plannerEnv.AI_MODEL_PLANNER_NO_TOOL_SKIP || process.env.AI_MODEL_PLANNER_NO_TOOL_SKIP || "1"
+  ) !== "0";
+  if (noToolSkipEnabled && manifestIntent
+    && Array.isArray(manifestIntent.allowedTools) && manifestIntent.allowedTools.length === 0
+    && manifestIntent.factualTask !== true) {
+    const planResult = deterministicPlanner.plan(input);
+    planResult.plannerType = "deterministic";
+    planResult.plannerSkipReason = "no_tool_intent";
+    return planResult;
   }
 
   const fallback = () => {

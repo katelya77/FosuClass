@@ -12,6 +12,9 @@ const LOW_RISK_KEYS = Object.freeze([
   "answerDetailLevel",
   "preferredClassName",
   "preferPersonalSchedule",
+  "college",
+  "major",
+  "grade",
 ]);
 
 const TEMPORARY_REASON_CODES = Object.freeze([
@@ -40,6 +43,9 @@ const DEFAULT_TTL_MS = Object.freeze({
   answerDetailLevel: 60 * 24 * 60 * 60 * 1000,
   preferredClassName: 30 * 24 * 60 * 60 * 1000,
   preferPersonalSchedule: 60 * 24 * 60 * 60 * 1000,
+  college: 180 * 24 * 60 * 60 * 1000,
+  major: 180 * 24 * 60 * 60 * 1000,
+  grade: 180 * 24 * 60 * 60 * 1000,
   working_entity: 7 * 24 * 60 * 60 * 1000,
   session_fact: 24 * 60 * 60 * 1000,
 });

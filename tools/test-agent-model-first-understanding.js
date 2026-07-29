@@ -291,7 +291,7 @@ async function testModelFirstAndPublicPolicy() {
   const fallback = await fallbackService.understand({
     message: "明天仙溪天气",
     runtimeMode: "dev",
-    providerRuntimeConfig: { AI_AGENT_ENABLED: "true" },
+    providerRuntimeConfig: { AI_AGENT_ENABLED: "true", AI_UNDERSTANDING_RULE_FIRST: "0" },
     deterministicIntent: {
       name: "get_campus_weather",
       slots: { campus: "仙溪校区", dateOffset: 1, dateHint: "tomorrow" },

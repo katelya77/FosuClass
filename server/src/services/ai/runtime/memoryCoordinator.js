@@ -275,7 +275,7 @@ function attachMemory(response, memoryBundle, options = {}) {
     observations: options.observations || response.observations,
     preferencePatch: options.preferencePatch || response.memoryPreferencePatch,
     preferredName: options.preferredName,
-    memoryCandidates: options.memoryCandidates || [],
+    memoryCandidates: options.memoryCandidates,
     providerPayload: options.providerPayload || null,
     pendingAction: options.pendingAction,
     lastResolvedEntity: options.lastResolvedEntity,

@@ -82,6 +82,9 @@ async function run() {
     AI_STRUCTURED_TIMEOUT_MS: "3000",
     DEEPSEEK_API_KEY: "unit-test-placeholder-not-real",
     AI_API_KEY: "unit-test-placeholder-not-real",
+    // 本测试验证模型优先链路本身：显式关闭快路径。
+    AI_UNDERSTANDING_RULE_FIRST: "0",
+    AI_MODEL_PLANNER_NO_TOOL_SKIP: "0",
   });
 
   try {

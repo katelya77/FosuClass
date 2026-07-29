@@ -193,6 +193,63 @@ function extractFromMessage(message, options = {}) {
     }
   }
 
+  // 学院/专业/年级：低敏身份事实，支撑个性化引导（ChatGPT 式自动记忆首批扩展）。
+  // 学院：必须是明确的身份陈述（我是/我读/就读于/我在X读书），避免"我在学院做实验"误判。
+  const collegeMatch = text.match(/(?:我是|我读|我就读于|我在)([㐀-鿿]{2,12}(?:学院|学部))(?=\s*(?:的学生|读书|上学|念书|的[\s，。！？、,.!?]|的$|$|[\s，。！？、,.!?]))/);
+  if (collegeMatch) {
+    const value = normalizeValue("college", collegeMatch[1]);
+    if (value) {
+      output.push(candidate({
+        type: "identity",
+        key: "college",
+        value,
+        scope: "user",
+        confidence: isCorrection ? 0.95 : 0.86,
+        reasonCode: isCorrection ? "user_correction" : "college_statement",
+        correction: isCorrection,
+        sourceTurnIds: turnId ? [turnId] : [],
+        rawText: text.slice(0, 80),
+      }));
+    }
+  }
+  // 专业：明确句式（我的专业是/我读/我学/主修），normalizeValue 会拒绝学院/大学/学生等误抓。
+  const majorMatch = text.match(/(?:我的专业是|专业是|我读|我学|学的是|主修|修读)([㐀-鿿A-Za-z]{2,12})(?=$|[\s，。！？、,.!?专业级班的学生读])/);
+  if (majorMatch) {
+    const value = normalizeValue("major", majorMatch[1]);
+    if (value) {
+      output.push(candidate({
+        type: "identity",
+        key: "major",
+        value,
+        scope: "user",
+        confidence: isCorrection ? 0.93 : 0.8,
+        reasonCode: isCorrection ? "user_correction" : "major_statement",
+        correction: isCorrection,
+        sourceTurnIds: turnId ? [turnId] : [],
+        rawText: text.slice(0, 80),
+      }));
+    }
+  }
+  // 年级：大二/2024级；后置边界防止"我大儿子"误抓；允许逗号分隔的补充说明（"我是计算机学院的，大二"）。
+  const gradeMatch = text.match(/我(?:是|读|在|现在|今年|上|念)?(?:是|读|上|念)?(大[一二三四五六]|20\d{2}级)(?=$|[\s，。！？、,.!?年级学生了啦呢吧])/)
+    || text.match(/(?:^|[\s，。！？、,.!?])(大[一二三四五六]|20\d{2}级)(?=$|[\s，。！？、,.!?年级学生了啦呢吧])/);
+  if (gradeMatch) {
+    const value = normalizeValue("grade", gradeMatch[1]);
+    if (value) {
+      output.push(candidate({
+        type: "identity",
+        key: "grade",
+        value,
+        scope: "user",
+        confidence: isCorrection ? 0.93 : 0.84,
+        reasonCode: isCorrection ? "user_correction" : "grade_statement",
+        correction: isCorrection,
+        sourceTurnIds: turnId ? [turnId] : [],
+        rawText: text.slice(0, 80),
+      }));
+    }
+  }
+
   // Named relation（类型化关系记忆）：第三方人物信息默认仅进 Working Memory，不进长期 User Memory。
   // 例："我妈妈叫刘秀英" → { relation: "mother", displayRelation: "妈妈", name: "刘秀英" }
   const RELATION_MAP = {

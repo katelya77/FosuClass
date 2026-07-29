@@ -374,6 +374,9 @@ class MemoryController {
           if (key === "preferredName") return "已记住你的称呼，可在记忆设置中修改。";
           if (key === "defaultReminderLeadMinutes") return "已记住默认提醒时间，可在记忆设置中修改。";
           if (key === "preferredBuilding") return "已记住你的常用楼栋，可在记忆设置中修改。";
+          if (key === "college") return "已记住你的学院，可在记忆设置中修改。";
+          if (key === "major") return "已记住你的专业，可在记忆设置中修改。";
+          if (key === "grade") return "已记住你的年级，可在记忆设置中修改。";
           return "";
         }).filter(Boolean).slice(0, 1)
         : [],

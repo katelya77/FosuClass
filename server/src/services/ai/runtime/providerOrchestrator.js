@@ -265,6 +265,7 @@ async function generateAssistantResponse(input = {}) {
     providerRuntimeConfig,
     toolResults: toolResultsForProvider,
     history: sanitizeResponseHistory(context.recentMessages),
+    userMemories: (Array.isArray(context.userMemories) ? context.userMemories : []).slice(0, 5),
     contextMeta: {
       contextTokenEstimate: responseContext.contextTokenEstimate,
       contextSections: responseContext.sections,

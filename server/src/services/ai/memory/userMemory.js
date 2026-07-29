@@ -25,7 +25,7 @@ function toMemoryItems(values = {}, meta = {}) {
     .map((key) => ({
       key,
       value: values[key],
-      type: key === "preferredName" ? "identity"
+      type: key === "preferredName" || key === "college" || key === "major" || key === "grade" ? "identity"
         : key === "campus" || key === "preferredBuilding" ? "location_pref"
           : key === "defaultReminderLeadMinutes" ? "reminder_pref"
             : key.indexOf("Schedule") >= 0 || key.indexOf("Class") >= 0 ? "schedule_pref"

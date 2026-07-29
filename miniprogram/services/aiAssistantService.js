@@ -236,6 +236,9 @@ const MEMORY_PREF_KEYS = [
   "preferredBuilding",
   "defaultReminderLeadMinutes",
   "answerDetailLevel",
+  "college",
+  "major",
+  "grade",
 ];
 
 function getUserPreferenceItems() {
