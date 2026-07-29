@@ -1,0 +1,11 @@
+{
+  "name": "@xiaofu-agent/tool-runtime",
+  "version": "0.1.0",
+  "description": "Exact-match Tool authorization, Schema validation, and execution runtime.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
