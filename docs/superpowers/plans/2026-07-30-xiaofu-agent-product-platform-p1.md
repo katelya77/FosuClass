@@ -492,21 +492,21 @@ git commit -m "refactor(agent): unify online transports on Run service"
 - Produces `getTopology(req,res)` and `getRecentRuns(req,res)` using the same platform diagnostics/trace repository.
 - Response includes active runtime package, plugin IDs/versions, configVersion, execution policy capability and package ownership; no key material or prompt text.
 
-- [ ] **Step 1: Write failing authenticated admin test**
+- [x] **Step 1: Write failing authenticated admin test**
 
 Use the existing admin HTTP harness and credentials fixture to GET `/api/admin/agent-platform/topology`. Assert the runtime/plugin/version fields match the production platform instance and that JSON serialization contains no `apiKey`, `token`, `authorization`, prompt or hidden reasoning fields.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node tools/test-agent-platform-admin.js`
 
 Expected: FAIL with 404.
 
-- [ ] **Step 3: Implement and mount handlers**
+- [x] **Step 3: Implement and mount handlers**
 
 Use existing admin middleware and audit conventions. The app reads, but never recreates, the platform singleton. P4 will add mutation and UI workflows; P1 endpoint is a real runtime truth surface, not a static feature matrix.
 
-- [ ] **Step 4: Run GREEN plus admin security tests**
+- [x] **Step 4: Run GREEN plus admin security tests**
 
 Run:
 
@@ -516,7 +516,7 @@ npm run test:admin-api-contract
 node tools/test-admin-error-sanitizer.js
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add apps/agent-admin server/src/routes/admin.js tools/test-agent-platform-admin.js

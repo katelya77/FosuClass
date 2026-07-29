@@ -49,6 +49,9 @@ const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
 const publisherReceiptService = require("../services/publisherReceiptService");
 const agentService = require("../services/ai/agentService");
+const platformComposition = require("../services/ai/platformComposition");
+const runtimeModeService = require("../services/ai/runtimeModeService");
+const { createPlatformAdminHandlers } = require("../../../apps/agent-admin");
 const aiProviderConfigService = require("../services/ai/providerConfigService");
 const providerChainService = require("../services/ai/providerChainService");
 const evaluationService = require("../services/ai/evaluationService");
@@ -56,6 +59,20 @@ const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
 const { createKnowledgeControlPlane } = require("../services/ai/knowledgeControlPlane");
 const agentProtocol = require("../services/ai/agentProtocol");
 const knowledgeControlPlane = createKnowledgeControlPlane();
+const platformAdminHandlers = createPlatformAdminHandlers({
+  getPlatformDiagnostics: platformComposition.getDiagnostics,
+  listRecentPlatformTraces: platformComposition.listRecentPlatformTraces,
+  getExecutionPolicy() {
+    const activeMode = runtimeModeService.resolveConfiguredMode();
+    return {
+      activeMode,
+      effectiveDefault: activeMode === "public" ? "deterministic" : "legacy_configured",
+      supported: ["deterministic", "legacy_configured"],
+      strictModelFirstReady: false,
+      adaptiveReady: false,
+    };
+  },
+});
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");
 const campusMapAssetService = require("../services/campusMapAssetService");
@@ -536,6 +553,9 @@ router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
     },
   });
 });
+
+router.get("/agent-platform/topology", adminAuth.verifyAdminAccess, platformAdminHandlers.getTopology);
+router.get("/agent-platform/runs", adminAuth.verifyAdminAccess, platformAdminHandlers.getRecentRuns);
 
 // 自定义 Provider（CCSwitch 式）CRUD 与模型拉取已迁入 modules/ai-provider/routes.js。
 
