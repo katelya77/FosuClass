@@ -2,6 +2,8 @@
 
 > 本清单连接 [`requirements.md`](./requirements.md) 与 [`design.md`](./design.md)。
 > 每个 P 阶段必须完成 RED→GREEN→REFACTOR、相关门禁、独立 Commit 和回滚说明后才进入下一阶段。
+> 2026-07-30 路线修订：新增 P2R；P4 拆分为 P4a–P4e；P5 拆分为 P5a–P5c；P6 拆分为 P6a/P6b；P7 收缩为 P7a（P7b/P7c deferred）。
+> 治理规则见 [`execution-governance.md`](./execution-governance.md)；术语见根目录 `CONTEXT.md`；架构边界见 `docs/adr/0006`、`docs/adr/0007`。
 
 ## 已完成
 
@@ -16,7 +18,7 @@
   - 独立提交：`1e5d047b`。
   - _Requirements: R1–R11_
 
-## P1 — 通用包边界与真实生产接线
+## P1 — 通用包边界与真实生产接线（已完成）
 
 - [x] 建立 npm workspace 与 `agent-protocol`、`ui-schema` 的可执行契约。
 - [x] 建立真实 `skill-runtime`、`tool-runtime`，实现声明式 registry、五因子交集与 exact-match。
@@ -27,9 +29,10 @@
 - [x] 让 agent.v2 输出通用 UI blocks，同时保持 agent.v1 可观察行为。
 - [x] 更新 Docker/CI/package hygiene，使生产容器包含并加载 workspaces。
 - [x] 用 HTTP + Trace 测试证明新 packages/apps/plugin 的真实顺序，运行全部现有门禁并提交 P1。
-  - _Requirements: R1, R4.4–R4.8, R10.4, R11.1, R11.4, R11.7_
+  - _Requirements: R1, R4.4, R4.7–R4.8, R10.4, R11.1, R11.4, R11.7_
+  - 注：R4.5（小程序消费 12 种 block）与 R4.6（新 Skill 免改客户端）原误映射至 P1，2026-07-30 修正归 P6，不标记完成。
 
-## P2 — strict_model_first、统一 Decision 与性能
+## P2 — strict_model_first、统一 Decision 与性能（已完成，遗留见 P2R）
 
 - [x] 建立 `packages/provider-runtime`，迁入 Provider Adapter、连接池、attempt、熔断与 probe。
 - [x] 实现三种 executionPolicy；public 强制 deterministic，trial/dev 默认 strict_model_first，adaptive 显式开启。
@@ -40,8 +43,12 @@
 - [x] 建立三 Provider mock conformance、strict-first 证明、public 零 attempt 与性能基准。
 - [x] 运行相关门禁并提交 P2。
   - _Requirements: R2, R3, R10.2, R11.2, R11.4, R11.6_
+  - 已知偏差（不回填勾选，由 P2R 关闭）：plan.steps 只校验不消费；fallback 不区分可回退错误；R3.7 分位数未按 outcome 分离。
+  - 旧 `modelPlanner`/`understandingService` 模型路径标记 compatibility-only / deprecated candidate：不删除、不扩展、新代码不得依赖；退役门槛见 P6b。
 
-## P3 — ContextAssembler 与成熟 Memory
+## P3 — ContextAssembler 与成熟 Memory（当前阶段）
+
+详细验收标准：[`p3-acceptance.md`](./p3-acceptance.md)。Evidence：`docs/xiaofu-agent/product-platform-p3-evidence.md`。
 
 - [ ] 建立统一 ContextAssembler，贯穿 Decision、Tool 与 Response。
 - [ ] 实现持久 MemoryItem、EpisodicMemory、MemoryPolicy 和滚动摘要。
@@ -52,45 +59,145 @@
 - [ ] 增加 50+ 多轮 fixture 和 100 Turn 验收，运行 Phase 2/3 与完整门禁并提交 P3。
   - _Requirements: R5, R10.1–R10.2, R11.3_
 
-## P4 — 热发布控制面、MCP 与 RAG
+附加验收（2026-07-30 grilling 确认，全部纳入 P3 提交）：H1 clear-all revision 闭环；H2 recentTurns 跨设备恢复（客户端边界规范化 + 生产形状契约测试）；M1 单 Turn 单次原子记忆提交与冲突重算；M3 滚动摘要保留工具轨迹与 pending 状态；M4 Memory-to-Provider 双层防护（ADR-0006）；M5 delete/edit/pause 的 refresh-on-conflict；Low×6（客户端死分支与 Mock 保真、404 统一、canonical 字段、TTL 类别化、explicit/pause 语义、verification fail-closed）。
 
-- [ ] 建立统一 Artifact/ConfigSnapshot Repository 和发布状态机。
-- [ ] Provider、Skill、Tool、MCP、RAG、Memory 全部接入 draft→validate→test→publish→hot reload→rollback。
-- [ ] 建立 `packages/mcp-runtime`，支持 Streamable HTTP、受控 stdio、发现、scope、超时和写确认。
-- [ ] 建立 `packages/rag-runtime`，支持文件/网页摄取、解析、分块、BM25、向量、rerank、引用与原子版本切换。
-- [ ] 完成 `apps/agent-admin` 六领域配置、Run Trace/Eval 与真实发布证据 UI。
-- [ ] 用新 Run 证明 configVersion 发布/回滚无需重建镜像，运行浏览器/安全/门禁并提交 P4。
+提交边界：暂存区 + 互锁未暂存文件 + 全部修复，单提交 `feat(agent): complete P3 mature memory runtime`；回滚整体撤回 P3，不破坏 P0–P2；v2 加密数据文件不通过删除回滚。
+
+## P2R — Decision 计划真实性、fallback 分类与性能指标回补
+
+详细验收标准：[`p2r-acceptance.md`](./p2r-acceptance.md)。Evidence：`docs/xiaofu-agent/product-platform-p2r-evidence.md`。
+
+- [ ] plan.steps 经 Schema 校验与五因子交集后真实影响 resolvedPlan；planBuilder 不得无条件丢弃合规模型计划；Trace 区分 proposedPlan/resolvedPlan 及改写原因。
+- [ ] 建立单一 retryability / fallback eligibility 分类函数，Provider Runtime、Decision、Response 共用；配置类 4xx fail fast 不 fallback；fallback 每 Turn 至多一次且共享总 Deadline。
+- [ ] outcome-aware 性能指标：stage × outcome（success/failed/cancelled/degraded）× executionPolicy × usedFallback × taskComplexity；success-only 与 all-runs P50/P95 分离；首事件延迟独立统计；低基数标签。
+- [ ] 运行相关门禁并提交 `fix(agent): close P2 decision and fallback truth gaps`。
+  - _Requirements: R2.4, R2.6, R3.5, R3.7_
+  - 不含：P3 记忆实现、P4 热发布、旧 Planner 删除。P2R 完成前不得开始 P4。
+
+## P4 — 热发布控制面、MCP 与 RAG（拆分为 P4a–P4e）
+
+统一发布链：draft → validate → test → publish → immutable configVersion → 新 Run 原子绑定快照 → hot reload → rollback。六域共用一套 Artifact/ConfigSnapshot 基础设施；禁止每域各建发布状态机；禁止草稿进生产；禁止回滚只改后台状态。
+
+### P4a — Artifact Repository and Config Publication Kernel
+
+- [ ] Artifact/ConfigSnapshot Repository + 统一发布状态机 + configVersion + environment scope + 审计。
+- [ ] createRun 原子绑定不可变快照；Run 内快照稳定；发布/回滚只影响新 Run；publish pointer 原子切换。
+- [ ] validate/test 失败不更新生产 pointer；rollback 只切已验证历史版本；热加载失败保持最近有效配置；重启恢复。
+- [ ] 最小 Skill 参考 Adapter 证明通用协议（不据此宣称其他域完成）。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4a-evidence.md`。提交：`feat(agent): add versioned config publication kernel`。
+  - _Requirements: R6.1–R6.3, R10.2_
+
+### P4b — Core Domain Hot-Publish Adapters
+
+- [ ] Provider、Skill、Tool、Memory 四域分别接入 P4a 内核：声明式 Schema、validate、test、publish、hot reload、rollback、审计、environment scope、失败保留最近有效版本。
+- [ ] Provider：密钥只存引用，不进 Artifact/Trace/导出；public 外部调用恒 0。
+- [ ] Skill：禁止上传执行任意 JS；只允许引用 Manifest 允许的 Tool。
+- [ ] Tool：不得绕过五因子交集与 Guardrail。
+- [ ] Memory：策略发布不影响在途 Run；不得经策略接口暴露用户记忆原文。
+- [ ] 统一 domain adapter conformance suite，四域各跑同一契约测试 + 各自专项。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4b-evidence.md`。提交：`feat(agent): hot-publish core runtime domains`。
+  - _Requirements: R6, R11.5_
+
+### P4c — Governed MCP Runtime and Publication
+
+- [ ] `packages/mcp-runtime`：Streamable HTTP 优先、受控 stdio（白名单命令，无任意 shell）、注册、鉴权、工具发现、Schema 缓存、scope、超时取消、写确认。
+- [ ] MCP 发现的 Tool 必须进入 Manifest/权限/Schema 校验链；写操作进 confirmation/ActionReceipt 闭环。
+- [ ] Server 更新只影响新 Run；不可用必须准确降级；鉴权信息不进 Artifact/Trace/导出。
+- [ ] 收口 `tools/fosu-kb-mcp` 治理（只走受保护后台 API，不注册 publish/rollback 工具）。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4c-evidence.md`。提交：`feat(agent): add governed MCP runtime`。
+  - _Requirements: R7.1–R7.4, R10.3_
+
+### P4d — Versioned Hybrid RAG Runtime
+
+- [ ] `packages/rag-runtime` 权威实现：文件/受控网页摄取（SSRF 防护）、解析、清洗、分块、BM25、deterministic local encoder（ADR-0007）、融合、确定性 rerank、引用、版本发布/回滚。
+- [ ] Encoder 单源抽取，semanticMemory 与 RAG 共用；对照测试证明 P3 记忆检索不回归。
+- [ ] 草稿索引对生产查询不可见；publish pointer 原子切换；rollback 只切已验证版本；重启恢复；索引构建进受控 worker/队列，不阻塞在线 Run。
+- [ ] golden query set：lexical / vector / hybrid / hybrid+rerank 四组对照，Recall@K、MRR、引用正确率、空答案正确率；本地 encoder 提升幅度如实报告。
+- [ ] 结构化校园事实继续走 Tool（负向测试锁定）。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4d-evidence.md`。提交：`feat(agent): add versioned hybrid RAG runtime`。
+  - _Requirements: R7.5–R7.8, R10.2–R10.3_
+
+### P4e — Agent Control Plane and Runtime Evidence
+
+- [ ] `apps/agent-admin` 六域配置页面 + draft/validate/test/publish/rollback 操作 + 版本历史 + environment scope。
+- [ ] Run Trace/Eval：runId、executionPolicy、configVersion、各域 Artifact 版本、intendedProvider/actualFirstProvider、fallbackPath、Goal、selectedSkill、Tool/Verification 状态、阶段耗时、outcome。不显示密钥/完整 Prompt/隐藏推理/记忆原文。
+- [ ] 后台只消费 P4a–P4d 真实 API；无 mock 数据；浏览器端完成发布→新 Run 生效→回滚闭环验收。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4e-evidence.md`。提交：`feat(agent): add runtime-backed agent control plane`。
   - _Requirements: R6, R7, R10.2–R10.3, R11.5_
 
-## P5 — 一体化与 Standalone 双部署
+## P5 — 一体化与 Standalone 双部署（拆分为 P5a–P5c）
 
-- [ ] 完成一体化容器的持久 Repository、迁移、健康与恢复。
-- [ ] 完成 Standalone server/worker、PostgreSQL/pgvector、Redis Adapter。
-- [ ] 新增 `deploy/standalone/docker-compose.yml`、`.env.example` 和持久卷/健康检查。
-- [ ] 提供迁移、备份、升级、回滚、1Panel、Oracle ARM 文档。
-- [ ] 更新 GHCR workflow 生成同 SHA linux/amd64 + linux/arm64 manifest。
-- [ ] 执行两架构 build/start/Run smoke；本地不可用项交由 CI 且明确记录，提交 P5。
-  - _Requirements: R8, R10.4, R11.6, R11.8_
+### P5a — Standalone Durable Storage
 
-## P6 — 通用 Agent SDK 与微信稳定壳
+- [ ] Repository/Adapter 接口（P4a 定义）的 PostgreSQL 实现：Artifact/ConfigSnapshot、发布状态、Provider/Skill/Tool/MCP/RAG/Memory 配置元数据、会话与长期记忆、Working State、Run 元数据与最终状态、RunEvent durable store、审计、RAG 文档/分块/版本/引用、pgvector、异步任务幂等记录。
+- [ ] 版本化 migration（可重复检测、版本可查、不兼容 schema 不启动）；expand-contract。
+- [ ] Redis Streams + Consumer Group + ACK + pending reclaim + 幂等 jobId + 有界重试 + dead-letter；Redis 永不做权威事实源。
+- [ ] 文件 Adapter 与 PostgreSQL Adapter 跑同一 Repository conformance suite。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5a-evidence.md`。提交：`feat(agent): add standalone durable storage adapters`。
+  - _Requirements: R8.1–R8.3, R10.4_
 
-- [ ] 完成 `packages/agent-sdk` 的 create/poll/SSE/reconnect/idempotency/cancel/result recovery 状态机。
-- [ ] 让 RunEvent 使用持久 event cursor，断线、重启和多实例后可恢复。
-- [ ] 小程序接入 SDK，移除在线 direct chat fallback 与客户端伪造状态。
-- [ ] 完成 12 类通用 UI block renderer，并用 Fosu plugin mapper 保持校园卡片。
-- [ ] 验证新增声明式测试 Skill 无需改小程序即可渲染。
-- [ ] 运行小程序单测、DevTools smoke（可用时）和全部门禁并提交 P6。
-  - _Requirements: R4, R11.6–R11.7_
+### P5b — Standalone Service Topology
 
-## P7 — Engine Adapter
+- [ ] 单 `fosu-agent-platform` 镜像四角色（server/worker/admin/migrate）；`deploy/standalone/docker-compose.yml` + `.env.example` + 命名卷 + 内部网络。
+- [ ] 依赖顺序：postgres/redis healthy → migrate completed → server/worker/admin。
+- [ ] liveness/readiness/startup 分离；readiness 区分 postgres/redis/migration/artifact/config/worker queue/RAG backend/Provider/published configVersion。
+- [ ] 无 fosu-campus 插件可独立运行（Admin、声明式 Skill、受控 Tool/MCP、知识库、Run、RunEvent、UI Schema、内置只读示例 Skill）；插件经只读卷/数据同步注入。
+- [ ] Provider 未配置：health 可 healthy，readiness 如实 not ready；不用 Mock 冒充生产 Provider；凭据只经环境变量/Secret 注入。
+- [ ] worker 职责：RAG 摄取/索引、golden 验证、发布前测试、Eval、维护清理；主聊天链不无条件异步化。
+- [ ] 备份/恢复/升级/回滚文档；不用 floating latest 作生产依据。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5b-evidence.md`。提交：`feat(agent): add standalone platform deployment`。
+  - _Requirements: R8, R10.4, R11.6_
 
-- [ ] 固化 AgentEngineAdapter conformance，Fosu Engine 保持默认。
-- [ ] 查阅官方 OpenAI Agents SDK JS 与 Pi Agent Core 当前接口和许可证。
-- [ ] 实现 OpenAI Adapter，只通过项目 Runtime ports 执行只读 Skill。
-- [ ] 实现 Pi Adapter，不注册 bash/read/write/edit，并执行相同只读 Skill。
-- [ ] 验证 feature flag、事件/UI/Memory/RAG/Guardrail 一致性；未通过时明确 unavailable。
-- [ ] 运行 Adapter conformance 和全部门禁并提交 P7。
+### P5c — Multi-Architecture Delivery
+
+- [ ] buildx 构建 linux/amd64 + linux/arm64；两架构各自 build + standalone smoke 通过后发布同 SHA manifest；标签含 commit SHA；记录 digest。
+- [ ] 本机 Docker Desktop 可用则本地 amd64 smoke；arm64 与 manifest 归 CI（build verified ≠ smoke verified，如实标注）。
+- [ ] 1Panel / Oracle ARM 部署文档；外部开发者快速启动文档。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5c-evidence.md`。提交：`build(agent): publish multi-architecture platform image`。
+  - _Requirements: R8.4–R8.7, R11.6, R11.8_
+
+## P6 — 通用 Agent SDK 与微信稳定壳（拆分为 P6a/P6b）
+
+### P6a — Recoverable Run Protocol and Agent SDK
+
+- [ ] `packages/agent-protocol`：RunEvent 标准结构、UI Schema、protocolVersion、能力协商、cursor/sequence、cancel、result recovery、错误分类、旧协议兼容契约。
+- [ ] `packages/agent-sdk`：环境无关 Run 状态机（createRun/poll/SSE adapter/reconnect/resumeFromCursor/cancelRun/recoverFinalResult/幂等 reducer/依赖注入）；不依赖 wx、DOM、Node HTTP 或 Fosu 业务。
+- [ ] 服务端 RunEvent 可恢复：立即返回 runId、稳定 eventId、严格单调 sequence（不用时间戳）、按 cursor 重放、终态不可覆盖、事件持久化经 Repository 接口（integrated 文件/SQLite，standalone PostgreSQL，同一模型）。
+- [ ] 交付语义：服务端至少一次可重放 + 客户端幂等消费 = 状态不重复不回退；取消端到端真实传播。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p6a-evidence.md`。提交：`feat(agent): add recoverable run protocol and agent sdk`。
+  - _Requirements: R4.1–R4.3, R10.2_
+
+### P6b — Miniprogram Agent Shell and UI Block Runtime
+
+- [ ] 小程序 SDK Adapter（wx.request/流式/cursor polling/storage/网络监听/生命周期/协议协商）。
+- [ ] 12 类通用 UI Block renderer（text/markdown/plan/tool_progress/list/detail/schedule/clarification/confirmation/action_receipt/warning/error）；未知 Block 安全 fallback。
+- [ ] ai-assistant 绞杀式迁移：传输/事件归并/恢复/取消抽离，页面只留生命周期/输入/组合/导航；不同时保留两个活跃 Run 状态源；不伪造执行状态。
+- [ ] Fosu 卡片经插件 mapper 映射为通用 Block；通用 SDK 不硬编码佛大字段。
+- [ ] 新增声明式测试 Skill 小程序零改动即可渲染（R4.5/R4.6 在此验收）。
+- [ ] direct chat fallback 标记 compatibility-only/deprecated：仅协议协商或显式开关触发、不伪造状态、记录原因；退役门槛（新 API 全覆盖 + 旧量归零 + DevTools/真机通过 + release-gate 绿）达成前不删。旧 modelPlanner 同门槛退役。
+- [ ] DevTools smoke：探测 CLI 可用且已登录则真实执行；否则如实标未验证 + 交付人工验收清单与证据模板。真机/体验版归 P8 人工。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p6b-evidence.md`。提交：`refactor(miniprogram): adopt agent sdk and ui block shell`。
+  - _Requirements: R4.5–R4.6, R11.6–R11.7_
+
+## P7 — Engine Adapter（仅 P7a；P7b/P7c deferred）
+
+### P7a — Engine Contract and Fosu Conformance
+
+- [ ] `AgentEngineAdapter` 单一权威契约（engineId/version/capabilities/readiness/createRun/resume/cancel/probe/shutdown/conformance metadata；统一受控依赖注入；统一归一化输出）。
+- [ ] Engine Registry：服务端受控选择（defaultEngine/allowedEngines/environment scope/feature flag/readiness/conformance status/experimental 标记/rollback）；public 恒 Fosu Engine；未过 conformance 不得默认；Run 创建绑定 Engine 版本。
+- [ ] Fosu Engine 真实经 Adapter 接入生产链（Trace 证明），行为不变，全部门禁通过。
+- [ ] Engine conformance suite（22 项，见 p7a 验收）；Fosu Engine 首先完整通过。
+- [ ] OpenAI/Pi Adapter：仅研究文档、依赖与许可证审计、API 映射、缺口与完成条件；不实现、不加依赖、不写空 Adapter。
+- [ ] Evidence：`docs/xiaofu-agent/product-platform-p7a-evidence.md`。提交：`refactor(agent): introduce engine adapter contract`。
   - _Requirements: R9, R10.2–R10.3, R11.1_
+
+### P7b — OpenAI Agents SDK Adapter（deferred）
+
+- 状态：deferred / not implemented。重启门槛：P3–P7a 全部完成、release-gate 全绿、双部署 smoke 完成、真机验收无 Critical/Important、时间与预算充足、用户再次明确授权。
+
+### P7c — Pi Agent Core Adapter（deferred）
+
+- 状态：deferred / not implemented。同 P7b 门槛，另加宿主能力隔离测试（无 bash/read/write/edit）。
 
 ## P8 — 收敛、文档、镜像与 Draft PR
 
@@ -98,7 +205,8 @@
 - [ ] 执行全部 AGENTS 门禁、故障矩阵、性能基准、密钥/许可证扫描和容器 smoke。
 - [ ] 生成并记录 SHA 镜像/manifest 证据；不可用环境不得用 mock 替代。
 - [ ] 执行独立代码复审并修复所有 Critical/Important。
-- [ ] 推送分支并创建 Draft PR，等待全部 CI。
-- [ ] CI 全绿且独立复审无 Critical/Important 后转 Ready；不合并、不部署。
-- [ ] 输出按代码/mock/staging/容器/CloudBase/体验版/真机/生产区分的最终报告。
+- [ ] 真机/体验版人工验收（P6 交付的清单与模板）；未验证项如实标注。
+- [ ] push 分支并创建 Draft PR，等待全部 CI；CI 全绿且独立复审无 Critical/Important 后按合并门禁处理；不绕过分支保护。
+- [ ] 部署按 execution-governance.md 的备份/回滚/观察门禁执行；无备份回滚路径则记录 blocker 禁止自动生产部署。
+- [ ] 输出按代码/mock/staging/容器/CloudBase/体验版/真机/生产区分的最终报告；记录生产 SHA、镜像 digest、configVersion、回滚版本。
   - _Requirements: R8.6–R8.7, R11_

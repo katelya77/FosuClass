@@ -2,6 +2,20 @@
 
 本文件适用于仓库内所有自动化开发 Agent（包括 Codex、Grok Build）及其子任务。若局部目录没有更严格的说明，以下规则不可绕过。
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (katelya77/FosuClass), operated via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels are used as-is: `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
 ## 项目与事实源
 
 - FosuClass 是面向佛山大学的课表微信小程序；“小佛助手”是其校园任务型 Agent。
