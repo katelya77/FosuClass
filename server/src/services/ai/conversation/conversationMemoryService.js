@@ -12,6 +12,7 @@ const {
   publicMemoryStatus,
   DEFAULT_SESSION_TTL_MS,
   DEFAULT_CLOUD_SYNC_TTL_MS,
+  MAX_SUMMARY,
   nowIso,
   safeText,
 } = require("./conversationSchema");
@@ -190,10 +191,10 @@ class ConversationMemoryService {
         recentMessages: mergedRecent.slice(-12),
         workingMemory: state && state.workingMemory || context.workingMemory || null,
       });
-      try {
+      if (mode === "cloud_sync") try {
         const cloudPreferences = this.userPreferenceService.getObject({ principal });
         context.userPreferences = Object.assign({}, context.userPreferences || {}, cloudPreferences, {
-          localOnly: mode === "session_state",
+          localOnly: false,
         });
       } catch (_) {
         // Preference storage is an optional privacy-preserving layer. Chat remains usable.
@@ -271,7 +272,7 @@ class ConversationMemoryService {
 
     // Prefer semantic summary from MemoryController; fall back to template.
     const summary = input.conversationSummary
-      ? safeText(input.conversationSummary, 240)
+      ? safeText(input.conversationSummary, MAX_SUMMARY)
       : buildConversationSummary({
         intent: input.intentName || mergedSlots.lastIntent,
         targetName: mergedSlots.lastTargetName || mergedSlots.q,
@@ -350,6 +351,7 @@ class ConversationMemoryService {
     return {
       success: true,
       items,
+      conversations: items,
       memory: publicMemoryStatus(null, { authenticated: true, mode: "session_state" }),
     };
   }
@@ -378,7 +380,7 @@ class ConversationMemoryService {
       }),
       contextSlots: state.contextSlots,
       pendingClarification: state.pendingClarification,
-      recentTurns: state.memoryPolicy && state.memoryPolicy.mode === "cloud_sync" ? state.recentTurns : [],
+      recentTurns: state.memoryPolicy && state.memoryPolicy.mode !== "local_only" ? state.recentTurns : [],
     };
   }
 
@@ -419,7 +421,7 @@ class ConversationMemoryService {
         cloudSyncEnabled: mode === "cloud_sync",
         updatedAt: nowIso(),
       };
-      if (mode !== "cloud_sync") patch.recentTurns = [];
+      if (mode === "local_only") patch.recentTurns = [];
       if (input.deleteCloudData === true && mode !== "cloud_sync") {
         patch.recentTurns = [];
         patch.conversationSummary = "";

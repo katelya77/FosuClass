@@ -5,7 +5,6 @@ const providerConfigService = require("../providerConfigService");
 const capabilityManifestService = require("../capabilityManifestService");
 const projectKnowledgeService = require("../projectKnowledgeService");
 const safetyGuard = require("../safetyGuard");
-const { assemble: assembleContext } = require("../context/contextAssembler");
 const { stableGeneratedPayload, configValue, getProviderPolicy } = require("./shared");
 const { emitChatEvent } = require("./runEventPublisher");
 const { deriveExecutionOutcome } = require("./responseComposerBridge");
@@ -253,6 +252,9 @@ async function generateAssistantResponse(input = {}) {
   const understanding = input.understanding;
   const plannerDiag = input.plannerDiag;
   const execution = input.execution;
+  const assembledContextTrace = input.contextTrace && typeof input.contextTrace === "object"
+    ? input.contextTrace
+    : {};
   const providerPolicy = getProviderPolicy(providerRuntimeConfig);
   const desiredProviderName = providerFactory.getProviderName(runtimeMode, providerRuntimeConfig);
   const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName, runtimeMode, providerRuntimeConfig);
@@ -265,22 +267,9 @@ async function generateAssistantResponse(input = {}) {
     || runtimeMode !== "public";
   const toolResultsForProvider = buildToolResultsForProvider(toolCalls);
   const projectKnowledgeText = shouldInjectProjectKnowledge
-    ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeMode, safeMessage)
+    ? projectKnowledgeService.getProjectKnowledgePrompt(input.assistantEnvironment || runtimeMode, safeMessage)
     : "";
   // Budgeted response context — never dump unbounded history or full schedule into provider.
-  const responseContext = assembleContext("response", {
-    message: safeMessage,
-    runtimeMode: runtimeMode,
-    currentTeachingWeek: context.currentTeachingWeek,
-    toolResults: toolResultsForProvider,
-    toolCalls: toolResultsForProvider,
-    projectKnowledge: projectKnowledgeText,
-    history: Array.isArray(context.recentMessages) ? context.recentMessages : [],
-    messages: Array.isArray(context.recentMessages) ? context.recentMessages : [],
-    historyLimit: 10,
-    conversationSummary: context.conversationSummary || "",
-    userMemories: context.userMemories || [],
-  });
   const providerInput = {
     message: safeMessage,
     context: buildMinimalProviderContext(context),
@@ -293,10 +282,13 @@ async function generateAssistantResponse(input = {}) {
     userMemories: (Array.isArray(context.userMemories) ? context.userMemories : []).slice(0, 5),
     principal,
     contextMeta: {
-      contextTokenEstimate: responseContext.contextTokenEstimate,
-      contextSections: responseContext.sections,
-      truncatedSections: responseContext.truncatedSections,
-      compressionUsed: responseContext.compressionUsed === true,
+      contextId: String(assembledContextTrace.contextId || input.contextId || "").slice(0, 64),
+      schemaVersion: String(assembledContextTrace.schemaVersion || "agent-context.v2").slice(0, 48),
+      contextTokenEstimate: Math.max(0, Number(assembledContextTrace.contextTokenEstimate || 0)),
+      contextSections: Object.keys(assembledContextTrace.sectionFingerprints || {}).slice(0, 16),
+      truncatedSections: (Array.isArray(assembledContextTrace.truncatedSections)
+        ? assembledContextTrace.truncatedSections : []).slice(0, 16),
+      compressionUsed: assembledContextTrace.compressionUsed === true,
     },
   };
   const deterministicGenerated = mockProvider.generate(providerInput);

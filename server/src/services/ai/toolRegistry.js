@@ -217,6 +217,9 @@ function stripPersonHonorifics(name) {
 }
 
 function hasScheduleContext(context = {}) {
+  // Decision/Planner receive only the availability bit from ContextAssembler;
+  // the authoritative schedule stays in the Tool-only private context.
+  if (context.personalScheduleAvailable === true) return true;
   const summary = context.currentScheduleSummary || {};
   return Boolean(summary.enabled && Array.isArray(summary.courses) && summary.courses.length);
 }

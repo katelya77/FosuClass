@@ -43,7 +43,8 @@ function resolvePendingClarificationPatch(input = {}) {
   const context = input.context || {};
   const pendingPatch = buildClarificationPatch(intent);
   const pendingExpiresAt = Number(context.pendingClarification && context.pendingClarification.expiresAt || 0);
-  const pendingExpired = Boolean(context.pendingClarification && pendingExpiresAt && pendingExpiresAt < Date.now());
+  const pendingExpired = context.pendingClarificationExpired === true
+    || Boolean(context.pendingClarification && pendingExpiresAt && pendingExpiresAt < Date.now());
   if (intent.name !== "clarify_missing_slot" && intent.slots && intent.slots.filledFromPendingClarification) {
     pendingPatch.clearPendingClarification = true;
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {

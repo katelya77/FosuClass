@@ -30,7 +30,7 @@ async function run() {
   });
   assert.strictEqual(followup.metrics.intentName, "search_school_index");
   assert(followup.toolCalls.some((call) => call.name === "search_school_index"));
-  assert.strictEqual(followup.safety.clearPendingClarification, true);
+  assert.strictEqual(followup.safety.clearPendingClarification, true, JSON.stringify(followup.safety));
   assert(JSON.stringify(followup).includes("张三"), "teacher name should become search query");
 
   const nextTask = await agentService.chat({

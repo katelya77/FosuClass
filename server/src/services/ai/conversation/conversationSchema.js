@@ -9,7 +9,7 @@ const SCHEMA_VERSION = "conversation-state.v2";
 const MEMORY_MODES = Object.freeze(["local_only", "session_state", "cloud_sync"]);
 const MAX_RECENT_TURNS = 12;
 const MAX_TURN_TEXT = 400;
-const MAX_SUMMARY = 240;
+const MAX_SUMMARY = 1200;
 const MAX_TITLE = 80;
 const MAX_EVIDENCE_REFS = 8;
 const CANONICAL_SLOTS = Object.freeze([
@@ -254,6 +254,7 @@ function publicConversationView(state) {
     runtimeMode: state.runtimeMode,
     memoryMode: state.memoryPolicy && state.memoryPolicy.mode || "session_state",
     summaryAvailable: Boolean(state.conversationSummary),
+    messageCount: Array.isArray(state.recentTurns) ? state.recentTurns.length : 0,
     conversationSummary: state.conversationSummary || "",
     updatedAt: state.updatedAt,
     createdAt: state.createdAt,

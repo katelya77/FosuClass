@@ -46,17 +46,17 @@
   - 已知偏差（不回填勾选，由 P2R 关闭）：plan.steps 只校验不消费；fallback 不区分可回退错误；R3.7 分位数未按 outcome 分离。
   - 旧 `modelPlanner`/`understandingService` 模型路径标记 compatibility-only / deprecated candidate：不删除、不扩展、新代码不得依赖；退役门槛见 P6b。
 
-## P3 — ContextAssembler 与成熟 Memory（当前阶段）
+## P3 — ContextAssembler 与成熟 Memory（已完成）
 
 详细验收标准：[`p3-acceptance.md`](./p3-acceptance.md)。Evidence：`docs/xiaofu-agent/product-platform-p3-evidence.md`。
 
-- [ ] 建立统一 ContextAssembler，贯穿 Decision、Tool 与 Response。
-- [ ] 实现持久 MemoryItem、EpisodicMemory、MemoryPolicy 和滚动摘要。
-- [ ] 实现本地零外部 semantic encoder、hybrid retrieval 与确定性 rerank。
-- [ ] 实现 supersede、冲突消解、TTL、scope、term/release invalidation。
-- [ ] 实现查看、修改、删除、清空、暂停、恢复和导出 API。
-- [ ] 明确 local_only/session_state/cloud_sync，并验证跨设备/跨会话恢复。
-- [ ] 增加 50+ 多轮 fixture 和 100 Turn 验收，运行 Phase 2/3 与完整门禁并提交 P3。
+- [x] 建立统一 ContextAssembler，贯穿 Decision、Tool 与 Response。
+- [x] 实现持久 MemoryItem、EpisodicMemory、MemoryPolicy 和滚动摘要。
+- [x] 实现本地零外部 semantic encoder、hybrid retrieval 与确定性 rerank。
+- [x] 实现 supersede、冲突消解、TTL、scope、term/release invalidation。
+- [x] 实现查看、修改、删除、清空、暂停、恢复和导出 API。
+- [x] 明确 local_only/session_state/cloud_sync，并验证跨设备/跨会话恢复。
+- [x] 增加 50+ 多轮 fixture 和 100 Turn 验收，运行 Phase 2/3 与完整门禁并提交 P3。
   - _Requirements: R5, R10.1–R10.2, R11.3_
 
 附加验收（2026-07-30 grilling 确认，全部纳入 P3 提交）：H1 clear-all revision 闭环；H2 recentTurns 跨设备恢复（客户端边界规范化 + 生产形状契约测试）；M1 单 Turn 单次原子记忆提交与冲突重算；M3 滚动摘要保留工具轨迹与 pending 状态；M4 Memory-to-Provider 双层防护（ADR-0006）；M5 delete/edit/pause 的 refresh-on-conflict；Low×6（客户端死分支与 Mock 保真、404 统一、canonical 字段、TTL 类别化、explicit/pause 语义、verification fail-closed）。

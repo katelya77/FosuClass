@@ -54,17 +54,37 @@ function createAgentPlatform(options = {}) {
         || "unversioned"),
       pluginIds: [plugin.id],
     });
+    // Request-scoped plugin state (sessions, repositories, authoritative Tool
+    // resources and Provider configuration) must never become a Runtime
+    // artifact or Trace payload. The Context stage returns an envelope once;
+    // only its generic snapshot crosses the package boundary.
+    let privateTurnState = null;
+    const invokeStage = (method, viewName) => async (stageInput) => {
+      const context = stageInput && stageInput.context || null;
+      const contextView = context && context.views && context.views[viewName] || null;
+      return stages[method](Object.assign({}, stageInput, {
+        contextView,
+        privateState: privateTurnState,
+      }));
+    };
     const execution = await runtime.executeTurn({
       request,
       configSnapshot,
       signal: input.signal || null,
       emit: (event) => callerEmit(toLegacyEvent(event)),
       stages: {
-        context: (stageInput) => stages.assembleContext(stageInput),
-        decision: (stageInput) => stages.decide(stageInput),
-        skillTool: (stageInput) => stages.executeSkillTool(stageInput),
-        verification: (stageInput) => stages.verify(stageInput),
-        response: (stageInput) => stages.compose(stageInput),
+        context: async (stageInput) => {
+          const assembled = await stages.assembleContext(stageInput);
+          if (assembled && assembled.snapshot) {
+            privateTurnState = assembled.privateState || null;
+            return assembled.snapshot;
+          }
+          return assembled;
+        },
+        decision: invokeStage("decide", "decision"),
+        skillTool: invokeStage("executeSkillTool", "tool"),
+        verification: invokeStage("verify", "verification"),
+        response: invokeStage("compose", "response"),
       },
     });
     const response = execution.artifacts && execution.artifacts.response;

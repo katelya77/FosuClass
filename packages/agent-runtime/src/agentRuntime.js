@@ -153,6 +153,7 @@ function createAgentRuntime(options = {}) {
         deadlineAt: request.deadlineAt,
         timeoutMs: request.totalTimeoutMs || 15000,
         hardLimitMs: 15000,
+        now: () => clock.now(),
       });
     const providerAttemptLedger = input.providerAttemptLedger || createProviderAttemptLedger(1);
     const createRunDurationMs = Math.max(0, Number(request.createRunDurationMs) || 0);
@@ -205,6 +206,15 @@ function createAgentRuntime(options = {}) {
       const budget = budgetFor(method);
       const stageSignal = createStageSignal(signal, budget.timeoutMs);
       try {
+        const viewName = method === "skillTool" ? "tool" : method;
+        const contextView = method === "context"
+          ? null
+          : artifacts.context && artifacts.context.views && artifacts.context.views[viewName];
+        if (method !== "context" && artifacts.context && artifacts.context.contextId) {
+          if (!contextView || contextView.contextId !== artifacts.context.contextId) {
+            throw codedError("AGENT_CONTEXT_VIEW_MISMATCH", `${method} did not receive the assembled Context view`);
+          }
+        }
         const stagePromise = Promise.resolve().then(() => stages[method](Object.freeze({
           request,
           configSnapshot,
@@ -214,6 +224,8 @@ function createAgentRuntime(options = {}) {
           providerAttemptLedger,
           emit: emitFromStage,
           context: artifacts.context,
+          contextView,
+          contextId: artifacts.context && artifacts.context.contextId || "",
           decision: artifacts.decision,
           skillTool: artifacts.skillTool,
           verification: artifacts.verification,
@@ -225,15 +237,23 @@ function createAgentRuntime(options = {}) {
         ]);
         if (stageSignal.signal.aborted) throw codedError(stageSignal.timedOut() ? "STAGE_TIMEOUT" : "ABORTED");
         assertNotAborted();
-        const immutableOutput = deepFreeze(output && typeof output === "object" ? output : {});
+        const normalizedOutput = output && typeof output === "object" ? output : {};
+        if (method !== "context" && artifacts.context && artifacts.context.contextId
+          && normalizedOutput.contextId && normalizedOutput.contextId !== artifacts.context.contextId) {
+          throw codedError("AGENT_CONTEXT_ID_MISMATCH", `${method} changed the Context identity`);
+        }
+        const immutableOutput = deepFreeze(normalizedOutput);
         artifacts[method] = immutableOutput;
         const durationMs = Math.max(0, clock.now() - startedAt);
-        records.push(stageRecord(stageName, "success", durationMs, immutableOutput));
+        const traceDetails = method === "context" || !artifacts.context
+          ? immutableOutput
+          : Object.assign({}, immutableOutput, { contextId: artifacts.context.contextId });
+        records.push(stageRecord(stageName, "success", durationMs, traceDetails));
         stageMetrics.record(stageMetricName(stageName), { durationMs, outcome: "success" });
         await emit("stage.completed", {
           stage: stageName,
           durationMs,
-          details: detailsForStage(stageName, immutableOutput),
+          details: detailsForStage(stageName, traceDetails),
         });
         return immutableOutput;
       } catch (error) {

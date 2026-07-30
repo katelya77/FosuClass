@@ -266,6 +266,12 @@ class AgentKernel {
     const context = input.contextAlreadySanitized === true
       ? Object.assign({}, input.context || {})
       : safetyGuard.sanitizeAgentContext(input.context || {});
+    // Semantic routing/planning only sees the assembled Context view. A plugin
+    // may provide request-scoped authoritative resources exclusively for the
+    // concrete Tool invocation (for example a personal schedule fact source).
+    const toolContext = input.toolContext && typeof input.toolContext === "object"
+      ? Object.assign({}, context, input.toolContext)
+      : context;
     const runtimeDecision = this.resolveRuntime(input, context);
     const runtimeMode = capabilityManifestService.normalizeRuntimeMode(runtimeDecision.runtimeMode);
     const intent = input.intent || this.intentResolver(message, context);
@@ -439,7 +445,7 @@ class AgentKernel {
           args: step.args || {},
           reason: step.reasonCode || step.reason,
         }));
-        return this.executePlan(legacyPlan, context, Object.assign({}, input, { skill, allowedToolIds }));
+        return this.executePlan(legacyPlan, toolContext, Object.assign({}, input, { skill, allowedToolIds }));
       },
       toObservations: (calls) => (calls || []).map(toObservation),
       verify: ({ toolCalls, plan: verifyPlan }) => {
