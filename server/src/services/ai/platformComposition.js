@@ -1,4 +1,4 @@
-const { createAgentRuntime } = require("../../../../packages/agent-runtime");
+const { createAgentRuntime, createContextAssembler } = require("../../../../packages/agent-runtime");
 const { EXECUTION_POLICIES, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
@@ -20,6 +20,7 @@ const { createDecisionService } = require("./decision/decisionService");
 const providerRuntimeComposition = require("./providerRuntimeComposition");
 const providerConfigService = require("./providerConfigService");
 const runtimeModeService = require("./runtimeModeService");
+const safetyGuard = require("./safetyGuard");
 
 const recentPlatformTraces = [];
 let runHandlers = null;
@@ -48,10 +49,14 @@ const platformDecisionService = createDecisionService({
     return require("./runtime/understandingCoordinator").resolveRuleBackedIntent(message, context).intent;
   },
 });
+const platformContextAssembler = createContextAssembler({
+  redact: safetyGuard.redactSensitiveText,
+});
 const ports = createFosuTurnPorts({
   agentKernel: platformKernel,
   skillCatalog: platformSkillCatalog,
   decisionService: platformDecisionService,
+  contextAssembler: platformContextAssembler,
 });
 const stages = createFosuStages({ plugin, ports });
 const runtime = createAgentRuntime({

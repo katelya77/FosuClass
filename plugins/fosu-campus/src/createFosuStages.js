@@ -23,6 +23,14 @@ function createFosuStages(options = {}) {
       plugin,
       releaseContext: plugin.getReleaseContext(),
     }));
+    if (output && output.snapshot) {
+      return {
+        snapshot: Object.assign({}, output.snapshot, {
+          pluginId: plugin.id,
+        }),
+        privateState: output.privateState || null,
+      };
+    }
     return Object.assign({}, output, {
       pluginId: plugin.id,
       releaseContext: output && output.releaseContext || plugin.getReleaseContext(),

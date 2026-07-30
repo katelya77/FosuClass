@@ -85,7 +85,9 @@ async function run() {
 
     const decisionStage = response.platformTrace.stages.find((stage) => stage.stage === "decision");
     assert.ok(decisionStage);
-    assert.deepStrictEqual(decisionStage.details, {
+    const { contextId: decisionContextId, ...decisionDetails } = decisionStage.details;
+    assert.match(decisionContextId, /^ctx_[a-f0-9]{24}$/);
+    assert.deepStrictEqual(decisionDetails, {
       executionPolicy: "strict_model_first",
       intendedProvider: "deepseek",
       actualFirstProvider: "deepseek",

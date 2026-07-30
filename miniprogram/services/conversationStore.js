@@ -63,6 +63,16 @@ function safeText(value, maxLength) {
   return text.slice(0, maxLength || MAX_MESSAGE_TEXT_LENGTH);
 }
 
+function safeRevision(value) {
+  const revision = Number(value);
+  return Number.isFinite(revision) && revision >= 0 ? Math.floor(revision) : 0;
+}
+
+function toTimestamp(value) {
+  const timestamp = Date.parse(String(value || ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function createConversationId() {
   return `xf-${Date.now()}-${Math.floor(Math.random() * 1000000).toString(36)}`;
 }
@@ -185,6 +195,11 @@ function normalizeConversation(conversation) {
     updatedAt: safeText(source.updatedAt, 40) || createdAt,
     messages,
     contextSlots: normalizeContextSlots(source.contextSlots),
+    revision: safeRevision(source.revision),
+    memoryMode: ["local_only", "session_state", "cloud_sync"].indexOf(source.memoryMode || source.mode) >= 0
+      ? (source.memoryMode || source.mode)
+      : "local_only",
+    source: source.source === "cloud_projection" ? "cloud_projection" : "local",
   };
 }
 
@@ -283,7 +298,77 @@ function getConversationList() {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     messageCount: item.messages.length,
+    revision: item.revision || 0,
+    memoryMode: item.memoryMode || "local_only",
+    source: item.source || "local",
   }));
+}
+
+/**
+ * 投影层消息白名单：仅 user/assistant 且正文非空的条目可进入本机缓存；
+ * 非法条目安全忽略，不伪造系统消息/执行状态，也不把未知角色强行归为 assistant。
+ */
+function isProjectableCloudMessage(message) {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return false;
+  if (message.role !== "user" && message.role !== "assistant") return false;
+  return Boolean(safeText(message.content, MAX_MESSAGE_TEXT_LENGTH));
+}
+
+/**
+ * Cache a server-owned conversation for rendering on this device. The cloud
+ * payload is normalized through the same privacy/size boundary as local
+ * messages, and a stale revision can never replace a newer cached projection.
+ * Messages come from the client-normalized conversation (recentTurns 权威来源）：
+ * 显式空数组表示"无可恢复消息"并会清空缓存；载荷完全未携带消息（如重命名响应）
+ * 时保留本机已有缓存，避免误清空。
+ */
+function upsertCloudProjection(conversation, options = {}) {
+  const source = conversation && typeof conversation === "object" && !Array.isArray(conversation)
+    ? conversation
+    : null;
+  const conversationId = safeText(source && source.conversationId, 80);
+  if (!source || !conversationId) return null;
+
+  const store = getStore({ createIfEmpty: false });
+  const existing = (store.conversations || []).find((item) => item.conversationId === conversationId) || null;
+  const normalizedSource = Object.assign({}, source, {
+    conversationId,
+    source: "cloud_projection",
+    memoryMode: source.memoryMode || source.mode || "cloud_sync",
+  });
+  if (Array.isArray(source.messages)) {
+    normalizedSource.messages = source.messages.filter(isProjectableCloudMessage);
+  } else if (existing && Array.isArray(existing.messages)) {
+    normalizedSource.messages = existing.messages;
+  }
+  const projection = normalizeConversation(normalizedSource);
+
+  if (existing) {
+    const incomingRevision = safeRevision(projection.revision);
+    const existingRevision = safeRevision(existing.revision);
+    const incomingTime = toTimestamp(projection.updatedAt);
+    const existingTime = toTimestamp(existing.updatedAt);
+    const isNewer = incomingRevision > existingRevision
+      || (incomingRevision === existingRevision && incomingTime > existingTime);
+    if (!isNewer) {
+      if (options.activate === true) {
+        writeStore(Object.assign({}, store, { activeConversationId: existing.conversationId }));
+      }
+      return existing;
+    }
+  }
+
+  const conversations = [projection].concat(
+    (store.conversations || []).filter((item) => item.conversationId !== conversationId)
+  );
+  const nextStore = writeStore({
+    schemaVersion: SCHEMA_VERSION,
+    activeConversationId: options.activate === true
+      ? projection.conversationId
+      : (store.activeConversationId || projection.conversationId),
+    conversations,
+  });
+  return nextStore.conversations.find((item) => item.conversationId === projection.conversationId) || projection;
 }
 
 function getActiveConversation() {
@@ -403,4 +488,5 @@ module.exports = {
   setActiveConversation,
   updateConversation,
   updateConversationContext,
+  upsertCloudProjection,
 };

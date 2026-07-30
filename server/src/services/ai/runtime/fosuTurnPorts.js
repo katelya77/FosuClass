@@ -52,9 +52,83 @@ function cloneMutable(value, seen = new WeakMap()) {
 }
 
 function countMemories(memoryBundle) {
-  const state = memoryBundle && memoryBundle.state || {};
+  const state = memoryBundle && memoryBundle.conversationState || {};
   return (Array.isArray(state.userMemories) ? state.userMemories.length : 0)
     + (Array.isArray(state.episodicMemories) ? state.episodicMemories.length : 0);
+}
+
+function requirePrivateState(stageInput = {}) {
+  const state = stageInput.privateState;
+  if (!state || typeof state !== "object") {
+    const error = new Error("The Fosu plugin private Turn state is unavailable");
+    error.code = "FOSU_PRIVATE_TURN_STATE_REQUIRED";
+    throw error;
+  }
+  return state;
+}
+
+function contextFromView(view = {}) {
+  const currentTurn = view.currentTurn && typeof view.currentTurn === "object" ? view.currentTurn : {};
+  const working = view.workingState && typeof view.workingState === "object" ? view.workingState : {};
+  const pending = view.pending && typeof view.pending === "object" ? view.pending : {};
+  return Object.assign({}, cloneMutable(working), {
+    contextId: String(view.contextId || ""),
+    runtimeMode: String(currentTurn.runtimeMode || "public"),
+    currentPage: working.currentPage || "",
+    todayDate: working.todayDate || "",
+    currentTeachingWeek: working.currentTeachingWeek || working.teachingWeek || null,
+    term: working.term || "",
+    releaseVersion: working.releaseVersion || "",
+    recentMessages: cloneMutable(view.recentMessages || []),
+    conversationSummary: String(view.rollingSummary || ""),
+    workingMemory: Object.assign({}, cloneMutable(working), {
+      currentGoal: working.activeGoal || "",
+      pendingClarification: pending.clarification || null,
+      pendingAction: pending.action || null,
+    }),
+    userMemories: cloneMutable(view.memories || []),
+    episodicMemories: cloneMutable(view.episodes || []),
+    ragCitations: cloneMutable(view.rag || []),
+    pendingClarification: cloneMutable(pending.clarification || null),
+    pendingAction: cloneMutable(pending.action || null),
+    personalScheduleAvailable: working.personalScheduleAvailable === true,
+  });
+}
+
+function conversationStateFromView(view = {}) {
+  const context = contextFromView(view);
+  return {
+    conversationSummary: context.conversationSummary,
+    summary: context.conversationSummary,
+    recentMessages: context.recentMessages,
+    workingMemory: context.workingMemory,
+    userMemories: context.userMemories,
+    episodicMemories: context.episodicMemories,
+    pendingClarification: context.pendingClarification,
+    contextSlots: Object.assign({}, context.workingMemory),
+  };
+}
+
+function authoritativeToolContext(state, view) {
+  const source = state.context && typeof state.context === "object" ? state.context : {};
+  const safeView = contextFromView(view);
+  // This object is passed only to the concrete Tool executor. It is not used by
+  // Decision/Planner/Response and never crosses the generic Runtime artifact or
+  // Trace boundary. The personal schedule remains an authoritative Tool input.
+  return Object.assign({}, safeView, {
+    currentScheduleSummary: cloneMutable(source.currentScheduleSummary || {}),
+    scheduleChangeBaseline: cloneMutable(
+      source.scheduleChangeBaseline || source.previousScheduleSummary || {}
+    ),
+    serverSession: source.serverSession || null,
+    userPreferences: cloneMutable(source.userPreferences || {}),
+    clientLocalTime: source.clientLocalTime || source.clientTime || "",
+    clientTime: source.clientTime || "",
+    todayTeachingInfo: cloneMutable(source.todayTeachingInfo || null),
+    termStartDate: source.termStartDate || "",
+    termPhase: source.termPhase || "",
+    principal: state.memoryBundle && state.memoryBundle.principal || null,
+  });
 }
 
 function deriveReminderPendingAction(toolCalls, principal, metadata = {}) {
@@ -141,9 +215,11 @@ function createFosuTurnPorts(options = {}) {
   const agentKernel = options.agentKernel;
   const skillCatalog = options.skillCatalog;
   const decisionService = options.decisionService;
+  const contextAssembler = options.contextAssembler;
   if (!agentKernel || typeof agentKernel.execute !== "function") throw new Error("agentKernel is required");
   if (!skillCatalog || typeof skillCatalog.getSkillForIntent !== "function") throw new Error("skillCatalog is required");
   if (!decisionService || typeof decisionService.decide !== "function") throw new Error("decisionService is required");
+  if (!contextAssembler || typeof contextAssembler.assemble !== "function") throw new Error("contextAssembler is required");
 
   async function context(stageInput = {}) {
     const request = stageInput.request || {};
@@ -163,6 +239,10 @@ function createFosuTurnPorts(options = {}) {
       }),
       releaseContext: stageInput.releaseContext || {},
     };
+    if (state.releaseContext && state.releaseContext.active) {
+      state.context.term = state.releaseContext.term || state.context.term || "";
+      state.context.releaseVersion = state.releaseContext.releaseVersion || state.context.releaseVersion || "";
+    }
     emitChatEvent(state.eventInput, {
       type: "request.sanitized",
       runtimeMode: state.runtimeDecision.runtimeMode,
@@ -173,19 +253,18 @@ function createFosuTurnPorts(options = {}) {
       emitChatEvent(state.eventInput, { type: "run.cancelled", runtimeMode: state.runtimeDecision.runtimeMode });
       state.earlyResponse = cancelledResponse(state);
       state.guardReason = "RUN_CANCELLED";
-      return Object.assign(state, { messageCount: 0, memoryCount: 0 });
+      const snapshot = await contextAssembler.assemble({
+        currentMessage: state.safeMessage,
+        runtimeMode: state.runtimeDecision.runtimeMode,
+        runtimeContext: state.context,
+        configVersion: stageInput.configSnapshot && stageInput.configSnapshot.configVersion,
+        manifestSummary: {
+          version: stageInput.plugin && stageInput.plugin.manifestVersion || "",
+          skillIds: stageInput.plugin && stageInput.plugin.skills && stageInput.plugin.skills.map((skill) => skill.id) || [],
+        },
+      });
+      return { snapshot: Object.assign({}, snapshot, { messageCount: 0, memoryCount: 0 }), privateState: state };
     }
-
-    const loadedMemory = memoryCoordinator.loadConversationMemory({
-      serverSession: request.serverSession,
-      runtimeMode: state.runtimeDecision.runtimeMode,
-      conversationId: state.conversationId,
-      message: state.safeMessage,
-      context: state.context,
-    });
-    state.memoryBundle = loadedMemory.memoryBundle;
-    state.conversationState = loadedMemory.conversationState;
-    state.context = loadedMemory.context;
 
     const providerConfigResolution = providerOrchestrator.resolveRuntimeProviderConfig({
       context: state.context,
@@ -196,6 +275,20 @@ function createFosuTurnPorts(options = {}) {
       runtimeMode: state.runtimeDecision.runtimeMode,
       providerRuntimeConfig: state.providerRuntimeConfig,
     });
+
+    const loadedMemory = memoryCoordinator.loadConversationMemory({
+      serverSession: request.serverSession,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      conversationId: state.conversationId,
+      message: state.safeMessage,
+      context: state.context,
+      releaseContext: state.releaseContext,
+      executionPolicy: state.executionPolicy,
+    });
+    state.memoryBundle = loadedMemory.memoryBundle;
+    state.conversationState = loadedMemory.conversationState;
+    state.context = loadedMemory.context;
+
     state.context.assistantEnvironment = providerConfigResolution.assistantEnvironment;
     state.usedPersonalContext = requestContextAssembler.deriveUsedPersonalContext(state.context);
 
@@ -309,14 +402,44 @@ function createFosuTurnPorts(options = {}) {
       state.guardReason = "SENSITIVE_CREDENTIAL_BLOCKED";
     }
 
-    return Object.assign(state, {
-      messageCount: state.safeMessage ? 1 : 0,
-      memoryCount: countMemories(state.memoryBundle),
+    const conversationState = state.conversationState || {};
+    const workingMemory = conversationState.workingMemory || state.context.workingMemory || {};
+    const snapshot = await contextAssembler.assemble({
+      currentMessage: state.safeMessage,
+      runtimeMode: state.runtimeDecision.runtimeMode,
+      recentMessages: conversationState.recentMessages || state.context.recentMessages || [],
+      rollingSummary: conversationState.conversationSummary || state.context.conversationSummary || "",
+      workingState: workingMemory,
+      pendingClarification: conversationState.pendingClarification || state.context.pendingClarification || null,
+      pendingAction: workingMemory.pendingAction || state.context.pendingAction || null,
+      memoryItems: conversationState.userMemories || [],
+      episodicMemories: conversationState.episodicMemories || [],
+      ragCitations: state.context.ragCitations || state.context.rag || [],
+      runtimeContext: Object.assign({}, state.context, {
+        personalScheduleAvailable: state.usedPersonalContext === true,
+      }),
+      configVersion: stageInput.configSnapshot && stageInput.configSnapshot.configVersion,
+      manifestSummary: {
+        version: stageInput.plugin && stageInput.plugin.manifestVersion || "",
+        skillIds: stageInput.plugin && stageInput.plugin.skills && stageInput.plugin.skills.map((skill) => skill.id) || [],
+      },
     });
+    state.assembledPending = cloneMutable(snapshot.pending || {});
+    return {
+      snapshot: Object.assign({}, snapshot, {
+        messageCount: snapshot.recentMessages.length + (state.safeMessage ? 1 : 0),
+        memoryCount: countMemories(state.memoryBundle),
+        episodeCount: snapshot.episodes.length,
+        ragCount: snapshot.rag.length,
+        selectionFingerprint: snapshot.selectionFingerprint,
+      }),
+      privateState: state,
+    };
   }
 
   async function decision(stageInput = {}) {
-    const state = stageInput.context || {};
+    const state = requirePrivateState(stageInput);
+    const contextView = stageInput.contextView || {};
     const executionPolicy = state.executionPolicy || decisionService.resolvePolicy({
       runtimeMode: state.runtimeDecision && state.runtimeDecision.runtimeMode,
       providerRuntimeConfig: state.providerRuntimeConfig || {},
@@ -332,14 +455,16 @@ function createFosuTurnPorts(options = {}) {
         decisionSource: "guard_rejected",
         goal: { name: state.guardReason || "guard_rejected" },
         selectedSkillId: "",
+        contextId: String(contextView.contextId || ""),
       };
     }
-    const mutableContext = cloneMutable(state.context);
-    const mutableConversationState = cloneMutable(state.conversationState);
+    const mutableContext = contextFromView(contextView);
+    const mutableConversationState = conversationStateFromView(contextView);
     const resolvedDecision = await decisionService.decide({
       message: state.safeMessage,
       context: mutableContext,
       conversationState: mutableConversationState,
+      contextView,
       runtimeMode: state.runtimeDecision.runtimeMode,
       executionPolicy,
       providerRuntimeConfig: state.providerRuntimeConfig,
@@ -384,6 +509,7 @@ function createFosuTurnPorts(options = {}) {
         skipped: true,
         earlyResponse: personalMemoryEarly,
         intent,
+        contextId: String(contextView.contextId || ""),
       });
     }
     return Object.assign({}, resolvedDecision, {
@@ -392,23 +518,32 @@ function createFosuTurnPorts(options = {}) {
       goalContractV2,
       intent,
       localRuleMatch: resolveRuleBackedIntent(state.safeMessage, mutableContext).ruleMatch,
+      contextId: String(contextView.contextId || ""),
     });
   }
 
   async function skillTool(stageInput = {}) {
-    const state = stageInput.context || {};
+    const state = requirePrivateState(stageInput);
+    const contextView = stageInput.contextView || {};
     const decisionResult = stageInput.decision || {};
     if (decisionResult.earlyResponse) {
-      return { skipped: true, earlyResponse: decisionResult.earlyResponse, toolCalls: [], steps: [] };
+      return {
+        skipped: true,
+        earlyResponse: decisionResult.earlyResponse,
+        toolCalls: [],
+        steps: [],
+        contextId: String(contextView.contextId || ""),
+      };
     }
-    const mutableContext = cloneMutable(state.context);
+    const mutableContext = contextFromView(contextView);
     const planned = await plannerCoordinator.executePlanner({
       message: state.safeMessage,
       context: mutableContext,
       runtimeMode: state.runtimeDecision.runtimeMode,
       runtimeDecision: state.runtimeDecision,
       intent: cloneMutable(decisionResult.intent),
-      conversationState: cloneMutable(state.conversationState),
+      conversationState: conversationStateFromView(contextView),
+      toolContext: authoritativeToolContext(state, contextView),
       providerRuntimeConfig: state.providerRuntimeConfig,
       requestId: state.requestId,
       conversationId: state.conversationId,
@@ -450,6 +585,7 @@ function createFosuTurnPorts(options = {}) {
         plan: planned.plan,
         execution: planned.execution,
         plannerDiag: planned.plannerDiag,
+        contextId: String(contextView.contextId || ""),
       };
     }
     return {
@@ -459,11 +595,13 @@ function createFosuTurnPorts(options = {}) {
       toolCalls: planned.toolCalls,
       publicToolCalls,
       plannerDiag: planned.plannerDiag,
+      contextId: String(contextView.contextId || ""),
     };
   }
 
   async function verification(stageInput = {}) {
-    const state = stageInput.context || {};
+    const state = requirePrivateState(stageInput);
+    const contextView = stageInput.contextView || {};
     const decisionResult = stageInput.decision || {};
     const skillResult = stageInput.skillTool || {};
     if (skillResult.earlyResponse) {
@@ -471,6 +609,7 @@ function createFosuTurnPorts(options = {}) {
         ok: skillResult.earlyResponse.success !== false,
         skipped: true,
         earlyResponse: skillResult.earlyResponse,
+        contextId: String(contextView.contextId || ""),
       };
     }
     const sourceExecution = skillResult.execution || {};
@@ -495,15 +634,22 @@ function createFosuTurnPorts(options = {}) {
       errors: execution.verification && execution.verification.errors || [],
       execution,
       toolResultVerification: summary,
+      contextId: String(contextView.contextId || ""),
     };
   }
 
   async function response(stageInput = {}) {
-    const state = stageInput.context || {};
+    const state = requirePrivateState(stageInput);
+    const contextView = stageInput.contextView || {};
+    const responseContext = contextFromView(contextView);
     const decisionResult = stageInput.decision || {};
     const skillResult = stageInput.skillTool || {};
     const verificationResult = stageInput.verification || {};
-    if (verificationResult.earlyResponse) return verificationResult.earlyResponse;
+    if (verificationResult.earlyResponse) {
+      return Object.assign({}, verificationResult.earlyResponse, {
+        contextId: String(contextView.contextId || ""),
+      });
+    }
 
     const execution = verificationResult.execution || skillResult.execution;
     const plan = skillResult.plan;
@@ -566,7 +712,7 @@ function createFosuTurnPorts(options = {}) {
         skill: skillRouter.executionSkill(execution),
         steps: execution.steps,
         observations: execution.observations,
-        context: state.context,
+        context: responseContext,
         rawToolCalls: toolCalls,
         fallback: false,
         fallbackLayer: "none",
@@ -586,7 +732,7 @@ function createFosuTurnPorts(options = {}) {
       }), state.memoryBundle, {
         message: state.safeMessage,
         intentName: intent.name,
-        context: state.context,
+        context: responseContext,
         runId: state.runId,
         status: "completed",
         stepCount: (execution.steps || []).length,
@@ -605,7 +751,7 @@ function createFosuTurnPorts(options = {}) {
         fallbackReason: "AI_RUNTIME_MODE=public",
         evidenceComplete: publicResponse.evidence && publicResponse.evidence.complete === true,
       });
-      return publicResponse;
+      return Object.assign(publicResponse, { contextId: String(contextView.contextId || "") });
     }
 
     const generatedResponse = await providerOrchestrator.generateAssistantResponse({
@@ -614,7 +760,7 @@ function createFosuTurnPorts(options = {}) {
       runtimeMode: state.runtimeDecision.runtimeMode,
       providerRuntimeConfig: state.providerRuntimeConfig,
       principal: state.memoryBundle.principal,
-      context: state.context,
+      context: responseContext,
       message: state.safeMessage,
       localRuleMatch: decisionResult.localRuleMatch,
       eventInput: state.eventInput,
@@ -627,6 +773,9 @@ function createFosuTurnPorts(options = {}) {
       deadline: stageInput.deadline,
       responseBudgetMs: stageInput.budget && stageInput.budget.timeoutMs,
       providerAttemptLedger: stageInput.providerAttemptLedger,
+      contextId: String(contextView.contextId || ""),
+      contextTrace: stageInput.context && stageInput.context.trace || null,
+      assistantEnvironment: state.context.assistantEnvironment || state.runtimeDecision.runtimeMode,
     });
     const stable = mergeGeneratedPayloads({
       intent,
@@ -635,7 +784,15 @@ function createFosuTurnPorts(options = {}) {
       providerPayload: generatedResponse.providerPayload,
       externalProviderUsed: generatedResponse.externalProviderUsed,
     });
-    const pendingPatch = verificationCoordinator.resolvePendingClarificationPatch({ intent, context: state.context });
+    const pendingPatch = verificationCoordinator.resolvePendingClarificationPatch({
+      intent,
+      context: Object.assign({}, responseContext, {
+        pendingClarification: state.assembledPending && state.assembledPending.clarification || null,
+        pendingClarificationExpired: Boolean(
+          state.assembledPending && state.assembledPending.clarificationExpired
+        ),
+      }),
+    });
     const composed = responseComposer.compose({
       answer: stable.answer,
       cards: stable.cards,
@@ -649,7 +806,7 @@ function createFosuTurnPorts(options = {}) {
       needsClarification: intent.name === "clarify_missing_slot" || (execution.plan && execution.plan.needsClarification),
       clarification: execution.plan && execution.plan.clarification,
       generalAssistant: isGeneralAssistantEnabled(state.runtimeDecision.runtimeMode),
-      context: state.context,
+      context: responseContext,
       message: state.safeMessage,
       userMessage: state.safeMessage,
       durationMs: Date.now() - state.startTime,
@@ -690,7 +847,7 @@ function createFosuTurnPorts(options = {}) {
       steps: execution.steps,
       observations: execution.observations,
       actions: actionCommands,
-      context: state.context,
+      context: responseContext,
       provider: generatedResponse.providerName,
       desiredProvider: generatedResponse.desiredProviderName,
       resolvedProvider: generatedResponse.providerName,
@@ -738,7 +895,7 @@ function createFosuTurnPorts(options = {}) {
     const finalResponse = attachMemory(builtResponse, state.memoryBundle, {
       message: state.safeMessage,
       intentName: intent.name,
-      context: state.context,
+      context: responseContext,
       runId: state.runId,
       status: finalOutcome.status,
       stepCount: (execution.steps || []).length,
@@ -747,17 +904,18 @@ function createFosuTurnPorts(options = {}) {
       clearPendingClarification: pendingPatch.clearPendingClarification,
       answer: composed.answer,
       evidence: null,
-      cloudSyncEnabled: state.context.cloudSyncEnabled === true
-        || (state.memoryBundle.memory && state.memoryBundle.memory.mode === "cloud_sync"),
+      cloudSyncEnabled: state.memoryBundle.memory && state.memoryBundle.memory.mode === "cloud_sync",
       allowPartialCommit: finalOutcome.status === "partial",
-      autoMemoryEnabled: state.context.autoMemoryEnabled !== false,
+      autoMemoryEnabled: !(state.memoryBundle.memoryPolicy
+        && (state.memoryBundle.memoryPolicy.paused === true
+          || state.memoryBundle.memoryPolicy.autoMemoryEnabled === false)),
       providerUsed: understanding.providerUsed || "",
       understandingSource: understanding.source,
       goalContract: decisionResult.goalContractV2 || undefined,
       pendingAction,
       lastResolvedEntity,
     });
-    maybeAttachProactive(finalResponse, { context: state.context, proactiveEvent: state.context.proactiveEvent }, state.memoryBundle, toolCalls);
+    maybeAttachProactive(finalResponse, { context: responseContext, proactiveEvent: state.context.proactiveEvent }, state.memoryBundle, toolCalls);
     attachReminderConfirmation(finalResponse, execution, state.memoryBundle.principal);
     agentKernel.finalize(execution, {
       totalDurationMs: Date.now() - state.startTime,
@@ -784,7 +942,7 @@ function createFosuTurnPorts(options = {}) {
       errorCount: finalOutcome.errors.length,
       plannerType: plan && plan.plannerType || "",
     });
-    return finalResponse;
+    return Object.assign(finalResponse, { contextId: String(contextView.contextId || "") });
   }
 
   return Object.freeze({

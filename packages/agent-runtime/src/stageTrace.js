@@ -16,14 +16,24 @@ function safeCount(value) {
 
 function detailsForStage(stage, output = {}) {
   if (!output || typeof output !== "object") return {};
+  const contextDetails = output.contextId ? {
+    contextId: safeString(output.contextId, 64),
+  } : {};
   if (stage === "context") {
-    return {
+    return Object.assign(contextDetails, {
+      schemaVersion: safeString(output.schemaVersion, 48),
+      owner: safeString(output.owner, 80),
       messageCount: safeCount(output.messageCount || output.messages && output.messages.length),
       memoryCount: safeCount(output.memoryCount || output.memories && output.memories.length),
-    };
+      episodeCount: safeCount(output.episodeCount || output.episodes && output.episodes.length),
+      ragCount: safeCount(output.ragCount || output.rag && output.rag.length),
+      tokenEstimate: safeCount(output.contextTokenEstimate),
+      compressionUsed: output.compressionUsed === true,
+      selectionFingerprint: safeString(output.selectionFingerprint, 80),
+    });
   }
   if (stage === "decision") {
-    return {
+    return Object.assign(contextDetails, {
       executionPolicy: safeString(output.executionPolicy, 48),
       intendedProvider: safeString(output.intendedProvider, 64),
       actualFirstProvider: safeString(output.actualFirstProvider, 64),
@@ -33,26 +43,26 @@ function detailsForStage(stage, output = {}) {
       fallbackPath: Object.freeze((Array.isArray(output.fallbackPath) ? output.fallbackPath : [])
         .slice(0, 2)
         .map((item) => safeString(item, 120))),
-    };
+    });
   }
   if (stage === "skill_tool") {
     const calls = Array.isArray(output.toolCalls) ? output.toolCalls : [];
-    return {
+    return Object.assign(contextDetails, {
       toolCallCount: calls.length,
       toolIds: calls.slice(0, 16).map((call) => safeString(call && (call.toolId || call.toolName || call.name), 120)),
-    };
+    });
   }
   if (stage === "verification") {
-    return {
+    return Object.assign(contextDetails, {
       ok: output.ok === true,
       errorCount: safeCount(output.errorCount || output.errors && output.errors.length),
-    };
+    });
   }
   if (stage === "response") {
-    return {
+    return Object.assign(contextDetails, {
       responseMode: safeString(output.responseMode || output.composer || "", 64),
       answerLength: safeCount(String(output.answer || output.text || "").length),
-    };
+    });
   }
   if (stage === "ui") {
     const blocks = Array.isArray(output.blocks) ? output.blocks : [];

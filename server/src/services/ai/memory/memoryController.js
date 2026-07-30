@@ -6,9 +6,14 @@
 const { defaultMemoryService } = require("../conversation/conversationMemoryService");
 const { defaultUserMemoryStore } = require("./userMemory");
 const { emptyWorkingMemory, normalizeWorkingMemory, updateWorkingMemory, workingMemoryToSlots } = require("./workingMemory");
-const { buildSemanticSummary, mergeRecentTurns, turnsToRecentMessages, desensitizeTurns } = require("./threadMemory");
+const {
+  buildSemanticSummary,
+  mergeRecentTurns,
+  turnsToRecentMessages,
+  desensitizeTurns,
+  sanitizeDurableTurnText,
+} = require("./threadMemory");
 const { extractMemoryCandidates } = require("./memoryCandidateExtractor");
-const { retrieveUserMemories } = require("./memoryRetriever");
 const { filterAndMergeCandidates } = require("./memoryPolicy");
 const safetyGuard = require("../safetyGuard");
 
@@ -42,8 +47,12 @@ class MemoryController {
 
     // Soft-fill working memory from persisted slots when empty.
     const slots = state && state.contextSlots || context.conversationSlots || {};
+    const allowCurrentTurnSemantics = input.executionPolicy !== "strict_model_first";
     const seeded = updateWorkingMemory(workingMemory, {
-      message: input.message,
+      // In strict_model_first the Provider owns the first semantic Decision.
+      // Current-turn regex extraction is deferred until the post-Decision
+      // commit; persisted slots and prior Working State remain available.
+      message: allowCurrentTurnSemantics ? input.message : "",
       intentName: slots.lastIntent,
       contextSlots: slots,
       campus: context.campus || slots.campus,
@@ -53,10 +62,44 @@ class MemoryController {
       pendingClarification: context.pendingClarification || (state && state.pendingClarification),
     });
 
-    const userLoaded = this.userMemory.load({
-      principal: bundle.principal,
-      memoryMode,
-    });
+    const authoritativeRelease = input.releaseContext && typeof input.releaseContext === "object"
+      ? input.releaseContext
+      : {};
+    const versionBoundary = {
+      termId: authoritativeRelease.term || authoritativeRelease.semester || "",
+      releaseVersion: authoritativeRelease.releaseVersion || authoritativeRelease.version || "",
+    };
+    if (memoryMode === "cloud_sync" && (versionBoundary.termId || versionBoundary.releaseVersion)) {
+      this.userMemory.invalidateContext({
+        principal: bundle.principal,
+        memoryMode,
+        ...versionBoundary,
+      });
+    }
+    const preparedMemory = typeof this.userMemory.prepareTurnSnapshot === "function"
+      ? this.userMemory.prepareTurnSnapshot({
+        principal: bundle.principal,
+        memoryMode,
+        message: input.message,
+        workingMemory: seeded,
+        goal: seeded.currentGoal,
+        intentName: slots.lastIntent,
+        ...versionBoundary,
+        limit: 5,
+        episodeLimit: 3,
+      })
+      : null;
+    const userLoaded = preparedMemory
+      ? {
+        items: preparedMemory.allItems,
+        values: preparedMemory.values,
+        revision: preparedMemory.revision,
+        policy: preparedMemory.policy,
+      }
+      : this.userMemory.load({
+        principal: bundle.principal,
+        memoryMode,
+      });
     if (userLoaded.values && userLoaded.values.preferredName && !seeded.preferredName) {
       seeded.preferredName = userLoaded.values.preferredName;
     }
@@ -101,17 +144,31 @@ class MemoryController {
       || context.conversationSummary
       || "";
 
-    const relevantUserMemories = retrieveUserMemories(userLoaded.items, {
-      message: input.message,
-      workingMemory: seeded,
-      goal: seeded.currentGoal,
-      intentName: slots.lastIntent,
-    }, 5);
+    const retrieved = preparedMemory
+      ? {
+        items: preparedMemory.items,
+        episodes: preparedMemory.episodes,
+        revision: preparedMemory.revision,
+      }
+      : this.userMemory.retrieve({
+        principal: bundle.principal,
+        memoryMode,
+        message: input.message,
+        workingMemory: seeded,
+        goal: seeded.currentGoal,
+        intentName: slots.lastIntent,
+        ...versionBoundary,
+        limit: 5,
+        episodeLimit: 3,
+      });
+    const relevantUserMemories = retrieved.items || [];
+    const relevantEpisodes = retrieved.episodes || [];
 
     context.recentMessages = recentMessages;
     context.conversationSummary = conversationSummary;
     context.workingMemory = seeded;
     context.userMemories = relevantUserMemories;
+    context.episodicMemories = relevantEpisodes;
     context.pendingClarification = context.pendingClarification || seeded.pendingClarification || null;
 
     // Apply soft entity inheritance onto flat context for tools.
@@ -135,6 +192,7 @@ class MemoryController {
       recentMessages,
       workingMemory: seeded,
       userMemories: relevantUserMemories,
+      episodicMemories: relevantEpisodes,
       pendingClarification: context.pendingClarification,
       contextSlots: state && state.contextSlots || soft,
       memoryMode,
@@ -148,6 +206,9 @@ class MemoryController {
       context: safetyGuard.sanitizeAgentContext(context),
       conversationState,
       userMemoryItems: userLoaded.items,
+      episodicMemories: relevantEpisodes,
+      memoryPolicy: userLoaded.policy,
+      memoryRevision: Math.max(userLoaded.revision || 0, retrieved.revision || 0),
       memoryMode,
     };
   }
@@ -163,7 +224,11 @@ class MemoryController {
     const principal = input.principal
       || (input.memoryBundle && input.memoryBundle.principal);
     const prevState = input.state || (input.memoryBundle && input.memoryBundle.state) || null;
-    const autoMemoryEnabled = input.autoMemoryEnabled !== false;
+    const storedPolicy = input.memoryBundle && input.memoryBundle.memoryPolicy;
+    // pause/autoMemoryEnabled=false 只停自动写入（M1/Low#5）：explicit 候选与手动
+    // 管理操作由下游服务层豁免。存储策略作为纵深防御与上游传入值取交集。
+    const autoMemoryEnabled = input.autoMemoryEnabled !== false
+      && !(storedPolicy && (storedPolicy.paused === true || storedPolicy.autoMemoryEnabled === false));
 
     if (input.cancelled === true || input.securityBlocked === true) {
       return {
@@ -215,6 +280,21 @@ class MemoryController {
       .map((c) => c && c.name)
       .filter(Boolean);
     const observations = Array.isArray(input.observations) ? input.observations : [];
+    const durableClassification = { toolNames, intentName: input.intentName };
+    const durableUserMessage = sanitizeDurableTurnText(input.message, {
+      ...durableClassification,
+      role: "user",
+    });
+    const durableAssistantAnswer = sanitizeDurableTurnText(input.answer, {
+      ...durableClassification,
+      role: "assistant",
+    });
+    const durableObservations = observations.map((observation) => Object.assign({}, observation, {
+      summary: sanitizeDurableTurnText(observation && observation.summary, {
+        ...durableClassification,
+        role: "assistant",
+      }),
+    }));
     const writeOps = (Array.isArray(input.toolCalls) ? input.toolCalls : [])
       .filter((c) => c && c.result && c.result.requiresConfirmation)
       .map((c) => ({ tool: c.name, status: "awaiting_confirmation" }));
@@ -230,7 +310,7 @@ class MemoryController {
         || prevWorking.preferredName,
       pendingClarification: input.clearPendingClarification ? null : input.pendingClarification,
       executedTools: toolNames,
-      observations,
+      observations: durableObservations,
       pendingWriteOps: writeOps,
       pendingAction: input.pendingAction,
       lastResolvedEntity: input.lastResolvedEntity,
@@ -238,8 +318,8 @@ class MemoryController {
       understandingSource: input.understandingSource,
       goalContract: input.goalContract,
       lastRecommendation: input.lastRecommendation || (
-        input.answer
-          ? { summary: String(input.answer).slice(0, 120), count: toolNames.length }
+        durableAssistantAnswer
+          ? { summary: durableAssistantAnswer.slice(0, 120), count: toolNames.length }
           : null
       ),
     });
@@ -296,18 +376,54 @@ class MemoryController {
       }
     });
 
+    // M1：偏好/约束/Episode 收敛为一个确定性 Mutation Plan + 一次权威 mutate。
+    // expectedRevision 来自本轮 load 的 memoryRevision；冲突重试与 fail-soft
+    // 由 UserMemoryStore.commit 统一编排（禁止并行批量并发写同一用户记忆）。
+    const expectedMemoryRevision = input.expectedMemoryRevision !== undefined && input.expectedMemoryRevision !== null
+      ? Number(input.expectedMemoryRevision)
+      : (input.memoryBundle && Number(input.memoryBundle.memoryRevision)) || 0;
+    const episodeRequested = input.status === "completed" && input.failed !== true
+      && input.allowPartialCommit !== true && input.verified === true
+      && autoMemoryEnabled && toolNames.length && input.intentName;
     const userCommit = this.userMemory.commit({
       principal,
       memoryMode,
       autoMemoryEnabled,
       candidates,
+      episode: episodeRequested
+        ? {
+          goal: input.intentName,
+          outcomeSummary: `已成功完成 ${String(input.intentName).slice(0, 80)}`,
+          reusableConstraints: {
+            campus: workingMemory.campus || "",
+            weekday: workingMemory.weekday || 0,
+            period: workingMemory.periodHint || "",
+            type: workingMemory.lastResolvedEntity && workingMemory.lastResolvedEntity.type || "",
+            targetName: workingMemory.lastResolvedEntity && workingMemory.lastResolvedEntity.name
+              || workingMemory.className || workingMemory.teacherName || workingMemory.courseName || "",
+          },
+          provenanceRunId: input.runId || "",
+          status: "success",
+        }
+        : null,
+      verified: input.verified === true,
+      expectedRevision: expectedMemoryRevision,
+      runId: input.runId,
+      conversationId: input.conversationId,
+      policyVersion: storedPolicy && storedPolicy.configVersion || "",
+      termId: input.context && (input.context.term || input.context.semester) || "",
+      releaseVersion: input.context && input.context.releaseVersion || "",
     });
+    const episodeCommit = userCommit && userCommit.episode
+      ? userCommit.episode
+      : { persisted: false, reason: episodeRequested ? "" : "not_successful_task" };
 
     const conversationSummary = buildSemanticSummary({
+      previousSummary: prevState && prevState.conversationSummary || "",
       intentName: input.intentName,
       workingMemory,
       completedTools: toolNames,
-      resultSummary: input.answer,
+      resultSummary: durableAssistantAnswer,
       corrections: candidates.filter((c) => c.correction).map((c) => `${c.key}=${c.value}`),
     });
 
@@ -315,7 +431,7 @@ class MemoryController {
     // Persist recent turns for both session_state and cloud_sync (desensitized); turnId dedupe.
     const recentTurns = memoryMode === "local_only"
       ? []
-      : mergeRecentTurns(prevTurns, input.message, input.answer, input.intentName, {
+      : mergeRecentTurns(prevTurns, durableUserMessage, durableAssistantAnswer, input.intentName, {
         runId: input.runId || "",
       });
 
@@ -348,8 +464,8 @@ class MemoryController {
       conversationId: input.conversationId,
       memoryMode,
       cloudSyncEnabled: memoryMode === "cloud_sync" || input.cloudSyncEnabled === true,
-      message: input.message,
-      answer: input.answer,
+      message: durableUserMessage,
+      answer: durableAssistantAnswer,
       intentName: input.intentName,
       context: input.context,
       runId: input.runId,
@@ -377,6 +493,12 @@ class MemoryController {
       recentTurns,
       candidates,
       userCommit,
+      episodeCommit,
+      memoryWrite: {
+        status: userCommit && userCommit.writeStatus || "succeeded",
+        attemptCount: userCommit && userCommit.attemptCount || 0,
+        revision: userCommit && userCommit.revision || 0,
+      },
       autoMemoryHints: userCommit.persisted
         ? userCommit.keys.map((key) => {
           if (key === "campus") return "已记住你的常用校区，可在记忆设置中修改。";
@@ -521,6 +643,7 @@ class MemoryController {
         recentMessages: [],
         workingMemory: emptyWorkingMemory(),
         userMemories: [],
+        episodicMemories: [],
         pendingClarification: null,
         contextSlots: {},
         memoryMode: "local_only",
@@ -533,6 +656,7 @@ class MemoryController {
       recentMessages: bundle.context && bundle.context.recentMessages || [],
       workingMemory: bundle.context && bundle.context.workingMemory || emptyWorkingMemory(),
       userMemories: bundle.context && bundle.context.userMemories || [],
+      episodicMemories: bundle.context && bundle.context.episodicMemories || [],
       pendingClarification: bundle.context && bundle.context.pendingClarification || null,
       contextSlots: bundle.state && bundle.state.contextSlots || {},
       memoryMode: bundle.memoryMode || "local_only",

@@ -39,6 +39,18 @@ async function main() {
     "total",
   ]);
   assert.strictEqual(response.platformTrace.stages.find((stage) => stage.stage === "decision").outcome, "success");
+  const contextStages = response.platformTrace.stages.filter((stage) => (
+    ["context", "decision", "skill_tool", "verification", "response"].includes(stage.stage)
+  ));
+  assert.match(contextStages[0].details.contextId, /^ctx_[a-f0-9]{24}$/);
+  assert.strictEqual(contextStages[0].details.schemaVersion, "agent-context.v2");
+  assert.strictEqual(contextStages[0].details.owner, "@xiaofu-agent/agent-runtime");
+  assert.deepStrictEqual(
+    Array.from(new Set(contextStages.map((stage) => stage.details.contextId))),
+    [contextStages[0].details.contextId],
+    "Decision, Tool, Verification and Response must consume one assembled Context identity"
+  );
+  assert(!JSON.stringify(response.platformTrace).includes("currentScheduleSummary"));
   assert(response.ui && Array.isArray(response.ui.blocks));
 
   const diagnostics = agentService.__getPlatformForTests();

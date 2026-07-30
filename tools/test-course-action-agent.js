@@ -85,8 +85,10 @@ async function run() {
 
   const changes = await chat("检测我的课表有没有变化");
   assert.ok(changes.steps.some((step) => step.tool === "detect_schedule_changes"));
-  assert.ok(changes.answer.includes("变化"));
+  assert.ok(changes.answer.includes("变化"), changes.answer);
   assert.ok(changes.cards[0].items.some((item) => item.title.includes("动物解剖学")));
+  assert.ok(!JSON.stringify(changes.platformTrace).includes("scheduleChangeBaseline"));
+  assert.ok(!JSON.stringify(changes.platformTrace).includes("currentScheduleSummary"));
 
   const gap = await chat("两节课中间有一小时，帮我找附近空教室");
   assert.ok(gap.steps.some((step) => step.tool === "get_today_courses"));

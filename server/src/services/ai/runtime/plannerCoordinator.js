@@ -36,6 +36,7 @@ async function executePlanner(input = {}) {
   const execution = await executionKernel.execute({
     message: message,
     context,
+    toolContext: input.toolContext || context,
     contextAlreadySanitized: true,
     runtimeDecision,
     intent,

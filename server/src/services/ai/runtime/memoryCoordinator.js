@@ -50,6 +50,8 @@ function loadConversationMemory(input = {}) {
       message: safeMessage,
       context,
       memoryMode: context.memoryMode,
+      releaseContext: input.releaseContext || null,
+      executionPolicy: input.executionPolicy || "",
     });
     conversationState = memoryBundle.conversationState || null;
     context = safetyGuard.sanitizeAgentContext(memoryBundle.context || context);
@@ -59,6 +61,7 @@ function loadConversationMemory(input = {}) {
       context.conversationSummary = conversationState.conversationSummary || context.conversationSummary;
       context.workingMemory = conversationState.workingMemory || context.workingMemory;
       context.userMemories = conversationState.userMemories || context.userMemories || [];
+      context.episodicMemories = conversationState.episodicMemories || context.episodicMemories || [];
       context.recentMessages = conversationState.recentMessages || context.recentMessages;
     }
   } catch (error) {
@@ -284,6 +287,9 @@ function attachMemory(response, memoryBundle, options = {}) {
     goalContract: options.goalContract,
     autoMemoryEnabled: options.autoMemoryEnabled !== false,
     allowPartialCommit: options.allowPartialCommit === true,
+    verification: options.verification || response.verification || null,
+    verified: options.verified === true
+      || Boolean(response.verification && response.verification.ok === true),
   });
   const memory = commitResult.memory;
   response.memory = memory;
