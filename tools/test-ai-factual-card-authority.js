@@ -9,15 +9,17 @@ process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "deepseek";
 process.env.AI_PROVIDER_POLICY = "always";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
-// 本用例验证 model-first 链路的 Provider truth（Understanding/Planner 尝试记录），
-// 显式关闭规则快路径，恢复模型优先理解；快路径本身由 test-agent-fast-path.js 覆盖。
-process.env.AI_UNDERSTANDING_RULE_FIRST = "0";
+// 本用例验证统一 Decision 的 model-first Provider truth；快路径由
+// test-agent-fast-path.js 在显式 adaptive 策略下覆盖。
+process.env.AI_EXECUTION_POLICY = "strict_model_first";
 process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(tempRoot, "ai-provider-config.json");
 process.env.AI_API_KEY = "test-provider-key-not-real";
 process.env.AI_RUNTIME_MODE = "competition";
 process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.AI_DECISION_PROVIDER = "deepseek";
+process.env.AI_RESPONSE_PROVIDER = "deepseek";
 process.env.NODE_ENV = "development";
 process.env.AI_PROVIDER_ENVIRONMENTS = JSON.stringify({
   public: { environment: "public", enabled: false, provider: "mock", providerPolicy: "tool-only" },
@@ -38,6 +40,18 @@ deepseekProvider.generate = async () => ({
     actions: [{ label: "伪造按钮", type: "navigate", url: "/pages/school/school" }],
   }],
   suggestions: ["伪造建议"],
+});
+deepseekProvider.generateStructured = async () => ({
+  provider: "deepseek",
+  content: JSON.stringify({
+    schemaVersion: "decision.v2",
+    goal: { name: "recommend_meeting_time", confidence: 0.99, requiresClarification: false },
+    entities: [],
+    constraints: { durationSections: 2 },
+    skillCandidates: [{ skillId: "recommend_meeting_time", confidence: 0.99 }],
+    plan: { steps: [{ id: "recommend", skillId: "recommend_meeting_time", purpose: "Recommend a verified study time" }] },
+    responseMode: "deterministic",
+  }),
 });
 
 const agentService = require("../server/src/services/ai/agentService");
@@ -67,7 +81,8 @@ async function run() {
   });
   const text = JSON.stringify(response);
   assert.strictEqual(providerCallCount, 0, "factual intents must never call the expression provider");
-  assert.strictEqual(response.safety.externalProviderUsed, true, "final Provider truth includes model-first Understanding/Planner attempts");
+  assert.strictEqual(response.safety.externalProviderUsed, true, "final Provider truth includes the model-first Decision attempt");
+  assert.strictEqual(response.providerStages.planner.attempted, false, "unified Decision suppresses the old model Planner");
   assert.strictEqual(response.providerStages.response.attempted, false, "the factual response stage remains deterministic");
   assert(!text.includes("伪造推荐卡"), "provider cards must not override deterministic cards");
   assert(!text.includes("伪造按钮"), "provider actions must not override deterministic actions");

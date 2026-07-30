@@ -52,6 +52,8 @@ function createPlatformAdminHandlers(options = {}) {
         skillCount: diagnostics.skillCount || 0,
         toolCount: diagnostics.toolCount || 0,
         recentTraceCount: diagnostics.recentTraceCount || 0,
+        runtime: diagnostics.runtime || {},
+        providerRuntime: diagnostics.providerRuntime || {},
         executionPolicy: getExecutionPolicy(),
       },
       serverTime: new Date().toISOString(),

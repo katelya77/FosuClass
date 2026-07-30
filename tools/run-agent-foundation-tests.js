@@ -55,6 +55,9 @@ for (const file of tests) {
     cwd: root,
     env: Object.assign({}, process.env, {
       AI_AGENT_ENABLED: "false",
+      // Foundation fixtures are deterministic and intentionally have no real
+      // Provider. P2 requires this fast path to be an explicit adaptive choice.
+      AI_EXECUTION_POLICY: "adaptive",
       AI_COMPETITION_ALLOW_ALL_SESSIONS: "true",
       // When suite inherits AI_RUNTIME_MODE=competition without active env, map to trial.
       AI_PROVIDER_ACTIVE_ENV: process.env.AI_PROVIDER_ACTIVE_ENV || "trial",

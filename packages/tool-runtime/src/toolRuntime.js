@@ -94,6 +94,9 @@ function createToolRuntime(options = {}) {
     if (inputErrors.length) throw codedError("TOOL_INPUT_SCHEMA_INVALID", exactId, inputErrors.slice(0, 20));
     const result = await byId.get(exactId).execute(args, context, {
       signal: executionOptions.signal || null,
+      timeoutMs: Number.isFinite(Number(executionOptions.timeoutMs)) && Number(executionOptions.timeoutMs) > 0
+        ? Number(executionOptions.timeoutMs)
+        : undefined,
       toolId: exactId,
     });
     if (executionOptions.signal && executionOptions.signal.aborted) throw codedError("ABORTED", exactId);

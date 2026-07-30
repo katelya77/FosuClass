@@ -107,6 +107,7 @@ function decisionFromUnderstanding(understanding, skillCatalog, source) {
 function isAdaptiveFastPath(intent) {
   const metadata = capabilityManifestService.getIntent(intent && intent.name);
   return Boolean(metadata && metadata.factualTask === true)
+    || Boolean(metadata && metadata.externalProviderAllowed === false)
     || String(intent && intent.name || "") === "project_qa"
     || Number(intent && intent.ruleScore || 0) >= 8;
 }
@@ -169,7 +170,10 @@ function createDecisionService(options = {}) {
     const localIntent = typeof input.deterministicResolve === "function"
       ? input.deterministicResolve(input.message, input.context || {})
       : deterministicResolve(input.message, input.context || {});
-    if (executionPolicy === EXECUTION_POLICIES.ADAPTIVE && isAdaptiveFastPath(localIntent)) {
+    const agentEnabled = !["false", "0"].includes(String(
+      input.providerRuntimeConfig && input.providerRuntimeConfig.AI_AGENT_ENABLED || "true"
+    ).toLowerCase());
+    if (executionPolicy === EXECUTION_POLICIES.ADAPTIVE && (!agentEnabled || isAdaptiveFastPath(localIntent))) {
       const result = deterministic(Object.assign({}, input, { deterministicIntent: localIntent }), "deterministic_adaptive", "ADAPTIVE_HIGH_CONFIDENCE", executionPolicy);
       emit(input.onEvent, { type: "understanding.completed", status: "success", runtimeMode, understandingSource: result.decisionSource, providerUsed: false });
       emit(input.onEvent, { type: "decision.completed", status: "success", runtimeMode, executionPolicy, decisionSource: result.decisionSource, providerUsed: false });

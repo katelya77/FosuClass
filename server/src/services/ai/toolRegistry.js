@@ -1333,12 +1333,18 @@ function diagnoseDataStatus(input = {}, context = {}) {
   };
 }
 
-function getCampusWeather(input = {}) {
-  return weatherService.getCampusWeather(input);
+function getCampusWeather(input = {}, context = {}) {
+  return weatherService.getCampusWeather(Object.assign({}, input, {
+    abortSignal: context.abortSignal || null,
+    timeoutMs: context.timeoutMs,
+  }));
 }
 
-function getCourseWeatherAdvice(input = {}) {
-  return weatherService.getCourseWeatherAdvice(input);
+function getCourseWeatherAdvice(input = {}, context = {}) {
+  return weatherService.getCourseWeatherAdvice(Object.assign({}, input, {
+    abortSignal: context.abortSignal || null,
+    timeoutMs: context.timeoutMs,
+  }));
 }
 
 function searchCampusPlace(input = {}) {
