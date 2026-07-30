@@ -21,14 +21,21 @@ const additional = [
   "tools/test-server-ai-module-require.js",
   "tools/test-server-no-root-shared-require.js"
 ];
-const tests = Array.from(new Set(discovered.concat(additional))).sort();
+let tests = Array.from(new Set(discovered.concat(additional))).sort();
+const startAt = String(process.env.AGENT_REGRESSION_START_AT || "").trim();
+if (startAt) tests = tests.filter((file) => path.basename(file) >= path.basename(startAt));
 
 let passed = 0;
 for (const file of tests) {
   console.log(`\n[agent-regression] ${file}`);
   const result = spawnSync(process.execPath, [path.join(root, file)], {
     cwd: root,
-    env: Object.assign({}, process.env, { AI_AGENT_ENABLED: "false" }),
+    env: Object.assign({}, process.env, {
+      AI_AGENT_ENABLED: "false",
+      // Regression fixtures do not carry Provider credentials. Keep their
+      // deterministic behavior as an explicit adaptive test policy.
+      AI_EXECUTION_POLICY: "adaptive",
+    }),
     stdio: "inherit",
   });
   if (result.status !== 0) {

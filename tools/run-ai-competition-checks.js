@@ -74,6 +74,9 @@ function runScript(name) {
     shell: true,
     env: Object.assign({}, process.env, {
       AI_AGENT_ENABLED: process.env.AI_AGENT_ENABLED || "false",
+      // This legacy deterministic matrix has no Provider credentials. P2 only
+      // permits its local fast path through an explicit adaptive policy.
+      AI_EXECUTION_POLICY: "adaptive",
     }),
   });
   if (result.status !== 0) {

@@ -139,7 +139,8 @@ async function run() {
     assert.strictEqual(requests.length, callsBeforePublic, "public external attempt count must remain zero");
     const publicStage = publicResponse.platformTrace.stages.find((stage) => stage.stage === "decision");
     assert.strictEqual(publicStage.details.executionPolicy, "deterministic");
-    assert.strictEqual(publicStage.details.actualFirstProvider, "");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(publicStage.details, "actualFirstProvider"), false,
+      "public client trace must not expose Provider diagnostics");
     console.log("test-agent-strict-decision: PASS");
   } finally {
     providerConfigService.resolveRuntimeProviderConfig = originalResolve;

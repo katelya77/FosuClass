@@ -1,4 +1,5 @@
 const { createAgentRuntime } = require("../../../../packages/agent-runtime");
+const { EXECUTION_POLICIES, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog } = require("../../../../packages/skill-runtime");
@@ -17,6 +18,8 @@ const { AgentKernel } = require("./agentKernel");
 const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
 const { createDecisionService } = require("./decision/decisionService");
 const providerRuntimeComposition = require("./providerRuntimeComposition");
+const providerConfigService = require("./providerConfigService");
+const runtimeModeService = require("./runtimeModeService");
 
 const recentPlatformTraces = [];
 let runHandlers = null;
@@ -89,6 +92,36 @@ function listRecentPlatformTraces() {
   return recentPlatformTraces.slice().reverse();
 }
 
+function getExecutionPolicyTruth() {
+  const activeMode = runtimeModeService.resolveConfiguredMode();
+  let runtimeConfig = {};
+  try {
+    const status = providerConfigService.getStatus();
+    const environment = activeMode === "public" ? "public" : (status.activeEnvironment || activeMode);
+    runtimeConfig = providerConfigService.getRuntimeConfigForEnvironment(environment) || {};
+  } catch (error) {
+    runtimeConfig = {};
+  }
+  const configuredPolicy = runtimeConfig.AI_EXECUTION_POLICY || process.env.AI_EXECUTION_POLICY || "";
+  return Object.freeze({
+    activeMode,
+    configuredPolicy: String(configuredPolicy || "").slice(0, 40),
+    effectiveDefault: resolveExecutionPolicy({
+      runtimeMode: activeMode,
+      configuredPolicy,
+      trusted: true,
+    }),
+    supported: Object.freeze([
+      EXECUTION_POLICIES.DETERMINISTIC,
+      EXECUTION_POLICIES.STRICT_MODEL_FIRST,
+      EXECUTION_POLICIES.ADAPTIVE,
+    ]),
+    strictModelFirstReady: true,
+    adaptiveReady: true,
+    publicProviderForbidden: true,
+  });
+}
+
 function getRunHandlers() {
   if (runHandlers) return runHandlers;
   // Lazy imports keep the Agent Runtime independent from the integrated
@@ -129,6 +162,7 @@ function getRunHandlers() {
 
 module.exports = {
   getDiagnostics,
+  getExecutionPolicyTruth,
   getPlatform,
   getRunHandlers,
   listRecentPlatformTraces,

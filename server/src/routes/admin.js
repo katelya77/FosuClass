@@ -62,16 +62,7 @@ const knowledgeControlPlane = createKnowledgeControlPlane();
 const platformAdminHandlers = createPlatformAdminHandlers({
   getPlatformDiagnostics: platformComposition.getDiagnostics,
   listRecentPlatformTraces: platformComposition.listRecentPlatformTraces,
-  getExecutionPolicy() {
-    const activeMode = runtimeModeService.resolveConfiguredMode();
-    return {
-      activeMode,
-      effectiveDefault: activeMode === "public" ? "deterministic" : "legacy_configured",
-      supported: ["deterministic", "legacy_configured"],
-      strictModelFirstReady: false,
-      adaptiveReady: false,
-    };
-  },
+  getExecutionPolicy: platformComposition.getExecutionPolicyTruth,
 });
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");

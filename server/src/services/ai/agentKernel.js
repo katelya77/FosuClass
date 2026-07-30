@@ -153,6 +153,7 @@ class AgentKernel {
       return await this.toolRuntime.execute(toolName, args, context, {
         allowedToolIds: input.allowedToolIds || [],
         signal: input.signal || null,
+        timeoutMs: input.budget && Number(input.budget.timeoutMs) || this.toolTimeoutMs,
       });
     } catch (error) {
       if (error && ["TOOL_NOT_ALLOWED", "TOOL_NOT_REGISTERED"].includes(error.code)) throw error;

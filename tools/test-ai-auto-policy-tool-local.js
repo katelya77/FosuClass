@@ -15,6 +15,9 @@ process.env.AI_RUNTIME_MODE = "competition";
 process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.AI_DECISION_PROVIDER = "deepseek";
+process.env.AI_RESPONSE_PROVIDER = "deepseek";
+process.env.AI_EXECUTION_POLICY = "strict_model_first";
 process.env.NODE_ENV = "development";
 // 本测试聚焦模型链 + 响应阶段策略边界：显式关闭快路径，保证 understanding/planning 走模型。
 process.env.AI_UNDERSTANDING_RULE_FIRST = "0";
@@ -39,23 +42,20 @@ deepseekProvider.generate = async (input) => {
 };
 deepseekProvider.generateStructured = async (input) => {
   structuredPurposes.push(input.purpose || "structured");
-  if (input.purpose === "planning") {
-    const error = new Error("force deterministic planner for this policy test");
-    error.code = "INVALID_PROVIDER_JSON";
-    throw error;
-  }
-  const isRecommendation = /连续\s*2\s*节自习/.test(String(input.message || ""));
+  const prompt = JSON.stringify(input.messages || []);
+  const isRecommendation = /连续\s*2\s*节自习/.test(prompt);
+  const goal = isRecommendation ? "recommend_meeting_time" : "project_qa";
+  const skillId = isRecommendation ? "recommend_meeting_time" : "knowledge_search";
   return {
     provider: "deepseek",
     content: JSON.stringify({
-      goal: isRecommendation ? "recommend_meeting_time" : "project_qa",
-      entityType: "none",
-      entity: "",
-      normalizedEntity: "",
+      schemaVersion: "decision.v2",
+      goal: { name: goal, confidence: 0.99, requiresClarification: false },
+      entities: [],
       constraints: isRecommendation ? { durationSections: 2 } : {},
-      followUpMode: "new_goal",
-      confidence: 0.99,
-      needsClarification: false,
+      skillCandidates: [{ skillId, confidence: 0.99 }],
+      plan: { steps: [{ id: "execute", skillId, purpose: "Resolve the user request" }] },
+      responseMode: isRecommendation ? "deterministic" : "natural_language",
     }),
   };
 };
@@ -85,14 +85,14 @@ async function run() {
     runtimeMode: "competition",
     serverSession: { openidHash: "unit-test-openid" },
   });
-  assert.deepStrictEqual(structuredPurposes, ["understanding", "planning"], "recommendation must understand first, then use the constrained planner boundary");
+  assert.deepStrictEqual(structuredPurposes, ["decision"], "recommendation must use one unified Decision call");
   assert.strictEqual(responseProviderCalls, 0, "factual recommendation must not use DeepSeek as its response fact source");
   assert.strictEqual(recommendation.safety.externalProviderUsed, true, "final truth must include Understanding/Planner Provider calls");
   assert.strictEqual(recommendation.safety.desiredProvider, "deepseek");
   assert.strictEqual(recommendation.safety.resolvedProvider, "mock");
   assert.strictEqual(recommendation.providerStages.understanding.completed, true);
-  assert.strictEqual(recommendation.providerStages.planner.attempted, true);
-  assert.strictEqual(recommendation.providerStages.planner.fallback, true);
+  assert.strictEqual(recommendation.providerStages.planner.attempted, false);
+  assert.strictEqual(recommendation.providerStages.planner.fallback, false);
   assert.strictEqual(recommendation.providerStages.response.attempted, false, "facts remain deterministic at the response stage");
   assert(recommendation.toolCalls.length >= 2, "recommendation should still have multiple deterministic tool calls");
   assert.strictEqual(recommendation.metrics.externalProviderUsed, true);
@@ -103,7 +103,7 @@ async function run() {
     runtimeMode: "competition",
     serverSession: { openidHash: "unit-test-openid" },
   });
-  assert.deepStrictEqual(structuredPurposes, ["understanding", "planning", "understanding", "planning"], "each message must run model Understanding before planning");
+  assert.deepStrictEqual(structuredPurposes, ["decision", "decision"], "each message must run exactly one unified model Decision");
   assert.strictEqual(responseProviderCalls, 1, "project QA should use DeepSeek for expression in auto policy");
   assert.strictEqual(qa.safety.externalProviderUsed, true);
   assert.strictEqual(qa.safety.resolvedProvider, "deepseek");

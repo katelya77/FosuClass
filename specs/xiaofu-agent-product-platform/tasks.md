@@ -31,14 +31,14 @@
 
 ## P2 — strict_model_first、统一 Decision 与性能
 
-- [ ] 建立 `packages/provider-runtime`，迁入 Provider Adapter、连接池、attempt、熔断与 probe。
-- [ ] 实现三种 executionPolicy；public 强制 deterministic，trial/dev 默认 strict_model_first，adaptive 显式开启。
-- [ ] 将 Understanding 与 Planner 合为一次 DecisionContract V2 调用；移除 strict 下规则先决定 Goal 的路径。
-- [ ] 校验 allowedSkillIds 与五因子 Tool 集合，拒绝任意模型 Tool 名。
-- [ ] 实现总 Deadline、阶段预算、AbortSignal 和一次受控 fallback。
-- [ ] 持久记录真实 first provider、fallbackPath 与六阶段 timing。
-- [ ] 建立三 Provider mock conformance、strict-first 证明、public 零 attempt 与性能基准。
-- [ ] 运行相关门禁并提交 P2。
+- [x] 建立 `packages/provider-runtime`，迁入 Provider Adapter、连接池、attempt、熔断与 probe。
+- [x] 实现三种 executionPolicy；public 强制 deterministic，trial/dev 默认 strict_model_first，adaptive 显式开启。
+- [x] 将 Understanding 与 Planner 合为一次 DecisionContract V2 调用；移除 strict 下规则先决定 Goal 的路径。
+- [x] 校验 allowedSkillIds 与五因子 Tool 集合，拒绝任意模型 Tool 名。
+- [x] 实现总 Deadline、阶段预算、AbortSignal 和一次受控 fallback。
+- [x] 持久记录真实 first provider、fallbackPath 与六阶段 timing。
+- [x] 建立三 Provider mock conformance、strict-first 证明、public 零 attempt 与性能基准。
+- [x] 运行相关门禁并提交 P2。
   - _Requirements: R2, R3, R10.2, R11.2, R11.4, R11.6_
 
 ## P3 — ContextAssembler 与成熟 Memory

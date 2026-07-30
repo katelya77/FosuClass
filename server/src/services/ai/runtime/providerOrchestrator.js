@@ -309,8 +309,8 @@ async function generateAssistantResponse(input = {}) {
   let responseLatencyMs = 0;
   let responseProviderChain = [];
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
+  const responseStartedAt = Date.now();
   try {
-    const responseStartedAt = Date.now();
     let generated = deterministicGenerated;
     if (policyDecision.useExternal) {
       const selection = providerRuntimeComposition.resolveResponseProviders(runtimeMode, providerRuntimeConfig);
@@ -364,7 +364,9 @@ async function generateAssistantResponse(input = {}) {
     if ((input.signal && input.signal.aborted) || String(error && error.code || "") === "ABORTED") throw error;
     providerName = "mock";
     externalProviderUsed = false;
-    fallbackReason = classifyProviderFailure(error);
+    responseLatencyMs = Date.now() - responseStartedAt;
+    responseProviderChain = providerChainFromRuntimePath(error && error.fallbackPath);
+    fallbackReason = classifyProviderFailure(error && error.cause && (error.cause.cause || error.cause) || error);
     emitChatEvent(eventInput, {
       type: "provider.failed",
       runtimeMode: runtimeMode,

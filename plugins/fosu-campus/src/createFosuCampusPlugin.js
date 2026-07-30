@@ -146,6 +146,9 @@ function toToolDescriptor(toolId, metadata, dependencies, manifest) {
     },
     execute: (args, context, execution = {}) => dependencies.toolRegistry.executeToolAsync(toolId, args, Object.assign({}, context, {
       abortSignal: execution.signal || null,
+      timeoutMs: Number.isFinite(Number(execution.timeoutMs)) && Number(execution.timeoutMs) > 0
+        ? Number(execution.timeoutMs)
+        : undefined,
     })),
   });
 }

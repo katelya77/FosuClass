@@ -71,10 +71,21 @@ function createAgentPlatform(options = {}) {
     if (!response || typeof response !== "object") {
       throw codedError("AGENT_PLATFORM_RESPONSE_INVALID");
     }
+    const publicMode = String(response.runtimeMode || request.runtimeMode || "public").toLowerCase() === "public";
+    const clientTrace = publicMode
+      ? Object.assign({}, execution.platformTrace, {
+        stages: (execution.platformTrace.stages || []).map((stage) => {
+          const details = Object.assign({}, stage.details || {});
+          delete details.intendedProvider;
+          delete details.actualFirstProvider;
+          return Object.assign({}, stage, { details });
+        }),
+      })
+      : execution.platformTrace;
     return Object.assign({}, response, {
       runId,
       deadlineAt: new Date(execution.deadlineAt).toISOString(),
-      platformTrace: execution.platformTrace,
+      platformTrace: clientTrace,
       ui: execution.ui,
     });
   }

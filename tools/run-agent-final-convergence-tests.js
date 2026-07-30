@@ -28,7 +28,13 @@ for (const rel of tests) {
   const file = path.join(__dirname, "..", rel.replace(/^tools\//, "tools/"));
   const result = spawnSync(process.execPath, [path.resolve(__dirname, "..", rel)], {
     stdio: "inherit",
-    env: process.env,
+    env: rel === "tools/test-agent-evaluation-120.js"
+      ? Object.assign({}, process.env, {
+        AI_AGENT_ENABLED: "false",
+        // This deterministic evaluation matrix explicitly opts into P2 adaptive.
+        AI_EXECUTION_POLICY: "adaptive",
+      })
+      : process.env,
   });
   if (result.status !== 0) {
     failed += 1;
