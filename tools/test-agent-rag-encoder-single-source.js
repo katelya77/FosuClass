@@ -2,10 +2,11 @@
 // P4d / ADR-0007：encoder 单源与世代治理锁定。
 //   - agent-runtime/semanticMemory 委托 rag-runtime/localEncoder（同一实现）；
 //   - 黄金值对照：v1（迁移前 semanticMemory 内联实现）捕获的精确输出在
-//     v2 下逐位保持——输入全为 CJK/干净 latin，证明 v2 的 latin 词元修正
-//     不改变既有记忆/RAG 语料的向量空间（v1→v2 稳定性证明）；
+//     v2/v3 下逐位保持——输入全为 CJK/干净 latin（无 CJK 相邻单字母），
+//     证明 latin 词元修正不改变既有记忆/RAG 语料的向量空间（稳定性证明）；
 //   - v2 新行为：尾随标点剥离、连字符拆分、单字符噪声丢弃；
-//   - 跨进程确定性：相同输入两次编码一致；manifest 字段固定为 v2 世代。
+//   - v3 新行为：CJK 相邻单字母词元保留（"C区" 式命名的字母维度）；
+//   - 跨进程确定性：相同输入两次编码一致；manifest 字段固定为 v3 世代。
 const assert = require("node:assert");
 
 const encoder = require("../packages/rag-runtime/src/localEncoder");
@@ -70,12 +71,12 @@ console.log("✓ golden values match the pre-extraction implementation bit-for-b
 });
 const manifest = encoder.encoderManifest();
 assert.deepStrictEqual(manifest, {
-  encoderType: "deterministic-local-v2",
+  encoderType: "deterministic-local-v3",
   dimensions: 64,
   hashAlgorithm: "sha256-u32be-mod",
-  tokenizer: "nfkc-lower-alnum-cjkbigram-alias-v2",
+  tokenizer: "nfkc-lower-alnum-cjkbigram-alias-v3",
 });
-console.log("✓ deterministic encoding + fixed manifest (deterministic-local-v2)");
+console.log("✓ deterministic encoding + fixed manifest (deterministic-local-v3)");
 
 // 4. v2 latin 词元修正（v1 缺陷：标点/连字符胶合、单字符噪声）。
 const hyphenated = encoder.tokenizeSemantic("enable two-factor authentication");
@@ -90,5 +91,16 @@ assert.ok(!stopwordNoise.includes("a") && !stopwordNoise.includes("i"), "v2 drop
 assert.ok(stopwordNoise.includes("export") && stopwordNoise.includes("data"), "meaningful tokens kept");
 assert.ok(encoder.tokenizeSemantic("arm64 build v2").includes("v2"), "digit-bearing short tokens kept");
 console.log("✓ v2 latin tokenization: hyphen split / punctuation strip / stopword drop");
+
+// 5. v3 修正（ADR-0007 §9）：CJK 相邻单字母词元保留，恢复「C区」式命名的
+//    字母维度；孤立单字母仍按噪声丢弃（v2 规则不变面）。
+const cjkAdjacent = encoder.tokenizeSemantic("C区");
+assert.ok(cjkAdjacent.includes("c") && cjkAdjacent.includes("区"), "v3 keeps CJK-adjacent single letters");
+assert.ok(
+  encoder.cosineSimilarity(encoder.encodeSemanticVector("A区"), encoder.encodeSemanticVector("C区")) < 1,
+  "A区 and C区 stay distinguishable in the latin channel"
+);
+assert.deepStrictEqual(encoder.tokenizeSemantic("a I to export data"), ["to", "export", "data"], "isolated single letters still dropped");
+console.log("✓ v3 tokenization: CJK-adjacent single letters kept, isolated noise still dropped");
 
 console.log("\ntest-agent-rag-encoder-single-source: PASS");

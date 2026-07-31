@@ -1,4 +1,4 @@
-// ADR-0007：本地确定性 encoder 权威实现（deterministic-local-v2）。
+// ADR-0007：本地确定性 encoder 权威实现（deterministic-local-v3）。
 //
 // 一体化 / public 模式的向量基线：归一化词元 + CJK bigram + 稳定 hash 投影
 // （sha256 前 4 字节取模）+ 固定维度 + L2 归一化。相同文本在任何进程、
@@ -16,15 +16,20 @@
 // 单字符词元；CJK run/bigram 与别名表逐位不变。v1 全部黄金值（CJK 与
 // 干净 latin 输入）在 v2 下逐位保持——单源测试同时充当 v1→v2 稳定性证明。
 //
+// v2 → v3（P4d 审查跟进，ADR-0007 §9 修正案）：v2 的无数字单字符丢弃
+// 规则误伤了「C区」式楼栋命名（字母维度丢失，"A区" 与 "C区" 词元相同）。
+// v3：与 CJK 相邻的单字母词元保留；其余单字符噪声规则不变。既有黄金值
+// （CJK/干净 latin 输入，无 CJK 相邻单字母）在 v3 下继续逐位保持。
+//
 // 质量口径：这是「离线检索基线」，不是神经语义 embedding 的等价物；
 // 提升幅度以 golden query set 对照如实报告（ADR-0007 §5）。
 
 const crypto = require("crypto");
 
-const ENCODER_VERSION = "deterministic-local-v2";
+const ENCODER_VERSION = "deterministic-local-v3";
 const VECTOR_DIMENSIONS = 64;
 const HASH_ALGORITHM = "sha256-u32be-mod";
-const TOKENIZER = "nfkc-lower-alnum-cjkbigram-alias-v2";
+const TOKENIZER = "nfkc-lower-alnum-cjkbigram-alias-v3";
 const ALIASES = Object.freeze({
   校区: ["campus", "仙溪", "江湾"],
   楼栋: ["building", "教学楼", "自习室", "空教室"],
@@ -36,18 +41,25 @@ const ALIASES = Object.freeze({
 
 // v2 latin 词元：剥首尾标点；连字符复合词保留整体并追加拆分词元；
 // 无数字的单字符词元（"a"/"I"）视为英语停用词噪声丢弃。
+// v3 修正：与 CJK 相邻的单字母词元保留（"C区"/"A座" 式命名的字母维度）。
 function addLatinTokens(text, tokens) {
-  (text.match(/[a-z0-9][a-z0-9_.-]*/g) || []).forEach((raw) => {
+  for (const match of text.matchAll(/[a-z0-9][a-z0-9_.-]*/g)) {
+    const raw = match[0];
     const token = raw.replace(/^[_.-]+|[_.-]+$/g, "");
-    if (!token) return;
-    if (token.length < 2 && !/\d/.test(token)) return;
+    if (!token) continue;
+    if (token.length < 2 && !/\d/.test(token)) {
+      const before = match.index > 0 ? text[match.index - 1] : "";
+      const after = text[match.index + raw.length] || "";
+      const cjkAdjacent = /[㐀-鿿]/.test(before) || /[㐀-鿿]/.test(after);
+      if (!cjkAdjacent) continue;
+    }
     tokens.add(token);
     if (token.includes("-")) {
       token.split("-").forEach((part) => {
         if (part.length >= 2 || /\d/.test(part)) tokens.add(part);
       });
     }
-  });
+  }
 }
 
 function tokenizeSemantic(value) {

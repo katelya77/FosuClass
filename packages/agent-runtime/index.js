@@ -7,6 +7,7 @@ const {
   estimateContextTokens,
 } = require("./src/contextAssembler");
 const {
+  ENCODER_VERSION,
   VECTOR_DIMENSIONS,
   cosineSimilarity,
   encodeSemanticVector,
@@ -26,6 +27,7 @@ const { createMemoryPolicyPublicationAdapter } = require("./src/memoryPolicyPubl
 module.exports = Object.freeze({
   CONTEXT_SCHEMA_VERSION,
   DEFAULT_CONTEXT_TOKEN_BUDGET,
+  ENCODER_VERSION,
   REPOSITORY_METHODS,
   SECTION_ORDER,
   VECTOR_DIMENSIONS,

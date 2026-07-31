@@ -53,6 +53,12 @@ function hasSecretField(value, allowedKeys) {
   });
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== "object") return value;
+  Object.values(value).forEach(deepFreeze);
+  return Object.freeze(value);
+}
+
 function createRagPublicationAdapter() {
   function validate(payload) {
     const errors = [];
@@ -95,6 +101,9 @@ function createRagPublicationAdapter() {
         seen.add(docId);
         const title = safeString(raw.title, INGEST_LIMITS.maxTitleChars);
         if (!title) errors.push(`${where}.title must be non-empty`);
+        else if (SECRET_VALUE_PATTERN.test(String(raw.title))) {
+          errors.push(`${where}.title looks like it contains credential material`);
+        }
         let kind;
         if (raw.kind !== undefined) {
           kind = safeString(raw.kind, 40).toLowerCase();
@@ -110,6 +119,10 @@ function createRagPublicationAdapter() {
             errors.push(`${where}.tags must be an array of at most ${INGEST_LIMITS.maxTags}`);
           } else {
             raw.tags.forEach((tag) => {
+              if (SECRET_VALUE_PATTERN.test(String(tag == null ? "" : tag))) {
+                errors.push(`${where}.tags contain credential-shaped material`);
+                return;
+              }
               const text = safeString(tag, INGEST_LIMITS.maxTagChars);
               if (text) tags.push(text);
             });
@@ -131,9 +144,18 @@ function createRagPublicationAdapter() {
             errors.push(`${where}.text looks like it contains credential material`);
           }
         } else {
-          uri = safeString(raw.uri, 500);
-          const verdict = validateDocumentUri(uri);
-          if (!verdict.ok) errors.push(`${where}.uri ${verdict.error}`);
+          const rawUri = String(raw.uri);
+          if (rawUri.trim().length > 500) {
+            // 超长 URI 拒绝而非静默截断（归一化会改变资源标识）。
+            errors.push(`${where}.uri exceeds 500 chars`);
+          } else {
+            if (SECRET_VALUE_PATTERN.test(rawUri)) {
+              errors.push(`${where}.uri looks like it contains credential material`);
+            }
+            uri = safeString(raw.uri, 500);
+            const verdict = validateDocumentUri(uri);
+            if (!verdict.ok) errors.push(`${where}.uri ${verdict.error}`);
+          }
         }
         documents.push(Object.freeze({
           docId,
@@ -251,7 +273,9 @@ function createRagPublicationAdapter() {
       if (!validation.ok) {
         throw codedError("RAG_PUBLICATION_VERSION_INVALID", validation.errors.join("; ").slice(0, 240));
       }
-      return Object.freeze(JSON.parse(JSON.stringify({
+      // 深冻结：结果被 platformComposition 按 (env, version) 长期缓存共享，
+      // 嵌套变异不得跨请求污染（与 tool-runtime 的 deepFreeze 同风格）。
+      return deepFreeze(JSON.parse(JSON.stringify({
         kbId: validation.normalized.kbId,
         documents: validation.normalized.documents,
         retrieval: validation.normalized.retrieval,

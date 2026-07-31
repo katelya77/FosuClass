@@ -17,7 +17,7 @@ const { ingestDocuments } = require("./ingestion");
 const RAG_INDEX_FORMAT = "rag-index.v1";
 const QUERY_MODES = Object.freeze(["lexical", "vector", "hybrid", "hybrid_rerank"]);
 
-// 无支撑命中抑制（deterministic-local-v2 校准策略）：64 维 hash 投影的
+// 无支撑命中抑制（deterministic-local-v3 校准策略）：64 维 hash 投影的
 // 碰撞噪声底实测 0.2..0.5，与弱真实信号同量级——纯向量余弦不能单独创造命中，
 // 命中必须有词元支撑（chunk∩query 非空；别名表扩展产生的语义匹配同样带有
 // 共享词元，不受此门影响）。向量通道仍真实参与排序：RRF 名次与 rerank 权重
@@ -150,12 +150,22 @@ function queryIndex(index, query, options = {}) {
   if (!index.encoder || index.encoder.encoderType !== ENCODER_VERSION) {
     throw codedError("RAG_ENCODER_MISMATCH", "index was built with a different encoder generation");
   }
-  const retrieval = normalizeRetrieval(Object.assign({}, index.retrieval, {
-    defaultMode: options.mode || (index.retrieval && index.retrieval.defaultMode),
-    topK: options.topK || (index.retrieval && index.retrieval.topK),
-    minScore: options.minScore !== undefined ? options.minScore : (index.retrieval && index.retrieval.minScore),
-    rerankWeights: options.weights || (index.retrieval && index.retrieval.rerankWeights),
-  }));
+  const published = normalizeRetrieval(index.retrieval);
+  // 已发布检索策略是门控边界（M-3）：请求只能收紧（更小 topK、更高
+  // minScore），不得削弱已发布的空答案门控。mode/weights 属排序旋钮，
+  // 可覆盖（weights 仍经 normalizeWeights 有界）。
+  const topK = Number.isInteger(options.topK) && options.topK >= 1
+    ? Math.min(options.topK, published.topK)
+    : published.topK;
+  const minScore = Number.isFinite(options.minScore)
+    ? Math.max(options.minScore, published.minScore)
+    : published.minScore;
+  const retrieval = Object.freeze({
+    defaultMode: published.defaultMode,
+    topK,
+    minScore,
+    rerankWeights: options.weights ? normalizeWeights(options.weights) : published.rerankWeights,
+  });
   const mode = QUERY_MODES.includes(options.mode) ? options.mode : retrieval.defaultMode;
   const text = cleanText(query);
   const queryTokens = Array.from(new Set(tokenizeSemantic(text)));

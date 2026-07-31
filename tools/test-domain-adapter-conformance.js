@@ -213,7 +213,7 @@ const DOMAINS = [
     assertSeedRuntime(runtime) {
       assert.strictEqual(runtime.kbId, "platform-example", "seed = builtin read-only example KB");
       assert.strictEqual(runtime.documents.length, 1);
-      assert.strictEqual(runtime.encoder.encoderType, "deterministic-local-v2", "runtime carries the encoder manifest");
+      assert.strictEqual(runtime.encoder.encoderType, "deterministic-local-v3", "runtime carries the encoder manifest");
     },
     assertChangedRuntime(runtime) {
       assert.strictEqual(runtime.documents.length, 2);

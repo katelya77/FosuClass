@@ -102,30 +102,44 @@ async function defaultFetch(url, options = {}) {
   if (typeof fetch !== "function") {
     throw codedError("RAG_FETCH_UNAVAILABLE", "global fetch is not available in this runtime");
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs || INGEST_LIMITS.fetchTimeoutMs);
+  // AbortController 由调用方（fetchDocumentText）持有：单跳时限覆盖
+  // 响应头等待 + body 读取全程。无外部 signal 时退回本地 header 时限。
+  let signal = options.signal;
+  let controller = null;
+  let timer = null;
+  if (!signal) {
+    controller = new AbortController();
+    signal = controller.signal;
+    timer = setTimeout(() => controller.abort(), options.timeoutMs || INGEST_LIMITS.fetchTimeoutMs);
+  }
   try {
     return await fetch(url, {
       method: "GET",
       redirect: "manual", // 重定向由调用方逐跳校验，禁止 fetch 内部自动跟随
-      signal: controller.signal,
+      signal,
       headers: { "user-agent": "agent-platform-rag-ingestion/0.1", accept: "text/*,application/json,application/markdown" },
     });
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
-async function readBoundedBody(response, maxBytes) {
+async function readBoundedBody(response, maxBytes, options = {}) {
+  const signal = options.signal;
+  const assertNotAborted = () => {
+    if (signal && signal.aborted) throw codedError("RAG_INGEST_TIMEOUT", "body read exceeded the fetch deadline");
+  };
   if (!response.body || typeof response.body.getReader !== "function") {
     const text = await response.text();
-    if (text.length > maxBytes) throw codedError("RAG_INGEST_TOO_LARGE");
+    if (Buffer.byteLength(text, "utf8") > maxBytes) throw codedError("RAG_INGEST_TOO_LARGE");
+    assertNotAborted();
     return text;
   }
   const reader = response.body.getReader();
   const chunks = [];
   let received = 0;
   for (;;) {
+    assertNotAborted();
     const { done, value } = await reader.read();
     if (done) break;
     received += value ? value.byteLength : 0;
@@ -135,38 +149,59 @@ async function readBoundedBody(response, maxBytes) {
     }
     chunks.push(value);
   }
+  // 收尾再查：abort 后对端正常 close 的竞态（done 先于下一次循环顶检查
+  // 到达）同样按超时归类——本跳已超出总时限。
+  assertNotAborted();
   return Buffer.concat(chunks.map((piece) => Buffer.from(piece))).toString("utf8");
 }
 
 // 受控抓取：逐跳校验重定向；返回清洗后文本。所有失败抛 codedError，由调用方归类。
+// 时限语义：每一跳一个总时限（fetchTimeoutMs），经 AbortController 贯穿
+// 响应头等待与 body 读取——慢滴 body 不再能永久挂住构建队列。边界如实说明：
+// 挂死（永不 resolve）的 body 只在 fetcher 尊重 signal 时可被打断（默认
+// defaultFetch 走 undici，signal 生效）；注入的测试 fetcher 至少受
+// 逐 chunk aborted 检查约束（慢滴场景覆盖）。
 async function fetchDocumentText(uri, options = {}) {
   const fetcher = options.fetcher || defaultFetch;
   const maxBytes = options.maxFetchBytes || INGEST_LIMITS.maxFetchBytes;
+  const timeoutMs = options.fetchTimeoutMs || INGEST_LIMITS.fetchTimeoutMs;
   let current = validateDocumentUri(uri);
   if (!current.ok) throw codedError("RAG_INGEST_URL_INVALID", current.error);
   for (let hop = 0; hop <= INGEST_LIMITS.maxRedirects; hop += 1) {
-    const response = await fetcher(current.url, { timeoutMs: options.fetchTimeoutMs });
-    const status = Number(response && response.status) || 0;
-    if (status >= 300 && status < 400) {
-      if (hop >= INGEST_LIMITS.maxRedirects) throw codedError("RAG_INGEST_REDIRECT_LIMIT");
-      const location = response.headers && typeof response.headers.get === "function"
-        ? response.headers.get("location")
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher(current.url, { timeoutMs, signal: controller.signal });
+      const status = Number(response && response.status) || 0;
+      if (status >= 300 && status < 400) {
+        if (hop >= INGEST_LIMITS.maxRedirects) throw codedError("RAG_INGEST_REDIRECT_LIMIT");
+        const location = response.headers && typeof response.headers.get === "function"
+          ? response.headers.get("location")
+          : "";
+        const next = parsePublicHttpsUrl(new URL(String(location || ""), current.url).toString());
+        if (!next) throw codedError("RAG_INGEST_REDIRECT_INVALID", "redirect target failed public https validation");
+        current = next;
+        continue;
+      }
+      if (status !== 200) throw codedError("RAG_INGEST_HTTP_ERROR", `unexpected status ${status}`);
+      const contentType = response.headers && typeof response.headers.get === "function"
+        ? response.headers.get("content-type")
         : "";
-      const next = parsePublicHttpsUrl(new URL(String(location || ""), current.url).toString());
-      if (!next) throw codedError("RAG_INGEST_REDIRECT_INVALID", "redirect target failed public https validation");
-      current = next;
-      continue;
+      if (!isTextualContentType(contentType)) throw codedError("RAG_INGEST_CONTENT_TYPE", `unsupported content-type: ${contentType}`);
+      const raw = await readBoundedBody(response, maxBytes, { signal: controller.signal });
+      const text = /html/i.test(String(contentType || "")) ? htmlToText(raw) : cleanText(raw);
+      const cleaned = cleanText(text);
+      if (!cleaned) throw codedError("RAG_INGEST_EMPTY");
+      return cleaned.slice(0, INGEST_LIMITS.maxInlineChars * 4);
+    } catch (error) {
+      // 超时可分类（AbortError 无 code，统一映射为 RAG_INGEST_TIMEOUT）。
+      if (controller.signal.aborted || (error && error.name === "AbortError")) {
+        throw codedError("RAG_INGEST_TIMEOUT", `fetch exceeded ${timeoutMs}ms (headers or body)`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    if (status !== 200) throw codedError("RAG_INGEST_HTTP_ERROR", `unexpected status ${status}`);
-    const contentType = response.headers && typeof response.headers.get === "function"
-      ? response.headers.get("content-type")
-      : "";
-    if (!isTextualContentType(contentType)) throw codedError("RAG_INGEST_CONTENT_TYPE", `unsupported content-type: ${contentType}`);
-    const raw = await readBoundedBody(response, maxBytes);
-    const text = /html/i.test(String(contentType || "")) ? htmlToText(raw) : cleanText(raw);
-    const cleaned = cleanText(text);
-    if (!cleaned) throw codedError("RAG_INGEST_EMPTY");
-    return cleaned.slice(0, INGEST_LIMITS.maxInlineChars * 4);
   }
   throw codedError("RAG_INGEST_REDIRECT_LIMIT");
 }

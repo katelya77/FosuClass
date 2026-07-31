@@ -40,6 +40,10 @@ function testValidation() {
     ["empty text", { kbId: "x", documents: [validDoc({ text: "   " })] }],
     ["oversized text", { kbId: "x", documents: [validDoc({ text: "y".repeat(20001) })] }],
     ["credential-shaped text", { kbId: "x", documents: [validDoc({ text: "api_key: abcd1234efgh5678" })] }],
+    ["credential-shaped title", { kbId: "x", documents: [validDoc({ title: "password: hunter22" })] }],
+    ["credential-shaped tag", { kbId: "x", documents: [validDoc({ tags: ["apikey: abcd1234"] })] }],
+    ["credential-shaped uri query", { kbId: "x", documents: [{ docId: "u4", title: "U", uri: "https://docs.example.com/x?token=sk-abcdef0123456789" }] }],
+    ["oversized uri", { kbId: "x", documents: [{ docId: "u5", title: "U", uri: `https://docs.example.com/${"p".repeat(501)}` }] }],
     ["http uri", { kbId: "x", documents: [{ docId: "u1", title: "U", uri: "http://docs.example.com/x" }] }],
     ["userinfo uri", { kbId: "x", documents: [{ docId: "u2", title: "U", uri: "https://docs.example.com@evil.example.com/x" }] }],
     ["ip uri", { kbId: "x", documents: [{ docId: "u3", title: "U", uri: "https://10.0.0.4/x" }] }],
@@ -83,6 +87,15 @@ function testValidation() {
   assert.strictEqual(rehearsal.ok, true);
   assert.strictEqual(rehearsal.results.inlineDocuments, 1);
   assert.strictEqual(rehearsal.results.uriVerifiedAtBuild, true, "uri documents deferred to post-publish build");
+
+  // M-1：resolveRuntime 深冻结——被 (env, version) 缓存共享的运行时
+  // 不得被任何消费方的嵌套变异跨请求污染。
+  const runtime = adapter.resolveRuntime({ payload: adapter.seedPayload() });
+  assert.ok(Object.isFrozen(runtime) && Object.isFrozen(runtime.documents)
+    && Object.isFrozen(runtime.documents[0]) && Object.isFrozen(runtime.retrieval)
+    && Object.isFrozen(runtime.retrieval.rerankWeights), "runtime is deeply frozen");
+  try { runtime.documents.push({ docId: "evil" }); } catch (_) { /* strict mode 抛错同样接受 */ }
+  assert.strictEqual(runtime.documents.length, 1, "nested mutation cannot pollute the cached runtime");
   console.log("✓ declarative validation: full rejection matrix + campus-fact kind lock + valid KB passes");
 }
 

@@ -4,6 +4,7 @@
 const encoder = require("../../rag-runtime/src/localEncoder");
 
 module.exports = {
+  ENCODER_VERSION: encoder.ENCODER_VERSION,
   VECTOR_DIMENSIONS: encoder.VECTOR_DIMENSIONS,
   cosineSimilarity: encoder.cosineSimilarity,
   encodeSemanticVector: encoder.encodeSemanticVector,
