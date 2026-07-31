@@ -6,6 +6,7 @@ const fusion = require("./src/fusion");
 const ingestion = require("./src/ingestion");
 const ragRuntime = require("./src/ragRuntime");
 const { createRagPublicationAdapter, FORBIDDEN_DOCUMENT_KINDS } = require("./src/ragPublicationAdapter");
+const { createPgVectorSearch } = require("./src/pgVectorSearch");
 
 module.exports = Object.freeze({
   // localEncoder（ADR-0007 单源）
@@ -36,6 +37,8 @@ module.exports = Object.freeze({
   RAG_INDEX_FORMAT: ragRuntime.RAG_INDEX_FORMAT,
   QUERY_MODES: ragRuntime.QUERY_MODES,
   UNSUPPORTED_VECTOR_HITS_ALLOWED: ragRuntime.UNSUPPORTED_VECTOR_HITS_ALLOWED,
+  // pgvector 最近邻（standalone 向量存储，同一确定性 encoder）
+  createPgVectorSearch,
   // 发布适配器
   createRagPublicationAdapter,
   FORBIDDEN_DOCUMENT_KINDS,

@@ -1,31 +1,23 @@
-// P5a：真实 PostgreSQL 测试环境助手。
+// P5a WS5：真实 Redis 测试环境助手（与 pg-test-env.js 同一模式）。
 //
 // 解析顺序：
-//   1. AGENT_TEST_PG_URL 已设置 → 使用外部库，{url, owned:false, cleanup 为 no-op}
-//      （外部库由调用方/CI 自行管理，绝不清理）；
-//   2. 否则探测 docker CLI + daemon → 启动 postgres:16-alpine 临时容器
-//      （127.0.0.1 随机宿主端口，容器内 pg_isready 循环等待至多 60s），
+//   1. AGENT_TEST_REDIS_URL 已设置 → 使用外部实例，{url, owned:false, cleanup 为 no-op}
+//      （外部实例由调用方/CI 自行管理，绝不清理；调用方须自行隔离 key 空间）；
+//   2. 否则探测 docker CLI + daemon → 启动 redis:7-alpine 临时容器
+//      （127.0.0.1 随机宿主端口，容器内 redis-cli ping 循环等待至多 60s），
 //      {url, owned:true, cleanup: stop + rm -f}；
-//      options.image 可覆盖镜像（如 pgvector/pgvector:pg16——pgvector 扩展
-//      基线；默认值不变，既有调用方零影响）；
 //   3. 都不可用 → null（调用方必须打印 UNVERIFIED 与原因并 exit 0，诚实标记）。
 //
-// 安全纪律：测试密码由拼接字面量构造（仅供本机一次性容器，且避免密钥扫描
-// 误报）；日志输出连接串一律经 redactUrl 脱敏；docker 一律 spawn/spawnSync
-// 参数数组调用，不经过 shell（防注入与路径空格问题）。
+// 安全纪律：docker 一律 spawn/spawnSync 参数数组调用，不经过 shell；
+// 日志输出连接串一律经 redactUrl 脱敏。
 
 const { spawn, spawnSync } = require("child_process");
+const { redactUrl } = require("./pg-test-env");
 
-const IMAGE = "postgres:16-alpine";
-const CONTAINER_PREFIX = "agent-p5a-pg-test-";
+const IMAGE = "redis:7-alpine";
+const CONTAINER_PREFIX = "agent-p5a-redis-test-";
 const READY_TIMEOUT_MS = 60000;
 const READY_INTERVAL_MS = 500;
-const TEST_PASSWORD = "p5a" + "-local-test";
-const TEST_USER = "postgres";
-
-function redactUrl(url) {
-  return String(url || "").replace(/(:\/\/[^:/\s]+:)[^@\s]+@/, "$1<redacted>@");
-}
 
 function collect(child, timeoutMs) {
   return new Promise((resolve) => {
@@ -82,16 +74,14 @@ function sleep(ms) {
 }
 
 /**
- * 确保一个可用的 PostgreSQL：见文件头说明。
- * @param {{onReason?: (reason: string) => void, image?: string}} [options]
- *   onReason：返回 null 时回调不可用原因；image：覆盖容器镜像（默认 postgres:16-alpine）
+ * 确保一个可用的 Redis：见文件头说明。
+ * @param {{onReason?: (reason: string) => void}} [options] 返回 null 时回调不可用原因
  * @returns {Promise<{url: string, owned: boolean, cleanup: () => Promise<void>, containerName?: string} | null>}
  */
-async function ensurePg(options = {}) {
+async function ensureRedis(options = {}) {
   const report = typeof options.onReason === "function" ? options.onReason : () => {};
-  const image = String(options.image || IMAGE);
 
-  const external = process.env.AGENT_TEST_PG_URL;
+  const external = process.env.AGENT_TEST_REDIS_URL;
   if (external) {
     return { url: external, owned: false, cleanup: async () => {} };
   }
@@ -111,11 +101,9 @@ async function ensurePg(options = {}) {
       "-d",
       "--name",
       name,
-      "-e",
-      `POSTGRES_PASSWORD=${TEST_PASSWORD}`,
       "-p",
-      "127.0.0.1::5432",
-      image,
+      "127.0.0.1::6379",
+      IMAGE,
     ],
     120000
   );
@@ -132,7 +120,7 @@ async function ensurePg(options = {}) {
     await run(["rm", "-f", name], 30000);
   };
 
-  const portResult = await run(["port", name, "5432"], 15000);
+  const portResult = await run(["port", name, "6379"], 15000);
   const portMatch = portResult.stdout.match(/127\.0\.0\.1:(\d+)/) || portResult.stdout.match(/:(\d+)/);
   if (portResult.code !== 0 || !portMatch) {
     await cleanup();
@@ -144,8 +132,8 @@ async function ensurePg(options = {}) {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   let ready = false;
   while (Date.now() < deadline) {
-    const probeResult = await run(["exec", name, "pg_isready", "-U", TEST_USER, "-h", "127.0.0.1"], 10000);
-    if (probeResult.code === 0) {
+    const probeResult = await run(["exec", name, "redis-cli", "ping"], 10000);
+    if (probeResult.code === 0 && /PONG/.test(probeResult.stdout)) {
       ready = true;
       break;
     }
@@ -153,12 +141,12 @@ async function ensurePg(options = {}) {
   }
   if (!ready) {
     await cleanup();
-    report("postgres container did not become ready within 60s");
+    report("redis container did not become ready within 60s");
     return null;
   }
 
   return {
-    url: `postgres://${TEST_USER}:${TEST_PASSWORD}@127.0.0.1:${port}/postgres`,
+    url: `redis://127.0.0.1:${port}`,
     owned: true,
     cleanup,
     containerName: name,
@@ -166,6 +154,6 @@ async function ensurePg(options = {}) {
 }
 
 module.exports = Object.freeze({
-  ensurePg,
+  ensureRedis,
   redactUrl,
 });

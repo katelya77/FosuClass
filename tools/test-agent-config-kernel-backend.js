@@ -118,7 +118,8 @@ function runChild(mode, extraEnv = {}) {
   const { ensurePg, redactUrl } = require("./test-helpers/pg-test-env");
   const { closePool, createPgPool, query } = require("../packages/agent-runtime");
   let reason = "no PostgreSQL available";
-  const env = await ensurePg({ onReason: (text) => {
+  // P5a WS5：聚合 migration 含 0005（CREATE EXTENSION vector）→ 基线镜像 pgvector/pgvector:pg16。
+  const env = await ensurePg({ image: "pgvector/pgvector:pg16", onReason: (text) => {
     reason = text;
   } });
   if (!env) {
