@@ -1,11 +1,12 @@
-const { createAgentRuntime, createContextAssembler } = require("../../../../packages/agent-runtime");
+const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, sha256Digest } = require("../../../../packages/agent-runtime");
 const { EXECUTION_POLICIES, createMetricsStore, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
-const { createSkillCatalog } = require("../../../../packages/skill-runtime");
+const { createSkillCatalog, createSkillPublicationAdapter } = require("../../../../packages/skill-runtime");
 const { createToolRuntime } = require("../../../../packages/tool-runtime");
 const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
+const path = require("path");
 
 const capabilityManifestService = require("./capabilityManifestService");
 const skillRegistry = require("./skillRegistry");
@@ -36,6 +37,76 @@ const plugin = createFosuCampusPlugin({
 });
 const platformSkillCatalog = createSkillCatalog({ skills: plugin.skills });
 const platformToolRuntime = createToolRuntime({ tools: plugin.tools });
+
+// P4a：统一配置发布内核。文件 Repository 为 integrated 模式默认适配器（P5a
+// 将增加 PostgreSQL 适配器）；Skill 域参考适配器证明通用发布协议。种子只
+// 初始化空环境或升级 seed-origin 版本，admin 发布的内容不会被覆盖。
+const configKernelRoot = process.env.FOSU_AGENT_CONFIG_KERNEL_PATH
+  || path.join(__dirname, "../../../data/ai/config-kernel");
+const skillPublicationAdapter = createSkillPublicationAdapter({ staticSkills: plugin.skills });
+const configKernel = createConfigKernel({
+  repository: createConfigKernelFileRepository({ root: configKernelRoot }),
+  domainAdapters: { skill: skillPublicationAdapter },
+  environments: ["public", "trial", "dev"],
+  logger(entry) {
+    try {
+      // 延迟加载，避免与日志模块的循环依赖；仅安全事件字段，不含配置内容。
+      const { safeLog } = require("../../utils/safeLogger");
+      safeLog("config-kernel", entry);
+    } catch (_) {
+      // 可观测性不得影响配置加载。
+    }
+  },
+});
+const skillSeedPayload = skillPublicationAdapter.seedPayload();
+const skillSeedDigest = sha256Digest(skillSeedPayload);
+["public", "trial", "dev"].forEach((environment) => {
+  configKernel.seedEnvironment(environment, [{
+    domain: "skill",
+    artifactId: plugin.id,
+    payload: skillSeedPayload,
+    sourceDigest: skillSeedDigest,
+  }]);
+});
+
+// 按快照绑定的技能目录：发布/回滚只影响新 Run；在途 Run 的快照不可变。
+// 解析结果按 (environment, version) 记忆化，目录接口与静态目录一致。
+const boundCatalogCache = new Map();
+function resolveSkillCatalogForSnapshot(configSnapshot) {
+  const artifacts = configSnapshot && configSnapshot.artifacts || null;
+  const entry = artifacts && artifacts[`skill:${plugin.id}`];
+  const environment = configSnapshot && configSnapshot.environment;
+  if (!entry || !environment) return platformSkillCatalog;
+  const cacheKey = `${environment}:${entry.version}`;
+  if (!boundCatalogCache.has(cacheKey)) {
+    let catalog = platformSkillCatalog;
+    try {
+      const versionDoc = configKernel.getArtifactVersion({
+        domain: "skill",
+        artifactId: plugin.id,
+        environment,
+        version: entry.version,
+      });
+      catalog = createSkillCatalog({ skills: skillPublicationAdapter.resolveRuntime(versionDoc) });
+    } catch (_) {
+      // 已发布版本不可读时 fail closed 到静态目录（与种子一致的全量集），
+      // 不伪造版本内容；内核自身已对 LKG 之外的情况抛错。
+      catalog = platformSkillCatalog;
+    }
+    boundCatalogCache.set(cacheKey, catalog);
+    if (boundCatalogCache.size > 24) {
+      const oldest = boundCatalogCache.keys().next().value;
+      boundCatalogCache.delete(oldest);
+    }
+  }
+  return boundCatalogCache.get(cacheKey);
+}
+
+function resolveSnapshotEnvironment(request) {
+  const requested = request && (request.runtimeMode || request.assistantEnvironment);
+  return capabilityManifestService.normalizeRuntimeMode(requested || runtimeModeService.resolveConfiguredMode());
+}
+
 const platformKernel = new AgentKernel({
   skillRegistry: platformSkillCatalog,
   toolRuntime: platformToolRuntime,
@@ -57,6 +128,7 @@ const ports = createFosuTurnPorts({
   skillCatalog: platformSkillCatalog,
   decisionService: platformDecisionService,
   contextAssembler: platformContextAssembler,
+  resolveSkillCatalog: resolveSkillCatalogForSnapshot,
 });
 const stages = createFosuStages({ plugin, ports });
 // 平台级共享 Metrics Store：Runtime 六阶段与 Run Handler 首事件延迟（firstEvent
@@ -77,9 +149,28 @@ const platform = createAgentPlatform({
   plugin,
   stages,
   createRunId: agentProtocol.createRunId,
-  resolveConfigSnapshot() {
+  // P4a：createRun 原子绑定内核当前不可变快照（单次读取，Runtime 深冻结）。
+  // 内核从未初始化/存储不可读且无 LKG 时回退 manifest 版本号，保持平台可用。
+  resolveConfigSnapshot({ request } = {}) {
+    const environment = resolveSnapshotEnvironment(request);
+    let snapshot = null;
+    try {
+      snapshot = configKernel.getCurrentSnapshot(environment);
+    } catch (_) {
+      snapshot = null;
+    }
+    if (!snapshot) {
+      return {
+        configVersion: `manifest:${plugin.manifestVersion}`,
+        environment,
+        manifestVersion: plugin.manifestVersion,
+      };
+    }
     return {
-      configVersion: `manifest:${plugin.manifestVersion}`,
+      configVersion: snapshot.configVersion,
+      environment,
+      artifacts: snapshot.artifacts,
+      manifestVersion: plugin.manifestVersion,
     };
   },
 });
@@ -89,7 +180,19 @@ function getPlatform() {
 }
 
 function getDiagnostics() {
+  // 后台显示必须等于真实执行：configVersion 来自发布内核当前快照，
+  // 不再由插件 manifest 版本号单独冒充。
+  const kernelEnvironment = capabilityManifestService.normalizeRuntimeMode(runtimeModeService.resolveConfiguredMode());
+  let kernelDiagnostics = null;
+  try {
+    kernelDiagnostics = configKernel.diagnostics(kernelEnvironment);
+  } catch (_) {
+    kernelDiagnostics = null;
+  }
   return Object.assign({}, platform.diagnostics(), {
+    configVersion: kernelDiagnostics && kernelDiagnostics.configVersion
+      || `manifest:${plugin.manifestVersion}`,
+    configKernel: kernelDiagnostics,
     manifestVersion: plugin.manifestVersion,
     skillCount: plugin.skills.length,
     toolCount: plugin.tools.length,
@@ -174,6 +277,9 @@ function getRunHandlers() {
 }
 
 module.exports = {
+  getConfigKernel() {
+    return configKernel;
+  },
   getDiagnostics,
   getExecutionPolicyTruth,
   getPlatform,

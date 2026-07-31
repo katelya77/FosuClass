@@ -130,14 +130,16 @@ function createDecisionService(options = {}) {
   }
 
   function deterministic(input, source, reasonCode, policy) {
+    // P4a：优先使用调用方按 Run 快照绑定的已发布目录，缺省回落构造注入目录。
+    const catalog = input.skillCatalog || skillCatalog;
     const understanding = defaultUnderstandingService.deterministicResult({
       message: input.message,
       context: input.context,
       conversationState: input.conversationState,
       deterministicResolve: input.deterministicResolve || deterministicResolve,
     }, source, reasonCode);
-    const decisionContract = decisionFromUnderstanding(understanding, skillCatalog, source);
-    const selectedSkill = selectedSkillFor(skillCatalog, decisionContract);
+    const decisionContract = decisionFromUnderstanding(understanding, catalog, source);
+    const selectedSkill = selectedSkillFor(catalog, decisionContract);
     understanding.decisionContract = decisionContract;
     return {
       executionPolicy: policy,
@@ -183,7 +185,7 @@ function createDecisionService(options = {}) {
       }
     }
 
-    const skills = skillOptions(skillCatalog, runtimeMode);
+    const skills = skillOptions(input.skillCatalog || skillCatalog, runtimeMode);
     const validatorOptions = validationOptions(skills);
     const providers = resolveDecisionProviders(runtimeMode, input.providerRuntimeConfig || {});
     const startedAt = Date.now();
@@ -231,7 +233,7 @@ function createDecisionService(options = {}) {
         conversationState: input.conversationState,
         deterministicHint,
       });
-      const selectedSkill = selectedSkillFor(skillCatalog, generated.contract);
+      const selectedSkill = selectedSkillFor(input.skillCatalog || skillCatalog, generated.contract);
       if (resolved.intent.name !== generated.contract.goal.name) {
         throw codedError("DECISION_GOAL_RESOLUTION_MISMATCH", "Goal resolution changed the Provider-selected Goal");
       }

@@ -172,7 +172,8 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
       scope: String(raw.scope || "user").slice(0, 24),
       confidence: Math.min(1, Math.max(0, Number(raw.confidence || 0) || 0)),
       sourceTurnIds: Array.isArray(raw.sourceTurnIds) ? raw.sourceTurnIds.slice(0, 8) : [],
-      expiresAt: resolveExpiresAt(raw),
+      // options.now 仅供测试注入确定性时钟；生产调用方不传时回落 Date.now()。
+      expiresAt: resolveExpiresAt(raw, Number.isFinite(options.now) ? options.now : undefined),
       expiresAtSource: raw.expiresAtSource === "explicit" || raw.expiresAtSource === "policy"
         ? raw.expiresAtSource
         : (raw.expiresAt ? "explicit" : "policy"),

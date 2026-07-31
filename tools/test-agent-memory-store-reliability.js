@@ -393,7 +393,7 @@ function main() {
       scope: "release",
       confidence: 0.95,
       source: "explicit_user",
-    }], { memoryMode: "cloud_sync", autoMemoryEnabled: true })[0];
+    }], { memoryMode: "cloud_sync", autoMemoryEnabled: true, now })[0];
     assert.ok(scopedCandidate.expiresAtSource === "policy");
     assert.ok(
       Date.parse(scopedCandidate.expiresAt) <= now + 30 * 86400000 + 1000,
