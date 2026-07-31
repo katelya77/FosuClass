@@ -547,7 +547,8 @@ router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.get("/agent-platform/topology", adminAuth.verifyAdminAccess, platformAdminHandlers.getTopology);
-router.get("/agent-platform/runs", adminAuth.verifyAdminAccess, platformAdminHandlers.getRecentRuns);
+// 与 modules/agent-platform/routes.js 的 /runs/:runId 详情端点对齐：列表同样要求 agent-config:read。
+router.get("/agent-platform/runs", adminAuth.verifyAdminAccess, adminAuth.requireScopes(["agent-config:read"]), platformAdminHandlers.getRecentRuns);
 
 // 自定义 Provider（CCSwitch 式）CRUD 与模型拉取已迁入 modules/ai-provider/routes.js。
 

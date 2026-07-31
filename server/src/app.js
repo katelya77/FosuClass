@@ -255,13 +255,32 @@ app.use("/admin-legacy", redirectAdminAlias("/admin-legacy"));
 // P4e：Agent 控制面静态页（apps/agent-admin/public，无构建纯静态）。
 // 页面本身只是 UI 外壳，数据全部来自 /api/admin/agent-platform/* 真实 API；
 // 未登录先跳 Legacy 登录页（与 adminPages 同一 Cookie 会话）。
-app.use("/admin/agent-platform", (req, res, next) => {
+function requireAgentAdminPageSession(req, res, next) {
   if (!adminAuth.isAdminCookieValid(req)) {
     const nextTarget = encodeURIComponent(String(req.originalUrl || "/admin/agent-platform"));
     return res.redirect(302, `/admin/login?next=${nextTarget}`);
   }
   return next();
-}, express.static(path.join(__dirname, "../../apps/agent-admin/public"), {
+}
+
+// 部署方运行时注入：页面是 apps/ 通用静态资产（边界守卫禁部署方字样），
+// 品牌/CSRF 头名/登录与后台路径/API 前缀由本端点下发，页面仅有通用默认值兜底。
+app.get("/admin/agent-platform/runtime-config.js", requireAgentAdminPageSession, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.type("application/javascript");
+  res.send(`window.AGENT_ADMIN_RUNTIME_CONFIG = ${JSON.stringify({
+    brand: "FosuClass Admin",
+    csrfHeader: adminAuth.CSRF_HEADER,
+    loginPath: "/admin/login",
+    sessionPath: "/api/admin/session",
+    dashboardPath: "/admin/dashboard",
+    apiBase: "/api/admin/agent-platform",
+  })};`);
+});
+
+app.use("/admin/agent-platform", requireAgentAdminPageSession, express.static(path.join(__dirname, "../../apps/agent-admin/public"), {
   index: "agent-platform.html",
   maxAge: 0,
   setHeaders: (res) => {

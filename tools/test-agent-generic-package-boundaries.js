@@ -12,7 +12,8 @@ function visit(directory) {
   fs.readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) return visit(target);
-    if (!/\.(?:js|json)$/.test(entry.name)) return;
+    // .html 同样在边界内：apps/ 下的静态页面不得硬编码部署方字样（由注入覆盖）。
+    if (!/\.(?:js|json|html)$/.test(entry.name)) return;
     const source = fs.readFileSync(target, "utf8");
     source.split(/\r?\n/).forEach((line, index) => {
       if (forbidden.test(line)) {

@@ -136,9 +136,22 @@ async function main() {
     page.on("dialog", (dialog) => dialog.accept());
 
     // ── 登录态打开控制面 ─────────────────────────────────────────────
+    // I-2 注入链路：runtime-config.js 未登录 302；登录后下发部署方配置且 no-store。
+    const runtimeConfigAnonymous = await harness.request("/admin/agent-platform/runtime-config.js");
+    assert.strictEqual(runtimeConfigAnonymous.status, 302, `anonymous runtime-config must redirect: ${runtimeConfigAnonymous.status}`);
+    const runtimeConfigResponse = await harness.request("/admin/agent-platform/runtime-config.js", { cookie: session.cookie });
+    assert.strictEqual(runtimeConfigResponse.status, 200, runtimeConfigResponse.text);
+    assert.ok(runtimeConfigResponse.text.indexOf("window.AGENT_ADMIN_RUNTIME_CONFIG") === 0, "runtime-config.js must define the injection global");
+    assert.match(String(runtimeConfigResponse.headers["cache-control"] || ""), /no-store/);
+
     await page.goto(`${harness.baseUrl}/admin/agent-platform/`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("h1");
     assert.match(await page.locator("h1").textContent(), /Agent 控制面/);
+    // 页面品牌/CSRF 头名必须来自注入而非通用默认值；写操作（下方发布链）经注入头名仍 200。
+    const injectedConfig = await page.evaluate(() => window.AGENT_ADMIN_RUNTIME_CONFIG || null);
+    assert.ok(injectedConfig && injectedConfig.csrfHeader === "x-fosu-csrf", `csrf header must be injected by the server: ${JSON.stringify(injectedConfig)}`);
+    assert.ok(injectedConfig.brand && injectedConfig.brand !== "Agent Admin", `brand must come from injection, not the generic default: ${JSON.stringify(injectedConfig)}`);
+    assert.strictEqual(await page.title(), `Agent 控制面 · ${injectedConfig.brand}`);
     await page.waitForFunction(() => document.querySelectorAll("[data-domain-tab]").length === 6, null, { timeout: 15000 });
 
     // 未登录访问必须跳登录页（另起无 Cookie 上下文验证）。

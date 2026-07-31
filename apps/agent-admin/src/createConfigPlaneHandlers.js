@@ -8,7 +8,10 @@
 // - 响应信封一律经 sanitizePublicValue（与 platformTrace 同源）。
 // - 配置 payload 走 redactConfigPayload：密钥形态字段/密钥形态值替换为
 //   "[REDACTED]"。已发布版本经域适配器密钥扫描后才可发布，合法声明式字段
-//   （如 provider 的 maxTokens）原样保留，草稿编辑器可无损往返。
+//   （如 provider 的 maxTokens）原样保留；不含密钥形态内容的 payload 在草稿
+//   编辑器可无损往返，含 "[REDACTED]" 字面量的保存请求被 coded 400 拒绝
+//   （占位符不得回存为真值）。脱敏递归深度超限的子树输出 "[TRUNCATED]"
+//   （安全方向失败），不再原样透出。
 // - 错误消息只在 4xx 时透传内核原文（只含字段名/门禁语义），5xx 一律泛化。
 
 const { sanitizePublicValue } = require("@xiaofu-agent/agent-protocol");
@@ -17,10 +20,12 @@ const ADMIN_APP = "@xiaofu-agent/agent-admin";
 
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const REDACTED = "[REDACTED]";
+// 脱敏递归深度超限时的安全方向输出（仅显示方向出现；保存方向不特殊处理）。
+const TRUNCATED = "[TRUNCATED]";
 // 与域适配器同形的密钥字段扫描（provider/maxTokens 是合法声明式字段，豁免）。
 const SECRET_FIELD = /api[-_]?key|token|secret|password|authorization|credential/i;
 const SECRET_FIELD_EXEMPT = new Set(["maxTokens"]);
-const SECRET_VALUE = /(sk-[a-z0-9]{16,}|bearer\s+[a-z0-9._-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|api[_-]?key\s*[:=]\s*\S{8,}|password\s*[:=]\s*\S{6,}|secret\s*[:=]\s*\S{8,})/i;
+const SECRET_VALUE = /(sk-[a-z0-9]{16,}|bearer\s+[a-z0-9._-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|AIza[0-9A-Za-z_-]{20,}|ghp_[0-9A-Za-z]{20,}|github_pat_[0-9A-Za-z_]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|api[_-]?key\s*[:=]\s*\S{8,}|password\s*[:=]\s*\S{6,}|secret\s*[:=]\s*\S{8,})/i;
 
 const STATUS_BY_CODE = Object.freeze({
   CONFIG_KERNEL_ENVIRONMENT_INVALID: 400,
@@ -36,12 +41,14 @@ const STATUS_BY_CODE = Object.freeze({
   CONFIG_KERNEL_SEED_INVALID: 400,
   AGENT_CONFIG_PAYLOAD_TOO_LARGE: 400,
   AGENT_CONFIG_ARTIFACT_UNRESOLVABLE: 400,
+  AGENT_CONFIG_REDACTED_VALUE_REJECTED: 400,
   AGENT_CONFIG_RUN_ID_INVALID: 400,
   CONFIG_KERNEL_DRAFT_NOT_FOUND: 404,
   CONFIG_KERNEL_VERSION_MISSING: 404,
   CONFIG_KERNEL_ROLLBACK_TARGET_NOT_FOUND: 404,
   AGENT_RUN_TRACE_NOT_FOUND: 404,
   CONFIG_KERNEL_VERSION_EXISTS: 409,
+  AGENT_CONFIG_ARTIFACT_AMBIGUOUS: 409,
   CONFIG_KERNEL_STORAGE_CORRUPT: 500,
   CONFIG_KERNEL_SNAPSHOT_UNREADABLE: 500,
 });
@@ -83,7 +90,9 @@ function safeString(value, maxLength = 240) {
 }
 
 function redactConfigPayload(value, depth = 0) {
-  if (depth > 8 || value === null || value === undefined) return value === undefined ? null : value;
+  if (value === null || value === undefined) return value === undefined ? null : value;
+  // 深度超限必须安全方向失败：输出截断标记而非原样透出子树（子树可能藏密钥形态值）。
+  if (depth > 8) return TRUNCATED;
   if (typeof value === "string") return SECRET_VALUE.test(value) ? REDACTED : value.slice(0, 4000);
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value;
@@ -98,6 +107,26 @@ function redactConfigPayload(value, depth = 0) {
     output[key] = redactConfigPayload(value[key], depth + 1);
   });
   return output;
+}
+
+// "[REDACTED]" 只是显示方向的脱敏占位符；保存方向出现即「把脱敏值当真值回存」，
+// 会静默覆盖真实密钥，必须 coded 400 拒绝。拒绝只发生在保存方向；显示方向
+// （含超深截断标记 "[TRUNCATED]"）照出。深度/广度受限递归，拒绝不依赖内核。
+function containsRedactedLiteral(value, depth = 0) {
+  if (depth > 32 || value === null || value === undefined) return false;
+  if (typeof value === "string") return value.indexOf(REDACTED) >= 0;
+  if (Array.isArray(value)) return value.slice(0, 500).some((item) => containsRedactedLiteral(item, depth + 1));
+  if (typeof value !== "object") return false;
+  return Object.keys(value).slice(0, 500).some((key) => containsRedactedLiteral(value[key], depth + 1));
+}
+
+function assertNoRedactedLiteral(payload) {
+  if (containsRedactedLiteral(payload)) {
+    throw codedError(
+      "AGENT_CONFIG_REDACTED_VALUE_REJECTED",
+      "payload contains the redaction placeholder [REDACTED]; re-enter the real value before saving"
+    );
+  }
 }
 
 function createConfigPlaneHandlers(options = {}) {
@@ -120,7 +149,9 @@ function createConfigPlaneHandlers(options = {}) {
 
   function sendError(res, error) {
     const code = safeString(error && error.code || "AGENT_CONFIG_INTERNAL", 80) || "AGENT_CONFIG_INTERNAL";
-    const status = STATUS_BY_CODE[code] || (code.indexOf("CONFIG_KERNEL_") === 0 ? 400 : 500);
+    // 只有显式列入 STATUS_BY_CODE 的 coded error 才是客户端错误（4xx）；
+    // 未列入的 CONFIG_KERNEL_*/其他 code 一律 500 + 泛化消息（不向客户端透内部语义）。
+    const status = STATUS_BY_CODE[code] || 500;
     return res.status(status).json({
       success: false,
       app: ADMIN_APP,
@@ -131,17 +162,18 @@ function createConfigPlaneHandlers(options = {}) {
   }
 
   function environmentOf(req) {
-    const source = req && req.method === "GET" ? req.query : req.body;
+    const source = req && (req.method === "GET" || req.method === "HEAD") ? req.query : req.body;
     return safeString(source && (source.env || source.environment), 40);
   }
 
   function domainOf(req) {
-    const source = req && req.method === "GET" ? req.query : req.body;
+    const source = req && (req.method === "GET" || req.method === "HEAD") ? req.query : req.body;
     return safeString(source && source.domain, 60);
   }
 
   // artifactId 未显式给出时，从内核发布指针解析该域当前唯一发布物。
-  // 控制面不假设固定的 artifact 命名；解析不到即 coded 400。
+  // 控制面不假设固定的 artifact 命名；解析不到即 coded 400，解析到多个即
+  // coded 409（静默取第一个会把操作打到错误的 artifact 上，必须显式指定）。
   function resolveArtifactId(req, environment, domain) {
     const source = req && req.method === "GET" ? req.query : req.body;
     const explicit = safeString(source && source.artifactId, 100);
@@ -152,10 +184,20 @@ function createConfigPlaneHandlers(options = {}) {
     if (!match.length) {
       throw codedError("AGENT_CONFIG_ARTIFACT_UNRESOLVABLE", `no published artifact found for domain ${domain}`);
     }
+    if (match.length > 1) {
+      const candidates = match.map((key) => key.slice(prefix.length));
+      throw codedError(
+        "AGENT_CONFIG_ARTIFACT_AMBIGUOUS",
+        `domain ${domain} has ${match.length} published artifacts (${candidates.join(", ")}); specify artifactId explicitly`
+      );
+    }
     return match[0].slice(prefix.length);
   }
 
   function assertPayloadSize(payload) {
+    if (payload === undefined) {
+      throw codedError("CONFIG_KERNEL_PAYLOAD_INVALID", "payload is required");
+    }
     let serialized;
     try {
       serialized = JSON.stringify(payload);
@@ -304,6 +346,7 @@ function createConfigPlaneHandlers(options = {}) {
       const artifactId = resolveArtifactId(req, environment, domain);
       const payload = req.body && req.body.payload;
       assertPayloadSize(payload);
+      assertNoRedactedLiteral(payload);
       const draft = kernel().saveDraft({
         environment,
         domain,

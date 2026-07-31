@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent 控制面 · FosuClass Admin</title>
+<title>Agent 控制面</title>
+<script src="runtime-config.js"></script>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -44,7 +45,7 @@
 <body>
 <header>
   <h1>Agent 控制面</h1>
-  <a href="/admin/dashboard">← 返回后台</a>
+  <a href="/admin/dashboard" id="dashboardLink">← 返回后台</a>
   <label class="muted" style="color:#cfe0ff">环境
     <select id="envSelect">
       <option value="public">public（正式）</option>
@@ -97,6 +98,18 @@
 (function () {
   "use strict";
 
+  // 部署方运行时配置由服务端 runtime-config.js 注入（品牌/CSRF 头名/路由前缀）。
+  // 本文件是通用静态资产，只保留通用默认值兜底；真实部署必须经注入覆盖成真实值。
+  var injected = window.AGENT_ADMIN_RUNTIME_CONFIG || {};
+  var runtimeConfig = {
+    brand: typeof injected.brand === "string" && injected.brand ? injected.brand : "Agent Admin",
+    csrfHeader: typeof injected.csrfHeader === "string" && injected.csrfHeader ? injected.csrfHeader : "X-CSRF-Token",
+    loginPath: typeof injected.loginPath === "string" && injected.loginPath ? injected.loginPath : "/admin/login",
+    sessionPath: typeof injected.sessionPath === "string" && injected.sessionPath ? injected.sessionPath : "/api/admin/session",
+    dashboardPath: typeof injected.dashboardPath === "string" && injected.dashboardPath ? injected.dashboardPath : "/admin/dashboard",
+    apiBase: typeof injected.apiBase === "string" && injected.apiBase ? injected.apiBase : "/api/admin/agent-platform"
+  };
+
   var state = {
     env: "dev",
     domains: [],
@@ -118,7 +131,7 @@
   }
 
   function redirectToLogin() {
-    window.location.href = "/admin/login?next=" + encodeURIComponent(window.location.pathname);
+    window.location.href = runtimeConfig.loginPath + "?next=" + encodeURIComponent(window.location.pathname);
   }
 
   function api(path, options) {
@@ -127,7 +140,7 @@
     options.credentials = "same-origin";
     if (options.method && options.method !== "GET") {
       options.headers["Content-Type"] = "application/json";
-      if (state.csrfToken) options.headers["X-Fosu-CSRF"] = state.csrfToken;
+      if (state.csrfToken) options.headers[runtimeConfig.csrfHeader] = state.csrfToken;
     }
     return fetch(path, options).then(function (res) {
       if (res.status === 401) { redirectToLogin(); throw new Error("未登录或会话已过期"); }
@@ -155,7 +168,7 @@
     return isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
   }
 
-  function basePath() { return "/api/admin/agent-platform"; }
+  function basePath() { return runtimeConfig.apiBase; }
   function configQuery() { return "?env=" + encodeURIComponent(state.env); }
   function domainQuery() {
     return configQuery() + "&domain=" + encodeURIComponent(state.activeDomain)
@@ -273,6 +286,12 @@
   }
 
   function saveDraft() {
+    // "[REDACTED]" 是显示方向的脱敏占位符；回存会静默覆盖真实密钥，保存前阻断。
+    if ($("draftEditor").value.indexOf("[REDACTED]") >= 0) {
+      var redactedError = new Error("draft contains the redaction placeholder [REDACTED]");
+      showToast("草稿中包含脱敏占位符 [REDACTED]，请重新输入真实值后再保存。", "error");
+      return Promise.reject(redactedError);
+    }
     var payload;
     try { payload = parseEditor(); } catch (error) { showToast("草稿 JSON 解析失败：" + error.message, "error"); return Promise.reject(error); }
     return api(basePath() + "/config/draft", { method: "PUT", body: writeBody({ payload: payload }) })
@@ -408,7 +427,9 @@
   }
 
   function bootstrap() {
-    api("/api/admin/session").then(function (session) {
+    document.title = "Agent 控制面 · " + runtimeConfig.brand;
+    $("dashboardLink").setAttribute("href", runtimeConfig.dashboardPath);
+    api(runtimeConfig.sessionPath).then(function (session) {
       if (!session.authenticated) { redirectToLogin(); return; }
       state.csrfToken = session.csrfToken || "";
       $("envSelect").addEventListener("change", function () {
