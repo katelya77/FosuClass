@@ -5,10 +5,17 @@
  * 等待中的任务可凭 resumeToken 恢复，不丢状态。同步对话链保持轻量，
  * 不引外部队列/工作流服务（Inngest 等仅借鉴原语，自研轻量落地）。
  *
- * 存储选型：沿用仓库服务端 JSON 文件存储惯例（参照 providerRuntimeConfigStore 的
- * FOSU_AI_PROVIDER_CONFIG_PATH 模式），单文件 + 原子写（tmp+rename）。
- * 路径裁定：FOSU_AI_DURABLE_STORE_PATH > FOSU_DATA_DIR/ai/durable-tasks.json。
- * 并发安全从简：单进程原子写文件即可（无跨进程锁）。
+ * 存储选型（P5a WS4a 起可注入）：构造函数接受可选 store adapter
+ * { load(), save(collection) }——
+ *   - 默认文件实现（原行为原样抽取）：单文件 + 原子写（tmp+rename），
+ *     路径裁定 FOSU_AI_DURABLE_STORE_PATH > FOSU_DATA_DIR/ai/durable-tasks.json，
+ *     同步方法，行为零变化；
+ *   - pgDurableTaskStoreAdapter：PostgreSQL 实现（异步方法），
+ *     经 createDurableTaskStore 工厂按 FOSU_AGENT_REPOSITORY_BACKEND 注入。
+ * 状态机 / 惰性过期 / 扫描 / 视图裁剪等领域规则只在本类一份，双后端共用；
+ * adapter 为 async 时同名方法返回 Promise（调用方 await），领域语义不变。
+ * 并发安全从简：文件模式单进程原子写；PG 模式整集合事务写（见 adapter 注释），
+ * 均不承诺跨实例互斥。
  *
  * 不落敏感信息：resumeToken 只存 SHA-256 哈希（明文仅注册时返回一次），
  * principal 只存 principalKey 的 SHA-256 哈希（与 proactiveCooldownStore 同口径）。
@@ -17,6 +24,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { resolveRepositoryBackend } = require("../persistence/repositoryBackend");
 
 const SCHEMA_VERSION = "ai-durable-tasks.v1";
 const TASK_KINDS = ["reminder", "approval", "receipt_wait"];
@@ -29,6 +37,12 @@ function createStoreError(message, code, statusCode = 400) {
   error.code = code;
   error.statusCode = statusCode;
   return error;
+}
+
+function isThenable(value) {
+  return value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && typeof value.then === "function";
 }
 
 function getDefaultStorePath() {
@@ -89,11 +103,40 @@ function sanitizeContext(value, depth = 0) {
   return output;
 }
 
+/** 默认文件 adapter：P5a 之前的存储行为原样抽取（缺文件/坏文件 → 空集合；原子写）。 */
+function createFileDurableTaskStoreAdapter(options = {}) {
+  const resolvePath = options.resolvePath;
+  return {
+    kind: "file",
+    load() {
+      const filePath = resolvePath();
+      if (!fs.existsSync(filePath)) return emptyData();
+      try {
+        const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
+        if (!raw || typeof raw !== "object" || !raw.tasks || typeof raw.tasks !== "object") return emptyData();
+        return {
+          schemaVersion: SCHEMA_VERSION,
+          updatedAt: raw.updatedAt || new Date().toISOString(),
+          tasks: raw.tasks,
+        };
+      } catch (_) {
+        return emptyData();
+      }
+    },
+    save(data) {
+      writeJsonAtomic(resolvePath(), data);
+    },
+  };
+}
+
 class DurableTaskStore {
   constructor(options = {}) {
     this.explicitPath = options.storePath ? path.resolve(String(options.storePath)) : "";
     this.maxTasks = Math.max(100, Number(options.maxTasks || DEFAULT_MAX_TASKS) || DEFAULT_MAX_TASKS);
     this.now = typeof options.now === "function" ? options.now : () => Date.now();
+    this.storeAdapter = options.store || createFileDurableTaskStoreAdapter({
+      resolvePath: () => this.getStorePath(),
+    });
   }
 
   getStorePath() {
@@ -102,24 +145,26 @@ class DurableTaskStore {
   }
 
   load() {
-    const filePath = this.getStorePath();
-    if (!fs.existsSync(filePath)) return emptyData();
-    try {
-      const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      if (!raw || typeof raw !== "object" || !raw.tasks || typeof raw.tasks !== "object") return emptyData();
-      return {
-        schemaVersion: SCHEMA_VERSION,
-        updatedAt: raw.updatedAt || new Date().toISOString(),
-        tasks: raw.tasks,
-      };
-    } catch (_) {
-      return emptyData();
-    }
+    return this.storeAdapter.load();
   }
 
   save(data) {
     data.updatedAt = new Date().toISOString();
-    writeJsonAtomic(this.getStorePath(), data);
+    return this.storeAdapter.save(data);
+  }
+
+  /** save 后返回值；adapter 为 async 时等待落盘后取 thunk 结果。 */
+  _saveThen(data, thunk) {
+    const saved = this.save(data);
+    if (isThenable(saved)) return saved.then(thunk);
+    return thunk();
+  }
+
+  /** save 后抛错（惰性过期翻转落盘语义）；adapter 为 async 时落盘后 reject。 */
+  _saveThenThrow(data, error) {
+    const saved = this.save(data);
+    if (isThenable(saved)) return saved.then(() => { throw error; });
+    throw error;
   }
 
   /** 惰性过期：非终态且已过 expiresAt 的任务视为 expired（不落盘，落盘由流转/sweep 负责）。 */
@@ -178,26 +223,47 @@ class DurableTaskStore {
       note: String(input.note || "").slice(0, 120),
     };
     const data = this.load();
+    if (isThenable(data)) return data.then((loaded) => this._createLoaded(loaded, task));
+    return this._createLoaded(data, task);
+  }
+
+  _createLoaded(data, task) {
     data.tasks[task.taskId] = task;
     data.tasks = this.pruneTerminal(data.tasks);
-    this.save(data);
-    return Object.assign({}, task);
+    return this._saveThen(data, () => Object.assign({}, task));
   }
 
   get(taskId) {
-    const task = this.load().tasks[String(taskId || "")];
+    const data = this.load();
+    if (isThenable(data)) return data.then((loaded) => this._getLoaded(loaded, taskId));
+    return this._getLoaded(data, taskId);
+  }
+
+  _getLoaded(data, taskId) {
+    const task = data.tasks[String(taskId || "")];
     return task ? Object.assign({}, task) : null;
   }
 
   getEffective(taskId, now = this.now()) {
     const task = this.get(taskId);
+    if (isThenable(task)) return task.then((resolved) => this._effectiveView(resolved, now));
+    return this._effectiveView(task, now);
+  }
+
+  _effectiveView(task, now) {
     if (!task) return null;
     task.status = this.effectiveStatus(task, now);
     return task;
   }
 
   list(filter = {}, now = this.now()) {
-    const tasks = this.load().tasks;
+    const data = this.load();
+    if (isThenable(data)) return data.then((loaded) => this._listLoaded(loaded, filter, now));
+    return this._listLoaded(data, filter, now);
+  }
+
+  _listLoaded(data, filter, now) {
+    const tasks = data.tasks;
     return Object.keys(tasks).map((key) => {
       const task = Object.assign({}, tasks[key]);
       task.status = this.effectiveStatus(task, now);
@@ -220,6 +286,11 @@ class DurableTaskStore {
       throw createStoreError(`未知的 durable 任务状态：${to}`, "DURABLE_STATUS_INVALID", 500);
     }
     const data = this.load();
+    if (isThenable(data)) return data.then((loaded) => this._transitionLoaded(loaded, taskId, expectedFrom, to, patch));
+    return this._transitionLoaded(data, taskId, expectedFrom, to, patch);
+  }
+
+  _transitionLoaded(data, taskId, expectedFrom, to, patch) {
     const key = String(taskId || "");
     const task = data.tasks[key];
     if (!task) {
@@ -231,7 +302,7 @@ class DurableTaskStore {
       if (task.status !== "expired") {
         task.status = "expired";
         task.updatedAt = new Date().toISOString();
-        this.save(data);
+        return this._saveThenThrow(data, createStoreError("durable 任务已过期，不能恢复。", "DURABLE_TASK_EXPIRED", 410));
       }
       throw createStoreError("durable 任务已过期，不能恢复。", "DURABLE_TASK_EXPIRED", 410);
     }
@@ -249,8 +320,7 @@ class DurableTaskStore {
       task[patchKey] = typeof value === "function" ? value(task) : value;
     });
     data.tasks = this.pruneTerminal(data.tasks);
-    this.save(data);
-    return Object.assign({}, task);
+    return this._saveThen(data, () => Object.assign({}, task));
   }
 
   markWaiting(taskId) {
@@ -274,6 +344,11 @@ class DurableTaskStore {
   /** 批量过期标记：把所有非终态且已过期任务落盘为 expired，返回翻转数量。 */
   sweepExpired(now = this.now()) {
     const data = this.load();
+    if (isThenable(data)) return data.then((loaded) => this._sweepLoaded(loaded, now));
+    return this._sweepLoaded(data, now);
+  }
+
+  _sweepLoaded(data, now) {
     let flipped = 0;
     Object.keys(data.tasks).forEach((key) => {
       const task = data.tasks[key];
@@ -284,7 +359,7 @@ class DurableTaskStore {
         flipped += 1;
       }
     });
-    if (flipped > 0) this.save(data);
+    if (flipped > 0) return this._saveThen(data, () => flipped);
     return flipped;
   }
 
@@ -292,23 +367,51 @@ class DurableTaskStore {
   findWaitingByEvent(query = {}, now = this.now()) {
     const waitEvent = String(query.waitEvent || "");
     const contextMatch = query.contextMatch && typeof query.contextMatch === "object" ? query.contextMatch : {};
-    const matches = this.list({ kind: query.kind, waitEvent, principalKey: query.principalKey }, now)
-      .filter((task) => task.status === "waiting" || task.status === "pending")
-      .filter((task) => Object.keys(contextMatch).every((key) => {
-        const context = task.context && typeof task.context === "object" ? task.context : {};
-        return String(context[key] || "") === String(contextMatch[key] || "");
-      }))
-      .sort((a, b) => Number(b.expiresAt || 0) - Number(a.expiresAt || 0));
-    return matches.length ? matches[0] : null;
+    const listed = this.list({ kind: query.kind, waitEvent, principalKey: query.principalKey }, now);
+    const pick = (tasks) => {
+      const matches = tasks
+        .filter((task) => task.status === "waiting" || task.status === "pending")
+        .filter((task) => Object.keys(contextMatch).every((key) => {
+          const context = task.context && typeof task.context === "object" ? task.context : {};
+          return String(context[key] || "") === String(contextMatch[key] || "");
+        }))
+        .sort((a, b) => Number(b.expiresAt || 0) - Number(a.expiresAt || 0));
+      return matches.length ? matches[0] : null;
+    };
+    if (isThenable(listed)) return listed.then(pick);
+    return pick(listed);
   }
 
   /** 测试辅助：清空全部任务。 */
   clearAll() {
-    this.save(emptyData());
+    const saved = this.save(emptyData());
+    if (isThenable(saved)) return saved.then(() => true);
     return true;
   }
 }
 
+/**
+ * P5a WS4a：按 FOSU_AGENT_REPOSITORY_BACKEND 注入存储后端的工厂。
+ * file（默认）→ 文件 adapter（同步方法，与直接 new DurableTaskStore 相同）；
+ * postgres → pgDurableTaskStoreAdapter（异步方法，pool 默认取 pgPersistenceService 单例）。
+ */
+function createDurableTaskStore(options = {}) {
+  if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
+    // lazy require：file 模式不加载 pg 依赖链。
+    const { getPool } = require("../persistence/pgPersistenceService");
+    const { createPgDurableTaskStoreAdapter } = require("./pgDurableTaskStoreAdapter");
+    return new DurableTaskStore(Object.assign({}, options, {
+      store: options.store || createPgDurableTaskStoreAdapter({
+        pool: options.pool || getPool(),
+        schemaVersion: SCHEMA_VERSION,
+      }),
+    }));
+  }
+  return new DurableTaskStore(options);
+}
+
+// 默认实例固定文件后端：现有同步消费链（waitForEvent/resume/routes）零变化；
+// postgres 模式的消费方一律经 createDurableTaskStore 工厂获取异步实例。
 const defaultDurableTaskStore = new DurableTaskStore();
 
 /** 对外展示视图：剥离 resumeTokenHash / principalKeyHash，绝不回传哈希。 */
@@ -331,6 +434,8 @@ function publicTaskView(task) {
 module.exports = {
   DurableTaskStore,
   defaultDurableTaskStore,
+  createDurableTaskStore,
+  createFileDurableTaskStoreAdapter,
   createStoreError,
   generateResumeToken,
   getDefaultStorePath,
