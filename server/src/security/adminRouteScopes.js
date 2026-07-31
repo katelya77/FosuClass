@@ -50,6 +50,13 @@ const ROUTE_SCOPE_MAP = {
   "POST /release/rebuild": [SCOPES.RELEASE_BUILD, SCOPES.ADMIN_FULL],
   "POST /static-release/sync": [SCOPES.STATIC_SYNC, SCOPES.ADMIN_FULL],
   "POST /static-release/verify": [SCOPES.STATIC_VERIFY, SCOPES.ADMIN_FULL],
+
+  // Agent platform config plane (P4e)
+  "PUT /agent-platform/config/draft": [SCOPES.AGENT_CONFIG_DRAFT_WRITE, SCOPES.ADMIN_FULL],
+  "POST /agent-platform/config/validate": [SCOPES.AGENT_CONFIG_VALIDATE, SCOPES.ADMIN_FULL],
+  "POST /agent-platform/config/test": [SCOPES.AGENT_CONFIG_VALIDATE, SCOPES.ADMIN_FULL],
+  "POST /agent-platform/config/publish": [SCOPES.AGENT_CONFIG_PUBLISH, SCOPES.ADMIN_FULL],
+  "POST /agent-platform/config/rollback": [SCOPES.AGENT_CONFIG_ROLLBACK, SCOPES.ADMIN_FULL],
 };
 
 const PUBLIC_MUTATIONS = new Set([

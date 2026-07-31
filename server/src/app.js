@@ -21,6 +21,7 @@ const termRegistryService = require("./services/termRegistryService");
 const runtimePointerService = require("./services/runtimePointerService");
 const performanceMonitorService = require("./services/performanceMonitorService");
 const campusMapAssetService = require("./services/campusMapAssetService");
+const adminAuth = require("./services/adminAuth");
 const { defaultCourseReminderDispatchService } = require("./services/ai/reminders/courseReminderDispatchService");
 
 // 路由引入
@@ -250,6 +251,29 @@ function redirectAdminAlias(prefix) {
 // Legacy is the only admin UI. Historical bookmarks keep their deep path and query.
 app.use("/admin-next", redirectAdminAlias("/admin-next"));
 app.use("/admin-legacy", redirectAdminAlias("/admin-legacy"));
+
+// P4e：Agent 控制面静态页（apps/agent-admin/public，无构建纯静态）。
+// 页面本身只是 UI 外壳，数据全部来自 /api/admin/agent-platform/* 真实 API；
+// 未登录先跳 Legacy 登录页（与 adminPages 同一 Cookie 会话）。
+app.use("/admin/agent-platform", (req, res, next) => {
+  if (!adminAuth.isAdminCookieValid(req)) {
+    const nextTarget = encodeURIComponent(String(req.originalUrl || "/admin/agent-platform"));
+    return res.redirect(302, `/admin/login?next=${nextTarget}`);
+  }
+  return next();
+}, express.static(path.join(__dirname, "../../apps/agent-admin/public"), {
+  index: "agent-platform.html",
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    );
+  },
+}));
+
 app.use("/admin", adminPageRouter);
 
 app.use("/api/relay", relayRouter);

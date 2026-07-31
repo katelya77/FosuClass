@@ -119,10 +119,10 @@
 
 ### P4e — Agent Control Plane and Runtime Evidence
 
-- [ ] `apps/agent-admin` 六域配置页面 + draft/validate/test/publish/rollback 操作 + 版本历史 + environment scope。
-- [ ] Run Trace/Eval：runId、executionPolicy、configVersion、各域 Artifact 版本、intendedProvider/actualFirstProvider、fallbackPath、Goal、selectedSkill、Tool/Verification 状态、阶段耗时、outcome。不显示密钥/完整 Prompt/隐藏推理/记忆原文。
-- [ ] 后台只消费 P4a–P4d 真实 API；无 mock 数据；浏览器端完成发布→新 Run 生效→回滚闭环验收。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4e-evidence.md`。提交：`feat(agent): add runtime-backed agent control plane`。
+- [x] `apps/agent-admin` 六域配置页面 + draft/validate/test/publish/rollback 操作 + 版本历史 + environment scope。
+- [x] Run Trace/Eval：runId、executionPolicy、configVersion、各域 Artifact 版本、intendedProvider/actualFirstProvider、fallbackPath、Goal、selectedSkill、Tool/Verification 状态、阶段耗时、outcome。不显示密钥/完整 Prompt/隐藏推理/记忆原文。
+- [x] 后台只消费 P4a–P4d 真实 API；无 mock 数据；浏览器端完成发布→新 Run 生效→回滚闭环验收。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p4e-evidence.md`。提交：`feat(agent): add runtime-backed agent control plane`。
   - _Requirements: R6, R7, R10.2–R10.3, R11.5_
 
 ## P5 — 一体化与 Standalone 双部署（拆分为 P5a–P5c）

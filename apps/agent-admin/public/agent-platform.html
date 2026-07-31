@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 控制面 · FosuClass Admin</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #f4f6fa; color: #1f2937; }
+  header { background: #0f3d91; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header a { color: #cfe0ff; font-size: 13px; }
+  header select { margin-left: auto; }
+  main { padding: 16px 20px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section { background: #fff; border: 1px solid #e3e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tabs button { border: 1px solid #cfd8e6; background: #f8fafc; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .tabs button[aria-selected="true"] { background: #0f3d91; color: #fff; border-color: #0f3d91; }
+  button.action { border: 1px solid #0f3d91; background: #fff; color: #0f3d91; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; margin: 2px 4px 2px 0; }
+  button.action.primary { background: #0f3d91; color: #fff; }
+  button.action.danger { border-color: #b42318; color: #b42318; }
+  button.action:disabled { opacity: 0.5; cursor: not-allowed; }
+  textarea { width: 100%; min-height: 220px; font-family: Consolas, "Courier New", monospace; font-size: 12px; border: 1px solid #cfd8e6; border-radius: 6px; padding: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { border: 1px solid #e3e8f0; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #f0f4fa; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .status-line { font-size: 13px; margin: 6px 0; }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11px; background: #e8eefc; color: #0f3d91; margin-right: 4px; }
+  .pill.ok { background: #dcfae6; color: #067647; }
+  .pill.bad { background: #fee4e2; color: #b42318; }
+  #toast { position: fixed; right: 16px; bottom: 16px; max-width: 420px; padding: 10px 14px; border-radius: 8px; color: #fff; font-size: 13px; display: none; z-index: 10; }
+  #toast.success { background: #067647; }
+  #toast.error { background: #b42318; }
+  pre.details { background: #f8fafc; border: 1px solid #e3e8f0; border-radius: 6px; padding: 8px; font-size: 11px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  .run-row { cursor: pointer; }
+  .run-row:hover { background: #f0f4fa; }
+  select, input[type="text"] { border: 1px solid #cfd8e6; border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent 控制面</h1>
+  <a href="/admin/dashboard">← 返回后台</a>
+  <label class="muted" style="color:#cfe0ff">环境
+    <select id="envSelect">
+      <option value="public">public（正式）</option>
+      <option value="trial">trial（体验）</option>
+      <option value="dev" selected>dev（开发）</option>
+    </select>
+  </label>
+  <button class="action" id="btnRefresh" type="button">刷新</button>
+</header>
+<main>
+  <div>
+    <section id="configSection">
+      <h2>配置域（draft → validate → test → publish / rollback）</h2>
+      <div class="status-line" id="configStatus">加载中…</div>
+      <div class="tabs" id="domainTabs" role="tablist"></div>
+      <div class="status-line" id="domainStatus"></div>
+      <div>
+        <button class="action" id="btnLoadPublished" type="button">载入已发布版本</button>
+        <button class="action" id="btnLoadDraft" type="button">载入草稿</button>
+        <button class="action" id="btnSaveDraft" type="button">保存草稿</button>
+        <button class="action" id="btnValidate" type="button">校验</button>
+        <button class="action" id="btnTest" type="button">测试</button>
+        <button class="action primary" id="btnPublish" type="button">发布</button>
+      </div>
+      <textarea id="draftEditor" spellcheck="false" placeholder="{}"></textarea>
+      <div class="muted" id="editorHint">草稿内容不会进入生产；发布只接受通过校验与测试的同一份草稿。</div>
+    </section>
+    <section>
+      <h2>版本历史</h2>
+      <div id="versionHistory"><span class="muted">加载中…</span></div>
+    </section>
+    <section>
+      <h2>内核审计</h2>
+      <div id="auditList"><span class="muted">加载中…</span></div>
+    </section>
+  </div>
+  <div>
+    <section>
+      <h2>最近 Run（点击行查看 Trace）</h2>
+      <div id="runList"><span class="muted">加载中…</span></div>
+    </section>
+    <section>
+      <h2>Run Trace 详情</h2>
+      <div id="runDetail"><span class="muted">未选择 Run。</span></div>
+    </section>
+  </div>
+</main>
+<div id="toast" role="status"></div>
+<script>
+(function () {
+  "use strict";
+
+  var state = {
+    env: "dev",
+    domains: [],
+    activeDomain: "",
+    artifactIds: {},
+    publishedVersions: {},
+    csrfToken: "",
+    selectedRunId: ""
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function showToast(message, kind) {
+    var toast = $("toast");
+    toast.textContent = message;
+    toast.className = kind === "error" ? "error" : "success";
+    toast.style.display = "block";
+    setTimeout(function () { toast.style.display = "none"; }, 4200);
+  }
+
+  function redirectToLogin() {
+    window.location.href = "/admin/login?next=" + encodeURIComponent(window.location.pathname);
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    options.credentials = "same-origin";
+    if (options.method && options.method !== "GET") {
+      options.headers["Content-Type"] = "application/json";
+      if (state.csrfToken) options.headers["X-Fosu-CSRF"] = state.csrfToken;
+    }
+    return fetch(path, options).then(function (res) {
+      if (res.status === 401) { redirectToLogin(); throw new Error("未登录或会话已过期"); }
+      return res.json().then(function (body) {
+        if (!res.ok || (body && body.success === false)) {
+          var error = new Error((body && (body.message || body.code)) || ("HTTP " + res.status));
+          error.code = body && body.code;
+          error.status = res.status;
+          throw error;
+        }
+        return body;
+      });
+    });
+  }
+
+  function esc(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function fmtTime(value) {
+    if (!value) return "-";
+    var date = new Date(value);
+    return isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
+  }
+
+  function basePath() { return "/api/admin/agent-platform"; }
+  function configQuery() { return "?env=" + encodeURIComponent(state.env); }
+  function domainQuery() {
+    return configQuery() + "&domain=" + encodeURIComponent(state.activeDomain)
+      + "&artifactId=" + encodeURIComponent(state.artifactIds[state.activeDomain] || "");
+  }
+  function writeBody(extra) {
+    return JSON.stringify(Object.assign({
+      environment: state.env,
+      domain: state.activeDomain,
+      artifactId: state.artifactIds[state.activeDomain] || ""
+    }, extra || {}));
+  }
+
+  function renderDomains(payload) {
+    state.domains = payload.domains || [];
+    state.artifactIds = {};
+    state.publishedVersions = {};
+    state.domains.forEach(function (domain) {
+      var artifacts = domain.artifacts || [];
+      if (artifacts.length) {
+        state.artifactIds[domain.domain] = artifacts[0].artifactId;
+        state.publishedVersions[domain.domain] = artifacts[0].publishedVersion;
+      }
+    });
+    if (!state.activeDomain || !state.artifactIds[state.activeDomain]) {
+      state.activeDomain = state.domains.length ? state.domains[0].domain : "";
+    }
+    $("configStatus").innerHTML = "环境 <b>" + esc(payload.environment) + "</b> · configVersion <b>"
+      + esc(payload.configVersion || "（未初始化）") + "</b> · 快照数 " + esc(payload.snapshotCount)
+      + " · LKG " + (payload.lkgAvailable ? "可用" : "不可用");
+    var tabs = $("domainTabs");
+    tabs.innerHTML = "";
+    state.domains.forEach(function (domain) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("data-domain-tab", domain.domain);
+      btn.setAttribute("aria-selected", domain.domain === state.activeDomain ? "true" : "false");
+      btn.textContent = domain.domain + " (v" + (state.publishedVersions[domain.domain] || 0) + ")";
+      btn.addEventListener("click", function () { switchDomain(domain.domain); });
+      tabs.appendChild(btn);
+    });
+    renderDomainStatus();
+  }
+
+  function renderDomainStatus(draftInfo) {
+    var domain = state.activeDomain;
+    if (!domain) { $("domainStatus").textContent = "该环境暂无已发布配置域。"; return; }
+    var parts = ["当前域 <b>" + esc(domain) + "</b> · artifact <b>" + esc(state.artifactIds[domain] || "-") + "</b>"
+      + " · 已发布 v" + esc(state.publishedVersions[domain] || 0)];
+    if (draftInfo && draftInfo.draft) {
+      var draft = draftInfo.draft;
+      parts.push("草稿：base v" + esc(draft.baseVersion)
+        + " · 校验 " + pillOf(draft.validation && draft.validation.ok)
+        + " · 测试 " + pillOf(draft.test && draft.test.ok));
+    } else if (draftInfo) {
+      parts.push("草稿：无");
+    }
+    $("domainStatus").innerHTML = parts.join(" · ");
+  }
+
+  function pillOf(ok) {
+    if (ok === true) return '<span class="pill ok">通过</span>';
+    if (ok === false) return '<span class="pill bad">未通过</span>';
+    return '<span class="pill">未执行</span>';
+  }
+
+  function switchDomain(domain) {
+    state.activeDomain = domain;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-domain-tab]"), function (btn) {
+      btn.setAttribute("aria-selected", btn.getAttribute("data-domain-tab") === domain ? "true" : "false");
+    });
+    renderDomainStatus();
+    loadDraft(true);
+    loadVersions();
+  }
+
+  function loadDomains() {
+    return api(basePath() + "/config/domains" + configQuery()).then(function (payload) {
+      renderDomains(payload);
+    }).catch(function (error) { showToast("加载配置域失败：" + error.message, "error"); });
+  }
+
+  function loadDraft(silent) {
+    if (!state.activeDomain) return Promise.resolve();
+    return api(basePath() + "/config/draft" + domainQuery()).then(function (payload) {
+      renderDomainStatus(payload);
+      if (payload.draft) {
+        $("draftEditor").value = JSON.stringify(payload.draft.payload || {}, null, 2);
+        if (!silent) showToast("已载入草稿。", "success");
+        return true;
+      }
+      return false;
+    }).catch(function (error) {
+      if (!silent) showToast("载入草稿失败：" + error.message, "error");
+      return false;
+    });
+  }
+
+  function loadPublished() {
+    if (!state.activeDomain) return;
+    var version = state.publishedVersions[state.activeDomain];
+    if (!version) { showToast("该域尚未发布。", "error"); return; }
+    api(basePath() + "/config/artifact" + domainQuery() + "&version=" + encodeURIComponent(version))
+      .then(function (payload) {
+        $("draftEditor").value = JSON.stringify(payload.artifact.payload || {}, null, 2);
+        showToast("已载入已发布 v" + version + " 内容（保存为草稿后才会进入发布链）。", "success");
+      })
+      .catch(function (error) { showToast("载入已发布版本失败：" + error.message, "error"); });
+  }
+
+  function parseEditor() {
+    var text = $("draftEditor").value.trim() || "{}";
+    return JSON.parse(text);
+  }
+
+  function saveDraft() {
+    var payload;
+    try { payload = parseEditor(); } catch (error) { showToast("草稿 JSON 解析失败：" + error.message, "error"); return Promise.reject(error); }
+    return api(basePath() + "/config/draft", { method: "PUT", body: writeBody({ payload: payload }) })
+      .then(function (result) {
+        renderDomainStatus({ draft: result.draft });
+        showToast("草稿已保存（base v" + result.draft.baseVersion + "）。", "success");
+      })
+      .catch(function (error) { showToast("保存草稿失败：" + error.message, "error"); throw error; });
+  }
+
+  function validateDraft() {
+    return api(basePath() + "/config/validate", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        var v = result.validation || {};
+        showToast(v.ok ? "校验通过。" : "校验未通过：" + (v.errors || []).join("；"), v.ok ? "success" : "error");
+        return v.ok === true;
+      })
+      .catch(function (error) { showToast("校验失败：" + error.message, "error"); throw error; });
+  }
+
+  function testDraft() {
+    return api(basePath() + "/config/test", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        var t = result.test || {};
+        showToast(t.ok ? "测试通过。" : "测试未通过：" + JSON.stringify(t.results || {}), t.ok ? "success" : "error");
+        return t.ok === true;
+      })
+      .catch(function (error) { showToast("测试失败：" + error.message, "error"); throw error; });
+  }
+
+  function publishDraft() {
+    if (!window.confirm("确认发布 " + state.env + " / " + state.activeDomain + " 的当前草稿？发布会生成新的不可变 configVersion，仅影响新 Run。")) return;
+    api(basePath() + "/config/publish", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        showToast("已发布 v" + result.published.version + "（" + result.published.configVersion + "）。", "success");
+        refreshAll();
+      })
+      .catch(function (error) { showToast("发布失败：" + error.message, "error"); });
+  }
+
+  function loadVersions() {
+    if (!state.activeDomain) return;
+    api(basePath() + "/config/versions" + domainQuery()).then(function (payload) {
+      var rows = (payload.versions || []).slice().reverse().map(function (item) {
+        return "<tr><td>v" + esc(item.version) + (item.current ? ' <span class="pill ok">当前</span>' : "") + "</td><td>"
+          + esc(item.origin) + "</td><td>" + esc(item.createdBy) + "</td><td>" + esc(fmtTime(item.createdAt)) + "</td><td>"
+          + (item.current ? "" : '<button class="action danger" type="button" data-rollback-version="' + esc(item.version) + '">回滚到此版本</button>')
+          + "</td></tr>";
+      });
+      $("versionHistory").innerHTML = rows.length
+        ? "<table><thead><tr><th>版本</th><th>来源</th><th>操作者</th><th>时间</th><th></th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无版本。</span>';
+      Array.prototype.forEach.call(document.querySelectorAll("[data-rollback-version]"), function (btn) {
+        btn.addEventListener("click", function () { rollbackTo(Number(btn.getAttribute("data-rollback-version"))); });
+      });
+    }).catch(function (error) { showToast("加载版本历史失败：" + error.message, "error"); });
+  }
+
+  function rollbackTo(version) {
+    if (!window.confirm("确认把 " + state.env + " / " + state.activeDomain + " 回滚到已发布 v" + version + "？回滚同样生成新 configVersion，仅影响新 Run。")) return;
+    api(basePath() + "/config/rollback", { method: "POST", body: writeBody({ toVersion: version }) })
+      .then(function (result) {
+        showToast("已回滚到 v" + result.rolledBack.version + "（" + result.rolledBack.configVersion + "）。", "success");
+        refreshAll();
+      })
+      .catch(function (error) { showToast("回滚失败：" + error.message, "error"); });
+  }
+
+  function loadAudit() {
+    api(basePath() + "/config/audit" + configQuery() + "&limit=50").then(function (payload) {
+      var rows = (payload.entries || []).map(function (entry) {
+        return "<tr><td>" + esc(fmtTime(entry.at)) + "</td><td>" + esc(entry.op) + "</td><td>"
+          + esc(entry.domain || "") + (entry.artifactId ? ":" + esc(entry.artifactId) : "") + "</td><td>"
+          + esc(entry.version || "") + "</td><td>" + esc(entry.actor || "") + "</td><td>"
+          + esc(entry.result || "") + (entry.reasonCode ? " (" + esc(entry.reasonCode) + ")" : "") + "</td></tr>";
+      });
+      $("auditList").innerHTML = rows.length
+        ? "<table><thead><tr><th>时间</th><th>操作</th><th>对象</th><th>版本</th><th>操作者</th><th>结果</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无审计记录。</span>';
+    }).catch(function (error) { showToast("加载审计失败：" + error.message, "error"); });
+  }
+
+  function loadRuns() {
+    api(basePath() + "/runs?limit=30").then(function (payload) {
+      var rows = (payload.runs || []).map(function (trace) {
+        var stages = Array.isArray(trace.stages) ? trace.stages : [];
+        var last = stages.length ? stages[stages.length - 1] : {};
+        return '<tr class="run-row" data-run-id="' + esc(trace.runId) + '"><td>' + esc(String(trace.runId || "").slice(0, 18)) + "…</td><td>"
+          + esc(trace.configVersion || "") + "</td><td>" + esc(last.outcome || "-") + "</td><td>"
+          + esc(trace.timings && trace.timings.total != null ? trace.timings.total : "-") + " ms</td></tr>";
+      });
+      $("runList").innerHTML = rows.length
+        ? "<table><thead><tr><th>runId</th><th>configVersion</th><th>末阶段结果</th><th>总耗时</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无 Run。</span>';
+      Array.prototype.forEach.call(document.querySelectorAll("[data-run-id]"), function (row) {
+        row.addEventListener("click", function () { loadRunDetail(row.getAttribute("data-run-id")); });
+      });
+    }).catch(function (error) { showToast("加载 Run 列表失败：" + error.message, "error"); });
+  }
+
+  function loadRunDetail(runId) {
+    state.selectedRunId = runId;
+    api(basePath() + "/runs/" + encodeURIComponent(runId)).then(function (payload) {
+      var trace = payload.trace || {};
+      var timings = trace.timings || {};
+      var stageRows = (trace.stages || []).map(function (stage) {
+        return "<tr><td>" + esc(stage.stage) + "</td><td>" + esc(stage.owner) + "</td><td>" + esc(stage.outcome)
+          + "</td><td>" + esc(stage.durationMs) + " ms</td></tr>";
+      });
+      var detailBlocks = (trace.stages || []).map(function (stage) {
+        var details = stage.details || {};
+        if (!Object.keys(details).length) return "";
+        return "<h3 style='font-size:12px;margin:8px 0 4px'>" + esc(stage.stage) + " details</h3><pre class='details'>"
+          + esc(JSON.stringify(details, null, 2)) + "</pre>";
+      }).join("");
+      $("runDetail").innerHTML = "<div class='status-line'>runId <b>" + esc(trace.runId) + "</b> · configVersion <b>"
+        + esc(trace.configVersion) + "</b> · runtime <b>" + esc(trace.runtimePackage) + "</b></div>"
+        + "<div class='status-line'>阶段耗时：createRun " + esc(timings.createRun) + " / decision " + esc(timings.decision)
+        + " / tool " + esc(timings.tool) + " / verification " + esc(timings.verification) + " / response "
+        + esc(timings.response) + " / total " + esc(timings.total) + " ms</div>"
+        + "<table><thead><tr><th>阶段</th><th>归属</th><th>结果</th><th>耗时</th></tr></thead><tbody>" + stageRows.join("") + "</tbody></table>"
+        + detailBlocks;
+    }).catch(function (error) { showToast("加载 Run Trace 失败：" + error.message, "error"); });
+  }
+
+  function refreshAll() {
+    loadDomains().then(function () {
+      loadDraft(true);
+      loadVersions();
+      loadAudit();
+      loadRuns();
+    });
+  }
+
+  function bootstrap() {
+    api("/api/admin/session").then(function (session) {
+      if (!session.authenticated) { redirectToLogin(); return; }
+      state.csrfToken = session.csrfToken || "";
+      $("envSelect").addEventListener("change", function () {
+        state.env = $("envSelect").value;
+        state.activeDomain = "";
+        refreshAll();
+      });
+      $("btnRefresh").addEventListener("click", refreshAll);
+      $("btnLoadPublished").addEventListener("click", loadPublished);
+      $("btnLoadDraft").addEventListener("click", function () { loadDraft(false); });
+      $("btnSaveDraft").addEventListener("click", function () { saveDraft(); });
+      $("btnValidate").addEventListener("click", function () { validateDraft(); });
+      $("btnTest").addEventListener("click", function () { testDraft(); });
+      $("btnPublish").addEventListener("click", publishDraft);
+      refreshAll();
+    }).catch(function () { redirectToLogin(); });
+  }
+
+  bootstrap();
+})();
+</script>
+</body>
+</html>

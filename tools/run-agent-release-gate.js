@@ -15,6 +15,7 @@ const STEPS = [
   ["test:agent-platform-p4b", "Product platform P4b hot-publish core runtime domains"],
   ["test:agent-platform-p4c", "Product platform P4c governed MCP runtime"],
   ["test:agent-platform-p4d", "Product platform P4d versioned hybrid RAG runtime"],
+  ["test:agent-platform-p4e", "Product platform P4e agent control plane"],
   ["test:xiaofu-final-suite", "Open-schedule / AG-UI / Coze / college / UI final + core experience"],
   ["test:xiaofu-core-experience", "Core experience: follow-up / college A-B / voice / geometry"],
   ["test:agent-memory-autonomy", "Memory + autonomy wiring"],
