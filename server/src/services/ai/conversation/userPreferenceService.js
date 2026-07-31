@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { acquireExclusiveFileLock } = require("../../exclusiveFileLockService");
 const { principalShard } = require("./conversationPrincipalService");
-const { encodeSemanticVector, semanticScores } = require("../../../../../packages/agent-runtime");
+const { encodeSemanticVector, semanticScores, ENCODER_VERSION } = require("../../../../../packages/agent-runtime");
 
 const LEGACY_SCHEMA_VERSION = "user-preferences.v1";
 const SCHEMA_VERSION = "user-memory.v2";
@@ -222,6 +222,9 @@ function normalizeStoredItem(item = {}) {
     createdAt: safeText(item.createdAt, 40),
     updatedAt: safeText(item.updatedAt, 40),
     featureVector: Array.isArray(item.featureVector) ? item.featureVector.slice(0, 64).map(Number) : [],
+    // encoder 世代标记（ADR-0007 §3 对记忆存储同样生效）：缺失/不符即旧世代，
+    // 读路径回退现算（semanticScores 第三参传 null），写路径自愈为当前世代。
+    encoderVersion: safeText(item.encoderVersion, 40),
   };
 }
 
@@ -244,6 +247,7 @@ function normalizeStoredEpisode(item = {}) {
     createdAt: safeText(item.createdAt, 40),
     updatedAt: safeText(item.updatedAt, 40),
     featureVector: Array.isArray(item.featureVector) ? item.featureVector.slice(0, 64).map(Number) : [],
+    encoderVersion: safeText(item.encoderVersion, 40),
   };
 }
 
@@ -294,6 +298,15 @@ function publicMemoryItem(item) {
 function publicEpisode(item) {
   const { featureVector, ...safe } = item;
   return safe;
+}
+
+// 世代不符的旧持久化向量不得与现算查询向量跨空间比较（ADR-0007 §3 对记忆
+// 存储同样生效）：返回 null 让 semanticScores 回退对文档现算，写路径自愈。
+function generationAwareStoredVector(entry) {
+  return entry && entry.encoderVersion === ENCODER_VERSION
+    && Array.isArray(entry.featureVector) && entry.featureVector.length
+    ? entry.featureVector
+    : null;
 }
 
 function publicAudit(entry) {
@@ -587,6 +600,7 @@ class UserPreferenceService {
           createdAt: legacyRecordedAt,
           updatedAt: legacyRecordedAt,
           featureVector: encodeSemanticVector(content),
+          encoderVersion: ENCODER_VERSION,
         }));
       });
       return document;
@@ -666,6 +680,7 @@ class UserPreferenceService {
       createdAt: now,
       updatedAt: now,
       featureVector: encodeSemanticVector(`${key} ${content} ${String(normalizedValue)}`),
+      encoderVersion: ENCODER_VERSION,
     });
   }
 
@@ -694,6 +709,7 @@ class UserPreferenceService {
       previous.updatedAt = now;
       previous.revision = document.revision;
       previous.featureVector = memory.featureVector;
+      previous.encoderVersion = memory.encoderVersion;
       audit(document, "confirm", previous.memoryId, now);
       return {
         changed: true,
@@ -752,7 +768,7 @@ class UserPreferenceService {
       const normalizedValue = item.normalizedValue === undefined || item.normalizedValue === null
         ? "" : String(item.normalizedValue);
       const documentText = `${item.key} ${item.content} ${normalizedValue} ${item.kind}`;
-      const semantic = semanticScores(query, documentText, item.featureVector);
+      const semantic = semanticScores(query, documentText, generationAwareStoredVector(item));
       const relevance = hasSemanticRelevance(item, input, semantic, query);
       if (!relevance.relevant) return null;
       const ageDays = Math.max(0, (nowMs - Date.parse(item.updatedAt || item.createdAt || 0)) / 86400000);
@@ -780,7 +796,7 @@ class UserPreferenceService {
         && isLiveEntry(episode, nowMs, DEFAULT_EPISODE_TTL_MS)
         && scopeMatches(episode, input);
     }).map((episode) => {
-      const scores = semanticScores(query, `${episode.goal} ${episode.outcomeSummary} ${JSON.stringify(episode.reusableConstraints)}`, episode.featureVector);
+      const scores = semanticScores(query, `${episode.goal} ${episode.outcomeSummary} ${JSON.stringify(episode.reusableConstraints)}`, generationAwareStoredVector(episode));
       const exactGoal = input.goal && String(input.goal) === episode.goal ? 0.3 : 0;
       if (!exactGoal && scores.lexical <= 0 && scores.vector < 0.28) return null;
       return {
@@ -1082,6 +1098,7 @@ class UserPreferenceService {
       createdAt: now,
       updatedAt: now,
       featureVector: encodeSemanticVector(serialized),
+      encoderVersion: ENCODER_VERSION,
     });
     document.episodes.push(episode);
     enforceCapacity(document, now);
@@ -1305,6 +1322,7 @@ class UserPreferenceService {
       item.updatedAt = now;
       item.revision = document.revision;
       item.featureVector = encodeSemanticVector(`${item.key} ${content} ${String(normalizedValue)}`);
+      item.encoderVersion = ENCODER_VERSION;
       audit(document, "patch", item.memoryId, now);
       return { memory: item };
     });

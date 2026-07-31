@@ -41,3 +41,22 @@ P4d golden query 实测暴露 v1 latin 词元三处系统性缺陷：尾随标�
    别名扩展的语义匹配带支撑，不受影响）。向量通道经 RRF 名次与 rerank
    权重真实参与排序（golden query 四组对照的 MRR/引用正确率差异证明）。
    该策略随 encoder 世代校准；未来神经 Embedding Adapter 可按新世代放宽。
+
+## Amendment §9: deterministic-local-v3（P4d 审查跟进，2026-07-31）
+
+P4d 独立审查（M-4）确认 v2 的单字符丢弃规则误伤「C区」式楼栋/区域命名：
+`tokenizeSemantic("C区")` v1→`["c","区"]`、v2→`["区"]`，"A区" 与 "C区"
+在 v2 下词元完全相同，latin 通道失去字母维度。按本 ADR §3 的既定机制
+递增世代为 `deterministic-local-v3`：
+
+1. 与 CJK 相邻的单字母词元保留；孤立单字母（"a"/"I"）仍按英语停用词
+   噪声丢弃；v2 其余规则（标点剥离、连字符拆分、CJK run/bigram、别名表）
+   逐位不变。
+2. 既有黄金值（CJK/干净 latin 输入，无 CJK 相邻单字母）在 v3 下继续逐位
+   保持；golden query 语料（12 篇通用文档，无 CJK 相邻单字母输入）四模式
+   指标与 v2 完全一致（Recall@5 90.9%、hybrid_rerank MRR 84.8%、引用
+   81.8%、空答案 100%），v3 不改变既有语料的向量空间。
+3. P3 记忆存储同步补齐世代治理（审查 I-3）：存储项带 `encoderVersion`
+   标记，读路径对世代不符的旧持久化向量回退现算（不再跨向量空间比较），
+   写路径自愈为当前世代——与 RAG 索引的 `RAG_ENCODER_MISMATCH` 硬失败
+   策略互补：记忆按条目惰性自愈，索引按版本整体重建。

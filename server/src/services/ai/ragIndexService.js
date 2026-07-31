@@ -6,7 +6,18 @@
 //   幂等（已存在且可校验的版本索引跳过重建）；P5b 以 Redis Streams 替换传输，
 //   业务语义（jobId/幂等/reclaim/有界重试）保持不变；
 // - 查询路径：快照钉住版本 → 读版本索引 → 失败回退 lkg（仅当 lkg 更旧，
-//   永不提供比钉住版本更新的索引）→ 双失败 fail closed。
+//   永不提供比钉住版本更新的索引）→ 扫描兜底（≤ 钉住版本的最大可读索引，
+//   I-1）→ 全失败 fail closed。
+//
+// 部署约束（M-6）：同一 root 不允许多实例运行——队列文件是整文件覆写，
+// 多实例会互相抹掉 pending 任务；standalone 多实例由 P5b Redis Streams 解决。
+//
+// 故障 containment（I-5）：队列文件持久化失败只降级「崩溃后恢复排队」的
+// 持久性，不击落进程——索引是可重建派生物，下一次 requestBuild/reclaim 自愈。
+//
+// 失败自愈（I-1）：re-pin 一个构建失败过的版本本身就是重试信号
+// （requestBuild 自动重排队 failed 任务，冷却期防抖，attempts 仍有界）；
+// 扫描兜底保证 rollback 越过失败版本后查询永远有 ≤ 钉住版本的可服务索引。
 //
 // 草稿不可见性：索引只从「已发布且被快照钉住」的版本构建（requestBuild 的
 // 唯一调用方是快照解析钩子），draft 永远没有索引文件。
@@ -20,6 +31,12 @@ const { buildIndex, queryIndex, serializeIndex, parseIndex, checkIndexCompatibil
 
 const QUEUE_FORMAT = 1;
 const MAX_ATTEMPTS = 3;
+// failed 任务被 re-pin 时自动重排队的冷却（防抖；测试可注入 0）。
+const FAILED_RETRY_COOLDOWN_MS = 60 * 1000;
+// 版本索引文件不可变且 digest 自校验：短 TTL 记忆化避免冷启动后同一文件的
+// 构建校验 + 查询双重全文件读取（M-2）；staleness 上限内服务的是已验证内容。
+const INDEX_MEMO_TTL_MS = 30 * 1000;
+const INDEX_MEMO_MAX = 64;
 
 function codedError(code, message) {
   const error = new Error(message || code);
@@ -49,6 +66,12 @@ function createRagIndexService(options = {}) {
   const fetcher = options.fetcher; // undefined = rag-runtime 默认受控 fetch
   // 队列 reclaim 时按引用重取发布物（队列不复制文档内容，内核是唯一内容源）。
   const resolveArtifact = options.resolveArtifact;
+  const failedRetryCooldownMs = Number.isFinite(options.failedRetryCooldownMs)
+    ? options.failedRetryCooldownMs
+    : FAILED_RETRY_COOLDOWN_MS;
+  const indexMemoTtlMs = Number.isFinite(options.indexMemoTtlMs)
+    ? options.indexMemoTtlMs
+    : INDEX_MEMO_TTL_MS;
 
   const indexDir = (environment, kbId) => path.join(root, "rag-indexes", environment, kbId);
   const versionFile = (environment, kbId, version) => path.join(indexDir(environment, kbId), `v${version}.json`);
@@ -57,9 +80,40 @@ function createRagIndexService(options = {}) {
 
   const queue = { jobs: [] };
   let running = false;
+  const indexMemo = new Map(); // file → { at, index }（仅缓存已验证可读的索引）
 
+  // 队列持久化故障 containment（I-5）：只丢「崩溃后恢复排队」能力，进程继续；
+  // 任何调用方（requestBuild/runJob/reclaim）都不再需要自行捕获。
   function persistQueue() {
-    atomicWriteJson(queueFile, { format: QUEUE_FORMAT, jobs: queue.jobs });
+    try {
+      atomicWriteJson(queueFile, { format: QUEUE_FORMAT, jobs: queue.jobs });
+    } catch (error) {
+      logger({
+        event: "rag-index-queue-persist-failed",
+        code: String(error && error.code || "RAG_INDEX_QUEUE_PERSIST_FAILED"),
+        message: String(error && error.message || "").slice(0, 200),
+      });
+    }
+  }
+
+  function readIndexFile(environment, kbId, version) {
+    const file = versionFile(environment, kbId, version);
+    const now = Date.now();
+    const hit = indexMemo.get(file);
+    if (hit && now - hit.at < indexMemoTtlMs) return hit.index;
+    let index = null;
+    try {
+      index = parseIndex(fs.readFileSync(file, "utf8"));
+    } catch (_) {
+      index = null;
+    }
+    if (index) {
+      if (indexMemo.size >= INDEX_MEMO_MAX) indexMemo.clear();
+      indexMemo.set(file, { at: now, index });
+    } else {
+      indexMemo.delete(file);
+    }
+    return index;
   }
 
   // 启动恢复：building 状态是崩溃残留，reclaim 为 pending 重跑（构建幂等）；
@@ -94,12 +148,7 @@ function createRagIndexService(options = {}) {
   })();
 
   function isIndexReadable(job) {
-    try {
-      parseIndex(fs.readFileSync(versionFile(job.environment, job.kbId, job.version), "utf8"));
-      return true;
-    } catch (_) {
-      return false;
-    }
+    return readIndexFile(job.environment, job.kbId, job.version) !== null;
   }
 
   function findJob(jobId) {
@@ -157,6 +206,14 @@ function createRagIndexService(options = {}) {
           if (!next) break;
           await runJob(next);
         }
+      } catch (error) {
+        // backstop（I-5）：构建子系统的任何逃逸故障不得击落进程；
+        // running 复位后下一次 requestBuild/reclaim 会重新 kick。
+        logger({
+          event: "rag-index-queue-error",
+          code: String(error && error.code || "RAG_INDEX_QUEUE_FAILED"),
+          message: String(error && error.message || "").slice(0, 200),
+        });
       } finally {
         running = false;
       }
@@ -178,9 +235,21 @@ function createRagIndexService(options = {}) {
       return Object.freeze({ jobId, status: "done", deduped: true });
     }
     if (job) {
-      if (job.status === "failed" && input.retry === true) {
+      if (job.status === "done" && !isIndexReadable(job)) {
+        // 索引文件被外部删除/损坏：进程内自愈（M-7，与启动 reclaim 同语义）。
         job.status = "pending";
         job.attempts = 0;
+        job.updatedAt = new Date().toISOString();
+        persistQueue();
+        kick();
+      } else if (job.status === "failed"
+        && (input.retry === true
+          || Date.now() - (Date.parse(job.updatedAt || "") || 0) >= failedRetryCooldownMs)) {
+        // re-pin 即重试（I-1）：rollback 到构建失败过的版本后系统自愈；
+        // 冷却防抖，attempts 重新计数仍有界。
+        job.status = "pending";
+        job.attempts = 0;
+        job.updatedAt = new Date().toISOString();
         persistQueue();
         kick();
       }
@@ -204,27 +273,54 @@ function createRagIndexService(options = {}) {
     return Object.freeze({ jobId, status: job.status, deduped: false });
   }
 
-  // 钉住版本优先；失败仅回退「更旧」的已验证 lkg（新版本加载失败用语义，
-  // 永不提供比钉住版本更新的索引，rollback 语义不被 lkg 破坏）。
+  // 扫描兜底（I-1）：lkg 是单指针优化，可能越过失败版本、缺失或损坏；
+  // 扫描版本目录取「< 钉住版本的最大可读索引」，rollback 后查询永远有
+  // 自愈路径，且永不提供比钉住版本更新的索引。
+  function loadScannedIndex(environment, kbId, version) {
+    let names;
+    try {
+      names = fs.readdirSync(indexDir(environment, kbId));
+    } catch (_) {
+      return null;
+    }
+    const candidates = names
+      .map((name) => /^v(\d+)\.json$/.exec(name))
+      .filter(Boolean)
+      .map((match) => Number(match[1]))
+      .filter((item) => Number.isInteger(item) && item < version)
+      .sort((a, b) => b - a);
+    for (const candidate of candidates) {
+      const index = readIndexFile(environment, kbId, candidate);
+      if (index) return index;
+    }
+    return null;
+  }
+
+  // 钉住版本优先；失败仅回退「更旧」的已验证索引（lkg 快路径 → 扫描兜底），
+  // 永不提供比钉住版本更新的索引（rollback 语义不被 lkg/扫描破坏）。
   function loadIndex(input = {}) {
     const environment = String(input.environment || "");
     const kbId = String(input.kbId || "");
     const version = Number(input.version);
-    try {
-      const index = parseIndex(fs.readFileSync(versionFile(environment, kbId, version), "utf8"));
-      return Object.freeze({ index, source: "version", requestedVersion: version, servedVersion: index.version });
-    } catch (_) {
-      // 继续尝试 lkg
+    const exact = readIndexFile(environment, kbId, version);
+    if (exact) {
+      return Object.freeze({ index: exact, source: "version", requestedVersion: version, servedVersion: exact.version });
     }
     try {
       const pointer = readJson(lkgFile(environment, kbId));
       const lkgVersion = Number(pointer.version);
       if (Number.isInteger(lkgVersion) && lkgVersion < version) {
-        const index = parseIndex(fs.readFileSync(versionFile(environment, kbId, lkgVersion), "utf8"));
-        return Object.freeze({ index, source: "lkg", requestedVersion: version, servedVersion: index.version });
+        const index = readIndexFile(environment, kbId, lkgVersion);
+        if (index) {
+          return Object.freeze({ index, source: "lkg", requestedVersion: version, servedVersion: index.version });
+        }
       }
     } catch (_) {
-      // lkg 同样不可用
+      // lkg 指针不可用，进入扫描兜底
+    }
+    const scanned = loadScannedIndex(environment, kbId, version);
+    if (scanned) {
+      return Object.freeze({ index: scanned, source: "scan", requestedVersion: version, servedVersion: scanned.version });
     }
     throw codedError("RAG_INDEX_UNAVAILABLE", `no readable index for ${environment}/${kbId} at v${version}`);
   }

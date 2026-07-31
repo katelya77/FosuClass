@@ -6,7 +6,10 @@
 //   - 索引：四模式真实查询链、序列化回读、digest 篡改 fail closed、
 //     encoder 世代不匹配硬失败、minScore 空答案门控、引用形态；
 //   - 索引服务：稳定 jobId、幂等去重、lkg 只回退更旧版本、崩溃 reclaim、
-//     草稿不可见（无索引文件）。
+//     草稿不可见（无索引文件）；
+//   - 审查跟进：慢滴 body 超时（I-2）、发布门控 clamp（M-3）、rollback
+//     自愈（I-1：扫描兜底 + re-pin 重试）、done+外删自愈（M-7/reclaim 子路径）、
+//     队列持久化故障 containment（I-5）。
 const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -116,12 +119,36 @@ async function testIngestion() {
   });
   const tooBig = await rag.ingestDocuments([{ docId: "big", title: "B", uri: "https://docs.example.com/big" }], { fetcher: bigFetcher });
   assert.strictEqual(tooBig.failures[0].errorClass, "RAG_INGEST_TOO_LARGE", "oversized body rejected");
-  console.log("✓ ingestion: uri matrix, fetcher injection, redirect revalidation, size cap, kind guard");
+
+  // I-2：慢滴 body 受单跳总时限约束（AbortController 贯穿 body 读取，
+  // 不再能永久挂住构建队列），且超时可分类为 RAG_INGEST_TIMEOUT。
+  const slowDripFetcher = async (url, { signal }) => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        while (!signal.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, 15));
+          if (signal.aborted) break;
+          controller.enqueue(encoder.encode("drip"));
+        }
+        try { controller.close(); } catch (_) { /* 已关闭 */ }
+      },
+    });
+    return { status: 200, headers: { get: () => "text/plain" }, body: stream };
+  };
+  const dripStartedAt = Date.now();
+  const drip = await rag.ingestDocuments(
+    [{ docId: "drip", title: "D", uri: "https://docs.example.com/drip" }],
+    { fetcher: slowDripFetcher, fetchTimeoutMs: 120 },
+  );
+  assert.strictEqual(drip.failures[0].errorClass, "RAG_INGEST_TIMEOUT", "slow-drip body bounded by the hop deadline");
+  assert.ok(Date.now() - dripStartedAt < 5000, `timeout is prompt (took ${Date.now() - dripStartedAt}ms)`);
+  console.log("✓ ingestion: uri matrix, fetcher injection, redirect revalidation, size cap, kind guard, slow-drip timeout");
 }
 
 async function testIndexLifecycle() {
   const index = await buildTestIndex();
-  assert.strictEqual(index.encoder.encoderType, "deterministic-local-v2");
+  assert.strictEqual(index.encoder.encoderType, "deterministic-local-v3");
   assert.ok(index.digest && index.chunks.length >= 4, "index carries digest and chunks");
 
   // 四模式真实查询链
@@ -151,11 +178,9 @@ async function testIndexLifecycle() {
   // encoder 世代不匹配：查询硬失败（不静默换向量空间）
   const drifted = JSON.parse(rag.serializeIndex(index));
   drifted.encoder = { encoderType: "deterministic-local-v0", dimensions: 64 };
-  drifted.digest = rag.digestOf ? undefined : undefined;
+  // 重算 digest 以隔离变量：digest 合法但 encoder 世代不同
   const rebuilt = Object.assign({}, drifted);
   delete rebuilt.digest;
-  // 重算 digest 以隔离变量：digest 合法但 encoder 世代不同
-  const { createRequire } = require("module");
   const ragRuntime = require("../packages/rag-runtime/src/ragRuntime");
   rebuilt.digest = ragRuntime.digestOf(rebuilt);
   const compat = rag.checkIndexCompatibility(ragRuntime.parseIndex(JSON.stringify(rebuilt)));
@@ -165,7 +190,18 @@ async function testIndexLifecycle() {
     (e) => e.code === "RAG_ENCODER_MISMATCH",
     "query on a drifted-encoder index fails hard"
   );
-  console.log("✓ index lifecycle: four real modes, empty-answer gate, digest/encoder fail-closed");
+
+  // M-3：已发布检索策略是门控边界——请求只能收紧（更小 topK/更高 minScore），
+  // 不得削弱已发布的空答案门控。
+  const gated = await rag.buildIndex({ kbId: "gated-kb", version: 1, documents: DOC_SET, retrieval: { topK: 1, minScore: 0.95 } });
+  const loosened = rag.queryIndex(gated, "settings", { mode: "vector", topK: 10, minScore: 0 });
+  assert.strictEqual(loosened.hits.length, 0, "request minScore below published is clamped up (empty-answer gate holds)");
+  assert.strictEqual(loosened.reason, "low_confidence");
+  const cappedTopK = rag.queryIndex(gated, "settings", { mode: "lexical", topK: 10 });
+  assert.strictEqual(cappedTopK.hits.length, 1, "request topK above published is clamped down");
+  const tightened = rag.queryIndex(await buildTestIndex(), "settings", { mode: "vector", topK: 2 });
+  assert.ok(tightened.hits.length <= 2 && tightened.hits.length >= 1, "tightening requests still apply");
+  console.log("✓ index lifecycle: four real modes, empty-answer gate, digest/encoder fail-closed, published-gate clamp");
 }
 
 async function testIndexService() {
@@ -242,12 +278,107 @@ async function testIndexService() {
   console.log("✓ index service: stable jobId, idempotency, lkg fallback, draft invisibility, crash reclaim");
 }
 
+// I-1：rollback 到「构建失败过的版本」后系统自愈——扫描兜底服务 ≤ 钉住版本的
+// 最大可读索引（永不服务更新版本）；re-pin 即重试，恢复可用后自动重建。
+async function testRollbackSelfHealing() {
+  const root = tmpRoot("rollback");
+  const artifacts = {
+    1: { documents: DOC_SET.slice(0, 2), retrieval: { topK: 2 } },
+    2: null, // v2 构建将失败（resolveArtifact 取不到发布物）
+    3: { documents: DOC_SET.slice(0, 3), retrieval: { topK: 2 } },
+  };
+  const service = createRagIndexService({
+    root,
+    failedRetryCooldownMs: 0,
+    resolveArtifact: ({ version }) => artifacts[version],
+  });
+  service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  assert.strictEqual(await service.drainQueueForTest(), true, "v1 builds");
+  service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
+  assert.strictEqual(await service.drainQueueForTest(), true, "v2 attempts drain");
+  const failed = service.getIndexStatus({ environment: "trial", kbId: "kb" }).jobs.find((job) => job.version === 2);
+  assert.strictEqual(failed.status, "failed", "v2 exhausts bounded retries");
+  service.requestBuild({ environment: "trial", kbId: "kb", version: 3 });
+  assert.strictEqual(await service.drainQueueForTest(), true, "v3 builds (lkg moves past the failed version)");
+
+  // 服务侧自愈：回钉 v2 → lkg(v3) 被拒绝（更新），扫描兜底服务 v1。
+  const scanned = await service.query({ environment: "trial", kbId: "kb", version: 2, query: "password reset" });
+  assert.strictEqual(scanned.indexSource, "scan", "rollback past a failed version heals via the scan fallback");
+  assert.strictEqual(scanned.servedVersion, 1, "scan serves the newest readable version ≤ pinned");
+  assert.notStrictEqual(scanned.servedVersion, 3, "never serves a version newer than pinned");
+
+  // 重建侧自愈：re-pin 即重试（无需显式 retry 标记），v2 恢复可用后自动重建。
+  artifacts[2] = { documents: DOC_SET, retrieval: { topK: 2 } };
+  const repinned = service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
+  assert.strictEqual(repinned.status, "pending", "re-pin auto-requeues the failed job");
+  assert.strictEqual(await service.drainQueueForTest(), true, "requeued v2 builds");
+  const rebuilt = await service.query({ environment: "trial", kbId: "kb", version: 2, query: "password reset" });
+  assert.strictEqual(rebuilt.indexSource, "version", "healed version serves its own index");
+  assert.strictEqual(rebuilt.servedVersion, 2);
+  console.log("✓ rollback self-healing: scan fallback serves ≤ pinned; re-pin auto-rebuilds the failed version");
+}
+
+// M-7/M-8：done 任务索引被外部删除的自愈——进程内 requestBuild 重排队，
+// 以及构造期 reclaim 的 done+unreadable 子路径（此前只覆盖 building 残留）。
+async function testIndexSelfHealingEdges() {
+  const root = tmpRoot("healing");
+  const artifacts = { 1: { documents: DOC_SET.slice(0, 2), retrieval: { topK: 2 } } };
+  const service = createRagIndexService({
+    root,
+    indexMemoTtlMs: 0, // 外删场景：关闭记忆化，读盘反映即时状态
+    resolveArtifact: ({ version }) => artifacts[version],
+  });
+  service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  assert.strictEqual(await service.drainQueueForTest(), true, "v1 builds");
+
+  fs.rmSync(path.join(root, "rag-indexes", "trial", "kb", "v1.json"));
+  const reheal = service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  assert.strictEqual(reheal.status, "pending", "deleted index re-queued in-process");
+  assert.strictEqual(await service.drainQueueForTest(), true, "reheal builds");
+  const rehealed = await service.query({ environment: "trial", kbId: "kb", version: 1, query: "password reset" });
+  assert.strictEqual(rehealed.servedVersion, 1, "rebuilt after external deletion");
+
+  fs.rmSync(path.join(root, "rag-indexes", "trial", "kb", "v1.json"));
+  const recovered = createRagIndexService({ root, resolveArtifact: ({ version }) => artifacts[version] });
+  assert.strictEqual(await recovered.drainQueueForTest(), true, "reclaimed done+unreadable job drains");
+  assert.strictEqual(fs.existsSync(path.join(root, "rag-indexes", "trial", "kb", "v1.json")), true, "reclaim rebuilt the deleted index");
+  console.log("✓ self-healing edges: done+deleted re-queued in-process and at startup reclaim");
+}
+
+// I-5：队列/索引持久化故障 containment——降级持久性，不击落进程，
+// 无未处理 Promise 拒绝逃逸。
+async function testQueuePersistContainment() {
+  const root = tmpRoot("persist");
+  const service = createRagIndexService({ root, resolveArtifact: () => ({ documents: DOC_SET, retrieval: { topK: 2 } }) });
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.writeFileSync(root, "not a directory"); // root 变成普通文件 → 队列/索引写入全部失败
+  let unhandled = null;
+  const onUnhandled = (reason) => { unhandled = reason; };
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const accepted = service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+    assert.ok(["pending", "failed"].includes(accepted.status), "requestBuild survives queue persist failure");
+    assert.strictEqual(await service.drainQueueForTest(), true, "bounded attempts drain without hanging");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const job = service.listJobs()[0];
+    assert.strictEqual(job.status, "failed", "build failure is bounded and classified");
+    assert.strictEqual(job.attempts, 3, "attempts are bounded");
+    assert.strictEqual(unhandled, null, `no unhandled rejection escapes the queue subsystem: ${unhandled}`);
+  } finally {
+    process.removeListener("unhandledRejection", onUnhandled);
+  }
+  console.log("✓ persist containment: disk failure degrades durability, never crashes the process");
+}
+
 (async () => {
   await testTextProcessing();
   await testRetrievalPrimitives();
   await testIngestion();
   await testIndexLifecycle();
   await testIndexService();
+  await testRollbackSelfHealing();
+  await testIndexSelfHealingEdges();
+  await testQueuePersistContainment();
   console.log("\ntest-agent-rag-runtime: PASS");
 })().catch((error) => {
   console.error(error);

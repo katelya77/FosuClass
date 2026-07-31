@@ -5,6 +5,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { UserPreferenceService } = require("../server/src/services/ai/conversation/userPreferenceService");
+const { ENCODER_VERSION, encodeSemanticVector, cosineSimilarity } = require("../packages/agent-runtime");
 
 function deriveKey(secret) {
   return crypto.createHash("sha256").update(secret).digest();
@@ -512,6 +513,46 @@ function main() {
 
     const noSecret = new UserPreferenceService({ dataDir: root, secret: "", clock });
     assert.throws(() => noSecret.clear({ principal }), (error) => error && error.code === "MEMORY_SECRET_UNAVAILABLE");
+
+    // I-3（ADR-0007 §3 对记忆存储生效）：持久化 featureVector 带 encoder 世代
+    // 标记；世代不符（旧世代/无标记）的存储向量不得与现算查询向量跨空间比较，
+    // 读路径回退对读侧文档现算，写路径自愈为当前世代。
+    const encoderOwner = { authenticated: true, principalKey: "memory-encoder-generation-owner" };
+    const encoderWritten = service.upsertMemory(memoryInput(encoderOwner, "preferredBuilding", "C7"));
+    assert.strictEqual(encoderWritten.persisted, true);
+    const storedItem = service.readDocumentUnlocked(fileFor(encoderOwner), encoderOwner.principalKey)
+      .items.find((candidate) => candidate.memoryId === encoderWritten.memory.memoryId);
+    assert.strictEqual(storedItem.encoderVersion, ENCODER_VERSION, "writes carry the encoder generation marker");
+    const encoderQuery = "preferredBuilding C7";
+    const baselineRetrieval = service.retrieveMemories({ principal: encoderOwner, query: encoderQuery, goal: "find_empty_room", limit: 5 });
+    assert.ok(baselineRetrieval.items[0].scoreBreakdown.vector > 0.5, "baseline has real vector signal");
+    // 模拟旧世代存量：无标记 + 与文档内容无关的旧向量（全零）。
+    service.mutate(encoderOwner.principalKey, {}, (document) => {
+      const item = document.items.find((candidate) => candidate.memoryId === encoderWritten.memory.memoryId);
+      item.encoderVersion = "";
+      item.featureVector = item.featureVector.map(() => 0);
+      return {};
+    });
+    const healedRetrieval = service.retrieveMemories({ principal: encoderOwner, query: encoderQuery, goal: "find_empty_room", limit: 5 });
+    assert.strictEqual(healedRetrieval.items[0].memoryId, encoderWritten.memory.memoryId, "stale-generation vector does not lose the memory");
+    const readSideDocument = "preferredBuilding preferredBuilding=C7 C7 stable_preference";
+    // 读侧查询形态 = `${query} ${goal}`（selectRelevantMemories 的拼合规则）。
+    const expectedFresh = Number(cosineSimilarity(
+      encodeSemanticVector(`${encoderQuery} find_empty_room`),
+      encodeSemanticVector(readSideDocument),
+    ).toFixed(6));
+    assert.strictEqual(
+      healedRetrieval.items[0].scoreBreakdown.vector,
+      expectedFresh,
+      "stale-generation stored vector falls back to a fresh encode of the read-side document"
+    );
+    assert.ok(expectedFresh > 0.5, "fallback assertion discriminates against the zero stored vector");
+    // 写路径自愈：确认写入把标记与向量恢复到当前世代。
+    service.upsertMemory(memoryInput(encoderOwner, "preferredBuilding", "C7", { confirmation: true, expectedRevision: healedRetrieval.revision }));
+    const restoredItem = service.readDocumentUnlocked(fileFor(encoderOwner), encoderOwner.principalKey)
+      .items.find((candidate) => candidate.memoryId === encoderWritten.memory.memoryId);
+    assert.strictEqual(restoredItem.encoderVersion, ENCODER_VERSION, "write path heals the generation marker");
+    assert.ok(restoredItem.featureVector.some((value) => value > 0), "write path restores a real vector");
 
     console.log("test-agent-memory-store-reliability: PASS");
   } finally {
