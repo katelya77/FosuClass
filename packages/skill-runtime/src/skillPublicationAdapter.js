@@ -46,8 +46,12 @@ function projectionOf(skill) {
     requiredSlots: (Array.isArray(skill.requiredSlots) ? skill.requiredSlots : []).slice(),
     optionalSlots: (Array.isArray(skill.optionalSlots) ? skill.optionalSlots : []).slice(),
     allowedTools: (Array.isArray(skill.allowedTools) ? skill.allowedTools : []).slice(),
-    runtimeModes: (Array.isArray(skill.runtimeModes) && skill.runtimeModes.length ? skill.runtimeModes : ["public"]).slice(),
-    outputBlockTypes: (Array.isArray(skill.outputBlockTypes) ? skill.outputBlockTypes : []).slice(),
+    // 静态 runtimeModes=[] 的目录语义是「全模式」，必须原样保留，不得收窄。
+    runtimeModes: (Array.isArray(skill.runtimeModes) ? skill.runtimeModes : ["public"]).slice(),
+    // 插件描述符的字段名是 outputCardTypes（normalizeSkill 兼容两者），投影不可丢。
+    outputBlockTypes: (Array.isArray(skill.outputBlockTypes) && skill.outputBlockTypes.length
+      ? skill.outputBlockTypes
+      : (Array.isArray(skill.outputCardTypes) ? skill.outputCardTypes : [])).slice(),
     providerPolicy: safeString(skill.providerPolicy, 64),
     fallbackPolicy: safeString(skill.fallbackPolicy, 64),
     recoveryRules: (Array.isArray(skill.recoveryRules) ? skill.recoveryRules : []).slice(),
@@ -120,10 +124,14 @@ function createSkillPublicationAdapter(options = {}) {
       }
       const staticGoals = new Set(staticSkill.supportedGoals || []);
       const staticTools = new Set(staticSkill.allowedTools || []);
+      // 发布物 runtimeModes 不得超出静态技能自身集合（授权不扩大）；
+      // 静态空集 = 全模式，此时才允许三元组内任意子集。
+      const staticModes = Array.isArray(staticSkill.runtimeModes) ? staticSkill.runtimeModes : [];
+      const allowedModeSet = new Set(staticModes.length ? staticModes : RUNTIME_MODES);
       const goals = validateStringList(item.supportedGoals, `${where}.supportedGoals`, errors, { subsetOf: staticGoals });
       const tools = validateStringList(item.allowedTools, `${where}.allowedTools`, errors, { subsetOf: staticTools });
-      const modes = validateStringList(item.runtimeModes, `${where}.runtimeModes`, errors, { subsetOf: new Set(RUNTIME_MODES) });
-      if (modes.length && !modes.includes("public") && (staticSkill.runtimeModes || []).includes("public")) {
+      const modes = validateStringList(item.runtimeModes, `${where}.runtimeModes`, errors, { subsetOf: allowedModeSet });
+      if (modes.length && !modes.includes("public") && staticModes.includes("public")) {
         errors.push(`${where}.runtimeModes cannot remove public from a public skill`);
       }
       if (item.enabled !== undefined && typeof item.enabled !== "boolean") {
@@ -137,11 +145,18 @@ function createSkillPublicationAdapter(options = {}) {
         version: safeString(item.version || (staticSkill.version || "1"), 64),
         description: safeString(item.description === undefined ? staticSkill.description : item.description, 500),
         supportedGoals: goals.length ? goals : (staticSkill.supportedGoals || []).slice(),
-        requiredSlots: validateStringList(item.requiredSlots, `${where}.requiredSlots`, errors, { maxItems: 64 }),
-        optionalSlots: validateStringList(item.optionalSlots, `${where}.optionalSlots`, errors, { maxItems: 64 }),
+        requiredSlots: item.requiredSlots === undefined
+          ? (staticSkill.requiredSlots || []).slice()
+          : validateStringList(item.requiredSlots, `${where}.requiredSlots`, errors, { maxItems: 64 }),
+        optionalSlots: item.optionalSlots === undefined
+          ? (staticSkill.optionalSlots || []).slice()
+          : validateStringList(item.optionalSlots, `${where}.optionalSlots`, errors, { maxItems: 64 }),
         allowedTools: tools.length ? tools : (staticSkill.allowedTools || []).slice(),
-        runtimeModes: modes.length ? modes : (staticSkill.runtimeModes || ["public"]).slice(),
-        outputBlockTypes: validateStringList(item.outputBlockTypes, `${where}.outputBlockTypes`, errors, { maxItems: 32 }),
+        // 省略时继承静态集合（静态空集 = 全模式语义原样保留）。
+        runtimeModes: modes.length ? modes : (staticModes.length ? staticModes.slice() : []),
+        outputBlockTypes: item.outputBlockTypes === undefined
+          ? projectionOf(staticSkill).outputBlockTypes
+          : validateStringList(item.outputBlockTypes, `${where}.outputBlockTypes`, errors, { maxItems: 32 }),
         providerPolicy: safeString(item.providerPolicy === undefined ? staticSkill.providerPolicy : item.providerPolicy, 64),
         fallbackPolicy: safeString(item.fallbackPolicy === undefined ? staticSkill.fallbackPolicy : item.fallbackPolicy, 64),
         recoveryRules: Array.isArray(item.recoveryRules) ? item.recoveryRules.slice(0, 32) : (staticSkill.recoveryRules || []).slice(),

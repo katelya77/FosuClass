@@ -12,6 +12,11 @@
 // - current 引用原子切换；读取失败回退 last-known-good；损坏 fail closed，
 //   绝不静默重置为空配置。
 // - seed 只初始化空环境或升级 seed-origin 版本；admin 发布的版本不被种子覆盖。
+//
+// 并发假设（single-writer）：publish/rollback 的 read-modify-write 与版本号分配
+// 无跨实例锁。单进程 integrated 模式内全部同步执行、无交错（安全）；多实例共享
+// 同一存储 root 会丢更新。P5a 的 PostgreSQL 适配器必须以事务/条件写保证同等
+// 语义（conformance 套件会约束），在此之前 standalone 部署必须单写者。
 
 const { jsonClone, sha256Digest } = require("./canonical");
 const { codedError } = require("./errors");

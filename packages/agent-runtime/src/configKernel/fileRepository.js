@@ -280,11 +280,17 @@ function createConfigKernelFileRepository(options = {}) {
         throw error;
       }
       const limit = Math.max(1, Math.min(500, Number(options2.limit) || 100));
-      return raw
-        .split("\n")
-        .filter(Boolean)
-        .slice(-limit)
-        .map((line) => JSON.parse(line));
+      // 崩溃可能在文件尾部留下半行；审计读取按行容错跳过损坏行，
+      // 不允许一条坏行让整个审计链不可读（故障定位局部化）。
+      const entries = [];
+      raw.split("\n").filter(Boolean).forEach((line) => {
+        try {
+          entries.push(JSON.parse(line));
+        } catch (_) {
+          entries.push({ op: "audit-corrupt-line", result: "skipped" });
+        }
+      });
+      return entries.slice(-limit);
     },
   });
 }

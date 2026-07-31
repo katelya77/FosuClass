@@ -139,7 +139,7 @@ function testKernelEndToEnd() {
   console.log("✓ publish → new-run binding → in-flight stability → rollback closed loop");
 }
 
-function testDecisionUsesBoundCatalog() {
+async function testDecisionUsesBoundCatalog() {
   const staticCatalog = createSkillCatalog({ skills: STATIC_SKILLS });
   const decisionService = createDecisionService({
     providerRuntime: { generateStructured: async () => { throw new Error("must not be called in deterministic mode"); } },
@@ -164,11 +164,122 @@ function testDecisionUsesBoundCatalog() {
   });
 }
 
+// P4a 审查跟进（M2/M6）：发布物 runtimeModes 不得超出静态技能自身集合
+// （授权不扩大）；静态空集 = 全模式，此时允许三元组内任意子集且语义不收窄。
+function testRuntimeModesBoundedByStaticSkill() {
+  const restricted = {
+    id: "trial_only_skill",
+    supportedGoals: ["trial_goal"],
+    allowedTools: [],
+    runtimeModes: ["trial"],
+  };
+  const allModes = {
+    id: "all_modes_skill",
+    supportedGoals: ["all_goal"],
+    allowedTools: [],
+    runtimeModes: [],
+  };
+  const adapter = createSkillPublicationAdapter({ staticSkills: [restricted, allModes] });
+  const base = adapter.seedPayload();
+
+  const widen = JSON.parse(JSON.stringify(base));
+  widen.skills[0].runtimeModes = ["public", "trial"];
+  const widenReport = adapter.validate(widen);
+  assert.strictEqual(widenReport.ok, false, "publishing must not add modes beyond the static skill set");
+  assert.ok(widenReport.errors.some((line) => line.includes("outside the plugin static set")));
+
+  const narrow = JSON.parse(JSON.stringify(base));
+  narrow.skills[0].runtimeModes = ["trial"];
+  assert.strictEqual(adapter.validate(narrow).ok, true, "narrowing within the static set is allowed");
+
+  // 静态空集（= 全模式语义）：允许三元组任意子集；种子投影必须保留空集不收窄。
+  assert.deepStrictEqual(base.skills[1].runtimeModes, [], "seed projection preserves the all-modes empty set");
+  const subset = JSON.parse(JSON.stringify(base));
+  subset.skills[1].runtimeModes = ["dev"];
+  const subsetReport = adapter.validate(subset);
+  assert.strictEqual(subsetReport.ok, true, "static empty set means all modes; any triple subset is allowed");
+  assert.deepStrictEqual(subsetReport.normalized.skills[1].runtimeModes, ["dev"]);
+  const omittedReport = adapter.validate(JSON.parse(JSON.stringify(base)));
+  assert.strictEqual(omittedReport.ok, true);
+  assert.deepStrictEqual(omittedReport.normalized.skills[1].runtimeModes, [], "omitted runtimeModes inherit the static empty set (all modes)");
+  console.log("✓ runtimeModes bounded by the static skill set; empty static set keeps all-modes semantics");
+}
+
+// P4a 审查跟进（Important #1）：模型路径 validate 回调必须按绑定目录校验。
+// 两个目录含相同技能但 goal→skill 映射顺序不同：绑定目录映射 skill_beta，
+// 静态目录映射 skill_alpha。契约选择 skill_beta，按绑定目录合法；若 validate
+// 漏用静态目录（修复前），getSkillForIntent 映射拒绝 → 合法契约被错误拒绝。
+async function testModelPathValidateUsesBoundCatalog() {
+  const skillAlpha = {
+    id: "skill_alpha",
+    supportedGoals: ["get_teaching_week"],
+    allowedTools: [],
+    runtimeModes: ["public", "trial", "dev"],
+  };
+  const skillBeta = {
+    id: "skill_beta",
+    supportedGoals: ["get_teaching_week"],
+    allowedTools: [],
+    runtimeModes: ["public", "trial", "dev"],
+  };
+  const staticCatalog = createSkillCatalog({ skills: [skillAlpha, skillBeta] });
+  const boundCatalog = createSkillCatalog({ skills: [skillBeta, skillAlpha] });
+  assert.strictEqual(staticCatalog.getSkillForIntent("get_teaching_week").id, "skill_alpha");
+  assert.strictEqual(boundCatalog.getSkillForIntent("get_teaching_week").id, "skill_beta");
+  const contract = {
+    schemaVersion: "decision.v2",
+    goal: { name: "get_teaching_week", confidence: 0.9, requiresClarification: false },
+    entities: [],
+    constraints: {},
+    skillCandidates: [{ skillId: "skill_beta", confidence: 0.9 }],
+    plan: { steps: [{ id: "s1", skillId: "skill_beta", purpose: "run beta" }] },
+    responseMode: "deterministic",
+  };
+  const providerRuntime = {
+    async generateStructured(input) {
+      const validated = input.validate(contract);
+      return {
+        contract: validated,
+        provider: "primary",
+        intendedProvider: "primary",
+        actualFirstProvider: "primary",
+        fallbackPath: ["primary:success"],
+      };
+    },
+  };
+  const decisionService = createDecisionService({
+    providerRuntime,
+    skillCatalog: staticCatalog,
+    deterministicResolve: () => ({ name: "get_teaching_week", confidence: 1, slots: {} }),
+  });
+  const result = await decisionService.decide({
+    message: "现在第几教学周？",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    providerRuntimeConfig: { AI_AGENT_ENABLED: "true", AI_PROVIDER: "primary" },
+    context: {},
+    skillCatalog: boundCatalog,
+    contextView: {
+      contextId: "ctx_bound_validate",
+      currentTurn: { message: "现在第几教学周？", runtimeMode: "trial" },
+      workingState: {},
+      recentMessages: [],
+      rollingSummary: "",
+      memories: [],
+      episodes: [],
+    },
+  });
+  assert.strictEqual(result.selectedSkillId, "skill_beta", "model-path validate must honor the snapshot-bound catalog");
+  console.log("✓ model-path validate callback resolves against the bound catalog (Important #1)");
+}
+
 async function run() {
   testAdapterValidation();
+  testRuntimeModesBoundedByStaticSkill();
   testExecutableMerge();
   testKernelEndToEnd();
   await testDecisionUsesBoundCatalog();
+  await testModelPathValidateUsesBoundCatalog();
   console.log("\ntest-agent-skill-publication: PASS");
 }
 

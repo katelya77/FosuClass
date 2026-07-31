@@ -41,22 +41,25 @@ const platformToolRuntime = createToolRuntime({ tools: plugin.tools });
 // P4a：统一配置发布内核。文件 Repository 为 integrated 模式默认适配器（P5a
 // 将增加 PostgreSQL 适配器）；Skill 域参考适配器证明通用发布协议。种子只
 // 初始化空环境或升级 seed-origin 版本，admin 发布的内容不会被覆盖。
+// root 遵守全仓 FOSU_DATA_DIR 约定（测试/容器可重定向数据目录）。
 const configKernelRoot = process.env.FOSU_AGENT_CONFIG_KERNEL_PATH
-  || path.join(__dirname, "../../../data/ai/config-kernel");
+  || path.join(path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../../data")), "ai", "config-kernel");
+
+function logConfigKernelEvent(entry) {
+  try {
+    // 延迟加载，避免与日志模块的循环依赖；仅安全事件字段，不含配置内容。
+    const { safeLog } = require("../../utils/safeLogger");
+    safeLog("config-kernel", entry);
+  } catch (_) {
+    // 可观测性不得影响配置加载。
+  }
+}
 const skillPublicationAdapter = createSkillPublicationAdapter({ staticSkills: plugin.skills });
 const configKernel = createConfigKernel({
   repository: createConfigKernelFileRepository({ root: configKernelRoot }),
   domainAdapters: { skill: skillPublicationAdapter },
   environments: ["public", "trial", "dev"],
-  logger(entry) {
-    try {
-      // 延迟加载，避免与日志模块的循环依赖；仅安全事件字段，不含配置内容。
-      const { safeLog } = require("../../utils/safeLogger");
-      safeLog("config-kernel", entry);
-    } catch (_) {
-      // 可观测性不得影响配置加载。
-    }
-  },
+  logger: logConfigKernelEvent,
 });
 const skillSeedPayload = skillPublicationAdapter.seedPayload();
 const skillSeedDigest = sha256Digest(skillSeedPayload);
@@ -79,21 +82,29 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
   if (!entry || !environment) return platformSkillCatalog;
   const cacheKey = `${environment}:${entry.version}`;
   if (!boundCatalogCache.has(cacheKey)) {
-    let catalog = platformSkillCatalog;
+    let versionDoc = null;
     try {
-      const versionDoc = configKernel.getArtifactVersion({
+      versionDoc = configKernel.getArtifactVersion({
         domain: "skill",
         artifactId: plugin.id,
         environment,
         version: entry.version,
       });
-      catalog = createSkillCatalog({ skills: skillPublicationAdapter.resolveRuntime(versionDoc) });
-    } catch (_) {
-      // 已发布版本不可读时 fail closed 到静态目录（与种子一致的全量集），
-      // 不伪造版本内容；内核自身已对 LKG 之外的情况抛错。
-      catalog = platformSkillCatalog;
+    } catch (error) {
+      // 快照明确钉住的版本文档不可读（含 digest 篡改）：这是配置完整性故障，
+      // 不得静默回落静态全量目录（已禁用技能复活 = 授权漂移）。fail closed
+      // 抛 coded 错误、记录安全日志，且失败结果不缓存（存储修复后无需重启）。
+      logConfigKernelEvent({
+        event: "skill-catalog-unreadable",
+        environment,
+        version: String(entry.version || ""),
+        code: String(error && error.code || "UNKNOWN"),
+      });
+      const failure = new Error(`Published skill catalog version is unreadable: ${String(entry.version || "")}`);
+      failure.code = "DECISION_SKILL_CATALOG_UNREADABLE";
+      throw failure;
     }
-    boundCatalogCache.set(cacheKey, catalog);
+    boundCatalogCache.set(cacheKey, createSkillCatalog({ skills: skillPublicationAdapter.resolveRuntime(versionDoc) }));
     if (boundCatalogCache.size > 24) {
       const oldest = boundCatalogCache.keys().next().value;
       boundCatalogCache.delete(oldest);
@@ -103,7 +114,11 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
 }
 
 function resolveSnapshotEnvironment(request) {
-  const requested = request && (request.runtimeMode || request.assistantEnvironment);
+  // 优先请求作用域模式（bindRuntimeDecision 的授权感知决策，经 platformInput
+  // 传入）；缺失时才回落全局 configuredMode。AGENTS.md：不得仅用全局
+  // configuredMode 串环境——trial/dev 服务器上被降级为 public 的请求必须绑定
+  // public 环境快照。
+  const requested = request && request.runtimeMode;
   return capabilityManifestService.normalizeRuntimeMode(requested || runtimeModeService.resolveConfiguredMode());
 }
 
@@ -156,7 +171,14 @@ const platform = createAgentPlatform({
     let snapshot = null;
     try {
       snapshot = configKernel.getCurrentSnapshot(environment);
-    } catch (_) {
+    } catch (error) {
+      // 快照读取失败（含 CONFIG_KERNEL_SNAPSHOT_UNREADABLE）降级为 manifest
+      // 兜底保持平台可用，但必须留下安全信号，不得静默掩盖配置存储故障。
+      logConfigKernelEvent({
+        event: "config-snapshot-fallback",
+        environment,
+        code: String(error && error.code || "UNKNOWN"),
+      });
       snapshot = null;
     }
     if (!snapshot) {
@@ -281,6 +303,10 @@ module.exports = {
     return configKernel;
   },
   getDiagnostics,
+  // 组合根解析器：fosuTurnPorts 经选项注入使用；P4b 其他域复用同一模式。
+  // 同时供契约测试直接驱动（请求作用域环境绑定、目录 fail-closed）。
+  resolveSnapshotEnvironment,
+  resolveSkillCatalogForSnapshot,
   getExecutionPolicyTruth,
   getPlatform,
   getRunHandlers,

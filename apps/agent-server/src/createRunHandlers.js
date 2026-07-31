@@ -104,7 +104,7 @@ function createRunHandlers(options = {}) {
   function platformInput(req, overrides = {}) {
     const body = req.body || {};
     const principal = resolvePrincipal(req) || {};
-    return Object.assign({
+    const input = Object.assign({
       message: String(body.message || "").trim(),
       context: requestContext(body),
       protocolVersion: body.protocolVersion,
@@ -112,6 +112,13 @@ function createRunHandlers(options = {}) {
       conversationId: String(body.conversationId || "").slice(0, 96),
       serverSession: principal.runtimePrincipal || principal.repositoryPrincipal || null,
     }, overrides);
+    // 请求作用域 runtimeMode（bindRuntimeDecision 中间件的授权感知决策）必须随
+    // 平台输入传递，createRun 才能绑定与本次请求同一环境的配置快照；缺省时由
+    // 平台侧回落 configuredMode，绝不默认成 "public" 造成跨环境串绑。
+    if (!input.runtimeMode && req && req.agentRuntimeDecision && req.agentRuntimeDecision.runtimeMode) {
+      input.runtimeMode = String(req.agentRuntimeDecision.runtimeMode);
+    }
+    return input;
   }
 
   function orderedEmitter(emit) {
