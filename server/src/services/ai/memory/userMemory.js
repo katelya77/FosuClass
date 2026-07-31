@@ -38,6 +38,16 @@ function safeEventText(value, max = 100) {
   return String(value == null ? "" : value).replace(/[\r\n\t]/g, " ").trim().slice(0, max);
 }
 
+// 检索上限解析（P4b 审查跟进）：显式 input.limit 优先；否则发布策略的
+// maxRetrieve（适配器已约束 1..10）；都没有回落静态默认 5。此前调用方
+// 硬编码 limit=5，发布的 maxRetrieve 旋钮在生产读路径不可达。
+function resolveMemoryLimit(input = {}, fallback = 5) {
+  if (Number.isInteger(input.limit) && input.limit > 0) return input.limit;
+  const policyValue = input.policy && Number(input.policy.maxRetrieve);
+  if (Number.isInteger(policyValue) && policyValue >= 1 && policyValue <= 10) return policyValue;
+  return fallback;
+}
+
 function emitMemoryWriteEvent(event = {}) {
   const entry = {
     event: safeEventText(event.event, 40),
@@ -199,7 +209,7 @@ class UserMemoryStore {
           goal: input.goal || input.intentName,
           termId: input.termId || "",
           releaseVersion: input.releaseVersion || "",
-          memoryLimit: input.limit || 5,
+          memoryLimit: resolveMemoryLimit(input),
           episodeLimit: input.episodeLimit || 3,
         });
         return {
@@ -303,9 +313,11 @@ class UserMemoryStore {
         releaseVersion: boundary.releaseVersion,
         // 显式过期时间原样传递；策略默认 TTL 传 ttlMs，由服务层在落盘时刻计算，
         // revision 冲突重试时 TTL 随最新状态重算（M1/Low#4）。
+        // P4b 审查跟进：ttlMs 必须带 policy——发布策略的 ttlOverridesMs 在写路径
+        // 真实生效（此前丢弃 policy 导致落盘恒为静态 TTL）。
         ...(candidate.expiresAtSource === "explicit"
           ? { expiresAt: candidate.expiresAt }
-          : { ttlMs: resolveTtlMs(Object.assign({}, candidate, { scope })) }),
+          : { ttlMs: resolveTtlMs(Object.assign({}, candidate, { scope }), input.policy || null) }),
       };
     });
 
@@ -540,7 +552,7 @@ class UserMemoryStore {
         goal: input.goal || input.intentName,
         termId: input.termId || "",
         releaseVersion: input.releaseVersion || "",
-        limit: input.limit || 5,
+        limit: resolveMemoryLimit(input),
       });
       const episodes = this.preferenceService.retrieveEpisodes({
         principal: input.principal,

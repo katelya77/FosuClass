@@ -85,7 +85,6 @@ class MemoryController {
         goal: seeded.currentGoal,
         intentName: slots.lastIntent,
         ...versionBoundary,
-        limit: 5,
         episodeLimit: 3,
         policy: input.policy || null,
       })
@@ -160,7 +159,6 @@ class MemoryController {
         goal: seeded.currentGoal,
         intentName: slots.lastIntent,
         ...versionBoundary,
-        limit: 5,
         episodeLimit: 3,
         policy: input.policy || null,
       });

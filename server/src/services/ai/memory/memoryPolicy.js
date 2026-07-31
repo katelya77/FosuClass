@@ -124,7 +124,10 @@ function mayAutoPersistUserMemory(memoryMode, candidate = {}, policy = null) {
   if (isSensitiveCandidate(candidate)) return false;
   if (isTemporaryCandidate(candidate)) return false;
   if (!isLowRiskKey(candidate.key)) return false;
-  if (Number(candidate.confidence || 0) < minConfidenceOf(policy)) return false;
+  // 显式用户指令（"叫我小明"）豁免置信门槛：该门槛面向推断型记忆；
+  // 否则发布的 minConfidence > 0.95 会让解析期判定 persist 的显式偏好在
+  // 落盘时被静默丢弃（回答声称已记住但实际未写）。
+  if (candidate.source !== "explicit_user" && Number(candidate.confidence || 0) < minConfidenceOf(policy)) return false;
   return true;
 }
 
@@ -196,7 +199,10 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
   (Array.isArray(candidates) ? candidates : []).forEach((raw) => {
     if (!raw || !raw.key) return;
     if (isSensitiveCandidate(raw)) return;
-    if (Number(raw.confidence || 0) < minConfidence) return;
+    // 显式用户指令（"叫我小明"，解析器置信 0.95）豁免置信门槛——与
+    // mayAutoPersistUserMemory 的豁免一致：门槛面向推断型记忆，发布的
+    // minConfidence > 0.95 不得把显式偏好在归并期静默丢弃（P4b 审查 Minor #8）。
+    if (raw.source !== "explicit_user" && Number(raw.confidence || 0) < minConfidence) return;
     if (!autoMemoryEnabled && raw.source !== "explicit_user") return;
 
     const candidate = {

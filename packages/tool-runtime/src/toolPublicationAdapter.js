@@ -80,6 +80,10 @@ function createToolPublicationAdapter(options = {}) {
       if (item.runtimeModes !== undefined) {
         if (!Array.isArray(item.runtimeModes)) {
           errors.push(`${where}.runtimeModes must be an array`);
+        } else if (!item.runtimeModes.length) {
+          // 空数组在下游「!modes.length = 全模式」语义下会把收窄变加宽
+          // （审查 Important #1 实测破口）：省略 = 继承静态；非空 = 收窄。
+          errors.push(`${where}.runtimeModes must not be an empty array (omit to inherit static modes)`);
         } else {
           modes = [];
           item.runtimeModes.forEach((mode) => {

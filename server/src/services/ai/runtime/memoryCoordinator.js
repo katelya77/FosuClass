@@ -211,6 +211,7 @@ function handlePersonalMemoryTurn(input = {}) {
       providerUsed: understanding.providerUsed || "",
       understandingSource: understanding.source,
       goalContract: goalContractV2 || undefined,
+      policy: input.policy || null,
     });
     if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
       response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
