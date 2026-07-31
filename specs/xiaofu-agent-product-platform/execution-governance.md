@@ -55,3 +55,16 @@ A staging 先行 → 生产；B 无 staging 则 canary（新容器/备用端口/
 ## 13. 环境条件式执行
 
 Docker Desktop 可用则本地 amd64 build+smoke，arm64 归 CI buildx/QEMU 或 arm64 Runner；DevTools CLI 可用且已登录则真实 smoke，需扫码则标记未验证不阻塞；真机/体验版生成交人工清单，不冒充完成，除直接依赖真机行为且风险不可控外不阻塞服务端/PR/合并/安全部署。
+
+## 14. UI 设计纪律（用户补充授权）
+
+凡新增或实质改动的 UI（小程序页面/组件、后台页面、控制面），必须先调用本地设计 skill 辅助设计再实现：`frontend-design`（`C:/Users/Katelya/.agents/skills/frontend-design`，视觉方向/文案/签名元素）与 `open-design`（`C:/Users/Katelya/.agents/skills/open-design/craft/`，color/typography/state-coverage/animation-discipline/accessibility-baseline/laws-of-ux/anti-ai-slop 规则手册）为主，`ui-ux-pro-max`（设计系统检索）为辅；要求：
+
+- 与既有整体 UI 一致统一（后台沿用 Legacy admin 视觉语言与设计令牌，小程序沿用现有设计令牌与组件体系）；brief 已钉死视觉方向时以 brief 为准，不用 skill 的通用默认配色覆盖产品既有令牌；
+- 直观、简洁、美观，以成熟前端设计标准打磨布局、交互与文案（中文文案一致、无机器味、动词主导，按钮措辞与结果反馈同名）；
+- 图标一律使用 SVG（内联 Heroicons/Lucide 风格单线图标或项目既有 SVG），禁止用 emoji 充当图标，hover/焦点有反馈且不引发布局位移，过渡 150–300ms；
+- accent 纪律：每屏主 accent 可见用途 ≤2 处（brand mark + 主 CTA/选中态），语义色仅表状态；禁 Tailwind 默认 indigo、禁两停“信任渐变”；
+- 字排纪律：UI 标签/按钮 letter-spacing ≥0.02em，全大写 ≥0.06em，权重 400/500/600 三档，字号 ≤8 级；
+- 状态覆盖：加载/空/错误/有数据/边界五态齐备，toast 自动消失须可悬停暂停（WCAG 2.2.1）；
+- 可访问性：对比度 ≥4.5:1、表单控件有标签、尊重 prefers-reduced-motion、色彩不作唯一信息载体、焦点可见、原生语义元素优先；
+- 交付前过 skill 的 Pre-Delivery Checklist；浏览器/小程序可验证时附真实渲染证据（截图或 DevTools）。
