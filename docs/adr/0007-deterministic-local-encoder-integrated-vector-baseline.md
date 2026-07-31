@@ -23,3 +23,21 @@ P4d 的 RAG 需要"BM25 + 向量"混合检索，但一体化容器没有 pgvecto
 - 一体化模式零外部依赖、离线可摄取/检索/发布/回滚；public 可用；行为确定性可测试。
 - 向量质量弱于神经 embedding；golden query set 必须以 lexical-only 为对照如实报告提升幅度，无提升时如实报告。
 - P5 接入 pgvector / 神经 Embedding 时接口不变，但索引需按 encoder manifest 重建。
+
+## Amendment §8: deterministic-local-v2（P4d，2026-07-31）
+
+P4d golden query 实测暴露 v1 latin 词元三处系统性缺陷：尾随标点胶合
+（"appearance." ≠ "appearance"）、连字符复合词胶合（"two-factor" 与
+"two factor" 互不可见）、单字符噪声词元（"a"/"I" 参与打分）。按本 ADR §3
+的既定机制递增世代为 `deterministic-local-v2`：
+
+1. latin 词元剥离首尾标点；连字符复合词保留整体并追加拆分词元；无数字的
+   单字符词元丢弃。CJK run/bigram 与别名表逐位不变。
+2. v1 全部黄金值（CJK 与干净 latin 输入）在 v2 下逐位保持，单源测试
+   （tools/test-agent-rag-encoder-single-source.js）同时充当 v1→v2 稳定性
+   证明；P3 记忆检索行为以 P3 既有套件复核无回归。
+3. 新增「无支撑命中抑制」校准策略：64 维 hash 投影碰撞噪声底实测 0.2..0.5，
+   与弱真实信号同量级，纯向量余弦不能单独创造命中（命中必须有词元支撑；
+   别名扩展的语义匹配带支撑，不受影响）。向量通道经 RRF 名次与 rerank
+   权重真实参与排序（golden query 四组对照的 MRR/引用正确率差异证明）。
+   该策略随 encoder 世代校准；未来神经 Embedding Adapter 可按新世代放宽。

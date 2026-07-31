@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// P4b：统一 domain adapter conformance suite（tasks.md P4b 验收项）。
-// 同一份契约对四个发布域各跑一遍（Skill 参考适配器 + Provider/Tool/Memory）：
+// P4b：统一 domain adapter conformance suite（tasks.md P4b 验收项；P4c/P4d 扩展至六域）。
+// 同一份契约对六个发布域各跑一遍（Skill 参考适配器 + Provider/Tool/Memory/MCP/RAG）：
 //   1. 域协议方法集完整（domain/validate/test/composeSnapshotEntry/resolveRuntime/seedPayload）；
 //   2. 种子 ≡ 静态默认：seed validate+test 通过，resolveRuntime(seed) 等价静态默认语义；
 //   3. 非声明式/越权发布物一律拒绝（含各域专项非法载荷）；
@@ -21,6 +21,7 @@ const { createSkillPublicationAdapter } = require("../packages/skill-runtime");
 const { createProviderPublicationAdapter } = require("../packages/provider-runtime");
 const { createToolPublicationAdapter } = require("../packages/tool-runtime");
 const { createMcpPublicationAdapter } = require("../packages/mcp-runtime");
+const { createRagPublicationAdapter } = require("../packages/rag-runtime");
 
 function tmpRoot(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `domain-conformance-${label}-`));
@@ -173,6 +174,50 @@ const DOMAINS = [
       assert.strictEqual(runtime.servers.length, 1);
       assert.strictEqual(runtime.servers[0].id, "kb-remote");
       assert.strictEqual(runtime.servers[0].authEnvVar, "MCP_KB_TOKEN", "auth kept as reference name");
+    },
+  },
+  {
+    domain: "rag",
+    createAdapter: () => createRagPublicationAdapter(),
+    validChange(seed) {
+      const payload = JSON.parse(JSON.stringify(seed));
+      payload.documents.push({
+        docId: "run-recovery",
+        title: "Run recovery",
+        kind: "note",
+        text: "A run can be resumed from its last acknowledged cursor. Final results are recoverable after a reconnect.",
+      });
+      payload.retrieval = Object.assign({}, payload.retrieval, { topK: 3 });
+      return payload;
+    },
+    invalidPayloads(seed) {
+      return [
+        ["structured campus fact kind", (() => {
+          const p = JSON.parse(JSON.stringify(seed));
+          p.documents.push({ docId: "week-facts", title: "Week facts", kind: "teaching_week", text: "current week is 12" });
+          return p;
+        })()],
+        ["credential-shaped text", (() => {
+          const p = JSON.parse(JSON.stringify(seed));
+          p.documents.push({ docId: "leaked", title: "Leaked", text: "example api_key: abcd1234efgh5678" });
+          return p;
+        })()],
+        ["non-public uri", (() => {
+          const p = JSON.parse(JSON.stringify(seed));
+          p.documents.push({ docId: "internal", title: "Internal", uri: "https://127.0.0.1/notes" });
+          return p;
+        })()],
+        ["non-declarative field", Object.assign(JSON.parse(JSON.stringify(seed)), { execute: "evil" })],
+      ];
+    },
+    assertSeedRuntime(runtime) {
+      assert.strictEqual(runtime.kbId, "platform-example", "seed = builtin read-only example KB");
+      assert.strictEqual(runtime.documents.length, 1);
+      assert.strictEqual(runtime.encoder.encoderType, "deterministic-local-v2", "runtime carries the encoder manifest");
+    },
+    assertChangedRuntime(runtime) {
+      assert.strictEqual(runtime.documents.length, 2);
+      assert.strictEqual(runtime.retrieval.topK, 3);
     },
   },
 ];

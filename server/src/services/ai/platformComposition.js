@@ -5,6 +5,8 @@ const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog, createSkillPublicationAdapter } = require("../../../../packages/skill-runtime");
 const { createToolRuntime, createToolPublicationAdapter } = require("../../../../packages/tool-runtime");
 const { createMcpPublicationAdapter, createMcpRuntime } = require("../../../../packages/mcp-runtime");
+const { createRagPublicationAdapter } = require("../../../../packages/rag-runtime");
+const { createRagIndexService } = require("./ragIndexService");
 const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
 const path = require("path");
@@ -87,6 +89,9 @@ const mcpPublicationAdapter = createMcpPublicationAdapter({
   knownCommands: Object.keys(mcpTrustedCommands),
   allowInsecureHttp: String(process.env.AGENT_MCP_ALLOW_INSECURE_HTTP || "").toLowerCase() === "true",
 });
+// P4d：RAG 域接入同一发布内核（第 6 域）。发布物是自包含版本化 KB 定义；
+// 索引是派生物（确定性可重建），由 ragIndexService 异步构建/持久化/恢复。
+const ragPublicationAdapter = createRagPublicationAdapter();
 const platformMcpRuntime = createMcpRuntime({
   trustedCommands: mcpTrustedCommands,
   allowInsecureHttp: String(process.env.AGENT_MCP_ALLOW_INSECURE_HTTP || "").toLowerCase() === "true",
@@ -98,6 +103,7 @@ const domainAdapters = Object.freeze({
   tool: toolPublicationAdapter,
   memory: memoryPolicyAdapter,
   mcp: mcpPublicationAdapter,
+  rag: ragPublicationAdapter,
 });
 const configKernel = createConfigKernel({
   repository: createConfigKernelFileRepository({ root: configKernelRoot }),
@@ -162,12 +168,13 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
 // P4b：Provider/Tool/Memory 按快照解析，与 Skill 目录同一不变量：发布/回滚
 // 只影响新 Run；在途 Run 快照不可变；按 (environment, version) 记忆化；快照
 // 钉住的版本不可读 = 配置完整性故障，fail closed（失败结果不缓存）。
-const boundDomainRuntimeCache = { provider: new Map(), tool: new Map(), memory: new Map(), mcp: new Map() };
+const boundDomainRuntimeCache = { provider: new Map(), tool: new Map(), memory: new Map(), mcp: new Map(), rag: new Map() };
 const DOMAIN_UNREADABLE_CODES = Object.freeze({
   provider: "PROVIDER_CONFIG_UNREADABLE",
   tool: "TOOL_CONFIG_UNREADABLE",
   memory: "MEMORY_POLICY_UNREADABLE",
   mcp: "MCP_REGISTRY_UNREADABLE",
+  rag: "RAG_CONFIG_UNREADABLE",
 });
 // 空 overlay 的解析结果 = 静态默认（等价 P4b 前行为），预先解析一次复用。
 const defaultDomainRuntime = Object.freeze(Object.fromEntries(Object.keys(domainAdapters).map((domain) => [
@@ -220,6 +227,65 @@ function resolveMemoryPolicyForSnapshot(configSnapshot) {
 }
 function resolveMcpRegistryForSnapshot(configSnapshot) {
   return resolveDomainRuntimeForSnapshot("mcp", configSnapshot);
+}
+
+// P4d：RAG 索引服务。队列/索引落在内核 root 下（`rag-indexes/` 与
+// `rag-index-queue.json`）；reclaim 时经 resolveArtifact 从内核重取发布物，
+// 队列不复制文档内容（内核是唯一内容源）。
+const ragIndexService = createRagIndexService({
+  root: configKernelRoot,
+  logger: logConfigKernelEvent,
+  resolveArtifact({ environment, artifactId, version }) {
+    const versionDoc = configKernel.getArtifactVersion({ domain: "rag", artifactId, environment, version });
+    return ragPublicationAdapter.resolveRuntime(versionDoc);
+  },
+});
+
+// RAG 快照解析 = 通用域解析 + 索引同步钩子：新快照钉住的版本若未构建，
+// 以稳定 jobId 入队异步构建（幂等，不阻塞在线 Run）；查询在索引就绪前
+// 按 lkg 语义降级或如实返回不可用，绝不返回草稿内容。
+function resolveRagArtifactForSnapshot(configSnapshot) {
+  const artifact = resolveDomainRuntimeForSnapshot("rag", configSnapshot);
+  const entry = configSnapshot && configSnapshot.artifacts && configSnapshot.artifacts[`rag:${plugin.id}`];
+  const environment = configSnapshot && configSnapshot.environment;
+  if (entry && environment && artifact && artifact.kbId) {
+    try {
+      ragIndexService.requestBuild({
+        environment,
+        artifactId: plugin.id,
+        kbId: artifact.kbId,
+        version: entry.version,
+      });
+    } catch (error) {
+      // 入队失败不阻断解析（查询路径会如实降级），但必须留安全信号。
+      logConfigKernelEvent({
+        event: "rag-index-enqueue-failed",
+        environment,
+        version: String(entry.version || ""),
+        code: String(error && error.code || "UNKNOWN"),
+      });
+    }
+  }
+  return artifact;
+}
+
+// 生产查询路径（P4d 契约测试与 P4e 控制面/工具接线共用）：快照钉住版本 →
+// 索引服务 → 四模式查询链。无快照钉住时如实降级（不发明内容）。
+async function queryRagForSnapshot(configSnapshot, input = {}) {
+  const artifact = resolveRagArtifactForSnapshot(configSnapshot);
+  const entry = configSnapshot && configSnapshot.artifacts && configSnapshot.artifacts[`rag:${plugin.id}`];
+  const environment = configSnapshot && configSnapshot.environment;
+  if (!entry || !environment || !artifact || !artifact.kbId) {
+    return Object.freeze({ hits: Object.freeze([]), reason: "rag_not_configured", kbId: artifact && artifact.kbId || "" });
+  }
+  return ragIndexService.query({
+    environment,
+    kbId: artifact.kbId,
+    version: entry.version,
+    query: input.query,
+    mode: input.mode,
+    topK: input.topK,
+  });
 }
 
 function resolveSnapshotEnvironment(request) {
@@ -424,6 +490,11 @@ module.exports = {
   resolveToolOverlayForSnapshot,
   resolveMemoryPolicyForSnapshot,
   resolveMcpRegistryForSnapshot,
+  resolveRagArtifactForSnapshot,
+  queryRagForSnapshot,
+  getRagIndexService() {
+    return ragIndexService;
+  },
   getMcpRuntime() {
     return platformMcpRuntime;
   },
