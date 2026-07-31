@@ -1,9 +1,9 @@
-const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, sha256Digest } = require("../../../../packages/agent-runtime");
-const { EXECUTION_POLICIES, createMetricsStore, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
+const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, createMemoryPolicyPublicationAdapter, sha256Digest } = require("../../../../packages/agent-runtime");
+const { EXECUTION_POLICIES, createMetricsStore, createProviderPublicationAdapter, overlayToRuntimeConfig, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog, createSkillPublicationAdapter } = require("../../../../packages/skill-runtime");
-const { createToolRuntime } = require("../../../../packages/tool-runtime");
+const { createToolRuntime, createToolPublicationAdapter } = require("../../../../packages/tool-runtime");
 const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
 const path = require("path");
@@ -22,6 +22,7 @@ const providerRuntimeComposition = require("./providerRuntimeComposition");
 const providerConfigService = require("./providerConfigService");
 const runtimeModeService = require("./runtimeModeService");
 const safetyGuard = require("./safetyGuard");
+const memoryPolicy = require("./memory/memoryPolicy");
 
 const recentPlatformTraces = [];
 let runHandlers = null;
@@ -55,21 +56,40 @@ function logConfigKernelEvent(entry) {
   }
 }
 const skillPublicationAdapter = createSkillPublicationAdapter({ staticSkills: plugin.skills });
+// P4b：Provider/Tool/Memory 三域接入同一发布内核。发布物均为纯声明式
+// overlay（禁 JS、禁密钥、只能收窄静态能力），种子 ≡ 静态默认（空 overlay）。
+const providerPublicationAdapter = createProviderPublicationAdapter({
+  knownProviderIds: providerRuntimeComposition.PROVIDER_IDS.concat(["mock"]),
+});
+const toolPublicationAdapter = createToolPublicationAdapter({
+  staticTools: platformToolRuntime.listDescriptors(),
+});
+const memoryPolicyAdapter = createMemoryPolicyPublicationAdapter({
+  knownTtlKeys: Object.keys(memoryPolicy.DEFAULT_TTL_MS),
+});
+const domainAdapters = Object.freeze({
+  skill: skillPublicationAdapter,
+  provider: providerPublicationAdapter,
+  tool: toolPublicationAdapter,
+  memory: memoryPolicyAdapter,
+});
 const configKernel = createConfigKernel({
   repository: createConfigKernelFileRepository({ root: configKernelRoot }),
-  domainAdapters: { skill: skillPublicationAdapter },
+  domainAdapters,
   environments: ["public", "trial", "dev"],
   logger: logConfigKernelEvent,
 });
-const skillSeedPayload = skillPublicationAdapter.seedPayload();
-const skillSeedDigest = sha256Digest(skillSeedPayload);
-["public", "trial", "dev"].forEach((environment) => {
-  configKernel.seedEnvironment(environment, [{
-    domain: "skill",
+const domainSeedEntries = Object.keys(domainAdapters).map((domain) => {
+  const payload = domainAdapters[domain].seedPayload();
+  return Object.freeze({
+    domain,
     artifactId: plugin.id,
-    payload: skillSeedPayload,
-    sourceDigest: skillSeedDigest,
-  }]);
+    payload,
+    sourceDigest: sha256Digest(payload),
+  });
+});
+["public", "trial", "dev"].forEach((environment) => {
+  configKernel.seedEnvironment(environment, domainSeedEntries);
 });
 
 // 按快照绑定的技能目录：发布/回滚只影响新 Run；在途 Run 的快照不可变。
@@ -113,6 +133,65 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
   return boundCatalogCache.get(cacheKey);
 }
 
+// P4b：Provider/Tool/Memory 按快照解析，与 Skill 目录同一不变量：发布/回滚
+// 只影响新 Run；在途 Run 快照不可变；按 (environment, version) 记忆化；快照
+// 钉住的版本不可读 = 配置完整性故障，fail closed（失败结果不缓存）。
+const boundDomainRuntimeCache = { provider: new Map(), tool: new Map(), memory: new Map() };
+const DOMAIN_UNREADABLE_CODES = Object.freeze({
+  provider: "PROVIDER_CONFIG_UNREADABLE",
+  tool: "TOOL_CONFIG_UNREADABLE",
+  memory: "MEMORY_POLICY_UNREADABLE",
+});
+// 空 overlay 的解析结果 = 静态默认（等价 P4b 前行为），预先解析一次复用。
+const defaultDomainRuntime = Object.freeze(Object.fromEntries(Object.keys(domainAdapters).map((domain) => [
+  domain,
+  domainAdapters[domain].resolveRuntime({ payload: domainAdapters[domain].seedPayload() }),
+])));
+function resolveDomainRuntimeForSnapshot(domain, configSnapshot) {
+  const artifacts = configSnapshot && configSnapshot.artifacts || null;
+  const entry = artifacts && artifacts[`${domain}:${plugin.id}`];
+  const environment = configSnapshot && configSnapshot.environment;
+  if (!entry || !environment) return defaultDomainRuntime[domain];
+  const cache = boundDomainRuntimeCache[domain];
+  const cacheKey = `${environment}:${entry.version}`;
+  if (!cache.has(cacheKey)) {
+    let versionDoc = null;
+    try {
+      versionDoc = configKernel.getArtifactVersion({
+        domain,
+        artifactId: plugin.id,
+        environment,
+        version: entry.version,
+      });
+    } catch (error) {
+      logConfigKernelEvent({
+        event: `${domain}-config-unreadable`,
+        environment,
+        version: String(entry.version || ""),
+        code: String(error && error.code || "UNKNOWN"),
+      });
+      const failure = new Error(`Published ${domain} config version is unreadable: ${String(entry.version || "")}`);
+      failure.code = DOMAIN_UNREADABLE_CODES[domain];
+      throw failure;
+    }
+    cache.set(cacheKey, domainAdapters[domain].resolveRuntime(versionDoc));
+    if (cache.size > 24) {
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
+    }
+  }
+  return cache.get(cacheKey);
+}
+function resolveProviderOverlayForSnapshot(configSnapshot) {
+  return resolveDomainRuntimeForSnapshot("provider", configSnapshot);
+}
+function resolveToolOverlayForSnapshot(configSnapshot) {
+  return resolveDomainRuntimeForSnapshot("tool", configSnapshot);
+}
+function resolveMemoryPolicyForSnapshot(configSnapshot) {
+  return resolveDomainRuntimeForSnapshot("memory", configSnapshot);
+}
+
 function resolveSnapshotEnvironment(request) {
   // 优先请求作用域模式（bindRuntimeDecision 的授权感知决策，经 platformInput
   // 传入）；缺失时才回落全局 configuredMode。AGENTS.md：不得仅用全局
@@ -144,6 +223,10 @@ const ports = createFosuTurnPorts({
   decisionService: platformDecisionService,
   contextAssembler: platformContextAssembler,
   resolveSkillCatalog: resolveSkillCatalogForSnapshot,
+  resolveProviderOverlay: resolveProviderOverlayForSnapshot,
+  resolveToolOverlay: resolveToolOverlayForSnapshot,
+  resolveMemoryPolicy: resolveMemoryPolicyForSnapshot,
+  overlayToRuntimeConfig,
 });
 const stages = createFosuStages({ plugin, ports });
 // 平台级共享 Metrics Store：Runtime 六阶段与 Run Handler 首事件延迟（firstEvent
@@ -307,6 +390,9 @@ module.exports = {
   // 同时供契约测试直接驱动（请求作用域环境绑定、目录 fail-closed）。
   resolveSnapshotEnvironment,
   resolveSkillCatalogForSnapshot,
+  resolveProviderOverlayForSnapshot,
+  resolveToolOverlayForSnapshot,
+  resolveMemoryPolicyForSnapshot,
   getExecutionPolicyTruth,
   getPlatform,
   getRunHandlers,

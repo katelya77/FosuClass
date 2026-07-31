@@ -5,6 +5,7 @@ const { METRIC_LABEL_VALUES, createMetricsStore, percentile } = require("./src/m
 const { createKeepAliveRegistry } = require("./src/keepAliveRegistry");
 const { createProviderRuntime } = require("./src/providerRuntime");
 const { classifyFallbackEligibility, resolveProviderRootCause } = require("./src/fallbackEligibility");
+const { createProviderPublicationAdapter, overlayToRuntimeConfig } = require("./src/providerPublicationAdapter");
 
 module.exports = Object.freeze({
   DECISION_SCHEMA_VERSION: protocol.DECISION_SCHEMA_VERSION,
@@ -14,9 +15,11 @@ module.exports = Object.freeze({
   createDeadline,
   createKeepAliveRegistry,
   createMetricsStore,
+  createProviderPublicationAdapter,
   createProviderRuntime,
   createStageSignal,
   normalizeDecisionContract: protocol.normalizeDecisionContract,
+  overlayToRuntimeConfig,
   parseDecisionContractJson: protocol.parseDecisionContractJson,
   percentile,
   resolveExecutionPolicy,

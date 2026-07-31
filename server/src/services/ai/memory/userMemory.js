@@ -113,7 +113,7 @@ function resolveCanonicalBoundary(candidate = {}, input = {}) {
   };
 }
 
-function toMemoryItems(values = {}, meta = {}) {
+function toMemoryItems(values = {}, meta = {}, policy = null) {
   return EXTENDED_KEYS
     .filter((key) => Object.prototype.hasOwnProperty.call(values, key) && values[key] != null && values[key] !== "")
     .map((key) => {
@@ -126,7 +126,7 @@ function toMemoryItems(values = {}, meta = {}) {
         expiresAt: itemMeta.expiresAt || "",
         updatedAt: itemMeta.updatedAt || "",
         createdAt: itemMeta.createdAt || "",
-      });
+      }, policy);
       return {
         key,
         value: values[key],
@@ -151,7 +151,7 @@ function toMemoryItems(values = {}, meta = {}) {
         releaseVersion: itemMeta.releaseVersion || "",
       };
     })
-    .filter((item) => !isExpired(item));
+    .filter((item) => !isExpired(item, Date.now(), policy));
 }
 
 class UserMemoryStore {
@@ -175,7 +175,7 @@ class UserMemoryStore {
         : null;
       const items = listed
         ? listed.items.map((item) => ({ ...item, value: item.normalizedValue }))
-        : enforceUserMemoryCap(toMemoryItems(this.preferenceService.getObject({ principal }) || {}));
+        : enforceUserMemoryCap(toMemoryItems(this.preferenceService.getObject({ principal }) || {}, {}, input.policy || null), undefined, input.policy || null);
       const values = Object.fromEntries(items.map((item) => [item.key, item.value]));
       return { items, values, episodes: [], revision: listed && listed.revision || 0, policy: listed && listed.policy || null };
     } catch (_) {
@@ -262,6 +262,7 @@ class UserMemoryStore {
     const filtered = filterAndMergeCandidates(input.candidates || [], {
       memoryMode,
       autoMemoryEnabled,
+      policy: input.policy || null,
     }).filter((c) => c.durable && isLowRiskKey(c.key));
 
     const values = {};

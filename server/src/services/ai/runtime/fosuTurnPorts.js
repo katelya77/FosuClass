@@ -128,6 +128,9 @@ function authoritativeToolContext(state, view) {
     termStartDate: source.termStartDate || "",
     termPhase: source.termPhase || "",
     principal: state.memoryBundle && state.memoryBundle.principal || null,
+    // P4b：Tool 发布 overlay（禁用/模式收窄）经工具上下文传入内核五因子
+    // 交集的 runtimeToolIds 因子；不经过 Decision/Planner/Response。
+    toolOverlay: state.toolOverlay || null,
   });
 }
 
@@ -171,6 +174,19 @@ function deriveReminderPendingAction(toolCalls, principal, metadata = {}) {
       term: "",
     },
   };
+}
+
+// P4b：Provider overlay 合并后的硬护栏（最后应用）。public 环境永远
+// mock/tool-only；任何发布物都无法让 public 离开确定性路径。纯函数导出
+// 供发布适配器专项测试直接锁定该不变量。
+function applyProviderHardGuards(runtimeConfig, assistantEnvironment) {
+  if (String(assistantEnvironment || "") !== "public") return runtimeConfig;
+  return Object.assign({}, runtimeConfig, {
+    AI_AGENT_ENABLED: "false",
+    AI_PROVIDER: "mock",
+    AI_PROVIDER_POLICY: "tool-only",
+    AI_RUNTIME_MODE: "public",
+  });
 }
 
 function cancelledResponse(state, extra = {}) {
@@ -225,6 +241,20 @@ function createFosuTurnPorts(options = {}) {
   const resolveSkillCatalog = typeof options.resolveSkillCatalog === "function"
     ? options.resolveSkillCatalog
     : () => skillCatalog;
+  // P4b：按快照解析 Provider/Tool/Memory 发布物；默认空 overlay（未接入
+  // 内核的组合 ≡ P4b 前行为）。public 硬护栏在 overlay 合并后最后重应用。
+  const resolveProviderOverlay = typeof options.resolveProviderOverlay === "function"
+    ? options.resolveProviderOverlay
+    : () => ({});
+  const resolveToolOverlay = typeof options.resolveToolOverlay === "function"
+    ? options.resolveToolOverlay
+    : () => ({ disabled: [], modeOverrides: {} });
+  const resolveMemoryPolicy = typeof options.resolveMemoryPolicy === "function"
+    ? options.resolveMemoryPolicy
+    : () => ({});
+  const overlayToRuntimeConfig = typeof options.overlayToRuntimeConfig === "function"
+    ? options.overlayToRuntimeConfig
+    : () => ({});
 
   async function context(stageInput = {}) {
     const request = stageInput.request || {};
@@ -276,6 +306,22 @@ function createFosuTurnPorts(options = {}) {
       runtimeMode: state.runtimeDecision.runtimeMode,
     });
     state.providerRuntimeConfig = providerConfigResolution.providerRuntimeConfig;
+    // P4b：发布内核 Provider overlay 合并到运行时配置。声明式 overlay 只能
+    // 调整链/阶段模型/预算等白名单字段（密钥永远不可经发布物注入）；硬护栏
+    // 在最后重应用，任何 overlay 都无法让 public 离开 mock/tool-only。
+    const providerOverlayConfig = overlayToRuntimeConfig(
+      resolveProviderOverlay(stageInput.configSnapshot || null)
+    );
+    if (Object.keys(providerOverlayConfig).length) {
+      state.providerRuntimeConfig = Object.assign({}, state.providerRuntimeConfig, providerOverlayConfig);
+    }
+    state.providerRuntimeConfig = applyProviderHardGuards(
+      state.providerRuntimeConfig,
+      providerConfigResolution.assistantEnvironment
+    );
+    // P4b：Memory 策略经快照绑定注入当次 Turn（发布/回滚不影响在途 Run）。
+    state.memoryPolicy = resolveMemoryPolicy(stageInput.configSnapshot || null);
+    state.toolOverlay = resolveToolOverlay(stageInput.configSnapshot || null);
     state.executionPolicy = decisionService.resolvePolicy({
       runtimeMode: state.runtimeDecision.runtimeMode,
       providerRuntimeConfig: state.providerRuntimeConfig,
@@ -289,6 +335,7 @@ function createFosuTurnPorts(options = {}) {
       context: state.context,
       releaseContext: state.releaseContext,
       executionPolicy: state.executionPolicy,
+      policy: state.memoryPolicy,
     });
     state.memoryBundle = loadedMemory.memoryBundle;
     state.conversationState = loadedMemory.conversationState;
@@ -509,6 +556,7 @@ function createFosuTurnPorts(options = {}) {
       startTime: state.startTime,
       understanding,
       goalContractV2,
+      policy: state.memoryPolicy || null,
     });
     if (personalMemoryEarly) {
       return Object.assign({}, resolvedDecision, {
@@ -743,6 +791,7 @@ function createFosuTurnPorts(options = {}) {
         runId: state.runId,
         status: "completed",
         stepCount: (execution.steps || []).length,
+        policy: state.memoryPolicy || null,
         contextSlots: buildContextSlots(intent, intent.slots || {}),
         pendingClarification: null,
         clearPendingClarification: true,
@@ -906,6 +955,7 @@ function createFosuTurnPorts(options = {}) {
       runId: state.runId,
       status: finalOutcome.status,
       stepCount: (execution.steps || []).length,
+      policy: state.memoryPolicy || null,
       contextSlots: buildContextSlots(intent, intent.slots || {}),
       pendingClarification: pendingPatch.pendingClarification,
       clearPendingClarification: pendingPatch.clearPendingClarification,
@@ -964,4 +1014,5 @@ function createFosuTurnPorts(options = {}) {
 module.exports = {
   createFosuTurnPorts,
   deriveReminderPendingAction,
+  applyProviderHardGuards,
 };

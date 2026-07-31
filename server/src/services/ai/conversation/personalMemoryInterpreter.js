@@ -45,6 +45,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
   const candidates = filterAndMergeCandidates(extractFromMessage(text), {
     memoryMode,
     autoMemoryEnabled: options.autoMemoryEnabled !== false,
+    policy: options.policy || null,
   });
 
   const output = [];
@@ -55,7 +56,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
     if (c.reasonCode === "one_off_study_spot") return;
     if (c.scope === "working" && !WORKING_IDENTITY_KEYS.includes(c.key)) return;
     // Durable User Memory only under cloud_sync (or explicit under cloud_sync).
-    const canPersistUser = (explicit || mayAutoPersistUserMemory(memoryMode, c)
+    const canPersistUser = (explicit || mayAutoPersistUserMemory(memoryMode, c, options.policy || null)
       || (reminderPref && c.key === "defaultReminderLeadMinutes"))
       && memoryMode === "cloud_sync";
     const item = command(
