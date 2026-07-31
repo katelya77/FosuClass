@@ -2,6 +2,12 @@
 /**
  * Unified Xiaofu Agent release gate — single definition for local, PR CI, and Deploy to VPS.
  * Fail-fast on first failing suite. Does not delete/weaken checks.
+ *
+ * Global rule: a step whose captured output contains "UNVERIFIED" is treated as
+ * FAILED even when its exit code is 0. UNVERIFIED is the honest marker used by
+ * environment-dependent suites (browser, docker, real provider); at the gate it
+ * must stay visible instead of silently passing. Positional CLI args filter the
+ * step list by script-name substring (local debugging only; the gate runs all).
  */
 const { spawnSync } = require("child_process");
 const path = require("path");
@@ -38,26 +44,46 @@ function runNpm(script) {
   const result = spawnSync(cmd, ["run", script], {
     cwd: ROOT,
     encoding: "utf8",
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
     env: process.env,
     shell: isWin,
+    maxBuffer: 64 * 1024 * 1024,
   });
-  return result.status === 0;
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  if (result.error) throw result.error;
+  const unverified = /UNVERIFIED/.test(output);
+  return { ok: result.status === 0, unverified };
 }
 
 function main() {
   console.log("=== Xiaofu Agent Release Gate ===");
   console.log(`root=${ROOT}`);
-  console.log(`steps=${STEPS.length}`);
+  const filters = process.argv.slice(2);
+  const steps = filters.length
+    ? STEPS.filter(([script]) => filters.some((needle) => script.indexOf(needle) >= 0))
+    : STEPS;
+  if (!steps.length) {
+    console.error(`no gate step matches filter: ${filters.join(", ")}`);
+    process.exit(1);
+  }
+  console.log(`steps=${steps.length}${filters.length ? ` (filtered from ${STEPS.length})` : ""}`);
   const started = Date.now();
   const results = [];
 
-  for (const [script, label] of STEPS) {
+  for (const [script, label] of steps) {
     console.log(`\n--- [${label}] npm run ${script} ---`);
-    const ok = runNpm(script);
+    const outcome = runNpm(script);
+    const ok = outcome.ok && !outcome.unverified;
     results.push({ script, label, ok });
     if (!ok) {
-      console.error(`\nGATE FAILED at ${script} (${label})`);
+      if (outcome.ok && outcome.unverified) {
+        console.error(`\nGATE FAILED at ${script} (${label}): output contains UNVERIFIED — ` +
+          "an environment-dependent suite did not actually run; the gate treats unverified as failed");
+      } else {
+        console.error(`\nGATE FAILED at ${script} (${label})`);
+      }
       results.forEach((r) => console.error(`  ${r.ok ? "OK" : "FAIL"}  ${r.script}`));
       process.exit(1);
     }

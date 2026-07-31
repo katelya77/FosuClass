@@ -26,6 +26,10 @@ async function run() {
       AI_EXECUTION_POLICY: "adaptive",
       DEEPSEEK_API_KEY: "unit-test-admin-public-zero-placeholder-not-real",
       AI_PROVIDER_IGNORE_ENV_FILE: "true",
+      ADMIN_SERVICE_TOKENS: JSON.stringify([
+        { name: "c1-catalog", token: "c1-catalog-token", scopes: ["catalog:write"] },
+        { name: "c1-config-read", token: "c1-config-read-token", scopes: ["agent-config:read"] },
+      ]),
     },
   });
   try {
@@ -84,6 +88,19 @@ async function run() {
     assert.deepStrictEqual(Object.keys(trace.timings), [
       "createRun", "decision", "tool", "verification", "response", "total",
     ]);
+
+    // P4e 复审跟进（M-2）：runs 列表与 runs/:runId 详情同权 —— 服务令牌必须持
+    // agent-config:read；cookie 会话（admin:full）行为不变（上方断言）。
+    const runsWrongScope = await harness.request("/api/admin/agent-platform/runs?limit=5", {
+      headers: { authorization: "Bearer c1-catalog-token" },
+    });
+    assert.strictEqual(runsWrongScope.status, 403, runsWrongScope.text);
+    assert.strictEqual(runsWrongScope.json.code, "ADMIN_SCOPE_DENIED");
+    const runsConfigRead = await harness.request("/api/admin/agent-platform/runs?limit=5", {
+      headers: { authorization: "Bearer c1-config-read-token" },
+    });
+    assert.strictEqual(runsConfigRead.status, 200, runsConfigRead.text);
+    assert.strictEqual(runsConfigRead.json.success, true);
 
     const after = await harness.request("/api/admin/agent-platform/topology", {
       cookie: session.cookie,
