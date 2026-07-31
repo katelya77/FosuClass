@@ -178,6 +178,11 @@ function createPgPool(options = {}) {
 
   const pool = new Pool(config);
   POOL_SECRETS.set(pool, collectSecrets(config));
+  // pg Pool 会在空闲客户端被服务端断开时向池本身发 'error'（容器停库 57P01、
+  // DROP DATABASE ... FORCE、连接超时回收等拆除期竞态）；EventEmitter 对无监听的
+  // 'error' 直接抛未处理异常击落宿主进程。业务路径的错误一律经 query/connect
+  // 逐调用包装为 coded error 传播，池级空闲错误不承载可行动信息，挂空监听。
+  pool.on("error", () => {});
   return pool;
 }
 
