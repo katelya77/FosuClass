@@ -21,6 +21,7 @@ const {
   createConfigKernelFileRepository,
 } = require("./src/configKernel/fileRepository");
 const { runConfigKernelRepositoryConformance } = require("./src/configKernel/repositoryConformance");
+const { createMemoryPolicyPublicationAdapter } = require("./src/memoryPolicyPublicationAdapter");
 
 module.exports = Object.freeze({
   CONTEXT_SCHEMA_VERSION,
@@ -34,6 +35,7 @@ module.exports = Object.freeze({
   createConfigKernel,
   createConfigKernelFileRepository,
   createContextAssembler,
+  createMemoryPolicyPublicationAdapter,
   encodeSemanticVector,
   estimateContextTokens,
   lexicalSimilarity,

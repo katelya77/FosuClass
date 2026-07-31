@@ -12,6 +12,7 @@ const STEPS = [
   ["test:agent-platform-p1", "Product platform P1 production wiring"],
   ["test:agent-platform-p2", "Product platform P2 model-first runtime and budgets"],
   ["test:agent-platform-p4a", "Product platform P4a config publication kernel"],
+  ["test:agent-platform-p4b", "Product platform P4b hot-publish core runtime domains"],
   ["test:xiaofu-final-suite", "Open-schedule / AG-UI / Coze / college / UI final + core experience"],
   ["test:xiaofu-core-experience", "Core experience: follow-up / college A-B / voice / geometry"],
   ["test:agent-memory-autonomy", "Memory + autonomy wiring"],

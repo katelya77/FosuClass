@@ -89,13 +89,13 @@
 
 ### P4b — Core Domain Hot-Publish Adapters
 
-- [ ] Provider、Skill、Tool、Memory 四域分别接入 P4a 内核：声明式 Schema、validate、test、publish、hot reload、rollback、审计、environment scope、失败保留最近有效版本。
-- [ ] Provider：密钥只存引用，不进 Artifact/Trace/导出；public 外部调用恒 0。
-- [ ] Skill：禁止上传执行任意 JS；只允许引用 Manifest 允许的 Tool。
-- [ ] Tool：不得绕过五因子交集与 Guardrail。
-- [ ] Memory：策略发布不影响在途 Run；不得经策略接口暴露用户记忆原文。
-- [ ] 统一 domain adapter conformance suite，四域各跑同一契约测试 + 各自专项。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4b-evidence.md`。提交：`feat(agent): hot-publish core runtime domains`。
+- [x] Provider、Skill、Tool、Memory 四域分别接入 P4a 内核：声明式 Schema、validate、test、publish、hot reload、rollback、审计、environment scope、失败保留最近有效版本。
+- [x] Provider：密钥只存引用，不进 Artifact/Trace/导出；public 外部调用恒 0。
+- [x] Skill：禁止上传执行任意 JS；只允许引用 Manifest 允许的 Tool。
+- [x] Tool：不得绕过五因子交集与 Guardrail。
+- [x] Memory：策略发布不影响在途 Run；不得经策略接口暴露用户记忆原文。
+- [x] 统一 domain adapter conformance suite，四域各跑同一契约测试 + 各自专项。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p4b-evidence.md`。提交：`feat(agent): hot-publish core runtime domains`。
   - _Requirements: R6, R11.5_
 
 ### P4c — Governed MCP Runtime and Publication

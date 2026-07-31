@@ -88,13 +88,43 @@ function isSensitiveCandidate(candidate = {}) {
  * session_state keeps Working/Thread for the current conversation only.
  * local_only never writes durable user memory.
  */
-function mayAutoPersistUserMemory(memoryMode, candidate = {}) {
+/**
+ * P4b：发布策略覆盖（可选）。policy 来自配置内核按快照解析的 Memory 域发布物
+ * （packages/agent-runtime memoryPolicyPublicationAdapter，字段已校验有界）。
+ * 所有消费点缺省 policy 时严格回落静态常量（= P4b 前行为）；
+ * 在途 Run 的策略由其创建时绑定的快照决定，发布/回滚只影响新 Run。
+ */
+function policyValue(policy, field) {
+  if (!policy || typeof policy !== "object") return undefined;
+  const value = policy[field];
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function ttlOverrideFor(policy, key) {
+  if (!policy || typeof policy !== "object" || !policy.ttlOverridesMs) return undefined;
+  const value = Number(policy.ttlOverridesMs[key]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function minConfidenceOf(policy) {
+  return policyValue(policy, "minConfidence") !== undefined ? policyValue(policy, "minConfidence") : MIN_CONFIDENCE;
+}
+
+function pendingTtlOf(policy) {
+  return policyValue(policy, "pendingTtlMs") !== undefined ? policyValue(policy, "pendingTtlMs") : PENDING_TTL_MS;
+}
+
+function termScopeTtlOf(policy) {
+  return policyValue(policy, "termScopeTtlMs") !== undefined ? policyValue(policy, "termScopeTtlMs") : TERM_SCOPE_TTL_MS;
+}
+
+function mayAutoPersistUserMemory(memoryMode, candidate = {}, policy = null) {
   const mode = String(memoryMode || "local_only");
   if (mode !== "cloud_sync") return false;
   if (isSensitiveCandidate(candidate)) return false;
   if (isTemporaryCandidate(candidate)) return false;
   if (!isLowRiskKey(candidate.key)) return false;
-  if (Number(candidate.confidence || 0) < MIN_CONFIDENCE) return false;
+  if (Number(candidate.confidence || 0) < minConfidenceOf(policy)) return false;
   return true;
 }
 
@@ -107,24 +137,26 @@ function mayKeepInWorkingMemory(candidate = {}) {
  * 类别化 TTL：scope=term/release 的记忆短 TTL 且绑版本边界；
  * pending/工作态短期；稳定偏好按 key 默认长 TTL。
  */
-function resolveTtlMs(candidate = {}) {
-  const base = DEFAULT_TTL_MS[candidate.key] || DEFAULT_TTL_MS.session_fact;
+function resolveTtlMs(candidate = {}, policy = null) {
+  const base = ttlOverrideFor(policy, candidate.key) !== undefined
+    ? ttlOverrideFor(policy, candidate.key)
+    : (DEFAULT_TTL_MS[candidate.key] || DEFAULT_TTL_MS.session_fact);
   if (candidate.scope === "term" || candidate.scope === "release") {
-    return Math.min(base, TERM_SCOPE_TTL_MS);
+    return Math.min(base, termScopeTtlOf(policy));
   }
   if (candidate.scope === "working" || candidate.scope === "turn"
     || candidate.reasonCode === "pending_action" || candidate.reasonCode === "pending_clarification") {
-    return PENDING_TTL_MS;
+    return pendingTtlOf(policy);
   }
   return base;
 }
 
-function resolveExpiresAt(candidate = {}, now = Date.now()) {
+function resolveExpiresAt(candidate = {}, now = Date.now(), policy = null) {
   if (candidate.expiresAt) {
     const parsed = Date.parse(candidate.expiresAt);
     if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
   }
-  return new Date(now + resolveTtlMs(candidate)).toISOString();
+  return new Date(now + resolveTtlMs(candidate, policy)).toISOString();
 }
 
 /**
@@ -134,18 +166,18 @@ function resolveExpiresAt(candidate = {}, now = Date.now()) {
  *    （禁止用"当前时间 + 默认 TTL"复活旧数据）；
  * 3. 无任何可确认时间 → null（调用方 fail closed，不进检索/Provider）。
  */
-function effectiveExpiryMs(entry = {}) {
+function effectiveExpiryMs(entry = {}, policy = null) {
   const direct = Date.parse(entry && entry.expiresAt || "");
   if (Number.isFinite(direct)) return direct;
   const base = Date.parse(entry && entry.updatedAt || "");
   const created = Date.parse(entry && entry.createdAt || "");
   const baseMs = Number.isFinite(base) ? base : created;
-  if (Number.isFinite(baseMs)) return baseMs + resolveTtlMs(entry);
+  if (Number.isFinite(baseMs)) return baseMs + resolveTtlMs(entry, policy);
   return null;
 }
 
-function isExpired(entry, now = Date.now()) {
-  const expiry = effectiveExpiryMs(entry);
+function isExpired(entry, now = Date.now(), policy = null) {
+  const expiry = effectiveExpiryMs(entry, policy);
   // 无法确认有效性 → fail closed，按已过期处理（不进入检索/Provider）。
   if (expiry === null) return true;
   return expiry <= now;
@@ -157,12 +189,14 @@ function isExpired(entry, now = Date.now()) {
 function filterAndMergeCandidates(candidates = [], options = {}) {
   const memoryMode = options.memoryMode || "local_only";
   const autoMemoryEnabled = options.autoMemoryEnabled !== false;
+  const policy = options.policy || null;
+  const minConfidence = minConfidenceOf(policy);
   const byKey = new Map();
 
   (Array.isArray(candidates) ? candidates : []).forEach((raw) => {
     if (!raw || !raw.key) return;
     if (isSensitiveCandidate(raw)) return;
-    if (Number(raw.confidence || 0) < MIN_CONFIDENCE) return;
+    if (Number(raw.confidence || 0) < minConfidence) return;
     if (!autoMemoryEnabled && raw.source !== "explicit_user") return;
 
     const candidate = {
@@ -173,7 +207,7 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
       confidence: Math.min(1, Math.max(0, Number(raw.confidence || 0) || 0)),
       sourceTurnIds: Array.isArray(raw.sourceTurnIds) ? raw.sourceTurnIds.slice(0, 8) : [],
       // options.now 仅供测试注入确定性时钟；生产调用方不传时回落 Date.now()。
-      expiresAt: resolveExpiresAt(raw, Number.isFinite(options.now) ? options.now : undefined),
+      expiresAt: resolveExpiresAt(raw, Number.isFinite(options.now) ? options.now : undefined, policy),
       expiresAtSource: raw.expiresAtSource === "explicit" || raw.expiresAtSource === "policy"
         ? raw.expiresAtSource
         : (raw.expiresAt ? "explicit" : "policy"),
@@ -191,7 +225,7 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
     };
 
     if (["user", "long_term", "term", "release"].includes(candidate.scope)) {
-      candidate.durable = mayAutoPersistUserMemory(memoryMode, candidate);
+      candidate.durable = mayAutoPersistUserMemory(memoryMode, candidate, policy);
       if (!candidate.durable && memoryMode === "local_only") {
         candidate.scope = "working";
       }
@@ -216,8 +250,8 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
   return Array.from(byKey.values());
 }
 
-function enforceUserMemoryCap(items = [], max = MAX_USER_MEMORIES) {
-  const list = (Array.isArray(items) ? items : []).filter((item) => !isExpired(item));
+function enforceUserMemoryCap(items = [], max = MAX_USER_MEMORIES, policy = null) {
+  const list = (Array.isArray(items) ? items : []).filter((item) => !isExpired(item, Date.now(), policy));
   if (list.length <= max) return list;
   return list
     .slice()

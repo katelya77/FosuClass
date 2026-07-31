@@ -87,6 +87,7 @@ class MemoryController {
         ...versionBoundary,
         limit: 5,
         episodeLimit: 3,
+        policy: input.policy || null,
       })
       : null;
     const userLoaded = preparedMemory
@@ -99,6 +100,7 @@ class MemoryController {
       : this.userMemory.load({
         principal: bundle.principal,
         memoryMode,
+        policy: input.policy || null,
       });
     if (userLoaded.values && userLoaded.values.preferredName && !seeded.preferredName) {
       seeded.preferredName = userLoaded.values.preferredName;
@@ -160,6 +162,7 @@ class MemoryController {
         ...versionBoundary,
         limit: 5,
         episodeLimit: 3,
+        policy: input.policy || null,
       });
     const relevantUserMemories = retrieved.items || [];
     const relevantEpisodes = retrieved.episodes || [];
@@ -342,7 +345,7 @@ class MemoryController {
           }))
           : []
       ),
-      { memoryMode, autoMemoryEnabled }
+      { memoryMode, autoMemoryEnabled, policy: input.policy || null }
     );
 
     // Apply durable name/campus into working memory for this thread immediately.
@@ -390,6 +393,7 @@ class MemoryController {
       memoryMode,
       autoMemoryEnabled,
       candidates,
+      policy: input.policy || null,
       episode: episodeRequested
         ? {
           goal: input.intentName,

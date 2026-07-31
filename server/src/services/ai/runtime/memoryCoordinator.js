@@ -52,6 +52,7 @@ function loadConversationMemory(input = {}) {
       memoryMode: context.memoryMode,
       releaseContext: input.releaseContext || null,
       executionPolicy: input.executionPolicy || "",
+      policy: input.policy || null,
     });
     conversationState = memoryBundle.conversationState || null;
     context = safetyGuard.sanitizeAgentContext(memoryBundle.context || context);
@@ -105,6 +106,7 @@ function handlePersonalMemoryTurn(input = {}) {
     principal: memoryBundle.principal,
     memoryMode: memoryBundle.memory && memoryBundle.memory.mode || context.memoryMode,
     preferenceService: defaultUserPreferenceService,
+    policy: input.policy || null,
   });
   if (personalMemoryTurn.handled) {
     const personalProviderTruth = deriveProviderRunTruth({
@@ -290,6 +292,7 @@ function attachMemory(response, memoryBundle, options = {}) {
     verification: options.verification || response.verification || null,
     verified: options.verified === true
       || Boolean(response.verification && response.verification.ok === true),
+    policy: options.policy || null,
   });
   const memory = commitResult.memory;
   response.memory = memory;

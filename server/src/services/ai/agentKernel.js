@@ -79,8 +79,23 @@ class AgentKernel {
     }
     const manifestIntent = this.capabilityManifest.getIntent(intent && intent.name || intent);
     const descriptors = this.toolRuntime.listDescriptors();
+    // P4b：Tool 发布 overlay 只作用于 runtimeToolIds 因子，且只能收窄——
+    // disabled 直接排除；modeOverrides 已由发布适配器校验为静态子集。
+    const overlay = context && context.toolOverlay && typeof context.toolOverlay === "object"
+      ? context.toolOverlay
+      : null;
+    const disabledToolIds = new Set(overlay && Array.isArray(overlay.disabled) ? overlay.disabled.map(String) : []);
+    const modeOverrides = overlay && overlay.modeOverrides && typeof overlay.modeOverrides === "object"
+      ? overlay.modeOverrides
+      : {};
     const runtimeToolIds = descriptors
-      .filter((descriptor) => !descriptor.runtimeModes.length || descriptor.runtimeModes.includes(runtimeMode))
+      .filter((descriptor) => !disabledToolIds.has(descriptor.id))
+      .filter((descriptor) => {
+        const modes = Array.isArray(modeOverrides[descriptor.id])
+          ? modeOverrides[descriptor.id]
+          : descriptor.runtimeModes;
+        return !modes.length || modes.includes(runtimeMode);
+      })
       .map((descriptor) => descriptor.id);
     const environmentToolIds = Array.isArray(candidateTools) ? candidateTools.slice() : [];
     const principal = context && context.principal;
@@ -333,7 +348,12 @@ class AgentKernel {
     const availableSkills = capabilityRoute.skillIds && capabilityRoute.skillIds.length
       ? capabilityRoute.skillIds
       : [skill.id];
-    const authorizationContext = Object.assign({}, context, { principal: input.principal || context.principal });
+    // P4b：toolOverlay 经 toolContext（授权/执行通道）携带，不进入语义
+    // context；五因子交集计算时显式转入授权上下文。
+    const authorizationContext = Object.assign({}, context, {
+      principal: input.principal || context.principal,
+      toolOverlay: toolContext.toolOverlay || null,
+    });
     const allowedToolIds = this.resolveAllowedToolIds(intent, skill, runtimeMode, candidateTools, authorizationContext);
 
     const loop = await runObservationLoop({
