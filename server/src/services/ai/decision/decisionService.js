@@ -217,7 +217,7 @@ function createDecisionService(options = {}) {
         validate(value) {
           const contract = normalizeDecisionContract(value, validatorOptions);
           projectDecisionContract(contract);
-          selectedSkillFor(skillCatalog, contract);
+          selectedSkillFor(input.skillCatalog || skillCatalog, contract);
           return contract;
         },
         onEvent: input.onEvent,

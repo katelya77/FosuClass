@@ -84,3 +84,22 @@ P4a 门禁运行中暴露 `tools/test-agent-memory-store-reliability.js` 在 202
 ## 8. 提交与回滚
 
 P4a 独立提交：`feat(agent): add versioned config publication kernel`（本文件随该提交）。回滚 `git revert` 该提交：恢复 manifest 版本号快照与静态目录；已写入 `server/data/ai/config-kernel/` 的种子数据不删除（只读忽略，不回滚数据文件）。
+
+## 9. 独立审查跟进（提交 d7288a87 之后）
+
+P4a 提交后经只读独立审查（explore 子代理，实跑复核内核/契约/适配器/包边界测试与种子幂等），结论：无 Critical；4 项 Important 与若干 Minor。以下修复随跟进提交 `fix(agent): close config kernel review findings` 落盘，证据即本节后述测试。
+
+- **Important #1（模型路径 validate 漏用绑定目录）**：`decisionService.js` `validate(value)` 回调改用 `input.skillCatalog || skillCatalog`（此前 188/236 行已改、此行遗漏）。锁定测试：`test-agent-skill-publication.js` 的 model-path 用例——两目录同技能但 goal→skill 映射顺序不同，合法契约若按静态目录校验会被错误拒绝，修复后按绑定目录通过。
+- **Important #2（快照环境=全局 configuredMode 死代码，跨环境串绑风险）**：`createRunHandlers.platformInput` 现在携带 `req.agentRuntimeDecision.runtimeMode`（bindRuntimeDecision 的授权感知决策，缺省不传、不默认 "public"）；`platformComposition.resolveSnapshotEnvironment` 优先请求作用域模式，缺失才回落 configuredMode。安全性论证：`runtimeModeService.resolveRuntimeMode` 的结果只可能是 configuredMode（已授权）或 public，请求级模式作为 hint 幂等、不可提权。锁定测试：`test-agent-config-kernel-followup.js` 第 1 组。
+- **Important #3（静默 catch 吞 fail-closed 信号）**：`resolveConfigSnapshot` 兜底与 `resolveSkillCatalogForSnapshot` 失败均补 `safeLog` 安全事件（低基数字段：event/environment/version/code）；后者语义改为 fail closed——快照钉住的版本文档不可读（含 digest 篡改）抛 `DECISION_SKILL_CATALOG_UNREADABLE`，不再静默回落静态全量目录（已禁用技能复活 = 授权漂移），且失败结果不进入 (env:version) 记忆化缓存（存储修复后无需重启）。锁定测试：followup 第 2 组（腐蚀 artifact → coded 抛错 → 修复文件 → 不经重启恢复）。
+- **Important #4（内核 root 不遵守 FOSU_DATA_DIR）**：root 解析改为 `FOSU_AGENT_CONFIG_KERNEL_PATH || <FOSU_DATA_DIR || server/data>/ai/config-kernel`，与全仓持久化约定一致（admin 测试/容器挂载不再误写开发者真实数据目录）。锁定测试：followup 子进程用例。
+- **Minor M1**：`projectionOf` 补 `outputCardTypes` 回退（插件描述符真实字段名），种子投影不再静默丢 outputBlockTypes；normalized 的 requiredSlots/optionalSlots/outputBlockTypes 省略时回退静态值（与 goals/tools 对称，admin 草稿省略不再收窄为空）。
+- **Minor M2+M6**：发布物 runtimeModes 收窄为 ⊆ 静态技能自身集合（授权不扩大；静态空集 = 全模式，允许三元组任意子集）；投影与 normalized 保留静态空集语义，不再收窄为 `["public"]`。锁定测试：`testRuntimeModesBoundedByStaticSkill`。
+- **Minor M3**：kernel.js 头注释声明 single-writer 并发假设（多实例共享 FS root 会丢更新；P5a PostgreSQL 适配器须事务/条件写保证同等语义）。
+- **Minor M4**：`listAudit` 按行容错（崩溃残留的半行跳过并标记 `audit-corrupt-line`，不再整体 JSON.parse 抛错）。
+- **Minor M7（证据完整性）**：§5 已在提交前填入全部最终命令与通过数（审查所见为中间稿）。
+- **Minor M5/M8**：tmp 命名同进程同毫秒理论碰撞与 jsonClone 变形（Date→字符串、NaN→null）维持现状——前者同步流程不触发，后者 digest 基于变形后内容自洽；记录在案不展开。
+
+审查已核实无问题项（摘录）：memoryPolicy 时钟注入对生产三调用方零影响；审计仅低基数元数据；种子不覆盖 admin 发布；createRun 绑定链真实（单次读取 + Runtime 深冻结）；测试全部按 `error.code` 精确断言；包边界守卫通过。
+
+跟进提交门禁：`test:agent-platform-p4a`（含新增 followup）+ foundation/regression/final-convergence/phase2/phase3/ai-competition + release-gate 全绿后提交，数字以提交前最终运行为准。
