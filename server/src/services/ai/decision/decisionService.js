@@ -1,5 +1,6 @@
 const {
   EXECUTION_POLICIES,
+  classifyFallbackEligibility,
   createDeadline,
   normalizeDecisionContract,
   resolveExecutionPolicy,
@@ -268,19 +269,48 @@ function createDecisionService(options = {}) {
       return result;
     } catch (error) {
       if (error && error.code === "ABORTED") throw error;
-      const fallback = deterministic(input, "deterministic_fallback", String(error && error.code || "DECISION_FAILED"), executionPolicy);
+      // P2R：单一 fallback eligibility 分类（与 Provider Runtime / Response 共用）。
+      // 配置类错误 fail fast 并给后台可操作原因，不得包装成降级成功；
+      // Schema/请求体类与其他不可重试错误不推进 fallback Provider（Runtime 已 fail fast），
+      // 此处统一走受控 deterministic_fallback；临时性错误（eligible）同理降级，
+      // 但换 Provider 已由 Runtime 在共享账本内尝试过至多一次。
+      const classification = classifyFallbackEligibility(error);
+      if (classification.failureClass === "config") {
+        const actionable = codedError(
+          classification.reasonCode,
+          "Decision Provider 配置缺失或不可用：请在后台检查 AI_DECISION_PROVIDER / AI_UNDERSTANDING_PROVIDER、AI_PROVIDER_CHAIN、AI_BASE_URL 与 API Key 配置后重试"
+        );
+        actionable.failureClass = "config";
+        actionable.failFast = true;
+        actionable.fallbackEligible = false;
+        actionable.fallbackReason = classification.reason;
+        actionable.intendedProvider = String(error && error.intendedProvider || providers.intendedProvider || "");
+        actionable.actualFirstProvider = String(error && error.actualFirstProvider || "");
+        actionable.fallbackPath = Array.isArray(error && error.fallbackPath) ? error.fallbackPath.slice() : [];
+        emit(input.onEvent, { type: "decision.completed", status: "failed", runtimeMode, executionPolicy, decisionSource: "none", reasonCode: actionable.code, failureClass: "config", providerUsed: false });
+        throw actionable;
+      }
+      const fallback = deterministic(input, "deterministic_fallback", classification.reasonCode || String(error && error.code || "DECISION_FAILED"), executionPolicy);
       fallback.intendedProvider = String(error && error.intendedProvider || providers.intendedProvider || "");
       fallback.actualFirstProvider = String(error && error.actualFirstProvider || "");
       fallback.fallbackPath = Array.isArray(error && error.fallbackPath) ? error.fallbackPath.slice() : [];
+      // P2R：failureClass / fallbackReason / remainingBudget 随阶段产物透传；Trace 统一落点由 Wave 2 收尾。
+      fallback.failureClass = classification.failureClass;
+      fallback.fallbackReason = classification.reason;
+      fallback.remainingFallbackBudget = Number.isFinite(error && error.remainingFallbackBudget)
+        ? error.remainingFallbackBudget
+        : null;
       fallback.understanding.intendedProvider = fallback.intendedProvider;
       fallback.understanding.actualFirstProvider = fallback.actualFirstProvider;
       fallback.understanding.fallbackPath = fallback.fallbackPath;
       fallback.understanding.providerChain = providerChainFromPath(fallback.fallbackPath);
+      fallback.understanding.failureClass = classification.failureClass;
+      fallback.understanding.fallbackReason = classification.reason;
       fallback.understanding.externalProviderUsed = Boolean(fallback.actualFirstProvider);
       fallback.understanding.providerUsed = fallback.actualFirstProvider || false;
       fallback.understanding.latencyMs = Date.now() - startedAt;
-      emit(input.onEvent, { type: "understanding.fallback", status: "degraded", runtimeMode, understandingSource: fallback.decisionSource, reasonCode: fallback.understanding.reasonCode, provider: fallback.actualFirstProvider, providerUsed: Boolean(fallback.actualFirstProvider), latencyMs: fallback.understanding.latencyMs });
-      emit(input.onEvent, { type: "decision.completed", status: "degraded", runtimeMode, executionPolicy, decisionSource: fallback.decisionSource, reasonCode: fallback.understanding.reasonCode, providerUsed: Boolean(fallback.actualFirstProvider) });
+      emit(input.onEvent, { type: "understanding.fallback", status: "degraded", runtimeMode, understandingSource: fallback.decisionSource, reasonCode: fallback.understanding.reasonCode, failureClass: classification.failureClass, provider: fallback.actualFirstProvider, providerUsed: Boolean(fallback.actualFirstProvider), latencyMs: fallback.understanding.latencyMs });
+      emit(input.onEvent, { type: "decision.completed", status: "degraded", runtimeMode, executionPolicy, decisionSource: fallback.decisionSource, reasonCode: fallback.understanding.reasonCode, failureClass: classification.failureClass, providerUsed: Boolean(fallback.actualFirstProvider) });
       return fallback;
     }
   }

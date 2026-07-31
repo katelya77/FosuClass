@@ -1,3 +1,17 @@
+/**
+ * UnderstandingService（2026-07-30, P2R 标注）
+ *
+ * 生产在用：`deterministicResult` —— decisionService / understandingCoordinator
+ * 用它做确定性规范化（规则意图 → GoalContract），public 与降级路径均合法。
+ *
+ * @deprecated compatibility-only / deprecated candidate：模型版 `understand()`
+ * 不再是生产路径。P2 统一 Decision 后唯一的生产侧调用入口
+ * understandingCoordinator.runUnderstanding 已无任何调用方；模型理解由
+ * decisionService 经 provider-runtime 的 DecisionContract V2 一次调用完成。
+ * 模型路径仅被兼容测试直接引用（tools/test-agent-model-first-understanding.js）。
+ * 退役门槛（P6b 完成、旧量归零、新 Runtime 全覆盖、对照测试、release-gate 绿）
+ * 达成前不删除、不重构。见 specs/xiaofu-agent-product-platform/p2r-acceptance.md §5。
+ */
 const capabilityManifestService = require("../capabilityManifestService");
 const safetyGuard = require("../safetyGuard");
 const toolRegistry = require("../toolRegistry");

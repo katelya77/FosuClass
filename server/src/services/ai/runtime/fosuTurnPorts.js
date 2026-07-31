@@ -554,6 +554,7 @@ function createFosuTurnPorts(options = {}) {
       agentKernel,
       unifiedDecision: Boolean(decisionResult.decisionContract),
       decisionContract: decisionResult.decisionContract || null,
+      decisionSource: String(decisionResult.decisionSource || ""),
       signal: stageInput.signal,
       deadline: stageInput.deadline,
       budget: stageInput.budget,

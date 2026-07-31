@@ -1,5 +1,11 @@
 const { STAGE_ORDER, detailsForStage, stageRecord } = require("./stageTrace");
-const { createDeadline, createMetricsStore, createStageSignal } = require("@xiaofu-agent/provider-runtime");
+const {
+  METRIC_LABEL_VALUES,
+  classifyFallbackEligibility,
+  createDeadline,
+  createMetricsStore,
+  createStageSignal,
+} = require("@xiaofu-agent/provider-runtime");
 
 const DEFAULT_STAGE_BUDGETS = Object.freeze({
   simple: Object.freeze({
@@ -72,6 +78,70 @@ function stageMetricName(stageName) {
   return stageName === "skill_tool" ? "tool" : stageName;
 }
 
+// 指标标签只取自 provider-runtime metrics 的集中词表；取不到合法值即省略，
+// 绝不把自由文本（runId / conversationId / 消息内容 / model 名）写进桶键。
+function pickLabelValue(name, value) {
+  const normalized = String(value == null ? "" : value).toLowerCase();
+  return METRIC_LABEL_VALUES[name].includes(normalized) ? normalized : undefined;
+}
+
+function providerClassLabel(provider) {
+  const name = String(provider || "").trim().toLowerCase();
+  if (!name) return "none";
+  return name === "mock" ? "mock" : "external";
+}
+
+function decisionUsedFallback(decision) {
+  if (!decision || typeof decision !== "object") return false;
+  if (decision.decisionSource === "deterministic_fallback") return true;
+  if (decision.understanding && decision.understanding.fallback === true) return true;
+  const path = Array.isArray(decision.fallbackPath) ? decision.fallbackPath : [];
+  return path.length > 1;
+}
+
+function decisionDegraded(decision) {
+  return Boolean(decision && typeof decision === "object" && decision.decisionSource === "deterministic_fallback");
+}
+
+function responseUsedFallback(response) {
+  return Boolean(response && typeof response === "object"
+    && (response.fallback === true || String(response.fallbackReason || "").length > 0));
+}
+
+function responseDegraded(response) {
+  if (!response || typeof response !== "object") return false;
+  if (responseUsedFallback(response) || response.partialCompletion === true) return true;
+  return ["partial", "degraded"].includes(String(response.status || ""));
+}
+
+// 失败分类优先取 Wave 1 透传字段（error.failureClass / fallbackReason /
+// remainingFallbackBudget），缺失时用共享分类器兜底（低基数词表）。
+function noteProviderFailure(ledger, error) {
+  if (!ledger || typeof ledger.noteFailure !== "function" || !error || typeof error !== "object") return;
+  const classification = classifyFallbackEligibility(error);
+  ledger.noteFailure({
+    failureClass: String(error.failureClass || classification.failureClass || ""),
+    fallbackReason: String(error.fallbackReason || classification.reason || ""),
+    remainingBudget: Number.isFinite(error.remainingFallbackBudget) ? error.remainingFallbackBudget : undefined,
+  });
+}
+
+// Decision 阶段失败（含降级）链路在 Trace details 中暴露失败分类；public 模式
+// 由 createAgentPlatform 的剥离列表移除这些字段。
+function decisionFailureTraceDetails(error) {
+  if (!error || typeof error !== "object") return {};
+  const classification = classifyFallbackEligibility(error);
+  const details = {};
+  const failureClass = String(error.failureClass || classification.failureClass || "");
+  const fallbackReason = String(error.fallbackReason || classification.reason || "");
+  if (failureClass) details.failureClass = failureClass;
+  if (fallbackReason) details.fallbackReason = fallbackReason;
+  if (Number.isFinite(error.remainingFallbackBudget)) {
+    details.remainingFallbackBudget = Math.max(0, Math.floor(Number(error.remainingFallbackBudget)));
+  }
+  return details;
+}
+
 function normalizeStageBudgets(value = {}) {
   function profile(name) {
     const defaults = DEFAULT_STAGE_BUDGETS[name];
@@ -86,6 +156,9 @@ function normalizeStageBudgets(value = {}) {
 
 function createProviderAttemptLedger(maxFallbacks = 1) {
   let fallbacksUsed = 0;
+  let lastFailureClass = "";
+  let lastFallbackReason = "";
+  let lastRemainingBudget = null;
   const maximum = Math.max(0, Math.min(1, Number(maxFallbacks) || 0));
   return Object.freeze({
     maxFallbacks: maximum,
@@ -95,8 +168,27 @@ function createProviderAttemptLedger(maxFallbacks = 1) {
       fallbacksUsed += 1;
       return true;
     },
+    // P2R Wave 2：错误对象 / 阶段产物透传的失败分类随账本归档
+    // （fallbackEligibility failureClass 词表，低基数，可进 Trace / metrics）。
+    noteFailure(detail = {}) {
+      const failureClass = String(detail.failureClass || "").slice(0, 48);
+      const fallbackReason = String(detail.fallbackReason || "").slice(0, 120);
+      if (failureClass) lastFailureClass = failureClass;
+      if (fallbackReason) lastFallbackReason = fallbackReason;
+      if (Number.isFinite(detail.remainingBudget)) {
+        lastRemainingBudget = Math.max(0, Math.min(maximum, Math.floor(Number(detail.remainingBudget))));
+      }
+    },
     snapshot() {
-      return Object.freeze({ maxFallbacks: maximum, fallbacksUsed });
+      return Object.freeze({
+        maxFallbacks: maximum,
+        fallbacksUsed,
+        failureClass: lastFailureClass,
+        fallbackReason: lastFallbackReason,
+        remainingBudget: Number.isFinite(lastRemainingBudget)
+          ? lastRemainingBudget
+          : Math.max(0, maximum - fallbacksUsed),
+      });
     },
   });
 }
@@ -159,7 +251,7 @@ function createAgentRuntime(options = {}) {
     const createRunDurationMs = Math.max(0, Number(request.createRunDurationMs) || 0);
     const records = [];
     const artifacts = {};
-    stageMetrics.record("createRun", { durationMs: createRunDurationMs, outcome: "success" });
+    stageMetrics.record("createRun", { durationMs: createRunDurationMs, outcome: "ok", labels: stageLabels() });
 
     async function emit(type, publicPayload = {}) {
       sequence += 1;
@@ -191,6 +283,67 @@ function createAgentRuntime(options = {}) {
 
     function complexity() {
       return artifacts.decision && artifacts.decision.taskComplexity === "multi" ? "multi" : "simple";
+    }
+
+    function decisionArtifact() {
+      return artifacts.decision && typeof artifacts.decision === "object" ? artifacts.decision : {};
+    }
+
+    function environmentLabel() {
+      return pickLabelValue("environment", request.runtimeMode
+        || artifacts.response && artifacts.response.runtimeMode
+        || "");
+    }
+
+    function totalProviderClass() {
+      const decisionClass = providerClassLabel(decisionArtifact().actualFirstProvider);
+      const response = artifacts.response && typeof artifacts.response === "object" ? artifacts.response : {};
+      const responseClass = response.externalProviderUsed === true ? "external" : providerClassLabel(response.provider);
+      if (decisionClass === "external" || responseClass === "external") return "external";
+      if (decisionClass === "mock" || responseClass === "mock") return "mock";
+      return "none";
+    }
+
+    // degraded / usedFallback 一律从阶段产物（decision.decisionSource、response
+    // fallback 状态等）传播，不靠猜测；取不到标签即省略。
+    function stageLabels(extra = {}) {
+      const labels = {};
+      const environment = environmentLabel();
+      if (environment) labels.environment = environment;
+      const decision = decisionArtifact();
+      const executionPolicy = pickLabelValue("executionPolicy", decision.executionPolicy);
+      if (executionPolicy) labels.executionPolicy = executionPolicy;
+      if (decision.taskComplexity === "multi") labels.taskComplexity = "multi_tool";
+      else if (decision.taskComplexity === "simple") labels.taskComplexity = "simple";
+      Object.entries(extra).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        labels[key] = value;
+      });
+      return labels;
+    }
+
+    function stageMetricInput(method, output) {
+      if (method === "decision") {
+        return {
+          outcome: decisionDegraded(output) ? "degraded" : "ok",
+          labels: stageLabels({
+            usedFallback: decisionUsedFallback(output),
+            providerClass: providerClassLabel(output && output.actualFirstProvider),
+          }),
+        };
+      }
+      if (method === "response") {
+        return {
+          outcome: responseDegraded(output) ? "degraded" : "ok",
+          labels: stageLabels({
+            usedFallback: responseUsedFallback(output),
+            providerClass: output && output.externalProviderUsed === true
+              ? "external"
+              : providerClassLabel(output && output.provider),
+          }),
+        };
+      }
+      return { outcome: "ok", labels: stageLabels() };
     }
 
     function budgetFor(method) {
@@ -249,7 +402,24 @@ function createAgentRuntime(options = {}) {
           ? immutableOutput
           : Object.assign({}, immutableOutput, { contextId: artifacts.context.contextId });
         records.push(stageRecord(stageName, "success", durationMs, traceDetails));
-        stageMetrics.record(stageMetricName(stageName), { durationMs, outcome: "success" });
+        const metricInput = stageMetricInput(method, immutableOutput);
+        stageMetrics.record(stageMetricName(stageName), {
+          durationMs,
+          outcome: metricInput.outcome,
+          labels: metricInput.labels,
+        });
+        // 降级链路的失败分类随阶段产物归档进共享账本（Wave 1 透传字段）。
+        if (method === "decision" && immutableOutput.failureClass) {
+          providerAttemptLedger.noteFailure({
+            failureClass: immutableOutput.failureClass,
+            fallbackReason: immutableOutput.fallbackReason,
+            remainingBudget: immutableOutput.remainingFallbackBudget,
+          });
+        }
+        if (method === "response") {
+          const responseFallbackReason = String(immutableOutput.fallbackReason || "");
+          if (responseFallbackReason) providerAttemptLedger.noteFailure({ fallbackReason: responseFallbackReason });
+        }
         await emit("stage.completed", {
           stage: stageName,
           durationMs,
@@ -257,10 +427,14 @@ function createAgentRuntime(options = {}) {
         });
         return immutableOutput;
       } catch (error) {
-        const outcome = isAborted(error, signal) ? "cancelled" : "failed";
+        const outcome = isAborted(error, signal)
+          ? "cancelled"
+          : (error && (error.code === "STAGE_TIMEOUT" || error.code === "DEADLINE_EXCEEDED") ? "timeout" : "failed");
+        noteProviderFailure(providerAttemptLedger, error);
         const durationMs = Math.max(0, clock.now() - startedAt);
-        records.push(stageRecord(stageName, outcome, durationMs, {}));
-        stageMetrics.record(stageMetricName(stageName), { durationMs, outcome });
+        const failureDetails = stageName === "decision" ? decisionFailureTraceDetails(error) : {};
+        records.push(stageRecord(stageName, outcome, durationMs, failureDetails));
+        stageMetrics.record(stageMetricName(stageName), { durationMs, outcome, labels: stageLabels() });
         await emit("stage.failed", {
           stage: stageName,
           durationMs,
@@ -321,7 +495,7 @@ function createAgentRuntime(options = {}) {
         artifacts.ui = deepFreeze({ blocks });
         const uiDurationMs = Math.max(0, clock.now() - uiStartedAt);
         records.push(stageRecord("ui", "success", uiDurationMs, artifacts.ui));
-        stageMetrics.record("ui", { durationMs: uiDurationMs, outcome: "success" });
+        stageMetrics.record("ui", { durationMs: uiDurationMs, outcome: "ok", labels: stageLabels() });
         await emit("stage.completed", {
           stage: "ui",
           durationMs: uiDurationMs,
@@ -330,7 +504,7 @@ function createAgentRuntime(options = {}) {
       } catch (error) {
         const uiDurationMs = Math.max(0, clock.now() - uiStartedAt);
         records.push(stageRecord("ui", "failed", uiDurationMs, {}));
-        stageMetrics.record("ui", { durationMs: uiDurationMs, outcome: "failed" });
+        stageMetrics.record("ui", { durationMs: uiDurationMs, outcome: "failed", labels: stageLabels() });
         await emit("stage.failed", {
           stage: "ui",
           durationMs: uiDurationMs,
@@ -342,7 +516,14 @@ function createAgentRuntime(options = {}) {
       }
 
       const totalDurationMs = Math.max(0, clock.now() - totalStartedAt);
-      stageMetrics.record("total", { durationMs: totalDurationMs, outcome: "success" });
+      stageMetrics.record("total", {
+        durationMs: totalDurationMs,
+        outcome: decisionDegraded(decisionArtifact()) || responseDegraded(artifacts.response) ? "degraded" : "ok",
+        labels: stageLabels({
+          usedFallback: decisionUsedFallback(decisionArtifact()) || responseUsedFallback(artifacts.response),
+          providerClass: totalProviderClass(),
+        }),
+      });
       const platformTrace = buildTrace("success");
       await persistTrace(platformTrace);
       await emit("runtime.completed", {
@@ -359,9 +540,16 @@ function createAgentRuntime(options = {}) {
       });
     } catch (error) {
       const aborted = isAborted(error, signal);
+      noteProviderFailure(providerAttemptLedger, error);
       stageMetrics.record("total", {
         durationMs: Math.max(0, clock.now() - totalStartedAt),
-        outcome: aborted ? "cancelled" : "failed",
+        outcome: aborted
+          ? "cancelled"
+          : (error && (error.code === "STAGE_TIMEOUT" || error.code === "DEADLINE_EXCEEDED") ? "timeout" : "failed"),
+        labels: stageLabels({
+          usedFallback: decisionUsedFallback(decisionArtifact()) || responseUsedFallback(artifacts.response),
+          providerClass: totalProviderClass(),
+        }),
       });
       const platformTrace = buildTrace(aborted ? "cancelled" : "failed");
       try {

@@ -62,6 +62,7 @@ async function executePlanner(input = {}) {
     modelGenerate: runtimeMode === "public" || unifiedDecision ? undefined : plannerGenerate,
     unifiedDecision,
     decisionContract: input.decisionContract || null,
+    decisionSource: input.decisionSource || "",
     plannerEnv: providerRuntimeConfig,
   });
   const plan = execution.plan;

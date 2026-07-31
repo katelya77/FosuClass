@@ -251,13 +251,19 @@ function wrapTextResponse(content, options = {}) {
 
 function classifyHttpError(error) {
   const code = String(error && error.code || "");
-  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
+  // P2R：只依据 code 枚举与数值状态分类，禁止 message 正则模糊匹配（旧实现
+  // /timeout|超时/i 会把消息文本里恰好含 "timeout" 的非超时错误误标为可重试，
+  // 导致 fallbackEligibility 数值状态表被架空）。
+  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code)) {
     return "provider_timeout";
   }
+  // 只有真实 400 才按响应体细分 fail-fast 业务码（invalid_model/invalid_payload）；
+  // 其余 4xx（axios 统一给 ERR_BAD_REQUEST）原样透传，由 fallbackEligibility
+  // 用数值状态表归一为 auth / not_found / rate_limited 等精确类别。
   const status = Number(error && error.response && error.response.status);
   const body = error && error.response && error.response.data;
   const text = JSON.stringify(body || {}).toLowerCase();
-  if (status === 400 || code === "ERR_BAD_REQUEST") {
+  if (status === 400) {
     if (/model/.test(text)) return "invalid_model";
     if (/response_format|payload|json|schema|thinking|reasoning/.test(text)) return "invalid_payload";
     return "provider_bad_request";
