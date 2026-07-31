@@ -80,11 +80,11 @@
 
 ### P4a — Artifact Repository and Config Publication Kernel
 
-- [ ] Artifact/ConfigSnapshot Repository + 统一发布状态机 + configVersion + environment scope + 审计。
-- [ ] createRun 原子绑定不可变快照；Run 内快照稳定；发布/回滚只影响新 Run；publish pointer 原子切换。
-- [ ] validate/test 失败不更新生产 pointer；rollback 只切已验证历史版本；热加载失败保持最近有效配置；重启恢复。
-- [ ] 最小 Skill 参考 Adapter 证明通用协议（不据此宣称其他域完成）。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4a-evidence.md`。提交：`feat(agent): add versioned config publication kernel`。
+- [x] Artifact/ConfigSnapshot Repository + 统一发布状态机 + configVersion + environment scope + 审计。
+- [x] createRun 原子绑定不可变快照；Run 内快照稳定；发布/回滚只影响新 Run；publish pointer 原子切换。
+- [x] validate/test 失败不更新生产 pointer；rollback 只切已验证历史版本；热加载失败保持最近有效配置；重启恢复。
+- [x] 最小 Skill 参考 Adapter 证明通用协议（不据此宣称其他域完成）。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p4a-evidence.md`。提交：`feat(agent): add versioned config publication kernel`。
   - _Requirements: R6.1–R6.3, R10.2_
 
 ### P4b — Core Domain Hot-Publish Adapters

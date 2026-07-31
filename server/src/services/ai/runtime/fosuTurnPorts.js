@@ -220,6 +220,11 @@ function createFosuTurnPorts(options = {}) {
   if (!skillCatalog || typeof skillCatalog.getSkillForIntent !== "function") throw new Error("skillCatalog is required");
   if (!decisionService || typeof decisionService.decide !== "function") throw new Error("decisionService is required");
   if (!contextAssembler || typeof contextAssembler.assemble !== "function") throw new Error("contextAssembler is required");
+  // P4a：按 Run 绑定的快照解析已发布技能目录（发布/回滚只影响新 Run）；
+  // 默认回落静态目录（未接入内核的测试/旧组合保持原行为）。
+  const resolveSkillCatalog = typeof options.resolveSkillCatalog === "function"
+    ? options.resolveSkillCatalog
+    : () => skillCatalog;
 
   async function context(stageInput = {}) {
     const request = stageInput.request || {};
@@ -474,6 +479,7 @@ function createFosuTurnPorts(options = {}) {
       deadline: stageInput.deadline,
       decisionBudgetMs: stageInput.budget && stageInput.budget.timeoutMs,
       providerAttemptLedger: stageInput.providerAttemptLedger,
+      skillCatalog: resolveSkillCatalog(stageInput.configSnapshot || null),
       deterministicResolve: (message, safeContext) => understandingCoordinator.resolveRuleBackedIntent(message, safeContext).intent,
       onEvent: (event) => emitChatEvent(state.eventInput, Object.assign({
         runtimeMode: state.runtimeDecision.runtimeMode,

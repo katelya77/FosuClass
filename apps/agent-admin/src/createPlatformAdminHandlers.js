@@ -46,6 +46,7 @@ function createPlatformAdminHandlers(options = {}) {
         pluginIds: diagnostics.pluginIds || [],
         plugins,
         configVersion: diagnostics.configVersion || "unversioned",
+        configKernel: diagnostics.configKernel || null,
         manifestVersion: diagnostics.manifestVersion || "unknown",
         packageOwnership: diagnostics.stageOwners || {},
         legacyWholeChatCallback: diagnostics.legacyWholeChatCallback === true,

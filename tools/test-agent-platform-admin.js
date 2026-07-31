@@ -42,7 +42,10 @@ async function run() {
     assert.strictEqual(topology.json.platform.runtimePackage, "@xiaofu-agent/agent-runtime");
     assert.strictEqual(topology.json.platform.protocolPackage, "@xiaofu-agent/agent-protocol");
     assert.deepStrictEqual(topology.json.platform.pluginIds, ["fosu-campus"]);
-    assert.ok(topology.json.platform.configVersion.startsWith("manifest:"));
+    // P4a：后台显示的 configVersion 必须等于发布内核真实当前快照（cfg-<env>-<seq>-<digest12>）。
+    assert.match(topology.json.platform.configVersion, /^cfg-(public|trial|dev)-\d{4,}-[0-9a-f]{12}$/);
+    assert.ok(topology.json.platform.configKernel);
+    assert.strictEqual(typeof topology.json.platform.configKernel.snapshotCount, "number");
     assert.strictEqual(topology.json.platform.plugins[0].id, "fosu-campus");
     assert.ok(topology.json.platform.plugins[0].version);
     assert.ok(topology.json.platform.packageOwnership.context);

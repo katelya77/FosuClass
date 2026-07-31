@@ -14,18 +14,31 @@ const {
   semanticScores,
   tokenizeSemantic,
 } = require("./src/semanticMemory");
+const { canonicalJson, sha256Digest } = require("./src/configKernel/canonical");
+const { createConfigKernel } = require("./src/configKernel/kernel");
+const {
+  REPOSITORY_METHODS,
+  createConfigKernelFileRepository,
+} = require("./src/configKernel/fileRepository");
+const { runConfigKernelRepositoryConformance } = require("./src/configKernel/repositoryConformance");
 
 module.exports = Object.freeze({
   CONTEXT_SCHEMA_VERSION,
   DEFAULT_CONTEXT_TOKEN_BUDGET,
+  REPOSITORY_METHODS,
   SECTION_ORDER,
   VECTOR_DIMENSIONS,
+  canonicalJson,
   cosineSimilarity,
   createAgentRuntime,
+  createConfigKernel,
+  createConfigKernelFileRepository,
   createContextAssembler,
   encodeSemanticVector,
   estimateContextTokens,
   lexicalSimilarity,
+  runConfigKernelRepositoryConformance,
   semanticScores,
+  sha256Digest,
   tokenizeSemantic,
 });
