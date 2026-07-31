@@ -100,11 +100,11 @@
 
 ### P4c — Governed MCP Runtime and Publication
 
-- [ ] `packages/mcp-runtime`：Streamable HTTP 优先、受控 stdio（白名单命令，无任意 shell）、注册、鉴权、工具发现、Schema 缓存、scope、超时取消、写确认。
-- [ ] MCP 发现的 Tool 必须进入 Manifest/权限/Schema 校验链；写操作进 confirmation/ActionReceipt 闭环。
-- [ ] Server 更新只影响新 Run；不可用必须准确降级；鉴权信息不进 Artifact/Trace/导出。
-- [ ] 收口 `tools/fosu-kb-mcp` 治理（只走受保护后台 API，不注册 publish/rollback 工具）。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4c-evidence.md`。提交：`feat(agent): add governed MCP runtime`。
+- [x] `packages/mcp-runtime`：Streamable HTTP 优先、受控 stdio（白名单命令，无任意 shell）、注册、鉴权、工具发现、Schema 缓存、scope、超时取消、写确认。
+- [x] MCP 发现的 Tool 必须进入 Manifest/权限/Schema 校验链；写操作进 confirmation/ActionReceipt 闭环。（桥接描述符 + 真实五因子一致性测试；生产激活属 P4e 按环境启用，见 evidence §1.3）
+- [x] Server 更新只影响新 Run；不可用必须准确降级；鉴权信息不进 Artifact/Trace/导出。
+- [x] 收口 `tools/fosu-kb-mcp` 治理（只走受保护后台 API，不注册 publish/rollback 工具）。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p4c-evidence.md`。提交：`feat(agent): add governed MCP runtime`。
   - _Requirements: R7.1–R7.4, R10.3_
 
 ### P4d — Versioned Hybrid RAG Runtime

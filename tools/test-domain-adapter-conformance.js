@@ -20,6 +20,7 @@ const {
 const { createSkillPublicationAdapter } = require("../packages/skill-runtime");
 const { createProviderPublicationAdapter } = require("../packages/provider-runtime");
 const { createToolPublicationAdapter } = require("../packages/tool-runtime");
+const { createMcpPublicationAdapter } = require("../packages/mcp-runtime");
 
 function tmpRoot(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `domain-conformance-${label}-`));
@@ -142,6 +143,36 @@ const DOMAINS = [
     assertChangedRuntime(runtime) {
       assert.strictEqual(runtime.minConfidence, 0.9);
       assert.deepStrictEqual(runtime.ttlOverridesMs, { session_fact: 7200000 });
+    },
+  },
+  {
+    domain: "mcp",
+    createAdapter: () => createMcpPublicationAdapter({ knownCommands: ["node"], allowInsecureHttp: true }),
+    validChange(seed) {
+      return {
+        servers: [{
+          id: "kb-remote",
+          transport: "http",
+          url: "https://mcp.example.com/mcp",
+          authEnvVar: "MCP_KB_TOKEN",
+          allowedTools: ["kb_search"],
+        }],
+      };
+    },
+    invalidPayloads(seed) {
+      return [
+        ["untrusted stdio command", { servers: [{ id: "s1", transport: "stdio", command: "bash", allowedTools: ["a"] }] }],
+        ["secret smuggled in registry", { servers: [{ id: "s1", transport: "http", url: "https://mcp.example.com", allowedTools: ["a"], apiKey: "sk-x" }] }],
+        ["writeTools outside allowedTools", { servers: [{ id: "s1", transport: "http", url: "https://mcp.example.com", allowedTools: ["a"], writeTools: ["b"] }] }],
+      ];
+    },
+    assertSeedRuntime(runtime) {
+      assert.deepStrictEqual(runtime, { servers: [] }, "seed registry = no MCP servers");
+    },
+    assertChangedRuntime(runtime) {
+      assert.strictEqual(runtime.servers.length, 1);
+      assert.strictEqual(runtime.servers[0].id, "kb-remote");
+      assert.strictEqual(runtime.servers[0].authEnvVar, "MCP_KB_TOKEN", "auth kept as reference name");
     },
   },
 ];

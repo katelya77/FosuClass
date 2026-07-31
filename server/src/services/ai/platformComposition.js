@@ -4,6 +4,7 @@ const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog, createSkillPublicationAdapter } = require("../../../../packages/skill-runtime");
 const { createToolRuntime, createToolPublicationAdapter } = require("../../../../packages/tool-runtime");
+const { createMcpPublicationAdapter, createMcpRuntime } = require("../../../../packages/mcp-runtime");
 const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
 const path = require("path");
@@ -67,11 +68,36 @@ const toolPublicationAdapter = createToolPublicationAdapter({
 const memoryPolicyAdapter = createMemoryPolicyPublicationAdapter({
   knownTtlKeys: Object.keys(memoryPolicy.DEFAULT_TTL_MS),
 });
+// P4c：MCP 域接入同一发布内核。注册表为纯声明式（鉴权只按环境变量名
+// 引用）；stdio 受信命令名集来自部署方环境变量 AGENT_MCP_TRUSTED_COMMANDS
+// （JSON：名→绝对路径），默认空集 = stdio 服务器永远不可激活（fail closed）。
+function parseTrustedCommands(raw) {
+  try {
+    const parsed = JSON.parse(String(raw || ""));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed)
+      .map(([name, value]) => [String(name || "").slice(0, 64), String(value || "")])
+      .filter(([name, value]) => name && path.isAbsolute(value)));
+  } catch (_) {
+    return {};
+  }
+}
+const mcpTrustedCommands = Object.freeze(parseTrustedCommands(process.env.AGENT_MCP_TRUSTED_COMMANDS));
+const mcpPublicationAdapter = createMcpPublicationAdapter({
+  knownCommands: Object.keys(mcpTrustedCommands),
+  allowInsecureHttp: String(process.env.AGENT_MCP_ALLOW_INSECURE_HTTP || "").toLowerCase() === "true",
+});
+const platformMcpRuntime = createMcpRuntime({
+  trustedCommands: mcpTrustedCommands,
+  allowInsecureHttp: String(process.env.AGENT_MCP_ALLOW_INSECURE_HTTP || "").toLowerCase() === "true",
+  logger: logConfigKernelEvent,
+});
 const domainAdapters = Object.freeze({
   skill: skillPublicationAdapter,
   provider: providerPublicationAdapter,
   tool: toolPublicationAdapter,
   memory: memoryPolicyAdapter,
+  mcp: mcpPublicationAdapter,
 });
 const configKernel = createConfigKernel({
   repository: createConfigKernelFileRepository({ root: configKernelRoot }),
@@ -136,11 +162,12 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
 // P4b：Provider/Tool/Memory 按快照解析，与 Skill 目录同一不变量：发布/回滚
 // 只影响新 Run；在途 Run 快照不可变；按 (environment, version) 记忆化；快照
 // 钉住的版本不可读 = 配置完整性故障，fail closed（失败结果不缓存）。
-const boundDomainRuntimeCache = { provider: new Map(), tool: new Map(), memory: new Map() };
+const boundDomainRuntimeCache = { provider: new Map(), tool: new Map(), memory: new Map(), mcp: new Map() };
 const DOMAIN_UNREADABLE_CODES = Object.freeze({
   provider: "PROVIDER_CONFIG_UNREADABLE",
   tool: "TOOL_CONFIG_UNREADABLE",
   memory: "MEMORY_POLICY_UNREADABLE",
+  mcp: "MCP_REGISTRY_UNREADABLE",
 });
 // 空 overlay 的解析结果 = 静态默认（等价 P4b 前行为），预先解析一次复用。
 const defaultDomainRuntime = Object.freeze(Object.fromEntries(Object.keys(domainAdapters).map((domain) => [
@@ -190,6 +217,9 @@ function resolveToolOverlayForSnapshot(configSnapshot) {
 }
 function resolveMemoryPolicyForSnapshot(configSnapshot) {
   return resolveDomainRuntimeForSnapshot("memory", configSnapshot);
+}
+function resolveMcpRegistryForSnapshot(configSnapshot) {
+  return resolveDomainRuntimeForSnapshot("mcp", configSnapshot);
 }
 
 function resolveSnapshotEnvironment(request) {
@@ -393,6 +423,10 @@ module.exports = {
   resolveProviderOverlayForSnapshot,
   resolveToolOverlayForSnapshot,
   resolveMemoryPolicyForSnapshot,
+  resolveMcpRegistryForSnapshot,
+  getMcpRuntime() {
+    return platformMcpRuntime;
+  },
   getExecutionPolicyTruth,
   getPlatform,
   getRunHandlers,
