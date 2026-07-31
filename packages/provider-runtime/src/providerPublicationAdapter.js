@@ -10,7 +10,8 @@
 //     maxTokens?: number        128..8192
 //     temperature?: number      0..2
 //     executionPolicy?: "strict_model_first" | "adaptive"（deterministic 保留给 public 硬护栏）
-//     baseUrlOverrides?: { deepseek?, "cloudbase-openai"? }  仅 https，禁止 IP/localhost
+//     baseUrlOverrides?: { deepseek?, "cloudbase-openai"? }  仅 https 公网 URL，且主机
+//         必须命中该 Provider 的内置白名单（后缀匹配，见 DEFAULT_ALLOWED_BASE_URL_HOSTS）
 //   }
 //
 // 安全不变量：
@@ -37,6 +38,13 @@ const DECLARATIVE_FIELDS = Object.freeze([
 ]);
 const STAGE_FIELDS = Object.freeze(["decision", "planner", "response"]);
 const BASE_URL_OVERRIDE_PROVIDERS = Object.freeze(["deepseek", "cloudbase-openai"]);
+// baseUrlOverrides 主机白名单（默认内置，部署方可在适配器 options 中按 Provider 覆盖）。
+// 后缀匹配：命中 "tcloudbasegateway.com" 允许其任意子域（环境子域名会随部署变化）。
+// 白名单存在的意义：override 只能把流量指向 Provider 自有域名族，不能把密钥发到任意主机。
+const DEFAULT_ALLOWED_BASE_URL_HOSTS = Object.freeze({
+  deepseek: Object.freeze(["api.deepseek.com"]),
+  "cloudbase-openai": Object.freeze(["tcloudbasegateway.com"]),
+});
 
 const LIMITS = Object.freeze({
   timeoutMs: Object.freeze({ min: 1000, max: 20000 }),
@@ -54,9 +62,11 @@ function safeString(value, maxLength = 240) {
   return String(value == null ? "" : value).trim().slice(0, maxLength);
 }
 
-// 深度密钥扫描：除精确的声明式白名单字段名外（如 maxTokens 这类合法字段），
-// 任何层级出现 key/token/secret 字样一律视为密钥材料。白名单是固定常量，
-// 不含任何密钥载体，因此该豁免不扩大攻击面。
+// 深度密钥扫描（纵深防御，非唯一屏障）：除精确的声明式白名单字段名外
+// （如 maxTokens 这类合法字段），递归各层出现 key/token/secret 字样一律视为密钥
+// 材料。注意：固定 Schema 子树（stageProviders/baseUrlOverrides）的第一道防线
+// 是各自的键白名单——未授权键在扫描之前已被拒绝；本扫描兜底的是值内任意深度
+// 的嵌套结构与未来新增字段。白名单是固定常量，不含任何密钥载体，豁免不扩大攻击面。
 function hasSecretField(value, allowedKeys) {
   if (!value || typeof value !== "object") return false;
   return Object.keys(value).some((key) => {
@@ -66,24 +76,40 @@ function hasSecretField(value, allowedKeys) {
   });
 }
 
-function isHttpsPublicUrl(value) {
+// 解析并归一化 override URL：https、无 userinfo、主机去尾点、禁 IP/localhost/内网后缀。
+// 返回 { host } 或 null。userinfo 必须拒绝：`https://api.deepseek.com@evil.com`
+// 的真实主机是 evil.com；尾点（"api.deepseek.com."）是 DNS 等价写法，必须归一后再比对。
+function parsePublicBaseUrl(value) {
   let url;
   try {
     url = new URL(String(value || ""));
   } catch (_) {
-    return false;
+    return null;
   }
-  if (url.protocol !== "https:") return false;
-  const host = url.hostname;
-  if (!host || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === "localhost" || host.endsWith(".local")) return false;
-  if (host.includes(":")) return false; // IPv6 字面量
-  return true;
+  if (url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  const host = String(url.hostname || "").replace(/\.+$/, "").toLowerCase();
+  if (!host || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === "localhost" || host.endsWith(".local")) return null;
+  if (host.includes(":")) return null; // IPv6 字面量
+  return { host };
+}
+
+function hostMatchesWhitelist(host, allowedHosts) {
+  return allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
 }
 
 function createProviderPublicationAdapter(options = {}) {
   const knownProviders = new Set((Array.isArray(options.knownProviderIds) ? options.knownProviderIds : [])
     .map((id) => safeString(id, 64)).filter(Boolean));
   if (!knownProviders.size) throw codedError("PROVIDER_PUBLICATION_KNOWN_SET_REQUIRED", "known provider ids are required");
+  // 主机白名单：options.allowedBaseUrlHosts 可按 Provider 覆盖内置默认（数组元素为主机后缀）。
+  const allowedBaseUrlHosts = {};
+  BASE_URL_OVERRIDE_PROVIDERS.forEach((id) => {
+    const override = options.allowedBaseUrlHosts && options.allowedBaseUrlHosts[id];
+    const hosts = (Array.isArray(override) && override.length ? override : DEFAULT_ALLOWED_BASE_URL_HOSTS[id])
+      .map((host) => String(host || "").trim().replace(/\.+$/, "").toLowerCase()).filter(Boolean);
+    allowedBaseUrlHosts[id] = Object.freeze(hosts);
+  });
 
   function validateProviderId(value, field, errors, { allowMock = true } = {}) {
     const id = safeString(value, 64);
@@ -152,8 +178,13 @@ function createProviderPublicationAdapter(options = {}) {
             return;
           }
           const url = safeString(payload.baseUrlOverrides[id], 240);
-          if (!isHttpsPublicUrl(url)) {
-            errors.push(`baseUrlOverrides.${id} must be a public https URL (no IP literal/localhost)`);
+          const parsed = parsePublicBaseUrl(url);
+          if (!parsed) {
+            errors.push(`baseUrlOverrides.${id} must be a public https URL (no userinfo/IP literal/localhost)`);
+            return;
+          }
+          if (!hostMatchesWhitelist(parsed.host, allowedBaseUrlHosts[id])) {
+            errors.push(`baseUrlOverrides.${id} host is not in the allowed set for ${id}`);
             return;
           }
           baseUrlOverrides[id] = url;

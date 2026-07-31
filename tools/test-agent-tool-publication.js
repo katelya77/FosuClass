@@ -45,6 +45,10 @@ function testValidation() {
     ["safety tamper field", { tools: [{ id: "create_course_reminder", safety: { operation: "read" } }] }],
     ["non-declarative top field", { tools: [], backdoor: true }],
     ["invalid id shape", { tools: [{ id: "DROP TABLES;--" }] }],
+    // P4b 审查 Important #1 回归：空数组在下游「!modes.length = 全模式」语义下
+    // 会把静态受限工具加宽到全模式；空数组必须拒绝（省略 = 继承静态）。
+    ["empty runtimeModes would widen static-restricted tool", { tools: [{ id: "search_campus_place", runtimeModes: [] }] }],
+    ["empty runtimeModes on all-modes tool", { tools: [{ id: "get_teaching_week", runtimeModes: [] }] }],
   ];
   cases.forEach(([name, payload]) => {
     const report = adapter.validate(payload);

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // P4b：Provider 发布适配器专项（tasks.md P4b「Provider 域」验收）。
 //   - 声明式校验：未知 Provider/越界预算/非法 URL/非白名单字段一律拒绝；
-//   - 密钥永远不进 Artifact：任意深度的 key/token/secret 字段拒绝；
+//   - baseUrlOverrides 主机白名单：userinfo/尾点混淆/白名单外主机一律拒绝，
+//     Provider 自有域名族子域与尾点归一化后接受；
+//   - 密钥永远不进 Artifact：深度扫描兜底（固定 Schema 子树先由键白名单拒绝）；
 //   - deterministic 策略不可发布（保留给 public 硬护栏）；
 //   - overlayToRuntimeConfig 只映射白名单 AI_* 键，永不产生密钥键；
 //   - public 硬护栏最后应用：任何 overlay 合并结果在 public 环境仍 mock/tool-only；
@@ -34,10 +36,14 @@ function testValidation() {
     ["timeout above ceiling", { timeoutMs: 60000 }],
     ["maxTokens out of range", { maxTokens: 16384 }],
     ["temperature out of range", { temperature: 5 }],
-    ["http baseUrl", { baseUrlOverrides: { deepseek: "http://api.example.com" } }],
+    ["http baseUrl", { baseUrlOverrides: { deepseek: "http://api.deepseek.com" } }],
     ["ip literal baseUrl", { baseUrlOverrides: { deepseek: "https://127.0.0.1:8443/v1" } }],
     ["localhost baseUrl", { baseUrlOverrides: { deepseek: "https://localhost/v1" } }],
-    ["non-overridable provider baseUrl", { baseUrlOverrides: { coze: "https://api.example.com" } }],
+    ["userinfo baseUrl (real host after @)", { baseUrlOverrides: { deepseek: "https://api.deepseek.com@evil.example.com" } }],
+    ["lookalike suffix host", { baseUrlOverrides: { deepseek: "https://api.deepseek.com.evil.example.com" } }],
+    ["host outside deepseek whitelist", { baseUrlOverrides: { deepseek: "https://openapi.example.com" } }],
+    ["host outside cloudbase whitelist", { baseUrlOverrides: { "cloudbase-openai": "https://openapi.example.com" } }],
+    ["non-overridable provider baseUrl", { baseUrlOverrides: { coze: "https://api.deepseek.com" } }],
     ["deterministic policy not publishable", { executionPolicy: "deterministic" }],
     ["unknown policy", { executionPolicy: "yolo" }],
     ["non-declarative field", { adminBackdoor: true }],
@@ -63,6 +69,14 @@ function testValidation() {
     baseUrlOverrides: { deepseek: "https://api.deepseek.com" },
   });
   assert.strictEqual(ok.ok, true, `valid overlay must pass: ${ok.errors}`);
+
+  // 白名单边界：Provider 自有域名族的子域接受；尾点是 DNS 等价写法，归一化后接受。
+  const subdomainOk = adapter.validate({
+    baseUrlOverrides: { "cloudbase-openai": "https://cloud1-abc.api.tcloudbasegateway.com/v1/ai/cloudbase" },
+  });
+  assert.strictEqual(subdomainOk.ok, true, `provider subdomain of whitelisted host must pass: ${subdomainOk.errors}`);
+  const trailingDotOk = adapter.validate({ baseUrlOverrides: { deepseek: "https://api.deepseek.com./v1" } });
+  assert.strictEqual(trailingDotOk.ok, true, `trailing-dot host must normalize to the whitelisted host: ${trailingDotOk.errors}`);
   console.log("✓ declarative validation: unknown/out-of-range/secret/deterministic all rejected");
 }
 
@@ -76,7 +90,7 @@ function testOverlayMapping() {
     maxTokens: 2048,
     temperature: 0.3,
     executionPolicy: "adaptive",
-    baseUrlOverrides: { deepseek: "https://api.deepseek.com", "cloudbase-openai": "https://openapi.example.com" },
+    baseUrlOverrides: { deepseek: "https://api.deepseek.com", "cloudbase-openai": "https://cloud1-abc.api.tcloudbasegateway.com/v1/ai/cloudbase" },
   });
   assert.strictEqual(updates.AI_PROVIDER_CHAIN, "deepseek,mock");
   assert.strictEqual(updates.AI_DECISION_PROVIDER, "deepseek");
@@ -90,7 +104,7 @@ function testOverlayMapping() {
   assert.strictEqual(updates.AI_TEMPERATURE, "0.3");
   assert.strictEqual(updates.AI_EXECUTION_POLICY, "adaptive");
   assert.strictEqual(updates.AI_BASE_URL, "https://api.deepseek.com");
-  assert.strictEqual(updates.CLOUDBASE_OPENAI_BASE_URL, "https://openapi.example.com");
+  assert.strictEqual(updates.CLOUDBASE_OPENAI_BASE_URL, "https://cloud1-abc.api.tcloudbasegateway.com/v1/ai/cloudbase");
   // 密钥键永不出现：映射输出键集合必须是固定白名单（白名单由人工审定，
   // 不含任何密钥载体；AI_MAX_TOKENS 等合法字段不算密钥）。
   const ALLOWED_KEYS = new Set([

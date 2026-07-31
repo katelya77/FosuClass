@@ -4,6 +4,10 @@
 //   - 发布前测试：termScopeTtlMs 不得短于 pendingTtlMs；
 //   - 策略真实生效：minConfidence 改变自动持久化门槛、ttlOverridesMs 改变
 //     过期时间、maxRetrieve 改变检索上限（server 侧 memory 模块真实消费）；
+//   - P4b 审查跟进回归：
+//       Important #2：ttlOverridesMs 到达 commit 写路径（落盘 TTL 真变）；
+//       Important #3：maxRetrieve 到达 prepareTurnSnapshot 的 memoryLimit；
+//       Minor #8：explicit_user 显式偏好豁免 minConfidence（判定与归并两道门）；
 //   - 快照绑定隔离：发布只影响新快照；在途 Run 持有的旧快照策略不变；
 //   - 策略接口不携带用户记忆内容（描述符只含有界数值）。
 const assert = require("node:assert");
@@ -14,6 +18,7 @@ const path = require("node:path");
 const { createMemoryPolicyPublicationAdapter } = require("../packages/agent-runtime");
 const memoryPolicy = require("../server/src/services/ai/memory/memoryPolicy");
 const { retrieveUserMemories } = require("../server/src/services/ai/memory/memoryRetriever");
+const { UserMemoryStore } = require("../server/src/services/ai/memory/userMemory");
 
 const KNOWN_KEYS = Object.keys(memoryPolicy.DEFAULT_TTL_MS);
 
@@ -107,6 +112,96 @@ function testPolicyActuallyApplies() {
   console.log("✓ published policy actually changes persistence threshold / TTL / retrieval cap");
 }
 
+// P4b 审查 Important #2 回归：发布策略的 ttlOverridesMs 必须到达 commit 写路径。
+// 此前 userMemory.commit 计算 ttlMs 时丢弃 input.policy，落盘恒为静态 TTL。
+function testWritePathTtlApplies() {
+  const principal = { authenticated: true, userIdHash: "p4b-review" };
+  const candidate = {
+    key: "campus", value: "江湾校区", confidence: 0.99, source: "explicit_user", scope: "user",
+  };
+  function capturingService(calls) {
+    return {
+      applyMutationPlan(input) {
+        calls.push(input);
+        return {
+          persisted: true,
+          reason: "applied",
+          revision: 1,
+          items: input.entries.map((entry) => ({ key: entry.key, normalizedValue: entry.normalizedValue })),
+        };
+      },
+    };
+  }
+
+  const defaultCalls = [];
+  new UserMemoryStore({ preferenceService: capturingService(defaultCalls) }).commit({
+    principal, memoryMode: "cloud_sync", candidates: [candidate],
+  });
+  assert.strictEqual(defaultCalls.length, 1, "baseline commit reaches the mutation plan");
+  assert.strictEqual(defaultCalls[0].entries[0].ttlMs, memoryPolicy.DEFAULT_TTL_MS.campus,
+    "no policy → static default TTL on the write path");
+
+  const policyCalls = [];
+  new UserMemoryStore({ preferenceService: capturingService(policyCalls) }).commit({
+    principal, memoryMode: "cloud_sync", candidates: [candidate],
+    policy: { ttlOverridesMs: { campus: 3600000 } },
+  });
+  assert.strictEqual(policyCalls.length, 1, "policy commit reaches the mutation plan");
+  assert.strictEqual(policyCalls[0].entries[0].ttlMs, 3600000,
+    "published ttlOverridesMs must drive the on-disk TTL");
+  console.log("✓ review Important #2: ttlOverridesMs reaches the commit write path");
+}
+
+// P4b 审查 Important #3 回归：发布策略的 maxRetrieve 必须到达生产检索快照路径
+// （prepareTurnSnapshot 的 memoryLimit）。此前调用方硬编码 limit=5，旋钮不可达。
+function testMaxRetrieveReachesSnapshotPath() {
+  const principal = { authenticated: true, userIdHash: "p4b-review" };
+  const captured = [];
+  const store = new UserMemoryStore({
+    preferenceService: {
+      prepareTurnSnapshot(input) {
+        captured.push(input);
+        return { allItems: [], values: {}, items: [], episodes: [], revision: 0 };
+      },
+    },
+  });
+  const turn = { principal, memoryMode: "cloud_sync", goal: "查课表" };
+
+  store.prepareTurnSnapshot(Object.assign({}, turn, { policy: { maxRetrieve: 2 } }));
+  assert.strictEqual(captured[0].memoryLimit, 2, "published maxRetrieve drives the snapshot memoryLimit");
+
+  captured.length = 0;
+  store.prepareTurnSnapshot(turn);
+  assert.strictEqual(captured[0].memoryLimit, 5, "static default preserved without policy");
+
+  captured.length = 0;
+  store.prepareTurnSnapshot(Object.assign({}, turn, { limit: 4, policy: { maxRetrieve: 2 } }));
+  assert.strictEqual(captured[0].memoryLimit, 4, "explicit caller limit takes precedence over policy");
+  console.log("✓ review Important #3: maxRetrieve reaches prepareTurnSnapshot memoryLimit");
+}
+
+// P4b 审查 Minor #8 回归：显式用户指令（解析器置信 0.95）豁免发布的 minConfidence
+// 门槛——判定门（mayAutoPersistUserMemory）与归并门（filterAndMergeCandidates）
+// 都不得拦截；同门槛下推断型候选仍被拒（门槛对推断语义保持有效）。
+function testExplicitUserExemptFromMinConfidence() {
+  const strictPolicy = { minConfidence: 0.99 };
+  const explicitCandidate = {
+    key: "preferredName", value: "小明", confidence: 0.95, source: "explicit_user", scope: "user",
+  };
+  assert.strictEqual(memoryPolicy.mayAutoPersistUserMemory("cloud_sync", explicitCandidate, strictPolicy), true,
+    "explicit_user exempt from the published minConfidence gate");
+  assert.strictEqual(memoryPolicy.mayAutoPersistUserMemory("cloud_sync",
+    { key: "preferredName", value: "小明", confidence: 0.95, source: "deterministic", scope: "user" }, strictPolicy), false,
+    "inferred candidates still honor the published threshold");
+
+  const merged = memoryPolicy.filterAndMergeCandidates([explicitCandidate], {
+    memoryMode: "cloud_sync", policy: strictPolicy,
+  });
+  assert.strictEqual(merged.length, 1, "explicit candidate survives candidate merge under a stricter threshold");
+  assert.strictEqual(merged[0].durable, true, "explicit candidate stays durable under a stricter threshold");
+  console.log("✓ review Minor #8: explicit_user exempt at both decision and merge gates");
+}
+
 function testSnapshotBindingIsolation() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
@@ -159,5 +254,8 @@ function testSnapshotBindingIsolation() {
 testValidation();
 testPrePublishGuard();
 testPolicyActuallyApplies();
+testWritePathTtlApplies();
+testMaxRetrieveReachesSnapshotPath();
+testExplicitUserExemptFromMinConfidence();
 testSnapshotBindingIsolation();
 console.log("\ntest-agent-memory-publication: PASS");

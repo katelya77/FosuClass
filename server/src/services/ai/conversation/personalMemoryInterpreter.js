@@ -175,6 +175,7 @@ function resolvePersonalMemoryTurn(input = {}) {
   const commands = parsePersonalMemoryCommands(message, {
     memoryMode,
     autoMemoryEnabled,
+    policy: input.policy || null,
   });
   const preferencePatch = {};
   commands.filter((item) => item.persist).forEach((item) => {
