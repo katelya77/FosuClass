@@ -202,15 +202,17 @@ function testExplicitUserExemptFromMinConfidence() {
   console.log("✓ review Minor #8: explicit_user exempt at both decision and merge gates");
 }
 
-function testSnapshotBindingIsolation() {
+async function testSnapshotBindingIsolation() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
   const composition = require("../server/src/services/ai/platformComposition");
+  // P5a：require 期不再种子，先 await init（file 模式 = 幂等种子）。
+  await composition.platformReady();
   const kernel = composition.getConfigKernel();
 
   // 种子：空策略（≡ P4b 前行为）
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
-  assert.deepStrictEqual(composition.resolveMemoryPolicyForSnapshot(snapshotV1), {},
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
+  assert.deepStrictEqual(await composition.resolveMemoryPolicyForSnapshot(snapshotV1), {},
     "seed snapshot resolves to empty policy (static defaults)");
 
   // 发布 v2：minConfidence 0.95 + campus TTL 1 小时
@@ -221,19 +223,19 @@ function testSnapshotBindingIsolation() {
     payload: { minConfidence: 0.95, ttlOverridesMs: { campus: 3600000 } },
     actor: "p4b-test",
   };
-  kernel.saveDraft(draftInput);
-  const validation = kernel.validateDraft(draftInput);
+  await kernel.saveDraft(draftInput);
+  const validation = await kernel.validateDraft(draftInput);
   assert.strictEqual(validation.ok, true, `policy draft validates: ${validation.errors}`);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
-  kernel.publishDraft(draftInput);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
+  await kernel.publishDraft(draftInput);
 
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
-  const boundPolicy = composition.resolveMemoryPolicyForSnapshot(snapshotV2);
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
+  const boundPolicy = await composition.resolveMemoryPolicyForSnapshot(snapshotV2);
   assert.strictEqual(boundPolicy.minConfidence, 0.95, "new snapshot binds the published policy");
   assert.deepStrictEqual(boundPolicy.ttlOverridesMs, { campus: 3600000 });
 
   // 在途 Run：v1 快照仍解析空策略（发布不影响在途）——同一进程两次解析互不影响
-  const inFlightPolicy = composition.resolveMemoryPolicyForSnapshot(snapshotV1);
+  const inFlightPolicy = await composition.resolveMemoryPolicyForSnapshot(snapshotV1);
   assert.deepStrictEqual(inFlightPolicy, {}, "in-flight snapshot keeps static defaults");
   const candidate = { key: "campus", confidence: 0.9, scope: "user" };
   assert.strictEqual(memoryPolicy.mayAutoPersistUserMemory("cloud_sync", candidate, inFlightPolicy), true,
@@ -242,20 +244,25 @@ function testSnapshotBindingIsolation() {
     "new run behavior follows the published policy");
 
   // rollback：新快照回到空策略
-  kernel.rollback({ domain: "memory", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
+  await kernel.rollback({ domain: "memory", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
   assert.deepStrictEqual(
-    composition.resolveMemoryPolicyForSnapshot(kernel.getCurrentSnapshot("trial")),
+    await composition.resolveMemoryPolicyForSnapshot(await kernel.getCurrentSnapshot("trial")),
     {},
     "rollback restores static defaults"
   );
   console.log("✓ snapshot binding isolation: publish → new-run policy → in-flight stability → rollback");
 }
 
-testValidation();
-testPrePublishGuard();
-testPolicyActuallyApplies();
-testWritePathTtlApplies();
-testMaxRetrieveReachesSnapshotPath();
-testExplicitUserExemptFromMinConfidence();
-testSnapshotBindingIsolation();
-console.log("\ntest-agent-memory-publication: PASS");
+(async () => {
+  testValidation();
+  testPrePublishGuard();
+  testPolicyActuallyApplies();
+  testWritePathTtlApplies();
+  testMaxRetrieveReachesSnapshotPath();
+  testExplicitUserExemptFromMinConfidence();
+  await testSnapshotBindingIsolation();
+  console.log("\ntest-agent-memory-publication: PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

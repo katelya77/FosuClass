@@ -139,14 +139,16 @@ function testFiveFactorIntegration() {
   console.log("✓ five-factor intersection: overlay only narrows runtimeToolIds; manifest/skill factors still gate");
 }
 
-function testCompositionRoundtrip() {
+async function testCompositionRoundtrip() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
   const composition = require("../server/src/services/ai/platformComposition");
+  // P5a：require 期不再种子，先 await init（file 模式 = 幂等种子）。
+  await composition.platformReady();
   const kernel = composition.getConfigKernel();
 
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
-  const baselineOverlay = composition.resolveToolOverlayForSnapshot(snapshotV1);
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
+  const baselineOverlay = await composition.resolveToolOverlayForSnapshot(snapshotV1);
   assert.deepStrictEqual(baselineOverlay, { disabled: [], modeOverrides: {} }, "seed overlay = static defaults");
 
   // 挑一个真实插件工具验证组合级闭环（静态描述符集由 platformToolRuntime 注入）
@@ -158,27 +160,32 @@ function testCompositionRoundtrip() {
     payload: { tools: [{ id: realToolId, enabled: false }] },
     actor: "p4b-test",
   };
-  kernel.saveDraft(draftInput);
-  const validation = kernel.validateDraft(draftInput);
+  await kernel.saveDraft(draftInput);
+  const validation = await kernel.validateDraft(draftInput);
   assert.strictEqual(validation.ok, true, `real tool overlay validates: ${validation.errors}`);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
-  kernel.publishDraft(draftInput);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
+  await kernel.publishDraft(draftInput);
 
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
-  const bound = composition.resolveToolOverlayForSnapshot(snapshotV2);
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
+  const bound = await composition.resolveToolOverlayForSnapshot(snapshotV2);
   assert.deepStrictEqual(bound.disabled, [realToolId], "new snapshot binds the published disable");
 
-  const inFlight = composition.resolveToolOverlayForSnapshot(snapshotV1);
+  const inFlight = await composition.resolveToolOverlayForSnapshot(snapshotV1);
   assert.deepStrictEqual(inFlight, { disabled: [], modeOverrides: {} }, "in-flight snapshot unaffected");
 
-  kernel.rollback({ domain: "tool", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
-  const restored = composition.resolveToolOverlayForSnapshot(kernel.getCurrentSnapshot("trial"));
+  await kernel.rollback({ domain: "tool", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
+  const restored = await composition.resolveToolOverlayForSnapshot(await kernel.getCurrentSnapshot("trial"));
   assert.deepStrictEqual(restored, { disabled: [], modeOverrides: {} }, "rollback restores static defaults");
   console.log("✓ composition roundtrip: publish → snapshot binding → in-flight stability → rollback");
 }
 
-testValidation();
-testPrePublishGuard();
-testFiveFactorIntegration();
-testCompositionRoundtrip();
-console.log("\ntest-agent-tool-publication: PASS");
+(async () => {
+  testValidation();
+  testPrePublishGuard();
+  testFiveFactorIntegration();
+  await testCompositionRoundtrip();
+  console.log("\ntest-agent-tool-publication: PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

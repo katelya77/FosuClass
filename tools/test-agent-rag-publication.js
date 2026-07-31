@@ -103,12 +103,14 @@ async function testCompositionRoundtrip() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
   const composition = require("../server/src/services/ai/platformComposition");
+  // P5a：require 期不再种子，先 await init（file 模式 = 幂等种子）。
+  await composition.platformReady();
   const kernel = composition.getConfigKernel();
   const indexService = composition.getRagIndexService();
 
   // 种子：内置示例 KB 绑定 v1；异步构建后真实可查
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
-  const seedArtifact = composition.resolveRagArtifactForSnapshot(snapshotV1);
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
+  const seedArtifact = await composition.resolveRagArtifactForSnapshot(snapshotV1);
   assert.strictEqual(seedArtifact.kbId, "platform-example", "seed = builtin read-only example KB");
   assert.strictEqual(await indexService.drainQueueForTest(), true, "seed index builds");
   const seedQuery = await composition.queryRagForSnapshot(snapshotV1, { query: "how does publish and rollback work" });
@@ -133,19 +135,19 @@ async function testCompositionRoundtrip() {
     },
     actor: "p4d-test",
   };
-  kernel.saveDraft(draftInput);
-  assert.strictEqual(kernel.validateDraft(draftInput).ok, true);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
+  await kernel.saveDraft(draftInput);
+  assert.strictEqual((await kernel.validateDraft(draftInput)).ok, true);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
 
   // 草稿不可见：发布前查询仍只见到 v1 内容
-  const beforePublish = await composition.queryRagForSnapshot(kernel.getCurrentSnapshot("trial"), { query: "run resume cursor reconnect" });
+  const beforePublish = await composition.queryRagForSnapshot(await kernel.getCurrentSnapshot("trial"), { query: "run resume cursor reconnect" });
   assert.ok(beforePublish.hits.every((hit) => hit.docId !== "run-recovery"), "draft content invisible before publish");
   assert.strictEqual(fs.existsSync(path.join(root, "rag-indexes", "trial", "platform-example", "v2.json")), false, "no index for the draft");
 
-  kernel.publishDraft(draftInput);
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
+  await kernel.publishDraft(draftInput);
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
   assert.notStrictEqual(snapshotV2.configVersion, snapshotV1.configVersion);
-  composition.resolveRagArtifactForSnapshot(snapshotV2); // 触发 v2 构建
+  await composition.resolveRagArtifactForSnapshot(snapshotV2); // 触发 v2 构建
   assert.strictEqual(await indexService.drainQueueForTest(), true, "v2 index builds");
   const afterPublish = await composition.queryRagForSnapshot(snapshotV2, { query: "run resume cursor reconnect" });
   assert.strictEqual(afterPublish.hits[0].docId, "run-recovery", "published content becomes queryable");
@@ -157,8 +159,8 @@ async function testCompositionRoundtrip() {
   assert.ok(inFlight.hits.every((hit) => hit.docId !== "run-recovery"), "in-flight content unchanged");
 
   // rollback：新快照回钉 v1，查询恢复种子内容
-  kernel.rollback({ domain: "rag", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4d-test" });
-  const snapshotV3 = kernel.getCurrentSnapshot("trial");
+  await kernel.rollback({ domain: "rag", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4d-test" });
+  const snapshotV3 = await kernel.getCurrentSnapshot("trial");
   const rolledBack = await composition.queryRagForSnapshot(snapshotV3, { query: "run resume cursor reconnect" });
   assert.strictEqual(rolledBack.servedVersion, 1, "rollback restores the verified old index");
   assert.ok(rolledBack.hits.every((hit) => hit.docId !== "run-recovery"), "rollback content matches the old version");

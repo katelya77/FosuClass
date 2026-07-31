@@ -14,9 +14,10 @@
 // - seed 只初始化空环境或升级 seed-origin 版本；admin 发布的版本不被种子覆盖。
 //
 // 并发假设（single-writer）：publish/rollback 的 read-modify-write 与版本号分配
-// 无跨实例锁。单进程 integrated 模式内全部同步执行、无交错（安全）；多实例共享
-// 同一存储 root 会丢更新。P5a 的 PostgreSQL 适配器必须以事务/条件写保证同等
-// 语义（conformance 套件会约束），在此之前 standalone 部署必须单写者。
+// 无跨实例锁。P5a 起内核方法全部为 async：文件适配器的同步返回被 await 透明
+// 容忍（单进程 integrated 模式内仍无交错，安全）；PostgreSQL 适配器在每个写
+// 方法事务内取 pg_advisory_xact_lock，把单写互斥提升到数据库级。跨进程的
+// 内核级 read-modify-write 序列仍要求 single-writer 部署（锁粒度为单写方法）。
 
 const { jsonClone, sha256Digest } = require("./canonical");
 const { codedError } = require("./errors");
@@ -74,21 +75,26 @@ function createConfigKernel(options = {}) {
   }
 
   function audit(entry) {
+    // 审计失败不得翻转业务操作：同步抛（文件适配器）与异步拒绝（PG 适配器）
+    // 都降级为告警日志。
     try {
-      repository.appendAudit(Object.assign({ at: now() }, entry));
+      Promise.resolve(repository.appendAudit(Object.assign({ at: now() }, entry))).catch((error) => {
+        logger({ level: "warn", event: "config-kernel-audit-failed", code: error && error.code });
+      });
     } catch (error) {
       logger({ level: "warn", event: "config-kernel-audit-failed", code: error && error.code });
     }
   }
 
-  function composeSnapshot(environment, pointers) {
+  async function composeSnapshot(environment, pointers) {
     const artifacts = {};
-    Object.keys(pointers.artifacts || {}).sort().forEach((key) => {
+    const keys = Object.keys(pointers.artifacts || {}).sort();
+    for (const key of keys) {
       const version = pointers.artifacts[key];
       const separator = key.indexOf(":");
       const domain = key.slice(0, separator);
       const artifactId = key.slice(separator + 1);
-      const doc = repository.getVersion(domain, artifactId, environment, version);
+      const doc = await repository.getVersion(domain, artifactId, environment, version);
       if (!doc) {
         throw codedError("CONFIG_KERNEL_VERSION_MISSING", `published version ${key}#${version} is missing`);
       }
@@ -103,7 +109,7 @@ function createConfigKernel(options = {}) {
         entry.summary = adapter.composeSnapshotEntry(doc) || null;
       }
       artifacts[key] = entry;
-    });
+    }
     const seq = Number(pointers.seq) || 0;
     const configVersion = `cfg-${environment}-${String(seq).padStart(4, "0")}-${sha256Digest(artifacts).slice(0, 12)}`;
     const content = {
@@ -116,16 +122,16 @@ function createConfigKernel(options = {}) {
     return Object.assign({}, content, { digest: sha256Digest(content) });
   }
 
-  function activateSnapshot(environment, snapshot) {
-    repository.putSnapshot(snapshot);
-    repository.writeCurrentRef(environment, snapshot.configVersion);
-    repository.writeLkg(environment, snapshot);
+  async function activateSnapshot(environment, snapshot) {
+    await repository.putSnapshot(snapshot);
+    await repository.writeCurrentRef(environment, snapshot.configVersion);
+    await repository.writeLkg(environment, snapshot);
     return snapshot;
   }
 
-  function publishVersion(environment, draft, actor, origin) {
+  async function publishVersion(environment, draft, actor, origin) {
     const key = `${draft.domain}:${draft.artifactId}`;
-    const existing = repository.listVersions(draft.domain, draft.artifactId, environment);
+    const existing = await repository.listVersions(draft.domain, draft.artifactId, environment);
     const version = existing.length ? existing[existing.length - 1] + 1 : 1;
     const payload = jsonClone(draft.payload);
     const content = {
@@ -141,13 +147,13 @@ function createConfigKernel(options = {}) {
       createdBy: String(actor || "system").slice(0, 120),
     };
     const doc = Object.assign({}, content, { digest: sha256Digest(content) });
-    repository.putVersion(doc);
-    const pointers = repository.readPointers(environment);
+    await repository.putVersion(doc);
+    const pointers = await repository.readPointers(environment);
     pointers.artifacts = Object.assign({}, pointers.artifacts, { [key]: version });
     pointers.seq = Number(pointers.seq || 0) + 1;
     pointers.updatedAt = now();
-    repository.writePointers(pointers);
-    const snapshot = activateSnapshot(environment, composeSnapshot(environment, pointers));
+    await repository.writePointers(pointers);
+    const snapshot = await activateSnapshot(environment, await composeSnapshot(environment, pointers));
     audit({
       op: origin === "seed" ? "seed.publish" : "publish",
       domain: draft.domain,
@@ -164,7 +170,7 @@ function createConfigKernel(options = {}) {
   return Object.freeze({
     environments: Object.freeze(environments.slice()),
 
-    saveDraft(input = {}) {
+    async saveDraft(input = {}) {
       const environment = requireEnvironment(input.environment);
       const adapter = requireAdapter(input.domain);
       const artifactId = String(input.artifactId || "");
@@ -175,7 +181,7 @@ function createConfigKernel(options = {}) {
       // 草稿必须可 JSON 持久化（声明式；拒绝函数/undefined 字段偷渡执行内容）。
       assertDeclarative(input.payload, "");
       const payload = jsonClone(input.payload);
-      const published = repository.readPointers(environment).artifacts[`${input.domain}:${artifactId}`] || 0;
+      const published = (await repository.readPointers(environment)).artifacts[`${input.domain}:${artifactId}`] || 0;
       const draft = {
         domain: String(input.domain),
         artifactId,
@@ -189,20 +195,20 @@ function createConfigKernel(options = {}) {
         validation: null,
         test: null,
       };
-      repository.putDraft(draft);
+      await repository.putDraft(draft);
       audit({ op: "draft.save", domain: draft.domain, artifactId, environment, actor: draft.updatedBy, result: "ok" });
       return draft;
     },
 
-    getDraft(input = {}) {
+    async getDraft(input = {}) {
       const environment = requireEnvironment(input.environment);
       return repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
     },
 
-    validateDraft(input = {}) {
+    async validateDraft(input = {}) {
       const environment = requireEnvironment(input.environment);
       const adapter = requireAdapter(input.domain);
-      const draft = repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
+      const draft = await repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
       if (!draft) throw codedError("CONFIG_KERNEL_DRAFT_NOT_FOUND");
       const report = adapter.validate(draft.payload) || {};
       const ok = report.ok === true;
@@ -213,7 +219,7 @@ function createConfigKernel(options = {}) {
         by: String(input.actor || "admin").slice(0, 120),
       };
       draft.test = null;
-      repository.putDraft(draft);
+      await repository.putDraft(draft);
       audit({
         op: "draft.validate",
         domain: draft.domain,
@@ -226,10 +232,10 @@ function createConfigKernel(options = {}) {
       return Object.freeze({ ok, errors: draft.validation.errors.slice(), normalized: ok && report.normalized ? jsonClone(report.normalized) : null });
     },
 
-    testDraft(input = {}) {
+    async testDraft(input = {}) {
       const environment = requireEnvironment(input.environment);
       const adapter = requireAdapter(input.domain);
-      const draft = repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
+      const draft = await repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
       if (!draft) throw codedError("CONFIG_KERNEL_DRAFT_NOT_FOUND");
       if (!draft.validation || draft.validation.ok !== true) {
         throw codedError("CONFIG_KERNEL_VALIDATION_REQUIRED", "draft must pass validation before testing");
@@ -246,7 +252,7 @@ function createConfigKernel(options = {}) {
         at: now(),
         by: String(input.actor || "admin").slice(0, 120),
       };
-      repository.putDraft(draft);
+      await repository.putDraft(draft);
       audit({
         op: "draft.test",
         domain: draft.domain,
@@ -259,9 +265,9 @@ function createConfigKernel(options = {}) {
       return Object.freeze({ ok, results: draft.test.results });
     },
 
-    publishDraft(input = {}) {
+    async publishDraft(input = {}) {
       const environment = requireEnvironment(input.environment);
-      const draft = repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
+      const draft = await repository.getDraft(String(input.domain), String(input.artifactId || ""), environment);
       if (!draft) throw codedError("CONFIG_KERNEL_DRAFT_NOT_FOUND");
       if (!draft.validation || draft.validation.ok !== true) {
         throw codedError("CONFIG_KERNEL_VALIDATION_REQUIRED", "draft must pass validation before publish");
@@ -269,30 +275,30 @@ function createConfigKernel(options = {}) {
       if (!draft.test || draft.test.ok !== true) {
         throw codedError("CONFIG_KERNEL_TEST_REQUIRED", "draft must pass testing before publish");
       }
-      const outcome = publishVersion(environment, draft, input.actor, "admin");
+      const outcome = await publishVersion(environment, draft, input.actor, "admin");
       return Object.freeze({ version: outcome.version, configVersion: outcome.configVersion });
     },
 
-    rollback(input = {}) {
+    async rollback(input = {}) {
       const environment = requireEnvironment(input.environment);
       const domain = String(input.domain);
       const artifactId = String(input.artifactId || "");
       const toVersion = Number(input.toVersion);
       // 只有已发布版本可被回滚：版本文档只由 publish 产生，存在即已验证。
-      const doc = repository.getVersion(domain, artifactId, environment, toVersion);
+      const doc = await repository.getVersion(domain, artifactId, environment, toVersion);
       if (!doc) {
         throw codedError("CONFIG_KERNEL_ROLLBACK_TARGET_NOT_FOUND", "rollback target must be a published version");
       }
       const key = `${domain}:${artifactId}`;
-      const pointers = repository.readPointers(environment);
+      const pointers = await repository.readPointers(environment);
       if (!pointers.artifacts[key]) {
         throw codedError("CONFIG_KERNEL_ROLLBACK_TARGET_NOT_FOUND", "artifact has no publication history");
       }
       pointers.artifacts = Object.assign({}, pointers.artifacts, { [key]: doc.version });
       pointers.seq = Number(pointers.seq || 0) + 1;
       pointers.updatedAt = now();
-      repository.writePointers(pointers);
-      const snapshot = activateSnapshot(environment, composeSnapshot(environment, pointers));
+      await repository.writePointers(pointers);
+      const snapshot = await activateSnapshot(environment, await composeSnapshot(environment, pointers));
       audit({
         op: "rollback",
         domain,
@@ -308,20 +314,20 @@ function createConfigKernel(options = {}) {
 
     // 新 Run 的绑定入口：读取当前不可变快照。读取/校验失败回退 LKG；
     // 从未初始化（无 current 且无 LKG）返回 null，由调用方决定保底行为。
-    getCurrentSnapshot(environment) {
+    async getCurrentSnapshot(environment) {
       const env = requireEnvironment(environment);
       let ref = null;
       try {
-        ref = repository.readCurrentRef(env);
+        ref = await repository.readCurrentRef(env);
         if (ref && ref.configVersion) {
-          const snapshot = repository.getSnapshot(env, ref.configVersion);
+          const snapshot = await repository.getSnapshot(env, ref.configVersion);
           if (snapshot) return Object.freeze(jsonClone(snapshot));
         }
       } catch (error) {
         logger({ level: "warn", event: "config-kernel-current-unreadable", environment: env, code: error && error.code });
       }
       try {
-        const lkg = repository.readLkg(env);
+        const lkg = await repository.readLkg(env);
         if (lkg) {
           logger({ level: "warn", event: "config-kernel-serving-lkg", environment: env });
           return Object.freeze(jsonClone(lkg));
@@ -330,49 +336,52 @@ function createConfigKernel(options = {}) {
         logger({ level: "warn", event: "config-kernel-lkg-unreadable", environment: env, code: error && error.code });
       }
       // 曾经发布过（有快照）但当前引用与 LKG 均不可读：fail closed。
-      if (repository.listSnapshots(env).length) {
+      if ((await repository.listSnapshots(env)).length) {
         throw codedError("CONFIG_KERNEL_SNAPSHOT_UNREADABLE", "published configuration exists but cannot be read");
       }
       return null;
     },
 
-    getArtifactVersion(input = {}) {
+    async getArtifactVersion(input = {}) {
       const environment = requireEnvironment(input.environment);
-      const doc = repository.getVersion(String(input.domain), String(input.artifactId || ""), environment, Number(input.version));
+      const doc = await repository.getVersion(String(input.domain), String(input.artifactId || ""), environment, Number(input.version));
       if (!doc) throw codedError("CONFIG_KERNEL_VERSION_MISSING");
       return Object.freeze(jsonClone(doc));
     },
 
-    listHistory(input = {}) {
+    async listHistory(input = {}) {
       const environment = requireEnvironment(input.environment);
       const domain = String(input.domain);
       const artifactId = String(input.artifactId || "");
-      const versions = repository.listVersions(domain, artifactId, environment);
-      const current = repository.readPointers(environment).artifacts[`${domain}:${artifactId}`] || null;
-      return Object.freeze(versions.map((version) => {
-        const doc = repository.getVersion(domain, artifactId, environment, version);
-        return Object.freeze({
+      const versions = await repository.listVersions(domain, artifactId, environment);
+      const current = (await repository.readPointers(environment)).artifacts[`${domain}:${artifactId}`] || null;
+      const history = [];
+      for (const version of versions) {
+        const doc = await repository.getVersion(domain, artifactId, environment, version);
+        history.push(Object.freeze({
           version,
           origin: doc && doc.origin || "admin",
           createdAt: doc && doc.createdAt || "",
           createdBy: doc && doc.createdBy || "",
           digest: doc && doc.digest || "",
           current: current === version,
-        });
-      }));
+        }));
+      }
+      return Object.freeze(history);
     },
 
-    listAudit(input = {}) {
-      return Object.freeze(repository.listAudit({ limit: input.limit }));
+    async listAudit(input = {}) {
+      return Object.freeze(await repository.listAudit({ limit: input.limit }));
     },
 
     // 种子：仅当环境从未发布过时初始化；已发布且当前版本为 seed-origin 且
     // sourceDigest 变化时自动升级种子版本；admin-origin 版本永不被种子触碰。
-    seedEnvironment(environment, seeds = []) {
+    async seedEnvironment(environment, seeds = []) {
       const env = requireEnvironment(environment);
-      const hasSnapshots = repository.listSnapshots(env).length > 0;
+      const hasSnapshots = (await repository.listSnapshots(env)).length > 0;
       const results = [];
-      (Array.isArray(seeds) ? seeds : []).forEach((seed) => {
+      const list = Array.isArray(seeds) ? seeds : [];
+      for (const seed of list) {
         const adapter = requireAdapter(seed.domain);
         const validation = adapter.validate(seed.payload) || {};
         if (validation.ok !== true) {
@@ -383,10 +392,10 @@ function createConfigKernel(options = {}) {
           throw codedError("CONFIG_KERNEL_SEED_INVALID", `seed payload for ${seed.domain}:${seed.artifactId} failed testing`);
         }
         const key = `${seed.domain}:${seed.artifactId}`;
-        const pointers = repository.readPointers(env);
+        const pointers = await repository.readPointers(env);
         const publishedVersion = pointers.artifacts[key] || 0;
         if (!hasSnapshots) {
-          const outcome = publishVersion(env, {
+          const outcome = await publishVersion(env, {
             domain: String(seed.domain),
             artifactId: String(seed.artifactId),
             payload: seed.payload,
@@ -394,10 +403,10 @@ function createConfigKernel(options = {}) {
             sourceDigest: seed.sourceDigest || null,
           }, "system", "seed");
           results.push({ key, action: "initialized", version: outcome.version });
-          return;
+          continue;
         }
         if (!publishedVersion) {
-          const outcome = publishVersion(env, {
+          const outcome = await publishVersion(env, {
             domain: String(seed.domain),
             artifactId: String(seed.artifactId),
             payload: seed.payload,
@@ -405,11 +414,11 @@ function createConfigKernel(options = {}) {
             sourceDigest: seed.sourceDigest || null,
           }, "system", "seed");
           results.push({ key, action: "added", version: outcome.version });
-          return;
+          continue;
         }
-        const current = repository.getVersion(String(seed.domain), String(seed.artifactId), env, publishedVersion);
+        const current = await repository.getVersion(String(seed.domain), String(seed.artifactId), env, publishedVersion);
         if (current && current.origin === "seed" && seed.sourceDigest && current.sourceDigest !== seed.sourceDigest) {
-          const outcome = publishVersion(env, {
+          const outcome = await publishVersion(env, {
             domain: String(seed.domain),
             artifactId: String(seed.artifactId),
             payload: seed.payload,
@@ -417,31 +426,35 @@ function createConfigKernel(options = {}) {
             sourceDigest: seed.sourceDigest || null,
           }, "system", "seed");
           results.push({ key, action: "upgraded", version: outcome.version });
-          return;
+          continue;
         }
         results.push({ key, action: "kept", version: publishedVersion });
-      });
+      }
       return Object.freeze(results);
     },
 
-    diagnostics(environment) {
+    async diagnostics(environment) {
       const env = requireEnvironment(environment);
-      const pointers = repository.readPointers(env);
+      const pointers = await repository.readPointers(env);
       let current = null;
       try {
-        const ref = repository.readCurrentRef(env);
+        const ref = await repository.readCurrentRef(env);
         current = ref && ref.configVersion || null;
       } catch (_) {
         current = null;
+      }
+      let lkgAvailable = false;
+      try {
+        lkgAvailable = Boolean(await repository.readLkg(env));
+      } catch (_) {
+        lkgAvailable = false;
       }
       return Object.freeze({
         environment: env,
         configVersion: current,
         artifacts: Object.freeze(Object.assign({}, pointers.artifacts)),
-        snapshotCount: repository.listSnapshots(env).length,
-        lkgAvailable: (() => {
-          try { return Boolean(repository.readLkg(env)); } catch (_) { return false; }
-        })(),
+        snapshotCount: (await repository.listSnapshots(env)).length,
+        lkgAvailable,
       });
     },
   });

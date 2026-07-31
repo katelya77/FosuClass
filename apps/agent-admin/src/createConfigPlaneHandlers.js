@@ -174,11 +174,11 @@ function createConfigPlaneHandlers(options = {}) {
   // artifactId 未显式给出时，从内核发布指针解析该域当前唯一发布物。
   // 控制面不假设固定的 artifact 命名；解析不到即 coded 400，解析到多个即
   // coded 409（静默取第一个会把操作打到错误的 artifact 上，必须显式指定）。
-  function resolveArtifactId(req, environment, domain) {
+  async function resolveArtifactId(req, environment, domain) {
     const source = req && req.method === "GET" ? req.query : req.body;
     const explicit = safeString(source && source.artifactId, 100);
     if (explicit) return explicit;
-    const diagnostics = kernel().diagnostics(environment);
+    const diagnostics = await kernel().diagnostics(environment);
     const prefix = `${domain}:`;
     const match = Object.keys(diagnostics.artifacts || {}).filter((key) => key.indexOf(prefix) === 0).sort();
     if (!match.length) {
@@ -217,11 +217,11 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getSnapshot(req, res) {
+  async function getSnapshot(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
-      const snapshot = kernel().getCurrentSnapshot(environment);
+      const snapshot = await kernel().getCurrentSnapshot(environment);
       return res.json(safePayload({
         success: true,
         app: ADMIN_APP,
@@ -235,18 +235,19 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getDomains(req, res) {
+  async function getDomains(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const configKernel = kernel();
-      const diagnostics = configKernel.diagnostics(environment);
+      const diagnostics = await configKernel.diagnostics(environment);
       const domains = {};
-      Object.keys(diagnostics.artifacts || {}).sort().forEach((key) => {
+      const keys = Object.keys(diagnostics.artifacts || {}).sort();
+      for (const key of keys) {
         const separator = key.indexOf(":");
         const domain = key.slice(0, separator);
         const artifactId = key.slice(separator + 1);
-        const draft = configKernel.getDraft({ domain, artifactId, environment });
+        const draft = await configKernel.getDraft({ domain, artifactId, environment });
         domains[domain] = domains[domain] || { domain, artifacts: [] };
         domains[domain].artifacts.push(safePayload({
           artifactId,
@@ -259,7 +260,7 @@ function createConfigPlaneHandlers(options = {}) {
             test: draft.test,
           } : null,
         }));
-      });
+      }
       return res.json(safePayload({
         success: true,
         app: ADMIN_APP,
@@ -275,13 +276,13 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getVersions(req, res) {
+  async function getVersions(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
-      const history = kernel().listHistory({ domain, artifactId, environment });
+      const artifactId = await resolveArtifactId(req, environment, domain);
+      const history = await kernel().listHistory({ domain, artifactId, environment });
       return res.json(safePayload({
         success: true,
         app: ADMIN_APP,
@@ -296,14 +297,14 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getArtifact(req, res) {
+  async function getArtifact(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
+      const artifactId = await resolveArtifactId(req, environment, domain);
       const version = Number((req.query || {}).version);
-      const doc = kernel().getArtifactVersion({ domain, artifactId, environment, version });
+      const doc = await kernel().getArtifactVersion({ domain, artifactId, environment, version });
       const body = safePayload({
         success: true,
         app: ADMIN_APP,
@@ -316,13 +317,13 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getDraft(req, res) {
+  async function getDraft(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
-      const draft = kernel().getDraft({ domain, artifactId, environment });
+      const artifactId = await resolveArtifactId(req, environment, domain);
+      const draft = await kernel().getDraft({ domain, artifactId, environment });
       const body = safePayload({
         success: true,
         app: ADMIN_APP,
@@ -338,16 +339,16 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function putDraft(req, res) {
+  async function putDraft(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
+      const artifactId = await resolveArtifactId(req, environment, domain);
       const payload = req.body && req.body.payload;
       assertPayloadSize(payload);
       assertNoRedactedLiteral(payload);
-      const draft = kernel().saveDraft({
+      const draft = await kernel().saveDraft({
         environment,
         domain,
         artifactId,
@@ -367,13 +368,13 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function postValidate(req, res) {
+  async function postValidate(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
-      const report = kernel().validateDraft({ environment, domain, artifactId, actor: actorOf(req) });
+      const artifactId = await resolveArtifactId(req, environment, domain);
+      const report = await kernel().validateDraft({ environment, domain, artifactId, actor: actorOf(req) });
       auditWrite(req, "validate", `${environment}/${domain}:${artifactId}`, `agent config draft validated: ${report.ok ? "ok" : "failed"}`);
       return res.json(safePayload({
         success: true,
@@ -389,13 +390,13 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function postTest(req, res) {
+  async function postTest(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
-      const report = kernel().testDraft({ environment, domain, artifactId, actor: actorOf(req) });
+      const artifactId = await resolveArtifactId(req, environment, domain);
+      const report = await kernel().testDraft({ environment, domain, artifactId, actor: actorOf(req) });
       auditWrite(req, "test", `${environment}/${domain}:${artifactId}`, `agent config draft tested: ${report.ok ? "ok" : "failed"}`);
       return res.json(safePayload({
         success: true,
@@ -411,13 +412,13 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function postPublish(req, res) {
+  async function postPublish(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
-      const outcome = kernel().publishDraft({ environment, domain, artifactId, actor: actorOf(req) });
+      const artifactId = await resolveArtifactId(req, environment, domain);
+      const outcome = await kernel().publishDraft({ environment, domain, artifactId, actor: actorOf(req) });
       auditWrite(req, "publish", `${environment}/${domain}:${artifactId}`, `agent config published: v${outcome.version} (${outcome.configVersion})`);
       return res.json(safePayload({
         success: true,
@@ -433,14 +434,14 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function postRollback(req, res) {
+  async function postRollback(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const domain = domainOf(req);
-      const artifactId = resolveArtifactId(req, environment, domain);
+      const artifactId = await resolveArtifactId(req, environment, domain);
       const toVersion = Number(req.body && req.body.toVersion);
-      const outcome = kernel().rollback({ environment, domain, artifactId, toVersion, actor: actorOf(req) });
+      const outcome = await kernel().rollback({ environment, domain, artifactId, toVersion, actor: actorOf(req) });
       auditWrite(req, "rollback", `${environment}/${domain}:${artifactId}`, `agent config rolled back to v${outcome.version} (${outcome.configVersion})`);
       return res.json(safePayload({
         success: true,
@@ -456,12 +457,12 @@ function createConfigPlaneHandlers(options = {}) {
     }
   }
 
-  function getAudit(req, res) {
+  async function getAudit(req, res) {
     noStore(res);
     try {
       const environment = environmentOf(req);
       const limit = Math.max(1, Math.min(500, Number((req.query || {}).limit) || 100));
-      const entries = kernel().listAudit({ limit: 500 })
+      const entries = (await kernel().listAudit({ limit: 500 }))
         .filter((entry) => !environment || entry.environment === environment)
         .slice(-limit)
         .reverse();

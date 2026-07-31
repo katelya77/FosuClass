@@ -145,6 +145,7 @@ function buildServiceFailureResponse(input = {}, error = {}) {
 }
 
 function __getPlatformForTests() {
+  // P5a：platformComposition.getDiagnostics 已 async 化，直接透传 Promise。
   return platformComposition.getDiagnostics();
 }
 

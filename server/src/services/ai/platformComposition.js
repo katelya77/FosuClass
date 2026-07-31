@@ -1,4 +1,4 @@
-const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, createMemoryPolicyPublicationAdapter, sha256Digest } = require("../../../../packages/agent-runtime");
+const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, createConfigKernelPgRepository, createMemoryPolicyPublicationAdapter, sha256Digest } = require("../../../../packages/agent-runtime");
 const { EXECUTION_POLICIES, createMetricsStore, createProviderPublicationAdapter, overlayToRuntimeConfig, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
@@ -26,6 +26,7 @@ const providerConfigService = require("./providerConfigService");
 const runtimeModeService = require("./runtimeModeService");
 const safetyGuard = require("./safetyGuard");
 const memoryPolicy = require("./memory/memoryPolicy");
+const { resolveRepositoryBackend } = require("./persistence/repositoryBackend");
 
 const recentPlatformTraces = [];
 let runHandlers = null;
@@ -42,10 +43,10 @@ const plugin = createFosuCampusPlugin({
 const platformSkillCatalog = createSkillCatalog({ skills: plugin.skills });
 const platformToolRuntime = createToolRuntime({ tools: plugin.tools });
 
-// P4a：统一配置发布内核。文件 Repository 为 integrated 模式默认适配器（P5a
-// 将增加 PostgreSQL 适配器）；Skill 域参考适配器证明通用发布协议。种子只
-// 初始化空环境或升级 seed-origin 版本，admin 发布的内容不会被覆盖。
-// root 遵守全仓 FOSU_DATA_DIR 约定（测试/容器可重定向数据目录）。
+// P4a：统一配置发布内核。P5a WS2 起 Repository 后端由
+// FOSU_AGENT_REPOSITORY_BACKEND 选择：file（integrated 默认）| postgres
+// （standalone）。种子只初始化空环境或升级 seed-origin 版本，admin 发布的
+// 内容不会被覆盖。root 遵守全仓 FOSU_DATA_DIR 约定（测试/容器可重定向数据目录）。
 const configKernelRoot = process.env.FOSU_AGENT_CONFIG_KERNEL_PATH
   || path.join(path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../../data")), "ai", "config-kernel");
 
@@ -105,8 +106,24 @@ const domainAdapters = Object.freeze({
   mcp: mcpPublicationAdapter,
   rag: ragPublicationAdapter,
 });
+// P5a WS2：Repository 后端选择（FOSU_AGENT_REPOSITORY_BACKEND，唯一解析点在
+// persistence/repositoryBackend）。postgres 模式经 pgPersistenceService 建 PG
+// 适配器；池用门面惰性解析——构造同步、不触网、未配置 PG 也不在 require 期
+// 抛错，配置/连接失败统一延迟到 initPlatform() 的 AGENT_PLATFORM_INIT_FAILED。
+const repositoryBackend = resolveRepositoryBackend();
+function createConfigKernelRepository() {
+  if (repositoryBackend === "postgres") {
+    const pgPersistenceService = require("./persistence/pgPersistenceService");
+    const lazyPool = {
+      query: (text, params) => pgPersistenceService.getPool().query(text, params),
+      connect: () => pgPersistenceService.getPool().connect(),
+    };
+    return createConfigKernelPgRepository({ pool: lazyPool });
+  }
+  return createConfigKernelFileRepository({ root: configKernelRoot });
+}
 const configKernel = createConfigKernel({
-  repository: createConfigKernelFileRepository({ root: configKernelRoot }),
+  repository: createConfigKernelRepository(),
   domainAdapters,
   environments: ["public", "trial", "dev"],
   logger: logConfigKernelEvent,
@@ -120,14 +137,47 @@ const domainSeedEntries = Object.keys(domainAdapters).map((domain) => {
     sourceDigest: sha256Digest(payload),
   });
 });
-["public", "trial", "dev"].forEach((environment) => {
-  configKernel.seedEnvironment(environment, domainSeedEntries);
-});
+
+// P5a WS2：init 模式。require 期只做同步构造（池 lazy 不触网）；迁移与种子
+// 统一收敛到 memoized initPlatform()：
+//   - postgres：先 runMigrations()（并发安全、checksum fail closed）再全环境种子；
+//   - file：仅全环境种子（行为与 P5a 前 require 期种子一致，幂等）。
+// init 失败（迁移/连接/种子存储故障）→ memoized promise 以 coded
+// AGENT_PLATFORM_INIT_FAILED 拒绝（粘性失败，causeCode 保留底层 code）；
+// config-plane 路由与 run 创建链 await platformReady()/initPlatform() 获取该语义。
+let initPromise = null;
+function initPlatform() {
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        if (repositoryBackend === "postgres") {
+          await require("./persistence/pgPersistenceService").runMigrations();
+        }
+        for (const environment of configKernel.environments) {
+          await configKernel.seedEnvironment(environment, domainSeedEntries);
+        }
+        return Object.freeze({ backend: repositoryBackend, environments: configKernel.environments.slice() });
+      } catch (error) {
+        const causeCode = String(error && error.code || "UNKNOWN");
+        const wrapped = new Error(`agent platform init failed (${repositoryBackend} backend): ${causeCode}`);
+        wrapped.code = "AGENT_PLATFORM_INIT_FAILED";
+        wrapped.causeCode = causeCode;
+        throw wrapped;
+      }
+    })();
+  }
+  return initPromise;
+}
+
+function platformReady() {
+  return initPlatform();
+}
 
 // 按快照绑定的技能目录：发布/回滚只影响新 Run；在途 Run 的快照不可变。
 // 解析结果按 (environment, version) 记忆化，目录接口与静态目录一致。
+// P5a：内核方法 async 化后本解析器同为 async（缓存命中也返回 Promise）。
 const boundCatalogCache = new Map();
-function resolveSkillCatalogForSnapshot(configSnapshot) {
+async function resolveSkillCatalogForSnapshot(configSnapshot) {
   const artifacts = configSnapshot && configSnapshot.artifacts || null;
   const entry = artifacts && artifacts[`skill:${plugin.id}`];
   const environment = configSnapshot && configSnapshot.environment;
@@ -136,7 +186,7 @@ function resolveSkillCatalogForSnapshot(configSnapshot) {
   if (!boundCatalogCache.has(cacheKey)) {
     let versionDoc = null;
     try {
-      versionDoc = configKernel.getArtifactVersion({
+      versionDoc = await configKernel.getArtifactVersion({
         domain: "skill",
         artifactId: plugin.id,
         environment,
@@ -181,7 +231,7 @@ const defaultDomainRuntime = Object.freeze(Object.fromEntries(Object.keys(domain
   domain,
   domainAdapters[domain].resolveRuntime({ payload: domainAdapters[domain].seedPayload() }),
 ])));
-function resolveDomainRuntimeForSnapshot(domain, configSnapshot) {
+async function resolveDomainRuntimeForSnapshot(domain, configSnapshot) {
   const artifacts = configSnapshot && configSnapshot.artifacts || null;
   const entry = artifacts && artifacts[`${domain}:${plugin.id}`];
   const environment = configSnapshot && configSnapshot.environment;
@@ -191,7 +241,7 @@ function resolveDomainRuntimeForSnapshot(domain, configSnapshot) {
   if (!cache.has(cacheKey)) {
     let versionDoc = null;
     try {
-      versionDoc = configKernel.getArtifactVersion({
+      versionDoc = await configKernel.getArtifactVersion({
         domain,
         artifactId: plugin.id,
         environment,
@@ -235,8 +285,8 @@ function resolveMcpRegistryForSnapshot(configSnapshot) {
 const ragIndexService = createRagIndexService({
   root: configKernelRoot,
   logger: logConfigKernelEvent,
-  resolveArtifact({ environment, artifactId, version }) {
-    const versionDoc = configKernel.getArtifactVersion({ domain: "rag", artifactId, environment, version });
+  async resolveArtifact({ environment, artifactId, version }) {
+    const versionDoc = await configKernel.getArtifactVersion({ domain: "rag", artifactId, environment, version });
     return ragPublicationAdapter.resolveRuntime(versionDoc);
   },
 });
@@ -244,13 +294,13 @@ const ragIndexService = createRagIndexService({
 // RAG 快照解析 = 通用域解析 + 索引同步钩子：新快照钉住的版本若未构建，
 // 以稳定 jobId 入队异步构建（幂等，不阻塞在线 Run）；查询在索引就绪前
 // 按 lkg 语义降级或如实返回不可用，绝不返回草稿内容。
-function resolveRagArtifactForSnapshot(configSnapshot) {
-  const artifact = resolveDomainRuntimeForSnapshot("rag", configSnapshot);
+async function resolveRagArtifactForSnapshot(configSnapshot) {
+  const artifact = await resolveDomainRuntimeForSnapshot("rag", configSnapshot);
   const entry = configSnapshot && configSnapshot.artifacts && configSnapshot.artifacts[`rag:${plugin.id}`];
   const environment = configSnapshot && configSnapshot.environment;
   if (entry && environment && artifact && artifact.kbId) {
     try {
-      ragIndexService.requestBuild({
+      await ragIndexService.requestBuild({
         environment,
         artifactId: plugin.id,
         kbId: artifact.kbId,
@@ -272,7 +322,7 @@ function resolveRagArtifactForSnapshot(configSnapshot) {
 // 生产查询路径（P4d 契约测试与 P4e 控制面/工具接线共用）：快照钉住版本 →
 // 索引服务 → 四模式查询链。无快照钉住时如实降级（不发明内容）。
 async function queryRagForSnapshot(configSnapshot, input = {}) {
-  const artifact = resolveRagArtifactForSnapshot(configSnapshot);
+  const artifact = await resolveRagArtifactForSnapshot(configSnapshot);
   const entry = configSnapshot && configSnapshot.artifacts && configSnapshot.artifacts[`rag:${plugin.id}`];
   const environment = configSnapshot && configSnapshot.environment;
   if (!entry || !environment || !artifact || !artifact.kbId) {
@@ -345,11 +395,14 @@ const platform = createAgentPlatform({
   createRunId: agentProtocol.createRunId,
   // P4a：createRun 原子绑定内核当前不可变快照（单次读取，Runtime 深冻结）。
   // 内核从未初始化/存储不可读且无 LKG 时回退 manifest 版本号，保持平台可用。
-  resolveConfigSnapshot({ request } = {}) {
+  // P5a：init 失败（coded AGENT_PLATFORM_INIT_FAILED）不回退——沿 run 创建链
+  // 上抛（init 失败语义与 config-plane 路由一致）；仅快照读取失败才降级。
+  async resolveConfigSnapshot({ request } = {}) {
     const environment = resolveSnapshotEnvironment(request);
+    await initPlatform();
     let snapshot = null;
     try {
-      snapshot = configKernel.getCurrentSnapshot(environment);
+      snapshot = await configKernel.getCurrentSnapshot(environment);
     } catch (error) {
       // 快照读取失败（含 CONFIG_KERNEL_SNAPSHOT_UNREADABLE）降级为 manifest
       // 兜底保持平台可用，但必须留下安全信号，不得静默掩盖配置存储故障。
@@ -380,13 +433,15 @@ function getPlatform() {
   return platform;
 }
 
-function getDiagnostics() {
+async function getDiagnostics() {
   // 后台显示必须等于真实执行：configVersion 来自发布内核当前快照，
-  // 不再由插件 manifest 版本号单独冒充。
+  // 不再由插件 manifest 版本号单独冒充。init/读取失败降级为 manifest
+  // 兜底（与 getCurrentSnapshot 读取失败同级语义），不击落诊断端点。
   const kernelEnvironment = capabilityManifestService.normalizeRuntimeMode(runtimeModeService.resolveConfiguredMode());
   let kernelDiagnostics = null;
   try {
-    kernelDiagnostics = configKernel.diagnostics(kernelEnvironment);
+    await initPlatform();
+    kernelDiagnostics = await configKernel.diagnostics(kernelEnvironment);
   } catch (_) {
     kernelDiagnostics = null;
   }
@@ -482,6 +537,10 @@ module.exports = {
     return configKernel;
   },
   getDiagnostics,
+  // P5a WS2：init 门。config-plane 路由中间件与 run 创建链（resolveConfigSnapshot
+  // 内部）await 它；postgres 迁移/连接失败 → coded AGENT_PLATFORM_INIT_FAILED 拒绝。
+  initPlatform,
+  platformReady,
   // 组合根解析器：fosuTurnPorts 经选项注入使用；P4b 其他域复用同一模式。
   // 同时供契约测试直接驱动（请求作用域环境绑定、目录 fail-closed）。
   resolveSnapshotEnvironment,

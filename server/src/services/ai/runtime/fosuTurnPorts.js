@@ -310,7 +310,7 @@ function createFosuTurnPorts(options = {}) {
     // 调整链/阶段模型/预算等白名单字段（密钥永远不可经发布物注入）；硬护栏
     // 在最后重应用，任何 overlay 都无法让 public 离开 mock/tool-only。
     const providerOverlayConfig = overlayToRuntimeConfig(
-      resolveProviderOverlay(stageInput.configSnapshot || null)
+      await resolveProviderOverlay(stageInput.configSnapshot || null)
     );
     if (Object.keys(providerOverlayConfig).length) {
       state.providerRuntimeConfig = Object.assign({}, state.providerRuntimeConfig, providerOverlayConfig);
@@ -320,8 +320,8 @@ function createFosuTurnPorts(options = {}) {
       providerConfigResolution.assistantEnvironment
     );
     // P4b：Memory 策略经快照绑定注入当次 Turn（发布/回滚不影响在途 Run）。
-    state.memoryPolicy = resolveMemoryPolicy(stageInput.configSnapshot || null);
-    state.toolOverlay = resolveToolOverlay(stageInput.configSnapshot || null);
+    state.memoryPolicy = await resolveMemoryPolicy(stageInput.configSnapshot || null);
+    state.toolOverlay = await resolveToolOverlay(stageInput.configSnapshot || null);
     state.executionPolicy = decisionService.resolvePolicy({
       runtimeMode: state.runtimeDecision.runtimeMode,
       providerRuntimeConfig: state.providerRuntimeConfig,
@@ -526,7 +526,7 @@ function createFosuTurnPorts(options = {}) {
       deadline: stageInput.deadline,
       decisionBudgetMs: stageInput.budget && stageInput.budget.timeoutMs,
       providerAttemptLedger: stageInput.providerAttemptLedger,
-      skillCatalog: resolveSkillCatalog(stageInput.configSnapshot || null),
+      skillCatalog: await resolveSkillCatalog(stageInput.configSnapshot || null),
       deterministicResolve: (message, safeContext) => understandingCoordinator.resolveRuleBackedIntent(message, safeContext).intent,
       onEvent: (event) => emitChatEvent(state.eventInput, Object.assign({
         runtimeMode: state.runtimeDecision.runtimeMode,

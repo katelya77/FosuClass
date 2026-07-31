@@ -298,4 +298,8 @@ function createConfigKernelFileRepository(options = {}) {
 module.exports = Object.freeze({
   REPOSITORY_METHODS,
   createConfigKernelFileRepository,
+  // 输入校验单一事实源：PG 适配器（pgRepository）复用同一套段/版本校验，
+  // 保证两种后端的错误码词表（PATH_SEGMENT_INVALID / VERSION_INVALID）逐字一致。
+  safeConfigKernelSegment: safeSegment,
+  safeConfigKernelVersion: safeVersion,
 });

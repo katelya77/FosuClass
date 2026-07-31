@@ -81,7 +81,7 @@ function testExecutableMerge() {
   console.log("✓ executable behavior merges from static code only; disabled skills are filtered");
 }
 
-function testKernelEndToEnd() {
+async function testKernelEndToEnd() {
   const adapter = createSkillPublicationAdapter({ staticSkills: STATIC_SKILLS });
   const kernel = createConfigKernel({
     repository: createConfigKernelFileRepository({ root: tmpRoot() }),
@@ -92,13 +92,13 @@ function testKernelEndToEnd() {
   // 种子：v1 全量
   const seedPayload = adapter.seedPayload();
   const { sha256Digest } = require("../packages/agent-runtime");
-  kernel.seedEnvironment("trial", [{
+  await kernel.seedEnvironment("trial", [{
     domain: "skill",
     artifactId: "campus",
     payload: seedPayload,
     sourceDigest: sha256Digest(seedPayload),
   }]);
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
   assert.strictEqual(snapshotV1.artifacts["skill:campus"].version, 1);
   assert.strictEqual(snapshotV1.artifacts["skill:campus"].summary.skillCount, 2);
 
@@ -106,33 +106,33 @@ function testKernelEndToEnd() {
   const draftPayload = JSON.parse(JSON.stringify(seedPayload));
   draftPayload.skills[1].enabled = false;
   const draftInput = { domain: "skill", artifactId: "campus", environment: "trial", payload: draftPayload, actor: "admin1" };
-  kernel.saveDraft(draftInput);
-  assert.strictEqual(kernel.validateDraft(draftInput).ok, true);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
-  const published = kernel.publishDraft(draftInput);
+  await kernel.saveDraft(draftInput);
+  assert.strictEqual((await kernel.validateDraft(draftInput)).ok, true);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
+  const published = await kernel.publishDraft(draftInput);
   assert.strictEqual(published.version, 2);
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
   assert.notStrictEqual(snapshotV2.configVersion, snapshotV1.configVersion);
   assert.strictEqual(snapshotV2.artifacts["skill:campus"].summary.skillCount, 1);
 
   // 新 Run 绑定：v2 目录不再提供 campus_map；在途 Run 持有的 v1 快照仍可解析
   const catalogV2 = createSkillCatalog({
-    skills: adapter.resolveRuntime(kernel.getArtifactVersion({
+    skills: adapter.resolveRuntime(await kernel.getArtifactVersion({
       domain: "skill", artifactId: "campus", environment: "trial", version: 2,
     })),
   });
   assert.strictEqual(catalogV2.get("campus_map"), null);
   assert.ok(catalogV2.get("teaching_week"));
   const catalogV1InFlight = createSkillCatalog({
-    skills: adapter.resolveRuntime(kernel.getArtifactVersion({
+    skills: adapter.resolveRuntime(await kernel.getArtifactVersion({
       domain: "skill", artifactId: "campus", environment: "trial", version: 1,
     })),
   });
   assert.ok(catalogV1InFlight.get("campus_map"), "in-flight runs keep the old published skill set");
 
   // rollback：新快照回到 v1 目录
-  kernel.rollback({ domain: "skill", artifactId: "campus", environment: "trial", toVersion: 1, actor: "ops" });
-  const snapshotV3 = kernel.getCurrentSnapshot("trial");
+  await kernel.rollback({ domain: "skill", artifactId: "campus", environment: "trial", toVersion: 1, actor: "ops" });
+  const snapshotV3 = await kernel.getCurrentSnapshot("trial");
   assert.strictEqual(snapshotV3.artifacts["skill:campus"].version, 1);
   assert.notStrictEqual(snapshotV3.configVersion, snapshotV1.configVersion, "rollback produces a new snapshot");
   assert.strictEqual(snapshotV3.artifacts["skill:campus"].summary.skillCount, 2);
@@ -277,7 +277,7 @@ async function run() {
   testAdapterValidation();
   testRuntimeModesBoundedByStaticSkill();
   testExecutableMerge();
-  testKernelEndToEnd();
+  await testKernelEndToEnd();
   await testDecisionUsesBoundCatalog();
   await testModelPathValidateUsesBoundCatalog();
   console.log("\ntest-agent-skill-publication: PASS");

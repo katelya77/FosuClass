@@ -90,14 +90,16 @@ function testPrePublishGuard() {
   console.log("✓ pre-publish test: enabled server must declare at least one allowed tool");
 }
 
-function testCompositionRoundtrip() {
+async function testCompositionRoundtrip() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
   const composition = require("../server/src/services/ai/platformComposition");
+  // P5a：require 期不再种子，先 await init（file 模式 = 幂等种子）。
+  await composition.platformReady();
   const kernel = composition.getConfigKernel();
 
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
-  assert.deepStrictEqual(composition.resolveMcpRegistryForSnapshot(snapshotV1), { servers: [] },
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
+  assert.deepStrictEqual(await composition.resolveMcpRegistryForSnapshot(snapshotV1), { servers: [] },
     "seed registry is empty (no MCP capability before any publication)");
 
   const draftInput = {
@@ -107,28 +109,33 @@ function testCompositionRoundtrip() {
     payload: { servers: [VALID_HTTP_SERVER] },
     actor: "p4c-test",
   };
-  kernel.saveDraft(draftInput);
-  const validation = kernel.validateDraft(draftInput);
+  await kernel.saveDraft(draftInput);
+  const validation = await kernel.validateDraft(draftInput);
   assert.strictEqual(validation.ok, true, `registry draft validates: ${validation.errors}`);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
-  kernel.publishDraft(draftInput);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
+  await kernel.publishDraft(draftInput);
 
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
-  const bound = composition.resolveMcpRegistryForSnapshot(snapshotV2);
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
+  const bound = await composition.resolveMcpRegistryForSnapshot(snapshotV2);
   assert.strictEqual(bound.servers.length, 1, "new snapshot binds the published registry");
   assert.strictEqual(bound.servers[0].id, "kb-remote");
   assert.strictEqual(bound.servers[0].authEnvVar, "MCP_KB_TOKEN", "auth stored as reference name only");
 
-  const inFlight = composition.resolveMcpRegistryForSnapshot(snapshotV1);
+  const inFlight = await composition.resolveMcpRegistryForSnapshot(snapshotV1);
   assert.deepStrictEqual(inFlight, { servers: [] }, "in-flight snapshot keeps the pre-publish registry");
 
-  kernel.rollback({ domain: "mcp", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4c-test" });
-  assert.deepStrictEqual(composition.resolveMcpRegistryForSnapshot(kernel.getCurrentSnapshot("trial")), { servers: [] },
+  await kernel.rollback({ domain: "mcp", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4c-test" });
+  assert.deepStrictEqual(await composition.resolveMcpRegistryForSnapshot(await kernel.getCurrentSnapshot("trial")), { servers: [] },
     "rollback restores the empty registry");
   console.log("✓ composition roundtrip: publish → snapshot binding → in-flight stability → rollback");
 }
 
-testValidation();
-testPrePublishGuard();
-testCompositionRoundtrip();
-console.log("\ntest-agent-mcp-publication: PASS");
+(async () => {
+  testValidation();
+  testPrePublishGuard();
+  await testCompositionRoundtrip();
+  console.log("\ntest-agent-mcp-publication: PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
