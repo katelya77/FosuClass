@@ -7,9 +7,8 @@
  * Sensitive credentials are never accepted.
  */
 const crypto = require("crypto");
-const fs = require("fs");
 const path = require("path");
-const { acquireExclusiveFileLock } = require("../../exclusiveFileLockService");
+const { createFileMemoryDocumentStore } = require("./fileMemoryDocumentStore");
 const { principalShard } = require("./conversationPrincipalService");
 const { encodeSemanticVector, semanticScores, ENCODER_VERSION } = require("../../../../../packages/agent-runtime");
 
@@ -148,17 +147,6 @@ function decryptObject(envelope, secret, aad) {
     throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
   }
   return parsed;
-}
-
-function ensureDir(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
-
-function writeJsonAtomic(filePath, value) {
-  ensureDir(path.dirname(filePath));
-  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-  fs.writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  fs.renameSync(tmpPath, filePath);
 }
 
 function safeText(value, max = 240) {
@@ -496,6 +484,10 @@ class UserPreferenceService {
     );
     this.secret = String(options.secret || process.env.FOSU_AGENT_MEMORY_SECRET || "");
     this.clock = options.clock && typeof options.clock.now === "function" ? options.clock : { now: Date.now };
+    // P5a WS4b：注入式同步文档存储 seam。默认实现与抽取前逐字一致
+    // （文件锁 + tmp/rename 原子写，见 fileMemoryDocumentStore.js）；
+    // 加密/迁移/revision 领域逻辑仍在本服务，store 只见不透明信封文本。
+    this.documentStore = options.documentStore || createFileMemoryDocumentStore({ rootDir: this.rootDir });
   }
 
   assertPrincipal(principal) {
@@ -512,32 +504,11 @@ class UserPreferenceService {
   }
 
   filePath(principalKey) {
-    const stableKey = String(principalKey || "");
-    // Production principals are already 64-char HMACs, so preserve the deployed path.
-    // Test/custom principals may share the same 16-char display shard; isolate those
-    // with a non-reversible digest rather than allowing one principal to decrypt or
-    // overwrite another principal's document.
-    if (/^[a-f0-9]{64}$/i.test(stableKey)) {
-      return path.join(this.rootDir, principalShard(stableKey), "preferences.json");
-    }
-    const isolated = crypto.createHash("sha256").update(stableKey).digest("hex").slice(0, 24);
-    return path.join(this.rootDir, principalShard(stableKey), isolated, "preferences.json");
+    return this.documentStore.filePath(principalKey);
   }
 
   withLock(principalKey, callback) {
-    const filePath = this.filePath(principalKey);
-    ensureDir(path.dirname(filePath));
-    const release = acquireExclusiveFileLock(filePath, {
-      lockPath: `${filePath}.lock`,
-      codePrefix: "USER_PREFERENCE",
-      waitMs: 1200,
-      staleMs: 30000,
-    });
-    try {
-      return callback(filePath);
-    } finally {
-      release();
-    }
+    return this.documentStore.withLock(principalKey, callback);
   }
 
   nowIso() {
@@ -546,13 +517,14 @@ class UserPreferenceService {
 
   readDocumentUnlocked(filePath, principalKey) {
     const now = this.nowIso();
-    if (!fs.existsSync(filePath)) return emptyDocument(now);
+    const storedText = this.documentStore.load(filePath);
+    if (storedText === null) return emptyDocument(now);
     if (!this.secret) {
       throw typedError("Memory encryption is not configured", "MEMORY_SECRET_UNAVAILABLE", 503);
     }
     let raw;
     try {
-      raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      raw = JSON.parse(storedText);
     } catch (_) {
       throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
     }
@@ -579,7 +551,7 @@ class UserPreferenceService {
       const document = emptyDocument(now);
       document.revision = Object.keys(values).length ? 1 : 0;
       const updatedAtMs = Date.parse(raw.updatedAt || "");
-      const legacyBaseMs = Number.isFinite(updatedAtMs) ? updatedAtMs : fs.statSync(filePath).mtimeMs;
+      const legacyBaseMs = Number.isFinite(updatedAtMs) ? updatedAtMs : this.documentStore.statMtimeMs(filePath);
       const legacyRecordedAt = new Date(legacyBaseMs).toISOString();
       Object.entries(values).forEach(([key, rawValue]) => {
         const value = normalizeValue(key, rawValue);
@@ -612,13 +584,13 @@ class UserPreferenceService {
     this.assertWritable();
     const now = this.nowIso();
     const clean = normalizeDocument(document, now);
-    writeJsonAtomic(filePath, {
+    this.documentStore.save(filePath, `${JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
       principalShard: principalShard(principalKey),
       revision: clean.revision,
       updatedAt: now,
       encrypted: encryptObject(clean, this.secret, principalKey),
-    });
+    }, null, 2)}\n`);
   }
 
   readUnlocked(filePath, principalKey) {
