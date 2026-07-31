@@ -1,12 +1,24 @@
 /**
  * Knowledge Control Plane v2
  * HTTP/MCP adapter → validation/version/audit → knowledgeBaseService
+ *
+ * P5a WS4a：审计/幂等存储按 FOSU_AGENT_REPOSITORY_BACKEND 双实现——
+ * file（默认，现状）或 PostgreSQL（persistence/pgKnowledgeAuditService /
+ * pgIdempotencyStore，异步方法）。条目整形/脱敏/指纹算法统一在
+ * knowledgeAuditEntry，双后端共用不复制。
  */
-const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { acquireExclusiveFileLock } = require("../exclusiveFileLockService");
 const defaultKnowledgeBaseService = require("./knowledgeBaseService");
+const { resolveRepositoryBackend } = require("./persistence/repositoryBackend");
+const {
+  buildAuditEntry,
+  fingerprintBody,
+  nowIso,
+  safeText,
+  typedError,
+} = require("./knowledgeAuditEntry");
 
 const HIGH_RISK_FIELDS = new Set([
   "scope",
@@ -19,23 +31,10 @@ const HIGH_RISK_FIELDS = new Set([
   "reply",
 ]);
 
-function safeText(value, limit = 100) {
-  return String(value || "").replace(/[\r\n\t]/g, " ").slice(0, limit);
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function createId(prefix) {
-  return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
-}
-
-function typedError(message, code, statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+function isThenable(value) {
+  return value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && typeof value.then === "function";
 }
 
 class KnowledgeAuditService {
@@ -57,32 +56,7 @@ class KnowledgeAuditService {
   }
 
   record(event = {}) {
-    const item = {
-      auditId: safeText(event.auditId || createId("kba"), 60),
-      requestId: safeText(event.requestId, 80),
-      action: safeText(event.action, 60),
-      targetType: safeText(event.targetType, 24),
-      targetId: safeText(event.targetId, 100),
-      beforeVersion: safeText(event.beforeVersion || event.versionId, 100),
-      afterVersion: safeText(event.afterVersion, 100),
-      operatorType: safeText(event.operatorType || "system", 40),
-      operatorName: safeText(event.operatorName, 80),
-      tokenName: safeText(event.tokenName, 80),
-      scopes: Array.isArray(event.scopes)
-        ? event.scopes.map((scope) => safeText(scope, 60)).slice(0, 20)
-        : [],
-      authMethod: safeText(event.authMethod, 40),
-      clientName: safeText(event.clientName, 80),
-      idempotencyKey: safeText(event.idempotencyKey, 120),
-      success: event.success !== false,
-      errorCode: safeText(event.errorCode, 80),
-      createdAt: event.createdAt || nowIso(),
-    };
-    // Never persist tokens/passwords/raw headers
-    const serialized = JSON.stringify(item);
-    if (/Bearer\s+[A-Za-z0-9._~+/=-]{8,}|password|api[_-]?key/i.test(serialized)) {
-      item.tokenName = item.tokenName ? "[redacted-name]" : "";
-    }
+    const item = buildAuditEntry(event);
     this.entries = this.entries.concat(item).slice(-this.maxEntries);
     if (!this.memoryOnly) {
       try {
@@ -165,7 +139,7 @@ class IdempotencyStore {
   }
 
   fingerprint(body) {
-    return crypto.createHash("sha256").update(JSON.stringify(body || {})).digest("hex");
+    return fingerprintBody(body);
   }
 
   get(key, body) {
@@ -201,6 +175,32 @@ class IdempotencyStore {
   }
 }
 
+/**
+ * P5a WS4a：按 FOSU_AGENT_REPOSITORY_BACKEND 选审计存储实现。
+ * file（默认）→ KnowledgeAuditService（同步）；postgres → PgKnowledgeAuditService（异步）。
+ */
+function createAuditService(options = {}) {
+  if (options.audit) return options.audit;
+  if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
+    // lazy require：file 模式不加载 pg 依赖链。
+    const { getPool } = require("./persistence/pgPersistenceService");
+    const { PgKnowledgeAuditService } = require("./persistence/pgKnowledgeAuditService");
+    return new PgKnowledgeAuditService({ pool: getPool(), maxEntries: options.maxEntries });
+  }
+  return new KnowledgeAuditService(options);
+}
+
+/** 同上：幂等存储的后端选择（TTL 口径双实现一致）。 */
+function createIdempotencyStore(options = {}) {
+  if (options.idempotency) return options.idempotency;
+  if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
+    const { getPool } = require("./persistence/pgPersistenceService");
+    const { PgIdempotencyStore } = require("./persistence/pgIdempotencyStore");
+    return new PgIdempotencyStore({ pool: getPool(), ttlMs: options.ttlMs });
+  }
+  return new IdempotencyStore(options);
+}
+
 function fieldDiff(before = {}, after = {}) {
   const keys = new Set([].concat(Object.keys(before || {}), Object.keys(after || {})));
   const changes = [];
@@ -228,8 +228,23 @@ function summarizeBody(text) {
 class KnowledgeRepository {
   constructor(options = {}) {
     this.service = options.service || defaultKnowledgeBaseService;
-    this.audit = options.audit || new KnowledgeAuditService(options);
-    this.idempotency = options.idempotency || new IdempotencyStore(options);
+    this.audit = createAuditService(options);
+    this.idempotency = createIdempotencyStore(options);
+  }
+
+  // 审计为 best-effort：文件实现落盘失败静默；PG 实现（async）失败同样不阻断主流程。
+  _recordAudit(event) {
+    const recorded = this.audit.record(event);
+    if (isThenable(recorded)) {
+      recorded.catch(() => {});
+      return null;
+    }
+    return recorded;
+  }
+
+  _cacheIdempotency(key, body, response) {
+    const written = this.idempotency.set(key, body, response);
+    if (isThenable(written)) written.catch(() => {});
   }
 
   _operatorMeta(options = {}) {
@@ -267,15 +282,23 @@ class KnowledgeRepository {
     const idempotencyKey = options.idempotencyKey || input.idempotencyKey;
     if (idempotencyKey) {
       const cached = this.idempotency.get(idempotencyKey, { type, input });
+      if (isThenable(cached)) {
+        // PG 幂等存储为 async：命中走缓存，未命中走同一创建路径（Promise 化）。
+        return cached.then((hit) => hit || this._createDraftFresh(type, input, options, idempotencyKey));
+      }
       if (cached) return cached;
     }
+    return this._createDraftFresh(type, input, options, idempotencyKey);
+  }
+
+  _createDraftFresh(type, input, options, idempotencyKey) {
     try {
       const result = this.service.createEntry(Object.assign({}, input, {
         type,
         status: "draft",
         updatedBy: options.operatorName || input.updatedBy || "",
       }));
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "create_draft",
         targetType: type,
         targetId: result.entry && result.entry.id,
@@ -283,10 +306,10 @@ class KnowledgeRepository {
         success: true,
       }));
       const response = Object.assign({}, result, { item: result.entry });
-      if (idempotencyKey) this.idempotency.set(idempotencyKey, { type, input }, response);
+      if (idempotencyKey) this._cacheIdempotency(idempotencyKey, { type, input }, response);
       return response;
     } catch (error) {
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "create_draft",
         targetType: type,
         targetId: input.id || input.sourceId || "",
@@ -301,8 +324,16 @@ class KnowledgeRepository {
     const idempotencyKey = options.idempotencyKey || patch.idempotencyKey;
     if (idempotencyKey) {
       const cached = this.idempotency.get(idempotencyKey, { type, id, patch });
+      if (isThenable(cached)) {
+        // PG 幂等存储为 async：命中走缓存，未命中走同一更新路径（Promise 化）。
+        return cached.then((hit) => hit || this._updateDraftFresh(type, id, patch, options, idempotencyKey));
+      }
       if (cached) return cached;
     }
+    return this._updateDraftFresh(type, id, patch, options, idempotencyKey);
+  }
+
+  _updateDraftFresh(type, id, patch, options, idempotencyKey) {
     const expectedRevision = options.expectedRevision != null
       ? options.expectedRevision
       : (options.ifMatch != null ? Number(options.ifMatch) : patch.expectedRevision);
@@ -312,7 +343,7 @@ class KnowledgeRepository {
         expectedRevision,
         updatedBy: options.operatorName || patch.updatedBy || "",
       });
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "update_draft",
         targetType: type || (result.entry && result.entry.type),
         targetId: id,
@@ -324,10 +355,10 @@ class KnowledgeRepository {
         item: result.entry,
         fieldChanges: fieldDiff(before || {}, result.entry || {}),
       });
-      if (idempotencyKey) this.idempotency.set(idempotencyKey, { type, id, patch }, response);
+      if (idempotencyKey) this._cacheIdempotency(idempotencyKey, { type, id, patch }, response);
       return response;
     } catch (error) {
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "update_draft",
         targetType: type,
         targetId: id,
@@ -342,7 +373,7 @@ class KnowledgeRepository {
     try {
       const before = this.getDraft(id);
       const result = this.service.deleteEntry(id);
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "delete_draft",
         targetType: result.removed && result.removed.type || (before && before.type),
         targetId: id,
@@ -351,7 +382,7 @@ class KnowledgeRepository {
       }));
       return result;
     } catch (error) {
-      this.audit.record(Object.assign(this._operatorMeta(options), {
+      this._recordAudit(Object.assign(this._operatorMeta(options), {
         action: "delete_draft",
         targetId: id,
         success: false,
@@ -367,7 +398,7 @@ class KnowledgeRepository {
 
   importDraft(input = {}, options = {}) {
     const result = this.service.importMarkdown(Object.assign({}, input, { commit: true }));
-    this.audit.record(Object.assign(this._operatorMeta(options), {
+    this._recordAudit(Object.assign(this._operatorMeta(options), {
       action: "import_draft",
       targetType: "doc",
       targetId: result.entry && result.entry.id,
@@ -399,7 +430,17 @@ class KnowledgeSearchProvider {
 class KnowledgeVersionService {
   constructor(options = {}) {
     this.service = options.service || defaultKnowledgeBaseService;
-    this.audit = options.audit || new KnowledgeAuditService(options);
+    this.audit = createAuditService(options);
+  }
+
+  // 与 KnowledgeRepository 同口径：审计 best-effort，PG（async）失败不阻断主流程。
+  _recordAudit(event) {
+    const recorded = this.audit.record(event);
+    if (isThenable(recorded)) {
+      recorded.catch(() => {});
+      return null;
+    }
+    return recorded;
   }
 
   getCurrentVersion() {
@@ -417,7 +458,7 @@ class KnowledgeVersionService {
     const before = this.getCurrentVersion();
     const result = this.service.publish(options);
     const versionId = result.store && result.store.currentVersion || options.versionId;
-    this.audit.record({
+    this._recordAudit({
       action: "publish",
       targetType: "version",
       targetId: versionId,
@@ -433,7 +474,7 @@ class KnowledgeVersionService {
   rollback(versionId, options = {}) {
     const before = this.getCurrentVersion();
     const result = this.service.rollback(versionId);
-    this.audit.record({
+    this._recordAudit({
       action: "rollback",
       targetType: "version",
       targetId: versionId,
@@ -547,9 +588,9 @@ const ASSISTANT_KB_SCOPES = Object.freeze({
 });
 
 function createKnowledgeControlPlane(options = {}) {
-  const audit = options.audit || new KnowledgeAuditService(options);
+  const audit = createAuditService(options);
   const service = options.service || defaultKnowledgeBaseService;
-  const idempotency = options.idempotency || new IdempotencyStore(options);
+  const idempotency = createIdempotencyStore(options);
   return {
     repository: new KnowledgeRepository({ service, audit, idempotency }),
     searchProvider: new KnowledgeSearchProvider({ service }),
@@ -569,6 +610,8 @@ module.exports = {
   KnowledgeSearchProvider,
   KnowledgeValidationService,
   KnowledgeVersionService,
+  createAuditService,
+  createIdempotencyStore,
   createKnowledgeControlPlane,
   fieldDiff,
 };
