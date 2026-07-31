@@ -6,9 +6,117 @@
 const capabilityManifestService = require("../capabilityManifestService");
 const skillRegistry = require("../skillRegistry");
 const toolRegistry = require("../toolRegistry");
-const { emptyPlan, normalizePlan } = require("./planSchema");
+const { emptyPlan, normalizePlan, MAX_STEPS } = require("./planSchema");
 const { validatePlan } = require("./planValidator");
 const { reasonCodeForTool } = require("./plannerPolicy");
+
+// Deterministic purpose→tool hints used to narrow a model skeleton step to the
+// subset of the step Skill's tools that match the step purpose. Narrowing never
+// escapes the five-factor allowedToolIds filter applied afterwards.
+const TOOL_PURPOSE_HINTS = {
+  get_today_courses: /今天|今日|当天|当前课程|today/i,
+  get_tomorrow_courses: /明天|明日|tomorrow/i,
+  get_next_course: /下一节|下节|接下来|next/i,
+  get_week_schedule: /周课表|整周|本周课程|week/i,
+  get_teaching_week: /教学周|第几周|teaching.?week/i,
+  get_term_calendar: /校历|日历|calendar/i,
+  search_empty_rooms: /空教室|空闲教室|自习|empty.?room/i,
+  search_continuous_empty_rooms: /连续.*(空|节)|持续空闲|continuous/i,
+  get_campus_weather: /天气|下雨|气温|weather/i,
+  get_course_weather_advice: /天气|穿衣|weather/i,
+  search_campus_place: /地点|位置|哪里|附近|place|location/i,
+  get_campus_route: /路线|怎么走|导航|route/i,
+  get_classroom_location: /教室.*(位置|在哪)|楼栋|classroom.?location/i,
+  rag_search: /知识|说明|如何|怎么办|knowledge/i,
+  search_school_index: /全校|索引|检索|index/i,
+  get_schedule_detail: /详情|detail/i,
+  diagnose_data_status: /诊断|状态|diagnos/i,
+  explain_personal_import: /导入|import/i,
+  recommend_meeting_time: /会议|聚会|meeting/i,
+  clarify_missing_slot: /澄清|clarif/i,
+};
+
+// Honest planSource label for plans the model skeleton did NOT drive.
+function planSourceForDecision(decisionSource, runtimeMode) {
+  const source = String(decisionSource || "");
+  if (source === "deterministic_adaptive") return "deterministic_adaptive";
+  if (source === "deterministic_fallback") return "deterministic_fallback";
+  if (runtimeMode === "public") return "deterministic_public";
+  return "deterministic";
+}
+
+// Expand the model Decision plan.steps skeleton into tool-level steps. Each
+// model step keeps its skillId; tool details are completed deterministically by
+// the step Skill's planBuilder and filtered by the five-factor allowed set.
+// Non-compliant steps are dropped with an enum reason recorded in adjustments.
+function expandModelSkeleton(contract, options = {}) {
+  const adjustments = [];
+  const steps = [];
+  const seenTools = new Set();
+  const contractSteps = Array.isArray(contract.plan && contract.plan.steps) ? contract.plan.steps : [];
+  const kept = contractSteps.slice(0, MAX_STEPS);
+  contractSteps.slice(MAX_STEPS).forEach((step) => {
+    adjustments.push({ stepId: String(step && step.id || ""), reasonCode: "MODEL_STEP_TRUNCATED" });
+  });
+  kept.forEach((step) => {
+    const stepId = String(step && step.id || "");
+    const skill = skillRegistry.getSkill(step && step.skillId);
+    if (!skill || (Array.isArray(skill.runtimeModes) && skill.runtimeModes.length
+      && !skill.runtimeModes.includes(options.runtimeMode))) {
+      adjustments.push({ stepId, reasonCode: "MODEL_STEP_SKILL_UNKNOWN" });
+      return;
+    }
+    const built = typeof skill.planBuilder === "function"
+      ? skill.planBuilder({
+        message: options.message,
+        context: Object.assign({}, options.context, { runtimeMode: options.runtimeMode }),
+        intent: options.intent,
+        runtimeMode: options.runtimeMode,
+      })
+      : toolRegistry.buildPlanForIntent(options.intent, options.message, options.context);
+    const builtValid = (Array.isArray(built) ? built : [])
+      .map((toolStep) => ({
+        toolName: String(toolStep && (toolStep.toolName || toolStep.name) || ""),
+        args: toolStep && (toolStep.args || toolStep.input) || {},
+      }))
+      .filter((toolStep) => toolStep.toolName);
+    const usable = builtValid.filter((toolStep) => options.allowedSet.has(toolStep.toolName));
+    if (!usable.length) {
+      adjustments.push({ stepId, reasonCode: "MODEL_STEP_TOOL_FILTERED" });
+      return;
+    }
+    if (usable.length < builtValid.length) {
+      // Five-factor filter rewrote the step: some planBuilder tools rejected.
+      adjustments.push({ stepId, reasonCode: "MODEL_STEP_TOOL_FILTERED" });
+    }
+    const purpose = String(step && step.purpose || "");
+    const hinted = usable.length > 1
+      ? usable.filter((toolStep) => TOOL_PURPOSE_HINTS[toolStep.toolName]
+        && TOOL_PURPOSE_HINTS[toolStep.toolName].test(purpose))
+      : [];
+    const chosen = hinted.length ? hinted : usable;
+    let truncated = false;
+    chosen.forEach((toolStep) => {
+      if (seenTools.has(toolStep.toolName)) return;
+      if (steps.length >= MAX_STEPS) {
+        truncated = true;
+        return;
+      }
+      seenTools.add(toolStep.toolName);
+      steps.push({
+        id: `step-${steps.length + 1}`,
+        skillId: skill.id,
+        toolName: toolStep.toolName,
+        args: toolStep.args,
+        reasonCode: reasonCodeForTool(toolStep.toolName),
+        dependsOn: [],
+        stopOnFailure: true,
+      });
+    });
+    if (truncated) adjustments.push({ stepId, reasonCode: "MODEL_STEP_TRUNCATED" });
+  });
+  return { steps, adjustments };
+}
 
 const CLARIFICATION_HINTS = {
   teacherName: {
@@ -177,6 +285,16 @@ function plan(input = {}) {
   const context = input.context || {};
   const skill = input.skill || skillRegistry.getSkillForIntent(intent.name);
   const clarification = detectMissingSlot(message, intent);
+  const decisionSource = String(input.decisionSource || "");
+  const contract = input.decisionContract && typeof input.decisionContract === "object"
+    ? input.decisionContract
+    : null;
+  // The skeleton only constrains planning when the Decision Contract truly came
+  // from the model; deterministic/adaptive/public synthetic contracts keep the
+  // historical deterministic behavior bit-for-bit.
+  const skeletonEligible = decisionSource === "model"
+    && contract && contract.plan && Array.isArray(contract.plan.steps);
+  const deterministicSource = planSourceForDecision(decisionSource, runtimeMode);
 
   if (clarification) {
     return validatePlan(normalizePlan({
@@ -196,8 +314,57 @@ function plan(input = {}) {
       }],
       stopCondition: "clarification_needed",
       plannerType: "deterministic",
+      planSource: deterministicSource,
+      planAdjustments: skeletonEligible && contract.plan.steps.length
+        ? [{ stepId: "plan", reasonCode: "MODEL_SKELETON_BYPASSED" }]
+        : [],
     }), { runtimeMode, skill: skillRegistry.getSkill("clarify_query") });
   }
+
+  // Consume the model plan skeleton: the model step skillId sequence constrains
+  // which Skills contribute steps and in which order; tool-level details are
+  // completed deterministically and filtered by the five-factor allowed set.
+  let skeletonAdjustments = [];
+  if (skeletonEligible) {
+    if (!contract.plan.steps.length) {
+      skeletonAdjustments = [{ stepId: "plan", reasonCode: "MODEL_SKELETON_EMPTY" }];
+    } else {
+      const allowedSet = new Set(hasExplicitToolScope
+        ? input.availableTools.map(String)
+        : (skill && skill.allowedTools) || []);
+      const expanded = expandModelSkeleton(contract, {
+        message,
+        context,
+        intent,
+        runtimeMode,
+        allowedSet,
+      });
+      if (expanded.steps.length) {
+        return validatePlan(normalizePlan({
+          goal: safeGoal(intent),
+          intent: intent.name || "",
+          confidence: Number(intent.confidence) || 0,
+          slots: Object.assign({}, intent.slots || {}, context.conversationSlots || {}, input.conversationState && input.conversationState.contextSlots || {}),
+          needsClarification: false,
+          steps: expanded.steps,
+          stopCondition: "all_steps_done",
+          plannerType: "deterministic",
+          planSource: "model_skeleton",
+          planAdjustments: expanded.adjustments,
+        }), {
+          runtimeMode,
+          skill,
+          allowedTools: Array.from(allowedSet),
+        });
+      }
+      // Model skeleton unusable: controlled degradation to deterministic
+      // generation with every rejection reason preserved.
+      skeletonAdjustments = expanded.adjustments.length
+        ? expanded.adjustments
+        : [{ stepId: "plan", reasonCode: "MODEL_SKELETON_EMPTY" }];
+    }
+  }
+  const planSource = skeletonAdjustments.length ? "deterministic_fallback" : deterministicSource;
 
   // Prefer registered skill / toolRegistry plans for known multi-step intents so
   // capability contracts stay stable; use expandMultiStepPlan only as enrichment.
@@ -290,6 +457,8 @@ function plan(input = {}) {
         : [],
       stopCondition: "all_steps_done",
       plannerType: "deterministic",
+      planSource,
+      planAdjustments: skeletonAdjustments,
     }), {
       runtimeMode,
       skill: skillRegistry.getSkill("knowledge_search") || skill,
@@ -323,6 +492,8 @@ function plan(input = {}) {
     steps: rawSteps,
     stopCondition: "all_steps_done",
     plannerType: "deterministic",
+    planSource,
+    planAdjustments: skeletonAdjustments,
   }), {
     runtimeMode,
     skill: (multi.length > 1 || rawSteps.length > 1)
@@ -342,6 +513,9 @@ function replan(input = {}) {
   const observations = Array.isArray(input.previousObservations) ? input.previousObservations : [];
   const hasExplicitToolScope = Array.isArray(input.availableTools);
   const explicitToolScope = new Set(hasExplicitToolScope ? input.availableTools.map(String) : []);
+  const replanSource = capabilityManifestService.normalizeRuntimeMode(input.runtimeMode || "public") === "public"
+    ? "deterministic_public"
+    : "deterministic";
   const replanCount = Math.max(0, Number(previous.replanCount) || 0) + 1;
   if (replanCount > MAX_REPLAN) {
     return validatePlan(normalizePlan({
@@ -388,6 +562,7 @@ function replan(input = {}) {
       stopCondition: "clarification_needed",
       replanCount,
       plannerType: "deterministic",
+      planSource: replanSource,
     }), {
       runtimeMode: input.runtimeMode,
       allowedTools: hasExplicitToolScope
@@ -422,6 +597,7 @@ function replan(input = {}) {
       stopCondition: "empty_result_recovery",
       replanCount,
       plannerType: "deterministic",
+      planSource: replanSource,
     }), {
       runtimeMode: input.runtimeMode,
       allowedTools: hasExplicitToolScope
@@ -445,5 +621,7 @@ module.exports = {
   plan,
   replan,
   detectMissingSlot,
+  expandModelSkeleton,
   expandMultiStepPlan,
+  planSourceForDecision,
 };

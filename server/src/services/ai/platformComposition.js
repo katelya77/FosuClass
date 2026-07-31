@@ -1,5 +1,5 @@
 const { createAgentRuntime, createContextAssembler } = require("../../../../packages/agent-runtime");
-const { EXECUTION_POLICIES, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
+const { EXECUTION_POLICIES, createMetricsStore, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
 const { createSkillCatalog } = require("../../../../packages/skill-runtime");
@@ -59,9 +59,14 @@ const ports = createFosuTurnPorts({
   contextAssembler: platformContextAssembler,
 });
 const stages = createFosuStages({ plugin, ports });
+// 平台级共享 Metrics Store：Runtime 六阶段与 Run Handler 首事件延迟（firstEvent
+// 桶）聚合到同一处，经 getDiagnostics 暴露（P2R R3.7，低基数标签词表见
+// provider-runtime metrics）。
+const platformMetrics = createMetricsStore({ sampleLimit: 2000 });
 const runtime = createAgentRuntime({
   protocol: platformProtocol,
   uiSchema,
+  stageMetrics: platformMetrics,
   traceSink(trace) {
     recentPlatformTraces.push(trace);
     if (recentPlatformTraces.length > 200) recentPlatformTraces.splice(0, recentPlatformTraces.length - 200);
@@ -90,6 +95,8 @@ function getDiagnostics() {
     toolCount: plugin.tools.length,
     recentTraceCount: recentPlatformTraces.length,
     providerRuntime: providerRuntimeComposition.getProviderRuntimeDiagnostics(),
+    // 首事件延迟独立桶（含 environment 标签；success/all-runs 双序列同六阶段口径）。
+    firstEventLatency: platformMetrics.summary("firstEvent"),
   });
 }
 
@@ -144,6 +151,7 @@ function getRunHandlers() {
     buildFailureResponse: agentService.buildServiceFailureResponse,
     log: safeLog,
     runRepositoryId: "agentRunEventService",
+    metrics: platformMetrics,
     resolvePrincipal(req) {
       const session = req && req.fosuSession || null;
       return {

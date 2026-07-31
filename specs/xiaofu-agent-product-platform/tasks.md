@@ -67,10 +67,10 @@
 
 详细验收标准：[`p2r-acceptance.md`](./p2r-acceptance.md)。Evidence：`docs/xiaofu-agent/product-platform-p2r-evidence.md`。
 
-- [ ] plan.steps 经 Schema 校验与五因子交集后真实影响 resolvedPlan；planBuilder 不得无条件丢弃合规模型计划；Trace 区分 proposedPlan/resolvedPlan 及改写原因。
-- [ ] 建立单一 retryability / fallback eligibility 分类函数，Provider Runtime、Decision、Response 共用；配置类 4xx fail fast 不 fallback；fallback 每 Turn 至多一次且共享总 Deadline。
-- [ ] outcome-aware 性能指标：stage × outcome（success/failed/cancelled/degraded）× executionPolicy × usedFallback × taskComplexity；success-only 与 all-runs P50/P95 分离；首事件延迟独立统计；低基数标签。
-- [ ] 运行相关门禁并提交 `fix(agent): close P2 decision and fallback truth gaps`。
+- [x] plan.steps 经 Schema 校验与五因子交集后真实影响 resolvedPlan；planBuilder 不得无条件丢弃合规模型计划；Trace 区分 proposedPlan/resolvedPlan 及改写原因。
+- [x] 建立单一 retryability / fallback eligibility 分类函数，Provider Runtime、Decision、Response 共用；配置类 4xx fail fast 不 fallback；fallback 每 Turn 至多一次且共享总 Deadline。
+- [x] outcome-aware 性能指标：stage × outcome（success/failed/cancelled/degraded）× executionPolicy × usedFallback × taskComplexity；success-only 与 all-runs P50/P95 分离；首事件延迟独立统计；低基数标签。
+- [x] 运行相关门禁并提交 `fix(agent): close P2 decision and fallback truth gaps`。
   - _Requirements: R2.4, R2.6, R3.5, R3.7_
   - 不含：P3 记忆实现、P4 热发布、旧 Planner 删除。P2R 完成前不得开始 P4。
 

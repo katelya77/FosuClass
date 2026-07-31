@@ -95,7 +95,14 @@ async function run() {
       goal: "get_teaching_week",
       selectedSkill: "teaching_week",
       fallbackPath: ["deepseek:success"],
+      proposedPlan: { stepCount: 1, skillIds: ["teaching_week"] },
     });
+    // Model skeleton must genuinely drive the resolved plan (non-public Turn).
+    const strictSkillTool = response.platformTrace.stages.find((stage) => stage.stage === "skill_tool");
+    assert.ok(strictSkillTool);
+    assert.deepStrictEqual(strictSkillTool.details.resolvedPlan, { stepCount: 1, skillIds: ["teaching_week"] });
+    assert.strictEqual(strictSkillTool.details.planSource, "model_skeleton");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(strictSkillTool.details, "planAdjustmentReasons"), false);
     assert.strictEqual(response.intent, "get_teaching_week");
     assert.strictEqual(response.understanding.source, "model");
     assert.strictEqual(response.goalContract.goal, "get_teaching_week");
@@ -115,6 +122,11 @@ async function run() {
     assert.strictEqual(invalidDecisionStage.details.decisionSource, "deterministic_fallback");
     assert.ok(invalidDecisionStage.details.fallbackPath[0].includes("PROVIDER_STRUCTURED_OUTPUT_INVALID")
       || invalidDecisionStage.details.fallbackPath[0].includes("DECISION_EXTRA_FIELD"));
+    // P2R Wave 2：降级链路在 trial/dev Trace 中暴露失败分类落点（低基数枚举）。
+    assert.strictEqual(invalidDecisionStage.details.failureClass, "schema_violation");
+    assert.strictEqual(typeof invalidDecisionStage.details.fallbackReason, "string");
+    assert.ok(invalidDecisionStage.details.fallbackReason.length > 0);
+    assert.strictEqual(invalidDecisionStage.details.remainingFallbackBudget, 1);
 
     responseContract = validDecision();
     configuredPolicy = "adaptive";
@@ -130,6 +142,13 @@ async function run() {
     const adaptiveStage = adaptive.platformTrace.stages.find((stage) => stage.stage === "decision");
     assert.strictEqual(adaptiveStage.details.executionPolicy, "adaptive");
     assert.strictEqual(adaptiveStage.details.decisionSource, "deterministic_adaptive");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(adaptiveStage.details, "proposedPlan"), false,
+      "adaptive fast path has no model skeleton to expose");
+    const adaptiveSkillTool = adaptive.platformTrace.stages.find((stage) => stage.stage === "skill_tool");
+    assert.ok(adaptiveSkillTool);
+    assert.strictEqual(adaptiveSkillTool.details.planSource, "deterministic_adaptive",
+      "adaptive fast path must honestly record the deterministic plan source");
+    assert.deepStrictEqual(adaptiveSkillTool.details.resolvedPlan, { stepCount: 1, skillIds: ["teaching_week"] });
 
     const callsBeforePublic = requests.length;
     const publicResponse = await agentService.chat({
@@ -143,6 +162,19 @@ async function run() {
     assert.strictEqual(publicStage.details.executionPolicy, "deterministic");
     assert.strictEqual(Object.prototype.hasOwnProperty.call(publicStage.details, "actualFirstProvider"), false,
       "public client trace must not expose Provider diagnostics");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(publicStage.details, "proposedPlan"), false,
+      "public deterministic Turn must not expose a model proposedPlan");
+    // P2R Wave 2：失败分类字段不得出现在 public 客户端 Trace。
+    ["failureClass", "fallbackReason", "remainingFallbackBudget"].forEach((field) => {
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(publicStage.details, field), false,
+        `public client trace must not expose ${field}`);
+    });
+    const publicSkillTool = publicResponse.platformTrace.stages.find((stage) => stage.stage === "skill_tool");
+    assert.ok(publicSkillTool);
+    ["resolvedPlan", "planSource", "planAdjustmentReasons"].forEach((field) => {
+      assert.strictEqual(Object.prototype.hasOwnProperty.call(publicSkillTool.details, field), false,
+        `public client trace must not expose ${field}`);
+    });
     console.log("test-agent-strict-decision: PASS");
   } finally {
     providerConfigService.resolveRuntimeProviderConfig = originalResolve;

@@ -1,4 +1,5 @@
 const { createDeadline, createStageSignal } = require("./deadline");
+const { classifyFallbackEligibility } = require("./fallbackEligibility");
 const { createMetricsStore } = require("./metrics");
 
 function codedError(code, message, extra = {}) {
@@ -132,7 +133,16 @@ function createProviderRuntime(options = {}) {
       if (!cancelled) markFailure(provider, code);
       metrics.record(input.stage, { durationMs, outcome: cancelled ? "cancelled" : "failed", fallback });
       emit(input.onEvent, { type: "provider.failed", provider, stage: input.stage, status: "failed", latencyMs: durationMs, reasonCode: code, providerUsed: true, fallback });
-      throw codedError(code, error && error.message, { cause: error, attempted: true });
+      // P2R：每次尝试的失败分类随 codedError 透传（failureClass/fallbackEligible/failFast），
+      // Trace 统一落点由 Wave 2 收尾。
+      const classification = classifyFallbackEligibility(error);
+      throw codedError(code, error && error.message, {
+        cause: error,
+        attempted: true,
+        failureClass: classification.failureClass,
+        fallbackEligible: classification.fallbackEligible,
+        failFast: classification.failFast,
+      });
     } finally {
       stageSignal.cleanup();
     }
@@ -163,6 +173,14 @@ function createProviderRuntime(options = {}) {
     let actualFirstProvider = "";
     let attemptCount = 0;
     let lastError = null;
+    function remainingFallbackBudget() {
+      const ledger = input.providerAttemptLedger;
+      if (ledger && typeof ledger.snapshot === "function") {
+        const snap = ledger.snapshot() || {};
+        return Math.max(0, Number(snap.maxFallbacks || 0) - Number(snap.fallbacksUsed || 0));
+      }
+      return null;
+    }
     for (let index = 0; index < providers.length; index += 1) {
       const provider = providers[index];
       const claimFallback = index > 0 && input.providerAttemptLedger
@@ -187,15 +205,39 @@ function createProviderRuntime(options = {}) {
           if (!actualFirstProvider) actualFirstProvider = provider;
         }
         fallbackPath.push(`${provider}:${errorCode(error)}`);
-        if (errorCode(error) === "ABORTED") throw Object.assign(error, { intendedProvider, actualFirstProvider, fallbackPath });
+        // P2R：单一 fallback eligibility 分类。ABORTED 视为 cancelled（fail fast）。
+        // failFast（invalid_model/bad_request/401/403/配置缺失/Schema 类等确定性错误）
+        // 直接重抛并附完整链路字段，不再推进 fallback Provider；eligible（timeout/network/
+        // 429/5xx）与 skipped（熔断/未注册/方法不支持/预算耗尽/租约耗尽）才继续推进——
+        // skipped 码在 invokeAttempt 内先于账本 claim 抛出，因此不消耗 fallback 预算。
+        const classification = classifyFallbackEligibility(error);
+        if (errorCode(error) === "ABORTED" || classification.failFast) {
+          throw Object.assign(error, {
+            intendedProvider,
+            actualFirstProvider,
+            fallbackProvider: providers[1] || "",
+            fallbackPath: Object.freeze(fallbackPath.slice()),
+            attemptCount,
+            failureClass: classification.failureClass,
+            fallbackEligible: false,
+            failFast: true,
+            fallbackReason: classification.reason,
+            remainingFallbackBudget: remainingFallbackBudget(),
+          });
+        }
       }
     }
+    const exhaustionClassification = classifyFallbackEligibility(lastError);
     throw codedError("PROVIDER_CHAIN_EXHAUSTED", "Structured Provider attempts were exhausted", {
       cause: lastError,
       intendedProvider,
       actualFirstProvider,
+      fallbackProvider: providers[1] || "",
       fallbackPath: Object.freeze(fallbackPath.slice()),
       attemptCount,
+      failureClass: exhaustionClassification.failureClass,
+      fallbackReason: exhaustionClassification.reason,
+      remainingFallbackBudget: remainingFallbackBudget(),
     });
   }
 

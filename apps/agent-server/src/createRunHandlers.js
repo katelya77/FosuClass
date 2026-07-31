@@ -82,6 +82,8 @@ function createRunHandlers(options = {}) {
     ? options.resolvePollCredential
     : (req) => String(req && req.query && req.query.pollToken || req && req.body && req.body.pollToken || "");
   const runRepositoryId = String(options.runRepositoryId || "run-repository").slice(0, 100);
+  // P2R Wave 2：首事件延迟经组合层注入的共享 Metrics Store 聚合（firstEvent 桶）。
+  const metricsStore = options.metrics && typeof options.metrics.record === "function" ? options.metrics : null;
 
   requireMethod(platform, "executeTurn", "platform");
   ["createRun", "createEventEmitter", "getRunView", "cancelRun", "isCancelled", "setResult", "statusFromResult"]
@@ -221,6 +223,20 @@ function createRunHandlers(options = {}) {
       requestId,
       conversationId,
     });
+    if (metricsStore) {
+      try {
+        // 首事件延迟独立桶（P2R：首个真实 RunEvent ≤500ms 口径）。environment 取自
+        // 服务端已判定的 runtimeMode；词表与 provider-runtime metrics 保持一致。
+        const environment = String(runtimeMode || "").toLowerCase();
+        metricsStore.record("firstEvent", {
+          durationMs: created.firstEventLatencyMs,
+          outcome: "ok",
+          labels: ["public", "trial", "dev"].includes(environment) ? { environment } : {},
+        });
+      } catch (metricsError) {
+        // 观测不得改变执行（与 providerRuntime emit 同一原则）。
+      }
+    }
     const controller = new AbortController();
     controllers.set(created.runId, controller);
     const idempotencyKeyAccepted = Boolean(String(body.idempotencyKey || "").trim());

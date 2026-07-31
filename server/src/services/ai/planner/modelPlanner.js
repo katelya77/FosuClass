@@ -2,6 +2,17 @@
  * Constrained model planner for trial/dev only.
  * Falls back to deterministicPlanner on any validation or provider failure.
  * Does not expose hidden reasoning; only structured JSON plan.
+ *
+ * @deprecated compatibility-only / deprecated candidate（2026-07-30, P2R）
+ * P2 统一 Decision 后，生产 Turn 管线不再调用本模块：decisionService 在所有
+ * 可达规划的路径上都返回 decisionContract（model / deterministic_policy /
+ * deterministic_adaptive / deterministic_fallback），agentKernel 因此始终以
+ * unifiedDecision=true 走 deterministicPlanner；配置类 fail fast 在规划前抛出，
+ * guard/记忆早退不进入规划。planner/index.js 与 observationLoop.js 中
+ * useModelPlanner 分支仅为旧协议/兼容测试保留（tools/test-agent-planner.js、
+ * test-agent-evaluation-120.js、test-planner-model-adapter*.js 直接引用）。
+ * 退役门槛（P6b 完成、旧量归零、新 Runtime 全覆盖、对照测试、release-gate 绿）
+ * 达成前不删除、不重构。见 specs/xiaofu-agent-product-platform/p2r-acceptance.md §5。
  */
 
 const capabilityManifestService = require("../capabilityManifestService");

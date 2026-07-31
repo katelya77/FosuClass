@@ -3,6 +3,7 @@
 > 日期：2026-07-30
 > 分支：`codex/xiaofu-agent-product-platform`
 > 范围：三种执行策略、统一 DecisionContract V2、Provider Runtime、总 Deadline、取消、连接复用、单次 fallback 与阶段性能真值。
+> 修订（2026-07-30, P2R）：plan.steps 消费、fallback 单一分类与 outcome-aware 指标口径以 `product-platform-p2r-evidence.md` 为准；本文 §4/§5 已就地修正过时表述。
 
 ## 1. 结论
 
@@ -52,7 +53,7 @@ DecisionContract V2 采用精确字段校验，Skill ID 必须来自本次发布
 - Run 接受时生成不超过 15 秒的绝对 Deadline，并在 createRun 响应返回 `deadlineAt`。
 - Context、Decision、Skill/Tool、Verification、Response、UI 都收到从剩余时间派生的 `AbortSignal` 与阶段 lease。
 - Provider HTTP Adapter 使用 lease 覆盖旧的完整固定超时，并通过按 origin 复用的 keep-alive Agent 连接复用。
-- Decision 与 Response 共用一个闭包账本；整个 Run 最多一次真实 fallback，而不是每个阶段各自重试一轮。
+- Decision 与 Response 共用一个闭包账本；整个 Run 最多一次真实 fallback，而不是每个阶段各自重试一轮。（P2R 修订：是否可以 fallback 由 `packages/provider-runtime/src/fallbackEligibility.js` 单一分类决定——配置类/Schema 类/401/403 fail fast 不换 Provider，timeout/network/429/5xx 才消耗共享账本；详见 P2R 证据 §3。）
 - Coze 的异步轮询等待可取消，Run 取消后不会继续后台轮询。
 - Tool Runtime 和 Fosu Tool Adapter 接收同一取消信号；超时或取消后不会进入后续成功阶段。
 
@@ -64,15 +65,15 @@ DecisionContract V2 采用精确字段校验，Skill ID 必须来自本次发布
 createRun, decision, tool, verification, response, total
 ```
 
-Runtime 与 Provider Runtime 都维护低基数、无提示词/参数/身份数据的 count、P50、P95、失败、取消和 fallback 指标。Admin topology 直接读取生产 Runtime 的相同诊断对象，Recent Runs 直接读取生产 trace sink，不维护第二份统计事实源。
+Runtime 与 Provider Runtime 都维护低基数、无提示词/参数/身份数据的指标。（P2R 修订：标签枚举为 outcome/executionPolicy/usedFallback/providerClass/taskComplexity/environment，未知标签拒绝；`count` 为全样本口径，`p50Ms/p95Ms` 自 P2R 起为 success-only 序列，all-runs 与 fallback 分离口径见 `allRuns.*`/`fallback.*`/`nonFallback.*`；degraded/timeout 独立计数，首事件延迟独立成桶。详见 P2R 证据 §4。）Admin topology 直接读取生产 Runtime 的相同诊断对象，Recent Runs 直接读取生产 trace sink，不维护第二份统计事实源。
 
-受控 mock 基准（本机 Node.js、无外部网络）：
+受控 mock 基准（本机 Node.js v24、无外部网络；P2R 复测值）：
 
 | 项目 | 结果 | 门槛 |
 |---|---:|---:|
-| 首个持久 `run.accepted` RunEvent | 0 ms | ≤500 ms |
-| 简单 Turn P95 | 54 ms | ≤6 s |
-| 多工具 Turn P95 | 49 ms | ≤12 s |
+| 首个持久 `run.accepted` RunEvent | 1 ms | ≤500 ms |
+| 简单 Turn P95（success-only） | 79 ms | ≤6 s |
+| 多工具 Turn P95（success-only） | 78 ms | ≤12 s |
 | Run 硬上限 | 15,000 ms | ≤15 s |
 
 这些数字只证明预算机制和受控运行时开销，不代表 staging-live Provider 网络时延。凭据存在时的 staging-live 三 Provider 延迟与错误率仍需在隔离环境执行，不能由 mock 冒充。

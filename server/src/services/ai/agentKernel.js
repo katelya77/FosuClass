@@ -7,6 +7,7 @@ const defaultSkillRegistry = require("./skillRegistry");
 const toolRegistry = require("./toolRegistry");
 const planner = require("./planner");
 const { runObservationLoop } = require("./planner/observationLoop");
+const { normalizePlan } = require("./planner/planSchema");
 const { routeCapabilities, getToolSafetyMeta } = require("./capabilityRouter");
 const { updateWorkingMemory } = require("./memory/workingMemory");
 
@@ -358,6 +359,7 @@ class AgentKernel {
             availableSkills,
             unifiedDecision: input.unifiedDecision === true,
             decisionContract: input.decisionContract || null,
+            decisionSource: input.decisionSource || "",
           }));
         } catch (error) {
           // Hard policy errors must surface; soft planner failures fall back.
@@ -369,9 +371,18 @@ class AgentKernel {
           ].includes(error.code)) {
             throw error;
           }
+          // Soft planner failure (a compliant model skeleton never reaches this
+          // path — deterministicPlanner degrades it in place). Rebuild the plan
+          // from the primary Skill only, and record the controlled degradation.
+          const reasonCode = String(error && error.code || "PLANNER_SOFT_FAILURE").slice(0, 80);
+          this.emit(input, {
+            type: "planner.failed",
+            status: "fallback",
+            reasonCode,
+          });
           const fallbackPlan = skill.planBuilder({ message, context, intent, runtimeMode });
           this.validatePlan(skill, fallbackPlan, runtimeMode, allowedToolIds);
-          structured = {
+          structured = normalizePlan({
             goal: intent.name,
             intent: intent.name,
             confidence: Number(intent.confidence) || 0,
@@ -390,7 +401,9 @@ class AgentKernel {
             stopCondition: "all_steps_done",
             replanCount: 0,
             plannerType: "deterministic_fallback",
-          };
+            planSource: "deterministic_fallback",
+            planAdjustments: [{ stepId: "plan", reasonCode: "PLANNER_SOFT_FALLBACK" }],
+          });
         }
         if (structured.steps && structured.steps.length) {
           const legacyPlan = structured.steps.map((step) => ({

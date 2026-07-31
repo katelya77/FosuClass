@@ -98,6 +98,15 @@ function createAgentPlatform(options = {}) {
           const details = Object.assign({}, stage.details || {});
           delete details.intendedProvider;
           delete details.actualFirstProvider;
+          // P2R Wave 2：失败分类字段只允许 trial/dev 客户端 Trace。
+          delete details.failureClass;
+          delete details.fallbackReason;
+          delete details.remainingFallbackBudget;
+          // P2R：计划来源字段同样只属 trial/dev（发射侧已门控，这里双保险）。
+          delete details.proposedPlan;
+          delete details.resolvedPlan;
+          delete details.planSource;
+          delete details.planAdjustmentReasons;
           return Object.assign({}, stage, { details });
         }),
       })
