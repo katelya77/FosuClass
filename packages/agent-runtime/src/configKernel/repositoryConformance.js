@@ -1,8 +1,10 @@
 // P4a：Config Kernel Repository 契约测试（conformance suite）。
-// 同一套契约对文件适配器与未来的 PostgreSQL 适配器（P5a）分别运行：
+// 同一套契约对文件适配器与 PostgreSQL 适配器（P5a WS2）分别运行：
 //   const { runConfigKernelRepositoryConformance } = require("...");
-//   runConfigKernelRepositoryConformance({ assert, label: "file", createRepository: () => ... });
+//   await runConfigKernelRepositoryConformance({ assert, label: "file", createRepository: () => ... });
 // 每个用例在全新 repository 实例上执行（调用方负责隔离/清理）。
+// P5a 起用例与 runner 均为 async：文件适配器的同步返回被 await 透明容忍，
+// createRepository 也可返回 Promise（PG 侧需要建库/迁移）。
 
 const { REPOSITORY_METHODS } = require("./fileRepository");
 
@@ -34,17 +36,20 @@ function baseSnapshot(overrides = {}) {
 }
 
 // digest 由调用方用与实现一致的 canonical 算法计算，契约测试通过注入获得。
-function runConfigKernelRepositoryConformance({ assert, label, createRepository, sha256Digest }) {
+async function runConfigKernelRepositoryConformance({ assert, label, createRepository, sha256Digest }) {
   if (!assert || typeof createRepository !== "function" || typeof sha256Digest !== "function") {
     throw new Error("conformance requires assert, createRepository and sha256Digest");
   }
   const results = [];
-  const record = (name, fn) => {
-    fn();
+  const record = async (name, fn) => {
+    await Promise.resolve(fn());
     results.push(name);
   };
-  const throwsCode = (fn, code) => {
-    assert.throws(fn, (error) => error && error.code === code);
+  // 同步抛（文件适配器）与异步拒绝（PG 适配器）统一经 async 包装进入 assert.rejects。
+  const throwsCode = async (fn, code) => {
+    await assert.rejects(async () => {
+      await fn();
+    }, (error) => error && error.code === code);
   };
 
   function signed(doc) {
@@ -53,83 +58,83 @@ function runConfigKernelRepositoryConformance({ assert, label, createRepository,
     return Object.assign({}, content, { digest: sha256Digest(content) });
   }
 
-  record(`${label}: exposes the full repository method set`, () => {
-    const repo = createRepository();
+  await record(`${label}: exposes the full repository method set`, async () => {
+    const repo = await createRepository();
     REPOSITORY_METHODS.forEach((method) => {
       assert.strictEqual(typeof repo[method], "function", `${method} must be implemented`);
     });
   });
 
-  record(`${label}: draft round-trip and isolation per environment`, () => {
-    const repo = createRepository();
+  await record(`${label}: draft round-trip and isolation per environment`, async () => {
+    const repo = await createRepository();
     const draft = { domain: "skill", artifactId: "conformance", environment: "trial", payload: { a: 1 }, updatedAt: "t", updatedBy: "u" };
-    repo.putDraft(draft);
-    assert.deepStrictEqual(repo.getDraft("skill", "conformance", "trial"), draft);
-    assert.strictEqual(repo.getDraft("skill", "conformance", "dev"), null);
-    assert.strictEqual(repo.getDraft("skill", "missing", "trial"), null);
+    await repo.putDraft(draft);
+    assert.deepStrictEqual(await repo.getDraft("skill", "conformance", "trial"), draft);
+    assert.strictEqual(await repo.getDraft("skill", "conformance", "dev"), null);
+    assert.strictEqual(await repo.getDraft("skill", "missing", "trial"), null);
   });
 
-  record(`${label}: versions are immutable and listed in order`, () => {
-    const repo = createRepository();
-    repo.putVersion(signed(baseVersionDoc({ version: 1 })));
-    repo.putVersion(signed(baseVersionDoc({ version: 2, payload: { skills: [{ id: "beta" }] } })));
-    throwsCode(() => repo.putVersion(signed(baseVersionDoc({ version: 1 }))), "CONFIG_KERNEL_VERSION_EXISTS");
-    assert.deepStrictEqual(repo.listVersions("skill", "conformance", "trial"), [1, 2]);
-    assert.deepStrictEqual(repo.listVersions("skill", "conformance", "public"), []);
-    assert.strictEqual(repo.getVersion("skill", "conformance", "trial", 2).payload.skills[0].id, "beta");
-    assert.strictEqual(repo.getVersion("skill", "conformance", "trial", 9), null);
+  await record(`${label}: versions are immutable and listed in order`, async () => {
+    const repo = await createRepository();
+    await repo.putVersion(signed(baseVersionDoc({ version: 1 })));
+    await repo.putVersion(signed(baseVersionDoc({ version: 2, payload: { skills: [{ id: "beta" }] } })));
+    await throwsCode(() => repo.putVersion(signed(baseVersionDoc({ version: 1 }))), "CONFIG_KERNEL_VERSION_EXISTS");
+    assert.deepStrictEqual(await repo.listVersions("skill", "conformance", "trial"), [1, 2]);
+    assert.deepStrictEqual(await repo.listVersions("skill", "conformance", "public"), []);
+    assert.strictEqual((await repo.getVersion("skill", "conformance", "trial", 2)).payload.skills[0].id, "beta");
+    assert.strictEqual(await repo.getVersion("skill", "conformance", "trial", 9), null);
   });
 
-  record(`${label}: pointers default empty and round-trip`, () => {
-    const repo = createRepository();
-    const empty = repo.readPointers("trial");
+  await record(`${label}: pointers default empty and round-trip`, async () => {
+    const repo = await createRepository();
+    const empty = await repo.readPointers("trial");
     assert.strictEqual(empty.seq, 0);
     assert.deepStrictEqual(empty.artifacts, {});
     const next = { environment: "trial", seq: 3, artifacts: { "skill:conformance": 2 }, updatedAt: "t" };
-    repo.writePointers(next);
-    assert.deepStrictEqual(repo.readPointers("trial"), next);
+    await repo.writePointers(next);
+    assert.deepStrictEqual(await repo.readPointers("trial"), next);
   });
 
-  record(`${label}: snapshots are retrievable by configVersion`, () => {
-    const repo = createRepository();
+  await record(`${label}: snapshots are retrievable by configVersion`, async () => {
+    const repo = await createRepository();
     const snap = signed(baseSnapshot());
-    repo.putSnapshot(snap);
-    assert.deepStrictEqual(repo.getSnapshot("trial", snap.configVersion), snap);
-    assert.strictEqual(repo.getSnapshot("trial", "cfg-trial-9999-000000000000"), null);
-    assert.deepStrictEqual(repo.listSnapshots("trial"), [snap.configVersion]);
-    assert.deepStrictEqual(repo.listSnapshots("dev"), []);
+    await repo.putSnapshot(snap);
+    assert.deepStrictEqual(await repo.getSnapshot("trial", snap.configVersion), snap);
+    assert.strictEqual(await repo.getSnapshot("trial", "cfg-trial-9999-000000000000"), null);
+    assert.deepStrictEqual(await repo.listSnapshots("trial"), [snap.configVersion]);
+    assert.deepStrictEqual(await repo.listSnapshots("dev"), []);
   });
 
-  record(`${label}: current ref switch is atomic and readable`, () => {
-    const repo = createRepository();
-    assert.strictEqual(repo.readCurrentRef("trial"), null);
-    repo.writeCurrentRef("trial", "cfg-trial-0001-abcdef123456");
-    assert.strictEqual(repo.readCurrentRef("trial").configVersion, "cfg-trial-0001-abcdef123456");
-    repo.writeCurrentRef("trial", "cfg-trial-0002-abcdef123456");
-    assert.strictEqual(repo.readCurrentRef("trial").configVersion, "cfg-trial-0002-abcdef123456");
-    assert.strictEqual(repo.readCurrentRef("public"), null);
+  await record(`${label}: current ref switch is atomic and readable`, async () => {
+    const repo = await createRepository();
+    assert.strictEqual(await repo.readCurrentRef("trial"), null);
+    await repo.writeCurrentRef("trial", "cfg-trial-0001-abcdef123456");
+    assert.strictEqual((await repo.readCurrentRef("trial")).configVersion, "cfg-trial-0001-abcdef123456");
+    await repo.writeCurrentRef("trial", "cfg-trial-0002-abcdef123456");
+    assert.strictEqual((await repo.readCurrentRef("trial")).configVersion, "cfg-trial-0002-abcdef123456");
+    assert.strictEqual(await repo.readCurrentRef("public"), null);
   });
 
-  record(`${label}: last-known-good round-trip`, () => {
-    const repo = createRepository();
-    assert.strictEqual(repo.readLkg("trial"), null);
+  await record(`${label}: last-known-good round-trip`, async () => {
+    const repo = await createRepository();
+    assert.strictEqual(await repo.readLkg("trial"), null);
     const snap = signed(baseSnapshot());
-    repo.writeLkg("trial", snap);
-    assert.deepStrictEqual(repo.readLkg("trial"), snap);
+    await repo.writeLkg("trial", snap);
+    assert.deepStrictEqual(await repo.readLkg("trial"), snap);
   });
 
-  record(`${label}: audit appends in order and respects limit`, () => {
-    const repo = createRepository();
-    repo.appendAudit({ at: "t1", op: "one", result: "ok" });
-    repo.appendAudit({ at: "t2", op: "two", result: "ok" });
-    assert.deepStrictEqual(repo.listAudit({ limit: 10 }).map((entry) => entry.op), ["one", "two"]);
-    assert.deepStrictEqual(repo.listAudit({ limit: 1 }).map((entry) => entry.op), ["two"]);
+  await record(`${label}: audit appends in order and respects limit`, async () => {
+    const repo = await createRepository();
+    await repo.appendAudit({ at: "t1", op: "one", result: "ok" });
+    await repo.appendAudit({ at: "t2", op: "two", result: "ok" });
+    assert.deepStrictEqual((await repo.listAudit({ limit: 10 })).map((entry) => entry.op), ["one", "two"]);
+    assert.deepStrictEqual((await repo.listAudit({ limit: 1 })).map((entry) => entry.op), ["two"]);
   });
 
-  record(`${label}: unsafe path segments are rejected`, () => {
-    const repo = createRepository();
-    throwsCode(() => repo.getDraft("sk../ill", "x", "trial"), "CONFIG_KERNEL_PATH_SEGMENT_INVALID");
-    throwsCode(() => repo.getVersion("skill", "conformance", "trial", 0), "CONFIG_KERNEL_VERSION_INVALID");
+  await record(`${label}: unsafe path segments are rejected`, async () => {
+    const repo = await createRepository();
+    await throwsCode(() => repo.getDraft("sk../ill", "x", "trial"), "CONFIG_KERNEL_PATH_SEGMENT_INVALID");
+    await throwsCode(() => repo.getVersion("skill", "conformance", "trial", 0), "CONFIG_KERNEL_VERSION_INVALID");
   });
 
   return Object.freeze(results);

@@ -53,7 +53,7 @@ async function main() {
   assert(!JSON.stringify(response.platformTrace).includes("currentScheduleSummary"));
   assert(response.ui && Array.isArray(response.ui.blocks));
 
-  const diagnostics = agentService.__getPlatformForTests();
+  const diagnostics = await agentService.__getPlatformForTests();
   assert.strictEqual(diagnostics.runtimePackage, "@xiaofu-agent/agent-runtime");
   assert.deepStrictEqual(diagnostics.pluginIds, ["fosu-campus"]);
   assert.strictEqual(diagnostics.legacyWholeChatCallback, false);

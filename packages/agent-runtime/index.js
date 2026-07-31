@@ -22,6 +22,7 @@ const {
   createConfigKernelFileRepository,
 } = require("./src/configKernel/fileRepository");
 const { runConfigKernelRepositoryConformance } = require("./src/configKernel/repositoryConformance");
+const { createConfigKernelPgRepository } = require("./src/configKernel/pgRepository");
 const { createMemoryPolicyPublicationAdapter } = require("./src/memoryPolicyPublicationAdapter");
 const { AGENT_CORE_MIGRATIONS } = require("./src/persistence/agentCoreMigrations");
 const { createMigrationRunner } = require("./src/persistence/migrations");
@@ -48,6 +49,7 @@ module.exports = Object.freeze({
   createAgentRuntime,
   createConfigKernel,
   createConfigKernelFileRepository,
+  createConfigKernelPgRepository,
   createContextAssembler,
   createMemoryPolicyPublicationAdapter,
   createMigrationRunner,

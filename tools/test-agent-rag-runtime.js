@@ -216,9 +216,9 @@ async function testIndexService() {
   });
 
   // 稳定 jobId + 幂等去重
-  const first = service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
+  const first = await service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
   assert.strictEqual(first.jobId, "rag:trial:test-kb:v1", "stable jobId");
-  const dupe = service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
+  const dupe = await service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
   assert.strictEqual(dupe.deduped, true, "same job deduped");
   assert.strictEqual(await service.drainQueueForTest(), true, "queue drains");
 
@@ -229,12 +229,12 @@ async function testIndexService() {
   assert.strictEqual(result.indexSource, "version");
 
   // 幂等：已完成的版本再次 requestBuild 不重建
-  const again = service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
+  const again = await service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 1 });
   assert.strictEqual(again.status, "done", "built version is idempotent");
 
   // v2 构建失败后查询回退 lkg（更旧版本），不发明内容
   artifacts[2] = null; // resolveArtifact 返回 null → 构建失败
-  service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 2 });
+  await service.requestBuild({ environment: "trial", artifactId: "a", kbId: "test-kb", version: 2 });
   await service.drainQueueForTest();
   let fellBack = null;
   try {
@@ -292,13 +292,13 @@ async function testRollbackSelfHealing() {
     failedRetryCooldownMs: 0,
     resolveArtifact: ({ version }) => artifacts[version],
   });
-  service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  await service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v1 builds");
-  service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
+  await service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v2 attempts drain");
   const failed = service.getIndexStatus({ environment: "trial", kbId: "kb" }).jobs.find((job) => job.version === 2);
   assert.strictEqual(failed.status, "failed", "v2 exhausts bounded retries");
-  service.requestBuild({ environment: "trial", kbId: "kb", version: 3 });
+  await service.requestBuild({ environment: "trial", kbId: "kb", version: 3 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v3 builds (lkg moves past the failed version)");
 
   // 服务侧自愈：回钉 v2 → lkg(v3) 被拒绝（更新），扫描兜底服务 v1。
@@ -309,7 +309,7 @@ async function testRollbackSelfHealing() {
 
   // 重建侧自愈：re-pin 即重试（无需显式 retry 标记），v2 恢复可用后自动重建。
   artifacts[2] = { documents: DOC_SET, retrieval: { topK: 2 } };
-  const repinned = service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
+  const repinned = await service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
   assert.strictEqual(repinned.status, "pending", "re-pin auto-requeues the failed job");
   assert.strictEqual(await service.drainQueueForTest(), true, "requeued v2 builds");
   const rebuilt = await service.query({ environment: "trial", kbId: "kb", version: 2, query: "password reset" });
@@ -328,11 +328,11 @@ async function testIndexSelfHealingEdges() {
     indexMemoTtlMs: 0, // 外删场景：关闭记忆化，读盘反映即时状态
     resolveArtifact: ({ version }) => artifacts[version],
   });
-  service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  await service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v1 builds");
 
   fs.rmSync(path.join(root, "rag-indexes", "trial", "kb", "v1.json"));
-  const reheal = service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+  const reheal = await service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
   assert.strictEqual(reheal.status, "pending", "deleted index re-queued in-process");
   assert.strictEqual(await service.drainQueueForTest(), true, "reheal builds");
   const rehealed = await service.query({ environment: "trial", kbId: "kb", version: 1, query: "password reset" });
@@ -356,7 +356,7 @@ async function testQueuePersistContainment() {
   const onUnhandled = (reason) => { unhandled = reason; };
   process.on("unhandledRejection", onUnhandled);
   try {
-    const accepted = service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
+    const accepted = await service.requestBuild({ environment: "trial", kbId: "kb", version: 1 });
     assert.ok(["pending", "failed"].includes(accepted.status), "requestBuild survives queue persist failure");
     assert.strictEqual(await service.drainQueueForTest(), true, "bounded attempts drain without hanging");
     await new Promise((resolve) => setTimeout(resolve, 100));

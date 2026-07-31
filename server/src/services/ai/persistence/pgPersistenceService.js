@@ -20,9 +20,11 @@ const {
   createMigrationRunner,
   createPgPool,
 } = require("../../../../../packages/agent-runtime");
-const {
-  CONVERSATION_MEMORY_STORE_MIGRATIONS,
-} = require("./migrations/0003ConversationMemoryStores");
+
+const fs = require("fs");
+const path = require("path");
+
+const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 
 let sharedPool = null;
 let sharedRunner = null;
@@ -34,9 +36,25 @@ function getPool() {
   return sharedPool;
 }
 
-/** 聚合全部已知 migration（版本序）：0002 预留 config kernel，见 migrations/ 目录纪律。 */
+/** 聚合全部已知 migration（版本序）：自动发现 migrations/ 下 NNNN*.js 文件，
+ * 每个文件须导出一个 migration 数组（版本全局唯一、严格递增由 runner 校验）。
+ * 各 workstream 只新增文件、不改本模块，避免并行改动冲突。 */
 function getMigrationList() {
-  return AGENT_CORE_MIGRATIONS.concat(CONVERSATION_MEMORY_STORE_MIGRATIONS);
+  const files = fs.readdirSync(MIGRATIONS_DIR)
+    .filter((name) => /^\d{4}.+\.js$/.test(name))
+    .sort();
+  const list = AGENT_CORE_MIGRATIONS.slice();
+  files.forEach((name) => {
+    const mod = require(path.join(MIGRATIONS_DIR, name));
+    const migrations = Object.keys(mod).map((key) => mod[key]).find((value) => Array.isArray(value) && value.length && typeof value[0].version === "number");
+    if (!migrations) {
+      const error = new Error(`migration file ${name} must export a non-empty migration array`);
+      error.code = "MIGRATION_DEFINITION_INVALID";
+      throw error;
+    }
+    list.push(...migrations);
+  });
+  return list.sort((a, b) => a.version - b.version);
 }
 
 function getMigrationRunner() {

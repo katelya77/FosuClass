@@ -161,7 +161,9 @@ function createRagIndexService(options = {}) {
     persistQueue();
     try {
       if (typeof resolveArtifact !== "function") throw codedError("RAG_INDEX_RESOLVER_REQUIRED");
-      const artifact = resolveArtifact({
+      // P5a：内核 async 化后 resolveArtifact 可返回 Promise（同步返回被
+      // await 透明容忍，既有测试注入的同步 mock 不受影响）。
+      const artifact = await resolveArtifact({
         environment: job.environment,
         artifactId: job.artifactId,
         version: job.version,
@@ -220,7 +222,9 @@ function createRagIndexService(options = {}) {
     });
   }
 
-  function requestBuild(input = {}) {
+  // P5a：与内核调用链统一为 async（返回同一 frozen 结果对象的 Promise）。
+  // 语义不变：幂等去重、失败重排队冷却、入队后 kick 异步构建。
+  async function requestBuild(input = {}) {
     const environment = String(input.environment || "");
     const kbId = String(input.kbId || "");
     const version = Number(input.version);

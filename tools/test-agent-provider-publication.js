@@ -143,15 +143,17 @@ function testPublicHardGuard() {
   console.log("✓ public hard guard re-applied after overlay merge; non-public untouched");
 }
 
-function testCompositionRoundtrip() {
+async function testCompositionRoundtrip() {
   const root = tmpRoot("compose");
   process.env.FOSU_AGENT_CONFIG_KERNEL_PATH = root;
   const composition = require("../server/src/services/ai/platformComposition");
+  // P5a：require 期不再种子，先 await init（file 模式 = 幂等种子）。
+  await composition.platformReady();
   const kernel = composition.getConfigKernel();
 
   // 种子：空 overlay（≡ P4b 前行为）
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
-  const overlayV1 = composition.resolveProviderOverlayForSnapshot(snapshotV1);
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
+  const overlayV1 = await composition.resolveProviderOverlayForSnapshot(snapshotV1);
   assert.deepStrictEqual(overlayV1, {}, "seed snapshot resolves to empty overlay");
 
   // 发布 v2：trial 环境换链
@@ -162,35 +164,41 @@ function testCompositionRoundtrip() {
     payload: { providerChain: ["deepseek", "mock"], timeoutMs: 9000 },
     actor: "p4b-test",
   };
-  kernel.saveDraft(draftInput);
-  assert.strictEqual(kernel.validateDraft(draftInput).ok, true);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true);
-  kernel.publishDraft(draftInput);
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
-  const overlayV2 = composition.resolveProviderOverlayForSnapshot(snapshotV2);
+  await kernel.saveDraft(draftInput);
+  assert.strictEqual((await kernel.validateDraft(draftInput)).ok, true);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true);
+  await kernel.publishDraft(draftInput);
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
+  const overlayV2 = await composition.resolveProviderOverlayForSnapshot(snapshotV2);
   assert.deepStrictEqual(overlayV2.providerChain, ["deepseek", "mock"], "new snapshot binds the published overlay");
   assert.strictEqual(overlayV2.timeoutMs, 9000);
 
   // 在途 Run 持有的 v1 快照仍解析空 overlay（发布不影响在途）
-  const inFlight = composition.resolveProviderOverlayForSnapshot(snapshotV1);
+  const inFlight = await composition.resolveProviderOverlayForSnapshot(snapshotV1);
   assert.deepStrictEqual(inFlight, {}, "in-flight snapshot keeps the pre-publish overlay");
 
   // rollback：新快照回到空 overlay
-  kernel.rollback({ domain: "provider", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
-  const snapshotV3 = kernel.getCurrentSnapshot("trial");
-  assert.deepStrictEqual(composition.resolveProviderOverlayForSnapshot(snapshotV3), {}, "rollback restores the seed overlay");
+  await kernel.rollback({ domain: "provider", artifactId: "fosu-campus", environment: "trial", toVersion: 1, actor: "p4b-test" });
+  const snapshotV3 = await kernel.getCurrentSnapshot("trial");
+  assert.deepStrictEqual(await composition.resolveProviderOverlayForSnapshot(snapshotV3), {}, "rollback restores the seed overlay");
 
   // public 环境种子解析同样为空 overlay（public 保护由运行时硬护栏兜底）
   assert.deepStrictEqual(
-    composition.resolveProviderOverlayForSnapshot(kernel.getCurrentSnapshot("public")),
+    await composition.resolveProviderOverlayForSnapshot(await kernel.getCurrentSnapshot("public")),
     {},
     "public seed overlay is empty"
   );
   console.log("✓ composition roundtrip: publish → snapshot binding → in-flight stability → rollback");
 }
 
-testValidation();
-testOverlayMapping();
-testPublicHardGuard();
-testCompositionRoundtrip();
+(async () => {
+  testValidation();
+  testOverlayMapping();
+  testPublicHardGuard();
+  await testCompositionRoundtrip();
+  console.log("\ntest-agent-provider-publication: PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
 console.log("\ntest-agent-provider-publication: PASS");

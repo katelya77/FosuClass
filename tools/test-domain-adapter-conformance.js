@@ -222,7 +222,7 @@ const DOMAINS = [
   },
 ];
 
-function runDomainAdapterConformance(spec) {
+async function runDomainAdapterConformance(spec) {
   const adapter = spec.createAdapter();
   const label = `[${spec.domain}]`;
 
@@ -263,13 +263,13 @@ function runDomainAdapterConformance(spec) {
     domainAdapters: { [spec.domain]: adapter },
     environments: ["trial"],
   });
-  kernel.seedEnvironment("trial", [{
+  await kernel.seedEnvironment("trial", [{
     domain: spec.domain,
     artifactId: "artifact",
     payload: seed,
     sourceDigest: sha256Digest(seed),
   }]);
-  const snapshotV1 = kernel.getCurrentSnapshot("trial");
+  const snapshotV1 = await kernel.getCurrentSnapshot("trial");
   assert.strictEqual(snapshotV1.artifacts[`${spec.domain}:artifact`].version, 1, `${label} seed pins v1`);
 
   const changePayload = spec.validChange(seed);
@@ -280,28 +280,35 @@ function runDomainAdapterConformance(spec) {
     payload: changePayload,
     actor: "conformance",
   };
-  kernel.saveDraft(draftInput);
-  assert.strictEqual(kernel.validateDraft(draftInput).ok, true, `${label} change draft validates`);
-  assert.strictEqual(kernel.testDraft(draftInput).ok, true, `${label} change draft passes pre-publish test`);
-  const published = kernel.publishDraft(draftInput);
+  await kernel.saveDraft(draftInput);
+  assert.strictEqual((await kernel.validateDraft(draftInput)).ok, true, `${label} change draft validates`);
+  assert.strictEqual((await kernel.testDraft(draftInput)).ok, true, `${label} change draft passes pre-publish test`);
+  const published = await kernel.publishDraft(draftInput);
   assert.strictEqual(published.version, 2, `${label} publish bumps version`);
-  const snapshotV2 = kernel.getCurrentSnapshot("trial");
+  const snapshotV2 = await kernel.getCurrentSnapshot("trial");
   assert.notStrictEqual(snapshotV2.configVersion, snapshotV1.configVersion, `${label} publish produces a new snapshot`);
 
   // 新快照绑定新版本；在途旧快照仍可解析旧版本（发布不影响在途 Run）
-  spec.assertChangedRuntime(adapter.resolveRuntime(kernel.getArtifactVersion({
+  spec.assertChangedRuntime(adapter.resolveRuntime(await kernel.getArtifactVersion({
     domain: spec.domain, artifactId: "artifact", environment: "trial", version: 2,
   })));
-  spec.assertSeedRuntime(adapter.resolveRuntime(kernel.getArtifactVersion({
+  spec.assertSeedRuntime(adapter.resolveRuntime(await kernel.getArtifactVersion({
     domain: spec.domain, artifactId: "artifact", environment: "trial", version: 1,
   })));
 
-  kernel.rollback({ domain: spec.domain, artifactId: "artifact", environment: "trial", toVersion: 1, actor: "conformance" });
-  const snapshotV3 = kernel.getCurrentSnapshot("trial");
+  await kernel.rollback({ domain: spec.domain, artifactId: "artifact", environment: "trial", toVersion: 1, actor: "conformance" });
+  const snapshotV3 = await kernel.getCurrentSnapshot("trial");
   assert.strictEqual(snapshotV3.artifacts[`${spec.domain}:artifact`].version, 1, `${label} rollback re-pins v1`);
   assert.notStrictEqual(snapshotV3.configVersion, snapshotV1.configVersion, `${label} rollback produces a new snapshot`);
   console.log(`✓ ${label} contract: methods / seed-default / rejection / kernel roundtrip / in-flight stability / rollback`);
 }
 
-DOMAINS.forEach(runDomainAdapterConformance);
-console.log(`\ntest-domain-adapter-conformance: PASS (${DOMAINS.length} domains)`);
+(async () => {
+  for (const spec of DOMAINS) {
+    await runDomainAdapterConformance(spec);
+  }
+  console.log(`\ntest-domain-adapter-conformance: PASS (${DOMAINS.length} domains)`);
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

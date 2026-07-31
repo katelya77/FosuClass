@@ -29,8 +29,8 @@ function createPlatformAdminHandlers(options = {}) {
   requireFunction(listRecentPlatformTraces, "listRecentPlatformTraces");
   requireFunction(getExecutionPolicy, "getExecutionPolicy");
 
-  function topologyPayload() {
-    const diagnostics = safePayload(getPlatformDiagnostics());
+  async function topologyPayload() {
+    const diagnostics = safePayload(await getPlatformDiagnostics());
     const plugins = Array.isArray(diagnostics.plugins)
       ? diagnostics.plugins
       : (diagnostics.pluginIds || []).map((id) => ({ id, version: "unknown" }));
@@ -61,10 +61,10 @@ function createPlatformAdminHandlers(options = {}) {
     });
   }
 
-  function getTopology(req, res) {
+  async function getTopology(req, res) {
     noStore(res);
     try {
-      return res.json(topologyPayload());
+      return res.json(await topologyPayload());
     } catch (error) {
       return res.status(503).json({
         success: false,
