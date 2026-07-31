@@ -448,10 +448,17 @@ async function withPgDatabase(env, fn) {
   const pgPersistenceService = require("../server/src/services/ai/persistence/pgPersistenceService");
   try {
     const migrated = await pgPersistenceService.runMigrations();
+    // 聚合列表随 workstream 追加（0002 config kernel / 0004 user memory）：
+    // 断言「空库应用全部已知版本且按版本序」，不锁死精确序列。
+    const expectedVersions = pgPersistenceService.getMigrationList().map((migration) => migration.version);
+    assert.ok(
+      expectedVersions.includes(1) && expectedVersions.includes(3) && expectedVersions.includes(4),
+      `聚合 migration 列表必须含 0001/0003/0004，实际 [${expectedVersions.join(", ")}]`
+    );
     assert.deepStrictEqual(
       migrated,
-      { applied: [1, 3], alreadyApplied: [], schemaVersion: 3 },
-      "空库迁移必须按版本序应用 0001 与 0003"
+      { applied: expectedVersions, alreadyApplied: [], schemaVersion: Math.max(...expectedVersions) },
+      "空库迁移必须按版本序应用全部已知 migration"
     );
     await fn(pgPersistenceService.getPool());
   } finally {

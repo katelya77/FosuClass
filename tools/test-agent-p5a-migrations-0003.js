@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// P5a WS4a：server 侧 pgPersistenceService 聚合迁移（含 version 3 四类存储建表）的真实验证。
+// P5a WS4a：server 侧 pgPersistenceService 聚合迁移（含 version 3 四类存储建表、
+// version 4 用户记忆文档表）的真实验证。
 //
-// 覆盖：空库 runMigrations → 版本序 [1,3] 应用 → 幂等重跑 → getMigrationStatus 形状 →
-// 四表 + durable status 索引存在 → 关键 DDL（复合主键 / bigserial / NOT NULL 约束）→
-// closeForTests 重置单例。0002 为 config kernel 预留版本，本套件断言聚合列表含 1、3 且不含 2。
+// 覆盖：空库 runMigrations → 已知版本按序应用 → 幂等重跑 → getMigrationStatus 形状 →
+// 五表 + durable status 索引存在 → 关键 DDL（复合主键 / bigserial / NOT NULL 约束 /
+// agent_user_memory 单列主键）→ closeForTests 重置单例。聚合列表随 workstream 追加
+// （0002 预留 config kernel），本套件断言「严格递增 + 必含 1/3/4」，不锁死精确序列。
 //
 // 环境：AGENT_TEST_PG_URL 优先，否则 docker 临时容器（test-helpers/pg-test-env）；
 // 不可用 → 打印 UNVERIFIED 与原因并 exit 0。
@@ -18,7 +20,12 @@ const EXPECTED_TABLES = [
   "agent_durable_tasks",
   "agent_kb_audit",
   "agent_kb_idempotency",
+  "agent_user_memory",
 ];
+
+// 版本断言纪律：聚合列表随 workstream 追加（0002 config kernel / 0004 user memory），
+// 本套件不再锁死精确序列，只断言「严格递增 + 必含版本」，避免并行 workstream 相互踩碎。
+const REQUIRED_VERSIONS = [1, 3, 4];
 
 async function withPgDatabase(env, fn) {
   const adminPool = createPgPool({ connectionString: env.url, max: 2 });
@@ -40,27 +47,45 @@ async function withPgDatabase(env, fn) {
 }
 
 async function testMigrationListShape() {
-  // 不触网：聚合列表定义期校验（0002 预留，不得被占用）。
+  // 不触网：聚合列表定义期校验（严格递增 + 必含 0001/0003/0004；0002 由 config kernel
+  // workstream 追加，本套件不锁死其在场与否）。
   delete process.env.AGENT_PG_URL;
   const { getMigrationList } = require("../server/src/services/ai/persistence/pgPersistenceService");
   const versions = getMigrationList().map((migration) => migration.version);
-  assert.deepStrictEqual(versions, [1, 3], "聚合 migration 列表必须按版本序为 [1, 3]（0002 预留）");
+  REQUIRED_VERSIONS.forEach((version) => {
+    assert.ok(versions.includes(version), `聚合 migration 列表必须包含 version ${version}`);
+  });
+  const sorted = versions.slice().sort((a, b) => a - b);
+  assert.deepStrictEqual(versions, sorted, "聚合 migration 列表必须按版本序");
+  assert.strictEqual(new Set(versions).size, versions.length, "migration version 不得重复");
   const v3 = getMigrationList().find((migration) => migration.version === 3);
   assert.strictEqual(v3.name, "conversation_memory_stores");
-  console.log("✓ 聚合 migration 列表版本序 [1, 3]，0002 未被占用");
+  const v4 = getMigrationList().find((migration) => migration.version === 4);
+  assert.strictEqual(v4.name, "user_memory");
+  console.log(`✓ 聚合 migration 列表版本序 [${versions.join(", ")}]，含 0001/0003/0004`);
 }
 
 async function testFreshMigrateAndStatus(pgPersistenceService, pool) {
+  const expectedVersions = pgPersistenceService.getMigrationList().map((migration) => migration.version);
+  const expectedNames = pgPersistenceService.getMigrationList().map((migration) => migration.name);
   const first = await pgPersistenceService.runMigrations();
-  assert.deepStrictEqual(first, { applied: [1, 3], alreadyApplied: [], schemaVersion: 3 });
+  assert.deepStrictEqual(first, {
+    applied: expectedVersions,
+    alreadyApplied: [],
+    schemaVersion: Math.max(...expectedVersions),
+  });
 
   const second = await pgPersistenceService.runMigrations();
-  assert.deepStrictEqual(second, { applied: [], alreadyApplied: [1, 3], schemaVersion: 3 }, "重复 migrate 必须是幂等 no-op");
+  assert.deepStrictEqual(second, {
+    applied: [],
+    alreadyApplied: expectedVersions,
+    schemaVersion: Math.max(...expectedVersions),
+  }, "重复 migrate 必须是幂等 no-op");
 
   const status = await pgPersistenceService.getMigrationStatus();
-  assert.strictEqual(status.schemaVersion, 3);
-  assert.deepStrictEqual(status.applied.map((row) => row.version), [1, 3]);
-  assert.deepStrictEqual(status.applied.map((row) => row.name), ["agent_meta", "conversation_memory_stores"]);
+  assert.strictEqual(status.schemaVersion, Math.max(...expectedVersions));
+  assert.deepStrictEqual(status.applied.map((row) => row.version), expectedVersions);
+  assert.deepStrictEqual(status.applied.map((row) => row.name), expectedNames);
   assert.deepStrictEqual(status.pending, []);
 
   for (const table of EXPECTED_TABLES) {
@@ -69,7 +94,7 @@ async function testFreshMigrateAndStatus(pgPersistenceService, pool) {
   }
   const index = await query(pool, "SELECT to_regclass('agent_durable_tasks_status_idx') AS reg");
   assert.ok(index.rows[0].reg, "agent_durable_tasks(status) 索引必须存在");
-  console.log("✓ 空库迁移 [1,3]、幂等重跑、getMigrationStatus 形状、四表与索引存在");
+  console.log(`✓ 空库迁移 [${expectedVersions.join(",")}]、幂等重跑、getMigrationStatus 形状、五表与索引存在`);
 }
 
 async function testDdlDetails(pool) {
@@ -103,7 +128,29 @@ async function testDdlDetails(pool) {
   const byTable = Object.fromEntries(nullable.rows.map((row) => [row.table_name, row.is_nullable]));
   assert.strictEqual(byTable.agent_kb_idempotency, "NO", "agent_kb_idempotency.expires_at 必须 NOT NULL");
   assert.strictEqual(byTable.agent_durable_tasks, "YES", "agent_durable_tasks.expires_at 必须可空");
-  console.log("✓ DDL 细节：复合主键 / bigserial / expires_at 约束");
+
+  // agent_user_memory（0004）：principal_key 单列主键；doc/revision/updated_at 均 NOT NULL。
+  const memoryPk = await query(
+    pool,
+    "SELECT kcu.column_name FROM information_schema.table_constraints tc " +
+      "JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name " +
+      "WHERE tc.table_name = 'agent_user_memory' AND tc.constraint_type = 'PRIMARY KEY' " +
+      "ORDER BY kcu.ordinal_position"
+  );
+  assert.deepStrictEqual(memoryPk.rows.map((row) => row.column_name), ["principal_key"]);
+  const memoryCols = await query(
+    pool,
+    "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns " +
+      "WHERE table_name = 'agent_user_memory'"
+  );
+  const memoryByName = Object.fromEntries(memoryCols.rows.map((row) => [row.column_name, row]));
+  assert.strictEqual(memoryByName.doc.data_type, "text");
+  assert.strictEqual(memoryByName.doc.is_nullable, "NO");
+  assert.strictEqual(memoryByName.revision.data_type, "bigint");
+  assert.strictEqual(memoryByName.revision.is_nullable, "NO");
+  assert.strictEqual(String(memoryByName.revision.column_default), "0");
+  assert.strictEqual(memoryByName.updated_at.is_nullable, "NO");
+  console.log("✓ DDL 细节：复合主键 / bigserial / expires_at 约束 / agent_user_memory 主键与非空列");
 }
 
 async function testCloseForTests(pgPersistenceService) {
