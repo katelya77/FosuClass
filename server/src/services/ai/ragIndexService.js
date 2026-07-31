@@ -1,16 +1,20 @@
-// P4d：RAG 索引服务（server 侧）。职责：
-// - 索引 blob 持久化：`<root>/rag-indexes/<env>/<kbId>/v<N>.json`（不可变版本索引）
-//   + `lkg.json`（最近成功构建，last-known-good）；
-// - 受控构建队列（integrated 模式的最小 worker）：稳定 jobId、持久化队列文件、
-//   进程内异步顺序执行（不阻塞在线 Run）、崩溃重启 reclaim、失败有界重试、
-//   幂等（已存在且可校验的版本索引跳过重建）；P5b 以 Redis Streams 替换传输，
-//   业务语义（jobId/幂等/reclaim/有界重试）保持不变；
-// - 查询路径：快照钉住版本 → 读版本索引 → 失败回退 lkg（仅当 lkg 更旧，
-//   永不提供比钉住版本更新的索引）→ 扫描兜底（≤ 钉住版本的最大可读索引，
-//   I-1）→ 全失败 fail closed。
+// P4d：RAG 索引服务（server 侧）。P5a WS5 起拆分为三条 seam：
+// - 索引产物存储（indexStore）：file（integrated 默认，ragIndexFileStore）
+//   | postgres（standalone，ragIndexPgStore + migration 0005，索引元数据、
+//   序列化索引与分块向量全部落 PG，不再依赖容器文件系统）。后端由
+//   FOSU_AGENT_REPOSITORY_BACKEND 经 persistence/repositoryBackend 判定，
+//   领域规则（钉住版本 → lkg 只回退更旧 → 扫描兜底 → fail closed）双实现共用。
+// - 构建队列（taskQueue 契约）：file 实现（integrated 默认，进程内最小 worker
+//   即时消费，不留无法消费的队列任务）| Redis Streams 实现（已交付
+//   taskQueue/redisStreamsTaskQueue，worker 启动角色接线属 WS6/P5b——
+//   本服务不主动连 Redis）。业务语义（稳定 jobId/幂等/reclaim/有界重试）
+//   与传输无关，由契约常量共享（MAX_ATTEMPTS=3）。
+// - 内容源： reclaim 时经 resolveArtifact 从内核重取发布物（队列不复制
+//   文档内容，内核是唯一内容源；索引是可重建派生物，不构成第二事实源）。
 //
-// 部署约束（M-6）：同一 root 不允许多实例运行——队列文件是整文件覆写，
-// 多实例会互相抹掉 pending 任务；standalone 多实例由 P5b Redis Streams 解决。
+// 部署约束（M-6）：file 队列同一 root 不允许多实例运行——队列文件是整文件
+// 覆写，多实例会互相抹掉 pending 任务；standalone 多实例由 WS6 接线
+// Redis Streams 解决。
 //
 // 故障 containment（I-5）：队列文件持久化失败只降级「崩溃后恢复排队」的
 // 持久性，不击落进程——索引是可重建派生物，下一次 requestBuild/reclaim 自愈。
@@ -20,48 +24,29 @@
 // 扫描兜底保证 rollback 越过失败版本后查询永远有 ≤ 钉住版本的可服务索引。
 //
 // 草稿不可见性：索引只从「已发布且被快照钉住」的版本构建（requestBuild 的
-// 唯一调用方是快照解析钩子），draft 永远没有索引文件。
+// 唯一调用方是快照解析钩子），draft 永远没有索引产物。
 //
-// 索引是派生物：权威内容在 config kernel 版本文档；索引可从发布物确定性
-// 重建，损坏即 fail closed（digest 校验），可删除后重建，不构成第二事实源。
+// 接口异步化（P5a）：PG 存储是异步 I/O，loadIndex/getIndexStatus/listJobs
+// 与既有 async 的 requestBuild/query/drainQueueForTest 统一为 async。
 
-const fs = require("fs");
 const path = require("path");
-const { buildIndex, queryIndex, serializeIndex, parseIndex, checkIndexCompatibility } = require("../../../../packages/rag-runtime");
+const { buildIndex, queryIndex, checkIndexCompatibility } = require("../../../../packages/rag-runtime");
+const { createFileRagIndexStore } = require("./ragIndexFileStore");
+const { createFileTaskQueue } = require("./taskQueue/fileTaskQueue");
+const { MAX_ATTEMPTS, codedError } = require("./taskQueue/contract");
+const { resolveRepositoryBackend } = require("./persistence/repositoryBackend");
 
-const QUEUE_FORMAT = 1;
-const MAX_ATTEMPTS = 3;
 // failed 任务被 re-pin 时自动重排队的冷却（防抖；测试可注入 0）。
 const FAILED_RETRY_COOLDOWN_MS = 60 * 1000;
-// 版本索引文件不可变且 digest 自校验：短 TTL 记忆化避免冷启动后同一文件的
-// 构建校验 + 查询双重全文件读取（M-2）；staleness 上限内服务的是已验证内容。
 const INDEX_MEMO_TTL_MS = 30 * 1000;
-const INDEX_MEMO_MAX = 64;
-
-function codedError(code, message) {
-  const error = new Error(message || code);
-  error.code = code;
-  return error;
-}
+const BUILD_JOB_KIND = "rag-index-build";
 
 function jobIdOf(input) {
   return `rag:${input.environment}:${input.kbId}:v${input.version}`;
 }
 
-function atomicWriteJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value));
-  fs.renameSync(tmp, file);
-}
-
-function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, "utf8"));
-}
-
 function createRagIndexService(options = {}) {
   const root = options.root;
-  if (!root) throw codedError("RAG_INDEX_ROOT_REQUIRED");
   const logger = typeof options.logger === "function" ? options.logger : () => {};
   const fetcher = options.fetcher; // undefined = rag-runtime 默认受控 fetch
   // 队列 reclaim 时按引用重取发布物（队列不复制文档内容，内核是唯一内容源）。
@@ -72,130 +57,122 @@ function createRagIndexService(options = {}) {
   const indexMemoTtlMs = Number.isFinite(options.indexMemoTtlMs)
     ? options.indexMemoTtlMs
     : INDEX_MEMO_TTL_MS;
+  const backend = typeof options.backend === "string" && options.backend
+    ? options.backend
+    : resolveRepositoryBackend();
 
-  const indexDir = (environment, kbId) => path.join(root, "rag-indexes", environment, kbId);
-  const versionFile = (environment, kbId, version) => path.join(indexDir(environment, kbId), `v${version}.json`);
-  const lkgFile = (environment, kbId) => path.join(indexDir(environment, kbId), "lkg.json");
-  const queueFile = path.join(root, "rag-index-queue.json");
-
-  const queue = { jobs: [] };
-  let running = false;
-  const indexMemo = new Map(); // file → { at, index }（仅缓存已验证可读的索引）
-
-  // 队列持久化故障 containment（I-5）：只丢「崩溃后恢复排队」能力，进程继续；
-  // 任何调用方（requestBuild/runJob/reclaim）都不再需要自行捕获。
-  function persistQueue() {
-    try {
-      atomicWriteJson(queueFile, { format: QUEUE_FORMAT, jobs: queue.jobs });
-    } catch (error) {
-      logger({
-        event: "rag-index-queue-persist-failed",
-        code: String(error && error.code || "RAG_INDEX_QUEUE_PERSIST_FAILED"),
-        message: String(error && error.message || "").slice(0, 200),
-      });
-    }
-  }
-
-  function readIndexFile(environment, kbId, version) {
-    const file = versionFile(environment, kbId, version);
-    const now = Date.now();
-    const hit = indexMemo.get(file);
-    if (hit && now - hit.at < indexMemoTtlMs) return hit.index;
-    let index = null;
-    try {
-      index = parseIndex(fs.readFileSync(file, "utf8"));
-    } catch (_) {
-      index = null;
-    }
-    if (index) {
-      if (indexMemo.size >= INDEX_MEMO_MAX) indexMemo.clear();
-      indexMemo.set(file, { at: now, index });
+  // 索引产物存储：postgres 分支懒加载 PG 模块（file 默认模式不触达 PG 连接路径）。
+  let indexStore = options.indexStore || null;
+  if (!indexStore) {
+    if (backend === "postgres") {
+      const { getPool } = require("./persistence/pgPersistenceService");
+      const { createPgRagIndexStore } = require("./ragIndexPgStore");
+      indexStore = createPgRagIndexStore({ pool: getPool(), logger, memoTtlMs: indexMemoTtlMs });
     } else {
-      indexMemo.delete(file);
+      if (!root) throw codedError("RAG_INDEX_ROOT_REQUIRED");
+      indexStore = createFileRagIndexStore({ root, logger, memoTtlMs: indexMemoTtlMs });
     }
-    return index;
   }
 
-  // 启动恢复：building 状态是崩溃残留，reclaim 为 pending 重跑（构建幂等）；
-  // done 但索引不可读（外部删除/损坏）→ 重新排队；done 且可读 → 出队（幂等完成）。
-  (function reclaim() {
-    let loaded = null;
-    try {
-      loaded = readJson(queueFile);
-    } catch (_) {
-      loaded = null;
-    }
-    if (loaded && Array.isArray(loaded.jobs)) {
-      loaded.jobs.forEach((job) => {
-        if (!job || !job.jobId) return;
-        queue.jobs.push(Object.assign({}, job, {
-          status: job.status === "building" ? "pending" : job.status,
-        }));
+  // 构建队列：默认文件实现（行为与 P4d 内嵌队列一致）；可注入契约实现。
+  if (!root && !options.queue) throw codedError("RAG_INDEX_ROOT_REQUIRED");
+  const queue = options.queue || createFileTaskQueue({
+    file: path.join(root, "rag-index-queue.json"),
+    logger,
+  });
+  const consumer = `rag-index-${process.pid}`;
+  let running = false;
+  let initPromise = null;
+  const reclaimedBacklog = []; // 启动 reclaim 认领的崩溃残留（kick 优先处理）
+
+  async function isIndexReadable(ref) {
+    return (await indexStore.readVersion(ref.environment, ref.kbId, ref.version)) !== null;
+  }
+
+  // 启动恢复（异步一次性）：building 崩溃残留 → reclaim 认领后由 kick 重跑
+  // （构建幂等）；done 但索引不可读（外部删除/损坏）→ 重新排队；
+  // done 且可读 → 出队（幂等完成）。失败可重试（下一次调用重新 init）。
+  function ensureInit() {
+    if (!initPromise) {
+      initPromise = (async () => {
+        const reclaimed = await queue.reclaimPending({ consumer, minIdleMs: 0 });
+        reclaimed.forEach((job) => {
+          logger({ event: "rag-index-job-reclaimed", jobId: job.jobId, status: job.status });
+          reclaimedBacklog.push(job);
+        });
+        const jobs = await queue.list();
+        for (const job of jobs) {
+          if (job.status !== "done") continue;
+          if (await isIndexReadable(job.payload)) {
+            await queue.remove(job.jobId);
+          } else {
+            await queue.requeue(job.jobId, { resetAttempts: true });
+            logger({ event: "rag-index-job-reclaimed", jobId: job.jobId, status: "pending" });
+          }
+        }
+        kick();
+      })().catch((error) => {
+        initPromise = null;
+        throw error;
       });
     }
-    queue.jobs = queue.jobs.filter((job) => job.status !== "done" || !isIndexReadable(job));
-    let reclaimed = 0;
-    queue.jobs.forEach((job) => {
-      if (job.status === "done") {
-        job.status = "pending";
-        job.attempts = 0;
-      }
-      reclaimed += 1;
-      logger({ event: "rag-index-job-reclaimed", jobId: job.jobId, status: job.status });
+    return initPromise;
+  }
+
+  // 构造即发恢复流程（fire-and-forget）：故障只记日志不击落进程（I-5）。
+  Promise.resolve()
+    .then(() => ensureInit())
+    .catch((error) => {
+      logger({
+        event: "rag-index-init-failed",
+        code: String((error && error.code) || "RAG_INDEX_INIT_FAILED"),
+        message: String((error && error.message) || "").slice(0, 200),
+      });
     });
-    if (queue.jobs.length) persistQueue();
-    if (reclaimed) kick();
-  })();
-
-  function isIndexReadable(job) {
-    return readIndexFile(job.environment, job.kbId, job.version) !== null;
-  }
-
-  function findJob(jobId) {
-    return queue.jobs.find((job) => job.jobId === jobId) || null;
-  }
 
   async function runJob(job) {
-    job.status = "building";
-    job.updatedAt = new Date().toISOString();
-    persistQueue();
+    const environment = String(job.payload.environment || "");
+    const artifactId = String(job.payload.artifactId || "");
+    const kbId = String(job.payload.kbId || "");
+    const version = Number(job.payload.version);
     try {
       if (typeof resolveArtifact !== "function") throw codedError("RAG_INDEX_RESOLVER_REQUIRED");
       // P5a：内核 async 化后 resolveArtifact 可返回 Promise（同步返回被
       // await 透明容忍，既有测试注入的同步 mock 不受影响）。
-      const artifact = await resolveArtifact({
-        environment: job.environment,
-        artifactId: job.artifactId,
-        version: job.version,
-      });
+      const artifact = await resolveArtifact({ environment, artifactId, version });
       const index = await buildIndex({
-        kbId: job.kbId,
-        version: job.version,
+        kbId,
+        version,
         documents: artifact.documents,
         retrieval: artifact.retrieval,
       }, fetcher ? { fetcher } : {});
-      const file = versionFile(job.environment, job.kbId, job.version);
-      atomicWriteJson(file, JSON.parse(serializeIndex(index)));
-      // 回读校验（digest）：写损坏立即失败，不推进 lkg。
-      parseIndex(fs.readFileSync(file, "utf8"));
-      atomicWriteJson(lkgFile(job.environment, job.kbId), {
-        kbId: job.kbId,
-        version: job.version,
-        environment: job.environment,
+      // 版本产物写入含回读 digest 校验（PG 侧同事务落分块向量）；
+      // 写损坏立即失败，不推进 lkg。
+      await indexStore.writeVersion(environment, kbId, version, index);
+      await indexStore.writeLkg(environment, kbId, {
+        kbId,
+        version,
+        environment,
         builtAt: new Date().toISOString(),
         digest: index.digest,
       });
-      job.status = "done";
-      job.errorClass = "";
+      await queue.ack(job);
       logger({ event: "rag-index-built", jobId: job.jobId, chunks: index.chunks.length, digest: index.digest.slice(0, 16) });
     } catch (error) {
-      job.attempts = (job.attempts || 0) + 1;
-      job.errorClass = String(error && error.code || "RAG_INDEX_BUILD_FAILED");
-      job.status = job.attempts >= MAX_ATTEMPTS ? "failed" : "pending";
-      logger({ event: "rag-index-build-failed", jobId: job.jobId, attempts: job.attempts, code: job.errorClass });
+      const errorClass = String((error && error.code) || "RAG_INDEX_BUILD_FAILED");
+      try {
+        const result = await queue.retry(job, { errorClass, maxAttempts: MAX_ATTEMPTS });
+        logger({ event: "rag-index-build-failed", jobId: job.jobId, attempts: result.attempts, code: errorClass });
+      } catch (retryError) {
+        // retry 记账自身失败（如队列后端故障）：任务仍在队列中可被 reclaim，
+        // 构建幂等——只留信号，不击落 worker（I-5）。
+        logger({
+          event: "rag-index-queue-error",
+          code: String((retryError && retryError.code) || "RAG_INDEX_QUEUE_FAILED"),
+          message: String((retryError && retryError.message) || "").slice(0, 200),
+        });
+      }
     }
-    job.updatedAt = new Date().toISOString();
-    persistQueue();
   }
 
   function kick() {
@@ -203,8 +180,14 @@ function createRagIndexService(options = {}) {
     running = true;
     setImmediate(async () => {
       try {
+        await ensureInit();
         for (;;) {
-          const next = queue.jobs.find((job) => job.status === "pending");
+          let next = null;
+          if (reclaimedBacklog.length) {
+            next = reclaimedBacklog.shift();
+          } else {
+            next = await queue.claim({ consumer });
+          }
           if (!next) break;
           await runJob(next);
         }
@@ -213,8 +196,8 @@ function createRagIndexService(options = {}) {
         // running 复位后下一次 requestBuild/reclaim 会重新 kick。
         logger({
           event: "rag-index-queue-error",
-          code: String(error && error.code || "RAG_INDEX_QUEUE_FAILED"),
-          message: String(error && error.message || "").slice(0, 200),
+          code: String((error && error.code) || "RAG_INDEX_QUEUE_FAILED"),
+          message: String((error && error.message) || "").slice(0, 200),
         });
       } finally {
         running = false;
@@ -222,9 +205,9 @@ function createRagIndexService(options = {}) {
     });
   }
 
-  // P5a：与内核调用链统一为 async（返回同一 frozen 结果对象的 Promise）。
-  // 语义不变：幂等去重、失败重排队冷却、入队后 kick 异步构建。
+  // 语义不变（P4d）：幂等去重、失败重排队冷却、入队后 kick 异步构建。
   async function requestBuild(input = {}) {
+    await ensureInit();
     const environment = String(input.environment || "");
     const kbId = String(input.kbId || "");
     const version = Number(input.version);
@@ -232,69 +215,50 @@ function createRagIndexService(options = {}) {
       throw codedError("RAG_INDEX_JOB_INVALID");
     }
     const jobId = jobIdOf({ environment, kbId, version });
-    let job = findJob(jobId);
+    let job = await queue.get(jobId);
     // 幂等：版本索引已存在且可校验 → 直接视为完成，不重复构建
-    // （done 任务出队后仍不触发重建）。
-    if (!job && isIndexReadable({ environment, kbId, version })) {
+    // （done 任务出队后仍不触发重建）。这是至少一次投递下业务幂等的
+    // 第二道锚（第一道是队列 jobId 去重）。
+    if (!job && (await isIndexReadable({ environment, kbId, version }))) {
       return Object.freeze({ jobId, status: "done", deduped: true });
     }
     if (job) {
-      if (job.status === "done" && !isIndexReadable(job)) {
-        // 索引文件被外部删除/损坏：进程内自愈（M-7，与启动 reclaim 同语义）。
-        job.status = "pending";
-        job.attempts = 0;
-        job.updatedAt = new Date().toISOString();
-        persistQueue();
+      if (job.status === "done" && !(await isIndexReadable({ environment, kbId, version }))) {
+        // 索引产物被外部删除/损坏：进程内自愈（M-7，与启动 reclaim 同语义）。
+        job = await queue.requeue(jobId, { resetAttempts: true });
         kick();
       } else if (job.status === "failed"
         && (input.retry === true
           || Date.now() - (Date.parse(job.updatedAt || "") || 0) >= failedRetryCooldownMs)) {
         // re-pin 即重试（I-1）：rollback 到构建失败过的版本后系统自愈；
         // 冷却防抖，attempts 重新计数仍有界。
-        job.status = "pending";
-        job.attempts = 0;
-        job.updatedAt = new Date().toISOString();
-        persistQueue();
+        job = await queue.requeue(jobId, { resetAttempts: true });
         kick();
       }
       return Object.freeze({ jobId, status: job.status, deduped: true });
     }
-    job = {
+    await queue.enqueue({
       jobId,
-      environment,
-      artifactId: String(input.artifactId || ""),
-      kbId,
-      version,
-      status: "pending",
-      attempts: 0,
-      errorClass: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    queue.jobs.push(job);
-    persistQueue();
+      kind: BUILD_JOB_KIND,
+      payload: {
+        environment,
+        artifactId: String(input.artifactId || ""),
+        kbId,
+        version,
+      },
+    });
     kick();
-    return Object.freeze({ jobId, status: job.status, deduped: false });
+    return Object.freeze({ jobId, status: "pending", deduped: false });
   }
 
   // 扫描兜底（I-1）：lkg 是单指针优化，可能越过失败版本、缺失或损坏；
-  // 扫描版本目录取「< 钉住版本的最大可读索引」，rollback 后查询永远有
+  // 扫描版本存储取「< 钉住版本的最大可读索引」，rollback 后查询永远有
   // 自愈路径，且永不提供比钉住版本更新的索引。
-  function loadScannedIndex(environment, kbId, version) {
-    let names;
-    try {
-      names = fs.readdirSync(indexDir(environment, kbId));
-    } catch (_) {
-      return null;
-    }
-    const candidates = names
-      .map((name) => /^v(\d+)\.json$/.exec(name))
-      .filter(Boolean)
-      .map((match) => Number(match[1]))
-      .filter((item) => Number.isInteger(item) && item < version)
-      .sort((a, b) => b - a);
-    for (const candidate of candidates) {
-      const index = readIndexFile(environment, kbId, candidate);
+  async function loadScannedIndex(environment, kbId, version) {
+    const versions = await indexStore.listVersions(environment, kbId);
+    for (const candidate of versions) {
+      if (!Number.isInteger(candidate) || candidate >= version) continue;
+      const index = await indexStore.readVersion(environment, kbId, candidate);
       if (index) return index;
     }
     return null;
@@ -302,60 +266,61 @@ function createRagIndexService(options = {}) {
 
   // 钉住版本优先；失败仅回退「更旧」的已验证索引（lkg 快路径 → 扫描兜底），
   // 永不提供比钉住版本更新的索引（rollback 语义不被 lkg/扫描破坏）。
-  function loadIndex(input = {}) {
+  async function loadIndex(input = {}) {
+    await ensureInit();
     const environment = String(input.environment || "");
     const kbId = String(input.kbId || "");
     const version = Number(input.version);
-    const exact = readIndexFile(environment, kbId, version);
+    const exact = await indexStore.readVersion(environment, kbId, version);
     if (exact) {
       return Object.freeze({ index: exact, source: "version", requestedVersion: version, servedVersion: exact.version });
     }
-    try {
-      const pointer = readJson(lkgFile(environment, kbId));
+    const pointer = await indexStore.readLkg(environment, kbId);
+    if (pointer) {
       const lkgVersion = Number(pointer.version);
       if (Number.isInteger(lkgVersion) && lkgVersion < version) {
-        const index = readIndexFile(environment, kbId, lkgVersion);
+        const index = await indexStore.readVersion(environment, kbId, lkgVersion);
         if (index) {
           return Object.freeze({ index, source: "lkg", requestedVersion: version, servedVersion: index.version });
         }
       }
-    } catch (_) {
-      // lkg 指针不可用，进入扫描兜底
     }
-    const scanned = loadScannedIndex(environment, kbId, version);
+    const scanned = await loadScannedIndex(environment, kbId, version);
     if (scanned) {
       return Object.freeze({ index: scanned, source: "scan", requestedVersion: version, servedVersion: scanned.version });
     }
     throw codedError("RAG_INDEX_UNAVAILABLE", `no readable index for ${environment}/${kbId} at v${version}`);
   }
 
-  function getIndexStatus(input = {}) {
+  async function getIndexStatus(input = {}) {
+    await ensureInit();
     const environment = String(input.environment || "");
     const kbId = String(input.kbId || "");
-    let lkg = null;
-    try {
-      lkg = readJson(lkgFile(environment, kbId));
-    } catch (_) {
-      lkg = null;
-    }
+    const pointer = await indexStore.readLkg(environment, kbId);
+    const jobs = (await queue.list())
+      .filter((job) => job.payload.environment === environment && job.payload.kbId === kbId)
+      .map((job) => Object.freeze({
+        jobId: job.jobId,
+        version: job.payload.version,
+        status: job.status,
+        attempts: job.attempts,
+        errorClass: job.errorClass,
+      }));
     return Object.freeze({
       environment,
       kbId,
-      lkgVersion: lkg ? lkg.version : null,
-      jobs: queue.jobs
-        .filter((job) => job.environment === environment && job.kbId === kbId)
-        .map((job) => Object.freeze({
-          jobId: job.jobId, version: job.version, status: job.status, attempts: job.attempts, errorClass: job.errorClass,
-        })),
+      lkgVersion: pointer ? pointer.version : null,
+      jobs,
     });
   }
 
-  function listJobs() {
-    return queue.jobs.map((job) => Object.freeze({
+  async function listJobs() {
+    await ensureInit();
+    return (await queue.list()).map((job) => Object.freeze({
       jobId: job.jobId,
-      environment: job.environment,
-      kbId: job.kbId,
-      version: job.version,
+      environment: job.payload.environment,
+      kbId: job.payload.kbId,
+      version: job.payload.version,
       status: job.status,
       attempts: job.attempts,
       errorClass: job.errorClass,
@@ -364,7 +329,7 @@ function createRagIndexService(options = {}) {
   }
 
   async function query(input = {}) {
-    const loaded = loadIndex(input);
+    const loaded = await loadIndex(input);
     const compatibility = checkIndexCompatibility(loaded.index);
     if (!compatibility.compatible) {
       throw codedError("RAG_ENCODER_MISMATCH", String(compatibility.reason || "encoder mismatch"));
@@ -385,15 +350,19 @@ function createRagIndexService(options = {}) {
 
   // 测试/运维辅助：等待队列排空（有界）。生产请求路径不调用。
   async function drainQueueForTest(timeoutMs = 15000) {
+    await ensureInit();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      if (!queue.jobs.some((job) => job.status === "pending" || job.status === "building")) return true;
+      const jobs = await queue.list();
+      const busy = jobs.some((job) => job.status === "pending" || job.status === "building");
+      if (!busy && !running && !reclaimedBacklog.length) return true;
       if (Date.now() > deadline) return false;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
   }
 
   return Object.freeze({
+    backend: indexStore.kind,
     requestBuild,
     loadIndex,
     query,

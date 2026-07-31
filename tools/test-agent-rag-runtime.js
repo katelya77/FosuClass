@@ -254,8 +254,8 @@ async function testIndexService() {
   assert.strictEqual(draftEyes.servedVersion, 1, "unbuilt version degrades to the last verified content");
   assert.strictEqual(draftEyes.hits[0].docId, "password-reset", "served content comes from the published version, never the draft");
 
-  // 完全无索引的 KB：fail closed
-  assert.throws(
+  // 完全无索引的 KB：fail closed（P5a：loadIndex 已 async 化）
+  await assert.rejects(
     () => service.loadIndex({ environment: "trial", kbId: "never-built", version: 1 }),
     (e) => e.code === "RAG_INDEX_UNAVAILABLE",
     "unknown KB fails closed"
@@ -296,7 +296,7 @@ async function testRollbackSelfHealing() {
   assert.strictEqual(await service.drainQueueForTest(), true, "v1 builds");
   await service.requestBuild({ environment: "trial", kbId: "kb", version: 2 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v2 attempts drain");
-  const failed = service.getIndexStatus({ environment: "trial", kbId: "kb" }).jobs.find((job) => job.version === 2);
+  const failed = (await service.getIndexStatus({ environment: "trial", kbId: "kb" })).jobs.find((job) => job.version === 2);
   assert.strictEqual(failed.status, "failed", "v2 exhausts bounded retries");
   await service.requestBuild({ environment: "trial", kbId: "kb", version: 3 });
   assert.strictEqual(await service.drainQueueForTest(), true, "v3 builds (lkg moves past the failed version)");
@@ -360,7 +360,7 @@ async function testQueuePersistContainment() {
     assert.ok(["pending", "failed"].includes(accepted.status), "requestBuild survives queue persist failure");
     assert.strictEqual(await service.drainQueueForTest(), true, "bounded attempts drain without hanging");
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const job = service.listJobs()[0];
+    const job = (await service.listJobs())[0];
     assert.strictEqual(job.status, "failed", "build failure is bounded and classified");
     assert.strictEqual(job.attempts, 3, "attempts are bounded");
     assert.strictEqual(unhandled, null, `no unhandled rejection escapes the queue subsystem: ${unhandled}`);

@@ -165,7 +165,8 @@ async function testCloseForTests(pgPersistenceService) {
   await testMigrationListShape(); // 不依赖数据库，任何环境下都执行
 
   let reason = "no PostgreSQL available";
-  const env = await ensurePg({ onReason: (text) => {
+  // P5a WS5：migration 0005 起基线镜像为 pgvector/pgvector:pg16（CREATE EXTENSION vector）。
+  const env = await ensurePg({ image: "pgvector/pgvector:pg16", onReason: (text) => {
     reason = text;
   } });
   if (!env) {

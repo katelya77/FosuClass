@@ -697,6 +697,7 @@
     "axios": "^1.16.1",
     "axios-cookiejar-support": "^7.0.0",
     "iconv-lite": "^0.7.2",
+    "ioredis": "^6.0.0",
     "pg": "^8.22.0",
     "sm-crypto": "^0.4.0",
     "tough-cookie": "^6.0.1"
