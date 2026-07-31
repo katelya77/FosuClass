@@ -53,6 +53,7 @@ server/storage/staging-uploads/
 server/data/backups/
 server/data/ai/kb-audit.jsonl
 server/data/ai/config-kernel/
+server/data/ai/run-store/
 .tmp/
 # Keep empty structure placeholders only when explicitly force-added
 !server/storage/relay/.gitkeep

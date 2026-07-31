@@ -502,6 +502,31 @@ function getRunHandlers() {
   const aguiAdapter = require("./aguiAdapter");
   const agentService = require("./agentService");
   const { safeLog } = require("../../utils/safeLogger");
+  // P5a WS3：Run/Event/Trace 持久化绑定（组合根唯一接线点，runHandlers 记忆化
+  // 保证只执行一次）。后端选择复用 WS2 的 repositoryBackend，不引入第二套开关：
+  //   - file（一体化默认）→ journalRunStore：持久卷 append-only journal +
+  //     原子 snapshot，构造即同步重放恢复 accepted/running（design.md §8.2）；
+  //   - postgres（standalone）→ pgRunStore：迁移由 initPlatform 的
+  //     getMigrationList 目录自动发现涵盖（0006）；水合在写队列头部异步完成，
+  //     就绪/失败语义沿用 initPlatform 的 AGENT_PLATFORM_INIT_FAILED 链。
+  // bindDefaultStore 后，模块级 12 函数、fosuTurnPorts 的 isCancelled 与下方
+  // runRepository 注入落到同一实例（12 函数 surface 逐字不变）。
+  if (repositoryBackend === "postgres") {
+    const pgPersistenceService = require("./persistence/pgPersistenceService");
+    const { createPgRunStore } = require("./persistence/pgRunStore");
+    const lazyPool = {
+      query: (text, params) => pgPersistenceService.getPool().query(text, params),
+      connect: () => pgPersistenceService.getPool().connect(),
+    };
+    const runStore = createPgRunStore({ pool: lazyPool, beforeStart: () => initPlatform() });
+    agentRunEventService.bindDefaultStore(runStore);
+    require("./agentTraceRecorder").bindDefaultStore(runStore);
+  } else {
+    const { createJournalRunStore } = require("./persistence/journalRunStore");
+    const runStore = createJournalRunStore();
+    agentRunEventService.bindDefaultStore(runStore);
+    require("./agentTraceRecorder").bindDefaultStore(runStore);
+  }
   runHandlers = createRunHandlers({
     platform,
     runRepository: agentRunEventService,

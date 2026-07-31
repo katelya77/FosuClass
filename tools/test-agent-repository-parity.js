@@ -484,7 +484,8 @@ async function withPgDatabase(env, fn) {
 
   // ---------- postgres 段（不可用则诚实标记） ----------
   let reason = "no PostgreSQL available";
-  const env = await ensurePg({ onReason: (text) => {
+  // P5a WS5：migration 0005 起基线镜像为 pgvector/pgvector:pg16（CREATE EXTENSION vector）。
+  const env = await ensurePg({ image: "pgvector/pgvector:pg16", onReason: (text) => {
     reason = text;
   } });
   if (!env) {
