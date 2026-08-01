@@ -60,7 +60,7 @@ function resolveRequestReadiness(input = {}) {
     } else {
       reasonCode = reasonCode || "TRIAL_ENV_NOT_ALLOWED";
     }
-  } else if (providerFlags.providerConfigured && providerFlags.configuredAvailable) {
+  } else if (providerFlags.providerConfigured && providerFlags.providerReachable) {
     enhancedMode = "ready";
     reasonCode = providerFlags.reasonCode || "PROVIDER_HEALTHY";
   } else {
@@ -79,8 +79,11 @@ function resolveRequestReadiness(input = {}) {
     providerConfigured: providerFlags.providerConfigured === true,
     configuredAvailable: providerFlags.configuredAvailable === true,
     providerVerified: providerFlags.verified === true,
-    // 向后兼容别名：语义等同 configuredAvailable（不代表真实触达）。
-    providerReachable: providerFlags.configuredAvailable === true,
+    providerReachable: providerFlags.providerReachable === true,
+    lastProbeAt: String(providerFlags.lastProbeAt || ""),
+    lastSuccessAt: String(providerFlags.lastSuccessAt || ""),
+    lastFailureAt: String(providerFlags.lastFailureAt || ""),
+    circuitState: String(providerFlags.circuitState || "closed"),
     memoryAvailable,
     runEventsSupported: true,
     reasonCode: String(reasonCode || "").slice(0, 80),

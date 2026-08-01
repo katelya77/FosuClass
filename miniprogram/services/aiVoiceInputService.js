@@ -1,4 +1,5 @@
 const cloudbaseConfig = require("../config/cloudbase");
+const platform = require("../utils/platform");
 
 const DAILY_COUNTER_KEY = "FOSU_AI_VOICE_DAILY_COUNTER";
 const MIN_DURATION_MS = 500;
@@ -26,12 +27,7 @@ function getConfig(overrides = {}) {
 }
 
 function getEnvVersion(wxLike) {
-  try {
-    const info = wxLike && wxLike.getAccountInfoSync && wxLike.getAccountInfoSync();
-    return info && info.miniProgram && info.miniProgram.envVersion || "";
-  } catch (error) {
-    return "";
-  }
+  return platform.getMiniProgramEnvVersion(wxLike);
 }
 
 function isVoiceInputAvailable(config = getConfig(), wxLike = getWx()) {

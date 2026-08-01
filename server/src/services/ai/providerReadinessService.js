@@ -121,12 +121,26 @@ function publicProviderFlags(runtimeMode, runtimeConfig) {
       configuredAvailable: false,
       providerReachable: false,
       verified: false,
+      lastProbeAt: "",
+      lastSuccessAt: "",
+      lastFailureAt: "",
+      circuitState: "closed",
       reasonCode: "SERVER_RUNTIME_PUBLIC",
     };
   }
   const name = providerFactory.getProviderName(mode, runtimeConfig);
   const configured = name !== "mock" && providerChainService.isProviderConfigured(name, runtimeConfig);
   const expired = name === "coze" && isCozeExpired(runtimeConfig);
+  const status = providerChainService.getStatus(mode, runtimeConfig)
+    .find((item) => item && item.name === name) || {};
+  const circuitState = String(status.circuitBreaker && status.circuitBreaker.state || "closed");
+  const lastSuccessAt = String(status.lastSuccessAt || "");
+  const lastFailureAt = String(status.lastFailureAt || "");
+  const verified = Boolean(lastSuccessAt);
+  const providerReachable = verified
+    && status.health === "ok"
+    && circuitState !== "open"
+    && (!lastFailureAt || lastSuccessAt >= lastFailureAt);
   let reasonCode = "PROVIDER_HEALTHY";
   if (String(configValue(runtimeConfig, "AI_AGENT_ENABLED", "false")).toLowerCase() === "false") {
     reasonCode = "AGENT_DISABLED";
@@ -136,16 +150,25 @@ function publicProviderFlags(runtimeMode, runtimeConfig) {
     reasonCode = "PROVIDER_KEY_MISSING";
   } else if (expired) {
     reasonCode = "PROVIDER_EXPIRED";
+  } else if (circuitState === "open") {
+    reasonCode = "PROVIDER_CIRCUIT_OPEN";
+  } else if (!verified) {
+    reasonCode = "PROVIDER_UNVERIFIED";
+  } else if (!providerReachable) {
+    reasonCode = "PROVIDER_UNREACHABLE";
   }
   // configuredAvailable：已配置 && 未到期 && 熔断未打开（不代表真实触达）。
   const configuredAvailable = configured && !expired && !providerChainService.isCircuitOpen(name);
   return {
     providerConfigured: configured && !expired,
     configuredAvailable,
-    // 向后兼容别名：旧客户端读 providerReachable，语义等同 configuredAvailable。
-    providerReachable: configuredAvailable,
+    providerReachable,
     // verified：本进程内有真实成功调用或 probe 成功。
-    verified: providerChainService.isProviderVerified(name),
+    verified,
+    lastProbeAt: String(status.lastProbeAt || ""),
+    lastSuccessAt,
+    lastFailureAt,
+    circuitState,
     reasonCode,
   };
 }

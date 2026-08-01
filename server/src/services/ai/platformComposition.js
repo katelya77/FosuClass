@@ -24,6 +24,7 @@ const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
 const { createDecisionService } = require("./decision/decisionService");
 const providerRuntimeComposition = require("./providerRuntimeComposition");
 const providerConfigService = require("./providerConfigService");
+const providerReadinessService = require("./providerReadinessService");
 const runtimeModeService = require("./runtimeModeService");
 const safetyGuard = require("./safetyGuard");
 const memoryPolicy = require("./memory/memoryPolicy");
@@ -473,6 +474,262 @@ function listRecentPlatformTraces() {
   return recentPlatformTraces.slice().reverse();
 }
 
+async function listDurableRunTraces() {
+  getRunHandlers();
+  return require("./agentTraceRecorder").listRecent();
+}
+
+function percentile(values, ratio) {
+  const ordered = (Array.isArray(values) ? values : [])
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .sort((left, right) => left - right);
+  if (!ordered.length) return null;
+  const index = Math.min(ordered.length - 1, Math.max(0, Math.ceil(ordered.length * ratio) - 1));
+  return ordered[index];
+}
+
+async function getOperationsSnapshot(requestedEnvironment = "public") {
+  const environment = capabilityManifestService.normalizeRuntimeMode(requestedEnvironment);
+  await initPlatform();
+  getRunHandlers();
+  const snapshot = await configKernel.getCurrentSnapshot(environment);
+  const traces = await require("./agentTraceRecorder").listRecent();
+  const runRecords = await require("./agentRunEventService").listRunRecords();
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  const recent = traces.filter((trace) => {
+    const at = Date.parse(trace && trace.recordedAt || "");
+    return (trace.environment || trace.runtimeMode) === environment && Number.isFinite(at) && at >= cutoff;
+  });
+  const completed = recent.filter((trace) => trace.status === "completed" && !trace.errorCode);
+  const failed = recent.filter((trace) => trace.status === "failed" || Boolean(trace.errorCode));
+  const lastSuccess = completed[0] || null;
+  const lastFailure = failed[0] || null;
+  const durations = recent.map((trace) => trace.totalDurationMs);
+  const runtimeConfig = providerConfigService.getRuntimeConfigForEnvironment(environment) || {};
+  const configuredProvider = providerReadinessService.evaluateEnvironment(environment);
+  const providerFlags = providerReadinessService.publicProviderFlags(environment, runtimeConfig);
+  const chainItem = (configuredProvider.chainStatus || [])
+    .find((item) => item && item.name === configuredProvider.provider) || {};
+
+  let rag = { backend: ragIndexService.backend, status: "not_configured", lkgVersion: null, pendingJobs: 0 };
+  let queueStatus = { backend: repositoryBackend === "postgres" ? "postgres" : "embedded", status: "available", pending: 0 };
+  try {
+    const ragEntry = snapshot && snapshot.artifacts && snapshot.artifacts[`rag:${plugin.id}`];
+    if (ragEntry) {
+      const doc = await configKernel.getArtifactVersion({
+        domain: "rag",
+        artifactId: plugin.id,
+        environment,
+        version: ragEntry.version,
+      });
+      const artifact = ragPublicationAdapter.resolveRuntime(doc);
+      if (artifact && artifact.kbId) {
+        const status = await ragIndexService.getIndexStatus({ environment, kbId: artifact.kbId });
+        rag = {
+          backend: ragIndexService.backend,
+          status: status.lkgVersion ? "available" : "not_built",
+          lkgVersion: status.lkgVersion || null,
+          pendingJobs: status.jobs.filter((job) => job.status === "pending" || job.status === "building").length,
+        };
+      }
+    }
+    const jobs = await ragIndexService.listJobs();
+    queueStatus.pending = jobs.filter((job) => job.status === "pending" || job.status === "building").length;
+  } catch (error) {
+    rag = Object.assign({}, rag, { status: "unavailable", reasonCode: String(error && error.code || "RAG_STATUS_UNAVAILABLE") });
+    queueStatus = Object.assign({}, queueStatus, { status: "unavailable", reasonCode: String(error && error.code || "QUEUE_STATUS_UNAVAILABLE") });
+  }
+
+  const toolOverlay = await resolveToolOverlayForSnapshot(snapshot);
+  const disabledTools = new Set(toolOverlay && Array.isArray(toolOverlay.disabled) ? toolOverlay.disabled.map(String) : []);
+  const manifest = capabilityManifestService.getManifest();
+  const capabilities = Object.values(manifest.skills || {}).map((skill) => ({
+    id: skill.id,
+    name: skill.description || skill.id,
+    tools: (skill.allowedTools || []).slice(),
+    dataSource: skill.providerPolicy === "never" ? "deterministic-tool" : "tool-and-provider",
+    publicAvailable: (skill.runtimeModes || []).includes("public"),
+    enhancedAvailable: (skill.runtimeModes || []).some((mode) => mode === "trial" || mode === "dev"),
+    providerRequired: skill.providerPolicy === "required",
+    available: (skill.allowedTools || []).some((toolId) => !disabledTools.has(toolId)),
+  }));
+  const providerExpected = environment !== "public" && configuredProvider.provider !== "mock";
+  const overallStatus = providerExpected && !providerFlags.providerReachable
+    ? "degraded"
+    : (rag.status === "unavailable" || queueStatus.status === "unavailable" ? "degraded" : "healthy");
+
+  return Object.freeze({
+    overallStatus,
+    environment,
+    deploymentSha: String(process.env.DEPLOY_SHA || process.env.GITHUB_SHA || process.env.COMMIT_SHA || "unknown").slice(0, 40),
+    configVersion: snapshot && snapshot.configVersion || `manifest:${plugin.manifestVersion}`,
+    provider: {
+      name: configuredProvider.provider,
+      configured: providerFlags.providerConfigured,
+      configuredAvailable: providerFlags.configuredAvailable,
+      verified: providerFlags.verified,
+      reachable: providerFlags.providerReachable,
+      lastProbeAt: providerFlags.lastProbeAt,
+      lastSuccessAt: providerFlags.lastSuccessAt,
+      lastFailureAt: providerFlags.lastFailureAt,
+      circuitState: providerFlags.circuitState,
+      reasonCode: providerFlags.reasonCode,
+      health: String(chainItem.health || "unknown"),
+    },
+    metrics15m: {
+      successRate: recent.length ? Number((completed.length / recent.length * 100).toFixed(1)) : null,
+      p50Ms: percentile(durations, 0.5),
+      p95Ms: percentile(durations, 0.95),
+      sampleCount: recent.length,
+    },
+    runningRuns: runRecords.filter((run) => !["completed", "failed", "cancelled"].includes(run.status)).length,
+    lastSuccessAt: lastSuccess && lastSuccess.recordedAt || "",
+    lastFailureAt: lastFailure && lastFailure.recordedAt || "",
+    lastFailure: lastFailure ? {
+      runId: lastFailure.runId,
+      requestId: lastFailure.requestId,
+      failureLayer: lastFailure.failureLayer,
+      errorCode: lastFailure.errorCode,
+    } : null,
+    stores: {
+      memory: { backend: repositoryBackend, status: "available", lastWriteSuccessAt: null, lastWriteFailureAt: null },
+      rag,
+      queue: queueStatus,
+      postgresql: { status: repositoryBackend === "postgres" ? "available" : "not_configured" },
+      redis: { status: "not_configured" },
+    },
+    tools: { available: plugin.tools.filter((tool) => !disabledTools.has(tool.id)).length, total: plugin.tools.length },
+    capabilities,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+async function runOperationsSmokeTest(requestedEnvironment = "public") {
+  const environment = capabilityManifestService.normalizeRuntimeMode(requestedEnvironment);
+  const envVersion = environment === "dev" ? "develop" : (environment === "trial" ? "trial" : "release");
+  const checks = [];
+  async function check(id, verificationType, task) {
+    const startedAt = Date.now();
+    try {
+      const outcome = await task();
+      const passed = outcome && outcome.passed === true;
+      checks.push({
+        id,
+        status: outcome && outcome.status === "skipped" ? "skipped" : (passed ? "passed" : (outcome && outcome.status || "failed")),
+        verificationType,
+        durationMs: Date.now() - startedAt,
+        reasonCode: String(outcome && outcome.reasonCode || (passed ? "OK" : "CHECK_FAILED")).slice(0, 80),
+        details: outcome && outcome.details || null,
+      });
+    } catch (error) {
+      checks.push({
+        id,
+        status: "failed",
+        verificationType,
+        durationMs: Date.now() - startedAt,
+        reasonCode: String(error && error.code || "CHECK_FAILED").slice(0, 80),
+      });
+    }
+  }
+
+  await initPlatform();
+  getRunHandlers();
+  const agentService = require("./agentService");
+  let publicToolPayload = null;
+  await check("public_tool", "real-deterministic-tool", async () => {
+    publicToolPayload = await agentService.chat({
+      message: "当前教学周",
+      requestId: `ops-public-${Date.now()}`,
+      context: { envVersion: "release", runtimeMode: "public", memoryMode: "local_only", currentPage: "admin-operations-smoke" },
+      runtimeMode: "public",
+    });
+    const external = Boolean(publicToolPayload && publicToolPayload.safety && publicToolPayload.safety.externalProviderUsed);
+    const calls = publicToolPayload && publicToolPayload.toolCalls || [];
+    return {
+      passed: publicToolPayload && publicToolPayload.success !== false && !external && calls.length > 0,
+      reasonCode: external ? "PUBLIC_PROVIDER_INVARIANT_BROKEN" : (calls.length ? "OK" : "PUBLIC_TOOL_NOT_EXECUTED"),
+      details: { externalProviderUsed: external, toolCount: calls.length },
+    };
+  });
+  await check("tool_call", "real-deterministic-tool", async () => {
+    const calls = publicToolPayload && publicToolPayload.toolCalls || [];
+    const successful = calls.filter((call) => call && call.success !== false && call.status !== "failed");
+    return {
+      passed: successful.length > 0,
+      reasonCode: successful.length ? "OK" : "TOOL_FAILED",
+      details: { tools: successful.map((call) => String(call.name || call.tool || "").slice(0, 80)) },
+    };
+  });
+  await check("trial_provider", environment === "public" ? "not-applicable" : "real-provider-probe", async () => {
+    if (environment === "public") return { passed: true, status: "skipped", reasonCode: "PUBLIC_PROVIDER_FORBIDDEN" };
+    const payload = await agentService.chat({
+      message: "请简要说明你当前可以完成哪些校园任务。",
+      requestId: `ops-provider-${Date.now()}`,
+      context: { envVersion, runtimeMode: environment, memoryMode: "local_only", currentPage: "admin-operations-smoke" },
+      runtimeMode: environment,
+      serverSession: { adminProviderVerification: true },
+    });
+    const safety = payload && payload.safety || {};
+    const external = safety.externalProviderUsed === true;
+    return {
+      passed: external,
+      reasonCode: external ? "OK" : String(safety.fallbackReason || "PROVIDER_UNVERIFIED"),
+      details: { provider: String(safety.resolvedProvider || safety.provider || "mock"), externalProviderUsed: external },
+    };
+  });
+  await check("run_create_poll", "real-durable-run-store", async () => {
+    const repository = require("./agentRunEventService");
+    const requestId = `ops-run-${Date.now()}`;
+    const created = repository.createRun({ runtimeMode: environment, requestId, idempotencyKey: requestId });
+    repository.appendEvent(created.runId, { type: "run.completed", runtimeMode: environment, status: "completed" });
+    repository.setResult(created.runId, { success: true, requestId, runtimeMode: environment }, "completed");
+    const view = repository.getRunView(created.runId, { pollToken: created.pollToken });
+    return {
+      passed: view && view.status === "completed" && Array.isArray(view.events) && view.events.length >= 2,
+      reasonCode: view && view.status === "completed" ? "OK" : "RUN_POLL_FAILED",
+      details: { runId: created.runId, status: view && view.status },
+    };
+  });
+  await check("memory_rollback", "real-store-write-read-delete", async () => {
+    const memoryService = require("./conversation/conversationMemoryService").defaultMemoryService;
+    const repository = memoryService.repository;
+    const nonce = `${process.pid}-${Date.now()}`;
+    const principalKey = require("./conversation/conversationPrincipalService").hmacPrincipalKey(["operations-smoke", nonce]);
+    const conversationId = `ops-smoke-${nonce}`;
+    try {
+      await repository.update(principalKey, conversationId, {
+        runtimeMode: environment,
+        title: "operations smoke",
+        memoryPolicy: { mode: "session_state" },
+      }, { createIfMissing: true, runtimeMode: environment, memoryMode: "session_state" });
+      const restored = await repository.get(principalKey, conversationId);
+      return { passed: Boolean(restored), reasonCode: restored ? "OK" : "MEMORY_STORE_UNAVAILABLE" };
+    } finally {
+      await repository.delete(principalKey, conversationId);
+    }
+  });
+  await check("rag_query", "real-published-index-query", async () => {
+    const snapshot = await configKernel.getCurrentSnapshot(environment);
+    await resolveRagArtifactForSnapshot(snapshot);
+    const idle = await ragIndexService.waitForIdle(5000);
+    if (!idle) return { passed: false, reasonCode: "RAG_INDEX_BUILD_TIMEOUT" };
+    const result = await queryRagForSnapshot(snapshot, { query: "校园办事入口", topK: 1 });
+    const available = Boolean(result.indexSource || result.servedVersion || Array.isArray(result.hits));
+    return {
+      passed: available,
+      reasonCode: String(result.reason || (available ? "OK" : "RAG_UNAVAILABLE")).toUpperCase(),
+      details: { hitCount: Array.isArray(result.hits) ? result.hits.length : 0, source: result.indexSource || "" },
+    };
+  });
+  return Object.freeze({
+    environment,
+    ok: checks.every((item) => item.status === "passed" || item.status === "skipped"),
+    checks,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
 function getExecutionPolicyTruth() {
   const activeMode = runtimeModeService.resolveConfiguredMode();
   let runtimeConfig = {};
@@ -596,4 +853,7 @@ module.exports = {
   getPlatform,
   getRunHandlers,
   listRecentPlatformTraces,
+  listDurableRunTraces,
+  getOperationsSnapshot,
+  runOperationsSmokeTest,
 };

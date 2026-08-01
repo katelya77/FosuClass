@@ -7,6 +7,7 @@
     "xiaofu-reminder-sheet": "/packageXiaofu/components/xiaofu-reminder-sheet/index",
     "xiaofu-conversation-sheet": "/packageXiaofu/components/xiaofu-conversation-sheet/index",
     "xiaofu-settings-sheet": "/packageXiaofu/components/xiaofu-settings-sheet/index",
+    "xiaofu-diagnostics-sheet": "/packageXiaofu/components/xiaofu-diagnostics-sheet/index",
     "xiaofu-result-card": "/packageXiaofu/components/xiaofu-result-card/index",
     "safe-markdown": "/packageXiaofu/components/safe-markdown/index"
   }

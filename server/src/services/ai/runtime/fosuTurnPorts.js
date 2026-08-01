@@ -602,6 +602,8 @@ function createFosuTurnPorts(options = {}) {
       requestId: state.requestId,
       conversationId: state.conversationId,
       runId: state.runId,
+      environment: stageInput.configSnapshot && stageInput.configSnapshot.environment || state.runtimeDecision.runtimeMode,
+      configVersion: stageInput.configSnapshot && stageInput.configSnapshot.configVersion || "",
       protocolVersion: state.protocolVersion,
       onEvent: state.eventInput.onEvent,
       eventInput: state.eventInput,
@@ -803,9 +805,11 @@ function createFosuTurnPorts(options = {}) {
       agentKernel.finalize(execution, {
         totalDurationMs: Date.now() - state.startTime,
         providerUsed: false,
+        provider: "mock",
         fallbackLayer: "server",
         fallbackReason: "AI_RUNTIME_MODE=public",
         evidenceComplete: publicResponse.evidence && publicResponse.evidence.complete === true,
+        status: "completed",
       });
       return Object.assign(publicResponse, { contextId: String(contextView.contextId || "") });
     }
@@ -977,11 +981,13 @@ function createFosuTurnPorts(options = {}) {
     agentKernel.finalize(execution, {
       totalDurationMs: Date.now() - state.startTime,
       providerUsed: generatedResponse.providerTruth.externalProviderUsed,
+      provider: generatedResponse.providerName || "mock",
       fallbackLayer: generatedResponse.providerTruth.fallback ? "server" : "none",
       fallbackReason: generatedResponse.providerTruth.fallbackReason,
       evidenceComplete: finalResponse.evidence && finalResponse.evidence.complete === true,
       plannerType: plan && plan.plannerType,
       plannerProvider: plannerDiag.plannerProvider,
+      status: finalOutcome.status,
     });
     emitChatEvent(state.eventInput, {
       type: finalOutcome.eventType,

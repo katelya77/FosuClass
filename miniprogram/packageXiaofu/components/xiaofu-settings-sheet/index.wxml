@@ -47,6 +47,14 @@
 
     <view class="settings-section">
       <view class="settings-section-label">帮助</view>
+      <button class="header-menu-row settings-row" wx:if="{{diagnosticsVisible}}" bindtap="onDiagnostics">
+        <view class="settings-row-icon">↯</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">连接诊断</view>
+          <view class="settings-row-desc">逐项检查真机到服务端的真实链路</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
       <button class="header-menu-row settings-row" bindtap="onCapability">
         <view class="settings-row-icon">?</view>
         <view class="settings-row-body">

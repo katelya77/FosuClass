@@ -73,7 +73,6 @@ function resolveWeatherEntities(message, clientContext = {}) {
 function hasPersonalScheduleContext(clientContext = {}) {
   const summary = clientContext.currentScheduleSummary || {};
   return summary.enabled === true &&
-    Number(summary.courseCount || 0) > 0 &&
     Array.isArray(summary.courses) &&
     summary.courses.length > 0;
 }
