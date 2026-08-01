@@ -237,11 +237,12 @@
     loginPath: typeof injected.loginPath === "string" && injected.loginPath ? injected.loginPath : "/admin/login",
     sessionPath: typeof injected.sessionPath === "string" && injected.sessionPath ? injected.sessionPath : "/api/admin/session",
     dashboardPath: typeof injected.dashboardPath === "string" && injected.dashboardPath ? injected.dashboardPath : "/admin/dashboard",
-    apiBase: typeof injected.apiBase === "string" && injected.apiBase ? injected.apiBase : "/api/admin/agent-platform"
+    apiBase: typeof injected.apiBase === "string" && injected.apiBase ? injected.apiBase : "/api/admin/agent-platform",
+    themeStorageKey: typeof injected.themeStorageKey === "string" && injected.themeStorageKey ? injected.themeStorageKey : "agent-admin-theme"
   };
 
-  // 与佛课后台 SPA 共用同一主题偏好键，保证内嵌时亮暗模式实时一致。
-  var THEME_STORAGE_KEY = "fosu-admin-theme";
+  // 与宿主后台 SPA 共用同一主题偏好键（由部署方注入），保证内嵌时亮暗模式实时一致。
+  var THEME_STORAGE_KEY = runtimeConfig.themeStorageKey;
   var themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
   function resolveTheme() {
     var preference = "system";
