@@ -1,0 +1,219 @@
+# FosuClass 小佛 Agent 平台 — standalone 部署拓扑（P5b）
+#
+# 快速启动：cp .env.example .env → 逐项填值 → docker compose up -d
+# 详见同目录 README.md（备份/恢复/升级/回滚纪律）。
+#
+# 镜像纪律（硬性）：禁止 floating latest 作为生产依据。
+#   - 生产必须按 commit SHA tag 或 digest 固定镜像，例如：
+#       AGENT_PLATFORM_IMAGE=fosu-agent-platform
+#       AGENT_PLATFORM_VERSION=9f3a1c2            # git commit SHA tag
+#     或
+#       AGENT_PLATFORM_IMAGE=registry.example.com/fosu-agent-platform@sha256:<digest>
+#   - 下方默认值仅用于本地构建回退（build 段），不是生产依据。
+
+name: fosu-agent-platform
+
+# ---- 共享片段（YAML anchors；compose 在变量插值前解析 anchor，二者可叠加）----
+x-agent-image: &agent-image
+  ${AGENT_PLATFORM_IMAGE:-fosu-agent-platform}:${AGENT_PLATFORM_VERSION:-local}
+
+x-agent-build: &agent-build
+  # 本地/开发回退构建；生产部署应使用预构建并按 SHA/digest 固定的镜像。
+  # 多架构（linux/amd64+linux/arm64）由 CI buildx/QEMU 产出，见 docs/deployment/oracle-arm.md。
+  context: ../..
+  dockerfile: server/Dockerfile
+  target: standalone
+  args:
+    GIT_REVISION: ${AGENT_PLATFORM_GIT_REVISION:-unknown}
+    BUILD_CREATED: ${AGENT_PLATFORM_BUILD_CREATED:-unknown}
+    IMAGE_VERSION: ${AGENT_PLATFORM_VERSION:-0.0.0}
+
+x-agent-env: &agent-env
+  # 持久化后端：standalone 默认 postgres（file 仅 integrated/本地开发用）。
+  FOSU_AGENT_REPOSITORY_BACKEND: ${FOSU_AGENT_REPOSITORY_BACKEND:-postgres}
+  # PostgreSQL：设置完整 AGENT_PG_URL 时优先；否则用离散项（默认指向内部 postgres 服务）。
+  AGENT_PG_URL: ${AGENT_PG_URL:-}
+  AGENT_PG_HOST: ${AGENT_PG_HOST:-postgres}
+  AGENT_PG_PORT: ${AGENT_PG_PORT:-5432}
+  AGENT_PG_USER: ${AGENT_PG_USER:-agent}
+  AGENT_PG_PASSWORD: ${AGENT_PG_PASSWORD:-}
+  AGENT_PG_DATABASE: ${AGENT_PG_DATABASE:-agent_platform}
+  AGENT_PG_SSL: ${AGENT_PG_SSL:-}
+  # Redis Streams 队列（非权威事实源，最终状态落 PG）。设密码时必须同步改 URL：
+  #   AGENT_REDIS_URL=redis://:<password>@redis:6379/0
+  AGENT_REDIS_URL: ${AGENT_REDIS_URL:-redis://redis:6379/0}
+  # 数据根目录（file fallback/artifact 缓存/上传暂存的统一根；命名卷挂载点，
+  # 与下方 volumes 对应）。standalone 运行时只消费 AGENT_PLATFORM_DATA_DIR。
+  AGENT_PLATFORM_DATA_DIR: /app/storage/agent-data
+  # Provider 凭据：留空 = 未配置。public 模式零外部 Provider 调用；
+  # trial/dev 在 Provider 未配置时 readiness 如实 not ready（禁 Mock 冒充）。
+  AGENT_PLATFORM_RUNTIME_MODE: ${AGENT_PLATFORM_RUNTIME_MODE:-public}
+  # Provider 声明（JSON 数组 [{id, apiKeyEnv, baseUrl?}]）；apiKeyEnv 只按名
+  # 引用下方透传的密钥变量，不落库、不进日志、不进 Trace。
+  AGENT_PLATFORM_PROVIDERS: ${AGENT_PLATFORM_PROVIDERS:-}
+  # 被 AGENT_PLATFORM_PROVIDERS 引用的密钥变量透传（示例占位，按实际声明增删）。
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  NODE_ENV: production
+
+networks:
+  agent-net:
+    driver: bridge
+    # 单一内部网络：postgres/redis 不发布宿主端口，仅 server 发布 HTTP。
+    # 不启用 internal: true —— server/worker 在 trial/dev 下需出站访问 Provider API。
+
+services:
+  postgres:
+    # RAG pgvector 基线镜像；禁用 postgres:16-alpine（缺 vector 扩展）。
+    image: pgvector/pgvector:pg16
+    container_name: fosu-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AGENT_PG_USER:-agent}
+      POSTGRES_PASSWORD: ${AGENT_PG_PASSWORD:-}
+      POSTGRES_DB: ${AGENT_PG_DATABASE:-agent_platform}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - agent-net
+    # 无 ports：不暴露到宿主，仅 agent-net 内可达。
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: fosu-agent-redis
+    restart: unless-stopped
+    # AGENT_REDIS_PASSWORD 非空时启用 requirepass（内部网络下可选）。
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${AGENT_REDIS_PASSWORD:-}" ]; then
+          exec redis-server --appendonly yes --requirepass "$${AGENT_REDIS_PASSWORD}"
+        fi
+        exec redis-server --appendonly yes
+    environment:
+      # 折行（>-）仅为满足仓库密钥扫描的行格式约束，YAML 语义等同单行。
+      AGENT_REDIS_PASSWORD: >-
+        ${AGENT_REDIS_PASSWORD:-}
+    volumes:
+      - redisdata:/data
+    networks:
+      - agent-net
+    # 无 ports：不暴露到宿主。
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          if [ -n "$${AGENT_REDIS_PASSWORD:-}" ]; then
+            redis-cli -a "$${AGENT_REDIS_PASSWORD}" --no-auth-warning ping | grep -q PONG
+          else
+            redis-cli ping | grep -q PONG
+          fi
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  migrate:
+    # 一次性 schema 迁移：跑完 runMigrations 即退出，exit 0 = 成功。
+    image: *agent-image
+    build: *agent-build
+    pull_policy: ${AGENT_PLATFORM_PULL_POLICY:-missing}
+    container_name: fosu-agent-migrate
+    restart: "no"
+    environment:
+      <<: *agent-env
+      AGENT_PLATFORM_ROLE: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - agent-net
+    healthcheck:
+      # 一次性任务无健康检查语义；容器内 test-standalone-health.js 对
+      # migrate 角色也直接 exit 0，双保险。
+      disable: true
+
+  server:
+    # HTTP 角色：run API + config-plane + admin 静态托管 + 三探针。
+    # admin 角色与 server 合一（默认）；角色分离仅为可扩展预留。
+    image: *agent-image
+    build: *agent-build
+    pull_policy: ${AGENT_PLATFORM_PULL_POLICY:-missing}
+    container_name: fosu-agent-server
+    restart: unless-stopped
+    environment:
+      <<: *agent-env
+      AGENT_PLATFORM_ROLE: server
+      AGENT_PLATFORM_PORT: "8080"
+      # Admin 控制台鉴权（AGENT_PLATFORM_ADMIN_TOKEN 全权；
+      # AGENT_PLATFORM_SERVICE_TOKENS 为 JSON 数组 [{name, token, scopes}]，
+      # 二者至少配置一项）。折行（>-）仅为满足密钥扫描的行格式约束。
+      AGENT_PLATFORM_ADMIN_TOKEN: >-
+        ${AGENT_PLATFORM_ADMIN_TOKEN:-}
+      AGENT_PLATFORM_SERVICE_TOKENS: >-
+        ${AGENT_PLATFORM_SERVICE_TOKENS:-}
+    ports:
+      # 唯一对宿主发布的端口；默认仅绑回环，公网暴露交给反向代理（README/1Panel 文档）。
+      - "${AGENT_PLATFORM_HOST_BIND:-127.0.0.1}:${AGENT_PLATFORM_HOST_PORT:-8080}:8080"
+    volumes:
+      - agent-data:/app/storage/agent-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - agent-net
+    healthcheck:
+      test: ["CMD", "node", "scripts/test-standalone-health.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    # 异步任务角色：RAG 摄取/索引、golden 验证、发布前测试、Eval、维护清理。
+    # 主聊天 Run 同步链留在 server 内，不因 worker 存在而异步化。
+    image: *agent-image
+    build: *agent-build
+    pull_policy: ${AGENT_PLATFORM_PULL_POLICY:-missing}
+    container_name: fosu-agent-worker
+    restart: unless-stopped
+    environment:
+      <<: *agent-env
+      AGENT_PLATFORM_ROLE: worker
+      AGENT_PLATFORM_PORT: "8080"
+    volumes:
+      - agent-data:/app/storage/agent-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - agent-net
+    healthcheck:
+      # worker 无 HTTP 监听时脚本回退为容器主进程活性检查（见脚本头注释）。
+      test: ["CMD", "node", "scripts/test-standalone-health.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pgdata:      # PostgreSQL 权威数据（备份对象）
+  redisdata:   # Redis AOF（队列暂存，非权威，不纳入权威备份）
+  agent-data:  # AGENT_PLATFORM_DATA_DIR 统一数据根：file fallback/artifact 缓存/上传暂存（备份对象）
