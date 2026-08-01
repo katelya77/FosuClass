@@ -31,7 +31,7 @@ async function runMigrate(options = {}) {
     return 1;
   } finally {
     try {
-      await pgPersistenceService.closeForTests(); // 关闭共享池（进程即退，语义同生产 close）
+      await pgPersistenceService.close(); // 关闭共享池（进程即退）
     } catch (_) {
       /* 尽力而为 */
     }

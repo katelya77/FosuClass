@@ -70,7 +70,7 @@ curl -X POST $BASE/api/admin/agent-platform/config/publish  -H "$ADMIN" -d '...�
 
 # 出问题时回滚到指定版本
 curl -X POST $BASE/api/admin/agent-platform/config/rollback -H "$ADMIN" \
-  -H 'Content-Type: application/json' -d '{"domain":"skill","artifactId":"campus-faq","environment":"trial","version":1}'
+  -H 'Content-Type: application/json' -d '{"domain":"skill","artifactId":"campus-faq","environment":"trial","toVersion":1}'
 ```
 
 Skill 字段以 `POST .../config/validate` 的校验结果为权威；上方骨架覆盖
@@ -99,19 +99,22 @@ runtimeModes/outputBlockTypes/providerPolicy/fallbackPolicy`。平台内置至�
 ## 5. 创建 Run 并消费 RunEvent
 
 ```bash
-# 创建 Run（同步返回 runId 与首批事件；idempotencyKey 防重）
-curl -X POST $BASE/api/ai/agent/runs -H 'Content-Type: application/json' -d '{
+# 创建 Run（202 返回 runId 与轮询凭据 pollToken；requestId/idempotencyKey 供幂等防重）
+curl -X POST $BASE/api/agent/runs -H 'Content-Type: application/json' -d '{
   "message": "新生报到流程是什么？",
-  "context": {"goal": "campus.faq"},
+  "requestId": "demo-0001",
+  "conversationId": "demo-conv",
+  "context": {},
   "protocolVersion": "agent.v1",
   "idempotencyKey": "demo-0001"
 }'
 
-# 轮询恢复：按 cursor 增量取事件（断线重连同一接口）
-curl "$BASE/api/ai/agent/runs/<runId>?cursor=<lastEventId>"
+# 轮询恢复：凭 pollToken 取状态与事件（可选 afterSequence 只取增量；断线重连同一接口）
+curl "$BASE/api/agent/runs/<runId>?pollToken=<pollToken>&afterSequence=<lastSequence>"
 
-# 取消（端到端真实传播）
-curl -X POST $BASE/api/ai/agent/runs/<runId>/cancel
+# 取消（端到端真实传播；pollToken 经 query 或 body 携带）
+curl -X POST "$BASE/api/agent/runs/<runId>/cancel" -H 'Content-Type: application/json' \
+  -d '{"pollToken":"<pollToken>"}'
 ```
 
 事件流约定（细节见 agent-run-events.md）：

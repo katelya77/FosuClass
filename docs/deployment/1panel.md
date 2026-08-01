@@ -45,8 +45,9 @@ compose 声明三个命名卷（1Panel「容器 → 存储卷」可见，前缀�
 3. 管理台（`/admin/agent-platform`）经该代理暴露时，使用
    `AGENT_PLATFORM_ADMIN_TOKEN`（或细粒度 `AGENT_PLATFORM_SERVICE_TOKENS`）
    Bearer 鉴权；令牌只经 `.env` 注入，不进日志。
-4. Run API（`/api/ai/agent/runs*`）如需被外部客户端消费，走同一代理即可；
-   注意代理超时需大于最长 Run 同步窗口，或客户端按 cursor 轮询恢复。
+4. Run API（`/api/agent/runs*`）如需被外部客户端消费，走同一代理即可；
+   注意代理超时需大于最长 Run 同步窗口，或客户端凭 pollToken 轮询
+   （可用 afterSequence 增量恢复）。
 
 ## 健康检查
 

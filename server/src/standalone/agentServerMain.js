@@ -60,7 +60,7 @@ function entryLoggerOf(log) {
 
 async function closePgPool() {
   try {
-    await require("../services/ai/persistence/pgPersistenceService").closeForTests();
+    await require("../services/ai/persistence/pgPersistenceService").close();
   } catch (_) {
     /* 进程即退，尽力而为 */
   }

@@ -18,7 +18,8 @@ Admin 角色默认与 server 合一（同一进程托管 admin 静态 + config-p
 ```bash
 cd deploy/standalone
 cp .env.example .env
-# 编辑 .env：必填 AGENT_PG_PASSWORD、ADMIN_*（至少一项鉴权）；
+# 编辑 .env：必填 AGENT_PG_PASSWORD、AGENT_PLATFORM_ADMIN_TOKEN
+# （或细粒度 AGENT_PLATFORM_SERVICE_TOKENS，二者至少一项）；
 # 随机密钥用 openssl rand -hex 24 生成
 docker compose up -d
 docker compose ps          # migrate 应为 Exited (0)，server/worker healthy
