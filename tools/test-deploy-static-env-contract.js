@@ -159,6 +159,20 @@ assert(
   "post-deploy version record must run only after the health gates and summary",
 );
 
+// server/Dockerfile builds with the monorepo root as build context
+// (server/docker-compose.yml build.context: ..), so the SCP upload must place
+// the workspace sources and root manifests next to server/ on the VPS.
+[
+  "packages/**",
+  "plugins/**",
+  "apps/**",
+  "package.json",
+  "package-lock.json",
+].forEach((needle) => {
+  const scpStep = workflow.slice(workflow.indexOf("Upload server/ directory via SCP"), workflow.indexOf("SSH Remote Deploy & Health Check"));
+  assert(scpStep.includes(needle), `SCP upload must include ${needle} (root build context)`);
+});
+
 assert(!workflow.includes("admin-web/**"), "deploy must not SCP admin-web");
 assert(!workflow.includes("FOSU_ADMIN_NEXT_ENABLED="), "deploy must not configure the retired Admin Next UI");
 assert(!workflow.includes("FOSU_ADMIN_PRIMARY="), "deploy must not configure a retired primary UI switch");
