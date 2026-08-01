@@ -1,17 +1,22 @@
 const request = require("../utils/request");
 const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
-const agentRunClient = require("./agentRunClient");
+const agentRunShell = require("./agentRunShell");
 const cloudbaseConfig = require("../config/cloudbase");
 
 // Runs transport is the production path: UI states must come from real server
-// Run Events. The legacy direct-chat oracle is kept only as an explicit
-// rollback (AI_AGENT_RUNS_TRANSPORT_ENABLED=false) and as the timeout
-// fallback inside callOracleViaRuns. Read lazily so tests can flip the flag.
+// Run Events. The legacy direct-chat oracle is compatibility-only/deprecated
+// (P6b): it may trigger ONLY when (a) the explicit rollback switch
+// AI_AGENT_RUNS_TRANSPORT_ENABLED=false, or (b) the server fails protocol
+// negotiation (RUN_PROTOCOL_UNSUPPORTED = old server without Run API). Plain
+// network errors/timeouts must NOT silently downgrade product semantics into
+// direct chat — they surface as retriable errors toward the offline fallback
+// chain. Every compat engagement is recorded locally with its reason.
 function runsTransportEnabled() {
   return cloudbaseConfig.AI_AGENT_RUNS_TRANSPORT_ENABLED !== false;
 }
 
 const METRICS_KEY = "FOSU_AI_GENERATIVE_METRICS";
+const DIRECT_CHAT_COMPAT_KEY = "FOSU_AI_DIRECT_CHAT_COMPAT";
 const INVALID_TEXT_TOKENS = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function nowIso() {
@@ -62,6 +67,64 @@ function recordMetric(metric) {
   };
   writeStorage(METRICS_KEY, list.concat(safe).slice(-80));
   return safe;
+}
+
+// direct chat 兼容通道使用记录（compatibility-only）：原因、协议版本、
+// 客户端版本、传输与功能影响五元组，供退役门槛量化（旧量归零才可删除）。
+function recordDirectChatCompat(compatReason, metadata = {}, extra = {}) {
+  const source = readStorage(DIRECT_CHAT_COMPAT_KEY, []);
+  const list = Array.isArray(source) ? source : [];
+  const entry = {
+    compatReason: String(compatReason || "").slice(0, 40),
+    protocolVersion: String(metadata.protocolVersion || "agent.v2").slice(0, 32),
+    clientVersion: String(extra.clientVersion || "miniprogram").slice(0, 40),
+    transport: "direct_chat_compat",
+    featureImpact: String(extra.featureImpact || "no_run_events").slice(0, 80),
+    at: nowIso(),
+  };
+  writeStorage(DIRECT_CHAT_COMPAT_KEY, list.concat(entry).slice(-40));
+  return entry;
+}
+
+function isProtocolUnsupportedError(error) {
+  if (!error) return false;
+  return error.errorClass === "unsupported_protocol"
+    || String(error.code || error.reasonCode || "").toUpperCase() === "RUN_PROTOCOL_UNSUPPORTED";
+}
+
+// 兼容通道（deprecated）：只搬运服务端 direct chat 的真实应答并打上兼容
+// 标记；绝不伪造 plan/tool_progress/verification/action_receipt 执行状态。
+async function directChatCompat(safeMessage, context, metadata, compatReason, callbacks = {}) {
+  recordDirectChatCompat(compatReason, metadata);
+  if (callbacks.onStatus) {
+    callbacks.onStatus({
+      type: "run.status_unavailable",
+      text: compatReason === "protocol_unsupported" ? "服务端版本较低，已切换兼容通道" : "已切换兼容通道",
+    });
+  }
+  const response = await request.post("/api/ai/agent/chat", {
+    message: safeMessage,
+    context,
+    protocolVersion: metadata.protocolVersion || "agent.v2",
+    requestId: metadata.requestId || "",
+    conversationId: metadata.conversationId || "",
+    memoryMode: context.memoryMode || "local_only",
+    cloudSyncEnabled: context.cloudSyncEnabled === true,
+  }, {
+    showLoading: false,
+    silentError: true,
+    timeout: 28000,
+    retries: 2,
+    retryBaseDelayMs: 420,
+    retryMaxDelayMs: 1800,
+    dedupe: false,
+  });
+  if (response && typeof response === "object") {
+    response.compatMode = "direct_chat";
+    response.compatReason = compatReason;
+    response.transport = "direct_chat_compat";
+  }
+  return response;
 }
 
 function normalizeOracleResponse(response) {
@@ -186,34 +249,29 @@ function shouldDisableGenerativeInClient() {
 }
 
 async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata = {}) {
-  const created = await agentRunClient.createRun({
+  // 单一 active-run 状态源（agentRunShell）驱动：建 Run → 事件扇出 → 终态
+  // 交还。onRunEvents 桥接为（新批次, 累计）二元，保持页面回调契约不变。
+  let fannedCount = 0;
+  const done = await agentRunShell.shell.startRun({
     message: safeMessage,
     context,
-    protocolVersion: metadata.protocolVersion || "agent.v2",
     requestId: metadata.requestId || "",
     conversationId: metadata.conversationId || "",
     memoryMode: context.memoryMode || "local_only",
     cloudSyncEnabled: context.cloudSyncEnabled === true,
-  });
-  if (callbacks.onRunCreated) {
-    callbacks.onRunCreated({
-      runId: created.runId,
-      pollToken: created.pollToken,
-    });
-  }
-  if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "run.accepted", text: "任务已受理，等待服务端状态" });
-  }
-  const collectedEvents = [];
-  const done = await agentRunClient.pollRunUntilDone(created.runId, created.pollToken, {
-    maxWaitMs: 45000,
     shouldCancel: () => callbacks.shouldCancel && callbacks.shouldCancel() === true,
-    onEvents: (events) => {
-      collectedEvents.push(...events);
-      if (callbacks.onRunEvents) callbacks.onRunEvents(events, collectedEvents.slice());
-    },
-    onStatus: (status) => {
-      if (callbacks.onStatus) callbacks.onStatus(status);
+    callbacks: {
+      onRunCreated: (info) => {
+        if (callbacks.onRunCreated) callbacks.onRunCreated(info);
+      },
+      onRunEvents: (allEvents) => {
+        const batch = allEvents.slice(fannedCount);
+        fannedCount = allEvents.length;
+        if (callbacks.onRunEvents) callbacks.onRunEvents(batch, allEvents.slice());
+      },
+      onStatus: (status) => {
+        if (callbacks.onStatus) callbacks.onStatus(status);
+      },
     },
   });
   if (done.cancelled) {
@@ -229,33 +287,23 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
       evidence: null,
       safety: { provider: "mock", externalProviderUsed: false, mode: "cancelled" },
       metrics: {},
-      runEvents: collectedEvents,
+      runEvents: done.events || [],
     };
   }
   if (done.result) {
-    return Object.assign({}, done.result, { runEvents: collectedEvents });
+    return Object.assign({}, done.result, { runEvents: done.events || [] });
   }
-  // Fallback to legacy chat if run timed out without result.
   if (done.timeout) {
-    if (callbacks.onStatus) callbacks.onStatus({ type: "run.status_unavailable", text: "处理时间较长，正在等待最终结果" });
-    return request.post("/api/ai/agent/chat", {
-      message: safeMessage,
-      context,
-      protocolVersion: metadata.protocolVersion || "agent.v2",
-      requestId: metadata.requestId || "",
-      conversationId: metadata.conversationId || "",
-      memoryMode: context.memoryMode || "local_only",
-      cloudSyncEnabled: context.cloudSyncEnabled === true,
-    }, {
-      showLoading: false,
-      silentError: true,
-      timeout: 28000,
-      retries: 1,
-      dedupe: false,
-    });
+    // 超时不等于失败：Run 在服务端可能仍存活（句柄已保留，可在页面重开/
+    // 网络恢复时续跑恢复）。如实抛可重试错误，绝不静默转 direct chat。
+    const timeoutError = new Error("RUN_TIMEOUT");
+    timeoutError.code = "TIMEOUT";
+    timeoutError.reasonCode = "RUN_TIMEOUT";
+    timeoutError.retriable = true;
+    throw timeoutError;
   }
-  const error = new Error("RUN_FAILED");
-  error.code = "RUN_FAILED";
+  const error = new Error(done.gone ? "RUN_GONE" : "RUN_FAILED");
+  error.code = done.gone ? "RUN_GONE" : "RUN_FAILED";
   throw error;
 }
 
@@ -264,31 +312,20 @@ async function callOracle(oracleChat, safeMessage, context, callbacks = {}, meta
   if (callbacks.onStatus) {
     callbacks.onStatus({ type: "request.submitted", text: "正在建立校园任务" });
   }
-  if (oracleChat && !runsTransportEnabled()) return oracleChat(safeMessage, context, metadata);
+  // 兼容开关（显式 opt-out）：唯一允许绕过 Run API 的配置路径。
+  if (oracleChat && !runsTransportEnabled()) {
+    recordDirectChatCompat("explicit_flag", metadata);
+    return oracleChat(safeMessage, context, metadata);
+  }
   try {
     return await callOracleViaRuns(safeMessage, context, callbacks, metadata);
   } catch (error) {
-    // Compatibility path if run API unavailable.
-    if (callbacks.onStatus) {
-      callbacks.onStatus({ type: "run.status_unavailable", text: "实时通道暂不可用，正在直接获取结果" });
+    // 协议协商确认旧服务端无 Run API：受控兼容（记录原因，标记应答）。
+    if (isProtocolUnsupportedError(error)) {
+      return directChatCompat(safeMessage, context, metadata, "protocol_unsupported", callbacks);
     }
-    return request.post("/api/ai/agent/chat", {
-      message: safeMessage,
-      context,
-      protocolVersion: metadata.protocolVersion || "agent.v2",
-      requestId: metadata.requestId || "",
-      conversationId: metadata.conversationId || "",
-      memoryMode: context.memoryMode || "local_only",
-      cloudSyncEnabled: context.cloudSyncEnabled === true,
-    }, {
-      showLoading: false,
-      silentError: true,
-      timeout: 28000,
-      retries: 2,
-      retryBaseDelayMs: 420,
-      retryMaxDelayMs: 1800,
-      dedupe: false,
-    });
+    // 普通网络错误/超时/失败：如实上抛，由离线降级链接管，不静默改语义。
+    throw error;
   }
 }
 
@@ -319,9 +356,11 @@ async function serverFirstChat(input = {}) {
 }
 
 module.exports = {
+  DIRECT_CHAT_COMPAT_KEY,
   METRICS_KEY,
   buildGenericCard,
   chat: serverFirstChat,
+  recordDirectChatCompat,
   recordMetric,
   safeText,
   shouldDisableGenerativeInClient,

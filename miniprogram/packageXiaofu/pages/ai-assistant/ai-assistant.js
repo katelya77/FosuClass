@@ -9,6 +9,7 @@ const xiaofuFloatService = require("../../../services/xiaofuFloatService");
 const agentMemoryClient = require("../../../services/agentMemoryClient");
 const agentReadinessClient = require("../../../services/agentReadinessClient");
 const agentRunClient = require("../../../services/agentRunClient");
+const agentRunShell = require("../../../services/agentRunShell");
 const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
 const courseReminderClient = require("../../../services/courseReminderClient");
 const currentScheduleService = require("../../../services/currentScheduleService");
@@ -20,6 +21,7 @@ const xiaofuPresentation = require("../../services/xiaofuPresentationAdapter");
 const xiaofuMessageActions = require("../../services/xiaofuMessageActions");
 const xiaofuConversationViewModel = require("../../services/xiaofuConversationViewModel");
 const { createActionBus } = require("../../services/xiaofuActionBus");
+const uiBlockAdapter = require("../../services/uiBlockAdapter");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const AUTO_MEMORY_ENABLED_KEY = "xiaofu_auto_memory_enabled";
@@ -1064,6 +1066,18 @@ function isGenericAssistantCard(card) {
   return false;
 }
 
+// 通用 UI Block 增强的触发前提：消息带有可推导的原始响应信封字段。
+// 只认能产生展示卡片/文本的通用字段；steps/taskSteps 单独出现时推导不出卡片，不算。
+function hasRawResponseEnvelope(source) {
+  if (!source || typeof source !== "object") return false;
+  return Boolean(
+    source.answer
+    || (Array.isArray(source.uiBlocks) && source.uiBlocks.length)
+    || (source.ui && Array.isArray(source.ui.blocks) && source.ui.blocks.length)
+    || (Array.isArray(source.errors) && source.errors.length)
+  );
+}
+
 function resolveAssistantIntentName(source) {
   return xiaofuPresentation.resolveIntentName(source || {});
 }
@@ -1099,6 +1113,30 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     rawCards,
     presentationMode || (isPlain ? "plain" : (rawCards.length > 1 ? "composite" : "single_card"))
   );
+
+  // P6b W4：通用 UI Block 增强。仅当消息本身没有任何可用卡片、且带有原始
+  // 响应信封字段时，才由通用 Block 推导展示卡片/文本；已有卡片的消息与推导
+  // 为空的情况完全保持原行为（适配器纯函数、绝不抛出）。
+  let augmentText = "";
+  if (role !== "user" && !rawCards.length) {
+    const rawResponse = source.response && typeof source.response === "object" && !Array.isArray(source.response)
+      ? source.response
+      : source;
+    if (hasRawResponseEnvelope(rawResponse)) {
+      const augment = uiBlockAdapter.responseToDisplayAugment(rawResponse);
+      const augmentDisplay = augment && augment.display || {};
+      const augmentCards = Array.isArray(augmentDisplay.cards) ? augmentDisplay.cards : [];
+      if (augmentCards.length) {
+        rawCards = xiaofuPresentation.limitDisplayCards(
+          augmentCards,
+          presentationMode || (isPlain ? "plain" : (augmentCards.length > 1 ? "composite" : "single_card"))
+        );
+      }
+      if (!safeText(source.content || "", 2000)) {
+        augmentText = safeText(augmentDisplay.text || "", 2000);
+      }
+    }
+  }
 
   const displaySteps = isPlain ? [] : normalizeDisplaySteps(source);
   // Product UX: never dump tool chips into the default message area
@@ -1170,7 +1208,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
   return Object.assign({}, source, {
     id,
     role,
-    content: safeText(source.content || "", 2000),
+    content: safeText(source.content || "", 2000) || augmentText,
     intentName: resolvedIntentName || source.intentName || "",
     userQuery: source.userQuery || lastUserText || "",
     presentationMode: presentationMode || (isPlain ? "plain" : ""),
@@ -1195,7 +1233,12 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     metrics,
     metricsText: "",
     fallback: fallback && !isPlain,
-    fallbackBanner: fallback && !isPlain ? "增强推理暂不可用，已使用本地确定性能力完成本次任务" : "",
+    // 横幅只讲用户能感知的事：本地降级说「能力变化」，兼容模式说「实时进度不可见」。
+    fallbackBanner: fallback && !isPlain
+      ? "增强推理暂不可用，已使用本地确定性能力完成本次任务"
+      : (source.compatMode === "direct_chat" && !isPlain
+        ? "服务端版本较低 · 已用兼容模式回答，实时进度不可见"
+        : ""),
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
     showCompactFeedback: false,
@@ -1246,6 +1289,51 @@ function makeMessage(role, content, patch) {
     safety: null,
     timeText: timeText(),
   }, patch || {});
+}
+
+// 由服务端响应信封构建助手消息：sendMessage 成功分支与断线恢复
+// （resumeActiveAgentRun）共用同一套构建逻辑，保证两条路径产出的消息一致。
+// extra.userQuery 供发送路径带上原始提问；恢复路径没有原文提问，留空。
+function buildAssistantMessageFromResponse(response, extra) {
+  const options = extra || {};
+  const resolvedIntentName = (typeof response.intent === "string" && response.intent)
+    || (response.intent && response.intent.name)
+    || response.intentName
+    || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
+    || "";
+  const presentationMode = response.presentationMode
+    || (response.presentation && response.presentation.presentationMode)
+    || "";
+  const responseCards = Array.isArray(response.cards) ? response.cards : [];
+  const waitingConfirmation = responseCards.some((card) => (Array.isArray(card && card.actions) ? card.actions : [])
+    .some((action) => action && action.type === "confirmReminder"));
+  const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
+    cards: responseCards,
+    suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
+    toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
+    taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+    steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
+    evidence: response.evidence || response.evidenceDisplay || null,
+    safety: response.safety || {},
+    metrics: response.metrics || null,
+    fallback: response.fallback === true,
+    fallbackLayer: response.fallbackLayer || "",
+    status: response.status || "completed",
+    memory: response.memory || null,
+    intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
+    intentName: resolvedIntentName,
+    userQuery: options.userQuery || "",
+    presentationMode,
+    presentation: response.presentation || null,
+    runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
+    taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
+    plan: response.plan || null,
+    // direct chat 兼容通道标记（compatibility-only）：供展示层如实提示
+    // 「实时进度不可见」，不得被当作普通成功路径隐藏。
+    compatMode: response.compatMode || "",
+    compatReason: response.compatReason || "",
+  });
+  return { assistantMessage, resolvedIntentName, waitingConfirmation, responseCards };
 }
 
 function formatConversationTime(value) {
@@ -1524,6 +1612,8 @@ Page({
     this._isComposing = false;
     this._recorderManager = null;
     this._composerInsetSyncTimer = null;
+    this._resumeInFlight = false;
+    this._networkListener = null;
     try {
       const storage = require("../../../utils/storage");
       if (storage.clearLegacyTeacherIndexCaches) storage.clearLegacyTeacherIndexCaches();
@@ -1579,6 +1669,16 @@ Page({
     if (!demoMode && question) {
       setTimeout(() => this.sendMessage(question), 260);
     }
+
+    // 网络恢复时尝试续跑未完成的任务（监听器在 onUnload 注销）。
+    if (typeof wx !== "undefined" && typeof wx.onNetworkStatusChange === "function") {
+      this._networkListener = (res) => {
+        if (res && res.isConnected && !this.data.sending) this.resumeActiveAgentRun();
+      };
+      wx.onNetworkStatusChange(this._networkListener);
+    }
+    // 页面重开后恢复未完成的 Run：凭 shell 持久句柄续跑，绝不重建第二个 Run。
+    this.resumeActiveAgentRun();
   },
 
   refreshConnectionStatus() {
@@ -1879,6 +1979,8 @@ Page({
         }
       });
     }
+    // 回到页面时恢复未完成的 Run（进行中的发送独占 UI 时跳过）。
+    if (!this.data.sending) this.resumeActiveAgentRun();
   },
 
   onResize() {
@@ -1892,6 +1994,10 @@ Page({
     if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
     if (this._onKeyboardHeightChange && typeof wx !== "undefined" && typeof wx.offKeyboardHeightChange === "function") {
       try { wx.offKeyboardHeightChange(this._onKeyboardHeightChange); } catch (e) { /* ignore */ }
+    }
+    if (this._networkListener && typeof wx !== "undefined" && typeof wx.offNetworkStatusChange === "function") {
+      try { wx.offNetworkStatusChange(this._networkListener); } catch (e) { /* ignore */ }
+      this._networkListener = null;
     }
   },
 
@@ -3092,39 +3198,10 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
-        const resolvedIntentName = (typeof response.intent === "string" && response.intent)
-          || (response.intent && response.intent.name)
-          || response.intentName
-          || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
-          || "";
-        const presentationMode = response.presentationMode
-          || (response.presentation && response.presentation.presentationMode)
-          || "";
-        const responseCards = Array.isArray(response.cards) ? response.cards : [];
-        const waitingConfirmation = responseCards.some((card) => (Array.isArray(card && card.actions) ? card.actions : [])
-          .some((action) => action && action.type === "confirmReminder"));
-        const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
-          cards: responseCards,
-          suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
-          toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
-          taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
-          steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
-          evidence: response.evidence || response.evidenceDisplay || null,
-          safety,
-          metrics: response.metrics || null,
-          fallback: response.fallback === true,
-          fallbackLayer: response.fallbackLayer || "",
-          status: response.status || "completed",
-          memory: response.memory || null,
-          intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
-          intentName: resolvedIntentName,
-          userQuery: message,
-          presentationMode,
-          presentation: response.presentation || null,
-          runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
-          taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
-          plan: response.plan || null,
-        });
+        const built = buildAssistantMessageFromResponse(response, { userQuery: message });
+        const resolvedIntentName = built.resolvedIntentName;
+        const waitingConfirmation = built.waitingConfirmation;
+        const assistantMessage = built.assistantMessage;
         if (response.memory && response.memory.mode) {
           this.setData(Object.assign({
             memoryMode: response.memory.mode,
@@ -3234,6 +3311,123 @@ Page({
           this._activeAiRequestId = "";
         }
       });
+  },
+
+  // P6b W4：断线/页面重开后的运行恢复唯一入口。
+  // 凭 agentRunShell 持久句柄续跑同一个 Run，绝不重建第二个 Run；
+  // 所有 Loading/状态文案只来自真实恢复路径与服务端 Run Events，绝不伪造。
+  resumeActiveAgentRun() {
+    if (this.data.sending || this._resumeInFlight) return;
+    const handle = agentRunShell.shell.getActiveRun();
+    if (!handle) return;
+    this._resumeInFlight = true;
+    this.setData({
+      sending: true,
+      slowRequest: false,
+      liveRunVisible: true,
+      liveRunEvents: [],
+      liveRunExpanded: false,
+      activeRunId: handle.runId,
+      activePollToken: handle.pollToken,
+      sendingStatusText: "正在恢复未完成的任务",
+      agentActivityState: "composing",
+      statusCapsuleText: "正在恢复未完成的任务",
+      statusCapsuleDetail: "将凭服务端真实运行事件继续，不会重新发起任务。",
+      statusCapsuleExpanded: true,
+    });
+    agentRunShell.shell.resumeActiveRun({
+      onRunEvents: (allEvents) => {
+        if (this._aiPageUnloaded) return;
+        this.setData({
+          liveRunEvents: Array.isArray(allEvents) ? allEvents.slice(-12) : [],
+        });
+      },
+      onStatus: (status) => {
+        if (this._aiPageUnloaded) return;
+        const activityPatch = agentActivityState.activityPatchForRunEvent(status);
+        this.setData(Object.assign({
+          sendingStatusText: status && status.text || this.data.sendingStatusText,
+        }, activityPatch));
+      },
+    }).then((outcome) => {
+      this._resumeInFlight = false;
+      if (this._aiPageUnloaded) return;
+      if (outcome && outcome.result) {
+        // 终态且取回真实结果：与 sendMessage 成功分支同一套消息构建与投递逻辑。
+        const response = outcome.result;
+        const built = buildAssistantMessageFromResponse(response, { userQuery: "" });
+        const nextContext = contextManager.updateFromResponse(this.data.activeConversationContext, response);
+        const terminalActivity = agentActivityState.activityPatchForResponse(response, {
+          waitingConfirmation: built.waitingConfirmation,
+        });
+        const finalMessages = (this.data.messages || []).slice().concat(built.assistantMessage);
+        this.setMessages(finalMessages, Object.assign({
+          activeConversationContext: nextContext,
+          sending: false,
+          slowRequest: false,
+          liveRunVisible: false,
+          liveRunEvents: [],
+          activeRunId: "",
+          activePollToken: "",
+        }, terminalActivity), { save: true });
+        this.executeResponseActions(response);
+        if (!built.waitingConfirmation) this.scheduleStatusCapsuleReset();
+        return;
+      }
+      if (outcome && outcome.cancelled) {
+        // 真实取消：只如实清理运行 UI，不补任何结果。
+        this.setData({
+          sending: false,
+          slowRequest: false,
+          liveRunVisible: false,
+          liveRunEvents: [],
+          sendingStatusText: "已取消",
+          agentActivityState: "idle",
+          statusCapsuleText: "任务已取消",
+          statusCapsuleDetail: "未继续执行后续工具或写操作。",
+          statusCapsuleExpanded: false,
+          activeRunId: "",
+          activePollToken: "",
+        });
+        return;
+      }
+      // 句柄竞态消失 / RUN_GONE / 超时未取回结果：如实重置运行 UI，绝不伪造成功。
+      const runGone = Boolean(outcome && outcome.reason === "RUN_GONE");
+      this.setData(Object.assign({
+        sending: false,
+        slowRequest: false,
+        liveRunVisible: false,
+        liveRunEvents: [],
+        activeRunId: "",
+        activePollToken: "",
+        agentActivityState: "idle",
+        statusCapsuleExpanded: false,
+      }, runGone ? {
+        sendingStatusText: "任务已过期",
+        statusCapsuleText: "任务已过期",
+        statusCapsuleDetail: "服务端已不存在该任务，请重新发起。",
+      } : {
+        statusCapsuleText: "待命 · 校园工具可用",
+        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
+      }));
+      if (runGone) this.scheduleStatusCapsuleReset();
+    }).catch((error) => {
+      this._resumeInFlight = false;
+      if (this._aiPageUnloaded) return;
+      console.warn("[ai-assistant] resumeActiveRun failed", error && error.message || error);
+      this.setData({
+        sending: false,
+        slowRequest: false,
+        liveRunVisible: false,
+        liveRunEvents: [],
+        activeRunId: "",
+        activePollToken: "",
+        agentActivityState: "idle",
+        statusCapsuleExpanded: false,
+        statusCapsuleText: "待命 · 校园工具可用",
+        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
+      });
+    });
   },
 
   dismissPrivacyTip() {
@@ -4756,5 +4950,6 @@ if (typeof module !== "undefined") {
     normalizeMessageForDisplay,
     makeMessage,
     resolveAssistantIntentName,
+    buildAssistantMessageFromResponse,
   };
 }

@@ -412,6 +412,18 @@ async function main() {
     error = await attempt();
     assert.strictEqual(error.errorClass, "network");
     assert.strictEqual(error.retriable, true);
+    // 契约破坏（202 但缺 runId）：RUN_CREATE_FAILED 服务失败类，可重试。
+    const brokenBackend = createBackend({ createRun: () => ({ status: 202, json: { success: true } }) });
+    const brokenClient = makeClient(brokenBackend);
+    try {
+      await brokenClient.createRun("hi");
+      assert.fail("missing runId must throw");
+    } catch (contractError) {
+      assert.strictEqual(contractError.message, "AGENT_SDK_RUN_ID_MISSING");
+      assert.strictEqual(contractError.code, "RUN_CREATE_FAILED");
+      assert.strictEqual(contractError.errorClass, "internal");
+      assert.strictEqual(contractError.retriable, true);
+    }
     await assert.rejects(() => client.createRun("   "), /AGENT_SDK_MESSAGE_REQUIRED/);
   });
   await checkAsync("C10 未知 Run：poll/cancel/reconnect 如实 not_found", async () => {
