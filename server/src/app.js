@@ -277,6 +277,7 @@ app.get("/admin/agent-platform/runtime-config.js", requireAgentAdminPageSession,
     sessionPath: "/api/admin/session",
     dashboardPath: "/admin/dashboard",
     apiBase: "/api/admin/agent-platform",
+    themeStorageKey: "fosu-admin-theme",
   })};`);
 });
 
