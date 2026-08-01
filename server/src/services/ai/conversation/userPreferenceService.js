@@ -10,7 +10,33 @@ const crypto = require("crypto");
 const path = require("path");
 const { createFileMemoryDocumentStore } = require("./fileMemoryDocumentStore");
 const { principalShard } = require("./conversationPrincipalService");
+const { resolveRepositoryBackend } = require("../persistence/repositoryBackend");
 const { encodeSemanticVector, semanticScores, ENCODER_VERSION } = require("../../../../../packages/agent-runtime");
+
+// P5a WS6：maybe-async 基元。documentStore 在 file 后端为同步实现（原行为
+// 逐字保持），postgres 后端为异步同形 seam（pgMemoryDocumentStoreAdapter）；
+// 各方法经 chain 透传——file 返回同步值，PG 返回 Promise，消费方 await 即可。
+function isThenable(value) {
+  return value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled) {
+  return isThenable(value) ? value.then(onFulfilled) : onFulfilled(value);
+}
+
+// 默认文档存储按后端选择（WS2 同款解析点）：file（默认）→ 文件 store；
+// postgres → PG seam adapter（lazy pool 构造不触网，init 就绪门在 adapter
+// withLock 入口，migration 0004 的 agent_user_memory 表由迁移链保证）。
+function createDefaultMemoryDocumentStore(rootDir, options = {}) {
+  if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
+    // lazy require：file 模式不加载 pg 依赖链。
+    const { createPgMemoryDocumentStoreAdapter } = require("./pgMemoryDocumentStoreAdapter");
+    return createPgMemoryDocumentStoreAdapter(options);
+  }
+  return createFileMemoryDocumentStore({ rootDir });
+}
 
 const LEGACY_SCHEMA_VERSION = "user-preferences.v1";
 const SCHEMA_VERSION = "user-memory.v2";
@@ -487,7 +513,8 @@ class UserPreferenceService {
     // P5a WS4b：注入式同步文档存储 seam。默认实现与抽取前逐字一致
     // （文件锁 + tmp/rename 原子写，见 fileMemoryDocumentStore.js）；
     // 加密/迁移/revision 领域逻辑仍在本服务，store 只见不透明信封文本。
-    this.documentStore = options.documentStore || createFileMemoryDocumentStore({ rootDir: this.rootDir });
+    // P5a WS6：postgres 后端默认改为异步同形 seam（pgMemoryDocumentStoreAdapter）。
+    this.documentStore = options.documentStore || createDefaultMemoryDocumentStore(this.rootDir, options);
   }
 
   assertPrincipal(principal) {
@@ -517,102 +544,120 @@ class UserPreferenceService {
 
   readDocumentUnlocked(filePath, principalKey) {
     const now = this.nowIso();
-    const storedText = this.documentStore.load(filePath);
-    if (storedText === null) return emptyDocument(now);
-    if (!this.secret) {
-      throw typedError("Memory encryption is not configured", "MEMORY_SECRET_UNAVAILABLE", 503);
-    }
-    let raw;
-    try {
-      raw = JSON.parse(storedText);
-    } catch (_) {
-      throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
-    }
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-      throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
-    }
-    if (raw.schemaVersion === SCHEMA_VERSION) {
-      try {
-        const decrypted = decryptObject(raw.encrypted, this.secret, principalKey);
-        assertV2DocumentShape(decrypted, raw.revision);
-        return normalizeDocument(decrypted, now);
-      } catch (error) {
-        if (error && error.code === "MEMORY_DOCUMENT_CORRUPT") throw error;
-        throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
+    return chain(this.documentStore.load(filePath), (storedText) => {
+      if (storedText === null) return emptyDocument(now);
+      if (!this.secret) {
+        throw typedError("Memory encryption is not configured", "MEMORY_SECRET_UNAVAILABLE", 503);
       }
-    }
-    if (raw.schemaVersion === LEGACY_SCHEMA_VERSION) {
-      let values;
+      let raw;
       try {
-        values = decryptObject(raw.encrypted, this.secret, principalKey);
+        raw = JSON.parse(storedText);
       } catch (_) {
         throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
       }
-      const document = emptyDocument(now);
-      document.revision = Object.keys(values).length ? 1 : 0;
-      const updatedAtMs = Date.parse(raw.updatedAt || "");
-      const legacyBaseMs = Number.isFinite(updatedAtMs) ? updatedAtMs : this.documentStore.statMtimeMs(filePath);
-      const legacyRecordedAt = new Date(legacyBaseMs).toISOString();
-      Object.entries(values).forEach(([key, rawValue]) => {
-        const value = normalizeValue(key, rawValue);
-        if (!ALLOWED_KEYS.includes(key) || value === null) return;
-        const content = `${key}=${String(value)}`;
-        document.items.push(normalizeStoredItem({
-          memoryId: `mem_legacy_${crypto.createHash("sha256").update(`${principalKey}|${key}`).digest("hex").slice(0, 16)}`,
-          kind: key === "preferredName" ? "identity_alias" : "stable_preference",
-          key,
-          content,
-          normalizedValue: value,
-          provenance: { type: "legacy_migration", recordedAt: legacyRecordedAt },
-          confidence: 0.9,
-          scope: "user",
-          expiresAt: new Date(legacyBaseMs + DEFAULT_MEMORY_TTL_MS).toISOString(),
-          status: "active",
-          revision: 1,
-          createdAt: legacyRecordedAt,
-          updatedAt: legacyRecordedAt,
-          featureVector: encodeSemanticVector(content),
-          encoderVersion: ENCODER_VERSION,
-        }));
-      });
-      return document;
-    }
-    throw typedError("Memory schema is unsupported", "MEMORY_SCHEMA_UNSUPPORTED", 409);
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
+      }
+      if (raw.schemaVersion === SCHEMA_VERSION) {
+        try {
+          const decrypted = decryptObject(raw.encrypted, this.secret, principalKey);
+          assertV2DocumentShape(decrypted, raw.revision);
+          return normalizeDocument(decrypted, now);
+        } catch (error) {
+          if (error && error.code === "MEMORY_DOCUMENT_CORRUPT") throw error;
+          throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
+        }
+      }
+      if (raw.schemaVersion === LEGACY_SCHEMA_VERSION) {
+        let values;
+        try {
+          values = decryptObject(raw.encrypted, this.secret, principalKey);
+        } catch (_) {
+          throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
+        }
+        const updatedAtMs = Date.parse(raw.updatedAt || "");
+        const buildLegacyDocument = (legacyBaseMs) => {
+          const document = emptyDocument(now);
+          document.revision = Object.keys(values).length ? 1 : 0;
+          const legacyRecordedAt = new Date(legacyBaseMs).toISOString();
+          Object.entries(values).forEach(([key, rawValue]) => {
+            const value = normalizeValue(key, rawValue);
+            if (!ALLOWED_KEYS.includes(key) || value === null) return;
+            const content = `${key}=${String(value)}`;
+            document.items.push(normalizeStoredItem({
+              memoryId: `mem_legacy_${crypto.createHash("sha256").update(`${principalKey}|${key}`).digest("hex").slice(0, 16)}`,
+              kind: key === "preferredName" ? "identity_alias" : "stable_preference",
+              key,
+              content,
+              normalizedValue: value,
+              provenance: { type: "legacy_migration", recordedAt: legacyRecordedAt },
+              confidence: 0.9,
+              scope: "user",
+              expiresAt: new Date(legacyBaseMs + DEFAULT_MEMORY_TTL_MS).toISOString(),
+              status: "active",
+              revision: 1,
+              createdAt: legacyRecordedAt,
+              updatedAt: legacyRecordedAt,
+              featureVector: encodeSemanticVector(content),
+              encoderVersion: ENCODER_VERSION,
+            }));
+          });
+          return document;
+        };
+        if (Number.isFinite(updatedAtMs)) return buildLegacyDocument(updatedAtMs);
+        return chain(this.documentStore.statMtimeMs(filePath), buildLegacyDocument);
+      }
+      throw typedError("Memory schema is unsupported", "MEMORY_SCHEMA_UNSUPPORTED", 409);
+    });
   }
 
-  writeDocumentUnlocked(filePath, principalKey, document) {
+  // cas（PG seam）：expectedRevision = 本次 read-modify-write 的基线 revision，
+  // revision = 新 revision；文件 store 忽略第三参（同步行为零变化）。
+  writeDocumentUnlocked(filePath, principalKey, document, cas = {}) {
     this.assertWritable();
     const now = this.nowIso();
     const clean = normalizeDocument(document, now);
-    this.documentStore.save(filePath, `${JSON.stringify({
+    return this.documentStore.save(filePath, `${JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
       principalShard: principalShard(principalKey),
       revision: clean.revision,
       updatedAt: now,
       encrypted: encryptObject(clean, this.secret, principalKey),
-    }, null, 2)}\n`);
+    }, null, 2)}\n`, {
+      expectedRevision: cas.expectedRevision,
+      revision: Number.isFinite(Number(cas.revision)) ? Number(cas.revision) : clean.revision,
+    });
   }
 
   readUnlocked(filePath, principalKey) {
-    return activeValues(this.readDocumentUnlocked(filePath, principalKey), this.clock.now());
+    return chain(this.readDocumentUnlocked(filePath, principalKey), (document) => (
+      activeValues(document, this.clock.now())
+    ));
   }
 
   mutate(principalKey, input, callback) {
     this.assertWritable();
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      assertExpectedRevision(document, input && input.expectedRevision);
-      const previousRevision = document.revision;
-      document.revision += 1;
-      const now = this.nowIso();
-      const result = callback(document, now) || {};
-      if (result.changed === false) {
-        document.revision = previousRevision;
-        return { document, result, changed: false };
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        assertExpectedRevision(document, input && input.expectedRevision);
+        const previousRevision = document.revision;
+        document.revision += 1;
+        const now = this.nowIso();
+        const result = callback(document, now) || {};
+        if (result.changed === false) {
+          document.revision = previousRevision;
+          return { document, result, changed: false };
+        }
+        return chain(
+          this.writeDocumentUnlocked(filePath, principalKey, document, {
+            expectedRevision: previousRevision,
+            revision: document.revision,
+          }),
+          () => ({ document, result, changed: true })
+        );
       }
-      this.writeDocumentUnlocked(filePath, principalKey, document);
-      return { document, result, changed: true };
-    });
+    ));
   }
 
   buildMemoryItem(entry, document, now) {
@@ -781,69 +826,72 @@ class UserPreferenceService {
 
   prepareTurnSnapshot(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      const nowMs = this.clock.now();
-      const allItems = document.items.filter((item) => {
-        return item.status === "active"
-          && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS)
-          && scopeMatches(item, input);
-      }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-      return {
-        success: true,
-        schemaVersion: SCHEMA_VERSION,
-        revision: document.revision,
-        policy: { ...document.policy },
-        values: Object.fromEntries(allItems.map((item) => [item.key, item.normalizedValue])),
-        allItems: allItems.map(publicMemoryItem),
-        items: this.selectRelevantMemories(document, {
-          ...input,
-          limit: input.memoryLimit || input.limit,
-        }),
-        episodes: this.selectRelevantEpisodes(document, {
-          ...input,
-          limit: input.episodeLimit,
-        }),
-      };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        const nowMs = this.clock.now();
+        const allItems = document.items.filter((item) => {
+          return item.status === "active"
+            && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS)
+            && scopeMatches(item, input);
+        }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+        return {
+          success: true,
+          schemaVersion: SCHEMA_VERSION,
+          revision: document.revision,
+          policy: { ...document.policy },
+          values: Object.fromEntries(allItems.map((item) => [item.key, item.normalizedValue])),
+          allItems: allItems.map(publicMemoryItem),
+          items: this.selectRelevantMemories(document, {
+            ...input,
+            limit: input.memoryLimit || input.limit,
+          }),
+          episodes: this.selectRelevantEpisodes(document, {
+            ...input,
+            limit: input.episodeLimit,
+          }),
+        };
+      }
+    ));
   }
 
   getObject(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => activeValues(
+    return this.withLock(principalKey, (filePath) => chain(
       this.readDocumentUnlocked(filePath, principalKey),
-      this.clock.now()
+      (document) => activeValues(document, this.clock.now())
     ));
   }
 
   listMemoryItems(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      const nowMs = this.clock.now();
-      const page = Math.max(1, Number(input.page || 1));
-      const pageSize = Math.max(1, Math.min(100, Number(input.pageSize || 50)));
-      const all = document.items.filter((item) => {
-        if (input.includeInactive === true) return true;
-        return item.status === "active" && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS);
-      }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-      const start = (page - 1) * pageSize;
-      return {
-        success: true,
-        schemaVersion: SCHEMA_VERSION,
-        revision: document.revision,
-        policy: { ...document.policy },
-        page,
-        pageSize,
-        total: all.length,
-        items: all.slice(start, start + pageSize).map(publicMemoryItem),
-      };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        const nowMs = this.clock.now();
+        const page = Math.max(1, Number(input.page || 1));
+        const pageSize = Math.max(1, Math.min(100, Number(input.pageSize || 50)));
+        const all = document.items.filter((item) => {
+          if (input.includeInactive === true) return true;
+          return item.status === "active" && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS);
+        }).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        const start = (page - 1) * pageSize;
+        return {
+          success: true,
+          schemaVersion: SCHEMA_VERSION,
+          revision: document.revision,
+          policy: { ...document.policy },
+          page,
+          pageSize,
+          total: all.length,
+          items: all.slice(start, start + pageSize).map(publicMemoryItem),
+        };
+      }
+    ));
   }
 
   list(input = {}) {
-    const listed = this.listMemoryItems(input);
-    return {
+    return chain(this.listMemoryItems(input), (listed) => ({
       success: true,
       revision: listed.revision,
       policy: listed.policy,
@@ -861,59 +909,63 @@ class UserPreferenceService {
                       : item.key === "grade" ? "年级" : "偏好",
         editable: true,
       })),
-    };
+    }));
   }
 
   listEpisodes(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      const nowMs = this.clock.now();
-      const page = Math.max(1, Number(input.page || 1));
-      const pageSize = Math.max(1, Math.min(100, Number(input.pageSize || 50)));
-      const all = document.episodes.filter((episode) => {
-        if (input.includeInactive === true) return true;
-        return ["active", "success"].includes(episode.status)
-          && isLiveEntry(episode, nowMs, DEFAULT_EPISODE_TTL_MS);
-      }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-      const start = (page - 1) * pageSize;
-      return {
-        success: true,
-        schemaVersion: SCHEMA_VERSION,
-        revision: document.revision,
-        page,
-        pageSize,
-        total: all.length,
-        items: all.slice(start, start + pageSize).map(publicEpisode),
-      };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        const nowMs = this.clock.now();
+        const page = Math.max(1, Number(input.page || 1));
+        const pageSize = Math.max(1, Math.min(100, Number(input.pageSize || 50)));
+        const all = document.episodes.filter((episode) => {
+          if (input.includeInactive === true) return true;
+          return ["active", "success"].includes(episode.status)
+            && isLiveEntry(episode, nowMs, DEFAULT_EPISODE_TTL_MS);
+        }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+        const start = (page - 1) * pageSize;
+        return {
+          success: true,
+          schemaVersion: SCHEMA_VERSION,
+          revision: document.revision,
+          page,
+          pageSize,
+          total: all.length,
+          items: all.slice(start, start + pageSize).map(publicEpisode),
+        };
+      }
+    ));
   }
 
   getManagementSnapshot(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      const nowMs = this.clock.now();
-      const includeInactive = input.includeInactive === true;
-      const itemVisible = (item) => {
-        if (includeInactive) return true;
-        return item.status === "active" && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS);
-      };
-      const episodeVisible = (episode) => {
-        if (includeInactive) return true;
-        return ["active", "success"].includes(episode.status)
-          && isLiveEntry(episode, nowMs, DEFAULT_EPISODE_TTL_MS);
-      };
-      return {
-        success: true,
-        schemaVersion: SCHEMA_VERSION,
-        revision: document.revision,
-        policy: { ...document.policy },
-        items: document.items.filter(itemVisible).map(publicMemoryItem),
-        episodes: document.episodes.filter(episodeVisible).map(publicEpisode),
-        audit: document.audit.map(publicAudit),
-      };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        const nowMs = this.clock.now();
+        const includeInactive = input.includeInactive === true;
+        const itemVisible = (item) => {
+          if (includeInactive) return true;
+          return item.status === "active" && isLiveEntry(item, nowMs, DEFAULT_MEMORY_TTL_MS);
+        };
+        const episodeVisible = (episode) => {
+          if (includeInactive) return true;
+          return ["active", "success"].includes(episode.status)
+            && isLiveEntry(episode, nowMs, DEFAULT_EPISODE_TTL_MS);
+        };
+        return {
+          success: true,
+          schemaVersion: SCHEMA_VERSION,
+          revision: document.revision,
+          policy: { ...document.policy },
+          items: document.items.filter(itemVisible).map(publicMemoryItem),
+          episodes: document.episodes.filter(episodeVisible).map(publicEpisode),
+          audit: document.audit.map(publicAudit),
+        };
+      }
+    ));
   }
 
   upsertMemory(input = {}) {
@@ -922,19 +974,18 @@ class UserPreferenceService {
     if (mode !== "cloud_sync") {
       return { success: true, persisted: false, reason: mode === "session_state" ? "session_state_no_user_memory" : "local_only" };
     }
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       if (input.explicit !== true && (document.policy.paused || !document.policy.autoMemoryEnabled)) {
         return { changed: false, persisted: false, reason: "MEMORY_PAUSED" };
       }
       return this.upsertIntoDocument(document, input.entry || {}, now, { explicit: input.explicit === true });
-    });
-    return {
+    }), (mutation) => ({
       success: true,
       persisted: mutation.result.persisted === true,
       reason: mutation.result.reason || "",
       memory: mutation.result.memory ? publicMemoryItem(mutation.result.memory) : undefined,
       revision: mutation.document.revision,
-    };
+    }));
   }
 
   upsertMemoryBatch(input = {}) {
@@ -950,7 +1001,7 @@ class UserPreferenceService {
     }
     const entries = Array.isArray(input.entries) ? input.entries.slice(0, 20) : [];
     if (!entries.length) return { success: true, persisted: false, reason: "MEMORY_BATCH_EMPTY", items: [] };
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const results = entries.map((entry) => {
         const explicit = entry && entry.explicit === true
           || input.explicit === true
@@ -964,20 +1015,21 @@ class UserPreferenceService {
         changed: results.some((result) => result.changed !== false),
         results,
       };
+    }), (mutation) => {
+      const persisted = mutation.result.results.filter((result) => result.persisted && result.memory);
+      return {
+        success: true,
+        persisted: persisted.length > 0,
+        reason: persisted.length ? "" : (mutation.result.results[0] && mutation.result.results[0].reason || ""),
+        items: persisted.map((result) => publicMemoryItem(result.memory)),
+        results: mutation.result.results.map((result) => ({
+          persisted: result.persisted === true,
+          reason: result.reason || "",
+          memory: result.memory ? publicMemoryItem(result.memory) : undefined,
+        })),
+        revision: mutation.document.revision,
+      };
     });
-    const persisted = mutation.result.results.filter((result) => result.persisted && result.memory);
-    return {
-      success: true,
-      persisted: persisted.length > 0,
-      reason: persisted.length ? "" : (mutation.result.results[0] && mutation.result.results[0].reason || ""),
-      items: persisted.map((result) => publicMemoryItem(result.memory)),
-      results: mutation.result.results.map((result) => ({
-        persisted: result.persisted === true,
-        reason: result.reason || "",
-        memory: result.memory ? publicMemoryItem(result.memory) : undefined,
-      })),
-      revision: mutation.document.revision,
-    };
   }
 
   upsert(input = {}) {
@@ -993,7 +1045,7 @@ class UserPreferenceService {
       value: normalizeValue(key, value),
     })).filter((item) => ALLOWED_KEYS.includes(item.key) && item.value !== null);
     if (!entries.length) throw typedError("Preference is invalid", "PREFERENCE_INVALID", 400);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const results = entries.map(({ key, value }) => this.upsertIntoDocument(document, {
         kind: key === "preferredName" ? "identity_alias" : (key === "answerDetailLevel" ? "interaction_preference" : "stable_preference"),
         key,
@@ -1007,21 +1059,20 @@ class UserPreferenceService {
         changed: results.some((result) => result.changed !== false),
         items: results.filter((result) => result.persisted).map((result) => result.memory),
       };
-    });
-    return {
+    }), (mutation) => ({
       success: true,
       persisted: mutation.changed === true,
       keys: mutation.changed ? entries.map((item) => item.key) : [],
       revision: mutation.document.revision,
-    };
+    }));
   }
 
   retrieveMemories(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      return { success: true, revision: document.revision, items: this.selectRelevantMemories(document, input) };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => ({ success: true, revision: document.revision, items: this.selectRelevantMemories(document, input) })
+    ));
   }
 
   /**
@@ -1088,19 +1139,18 @@ class UserPreferenceService {
     if (!check.ok) {
       return { success: true, persisted: false, reason: check.reason };
     }
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       if (document.policy.paused || !document.policy.autoMemoryEnabled) {
         return { changed: false, persisted: false, reason: "MEMORY_PAUSED" };
       }
       return this.appendEpisodeIntoDocument(document, episodeInput, now, check.serialized);
-    });
-    return {
+    }), (mutation) => ({
       success: true,
       persisted: mutation.result.persisted === true,
       reason: mutation.result.reason || "",
       episode: mutation.result.episode ? publicEpisode(mutation.result.episode) : undefined,
       revision: mutation.document.revision,
-    };
+    }));
   }
 
   /**
@@ -1137,7 +1187,7 @@ class UserPreferenceService {
         episode: episodeInput ? { persisted: false, reason: episodeCheck.reason } : { persisted: false, reason: "not_successful_task" },
       };
     }
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const results = entries.map((entry) => {
         const explicit = entry && entry.explicit === true
           || input.explicit === true
@@ -1162,28 +1212,29 @@ class UserPreferenceService {
       const changed = results.some((result) => result.changed !== false)
         || Boolean(episodeResult && episodeResult.changed !== false);
       return { changed, results, episodeResult };
+    }), (mutation) => {
+      const persisted = mutation.result.results.filter((result) => result.persisted && result.memory);
+      const episodeResult = mutation.result.episodeResult || null;
+      return {
+        success: true,
+        persisted: persisted.length > 0 || Boolean(episodeResult && episodeResult.persisted),
+        reason: persisted.length ? "" : (mutation.result.results[0] && mutation.result.results[0].reason || ""),
+        items: persisted.map((result) => publicMemoryItem(result.memory)),
+        results: mutation.result.results.map((result) => ({
+          persisted: result.persisted === true,
+          reason: result.reason || "",
+          memory: result.memory ? publicMemoryItem(result.memory) : undefined,
+        })),
+        episode: episodeInput
+          ? {
+            persisted: episodeResult && episodeResult.persisted === true,
+            reason: episodeResult && episodeResult.reason || "",
+            episode: episodeResult && episodeResult.episode ? publicEpisode(episodeResult.episode) : undefined,
+          }
+          : { persisted: false, reason: "not_successful_task" },
+        revision: mutation.document.revision,
+      };
     });
-    const persisted = mutation.result.results.filter((result) => result.persisted && result.memory);
-    const episodeResult = mutation.result.episodeResult || null;
-    return {
-      success: true,
-      persisted: persisted.length > 0 || Boolean(episodeResult && episodeResult.persisted),
-      reason: persisted.length ? "" : (mutation.result.results[0] && mutation.result.results[0].reason || ""),
-      items: persisted.map((result) => publicMemoryItem(result.memory)),
-      results: mutation.result.results.map((result) => ({
-        persisted: result.persisted === true,
-        reason: result.reason || "",
-        memory: result.memory ? publicMemoryItem(result.memory) : undefined,
-      })),
-      episode: episodeInput
-        ? {
-          persisted: episodeResult && episodeResult.persisted === true,
-          reason: episodeResult && episodeResult.reason || "",
-          episode: episodeResult && episodeResult.episode ? publicEpisode(episodeResult.episode) : undefined,
-        }
-        : { persisted: false, reason: "not_successful_task" },
-      revision: mutation.document.revision,
-    };
   }
 
   /**
@@ -1192,27 +1243,27 @@ class UserPreferenceService {
    */
   readRevision(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      return {
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => ({
         success: true,
         revision: document.revision,
         policyVersion: safeText(document.policy && document.policy.configVersion || "", 100),
-      };
-    });
+      })
+    ));
   }
 
   retrieveEpisodes(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      return { success: true, revision: document.revision, items: this.selectRelevantEpisodes(document, input) };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => ({ success: true, revision: document.revision, items: this.selectRelevantEpisodes(document, input) })
+    ));
   }
 
   invalidateContext(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const invalidatedIds = [];
       document.items.forEach((item) => {
         const termChanged = item.scope === "term" && item.termId && input.termId && item.termId !== input.termId;
@@ -1242,14 +1293,15 @@ class UserPreferenceService {
       if (!invalidatedIds.length) return { changed: false, invalidatedIds };
       audit(document, "invalidate_context", invalidatedIds.join(","), now);
       return { changed: true, invalidatedIds };
-    });
-    return { success: true, revision: mutation.document.revision, invalidatedIds: mutation.result.invalidatedIds };
+    }), (mutation) => (
+      { success: true, revision: mutation.document.revision, invalidatedIds: mutation.result.invalidatedIds }
+    ));
   }
 
   setMemoryPolicy(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     const patch = input.patch && typeof input.patch === "object" ? input.patch : {};
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       let changed = false;
       const apply = (key, value) => {
         if (document.policy[key] === value) return;
@@ -1272,13 +1324,14 @@ class UserPreferenceService {
       document.policy.updatedAt = now;
       audit(document, document.policy.paused ? "pause" : "update_policy", "policy", now);
       return { changed: true, policy: { ...document.policy } };
-    });
-    return { success: true, revision: mutation.document.revision, policy: mutation.result.policy };
+    }), (mutation) => (
+      { success: true, revision: mutation.document.revision, policy: mutation.result.policy }
+    ));
   }
 
   patchMemory(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const item = document.items.find((candidate) => candidate.memoryId === input.memoryId);
       if (!item) throw typedError("Memory not found", "MEMORY_NOT_FOUND", 404);
       const patch = input.patch && typeof input.patch === "object" ? input.patch : {};
@@ -1297,27 +1350,29 @@ class UserPreferenceService {
       item.encoderVersion = ENCODER_VERSION;
       audit(document, "patch", item.memoryId, now);
       return { memory: item };
-    });
-    return { success: true, revision: mutation.document.revision, memory: publicMemoryItem(mutation.result.memory) };
+    }), (mutation) => (
+      { success: true, revision: mutation.document.revision, memory: publicMemoryItem(mutation.result.memory) }
+    ));
   }
 
   deleteMemory(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const before = document.items.length;
       document.items = document.items.filter((item) => item.memoryId !== input.memoryId);
       const deleted = document.items.length !== before;
       if (!deleted) throw typedError("Memory not found", "MEMORY_NOT_FOUND", 404);
       audit(document, "delete", input.memoryId, now);
       return { deleted };
-    });
-    return { success: true, revision: mutation.document.revision, deleted: mutation.result.deleted };
+    }), (mutation) => (
+      { success: true, revision: mutation.document.revision, deleted: mutation.result.deleted }
+    ));
   }
 
   deleteEpisode(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     const episodeId = safeText(input.episodeId, 100);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const before = document.episodes.length;
       document.episodes = document.episodes.filter((episode) => episode.episodeId !== episodeId);
       const deleted = document.episodes.length !== before;
@@ -1325,19 +1380,18 @@ class UserPreferenceService {
       if (!deleted) throw typedError("Episode not found", "EPISODE_NOT_FOUND", 404);
       audit(document, "delete_episode", episodeId, now);
       return { changed: true, deleted: true };
-    });
-    return {
+    }), (mutation) => ({
       success: true,
       revision: mutation.document.revision,
       deleted: mutation.result.deleted === true,
-    };
+    }));
   }
 
   exportMemories(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      return {
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => ({
         schemaVersion: "user-memory.export.v1",
         exportedAt: this.nowIso(),
         revision: document.revision,
@@ -1345,41 +1399,50 @@ class UserPreferenceService {
         items: document.items.map(publicMemoryItem),
         episodes: document.episodes.map(publicEpisode),
         audit: document.audit.map(publicAudit),
-      };
-    });
+      })
+    ));
   }
 
   remove(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     const key = String(input.key || "");
     if (!ALLOWED_KEYS.includes(key)) throw typedError("Preference key is invalid", "PREFERENCE_KEY_INVALID", 400);
-    const mutation = this.mutate(principalKey, input, (document, now) => {
+    return chain(this.mutate(principalKey, input, (document, now) => {
       const before = document.items.length;
       document.items = document.items.filter((item) => item.key !== key);
       const deleted = document.items.length !== before;
       if (!deleted) return { changed: false, deleted: false };
       audit(document, "delete_key", key, now);
       return { changed: true, deleted };
-    });
-    return { success: true, deleted: mutation.result.deleted, revision: mutation.document.revision };
+    }), (mutation) => (
+      { success: true, deleted: mutation.result.deleted, revision: mutation.document.revision }
+    ));
   }
 
   clear(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     this.assertWritable();
-    return this.withLock(principalKey, (filePath) => {
-      const document = this.readDocumentUnlocked(filePath, principalKey);
-      assertExpectedRevision(document, input.expectedRevision);
-      const deleted = document.items.length + document.episodes.length;
-      if (!deleted) return { success: true, deleted: 0, revision: document.revision };
-      document.revision += 1;
-      document.items = [];
-      document.episodes = [];
-      const now = this.nowIso();
-      audit(document, "clear", "all", now);
-      this.writeDocumentUnlocked(filePath, principalKey, document);
-      return { success: true, deleted, revision: document.revision };
-    });
+    return this.withLock(principalKey, (filePath) => chain(
+      this.readDocumentUnlocked(filePath, principalKey),
+      (document) => {
+        assertExpectedRevision(document, input.expectedRevision);
+        const deleted = document.items.length + document.episodes.length;
+        if (!deleted) return { success: true, deleted: 0, revision: document.revision };
+        const previousRevision = document.revision;
+        document.revision += 1;
+        document.items = [];
+        document.episodes = [];
+        const now = this.nowIso();
+        audit(document, "clear", "all", now);
+        return chain(
+          this.writeDocumentUnlocked(filePath, principalKey, document, {
+            expectedRevision: previousRevision,
+            revision: document.revision,
+          }),
+          () => ({ success: true, deleted, revision: document.revision })
+        );
+      }
+    ));
   }
 }
 

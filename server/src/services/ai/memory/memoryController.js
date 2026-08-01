@@ -17,6 +17,16 @@ const { extractMemoryCandidates } = require("./memoryCandidateExtractor");
 const { filterAndMergeCandidates } = require("./memoryPolicy");
 const safetyGuard = require("../safetyGuard");
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 // 允许通过 ActionReceipt 提交记忆变更的命令白名单（与 routes/ai.js action-receipts 端点一致）：
 // setCurrentSchedule + manifest 已定义的提醒类命令 createCourseReminder/deleteReminder。
 // 白名单扩大不等于校验放松：pendingAction 的 command/runId/expiresAt/target 绑定对全部命令同样生效。
@@ -34,7 +44,10 @@ class MemoryController {
    * Returns unified conversationState field names for Kernel/Planner.
    */
   load(input = {}) {
-    const bundle = this.conversationMemory.loadForChat(input);
+    return chain(this.conversationMemory.loadForChat(input), (bundle) => this._loadWithBundle(input, bundle));
+  }
+
+  _loadWithBundle(input, bundle) {
     const memoryMode = bundle.memory && bundle.memory.mode || "local_only";
     const state = bundle.state;
     const context = Object.assign({}, bundle.context || input.context || {});
@@ -69,149 +82,158 @@ class MemoryController {
       termId: authoritativeRelease.term || authoritativeRelease.semester || "",
       releaseVersion: authoritativeRelease.releaseVersion || authoritativeRelease.version || "",
     };
+    const afterInvalidate = () => {
+      const preparedMemoryMaybe = typeof this.userMemory.prepareTurnSnapshot === "function"
+        ? this.userMemory.prepareTurnSnapshot({
+          principal: bundle.principal,
+          memoryMode,
+          message: input.message,
+          workingMemory: seeded,
+          goal: seeded.currentGoal,
+          intentName: slots.lastIntent,
+          ...versionBoundary,
+          episodeLimit: 3,
+          policy: input.policy || null,
+        })
+        : null;
+      return chain(preparedMemoryMaybe, (preparedMemory) => {
+        const userLoadedMaybe = preparedMemory
+          ? {
+            items: preparedMemory.allItems,
+            values: preparedMemory.values,
+            revision: preparedMemory.revision,
+            policy: preparedMemory.policy,
+          }
+          : this.userMemory.load({
+            principal: bundle.principal,
+            memoryMode,
+            policy: input.policy || null,
+          });
+        return chain(userLoadedMaybe, (userLoaded) => {
+          if (userLoaded.values && userLoaded.values.preferredName && !seeded.preferredName) {
+            seeded.preferredName = userLoaded.values.preferredName;
+          }
+          if (userLoaded.values && userLoaded.values.campus && !seeded.campus) {
+            seeded.campus = userLoaded.values.campus;
+          }
+          ["college", "major", "grade"].forEach((key) => {
+            if (userLoaded.values && userLoaded.values[key] && !seeded[key]) {
+              seeded[key] = userLoaded.values[key];
+            }
+          });
+
+          // session_state + cloud_sync both expose recent turns when present.
+          const serverTurns = state && Array.isArray(state.recentTurns) ? state.recentTurns : [];
+          let recentMessages = Array.isArray(context.recentMessages) ? context.recentMessages : [];
+          if (serverTurns.length && memoryMode !== "local_only") {
+            const fromServer = turnsToRecentMessages(serverTurns);
+            const merged = [];
+            const seenTurnIds = new Set();
+            recentMessages.concat(fromServer).forEach((turn) => {
+              const role = turn && turn.role === "user" ? "user" : "assistant";
+              const content = safetyGuard.redactSensitiveText(String(turn && (turn.content || turn.text) || "")).slice(0, 400);
+              if (!content) return;
+              const turnId = String(turn.turnId || "").slice(0, 64);
+              if (turnId && seenTurnIds.has(turnId)) return;
+              if (turnId) seenTurnIds.add(turnId);
+              const prev = merged[merged.length - 1];
+              if (!turnId && prev && prev.role === role && prev.content === content) return;
+              merged.push({ role, content, turnId: turnId || undefined });
+            });
+            recentMessages = merged.slice(-12);
+          }
+
+          // User preferences only when cloud_sync loaded them.
+          if (memoryMode === "cloud_sync" && userLoaded.values && Object.keys(userLoaded.values).length) {
+            context.userPreferences = Object.assign({}, context.userPreferences || {}, userLoaded.values, {
+              localOnly: false,
+            });
+          }
+
+          const conversationSummary = (state && state.conversationSummary)
+            || context.conversationSummary
+            || "";
+
+          const retrievedMaybe = preparedMemory
+            ? {
+              items: preparedMemory.items,
+              episodes: preparedMemory.episodes,
+              revision: preparedMemory.revision,
+            }
+            : this.userMemory.retrieve({
+              principal: bundle.principal,
+              memoryMode,
+              message: input.message,
+              workingMemory: seeded,
+              goal: seeded.currentGoal,
+              intentName: slots.lastIntent,
+              ...versionBoundary,
+              episodeLimit: 3,
+              policy: input.policy || null,
+            });
+          return chain(retrievedMaybe, (retrieved) => {
+            const relevantUserMemories = retrieved.items || [];
+            const relevantEpisodes = retrieved.episodes || [];
+
+            context.recentMessages = recentMessages;
+            context.conversationSummary = conversationSummary;
+            context.workingMemory = seeded;
+            context.userMemories = relevantUserMemories;
+            context.episodicMemories = relevantEpisodes;
+            context.pendingClarification = context.pendingClarification || seeded.pendingClarification || null;
+
+            // Apply soft entity inheritance onto flat context for tools.
+            const soft = workingMemoryToSlots(seeded);
+            ["className", "teacherName", "courseName", "classroom", "campus", "week", "weekday", "q", "type"].forEach((key) => {
+              if ((context[key] === undefined || context[key] === null || context[key] === "")
+                && soft[key] != null && soft[key] !== "") {
+                context[key] = soft[key];
+              }
+            });
+            if ((context.lastTargetName === undefined || !context.lastTargetName) && soft.lastTargetName) {
+              context.lastTargetName = soft.lastTargetName;
+              context.lastTargetType = soft.lastTargetType;
+            }
+            if (context.lastWeek == null && soft.lastWeek != null) context.lastWeek = soft.lastWeek;
+            if (context.lastWeekday == null && soft.lastWeekday != null) context.lastWeekday = soft.lastWeekday;
+
+            const conversationState = {
+              conversationSummary,
+              summary: conversationSummary, // compat for any remaining readers
+              recentMessages,
+              workingMemory: seeded,
+              userMemories: relevantUserMemories,
+              episodicMemories: relevantEpisodes,
+              pendingClarification: context.pendingClarification,
+              contextSlots: state && state.contextSlots || soft,
+              memoryMode,
+              revision: state && state.revision || 0,
+            };
+
+            return {
+              principal: bundle.principal,
+              state,
+              memory: bundle.memory,
+              context: safetyGuard.sanitizeAgentContext(context),
+              conversationState,
+              userMemoryItems: userLoaded.items,
+              episodicMemories: relevantEpisodes,
+              memoryPolicy: userLoaded.policy,
+              memoryRevision: Math.max(userLoaded.revision || 0, retrieved.revision || 0),
+              memoryMode,
+            };
+          });
+        });
+      });
+    };
     if (memoryMode === "cloud_sync" && (versionBoundary.termId || versionBoundary.releaseVersion)) {
-      this.userMemory.invalidateContext({
+      return chain(this.userMemory.invalidateContext({
         principal: bundle.principal,
         memoryMode,
         ...versionBoundary,
-      });
+      }), afterInvalidate);
     }
-    const preparedMemory = typeof this.userMemory.prepareTurnSnapshot === "function"
-      ? this.userMemory.prepareTurnSnapshot({
-        principal: bundle.principal,
-        memoryMode,
-        message: input.message,
-        workingMemory: seeded,
-        goal: seeded.currentGoal,
-        intentName: slots.lastIntent,
-        ...versionBoundary,
-        episodeLimit: 3,
-        policy: input.policy || null,
-      })
-      : null;
-    const userLoaded = preparedMemory
-      ? {
-        items: preparedMemory.allItems,
-        values: preparedMemory.values,
-        revision: preparedMemory.revision,
-        policy: preparedMemory.policy,
-      }
-      : this.userMemory.load({
-        principal: bundle.principal,
-        memoryMode,
-        policy: input.policy || null,
-      });
-    if (userLoaded.values && userLoaded.values.preferredName && !seeded.preferredName) {
-      seeded.preferredName = userLoaded.values.preferredName;
-    }
-    if (userLoaded.values && userLoaded.values.campus && !seeded.campus) {
-      seeded.campus = userLoaded.values.campus;
-    }
-    ["college", "major", "grade"].forEach((key) => {
-      if (userLoaded.values && userLoaded.values[key] && !seeded[key]) {
-        seeded[key] = userLoaded.values[key];
-      }
-    });
-
-    // session_state + cloud_sync both expose recent turns when present.
-    const serverTurns = state && Array.isArray(state.recentTurns) ? state.recentTurns : [];
-    let recentMessages = Array.isArray(context.recentMessages) ? context.recentMessages : [];
-    if (serverTurns.length && memoryMode !== "local_only") {
-      const fromServer = turnsToRecentMessages(serverTurns);
-      const merged = [];
-      const seenTurnIds = new Set();
-      recentMessages.concat(fromServer).forEach((turn) => {
-        const role = turn && turn.role === "user" ? "user" : "assistant";
-        const content = safetyGuard.redactSensitiveText(String(turn && (turn.content || turn.text) || "")).slice(0, 400);
-        if (!content) return;
-        const turnId = String(turn.turnId || "").slice(0, 64);
-        if (turnId && seenTurnIds.has(turnId)) return;
-        if (turnId) seenTurnIds.add(turnId);
-        const prev = merged[merged.length - 1];
-        if (!turnId && prev && prev.role === role && prev.content === content) return;
-        merged.push({ role, content, turnId: turnId || undefined });
-      });
-      recentMessages = merged.slice(-12);
-    }
-
-    // User preferences only when cloud_sync loaded them.
-    if (memoryMode === "cloud_sync" && userLoaded.values && Object.keys(userLoaded.values).length) {
-      context.userPreferences = Object.assign({}, context.userPreferences || {}, userLoaded.values, {
-        localOnly: false,
-      });
-    }
-
-    const conversationSummary = (state && state.conversationSummary)
-      || context.conversationSummary
-      || "";
-
-    const retrieved = preparedMemory
-      ? {
-        items: preparedMemory.items,
-        episodes: preparedMemory.episodes,
-        revision: preparedMemory.revision,
-      }
-      : this.userMemory.retrieve({
-        principal: bundle.principal,
-        memoryMode,
-        message: input.message,
-        workingMemory: seeded,
-        goal: seeded.currentGoal,
-        intentName: slots.lastIntent,
-        ...versionBoundary,
-        episodeLimit: 3,
-        policy: input.policy || null,
-      });
-    const relevantUserMemories = retrieved.items || [];
-    const relevantEpisodes = retrieved.episodes || [];
-
-    context.recentMessages = recentMessages;
-    context.conversationSummary = conversationSummary;
-    context.workingMemory = seeded;
-    context.userMemories = relevantUserMemories;
-    context.episodicMemories = relevantEpisodes;
-    context.pendingClarification = context.pendingClarification || seeded.pendingClarification || null;
-
-    // Apply soft entity inheritance onto flat context for tools.
-    const soft = workingMemoryToSlots(seeded);
-    ["className", "teacherName", "courseName", "classroom", "campus", "week", "weekday", "q", "type"].forEach((key) => {
-      if ((context[key] === undefined || context[key] === null || context[key] === "")
-        && soft[key] != null && soft[key] !== "") {
-        context[key] = soft[key];
-      }
-    });
-    if ((context.lastTargetName === undefined || !context.lastTargetName) && soft.lastTargetName) {
-      context.lastTargetName = soft.lastTargetName;
-      context.lastTargetType = soft.lastTargetType;
-    }
-    if (context.lastWeek == null && soft.lastWeek != null) context.lastWeek = soft.lastWeek;
-    if (context.lastWeekday == null && soft.lastWeekday != null) context.lastWeekday = soft.lastWeekday;
-
-    const conversationState = {
-      conversationSummary,
-      summary: conversationSummary, // compat for any remaining readers
-      recentMessages,
-      workingMemory: seeded,
-      userMemories: relevantUserMemories,
-      episodicMemories: relevantEpisodes,
-      pendingClarification: context.pendingClarification,
-      contextSlots: state && state.contextSlots || soft,
-      memoryMode,
-      revision: state && state.revision || 0,
-    };
-
-    return {
-      principal: bundle.principal,
-      state,
-      memory: bundle.memory,
-      context: safetyGuard.sanitizeAgentContext(context),
-      conversationState,
-      userMemoryItems: userLoaded.items,
-      episodicMemories: relevantEpisodes,
-      memoryPolicy: userLoaded.policy,
-      memoryRevision: Math.max(userLoaded.revision || 0, retrieved.revision || 0),
-      memoryMode,
-    };
+    return afterInvalidate();
   }
 
   /**
@@ -386,7 +408,19 @@ class MemoryController {
     const episodeRequested = input.status === "completed" && input.failed !== true
       && input.allowPartialCommit !== true && input.verified === true
       && autoMemoryEnabled && toolNames.length && input.intentName;
-    const userCommit = this.userMemory.commit({
+    const commitContext = {
+      input,
+      memoryMode,
+      principal,
+      prevState,
+      workingMemory,
+      candidates,
+      toolNames,
+      durableUserMessage,
+      durableAssistantAnswer,
+      episodeRequested,
+    };
+    return chain(this.userMemory.commit({
       principal,
       memoryMode,
       autoMemoryEnabled,
@@ -415,7 +449,22 @@ class MemoryController {
       policyVersion: storedPolicy && storedPolicy.configVersion || "",
       termId: input.context && (input.context.term || input.context.semester) || "",
       releaseVersion: input.context && input.context.releaseVersion || "",
-    });
+    }), (userCommit) => this._finishCommit(commitContext, userCommit));
+  }
+
+  _finishCommit(ctx, userCommit) {
+    const {
+      input,
+      memoryMode,
+      principal,
+      prevState,
+      workingMemory,
+      candidates,
+      toolNames,
+      durableUserMessage,
+      durableAssistantAnswer,
+      episodeRequested,
+    } = ctx;
     const episodeCommit = userCommit && userCommit.episode
       ? userCommit.episode
       : { persisted: false, reason: episodeRequested ? "" : "not_successful_task" };
@@ -460,7 +509,7 @@ class MemoryController {
       contextSlots.periodHint = workingMemory.periodHint;
     }
 
-    const memory = this.conversationMemory.persistAfterSuccess({
+    return chain(this.conversationMemory.persistAfterSuccess({
       principal,
       state: prevState,
       conversationId: input.conversationId,
@@ -486,9 +535,7 @@ class MemoryController {
       conversationSummary,
       recentTurns,
       forceRecentTurns: memoryMode !== "local_only",
-    });
-
-    return {
+    }), (memory) => ({
       memory,
       workingMemory,
       conversationSummary,
@@ -513,7 +560,7 @@ class MemoryController {
           return "";
         }).filter(Boolean).slice(0, 1)
         : [],
-    };
+    }));
   }
 
   /**
@@ -615,7 +662,7 @@ class MemoryController {
         contextSlots,
       };
     }
-    const memory = this.conversationMemory.persistAfterSuccess({
+    return chain(this.conversationMemory.persistAfterSuccess({
       principal: input.principal,
       state: prevState,
       conversationId: input.conversationId,
@@ -633,8 +680,7 @@ class MemoryController {
       conversationSummary: (prevState && prevState.conversationSummary) || "",
       recentTurns: (prevState && Array.isArray(prevState.recentTurns)) ? prevState.recentTurns : [],
       workingMemory,
-    });
-    return { committed: true, reason: "", workingMemory, contextSlots, memory };
+    }), (memory) => ({ committed: true, reason: "", workingMemory, contextSlots, memory }));
   }
 
   buildConversationState(bundle) {

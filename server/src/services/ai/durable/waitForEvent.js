@@ -9,12 +9,22 @@
 
 const { safeLog } = require("../../../utils/safeLogger");
 const {
-  defaultDurableTaskStore,
   createStoreError,
   generateResumeToken,
   hashToken,
   TASK_KINDS,
 } = require("./taskStore");
+const { getSharedDurableTaskStore } = require("./sharedTaskStore");
+
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
 
 function assertPrincipalKey(principal) {
   const principalKey = String(principal && principal.principalKey || "");
@@ -36,7 +46,7 @@ function assertFutureExpiry(expiresAt, now = Date.now()) {
  * 创建等待任务（status=pending，未武装）。
  * 返回 { task, resumeToken }；resumeToken 明文只在此返回一次，调用方不得落盘/入日志。
  */
-function createWaitTask(input = {}, store = defaultDurableTaskStore) {
+function createWaitTask(input = {}, store = getSharedDurableTaskStore()) {
   const kind = String(input.kind || "");
   if (TASK_KINDS.indexOf(kind) < 0) {
     throw createStoreError(`未知的 durable 任务类型：${kind || "(空)"}`, "DURABLE_KIND_INVALID", 400);
@@ -44,7 +54,7 @@ function createWaitTask(input = {}, store = defaultDurableTaskStore) {
   const principalKey = assertPrincipalKey(input.principal);
   const expiresAt = assertFutureExpiry(input.expiresAt, input.now);
   const resumeToken = generateResumeToken();
-  const task = store.create({
+  return chain(store.create({
     kind,
     waitEvent: input.waitEvent,
     principalKey,
@@ -52,12 +62,11 @@ function createWaitTask(input = {}, store = defaultDurableTaskStore) {
     expiresAt,
     resumeTokenHash: hashToken(resumeToken),
     note: input.note,
-  });
-  return { task, resumeToken };
+  }), (task) => ({ task, resumeToken }));
 }
 
 /** 武装等待：pending → waiting（等待正式开始计时）。 */
-function armWaitTask(taskId, store = defaultDurableTaskStore) {
+function armWaitTask(taskId, store = getSharedDurableTaskStore()) {
   return store.markWaiting(taskId);
 }
 
@@ -65,10 +74,11 @@ function armWaitTask(taskId, store = defaultDurableTaskStore) {
  * 一步登记：创建并武装（pending → waiting）。
  * 等待方随后凭 resumeToken + Principal 走 resume 恢复。
  */
-function registerWaitEvent(input = {}, store = defaultDurableTaskStore) {
-  const created = createWaitTask(input, store);
-  const task = armWaitTask(created.task.taskId, store);
-  return { task, resumeToken: created.resumeToken };
+function registerWaitEvent(input = {}, store = getSharedDurableTaskStore()) {
+  return chain(createWaitTask(input, store), (created) => chain(
+    armWaitTask(created.task.taskId, store),
+    (task) => ({ task, resumeToken: created.resumeToken })
+  ));
 }
 
 /**
@@ -76,7 +86,7 @@ function registerWaitEvent(input = {}, store = defaultDurableTaskStore) {
  * waitEvent 固定 action_receipt，上下文只携带 command/runId/detailId（无敏感信息）。
  * 返回 null 表示不适用（非提醒 pendingAction / 未认证 principal / 已过期）。
  */
-function registerReminderReceiptWait(input = {}, store = defaultDurableTaskStore) {
+function registerReminderReceiptWait(input = {}, store = getSharedDurableTaskStore()) {
   const pendingAction = input.pendingAction;
   const principal = input.principal;
   if (!pendingAction || pendingAction.status !== "awaiting_receipt") return null;
@@ -101,15 +111,23 @@ function registerReminderReceiptWait(input = {}, store = defaultDurableTaskStore
 /**
  * best-effort 包装：durable 层是持久化兜底，登记失败不得影响同步对话主链。
  * 失败只留脱敏日志（不含 token / principalKey）。
+ * WS6：postgres 后端返回 Promise——rejection 同样收口为 null（防 unhandled rejection）。
  */
-function registerReminderReceiptWaitBestEffort(pendingAction, principal, store = defaultDurableTaskStore) {
-  try {
-    return registerReminderReceiptWait({ pendingAction, principal }, store);
-  } catch (error) {
+function registerReminderReceiptWaitBestEffort(pendingAction, principal, store = getSharedDurableTaskStore()) {
+  const logAndNull = (error) => {
     safeLog("ai-agent-durable-register-failed", {
       code: String(error && error.code || "DURABLE_REGISTER_FAILED").slice(0, 60),
     });
     return null;
+  };
+  try {
+    return chain(
+      registerReminderReceiptWait({ pendingAction, principal }, store),
+      (result) => result,
+      logAndNull
+    );
+  } catch (error) {
+    return logAndNull(error);
   }
 }
 

@@ -25,6 +25,16 @@ const {
   derivePendingAction,
 } = actionReceiptCoordinator;
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 async function chat(input = {}) {
   return platformComposition.getPlatform().executeTurn(input);
 }
@@ -32,7 +42,7 @@ async function chat(input = {}) {
 function evaluateProactiveForRequest(input = {}) {
   const context = safetyGuard.sanitizeAgentContext(input.context || {});
   const event = String(input.event || context.proactiveEvent || "").slice(0, 64);
-  const memoryBundle = defaultMemoryController.load({
+  return chain(defaultMemoryController.load({
     message: "",
     context,
     conversationId: input.conversationId,
@@ -40,25 +50,26 @@ function evaluateProactiveForRequest(input = {}) {
     runtimeMode: input.runtimeMode,
     memoryMode: context.memoryMode || input.memoryMode,
     cloudSyncEnabled: context.cloudSyncEnabled === true,
+  }), (memoryBundle) => {
+    const facts = Object.assign({}, factsFromContext(context), input.facts && typeof input.facts === "object" ? input.facts : {});
+    const result = evaluateProactive({
+      event,
+      principal: memoryBundle.principal,
+      principalKey: memoryBundle.principal && memoryBundle.principal.principalKey || "",
+      context: {
+        disabledProactiveTypes: context.disabledProactiveTypes || context.proactiveOptOut,
+        proactiveOptOut: context.proactiveOptOut,
+      },
+      facts,
+    });
+    return {
+      success: true,
+      event: result.event || event,
+      reason: result.reason || "",
+      proactiveSuggestion: result.suggestion ? normalizeProactiveSuggestion(result.suggestion) : null,
+      serverTime: nowIso(),
+    };
   });
-  const facts = Object.assign({}, factsFromContext(context), input.facts && typeof input.facts === "object" ? input.facts : {});
-  const result = evaluateProactive({
-    event,
-    principal: memoryBundle.principal,
-    principalKey: memoryBundle.principal && memoryBundle.principal.principalKey || "",
-    context: {
-      disabledProactiveTypes: context.disabledProactiveTypes || context.proactiveOptOut,
-      proactiveOptOut: context.proactiveOptOut,
-    },
-    facts,
-  });
-  return {
-    success: true,
-    event: result.event || event,
-    reason: result.reason || "",
-    proactiveSuggestion: result.suggestion ? normalizeProactiveSuggestion(result.suggestion) : null,
-    serverTime: nowIso(),
-  };
 }
 
 function buildServiceFailureResponse(input = {}, error = {}) {

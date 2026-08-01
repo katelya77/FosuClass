@@ -15,6 +15,16 @@ const {
 } = require("./responseComposerBridge");
 const { earlyTraceSkillFor, personalMemorySkill } = require("./skillRouter");
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 /**
  * Memory load coordination: unified MemoryController load with the
  * local_only fallback bundle and context merge (verbatim from agentService).
@@ -25,7 +35,7 @@ function loadConversationMemory(input = {}) {
   const conversationId = input.conversationId;
   const safeMessage = input.message;
   let context = input.context || {};
-  let memoryBundle = {
+  const memoryBundle = {
     principal: { authenticated: false, principalKey: "", runtimeMode: runtimeMode },
     state: null,
     memory: {
@@ -40,10 +50,42 @@ function loadConversationMemory(input = {}) {
     },
     context,
   };
-  let conversationState = null;
+  const finish = (loadedBundle) => {
+    try {
+      const bundle = loadedBundle;
+      const conversationState = bundle.conversationState || null;
+      context = safetyGuard.sanitizeAgentContext(bundle.context || context);
+      context.runtimeMode = runtimeMode;
+      context.serverSession = serverSession || null;
+      if (conversationState) {
+        context.conversationSummary = conversationState.conversationSummary || context.conversationSummary;
+        context.workingMemory = conversationState.workingMemory || context.workingMemory;
+        context.userMemories = conversationState.userMemories || context.userMemories || [];
+        context.episodicMemories = conversationState.episodicMemories || context.episodicMemories || [];
+        context.recentMessages = conversationState.recentMessages || context.recentMessages;
+      }
+      return { memoryBundle: bundle, conversationState, context };
+    } catch (error) {
+      return recover(loadedBundle);
+    }
+  };
+  const recover = (bundle) => {
+    const target = bundle || memoryBundle;
+    target.memory = {
+      mode: "local_only",
+      authenticated: Boolean(serverSession && serverSession.openidHash),
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    };
+    return { memoryBundle: target, conversationState: null, context };
+  };
   try {
     // Unified MemoryController: working + thread + user memory (single authoritative path).
-    memoryBundle = defaultMemoryController.load({
+    const loaded = defaultMemoryController.load({
       serverSession: serverSession,
       runtimeMode: runtimeMode,
       conversationId,
@@ -54,31 +96,10 @@ function loadConversationMemory(input = {}) {
       executionPolicy: input.executionPolicy || "",
       policy: input.policy || null,
     });
-    conversationState = memoryBundle.conversationState || null;
-    context = safetyGuard.sanitizeAgentContext(memoryBundle.context || context);
-    context.runtimeMode = runtimeMode;
-    context.serverSession = serverSession || null;
-    if (conversationState) {
-      context.conversationSummary = conversationState.conversationSummary || context.conversationSummary;
-      context.workingMemory = conversationState.workingMemory || context.workingMemory;
-      context.userMemories = conversationState.userMemories || context.userMemories || [];
-      context.episodicMemories = conversationState.episodicMemories || context.episodicMemories || [];
-      context.recentMessages = conversationState.recentMessages || context.recentMessages;
-    }
+    return chain(loaded, finish, () => recover(memoryBundle));
   } catch (error) {
-    memoryBundle.memory = {
-      mode: "local_only",
-      authenticated: Boolean(serverSession && serverSession.openidHash),
-      persisted: false,
-      synced: false,
-      revision: 0,
-      expiresAt: "",
-      summaryAvailable: false,
-      canClear: false,
-    };
-    conversationState = null;
+    return recover(memoryBundle);
   }
-  return { memoryBundle, conversationState, context };
 }
 
 /**
@@ -100,15 +121,17 @@ function handlePersonalMemoryTurn(input = {}) {
   const startTime = input.startTime;
   const understanding = input.understanding;
   const goalContractV2 = input.goalContractV2;
-  const personalMemoryTurn = resolvePersonalMemoryTurn({
+  return chain(resolvePersonalMemoryTurn({
     message: safeMessage,
     context,
     principal: memoryBundle.principal,
     memoryMode: memoryBundle.memory && memoryBundle.memory.mode || context.memoryMode,
     preferenceService: defaultUserPreferenceService,
     policy: input.policy || null,
-  });
-  if (personalMemoryTurn.handled) {
+  }), (personalMemoryTurn) => {
+    if (!personalMemoryTurn.handled) {
+      return null;
+    }
     const personalProviderTruth = deriveProviderRunTruth({
       runtimeMode: runtimeMode,
       understanding,
@@ -144,7 +167,7 @@ function handlePersonalMemoryTurn(input = {}) {
         actions: preferenceActions.slice(0, 3),
       }]
       : [];
-    const response = attachMemory(buildResponse({
+    return chain(attachMemory(buildResponse({
       protocolVersion,
       runId,
       requestId,
@@ -212,34 +235,34 @@ function handlePersonalMemoryTurn(input = {}) {
       understandingSource: understanding.source,
       goalContract: goalContractV2 || undefined,
       policy: input.policy || null,
+    }), (response) => {
+      if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
+        response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
+      }
+      maybeAttachProactive(response, { context, proactiveEvent: context.proactiveEvent }, memoryBundle, []);
+      recordEarlyTrace({
+        runId,
+        requestId,
+        conversationId,
+        runtimeMode: runtimeMode,
+        startTime,
+        intent: personalMemoryTurn.intentName,
+        selectedSkill: earlyTraceSkillFor("PERSONAL_MEMORY"),
+      });
+      emitChatEvent(eventInput, {
+        type: personalOutcome.eventType,
+        runtimeMode: runtimeMode,
+        intentName: personalMemoryTurn.intentName,
+        providerUsed: personalProviderTruth.externalProviderUsed,
+        status: personalOutcome.status,
+        success: personalOutcome.success,
+        fallback: personalProviderTruth.fallback,
+        verificationOk: personalOutcome.verificationOk,
+        errorCount: personalOutcome.errors.length,
+      });
+      return response;
     });
-    if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
-      response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
-    }
-    maybeAttachProactive(response, { context, proactiveEvent: context.proactiveEvent }, memoryBundle, []);
-    recordEarlyTrace({
-      runId,
-      requestId,
-      conversationId,
-      runtimeMode: runtimeMode,
-      startTime,
-      intent: personalMemoryTurn.intentName,
-      selectedSkill: earlyTraceSkillFor("PERSONAL_MEMORY"),
-    });
-    emitChatEvent(eventInput, {
-      type: personalOutcome.eventType,
-      runtimeMode: runtimeMode,
-      intentName: personalMemoryTurn.intentName,
-      providerUsed: personalProviderTruth.externalProviderUsed,
-      status: personalOutcome.status,
-      success: personalOutcome.success,
-      fallback: personalProviderTruth.fallback,
-      verificationOk: personalOutcome.verificationOk,
-      errorCount: personalOutcome.errors.length,
-    });
-    return response;
-  }
-  return null;
+  });
 }
 
 function attachMemory(response, memoryBundle, options = {}) {
@@ -255,7 +278,7 @@ function attachMemory(response, memoryBundle, options = {}) {
     return response;
   }
   // Unified commit path: working + thread + user memory candidates.
-  const commitResult = defaultMemoryController.commit({
+  return chain(defaultMemoryController.commit({
     principal: memoryBundle && memoryBundle.principal,
     state: memoryBundle && memoryBundle.state,
     memoryBundle,
@@ -294,7 +317,10 @@ function attachMemory(response, memoryBundle, options = {}) {
     verified: options.verified === true
       || Boolean(response.verification && response.verification.ok === true),
     policy: options.policy || null,
-  });
+  }), (commitResult) => applyCommitResult(response, commitResult));
+}
+
+function applyCommitResult(response, commitResult) {
   const memory = commitResult.memory;
   response.memory = memory;
   if (commitResult.autoMemoryHints && commitResult.autoMemoryHints.length) {

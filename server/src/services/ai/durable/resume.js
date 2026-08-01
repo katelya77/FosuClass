@@ -9,12 +9,22 @@
 
 const { safeLog } = require("../../../utils/safeLogger");
 const {
-  defaultDurableTaskStore,
   createStoreError,
   hashPrincipalKey,
   hashToken,
   publicTaskView,
 } = require("./taskStore");
+const { getSharedDurableTaskStore } = require("./sharedTaskStore");
+
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
 
 function assertResumePrincipal(principal) {
   const principalKey = String(principal && principal.principalKey || "");
@@ -33,57 +43,63 @@ function assertTaskPrincipal(task, principalKey) {
 function findTaskByToken(store, taskId, resumeToken) {
   const tokenHash = hashToken(resumeToken);
   if (taskId) {
-    const task = store.get(taskId);
-    if (!task) {
-      throw createStoreError("durable 任务不存在。", "DURABLE_TASK_NOT_FOUND", 404);
-    }
-    if (task.resumeTokenHash !== tokenHash) {
+    return chain(store.get(taskId), (task) => {
+      if (!task) {
+        throw createStoreError("durable 任务不存在。", "DURABLE_TASK_NOT_FOUND", 404);
+      }
+      if (task.resumeTokenHash !== tokenHash) {
+        throw createStoreError("resumeToken 校验失败。", "DURABLE_TOKEN_INVALID", 403);
+      }
+      return task;
+    });
+  }
+  return chain(store.list(), (tasks) => {
+    const matched = tasks.find((task) => task.resumeTokenHash === tokenHash);
+    if (!matched) {
       throw createStoreError("resumeToken 校验失败。", "DURABLE_TOKEN_INVALID", 403);
     }
-    return task;
-  }
-  const matched = store.list().find((task) => task.resumeTokenHash === tokenHash);
-  if (!matched) {
-    throw createStoreError("resumeToken 校验失败。", "DURABLE_TOKEN_INVALID", 403);
-  }
-  return matched;
+    return matched;
+  });
 }
 
 /**
  * 恢复任务：token 匹配 + principal 归属一致 + 未过期 → status resumed。
  * @returns {{ task: object, context: object }} 对外视图（无哈希、无 token）。
  */
-function resumeDurableTask(input = {}, store = defaultDurableTaskStore) {
+function resumeDurableTask(input = {}, store = getSharedDurableTaskStore()) {
   const resumeToken = String(input.resumeToken || "");
   if (!resumeToken || resumeToken.length < 16 || resumeToken.length > 256) {
     throw createStoreError("resumeToken 缺失或形态非法。", "DURABLE_TOKEN_INVALID", 403);
   }
   const principalKey = assertResumePrincipal(input.principal);
   const taskId = String(input.taskId || "").slice(0, 64);
-  const task = findTaskByToken(store, taskId, resumeToken);
-  assertTaskPrincipal(task, principalKey);
-  const resumed = store.markResumed(task.taskId); // 惰性过期/状态冲突在此收口
-  safeLog("ai-agent-durable-resume", {
-    kind: resumed.kind,
-    waitEvent: resumed.waitEvent,
+  return chain(findTaskByToken(store, taskId, resumeToken), (task) => {
+    assertTaskPrincipal(task, principalKey);
+    // 惰性过期/状态冲突在此收口
+    return chain(store.markResumed(task.taskId), (resumed) => {
+      safeLog("ai-agent-durable-resume", {
+        kind: resumed.kind,
+        waitEvent: resumed.waitEvent,
+      });
+      return {
+        task: publicTaskView(resumed),
+        context: resumed.context && typeof resumed.context === "object" ? resumed.context : {},
+      };
+    });
   });
-  return {
-    task: publicTaskView(resumed),
-    context: resumed.context && typeof resumed.context === "object" ? resumed.context : {},
-  };
 }
 
 /** 完成任务：pending/waiting/resumed → done（回执达成、审批结论落地时调用）。 */
-function completeDurableTask(input = {}, store = defaultDurableTaskStore) {
+function completeDurableTask(input = {}, store = getSharedDurableTaskStore()) {
   const principalKey = assertResumePrincipal(input.principal);
   const taskId = String(input.taskId || "").slice(0, 64);
-  const task = store.get(taskId);
-  if (!task) {
-    throw createStoreError("durable 任务不存在。", "DURABLE_TASK_NOT_FOUND", 404);
-  }
-  assertTaskPrincipal(task, principalKey);
-  const done = store.markDone(taskId, input.note);
-  return publicTaskView(done);
+  return chain(store.get(taskId), (task) => {
+    if (!task) {
+      throw createStoreError("durable 任务不存在。", "DURABLE_TASK_NOT_FOUND", 404);
+    }
+    assertTaskPrincipal(task, principalKey);
+    return chain(store.markDone(taskId, input.note), (done) => publicTaskView(done));
+  });
 }
 
 /**
@@ -91,12 +107,12 @@ function completeDurableTask(input = {}, store = defaultDurableTaskStore) {
  * 找不到对应任务不是错误（回执先于 durable 层存在，或任务已过期清理），
  * 回执端点语义不受影响。
  */
-function completeReminderReceiptWait(input = {}, store = defaultDurableTaskStore) {
+function completeReminderReceiptWait(input = {}, store = getSharedDurableTaskStore()) {
   const principal = input.principal;
   if (!principal || principal.authenticated !== true || !principal.principalKey) {
     return { completed: false, reason: "PRINCIPAL_REQUIRED" };
   }
-  const task = store.findWaitingByEvent({
+  return chain(store.findWaitingByEvent({
     kind: "receipt_wait",
     waitEvent: "action_receipt",
     principalKey: principal.principalKey,
@@ -105,14 +121,16 @@ function completeReminderReceiptWait(input = {}, store = defaultDurableTaskStore
       runId: String(input.runId || "").slice(0, 100),
       detailId: String(input.detailId || "").slice(0, 128),
     },
+  }), (task) => {
+    if (!task) return { completed: false, reason: "DURABLE_TASK_NOT_FOUND" };
+    return chain(store.markDone(task.taskId, "action_receipt"), (done) => (
+      { completed: true, taskId: done.taskId }
+    ));
   });
-  if (!task) return { completed: false, reason: "DURABLE_TASK_NOT_FOUND" };
-  const done = store.markDone(task.taskId, "action_receipt");
-  return { completed: true, taskId: done.taskId };
 }
 
 /** 批量过期标记（供定期清扫或端点懒触发）。 */
-function sweepExpiredTasks(store = defaultDurableTaskStore) {
+function sweepExpiredTasks(store = getSharedDurableTaskStore()) {
   return store.sweepExpired();
 }
 

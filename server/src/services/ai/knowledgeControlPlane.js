@@ -183,9 +183,11 @@ function createAuditService(options = {}) {
   if (options.audit) return options.audit;
   if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
     // lazy require：file 模式不加载 pg 依赖链。
-    const { getPool } = require("./persistence/pgPersistenceService");
+    // WS6：lazy gated pool——require 期不触网、未配置 PG 也不抛错；
+    // 每次真实查询先过 init 就绪门（fail closed）。
+    const { createLazyPool } = require("./persistence/pgReadiness");
     const { PgKnowledgeAuditService } = require("./persistence/pgKnowledgeAuditService");
-    return new PgKnowledgeAuditService({ pool: getPool(), maxEntries: options.maxEntries });
+    return new PgKnowledgeAuditService({ pool: createLazyPool({ gated: true }), maxEntries: options.maxEntries });
   }
   return new KnowledgeAuditService(options);
 }
@@ -194,9 +196,10 @@ function createAuditService(options = {}) {
 function createIdempotencyStore(options = {}) {
   if (options.idempotency) return options.idempotency;
   if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
-    const { getPool } = require("./persistence/pgPersistenceService");
+    // lazy require + lazy gated pool（同 createAuditService）。
+    const { createLazyPool } = require("./persistence/pgReadiness");
     const { PgIdempotencyStore } = require("./persistence/pgIdempotencyStore");
-    return new PgIdempotencyStore({ pool: getPool(), ttlMs: options.ttlMs });
+    return new PgIdempotencyStore({ pool: createLazyPool({ gated: true }), ttlMs: options.ttlMs });
   }
   return new IdempotencyStore(options);
 }

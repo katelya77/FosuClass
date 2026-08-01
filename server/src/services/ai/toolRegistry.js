@@ -30,6 +30,17 @@ const classAliasResolver = require("./classAliasResolver");
 const MAX_SECTION = 14;
 const termRegistryService = require("../termRegistryService");
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+// 热链 executeToolAsync 会 await；同步 executeTool 遇 Promise 走既有 ASYNC_TOOL_REQUIRES_AGENT。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 function getDefaultTerm() {
   const active = termRegistryService.getActiveTerm();
   if (active && active.term) return active.term;
@@ -1476,20 +1487,19 @@ function updateUserPreference(input = {}, context = {}) {
     return { success: false, code: "PREFERENCE_INVALID", writeExecuted: false, summary: "没有可更新的偏好。" };
   }
   const principal = resolveReminderPrincipal(context);
-  const saved = defaultUserPreferenceService.upsert({
+  return chain(defaultUserPreferenceService.upsert({
     principal,
     memoryMode: context.memoryMode || "local_only",
     explicit: true,
     values,
-  });
-  return {
+  }), (saved) => ({
     success: true,
     persisted: saved.persisted === true,
     memoryMode: saved.memoryMode || context.memoryMode || "local_only",
     updatedKeys: Object.keys(values),
     writeExecuted: true,
     summary: saved.persisted === true ? "用户明确偏好已安全保存。" : "偏好已返回客户端，仅保存在本机。",
-  };
+  }));
 }
 
 function getCourseRoute(input = {}, context = {}) {

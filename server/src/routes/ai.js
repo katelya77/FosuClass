@@ -25,6 +25,19 @@ const { resumeDurableTask, completeReminderReceiptWait } = require("../services/
 const router = express.Router();
 let configuredAgentRunHandlers = null;
 
+// maybe-async 透传（P5a WS6）：file 后端同步直返（既有同步调用方/测试零变化）；
+// postgres 后端返回 Promise，经 chain 的 onFulfilled/onRejected 收口。
+// 注意：handler 不得改 async——`await 非 thenable` 也会把响应推迟到微任务，
+// 破坏同步调用 handler 的既有测试。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 router.use(publicFosuGuard);
 
 function getAgentRunHandlers() {
@@ -418,76 +431,91 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
     });
     const requestedCloudSync = String(body.memoryMode || "").slice(0, 24) === "cloud_sync";
     const conversationId = String(body.conversationId || "").slice(0, 100);
-    const bundle = defaultMemoryService.loadForChat({
+    return chain(defaultMemoryService.loadForChat({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
       conversationId,
       memoryMode: requestedCloudSync ? "cloud_sync" : "local_only",
       context: {},
-    });
-    const cloudSyncAuthorized = Boolean(
-      requestedCloudSync
-      && bundle && bundle.memory && bundle.memory.mode === "cloud_sync"
-      && bundle.state && bundle.state.memoryPolicy
-      && bundle.state.memoryPolicy.mode === "cloud_sync"
-      && bundle.state.memoryPolicy.cloudSyncEnabled === true
-    );
-    if (requestedCloudSync && !cloudSyncAuthorized) {
-      return res.status(409).json({
-        success: false,
-        committed: false,
-        code: "CLOUD_SYNC_NOT_AUTHORIZED",
-        reason: "CLOUD_SYNC_NOT_AUTHORIZED",
-        serverTime: new Date().toISOString(),
-      });
-    }
-    const memoryMode = cloudSyncAuthorized ? "cloud_sync" : "local_only";
-    const commitResult = defaultMemoryController.commitActionReceipt({
-      principal,
-      state: bundle && bundle.state,
-      conversationId,
-      memoryMode,
-      command,
-      runId: String(body.runId || "").slice(0, 100),
-      appliedTarget: receiptTarget,
-    });
-    if (memoryMode === "cloud_sync" && commitResult.committed !== true) {
-      return res.status(409).json({
-        success: false,
-        committed: false,
-        code: commitResult.reason || "ACTION_RECEIPT_REJECTED",
-        reason: commitResult.reason || "ACTION_RECEIPT_REJECTED",
-        serverTime: new Date().toISOString(),
-      });
-    }
-    safeLog("ai-agent-action-receipt", buildSafeLogPayload({
-      provider: "action-receipt",
-      toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
-      memoryMode,
-    }));
-    // M6-T4 durable 兜底：提醒回执被接受后，将对应 receipt_wait 持久任务置 done。
-    // 纯附加、best-effort：找不到任务或置 done 失败均不改变 M5 回执语义与响应。
-    if (isReminderReceipt) {
-      try {
-        completeReminderReceiptWait({
-          principal,
-          command,
-          runId: String(body.runId || "").slice(0, 100),
-          detailId,
-        });
-      } catch (durableError) {
-        safeLog("ai-agent-durable-complete-failed", {
-          code: String(durableError && durableError.code || "DURABLE_COMPLETE_FAILED").slice(0, 60),
+    }), (bundle) => {
+      const cloudSyncAuthorized = Boolean(
+        requestedCloudSync
+        && bundle && bundle.memory && bundle.memory.mode === "cloud_sync"
+        && bundle.state && bundle.state.memoryPolicy
+        && bundle.state.memoryPolicy.mode === "cloud_sync"
+        && bundle.state.memoryPolicy.cloudSyncEnabled === true
+      );
+      if (requestedCloudSync && !cloudSyncAuthorized) {
+        return res.status(409).json({
+          success: false,
+          committed: false,
+          code: "CLOUD_SYNC_NOT_AUTHORIZED",
+          reason: "CLOUD_SYNC_NOT_AUTHORIZED",
+          serverTime: new Date().toISOString(),
         });
       }
-    }
-    return res.json({
-      success: true,
-      committed: commitResult.committed === true,
-      reason: commitResult.reason || "",
-      memory: commitResult.memory || null,
-      serverTime: new Date().toISOString(),
-    });
+      const memoryMode = cloudSyncAuthorized ? "cloud_sync" : "local_only";
+      return chain(defaultMemoryController.commitActionReceipt({
+        principal,
+        state: bundle && bundle.state,
+        conversationId,
+        memoryMode,
+        command,
+        runId: String(body.runId || "").slice(0, 100),
+        appliedTarget: receiptTarget,
+      }), (commitResult) => {
+        if (memoryMode === "cloud_sync" && commitResult.committed !== true) {
+          return res.status(409).json({
+            success: false,
+            committed: false,
+            code: commitResult.reason || "ACTION_RECEIPT_REJECTED",
+            reason: commitResult.reason || "ACTION_RECEIPT_REJECTED",
+            serverTime: new Date().toISOString(),
+          });
+        }
+        safeLog("ai-agent-action-receipt", buildSafeLogPayload({
+          provider: "action-receipt",
+          toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
+          memoryMode,
+        }));
+        const sendCommitResponse = () => res.json({
+          success: true,
+          committed: commitResult.committed === true,
+          reason: commitResult.reason || "",
+          memory: commitResult.memory || null,
+          serverTime: new Date().toISOString(),
+        });
+        // M6-T4 durable 兜底：提醒回执被接受后，将对应 receipt_wait 持久任务置 done。
+        // 纯附加、best-effort：找不到任务或置 done 失败均不改变 M5 回执语义与响应。
+        if (isReminderReceipt) {
+          const logDurableFailure = (durableError) => {
+            safeLog("ai-agent-durable-complete-failed", {
+              code: String(durableError && durableError.code || "DURABLE_COMPLETE_FAILED").slice(0, 60),
+            });
+          };
+          try {
+            const durableOutcome = completeReminderReceiptWait({
+              principal,
+              command,
+              runId: String(body.runId || "").slice(0, 100),
+              detailId,
+            });
+            if (isThenable(durableOutcome)) {
+              return durableOutcome.then(
+                () => sendCommitResponse(),
+                (durableError) => {
+                  logDurableFailure(durableError);
+                  return sendCommitResponse();
+                }
+              );
+            }
+          } catch (durableError) {
+            logDurableFailure(durableError);
+          }
+        }
+        return sendCommitResponse();
+      }, (error) => handleMemoryError(res, error));
+    }, (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -500,17 +528,16 @@ router.post("/agent/durable/resume", scheduleLimiter, requireSessionGuard, valid
   try {
     const body = req.body || {};
     const principal = resolveReminderPrincipal(req);
-    const result = resumeDurableTask({
+    return chain(resumeDurableTask({
       taskId: String(body.taskId || "").slice(0, 64),
       resumeToken: String(body.resumeToken || ""),
       principal,
-    });
-    return res.json({
+    }), (result) => res.json({
       success: true,
       task: result.task,
       context: result.context,
       serverTime: new Date().toISOString(),
-    });
+    }), (error) => handleDurableError(res, error));
   } catch (error) {
     return handleDurableError(res, error);
   }
@@ -519,11 +546,11 @@ router.post("/agent/durable/resume", scheduleLimiter, requireSessionGuard, valid
 router.get("/agent/conversations", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultMemoryService.listConversations({
+    return chain(defaultMemoryService.listConversations({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -532,12 +559,12 @@ router.get("/agent/conversations", scheduleLimiter, requireSessionGuard, (req, r
 router.get("/agent/conversations/:conversationId", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultMemoryService.getConversation({
+    return chain(defaultMemoryService.getConversation({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
       conversationId: req.params.conversationId,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -546,7 +573,7 @@ router.get("/agent/conversations/:conversationId", scheduleLimiter, requireSessi
 router.patch("/agent/conversations/:conversationId", scheduleLimiter, requireSessionGuard, validateJsonBody(["title", "memoryMode", "memoryPolicy", "expectedRevision", "deleteCloudData"]), (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultMemoryService.patchConversation({
+    return chain(defaultMemoryService.patchConversation({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
       conversationId: req.params.conversationId,
@@ -555,8 +582,8 @@ router.patch("/agent/conversations/:conversationId", scheduleLimiter, requireSes
       memoryPolicy: req.body && req.body.memoryPolicy,
       expectedRevision: req.body && req.body.expectedRevision,
       deleteCloudData: req.body && req.body.deleteCloudData === true,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -565,12 +592,12 @@ router.patch("/agent/conversations/:conversationId", scheduleLimiter, requireSes
 router.delete("/agent/conversations/:conversationId", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultMemoryService.deleteConversation({
+    return chain(defaultMemoryService.deleteConversation({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
       conversationId: req.params.conversationId,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -579,11 +606,11 @@ router.delete("/agent/conversations/:conversationId", scheduleLimiter, requireSe
 router.get("/agent/memory", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.getManagementSnapshot({
+    return chain(defaultUserPreferenceService.getManagementSnapshot({
       principal: resolveMemoryPrincipal(req),
       includeInactive: String(req.query.includeInactive || "").toLowerCase() === "true",
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -592,13 +619,13 @@ router.get("/agent/memory", scheduleLimiter, requireSessionGuard, (req, res) => 
 router.get("/agent/memory/items", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.listMemoryItems({
+    return chain(defaultUserPreferenceService.listMemoryItems({
       principal: resolveMemoryPrincipal(req),
       includeInactive: String(req.query.includeInactive || "").toLowerCase() === "true",
       page: req.query.page,
       pageSize: req.query.pageSize,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -619,13 +646,13 @@ router.patch("/agent/memory/items/:memoryId", scheduleLimiter, requireSessionGua
         serverTime: new Date().toISOString(),
       });
     }
-    const payload = defaultUserPreferenceService.patchMemory({
+    return chain(defaultUserPreferenceService.patchMemory({
       principal: resolveMemoryPrincipal(req),
       memoryId: req.params.memoryId,
       expectedRevision: body.expectedRevision,
       patch,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -634,12 +661,12 @@ router.patch("/agent/memory/items/:memoryId", scheduleLimiter, requireSessionGua
 router.delete("/agent/memory/items/:memoryId", scheduleLimiter, requireSessionGuard, validateMemoryDeleteBody(["expectedRevision"]), requireMemoryRevision, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.deleteMemory({
+    return chain(defaultUserPreferenceService.deleteMemory({
       principal: resolveMemoryPrincipal(req),
       memoryId: req.params.memoryId,
       expectedRevision: req.body && req.body.expectedRevision,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -648,13 +675,13 @@ router.delete("/agent/memory/items/:memoryId", scheduleLimiter, requireSessionGu
 router.get("/agent/memory/episodes", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.listEpisodes({
+    return chain(defaultUserPreferenceService.listEpisodes({
       principal: resolveMemoryPrincipal(req),
       includeInactive: String(req.query.includeInactive || "").toLowerCase() === "true",
       page: req.query.page,
       pageSize: req.query.pageSize,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -663,12 +690,12 @@ router.get("/agent/memory/episodes", scheduleLimiter, requireSessionGuard, (req,
 router.delete("/agent/memory/episodes/:episodeId", scheduleLimiter, requireSessionGuard, validateMemoryDeleteBody(["expectedRevision"]), requireMemoryRevision, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.deleteEpisode({
+    return chain(defaultUserPreferenceService.deleteEpisode({
       principal: resolveMemoryPrincipal(req),
       episodeId: req.params.episodeId,
       expectedRevision: req.body && req.body.expectedRevision,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -677,15 +704,14 @@ router.delete("/agent/memory/episodes/:episodeId", scheduleLimiter, requireSessi
 router.get("/agent/memory/policy", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const snapshot = defaultUserPreferenceService.getManagementSnapshot({
+    return chain(defaultUserPreferenceService.getManagementSnapshot({
       principal: resolveMemoryPrincipal(req),
-    });
-    return res.json({
+    }), (snapshot) => res.json({
       success: true,
       revision: snapshot.revision,
       policy: snapshot.policy,
       serverTime: new Date().toISOString(),
-    });
+    }), (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -707,12 +733,12 @@ router.patch("/agent/memory/policy", scheduleLimiter, requireSessionGuard, valid
         serverTime: new Date().toISOString(),
       });
     }
-    const payload = defaultUserPreferenceService.setMemoryPolicy({
+    return chain(defaultUserPreferenceService.setMemoryPolicy({
       principal: resolveMemoryPrincipal(req),
       expectedRevision: body.expectedRevision,
       patch,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -721,14 +747,13 @@ router.patch("/agent/memory/policy", scheduleLimiter, requireSessionGuard, valid
 router.get("/agent/memory/export", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultUserPreferenceService.exportMemories({
+    return chain(defaultUserPreferenceService.exportMemories({
       principal: resolveMemoryPrincipal(req),
-    });
-    return res.json({
+    }), (payload) => res.json({
       success: true,
       export: payload,
       serverTime: new Date().toISOString(),
-    });
+    }), (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -741,12 +766,7 @@ router.delete("/agent/memory", scheduleLimiter, requireSessionGuard, validateMem
     longTerm: { success: false, skipped: true },
     conversations: { success: false, skipped: true },
   };
-  try {
-    stores.longTerm = defaultUserPreferenceService.clear({
-      principal,
-      expectedRevision: req.body && req.body.expectedRevision,
-    });
-  } catch (error) {
+  const failLongTerm = (error) => {
     stores.longTerm = memoryStoreFailure(error);
     return res.status(Number(error && error.statusCode) || 400).json({
       success: false,
@@ -756,13 +776,8 @@ router.delete("/agent/memory", scheduleLimiter, requireSessionGuard, validateMem
       stores,
       serverTime: new Date().toISOString(),
     });
-  }
-  try {
-    stores.conversations = defaultMemoryService.clearAllMemory({
-      serverSession: req.fosuSession,
-      runtimeMode: resolveMemoryRuntimeMode(req),
-    });
-  } catch (error) {
+  };
+  const failConversations = (error) => {
     stores.conversations = memoryStoreFailure(error);
     return res.status(Number(error && error.statusCode) || 500).json({
       success: false,
@@ -773,26 +788,52 @@ router.delete("/agent/memory", scheduleLimiter, requireSessionGuard, validateMem
       revision: stores.longTerm.revision,
       serverTime: new Date().toISOString(),
     });
+  };
+  const clearConversations = () => {
+    let conversationsOutcome;
+    try {
+      conversationsOutcome = defaultMemoryService.clearAllMemory({
+        serverSession: req.fosuSession,
+        runtimeMode: resolveMemoryRuntimeMode(req),
+      });
+    } catch (error) {
+      return failConversations(error);
+    }
+    return chain(conversationsOutcome, (result) => {
+      stores.conversations = result;
+      return res.json({
+        success: true,
+        cleared: true,
+        partial: false,
+        stores,
+        revision: stores.longTerm.revision,
+        serverTime: new Date().toISOString(),
+      });
+    }, failConversations);
+  };
+  let longTermOutcome;
+  try {
+    longTermOutcome = defaultUserPreferenceService.clear({
+      principal,
+      expectedRevision: req.body && req.body.expectedRevision,
+    });
+  } catch (error) {
+    return failLongTerm(error);
   }
-  return res.json({
-    success: true,
-    cleared: true,
-    partial: false,
-    stores,
-    revision: stores.longTerm.revision,
-    serverTime: new Date().toISOString(),
-  });
+  return chain(longTermOutcome, (result) => {
+    stores.longTerm = result;
+    return clearConversations();
+  }, failLongTerm);
 });
 
 router.get("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const principal = resolveMemoryPrincipal(req);
-    const payload = defaultUserPreferenceService.list({ principal });
-    return res.json(Object.assign({
+    return chain(defaultUserPreferenceService.list({ principal }), (payload) => res.json(Object.assign({
       serverTime: new Date().toISOString(),
       autoMemoryEnabled: payload.policy && payload.policy.autoMemoryEnabled !== false,
-    }, payload));
+    }, payload)), (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -814,32 +855,7 @@ router.patch("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, 
         serverTime: new Date().toISOString(),
       });
     }
-    let revision = body.expectedRevision;
-    let preferenceResult = { success: true, persisted: false, keys: [] };
-    if (Object.keys(values).length) {
-      preferenceResult = defaultUserPreferenceService.upsert({
-        principal,
-        memoryMode: "cloud_sync",
-        explicit: true,
-        autoMemory: false,
-        values,
-        expectedRevision: revision,
-      });
-      revision = preferenceResult.revision;
-    }
-    let policyResult = null;
-    let policyChanged = false;
-    if (typeof body.autoMemoryEnabled === "boolean") {
-      const policyRevisionBefore = revision;
-      policyResult = defaultUserPreferenceService.setMemoryPolicy({
-        principal,
-        expectedRevision: revision,
-        patch: { autoMemoryEnabled: body.autoMemoryEnabled },
-      });
-      revision = policyResult.revision;
-      policyChanged = Number(revision) !== Number(policyRevisionBefore);
-    }
-    return res.json({
+    const respond = (preferenceResult, policyResult, policyChanged, revision) => res.json({
       success: true,
       serverTime: new Date().toISOString(),
       persisted: preferenceResult.persisted === true || policyChanged,
@@ -848,6 +864,46 @@ router.patch("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, 
       policy: policyResult && policyResult.policy,
       autoMemoryEnabled: policyResult ? policyResult.policy.autoMemoryEnabled : undefined,
     });
+    const runPolicyStep = (revision, preferenceResult) => {
+      if (typeof body.autoMemoryEnabled !== "boolean") {
+        return respond(preferenceResult, null, false, revision);
+      }
+      const policyRevisionBefore = revision;
+      let policyOutcome;
+      try {
+        policyOutcome = defaultUserPreferenceService.setMemoryPolicy({
+          principal,
+          expectedRevision: revision,
+          patch: { autoMemoryEnabled: body.autoMemoryEnabled },
+        });
+      } catch (error) {
+        return handleMemoryError(res, error);
+      }
+      return chain(policyOutcome, (policyResult) => {
+        const nextRevision = policyResult.revision;
+        const policyChanged = Number(nextRevision) !== Number(policyRevisionBefore);
+        return respond(preferenceResult, policyResult, policyChanged, nextRevision);
+      }, (error) => handleMemoryError(res, error));
+    };
+    if (!Object.keys(values).length) {
+      return runPolicyStep(body.expectedRevision, { success: true, persisted: false, keys: [] });
+    }
+    let upsertOutcome;
+    try {
+      upsertOutcome = defaultUserPreferenceService.upsert({
+        principal,
+        memoryMode: "cloud_sync",
+        explicit: true,
+        autoMemory: false,
+        values,
+        expectedRevision: body.expectedRevision,
+      });
+    } catch (error) {
+      return handleMemoryError(res, error);
+    }
+    return chain(upsertOutcome, (preferenceResult) => (
+      runPolicyStep(preferenceResult.revision, preferenceResult)
+    ), (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -857,12 +913,12 @@ router.delete("/agent/memory/preferences/:key", scheduleLimiter, requireSessionG
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const principal = resolveMemoryPrincipal(req);
-    const payload = defaultUserPreferenceService.remove({
+    return chain(defaultUserPreferenceService.remove({
       principal,
       key: req.params.key,
       expectedRevision: req.body && req.body.expectedRevision,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -882,7 +938,7 @@ router.post("/agent/proactive/evaluate", scheduleLimiter, optionalSessionGuard, 
     }
     const context = Object.assign({}, req.body.context || {});
     if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
-    const payload = agentService.evaluateProactiveForRequest({
+    return chain(agentService.evaluateProactiveForRequest({
       event,
       context,
       facts: req.body.facts || {},
@@ -894,8 +950,7 @@ router.post("/agent/proactive/evaluate", scheduleLimiter, optionalSessionGuard, 
         appid: req.fosuSession.appid || "",
       } : null,
       runtimeMode: resolveMemoryRuntimeMode(req),
-    });
-    return res.json(payload);
+    }), (payload) => res.json(payload), (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
@@ -904,7 +959,7 @@ router.post("/agent/proactive/evaluate", scheduleLimiter, optionalSessionGuard, 
 router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, validateJsonBody(["mode", "conversationId", "clearExisting", "expectedRevision", "title"]), (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const payload = defaultMemoryService.setMemoryPolicy({
+    return chain(defaultMemoryService.setMemoryPolicy({
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
       mode: req.body && req.body.mode,
@@ -912,8 +967,8 @@ router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, valida
       title: req.body && req.body.title,
       clearExisting: req.body && req.body.clearExisting === true,
       expectedRevision: req.body && req.body.expectedRevision,
-    });
-    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+    }), (payload) => res.json(Object.assign({ serverTime: new Date().toISOString() }, payload)),
+    (error) => handleMemoryError(res, error));
   } catch (error) {
     return handleMemoryError(res, error);
   }
