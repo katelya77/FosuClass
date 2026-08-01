@@ -129,11 +129,11 @@
 
 ### P5a — Standalone Durable Storage
 
-- [ ] Repository/Adapter 接口（P4a 定义）的 PostgreSQL 实现：Artifact/ConfigSnapshot、发布状态、Provider/Skill/Tool/MCP/RAG/Memory 配置元数据、会话与长期记忆、Working State、Run 元数据与最终状态、RunEvent durable store、审计、RAG 文档/分块/版本/引用、pgvector、异步任务幂等记录。
-- [ ] 版本化 migration（可重复检测、版本可查、不兼容 schema 不启动）；expand-contract。
-- [ ] Redis Streams + Consumer Group + ACK + pending reclaim + 幂等 jobId + 有界重试 + dead-letter；Redis 永不做权威事实源。
-- [ ] 文件 Adapter 与 PostgreSQL Adapter 跑同一 Repository conformance suite。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5a-evidence.md`。提交：`feat(agent): add standalone durable storage adapters`。
+- [x] Repository/Adapter 接口（P4a 定义）的 PostgreSQL 实现：Artifact/ConfigSnapshot、发布状态、Provider/Skill/Tool/MCP/RAG/Memory 配置元数据、会话与长期记忆、Working State、Run 元数据与最终状态、RunEvent durable store、审计、RAG 文档/分块/版本/引用、pgvector、异步任务幂等记录。
+- [x] 版本化 migration（可重复检测、版本可查、不兼容 schema 不启动）；expand-contract。
+- [x] Redis Streams + Consumer Group + ACK + pending reclaim + 幂等 jobId + 有界重试 + dead-letter；Redis 永不做权威事实源。
+- [x] 文件 Adapter 与 PostgreSQL Adapter 跑同一 Repository conformance suite。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p5a-evidence.md`。提交：`feat(agent): add standalone durable storage adapters`。
   - _Requirements: R8.1–R8.3, R10.4_
 
 ### P5b — Standalone Service Topology
