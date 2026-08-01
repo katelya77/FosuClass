@@ -8,6 +8,12 @@ const { normalizeWorkingMemory } = require("./workingMemory");
 
 const MAX_RETRIEVE = 5;
 
+function maxRetrieveOf(policy) {
+  const value = policy && Number(policy.maxRetrieve);
+  if (Number.isInteger(value) && value >= 1 && value <= 10) return value;
+  return MAX_RETRIEVE;
+}
+
 function tokensFromText(text) {
   return String(text || "")
     .toLowerCase()
@@ -18,7 +24,7 @@ function tokensFromText(text) {
 }
 
 function scoreMemory(item, query = {}) {
-  if (!item || isExpired(item)) return -1;
+  if (!item || isExpired(item, Date.now(), query.policy || null)) return -1;
   let score = 0;
   const key = String(item.key || "");
   const value = String(item.value == null ? "" : item.value);
@@ -61,11 +67,15 @@ function scoreMemory(item, query = {}) {
   return score;
 }
 
-function retrieveUserMemories(userMemories = [], query = {}, limit = MAX_RETRIEVE) {
-  const max = Math.min(MAX_RETRIEVE, Math.max(1, Number(limit) || MAX_RETRIEVE));
+function retrieveUserMemories(userMemories = [], query = {}, limit, policy = null) {
+  const cap = maxRetrieveOf(policy);
+  const max = Math.min(cap, Math.max(1, Number(limit) || cap));
   const list = Array.isArray(userMemories) ? userMemories : [];
+  // policy 同时决定条数上限与过期判定（scoreMemory 经 query.policy 读取）；
+  // 显式 query.policy 优先于第四参，保持调用方可精确覆盖。
+  const scopedQuery = query && query.policy ? query : Object.assign({}, query, { policy: policy || null });
   return list
-    .map((item) => ({ item, score: scoreMemory(item, query) }))
+    .map((item) => ({ item, score: scoreMemory(item, scopedQuery) }))
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, max)

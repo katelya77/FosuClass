@@ -655,7 +655,9 @@ function buildResponse(payload) {
       : null,
     verification: payload.verification && typeof payload.verification === "object"
       ? safetyGuard.sanitizeToolResult({
-        ok: payload.verification.ok !== false,
+        // Fail closed (P3 Low#6): only a strict boolean true counts as passed.
+        // Missing/null/"true"-string/malformed ok all surface as not verified.
+        ok: payload.verification.ok === true,
         evidenceComplete: payload.verification.evidenceComplete !== false,
         errors: Array.isArray(payload.verification.errors) ? payload.verification.errors.slice(0, 8) : [],
       })

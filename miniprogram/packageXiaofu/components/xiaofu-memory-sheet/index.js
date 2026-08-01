@@ -5,6 +5,10 @@ Component({
     preferences: { type: Array, value: [] },
     preferencesLoading: { type: Boolean, value: false },
     autoMemoryEnabled: { type: Boolean, value: true },
+    memoryPolicy: { type: Object, value: null },
+    memoryRevision: { type: Number, value: 0 },
+    episodes: { type: Array, value: [] },
+    operationPending: { type: Boolean, value: false },
   },
   data: {
     privacyExpanded: false,
@@ -41,14 +45,19 @@ Component({
       this.triggerEvent("clearall");
     },
     onDeletePreference(event) {
+      const memoryId = event.currentTarget.dataset.memoryId || "";
       const key = event.currentTarget.dataset.key || "";
-      if (key) this.triggerEvent("deletepreference", { key });
+      if (memoryId || key) this.triggerEvent("deletepreference", { memoryId, key });
     },
     onEditPreference(event) {
+      const memoryId = event.currentTarget.dataset.memoryId || "";
       const key = event.currentTarget.dataset.key || "";
       const value = event.currentTarget.dataset.value;
-      if (!key) return;
-      this.triggerEvent("editpreference", { key, value });
+      if (!memoryId && !key) return;
+      this.triggerEvent("editpreference", { memoryId, key, value });
+    },
+    onExportMemory() {
+      this.triggerEvent("exportmemory");
     },
   },
 });

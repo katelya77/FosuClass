@@ -1,0 +1,10 @@
+{
+  "name": "@xiaofu-agent/fosu-campus",
+  "version": "0.1.0",
+  "private": false,
+  "main": "index.js",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}

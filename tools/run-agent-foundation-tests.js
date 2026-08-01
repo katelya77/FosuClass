@@ -4,6 +4,14 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const tests = [
+  "tools/test-agent-platform-contracts.js",
+  "tools/test-agent-platform-capability-runtimes.js",
+  "tools/test-fosu-campus-plugin.js",
+  "tools/test-agent-runtime-lifecycle.js",
+  "tools/test-agent-platform-production-wiring.js",
+  "tools/test-agent-platform-http.js",
+  "tools/test-agent-platform-admin.js",
+  "tools/test-agent-generic-package-boundaries.js",
   "tools/test-capability-contract.js",
   "tools/test-xiaofu-action-bus.js",
   "tools/test-coze-tool-gateway.js",
@@ -47,6 +55,9 @@ for (const file of tests) {
     cwd: root,
     env: Object.assign({}, process.env, {
       AI_AGENT_ENABLED: "false",
+      // Foundation fixtures are deterministic and intentionally have no real
+      // Provider. P2 requires this fast path to be an explicit adaptive choice.
+      AI_EXECUTION_POLICY: "adaptive",
       AI_COMPETITION_ALLOW_ALL_SESSIONS: "true",
       // When suite inherits AI_RUNTIME_MODE=competition without active env, map to trial.
       AI_PROVIDER_ACTIVE_ENV: process.env.AI_PROVIDER_ACTIVE_ENV || "trial",

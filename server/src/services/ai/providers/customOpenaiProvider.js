@@ -22,11 +22,12 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
-  const timeout = Math.max(1000, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const configuredTimeout = Math.max(50, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = Math.max(128, Math.min(4096, Number(runtimeConfig.AI_MAX_TOKENS || 1200) || 1200));
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = entry.strictJsonMode && deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
@@ -62,6 +63,9 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   try {
     response = await axios.post(`${entry.baseUrl}/chat/completions`, body, {
       timeout,
+      signal: signal || undefined,
+      httpAgent: httpAgent || undefined,
+      httpsAgent: httpsAgent || undefined,
       headers: {
         Authorization: `Bearer ${entry.apiKey}`,
         "Content-Type": "application/json",
@@ -105,16 +109,19 @@ async function generateStructured(input = {}) {
   return openaiStructuredProvider.generateStructured({
     baseUrl: entry.baseUrl,
     apiKey: entry.apiKey,
-    model: String(
-      input.purpose === "understanding"
+    model: String(input.purpose === "decision"
+      ? runtimeConfig.AI_DECISION_MODEL || runtimeConfig.AI_UNDERSTANDING_MODEL || ""
+      : (input.purpose === "understanding"
         ? runtimeConfig.AI_UNDERSTANDING_MODEL || ""
-        : runtimeConfig.AI_PLANNER_MODEL || ""
-    ) || entry.model,
+        : runtimeConfig.AI_PLANNER_MODEL || "")) || entry.model,
     messages: input.messages,
     maxTokens: input.maxTokens || Math.max(128, Math.min(2000, Number(runtimeConfig.AI_STRUCTURED_MAX_TOKENS || 800) || 800)),
     timeoutMs: input.timeoutMs || Math.max(1000, Math.min(30000, Number(runtimeConfig.AI_STRUCTURED_TIMEOUT_MS || 8000) || 8000)),
     provider: "custom-openai",
     classifyError: classifyHttpError,
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
   });
 }
 
@@ -138,6 +145,9 @@ async function generateStructuredLoose(input, entry, runtimeConfig) {
       },
       {
         timeout: timeoutMs,
+        signal: input.signal || undefined,
+        httpAgent: input.httpAgent || undefined,
+        httpsAgent: input.httpsAgent || undefined,
         headers: { Authorization: `Bearer ${entry.apiKey}`, "Content-Type": "application/json" },
       }
     );

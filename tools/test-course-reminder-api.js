@@ -45,6 +45,8 @@ async function request(baseUrl, pathname, options = {}) {
 }
 
 async function run() {
+  const originalNow = defaultCourseReminderService.now;
+  defaultCourseReminderService.now = () => Date.parse("2026-07-22T04:00:00.000Z");
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   app.use("/api/ai", aiRouter);
@@ -210,7 +212,9 @@ async function run() {
         subscriptionStatus: "reject",
       }),
     });
-    assert.strictEqual(roomCreated.data.reminder.eventDriven, true);
+    assert.strictEqual(roomCreated.data.reminder.eventDriven, true, JSON.stringify(roomCreated.data));
+    assert.strictEqual(roomCreated.data.reminder.scope, "room_change", JSON.stringify(roomCreated.data));
+    assert.strictEqual(roomCreated.data.reminder.status, "enabled", JSON.stringify(roomCreated.data));
 
     // Pause the lead-30 all_courses reminder so dispatchDue only counts the room-change event.
     // Without this, its nextTriggerAt can also be due and inflate appOnlyDue (date-dependent flake).
@@ -253,7 +257,7 @@ async function run() {
     assert.strictEqual(eventResponse.status, 200);
     assert.strictEqual(eventResponse.data.changed, true);
     assert.strictEqual(eventResponse.data.roomChangeCount, 1);
-    assert.strictEqual(eventResponse.data.queued, 1);
+    assert.strictEqual(eventResponse.data.queued, 1, JSON.stringify(eventResponse.data));
     assert.strictEqual(eventResponse.data.delivery.appOnlyDue, 1);
 
     const inAppEvents = await request(baseUrl, "/api/ai/agent/reminders/in-app-events?envVersion=release", { headers });
@@ -297,6 +301,7 @@ async function run() {
 
     console.log("test-course-reminder-api: PASS");
   } finally {
+    defaultCourseReminderService.now = originalNow;
     await new Promise((resolve) => server.close(resolve));
   }
 }

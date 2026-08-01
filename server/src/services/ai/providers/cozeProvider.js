@@ -52,6 +52,33 @@ function expiredError() {
   return error;
 }
 
+function abortedError() {
+  const error = new Error("Coze request was cancelled.");
+  error.code = "ABORTED";
+  return error;
+}
+
+function abortableDelay(ms, signal = null) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) {
+      reject(abortedError());
+      return;
+    }
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      callback(value);
+    };
+    const onAbort = () => finish(reject, abortedError());
+    const timer = setTimeout(() => finish(resolve), Math.max(0, Number(ms) || 0));
+    if (typeof timer.unref === "function") timer.unref();
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function mapHttpError(error) {
   const status = Number(error && error.response && error.response.status || 0) || 0;
   const data = error && error.response && error.response.data || {};
@@ -422,6 +449,9 @@ async function generateWorkload(input, config, runtimeConfig) {
       buildWorkloadRequestBody(input, config, sessionId),
       {
         timeout: config.timeoutMs,
+        signal: input.signal || undefined,
+        httpAgent: input.httpAgent || undefined,
+        httpsAgent: input.httpsAgent || undefined,
         responseType: "stream",
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
@@ -433,15 +463,19 @@ async function generateWorkload(input, config, runtimeConfig) {
     const rawText = await readResponseText(response.data);
     return parseWorkloadStream(rawText);
   } catch (error) {
+    if (input.signal && input.signal.aborted) throw abortedError();
     if (error && ["COZE_RESPONSE_UNSUPPORTED", "response_too_large"].includes(error.code)) throw error;
     throw mapHttpError(error);
   }
 }
 
-async function retrieveChat(config, pollInfo) {
+async function retrieveChat(config, pollInfo, requestOptions = {}) {
   const endpoint = `/v3/chat/retrieve?chat_id=${encodeURIComponent(pollInfo.chatId)}${pollInfo.conversationId ? `&conversation_id=${encodeURIComponent(pollInfo.conversationId)}` : ""}`;
   const response = await axios.get(`${config.baseUrl}${endpoint}`, {
     timeout: config.timeoutMs,
+    signal: requestOptions.signal || undefined,
+    httpAgent: requestOptions.httpAgent || undefined,
+    httpsAgent: requestOptions.httpsAgent || undefined,
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
     },
@@ -449,10 +483,13 @@ async function retrieveChat(config, pollInfo) {
   return response.data;
 }
 
-async function listMessages(config, pollInfo) {
+async function listMessages(config, pollInfo, requestOptions = {}) {
   const endpoint = `/v3/chat/message/list?chat_id=${encodeURIComponent(pollInfo.chatId)}${pollInfo.conversationId ? `&conversation_id=${encodeURIComponent(pollInfo.conversationId)}` : ""}`;
   const response = await axios.get(`${config.baseUrl}${endpoint}`, {
     timeout: config.timeoutMs,
+    signal: requestOptions.signal || undefined,
+    httpAgent: requestOptions.httpAgent || undefined,
+    httpsAgent: requestOptions.httpsAgent || undefined,
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
     },
@@ -460,14 +497,15 @@ async function listMessages(config, pollInfo) {
   return response.data;
 }
 
-async function pollChatResult(config, pollInfo) {
+async function pollChatResult(config, pollInfo, requestOptions = {}) {
   if (!pollInfo.chatId) return "";
   for (let attempt = 0; attempt < config.pollMaxAttempts; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
+    await abortableDelay(config.pollIntervalMs, requestOptions.signal || null);
     let retrieveData;
     try {
-      retrieveData = await retrieveChat(config, pollInfo);
+      retrieveData = await retrieveChat(config, pollInfo, requestOptions);
     } catch (error) {
+      if (requestOptions.signal && requestOptions.signal.aborted) throw abortedError();
       throw mapHttpError(error);
     }
     const info = extractPollInfo(retrieveData);
@@ -479,7 +517,7 @@ async function pollChatResult(config, pollInfo) {
     }
     if (status === "completed" || status === "requires_action") {
       try {
-        const messageData = await listMessages(config, pollInfo);
+        const messageData = await listMessages(config, pollInfo, requestOptions);
         const fromList = extractAnswer(messageData) || pickMessageText(messageData && messageData.data);
         if (fromList) return fromList;
       } catch (error) {
@@ -499,7 +537,10 @@ async function pollChatResult(config, pollInfo) {
 
 async function generate(input = {}) {
   const runtimeConfig = input.providerRuntimeConfig || {};
-  const config = getConfig(runtimeConfig);
+  const baseConfig = getConfig(runtimeConfig);
+  const config = Object.assign({}, baseConfig, {
+    timeoutMs: Math.max(50, Math.min(baseConfig.timeoutMs, Number(input.timeoutMs || baseConfig.timeoutMs) || baseConfig.timeoutMs)),
+  });
   if (!config.enabled) throw notConfigured();
   if (isExpired(runtimeConfig)) throw expiredError();
   if (!isEnabled(runtimeConfig)) throw notConfigured();
@@ -522,6 +563,9 @@ async function generate(input = {}) {
       buildRequestBody(input, config, userId),
       {
         timeout: config.timeoutMs,
+        signal: input.signal || undefined,
+        httpAgent: input.httpAgent || undefined,
+        httpsAgent: input.httpsAgent || undefined,
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
           "Content-Type": "application/json",
@@ -529,6 +573,7 @@ async function generate(input = {}) {
       }
     );
   } catch (error) {
+    if (input.signal && input.signal.aborted) throw abortedError();
     throw mapHttpError(error);
   }
 
@@ -536,7 +581,7 @@ async function generate(input = {}) {
   const pollInfo = extractPollInfo(createResponse.data);
   const createStatus = String(pollInfo.status || "").toLowerCase();
   if (!answer && (createStatus === "in_progress" || createStatus === "created" || createStatus === "pending" || pollInfo.chatId)) {
-    answer = await pollChatResult(config, pollInfo);
+    answer = await pollChatResult(config, pollInfo, input);
   }
   if (!answer) throw unsupported();
 
@@ -632,6 +677,7 @@ async function testConnection(input = {}) {
 }
 
 module.exports = {
+  abortableDelay,
   buildPseudoUserId,
   buildSafeUserContent,
   buildWorkloadRequestBody,

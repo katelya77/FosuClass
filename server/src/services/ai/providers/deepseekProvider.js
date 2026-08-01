@@ -251,13 +251,19 @@ function wrapTextResponse(content, options = {}) {
 
 function classifyHttpError(error) {
   const code = String(error && error.code || "");
-  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
+  // P2R：只依据 code 枚举与数值状态分类，禁止 message 正则模糊匹配（旧实现
+  // /timeout|超时/i 会把消息文本里恰好含 "timeout" 的非超时错误误标为可重试，
+  // 导致 fallbackEligibility 数值状态表被架空）。
+  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code)) {
     return "provider_timeout";
   }
+  // 只有真实 400 才按响应体细分 fail-fast 业务码（invalid_model/invalid_payload）；
+  // 其余 4xx（axios 统一给 ERR_BAD_REQUEST）原样透传，由 fallbackEligibility
+  // 用数值状态表归一为 auth / not_found / rate_limited 等精确类别。
   const status = Number(error && error.response && error.response.status);
   const body = error && error.response && error.response.data;
   const text = JSON.stringify(body || {}).toLowerCase();
-  if (status === 400 || code === "ERR_BAD_REQUEST") {
+  if (status === 400) {
     if (/model/.test(text)) return "invalid_model";
     if (/response_format|payload|json|schema|thinking|reasoning/.test(text)) return "invalid_payload";
     return "provider_bad_request";
@@ -265,7 +271,7 @@ function classifyHttpError(error) {
   return code || "PROVIDER_REQUEST_FAILED";
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const apiKey = firstConfiguredKey(runtimeConfig);
   if (!apiKey) {
@@ -278,7 +284,8 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const reasoningModel = configuredEnv("AI_REASONING_MODEL", DEFAULT_REASONING_MODEL, runtimeConfig);
   const thinkingEnabled = boolEnv("AI_THINKING_ENABLED", false, runtimeConfig);
   const model = thinkingEnabled && /pro/i.test(requestedModel) ? requestedModel : requestedModel || reasoningModel;
-  const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
+  const configuredTimeout = numberEnv("AI_TIMEOUT_MS", 15000, 50, 60000, runtimeConfig);
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = numberEnv("AI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
   const conversational = isProjectQaIntent(intent);
   const defaultTemperature = conversational ? 0.7 : 0.1;
@@ -322,6 +329,9 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   try {
     response = await axios.post(`${baseUrl}/chat/completions`, body, {
       timeout,
+      signal: signal || undefined,
+      httpAgent: httpAgent || undefined,
+      httpsAgent: httpsAgent || undefined,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -376,16 +386,21 @@ async function generateStructured(input = {}) {
   return openaiStructuredProvider.generateStructured({
     baseUrl: configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig),
     apiKey,
-    model: configuredEnv(
-      input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
-      configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig),
-      runtimeConfig
-    ),
+    model: input.purpose === "decision"
+      ? configuredEnv("AI_DECISION_MODEL", configuredEnv("AI_UNDERSTANDING_MODEL", configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig), runtimeConfig), runtimeConfig)
+      : configuredEnv(
+        input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
+        configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig),
+        runtimeConfig
+      ),
     messages: input.messages,
     maxTokens: input.maxTokens || numberEnv("AI_STRUCTURED_MAX_TOKENS", 800, 128, 2000, runtimeConfig),
     timeoutMs: input.timeoutMs || numberEnv("AI_STRUCTURED_TIMEOUT_MS", 8000, 1000, 30000, runtimeConfig),
     provider: "deepseek",
     classifyError: classifyHttpError,
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
   });
 }
 

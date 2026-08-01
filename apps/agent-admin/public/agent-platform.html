@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 控制面</title>
+<script src="runtime-config.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --page-bg: #f4f2ed;
+    --surface: #fbfaf7;
+    --surface-raised: #fffefa;
+    --surface-muted: #eeece6;
+    --border: #d9d5cc;
+    --border-strong: #b8b2a7;
+    --text-primary: #181b20;
+    --text-secondary: #4b515b;
+    --text-muted: #626a75;
+    --primary: #3158c7;
+    --primary-hover: #2447a9;
+    --primary-soft: #e7ecfb;
+    --on-primary: #ffffff;
+    --success: #14795a;
+    --success-soft: #e5f3ed;
+    --warning: #9a5d08;
+    --warning-soft: #f8edd9;
+    --danger: #b42318;
+    --danger-soft: #f8e6e3;
+    --shadow: 0 1px 2px rgba(31, 28, 23, 0.06);
+    --shadow-lg: 0 18px 42px rgba(31, 28, 23, 0.16);
+    --code-bg: #f0eee8;
+    --table-hover: #f0f3fb;
+    --focus-ring: rgba(49, 88, 199, 0.3);
+    --radius: 9px;
+    --font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
+    --transition: color 180ms cubic-bezier(0.4, 0, 0.2, 1), background-color 180ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-family); background: var(--page-bg); color: var(--text-primary); line-height: 1.5; }
+  ::selection { background: var(--primary-soft); color: var(--text-primary); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--surface-muted); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border: 2px solid var(--surface-muted); border-radius: 999px; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .icon { width: 15px; height: 15px; flex: none; }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--surface-raised); border-bottom: 1px solid var(--border); padding: 0 20px; min-height: 57px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+  .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
+  .brand-mark svg { width: 17px; height: 17px; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .nav-link { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13px; text-decoration: none; padding: 5px 9px; border-radius: 7px; transition: var(--transition); }
+  .nav-link:hover { color: var(--primary); background: var(--primary-soft); }
+  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; }
+  .env-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+  .env-label .icon { color: var(--text-muted); }
+
+  main { padding: 18px 20px 28px; max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) { main { padding: 14px 12px 24px; } header { padding: 0 12px; } }
+
+  section { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 18px; }
+  h2 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .h2-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 7px; background: var(--surface-muted); color: var(--text-secondary); }
+  .h2-icon svg { width: 14px; height: 14px; }
+  .section-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; letter-spacing: 0.01em; }
+
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; padding: 4px; background: var(--surface-muted); border-radius: 10px; }
+  .tabs button { border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--text-secondary); letter-spacing: 0.02em; transition: var(--transition); }
+  .tabs button:hover { color: var(--primary); background: var(--surface-raised); }
+  .tabs button[aria-selected="true"] { background: var(--surface-raised); color: var(--primary); border-color: var(--border); box-shadow: var(--shadow); font-weight: 600; }
+
+  .btn-row { margin: 10px 0 12px; display: flex; flex-wrap: wrap; gap: 2px 0; }
+  button.action { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--surface-raised); color: var(--text-primary); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: var(--font-family); letter-spacing: 0.02em; margin: 2px 6px 2px 0; transition: var(--transition); }
+  button.action:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+  button.action.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  button.action.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  button.action.danger { border-color: var(--danger); color: var(--danger); }
+  button.action.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+  button.action:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  textarea { width: 100%; min-height: 260px; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; background: var(--code-bg); color: var(--text-primary); transition: var(--transition); resize: vertical; }
+  textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); background: var(--surface-raised); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  tbody tr:last-child td { border-bottom: none; }
+  th { background: var(--surface-muted); color: var(--text-secondary); font-weight: 600; font-size: 12px; letter-spacing: 0.02em; border-bottom: 1px solid var(--border-strong); }
+  td { font-variant-numeric: tabular-nums; }
+  tbody tr { transition: var(--transition); }
+  tbody tr:hover { background: var(--table-hover); }
+  .run-row { cursor: pointer; }
+
+  .muted { color: var(--text-muted); font-size: 12.5px; }
+  #editorHint { margin-top: 8px; }
+  .status-line { font-size: 13px; margin: 6px 0 10px; color: var(--text-secondary); }
+  .status-line b { color: var(--text-primary); font-weight: 600; }
+  .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; background: var(--primary-soft); color: var(--primary); margin-right: 4px; }
+  .pill.ok { background: var(--success-soft); color: var(--success); }
+  .pill.bad { background: var(--danger-soft); color: var(--danger); }
+
+  #toast { position: fixed; right: 18px; bottom: 18px; max-width: 420px; padding: 11px 16px; border-radius: var(--radius); color: #fff; font-size: 13px; display: none; z-index: 10; box-shadow: var(--shadow-lg); animation: toast-in 180ms cubic-bezier(0.4, 0, 0.2, 1); }
+  #toast.success { background: var(--success); }
+  #toast.error { background: var(--danger); }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  pre.details { background: var(--code-bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; font-size: 11px; font-family: var(--font-mono); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  select, input[type="text"] { border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; font-size: 13px; background: var(--surface-raised); color: var(--text-primary); font-family: var(--font-family); transition: var(--transition); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg></span>
+    <h1>Agent 控制面</h1>
+  </div>
+  <a href="/admin/dashboard" id="dashboardLink" class="nav-link"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>返回后台</a>
+  <div class="header-actions">
+    <label class="env-label" for="envSelect"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14.5 14.5 0 0 0 0 18 14.5 14.5 0 0 0 0-18"/></svg>环境
+      <select id="envSelect">
+        <option value="public">public（正式）</option>
+        <option value="trial">trial（体验）</option>
+        <option value="dev" selected>dev（开发）</option>
+      </select>
+    </label>
+    <button class="action" id="btnRefresh" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>刷新</button>
+  </div>
+</header>
+<main>
+  <div>
+    <section id="configSection" aria-labelledby="h2-config">
+      <h2 id="h2-config"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 8.5 4.5L12 11 3.5 6.5 12 2z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/></svg></span>配置域发布链</h2>
+      <p class="section-desc">草稿 → 校验 → 测试 → 发布；每一步都可追溯，发现问题可回滚到任一历史版本。</p>
+      <div class="status-line" id="configStatus">加载中…</div>
+      <div class="tabs" id="domainTabs" role="tablist"></div>
+      <div class="status-line" id="domainStatus"></div>
+      <div class="btn-row">
+        <button class="action" id="btnLoadPublished" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>载入已发布版本</button>
+        <button class="action" id="btnLoadDraft" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>载入草稿</button>
+        <button class="action" id="btnSaveDraft" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>保存草稿</button>
+        <button class="action" id="btnValidate" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>校验</button>
+        <button class="action" id="btnTest" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.53a2 2 0 0 1-.21.89L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.07-10.13a2 2 0 0 1-.21-.89V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>测试</button>
+        <button class="action primary" id="btnPublish" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>发布</button>
+      </div>
+      <textarea id="draftEditor" spellcheck="false" placeholder="{}" aria-label="配置草稿 JSON 编辑器" aria-describedby="editorHint"></textarea>
+      <div class="muted" id="editorHint">草稿内容不会进入生产；发布只接受通过校验与测试的同一份草稿。</div>
+    </section>
+    <section aria-labelledby="h2-versions">
+      <h2 id="h2-versions"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3.5 2"/></svg></span>版本历史</h2>
+      <p class="section-desc">不可变版本记录；回滚会生成新的 configVersion，仅影响新 Run。</p>
+      <div id="versionHistory"><span class="muted">加载中…</span></div>
+    </section>
+    <section aria-labelledby="h2-audit">
+      <h2 id="h2-audit"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>内核审计</h2>
+      <p class="section-desc">配置面全部写操作的审计流水（已脱敏）。</p>
+      <div id="auditList"><span class="muted">加载中…</span></div>
+    </section>
+  </div>
+  <div>
+    <section aria-labelledby="h2-runs">
+      <h2 id="h2-runs"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>最近 Run</h2>
+      <p class="section-desc">最近运行的决策链；点击任意一行查看完整 Trace。</p>
+      <div id="runList"><span class="muted">加载中…</span></div>
+    </section>
+    <section aria-labelledby="h2-trace">
+      <h2 id="h2-trace"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>Run Trace 详情</h2>
+      <p class="section-desc">阶段归属、耗时与脱敏后的验证细节。</p>
+      <div id="runDetail"><span class="muted">未选择 Run。</span></div>
+    </section>
+  </div>
+</main>
+<div id="toast" role="status"></div>
+<script>
+(function () {
+  "use strict";
+
+  // 部署方运行时配置由服务端 runtime-config.js 注入（品牌/CSRF 头名/路由前缀）。
+  // 本文件是通用静态资产，只保留通用默认值兜底；真实部署必须经注入覆盖成真实值。
+  var injected = window.AGENT_ADMIN_RUNTIME_CONFIG || {};
+  var runtimeConfig = {
+    brand: typeof injected.brand === "string" && injected.brand ? injected.brand : "Agent Admin",
+    csrfHeader: typeof injected.csrfHeader === "string" && injected.csrfHeader ? injected.csrfHeader : "X-CSRF-Token",
+    loginPath: typeof injected.loginPath === "string" && injected.loginPath ? injected.loginPath : "/admin/login",
+    sessionPath: typeof injected.sessionPath === "string" && injected.sessionPath ? injected.sessionPath : "/api/admin/session",
+    dashboardPath: typeof injected.dashboardPath === "string" && injected.dashboardPath ? injected.dashboardPath : "/admin/dashboard",
+    apiBase: typeof injected.apiBase === "string" && injected.apiBase ? injected.apiBase : "/api/admin/agent-platform"
+  };
+
+  var state = {
+    env: "dev",
+    domains: [],
+    activeDomain: "",
+    artifactIds: {},
+    publishedVersions: {},
+    csrfToken: "",
+    selectedRunId: ""
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  var toastTimer = null;
+  function scheduleToastHide(delay) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { $("toast").style.display = "none"; }, delay);
+  }
+
+  function showToast(message, kind) {
+    var toast = $("toast");
+    toast.textContent = message;
+    toast.className = kind === "error" ? "error" : "success";
+    toast.style.display = "block";
+    scheduleToastHide(4200);
+    // WCAG 2.2.1：自动消失的提示在悬停时暂停计时，移开后给予充足剩余时间。
+    toast.onmouseenter = function () { if (toastTimer) clearTimeout(toastTimer); };
+    toast.onmouseleave = function () { scheduleToastHide(2400); };
+  }
+
+  function redirectToLogin() {
+    window.location.href = runtimeConfig.loginPath + "?next=" + encodeURIComponent(window.location.pathname);
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    options.credentials = "same-origin";
+    if (options.method && options.method !== "GET") {
+      options.headers["Content-Type"] = "application/json";
+      if (state.csrfToken) options.headers[runtimeConfig.csrfHeader] = state.csrfToken;
+    }
+    return fetch(path, options).then(function (res) {
+      if (res.status === 401) { redirectToLogin(); throw new Error("未登录或会话已过期"); }
+      return res.json().then(function (body) {
+        if (!res.ok || (body && body.success === false)) {
+          var error = new Error((body && (body.message || body.code)) || ("HTTP " + res.status));
+          error.code = body && body.code;
+          error.status = res.status;
+          throw error;
+        }
+        return body;
+      });
+    });
+  }
+
+  function esc(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function fmtTime(value) {
+    if (!value) return "-";
+    var date = new Date(value);
+    return isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN", { hour12: false });
+  }
+
+  function basePath() { return runtimeConfig.apiBase; }
+  function configQuery() { return "?env=" + encodeURIComponent(state.env); }
+  function domainQuery() {
+    return configQuery() + "&domain=" + encodeURIComponent(state.activeDomain)
+      + "&artifactId=" + encodeURIComponent(state.artifactIds[state.activeDomain] || "");
+  }
+  function writeBody(extra) {
+    return JSON.stringify(Object.assign({
+      environment: state.env,
+      domain: state.activeDomain,
+      artifactId: state.artifactIds[state.activeDomain] || ""
+    }, extra || {}));
+  }
+
+  function renderDomains(payload) {
+    state.domains = payload.domains || [];
+    state.artifactIds = {};
+    state.publishedVersions = {};
+    state.domains.forEach(function (domain) {
+      var artifacts = domain.artifacts || [];
+      if (artifacts.length) {
+        state.artifactIds[domain.domain] = artifacts[0].artifactId;
+        state.publishedVersions[domain.domain] = artifacts[0].publishedVersion;
+      }
+    });
+    if (!state.activeDomain || !state.artifactIds[state.activeDomain]) {
+      state.activeDomain = state.domains.length ? state.domains[0].domain : "";
+    }
+    $("configStatus").innerHTML = "环境 <b>" + esc(payload.environment) + "</b> · configVersion <b>"
+      + esc(payload.configVersion || "（未初始化）") + "</b> · 快照数 " + esc(payload.snapshotCount)
+      + " · LKG " + (payload.lkgAvailable ? "可用" : "不可用");
+    var tabs = $("domainTabs");
+    tabs.innerHTML = "";
+    state.domains.forEach(function (domain) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("data-domain-tab", domain.domain);
+      btn.setAttribute("aria-selected", domain.domain === state.activeDomain ? "true" : "false");
+      btn.textContent = domain.domain + " (v" + (state.publishedVersions[domain.domain] || 0) + ")";
+      btn.addEventListener("click", function () { switchDomain(domain.domain); });
+      tabs.appendChild(btn);
+    });
+    renderDomainStatus();
+  }
+
+  function renderDomainStatus(draftInfo) {
+    var domain = state.activeDomain;
+    if (!domain) { $("domainStatus").textContent = "该环境暂无已发布配置域。"; return; }
+    var parts = ["当前域 <b>" + esc(domain) + "</b> · artifact <b>" + esc(state.artifactIds[domain] || "-") + "</b>"
+      + " · 已发布 v" + esc(state.publishedVersions[domain] || 0)];
+    if (draftInfo && draftInfo.draft) {
+      var draft = draftInfo.draft;
+      parts.push("草稿：base v" + esc(draft.baseVersion)
+        + " · 校验 " + pillOf(draft.validation && draft.validation.ok)
+        + " · 测试 " + pillOf(draft.test && draft.test.ok));
+    } else if (draftInfo) {
+      parts.push("草稿：无");
+    }
+    $("domainStatus").innerHTML = parts.join(" · ");
+  }
+
+  function pillOf(ok) {
+    if (ok === true) return '<span class="pill ok">通过</span>';
+    if (ok === false) return '<span class="pill bad">未通过</span>';
+    return '<span class="pill">未执行</span>';
+  }
+
+  function switchDomain(domain) {
+    state.activeDomain = domain;
+    Array.prototype.forEach.call(document.querySelectorAll("[data-domain-tab]"), function (btn) {
+      btn.setAttribute("aria-selected", btn.getAttribute("data-domain-tab") === domain ? "true" : "false");
+    });
+    renderDomainStatus();
+    loadDraft(true);
+    loadVersions();
+  }
+
+  function loadDomains() {
+    return api(basePath() + "/config/domains" + configQuery()).then(function (payload) {
+      renderDomains(payload);
+    }).catch(function (error) { showToast("加载配置域失败：" + error.message, "error"); });
+  }
+
+  function loadDraft(silent) {
+    if (!state.activeDomain) return Promise.resolve();
+    return api(basePath() + "/config/draft" + domainQuery()).then(function (payload) {
+      renderDomainStatus(payload);
+      if (payload.draft) {
+        $("draftEditor").value = JSON.stringify(payload.draft.payload || {}, null, 2);
+        if (!silent) showToast("已载入草稿。", "success");
+        return true;
+      }
+      return false;
+    }).catch(function (error) {
+      if (!silent) showToast("载入草稿失败：" + error.message, "error");
+      return false;
+    });
+  }
+
+  function loadPublished() {
+    if (!state.activeDomain) return;
+    var version = state.publishedVersions[state.activeDomain];
+    if (!version) { showToast("该域尚未发布。", "error"); return; }
+    api(basePath() + "/config/artifact" + domainQuery() + "&version=" + encodeURIComponent(version))
+      .then(function (payload) {
+        $("draftEditor").value = JSON.stringify(payload.artifact.payload || {}, null, 2);
+        showToast("已载入已发布 v" + version + " 内容（保存为草稿后才会进入发布链）。", "success");
+      })
+      .catch(function (error) { showToast("载入已发布版本失败：" + error.message, "error"); });
+  }
+
+  function parseEditor() {
+    var text = $("draftEditor").value.trim() || "{}";
+    return JSON.parse(text);
+  }
+
+  function saveDraft() {
+    // "[REDACTED]" 是显示方向的脱敏占位符；回存会静默覆盖真实密钥，保存前阻断。
+    if ($("draftEditor").value.indexOf("[REDACTED]") >= 0) {
+      var redactedError = new Error("draft contains the redaction placeholder [REDACTED]");
+      showToast("草稿中包含脱敏占位符 [REDACTED]，请重新输入真实值后再保存。", "error");
+      return Promise.reject(redactedError);
+    }
+    var payload;
+    try { payload = parseEditor(); } catch (error) { showToast("草稿 JSON 解析失败：" + error.message, "error"); return Promise.reject(error); }
+    return api(basePath() + "/config/draft", { method: "PUT", body: writeBody({ payload: payload }) })
+      .then(function (result) {
+        renderDomainStatus({ draft: result.draft });
+        showToast("草稿已保存（base v" + result.draft.baseVersion + "）。", "success");
+      })
+      .catch(function (error) { showToast("保存草稿失败：" + error.message, "error"); throw error; });
+  }
+
+  function validateDraft() {
+    return api(basePath() + "/config/validate", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        var v = result.validation || {};
+        showToast(v.ok ? "校验通过。" : "校验未通过：" + (v.errors || []).join("；"), v.ok ? "success" : "error");
+        return v.ok === true;
+      })
+      .catch(function (error) { showToast("校验失败：" + error.message, "error"); throw error; });
+  }
+
+  function testDraft() {
+    return api(basePath() + "/config/test", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        var t = result.test || {};
+        showToast(t.ok ? "测试通过。" : "测试未通过：" + JSON.stringify(t.results || {}), t.ok ? "success" : "error");
+        return t.ok === true;
+      })
+      .catch(function (error) { showToast("测试失败：" + error.message, "error"); throw error; });
+  }
+
+  function publishDraft() {
+    if (!window.confirm("确认发布 " + state.env + " / " + state.activeDomain + " 的当前草稿？发布会生成新的不可变 configVersion，仅影响新 Run。")) return;
+    api(basePath() + "/config/publish", { method: "POST", body: writeBody() })
+      .then(function (result) {
+        showToast("已发布 v" + result.published.version + "（" + result.published.configVersion + "）。", "success");
+        refreshAll();
+      })
+      .catch(function (error) { showToast("发布失败：" + error.message, "error"); });
+  }
+
+  function loadVersions() {
+    if (!state.activeDomain) return;
+    api(basePath() + "/config/versions" + domainQuery()).then(function (payload) {
+      var rows = (payload.versions || []).slice().reverse().map(function (item) {
+        return "<tr><td>v" + esc(item.version) + (item.current ? ' <span class="pill ok">当前</span>' : "") + "</td><td>"
+          + esc(item.origin) + "</td><td>" + esc(item.createdBy) + "</td><td>" + esc(fmtTime(item.createdAt)) + "</td><td>"
+          + (item.current ? "" : '<button class="action danger" type="button" data-rollback-version="' + esc(item.version) + '">回滚到此版本</button>')
+          + "</td></tr>";
+      });
+      $("versionHistory").innerHTML = rows.length
+        ? "<table><thead><tr><th>版本</th><th>来源</th><th>操作者</th><th>时间</th><th></th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无版本。</span>';
+      Array.prototype.forEach.call(document.querySelectorAll("[data-rollback-version]"), function (btn) {
+        btn.addEventListener("click", function () { rollbackTo(Number(btn.getAttribute("data-rollback-version"))); });
+      });
+    }).catch(function (error) { showToast("加载版本历史失败：" + error.message, "error"); });
+  }
+
+  function rollbackTo(version) {
+    if (!window.confirm("确认把 " + state.env + " / " + state.activeDomain + " 回滚到已发布 v" + version + "？回滚同样生成新 configVersion，仅影响新 Run。")) return;
+    api(basePath() + "/config/rollback", { method: "POST", body: writeBody({ toVersion: version }) })
+      .then(function (result) {
+        showToast("已回滚到 v" + result.rolledBack.version + "（" + result.rolledBack.configVersion + "）。", "success");
+        refreshAll();
+      })
+      .catch(function (error) { showToast("回滚失败：" + error.message, "error"); });
+  }
+
+  function loadAudit() {
+    api(basePath() + "/config/audit" + configQuery() + "&limit=50").then(function (payload) {
+      var rows = (payload.entries || []).map(function (entry) {
+        return "<tr><td>" + esc(fmtTime(entry.at)) + "</td><td>" + esc(entry.op) + "</td><td>"
+          + esc(entry.domain || "") + (entry.artifactId ? ":" + esc(entry.artifactId) : "") + "</td><td>"
+          + esc(entry.version || "") + "</td><td>" + esc(entry.actor || "") + "</td><td>"
+          + esc(entry.result || "") + (entry.reasonCode ? " (" + esc(entry.reasonCode) + ")" : "") + "</td></tr>";
+      });
+      $("auditList").innerHTML = rows.length
+        ? "<table><thead><tr><th>时间</th><th>操作</th><th>对象</th><th>版本</th><th>操作者</th><th>结果</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无审计记录。</span>';
+    }).catch(function (error) { showToast("加载审计失败：" + error.message, "error"); });
+  }
+
+  function loadRuns() {
+    api(basePath() + "/runs?limit=30").then(function (payload) {
+      var rows = (payload.runs || []).map(function (trace) {
+        var stages = Array.isArray(trace.stages) ? trace.stages : [];
+        var last = stages.length ? stages[stages.length - 1] : {};
+        return '<tr class="run-row" data-run-id="' + esc(trace.runId) + '"><td>' + esc(String(trace.runId || "").slice(0, 18)) + "…</td><td>"
+          + esc(trace.configVersion || "") + "</td><td>" + esc(last.outcome || "-") + "</td><td>"
+          + esc(trace.timings && trace.timings.total != null ? trace.timings.total : "-") + " ms</td></tr>";
+      });
+      $("runList").innerHTML = rows.length
+        ? "<table><thead><tr><th>runId</th><th>configVersion</th><th>末阶段结果</th><th>总耗时</th></tr></thead><tbody>" + rows.join("") + "</tbody></table>"
+        : '<span class="muted">暂无 Run。</span>';
+      Array.prototype.forEach.call(document.querySelectorAll("[data-run-id]"), function (row) {
+        row.addEventListener("click", function () { loadRunDetail(row.getAttribute("data-run-id")); });
+      });
+    }).catch(function (error) { showToast("加载 Run 列表失败：" + error.message, "error"); });
+  }
+
+  function loadRunDetail(runId) {
+    state.selectedRunId = runId;
+    api(basePath() + "/runs/" + encodeURIComponent(runId)).then(function (payload) {
+      var trace = payload.trace || {};
+      var timings = trace.timings || {};
+      var stageRows = (trace.stages || []).map(function (stage) {
+        return "<tr><td>" + esc(stage.stage) + "</td><td>" + esc(stage.owner) + "</td><td>" + esc(stage.outcome)
+          + "</td><td>" + esc(stage.durationMs) + " ms</td></tr>";
+      });
+      var detailBlocks = (trace.stages || []).map(function (stage) {
+        var details = stage.details || {};
+        if (!Object.keys(details).length) return "";
+        return "<h3 style='font-size:12px;margin:8px 0 4px'>" + esc(stage.stage) + " details</h3><pre class='details'>"
+          + esc(JSON.stringify(details, null, 2)) + "</pre>";
+      }).join("");
+      $("runDetail").innerHTML = "<div class='status-line'>runId <b>" + esc(trace.runId) + "</b> · configVersion <b>"
+        + esc(trace.configVersion) + "</b> · runtime <b>" + esc(trace.runtimePackage) + "</b></div>"
+        + "<div class='status-line'>阶段耗时：createRun " + esc(timings.createRun) + " / decision " + esc(timings.decision)
+        + " / tool " + esc(timings.tool) + " / verification " + esc(timings.verification) + " / response "
+        + esc(timings.response) + " / total " + esc(timings.total) + " ms</div>"
+        + "<table><thead><tr><th>阶段</th><th>归属</th><th>结果</th><th>耗时</th></tr></thead><tbody>" + stageRows.join("") + "</tbody></table>"
+        + detailBlocks;
+    }).catch(function (error) { showToast("加载 Run Trace 失败：" + error.message, "error"); });
+  }
+
+  function refreshAll() {
+    loadDomains().then(function () {
+      loadDraft(true);
+      loadVersions();
+      loadAudit();
+      loadRuns();
+    });
+  }
+
+  function bootstrap() {
+    document.title = "Agent 控制面 · " + runtimeConfig.brand;
+    $("dashboardLink").setAttribute("href", runtimeConfig.dashboardPath);
+    api(runtimeConfig.sessionPath).then(function (session) {
+      if (!session.authenticated) { redirectToLogin(); return; }
+      state.csrfToken = session.csrfToken || "";
+      $("envSelect").addEventListener("change", function () {
+        state.env = $("envSelect").value;
+        state.activeDomain = "";
+        refreshAll();
+      });
+      $("btnRefresh").addEventListener("click", refreshAll);
+      $("btnLoadPublished").addEventListener("click", loadPublished);
+      $("btnLoadDraft").addEventListener("click", function () { loadDraft(false); });
+      $("btnSaveDraft").addEventListener("click", function () { saveDraft(); });
+      $("btnValidate").addEventListener("click", function () { validateDraft(); });
+      $("btnTest").addEventListener("click", function () { testDraft(); });
+      $("btnPublish").addEventListener("click", publishDraft);
+      refreshAll();
+    }).catch(function () { redirectToLogin(); });
+  }
+
+  bootstrap();
+})();
+</script>
+</body>
+</html>

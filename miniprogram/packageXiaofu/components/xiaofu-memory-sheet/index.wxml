@@ -52,6 +52,10 @@
       </view>
       <view class="memory-mode-check {{autoMemoryEnabled ? 'on' : ''}}"></view>
     </view>
+    <view class="memory-policy-status">
+      <text>{{autoMemoryEnabled ? '自动记忆已启用' : '自动记忆已暂停'}}</text>
+      <text wx:if="{{memoryRevision}}"> · 配置版本 {{memoryRevision}}</text>
+    </view>
 
     <view class="memory-preference-section">
       <view class="memory-section-head">
@@ -74,13 +78,27 @@
             <button
               class="memory-preference-edit"
               wx:if="{{item.editable !== false}}"
+              data-memory-id="{{item.memoryId}}"
               data-key="{{item.key}}"
               data-value="{{item.value}}"
               bindtap="onEditPreference"
               aria-label="修改这项记忆"
             >修改</button>
-            <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">遗忘</button>
+            <button class="memory-preference-delete" data-memory-id="{{item.memoryId}}" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">遗忘</button>
           </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="memory-episode-section" wx:if="{{episodes.length}}">
+      <view class="memory-section-head">
+        <view class="memory-section-title">最近完成的任务</view>
+        <view class="memory-section-meta">仅保留经核验的简短结果</view>
+      </view>
+      <view class="memory-episode-list">
+        <view class="memory-episode-item" wx:for="{{episodes}}" wx:key="episodeId">
+          <view class="memory-episode-goal">{{item.goal || '已完成任务'}}</view>
+          <view class="memory-episode-summary">{{item.summary}}</view>
         </view>
       </view>
     </view>
@@ -95,6 +113,7 @@
     </view>
 
     <view class="memory-actions memory-actions-stack">
+      <button class="memory-action" bindtap="onExportMemory" disabled="{{operationPending}}">导出我的记忆</button>
       <button class="memory-action" bindtap="onClearLocal">清空本机消息</button>
       <button class="memory-action" bindtap="onClearCurrent">清除当前会话状态</button>
       <button class="memory-action danger text-danger" bindtap="onClearAll">清除全部云端记忆</button>

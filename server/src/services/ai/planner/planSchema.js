@@ -29,6 +29,29 @@ const STOP_CONDITIONS = Object.freeze([
   "budget_exhausted",
 ]);
 
+// Low-cardinality provenance of the resolved plan. `model_skeleton` means the
+// model Decision plan.steps skeleton genuinely constrained step selection/order;
+// the deterministic_* values record which deterministic path produced the plan.
+const PLAN_SOURCES = Object.freeze([
+  "model_skeleton",
+  "deterministic",
+  "deterministic_fallback",
+  "deterministic_adaptive",
+  "deterministic_public",
+]);
+
+// Enum-only rewrite/rejection reasons for planAdjustments (no free text).
+const ADJUSTMENT_REASON_CODES = Object.freeze([
+  "MODEL_STEP_SKILL_UNKNOWN",
+  "MODEL_STEP_TOOL_FILTERED",
+  "MODEL_STEP_TRUNCATED",
+  "MODEL_SKELETON_EMPTY",
+  "MODEL_SKELETON_BYPASSED",
+  "PLANNER_SOFT_FALLBACK",
+]);
+
+const MAX_PLAN_ADJUSTMENTS = 8;
+
 const MAX_STEPS = 6;
 const MAX_REPLAN = 2;
 
@@ -85,6 +108,25 @@ function normalizeClarification(value) {
   };
 }
 
+function normalizePlanSource(raw = {}) {
+  const explicit = String(raw.planSource || "");
+  if (PLAN_SOURCES.includes(explicit)) return explicit;
+  const plannerType = String(raw.plannerType || "");
+  if (plannerType === "model" || plannerType === "model_replan") return "model_skeleton";
+  if (plannerType === "deterministic_fallback") return "deterministic_fallback";
+  return "deterministic";
+}
+
+function normalizePlanAdjustments(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({
+    stepId: safeText(item && item.stepId, 40),
+    reasonCode: ADJUSTMENT_REASON_CODES.includes(String(item && item.reasonCode || ""))
+      ? String(item.reasonCode)
+      : "",
+  })).filter((item) => item.reasonCode).slice(0, MAX_PLAN_ADJUSTMENTS);
+}
+
 function normalizePlan(raw = {}) {
   const steps = Array.isArray(raw.steps) ? raw.steps.map(normalizeStep).filter((s) => s.toolName) : [];
   const clarification = normalizeClarification(raw.clarification);
@@ -102,16 +144,23 @@ function normalizePlan(raw = {}) {
       : (needsClarification ? "clarification_needed" : "all_steps_done"),
     replanCount: Math.max(0, Math.min(MAX_REPLAN, Number(raw.replanCount) || 0)),
     plannerType: safeText(raw.plannerType || "deterministic", 32) || "deterministic",
+    planSource: normalizePlanSource(raw),
+    planAdjustments: normalizePlanAdjustments(raw.planAdjustments),
   };
 }
 
 module.exports = {
+  ADJUSTMENT_REASON_CODES,
+  MAX_PLAN_ADJUSTMENTS,
   MAX_REPLAN,
   MAX_STEPS,
+  PLAN_SOURCES,
   REASON_CODES,
   STOP_CONDITIONS,
   emptyPlan,
   normalizeClarification,
   normalizePlan,
+  normalizePlanAdjustments,
+  normalizePlanSource,
   normalizeStep,
 };

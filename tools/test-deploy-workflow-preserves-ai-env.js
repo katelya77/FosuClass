@@ -58,6 +58,15 @@ const requiredSecretsBlock = workflow.slice(
   assert(requiredSecretsBlock.includes(needle), `required secrets must include ${needle}`);
 });
 
+// Sanitization and ERR-trap diagnostics moved from inline workflow blocks to
+// server/scripts/deploy-guard.sh (workflow expression-length contract). The
+// invariant is that the deploy chain still redacts secrets and diagnoses
+// failures, so assert both the guard implementation and its wiring.
+const deployGuard = fs.readFileSync(path.join(ROOT, "server", "scripts", "deploy-guard.sh"), "utf8");
+const sanitizeBlock = deployGuard.slice(
+  deployGuard.indexOf("__sanitize() {"),
+  deployGuard.indexOf('case "$ACTION"')
+);
 [
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
@@ -66,10 +75,14 @@ const requiredSecretsBlock = workflow.slice(
   "Authorization: Bearer",
   "token|password|secret|key",
 ].forEach((needle) => {
-  const sanitizeBlock = workflow.slice(workflow.indexOf("sanitize()"), workflow.indexOf("on_error()"));
   assert(sanitizeBlock.includes(needle), `sanitize should cover ${needle}`);
 });
+assert(workflow.includes('bash "$GUARD" sanitize'),
+  "workflow must pipe sensitive deploy output through deploy-guard sanitize");
 
+assert(workflow.includes('trap \'bash "$GUARD" diagnose'),
+  "workflow must wire the ERR trap to deploy-guard diagnose");
+const diagnoseBlock = deployGuard.slice(deployGuard.indexOf("diagnose)"), deployGuard.indexOf("pre)"));
 [
   "docker compose ps",
   "docker inspect",
@@ -78,7 +91,7 @@ const requiredSecretsBlock = workflow.slice(
   "docker compose logs",
   "ss -lntp",
 ].forEach((needle) => {
-  assert(workflow.includes(needle), `on_error diagnostics should include ${needle}`);
+  assert(diagnoseBlock.includes(needle), `on_error diagnostics should include ${needle}`);
 });
 
 assert(!/echo\s+["']?\$\{\{\s*secrets\.(AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)\s*\}\}/.test(workflow),

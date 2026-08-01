@@ -47,7 +47,7 @@ function findPort(start = 18319) {
   });
 }
 
-function requestJson(port, method, pathname, payload) {
+function requestJson(port, method, pathname, payload, headers = {}) {
   const body = payload ? JSON.stringify(payload) : "";
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -57,7 +57,7 @@ function requestJson(port, method, pathname, payload) {
       method,
       headers: Object.assign({
         "Content-Type": "application/json",
-      }, body ? { "Content-Length": Buffer.byteLength(body) } : {}),
+      }, body ? { "Content-Length": Buffer.byteLength(body) } : {}, headers),
       timeout: 5000,
     }, (res) => {
       let data = "";
@@ -82,6 +82,22 @@ function requestJson(port, method, pathname, payload) {
     if (body) req.write(body);
     req.end();
   });
+}
+
+async function waitForRun(port, accepted) {
+  let last = null;
+  for (let index = 0; index < 40; index += 1) {
+    last = await requestJson(
+      port,
+      "GET",
+      `/api/ai/agent/runs/${encodeURIComponent(accepted.runId)}?pollToken=${encodeURIComponent(accepted.pollToken)}`
+    );
+    if (last.statusCode === 200 && ["completed", "degraded", "failed", "cancelled"].includes(last.body && last.body.status)) {
+      return last;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`run polling timeout: ${sanitize(JSON.stringify(last && last.body))}`);
 }
 
 async function waitForHealth(port) {
@@ -179,17 +195,38 @@ async function run() {
     }
 
     await waitForHealth(port);
-    result = runDocker(["exec", containerName, "sh", "-lc", "test ! -e /app/public/admin-app"], { cwd: ROOT });
+    result = runDocker(["exec", containerName, "sh", "-lc", "test ! -e /app/server/public/admin-app && test -f /app/server/src/app.js && test -f /app/packages/agent-runtime/index.js && test -f /app/plugins/fosu-campus/index.js && test -f /app/apps/agent-server/index.js && test -f /app/apps/agent-admin/index.js"], { cwd: ROOT });
     if (result.status !== 0) {
-      throw new Error("Docker image must not contain /app/public/admin-app");
+      throw new Error("Docker image platform layout is incomplete or contains retired admin-app assets");
     }
 
-    const chat = await requestJson(port, "POST", "/api/ai/agent/chat", {
-      message: "你能做什么",
-      context: { clientLocalTime: "2026-06-08T22:00:00+08:00" },
+    const topology = await requestJson(port, "GET", "/api/admin/agent-platform/topology", null, {
+      "x-admin-token": "smoke-admin-token",
     });
-    if (chat.statusCode !== 200 || !chat.body || chat.body.success !== true) {
-      throw new Error(`chat smoke failed: HTTP ${chat.statusCode} ${sanitize(JSON.stringify(chat.body))}`);
+    if (topology.statusCode !== 200
+      || !topology.body
+      || topology.body.platform.runtimePackage !== "@xiaofu-agent/agent-runtime"
+      || !topology.body.platform.pluginIds.includes("fosu-campus")) {
+      throw new Error(`topology smoke failed: HTTP ${topology.statusCode} ${sanitize(JSON.stringify(topology.body))}`);
+    }
+
+    const accepted = await requestJson(port, "POST", "/api/ai/agent/runs", {
+      message: "你是谁？",
+      protocolVersion: "agent.v2",
+      requestId: "docker-platform-smoke",
+      context: { envVersion: "release", memoryMode: "local_only" },
+    });
+    if (accepted.statusCode !== 202 || !accepted.body || accepted.body.appService !== "@xiaofu-agent/agent-server") {
+      throw new Error(`run create smoke failed: HTTP ${accepted.statusCode} ${sanitize(JSON.stringify(accepted.body))}`);
+    }
+    const runView = await waitForRun(port, accepted.body);
+    const eventTypes = (runView.body.events || []).map((event) => event.type);
+    if (!runView.body.result
+      || !runView.body.result.platformTrace
+      || runView.body.result.platformTrace.runtimePackage !== "@xiaofu-agent/agent-runtime"
+      || !eventTypes.includes("runtime.entered")
+      || !eventTypes.includes("runtime.completed")) {
+      throw new Error(`run execution smoke failed: ${sanitize(JSON.stringify(runView.body))}`);
     }
     console.log(`test-server-docker-smoke passed on 127.0.0.1:${port}`);
   } finally {

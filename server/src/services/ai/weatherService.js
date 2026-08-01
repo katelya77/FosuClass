@@ -202,9 +202,13 @@ function buildAdvice(result, topic) {
   return advice[0];
 }
 
-async function fetchOpenMeteo(campus, targetDay) {
+async function fetchOpenMeteo(campus, targetDay, request = {}) {
+  const configuredTimeoutMs = Math.max(50, Number(process.env.AI_WEATHER_TIMEOUT_MS || 3500) || 3500);
+  const requestedTimeoutMs = Math.max(1, Number(request.timeoutMs || configuredTimeoutMs) || configuredTimeoutMs);
+  const timeoutMs = Math.max(50, Math.min(configuredTimeoutMs, Math.max(50, requestedTimeoutMs - 150)));
   const response = await weatherFetcher("https://api.open-meteo.com/v1/forecast", {
-    timeout: Number(process.env.AI_WEATHER_TIMEOUT_MS || 3500) || 3500,
+    timeout: timeoutMs,
+    signal: request.abortSignal || undefined,
     params: {
       latitude: campus.latitude,
       longitude: campus.longitude,
@@ -312,9 +316,10 @@ async function getCampusWeather(input = {}) {
   const cached = readCache(key);
   if (cached.fresh) return cached.fresh;
 
-  if (INFLIGHT.has(key)) return INFLIGHT.get(key);
+  const abortable = Boolean(input.abortSignal);
+  if (!abortable && INFLIGHT.has(key)) return INFLIGHT.get(key);
 
-  const promise = fetchOpenMeteo(campus, targetDay)
+  const promise = fetchOpenMeteo(campus, targetDay, input)
     .then((data) => writeCache(key, buildWeatherResult(campus, data, targetDay, topic), ttlMs, staleMs))
     .catch((error) => {
       const fallback = readCache(key).stale;
@@ -339,10 +344,10 @@ async function getCampusWeather(input = {}) {
       };
     })
     .finally(() => {
-      INFLIGHT.delete(key);
+      if (!abortable) INFLIGHT.delete(key);
     });
 
-  INFLIGHT.set(key, promise);
+  if (!abortable) INFLIGHT.set(key, promise);
   return promise;
 }
 

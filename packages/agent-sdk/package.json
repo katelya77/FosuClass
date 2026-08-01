@@ -1,0 +1,11 @@
+{
+  "name": "@xiaofu-agent/agent-sdk",
+  "version": "0.1.0",
+  "description": "Environment-agnostic Agent run client: state machine, idempotent reducer, cursor resume, cancel and final-result recovery.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

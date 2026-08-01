@@ -1,0 +1,8 @@
+{
+  "name": "@agent-platform/rag-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Versioned hybrid RAG runtime: controlled ingestion, chunking, BM25, deterministic local encoder, RRF fusion, deterministic rerank, citations, publish/rollback.",
+  "main": "index.js",
+  "license": "MIT"
+}

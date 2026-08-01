@@ -6,11 +6,11 @@ const rateLimit = require("express-rate-limit");
 
 /**
  * 全局 API 限流限制器
- * 每个 IP 每分钟最多 60 次请求
+ * 每个 IP 每分钟最多 60 次请求（FOSU_GLOBAL_RATE_LIMIT_MAX 只能上调，供测试 harness 抬高）
  */
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 分钟
-  max: 60,
+  max: Math.max(60, Number(process.env.FOSU_GLOBAL_RATE_LIMIT_MAX || 60) || 60),
   message: {
     success: false,
     message: "请求过于频繁，请稍后再试",
