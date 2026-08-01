@@ -4,5 +4,5 @@
   "private": true,
   "description": "Governed MCP client runtime: streamable HTTP / controlled stdio transports, registry publication, scoped tool invocation.",
   "main": "index.js",
-  "license": "UNLICENSED"
+  "license": "MIT"
 }

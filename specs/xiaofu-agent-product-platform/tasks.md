@@ -109,12 +109,12 @@
 
 ### P4d — Versioned Hybrid RAG Runtime
 
-- [ ] `packages/rag-runtime` 权威实现：文件/受控网页摄取（SSRF 防护）、解析、清洗、分块、BM25、deterministic local encoder（ADR-0007）、融合、确定性 rerank、引用、版本发布/回滚。
-- [ ] Encoder 单源抽取，semanticMemory 与 RAG 共用；对照测试证明 P3 记忆检索不回归。
-- [ ] 草稿索引对生产查询不可见；publish pointer 原子切换；rollback 只切已验证版本；重启恢复；索引构建进受控 worker/队列，不阻塞在线 Run。
-- [ ] golden query set：lexical / vector / hybrid / hybrid+rerank 四组对照，Recall@K、MRR、引用正确率、空答案正确率；本地 encoder 提升幅度如实报告。
-- [ ] 结构化校园事实继续走 Tool（负向测试锁定）。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p4d-evidence.md`。提交：`feat(agent): add versioned hybrid RAG runtime`。
+- [x] `packages/rag-runtime` 权威实现：文件/受控网页摄取（SSRF 防护）、解析、清洗、分块、BM25、deterministic local encoder（ADR-0007）、融合、确定性 rerank、引用、版本发布/回滚。
+- [x] Encoder 单源抽取，semanticMemory 与 RAG 共用；对照测试证明 P3 记忆检索不回归。
+- [x] 草稿索引对生产查询不可见；publish pointer 原子切换；rollback 只切已验证版本；重启恢复；索引构建进受控 worker/队列，不阻塞在线 Run。
+- [x] golden query set：lexical / vector / hybrid / hybrid+rerank 四组对照，Recall@K、MRR、引用正确率、空答案正确率；本地 encoder 提升幅度如实报告。
+- [x] 结构化校园事实继续走 Tool（负向测试锁定）。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p4d-evidence.md`。提交：`feat(agent): add versioned hybrid RAG runtime`。
   - _Requirements: R7.5–R7.8, R10.2–R10.3_
 
 ### P4e — Agent Control Plane and Runtime Evidence
@@ -201,10 +201,10 @@
 
 ## P8 — 收敛、文档、镜像与 Draft PR
 
-- [ ] 更新开发者 Provider/Skill/Tool/MCP/RAG/UI Client 示例和开源使用文档。
+- [x] 更新开发者 Provider/Skill/Tool/MCP/RAG/UI Client 示例和开源使用文档。_(P5b 交付 docs/deployment/developer-quickstart.md 等三篇，P8 复核仍覆盖全五域+UI Schema；明确决定不补 Engine 概念——内部接缝，见最终报告 §5。)_
 - [ ] 执行全部 AGENTS 门禁、故障矩阵、性能基准、密钥/许可证扫描和容器 smoke。
 - [ ] 生成并记录 SHA 镜像/manifest 证据；不可用环境不得用 mock 替代。
-- [ ] 执行独立代码复审并修复所有 Critical/Important。
+- [x] 执行独立代码复审并修复所有 Critical/Important。_(P8 两轴独立复审：Critical=0、Important=0，六项不变量全 PASS；8 条 Minor 记录于最终报告 §5 与跟踪 Issue。)_
 - [ ] 真机/体验版人工验收（P6 交付的清单与模板）；未验证项如实标注。
 - [ ] push 分支并创建 Draft PR，等待全部 CI；CI 全绿且独立复审无 Critical/Important 后按合并门禁处理；不绕过分支保护。
 - [ ] 部署按 execution-governance.md 的备份/回滚/观察门禁执行；无备份回滚路径则记录 blocker 禁止自动生产部署。
