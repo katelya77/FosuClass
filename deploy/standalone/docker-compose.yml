@@ -193,7 +193,12 @@ services:
     environment:
       <<: *agent-env
       AGENT_PLATFORM_ROLE: worker
-      AGENT_PLATFORM_PORT: "8080"
+      # worker 健康监听在 127.0.0.1:8081（AGENT_PLATFORM_WORKER_HEALTH_PORT 默认）；
+      # 健康检查脚本按 AGENT_PLATFORM_HEALTHCHECK_PORT 对齐该端口，并以 /health/ready
+      # 携带真实 readiness（PG/队列等），不再是纯进程活性。运维关闭健康端口
+      # （"0"/"off"）时脚本回退 /proc/1/cmdline 活性检查（见脚本头注释）。
+      AGENT_PLATFORM_HEALTHCHECK_PORT: "8081"
+      AGENT_PLATFORM_HEALTHCHECK_PATH: "/health/ready"
     volumes:
       - agent-data:/app/storage/agent-data
     depends_on:
@@ -206,7 +211,7 @@ services:
     networks:
       - agent-net
     healthcheck:
-      # worker 无 HTTP 监听时脚本回退为容器主进程活性检查（见脚本头注释）。
+      # 就绪探针（8081 /health/ready）；健康端口被关闭时回退主进程活性检查。
       test: ["CMD", "node", "scripts/test-standalone-health.js"]
       interval: 30s
       timeout: 10s

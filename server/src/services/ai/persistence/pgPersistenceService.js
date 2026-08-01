@@ -8,7 +8,8 @@
  *   - runMigrations() / getMigrationStatus()：聚合全部已知 migration 列表
  *     （packages 侧 agent_meta=0001 + 本目录 migrations/ 下各 workstream 追加项）
  *     按版本序执行 / 查询；并发安全与 checksum 校验由 runner 保证。
- *   - closeForTests()：测试收尾关闭池并重置单例（生产路径不调用）。
+ *   - close()：关停路径关闭共享池并重置单例（server/worker/migrate 优雅退出调用）。
+ *   - closeForTests()：close() 的别名，供测试收尾使用。
  *
  * 注意：只有 FOSU_AGENT_REPOSITORY_BACKEND=postgres 时才应有调用方触达本模块；
  * file（默认）模式下各 facade 不 require 本模块的连接路径。
@@ -72,7 +73,7 @@ async function getMigrationStatus() {
   return getMigrationRunner().getStatus();
 }
 
-async function closeForTests() {
+async function close() {
   const pool = sharedPool;
   sharedPool = null;
   sharedRunner = null;
@@ -82,7 +83,8 @@ async function closeForTests() {
 }
 
 module.exports = {
-  closeForTests,
+  close,
+  closeForTests: close,
   getMigrationList,
   getMigrationStatus,
   getPool,

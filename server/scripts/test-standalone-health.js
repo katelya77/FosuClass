@@ -13,9 +13,14 @@
  *     可设 AGENT_PLATFORM_HEALTHCHECK_PATH=/health/live 降级。
  *
  *   worker：
- *     worker 不监听 HTTP（或仅暴露 localhost health）。先探 /health/live：
+ *     worker 健康监听在 127.0.0.1:${AGENT_PLATFORM_WORKER_HEALTH_PORT:-8081}
+ *     （可 "0"/"off" 关闭），与 server 的 AGENT_PLATFORM_PORT 不同。探测端口按
+ *     AGENT_PLATFORM_HEALTHCHECK_PORT → AGENT_PLATFORM_PORT → 8080 取值，
+ *     compose 对 worker 显式设 AGENT_PLATFORM_HEALTHCHECK_PORT=8081 对齐。
+ *     先探 AGENT_PLATFORM_HEALTHCHECK_PATH（compose 设 /health/ready，携带真实
+ *     readiness；未设时默认 /health/live）：
  *       - HTTP 2xx → exit 0；HTTP 其他状态 / 超时 → exit 1；
- *       - 连接被拒绝（ECONNREFUSED，无 HTTP 监听属预期形态）→ 回退进程活性检查：
+ *       - 连接被拒绝（ECONNREFUSED，运维关闭健康端口的预期形态）→ 回退进程活性检查：
  *         /proc/1/cmdline 须包含 agentServerMain.js（容器主进程）。满足 → exit 0。
  *
  *   migrate：
@@ -29,7 +34,7 @@
 const fs = require("fs");
 
 const ROLE = String(process.env.AGENT_PLATFORM_ROLE || "server").trim().toLowerCase() || "server";
-const PORT = Number(process.env.AGENT_PLATFORM_PORT || 8080) || 8080;
+const PORT = Number(process.env.AGENT_PLATFORM_HEALTHCHECK_PORT || process.env.AGENT_PLATFORM_PORT || 8080) || 8080;
 const PROBE_PATH = String(process.env.AGENT_PLATFORM_HEALTHCHECK_PATH || "").trim();
 const TIMEOUT_MS = 5000;
 
