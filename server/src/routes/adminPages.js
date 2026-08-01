@@ -5901,6 +5901,7 @@ const adminConsoleHtml = `<!doctype html>
 
             <li class="nav-group-label" data-nav-group="系统与安全">系统与安全</li>
             <li class="nav-item" data-section="ai-provider"><button type="button" title="查询服务"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 4h.01M15 14h.01M9 17h6"/></svg><span class="nav-label">查询服务</span></button></li>
+            <li class="nav-item"><button type="button" id="agentPlatformNavBtn" title="Agent 控制面"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg><span class="nav-label">Agent 控制面</span></button></li>
             <li class="nav-item" data-section="security"><button type="button" title="安全状态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm0 5v4m0 4h.01"/></svg><span class="nav-label">安全状态</span></button></li>
             <li class="nav-item" data-section="settings"><button type="button" title="系统设置"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4a7.7 7.7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8.7 8.7 0 0 0-1.8-1L14.8 3h-4l-.3 2.7a8.7 8.7 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.7 7.7 0 0 0 0 2.8l-2 1.5 2 3.4 2.4-1a8.7 8.7 0 0 0 1.8 1l.3 2.7h4l.3-2.7a8.7 8.7 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5a7.7 7.7 0 0 0 .1-1.4Z"/></svg><span class="nav-label">系统设置</span></button></li>
           </ul>
@@ -16210,6 +16211,8 @@ const adminConsoleHtml = `<!doctype html>
           switchSection(item.dataset.section);
         });
       });
+      // Agent 控制面为独立页面（非 SPA section），无 data-section，单独绑定跳转
+      safeBind("agentPlatformNavBtn", "click", function () { location.href = "/admin/agent-platform/"; });
 
       // 实时预览监听
       ["noticeTitle", "noticeContent", "noticeVersion"].forEach(function (id) {
