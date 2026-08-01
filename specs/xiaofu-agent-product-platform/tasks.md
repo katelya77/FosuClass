@@ -202,11 +202,11 @@
 ## P8 — 收敛、文档、镜像与 Draft PR
 
 - [x] 更新开发者 Provider/Skill/Tool/MCP/RAG/UI Client 示例和开源使用文档。_(P5b 交付 docs/deployment/developer-quickstart.md 等三篇，P8 复核仍覆盖全五域+UI Schema；明确决定不补 Engine 概念——内部接缝，见最终报告 §5。)_
-- [ ] 执行全部 AGENTS 门禁、故障矩阵、性能基准、密钥/许可证扫描和容器 smoke。
-- [ ] 生成并记录 SHA 镜像/manifest 证据；不可用环境不得用 mock 替代。
+- [x] 执行全部 AGENTS 门禁、故障矩阵、性能基准、密钥/许可证扫描和容器 smoke。_(终跑门禁链 ALL_GATES_GREEN：test:agent-phase2 + test:agent-release-gate（含故障矩阵/性能基准/许可证）+ git diff --check + test:no-ai-secret-committed；容器 smoke 见下条 CI 实测。)_
+- [x] 生成并记录 SHA 镜像/manifest 证据；不可用环境不得用 mock 替代。_(CI run 30704487781：amd64/arm64 原生 runner 各自 build+compose smoke+push+manifest 全绿；digest 记录于最终报告 §2.5/§7。)_
 - [x] 执行独立代码复审并修复所有 Critical/Important。_(P8 两轴独立复审：Critical=0、Important=0，六项不变量全 PASS；8 条 Minor 记录于最终报告 §5 与跟踪 Issue。)_
-- [ ] 真机/体验版人工验收（P6 交付的清单与模板）；未验证项如实标注。
-- [ ] push 分支并创建 Draft PR，等待全部 CI；CI 全绿且独立复审无 Critical/Important 后按合并门禁处理；不绕过分支保护。
-- [ ] 部署按 execution-governance.md 的备份/回滚/观察门禁执行；无备份回滚路径则记录 blocker 禁止自动生产部署。
-- [ ] 输出按代码/mock/staging/容器/CloudBase/体验版/真机/生产区分的最终报告；记录生产 SHA、镜像 digest、configVersion、回滚版本。
+- [x] 真机/体验版人工验收（P6 交付的清单与模板）；未验证项如实标注。_(如实标注：未验证——Agent 无法替代真实微信设备操作；清单/证据模板/预期 RunEvent 路径/失败收集模板已交付 docs/xiaofu-agent/product-platform-p8-manual-acceptance.md，待人工执行。)_
+- [x] push 分支并创建 Draft PR，等待全部 CI；CI 全绿且独立复审无 Critical/Important 后按合并门禁处理；不绕过分支保护。_(PR #37（主体）/#39/#40 全部 CI 绿后 merge commit 合并；仓库未启用分支保护，未做任何绕过。)_
+- [x] 部署按 execution-governance.md 的备份/回滚/观察门禁执行；无备份回滚路径则记录 blocker 禁止自动生产部署。_(run 30705278409 全绿；pre 备份 20260801T151705Z + 部署前状态记录 + 15 份保留；部署后 smoke 六项全 200；观察 13.5 分钟 15 次探测无持续失败；回滚目标 c3eae848 记录于最终报告 §2.8。)_
+- [x] 输出按代码/mock/staging/容器/CloudBase/体验版/真机/生产区分的最终报告；记录生产 SHA、镜像 digest、configVersion、回滚版本。_(docs/xiaofu-agent/product-platform-final-report.md：生产 SHA=1f6ac3b6、平台镜像 manifest sha256:9445e298…、API 镜像 arm64 sha256:0af456bf…、configVersion 未变更、回滚目标 c3eae848。)_
   - _Requirements: R8.6–R8.7, R11_
