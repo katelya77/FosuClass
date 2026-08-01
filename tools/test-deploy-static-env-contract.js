@@ -140,6 +140,25 @@ assert(
   `remote deploy script must stay below the GitHub Actions expression limit (got ${remoteDeployScript.length} characters)`,
 );
 
+// Deploy guard must be wired as an SCP-shipped script (keeps the inline script
+// under the expression limit and the logic lintable). pre runs before the
+// deploy mutates anything; post records version markers only after the health
+// gates and summary.
+assert(workflow.includes("scripts/deploy-guard.sh pre "), "deploy workflow must invoke the pre-deploy backup guard");
+assert(workflow.includes("scripts/deploy-guard.sh post "), "deploy workflow must invoke the post-deploy version record");
+assert(
+  fs.existsSync(path.join(root, "server", "scripts", "deploy-guard.sh")),
+  "deploy-guard.sh must exist in the repo (SCP uploads server/**)",
+);
+assert(
+  remoteDeployScript.indexOf("deploy-guard.sh pre ") < remoteDeployScript.indexOf("docker compose up -d --build"),
+  "pre-deploy backup must run before docker compose up",
+);
+assert(
+  remoteDeployScript.indexOf("deploy-guard.sh post ") > remoteDeployScript.indexOf("Deployment summary"),
+  "post-deploy version record must run only after the health gates and summary",
+);
+
 assert(!workflow.includes("admin-web/**"), "deploy must not SCP admin-web");
 assert(!workflow.includes("FOSU_ADMIN_NEXT_ENABLED="), "deploy must not configure the retired Admin Next UI");
 assert(!workflow.includes("FOSU_ADMIN_PRIMARY="), "deploy must not configure a retired primary UI switch");

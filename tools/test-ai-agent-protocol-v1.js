@@ -5,6 +5,10 @@ process.env.AI_AGENT_ENABLED = "false";
 // Pin trial so V1 legacy serialization stays stable in clean CI environments.
 process.env.AI_RUNTIME_MODE = "competition";
 process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
+// This legacy fixture intentionally exercises deterministic V1 serialization
+// without a Provider. P2 requires that choice to be explicit rather than
+// silently weakening trial/dev strict_model_first.
+process.env.AI_EXECUTION_POLICY = "adaptive";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.NODE_ENV = "development";
 process.env.AI_WEATHER_ENABLED = "false";

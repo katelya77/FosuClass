@@ -1,11 +1,11 @@
 const providerFactory = require("../providerFactory");
 const mockProvider = require("../providers/mockProvider");
-const providerChainService = require("../providerChainService");
+const providerRuntimeComposition = require("../providerRuntimeComposition");
 const providerConfigService = require("../providerConfigService");
 const capabilityManifestService = require("../capabilityManifestService");
 const projectKnowledgeService = require("../projectKnowledgeService");
 const safetyGuard = require("../safetyGuard");
-const { assemble: assembleContext } = require("../context/contextAssembler");
+const { classifyFallbackEligibility } = require("../../../../../packages/provider-runtime");
 const { stableGeneratedPayload, configValue, getProviderPolicy } = require("./shared");
 const { emitChatEvent } = require("./runEventPublisher");
 const { deriveExecutionOutcome } = require("./responseComposerBridge");
@@ -95,23 +95,13 @@ function shouldUseExternalProvider(intent, toolCalls, policy, runtimeMode) {
   return evaluateProviderPolicy(intent, toolCalls, policy, providerFactory.getProviderName(runtimeMode), runtimeMode || providerFactory.getRuntimeMode()).useExternal;
 }
 
+// P2R：保留导出签名（返回稳定低基数字符串），内部委托共享分类
+// （packages/provider-runtime/src/fallbackEligibility.js）。禁止 message 正则模糊匹配；
+// error.status 与 error.response.status 的错位由共享函数统一归一。
+// 返回值为 failureClass（timeout/bad_request/invalid_model/config/...），
+// 与 Decision、Provider Runtime 的 failureClass 口径一致。
 function classifyProviderFailure(error) {
-  const code = String(error && error.code || "");
-  if (["provider_bad_request", "invalid_model", "invalid_payload", "provider_timeout"].includes(code)) {
-    return code;
-  }
-  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
-    return "provider_timeout";
-  }
-  const status = Number(error && error.response && error.response.status);
-  const body = error && error.response && error.response.data;
-  const text = JSON.stringify(body || {}).toLowerCase();
-  if (status === 400 || code === "ERR_BAD_REQUEST") {
-    if (/model/.test(text)) return "invalid_model";
-    if (/response_format|payload|json|schema|thinking|reasoning/.test(text)) return "invalid_payload";
-    return "provider_bad_request";
-  }
-  return code || "provider_fallback";
+  return classifyFallbackEligibility(error).failureClass;
 }
 
 function summarizeProviderChainFallback(chain = []) {
@@ -125,7 +115,32 @@ function summarizeProviderChainFallback(chain = []) {
 function providerChainAttempts(chain = []) {
   return (Array.isArray(chain) ? chain : []).filter((item) => item
     && String(item.provider || "").toLowerCase() !== "mock"
+    && item.attempted !== false
     && ["success", "failed"].includes(String(item.status || "").toLowerCase()));
+}
+
+function providerChainFromRuntimePath(path = []) {
+  const skippedCodes = new Set([
+    "PROVIDER_CIRCUIT_OPEN",
+    "PROVIDER_NOT_REGISTERED",
+    "PROVIDER_METHOD_UNSUPPORTED",
+    "PROVIDER_FALLBACK_BUDGET_EXHAUSTED",
+    "DEADLINE_EXCEEDED",
+  ]);
+  return (Array.isArray(path) ? path : []).map((entry) => {
+    const text = String(entry || "");
+    const separator = text.indexOf(":");
+    const provider = separator >= 0 ? text.slice(0, separator) : text;
+    const reason = separator >= 0 ? text.slice(separator + 1) : "provider_failed";
+    const success = reason === "success";
+    const skipped = !success && skippedCodes.has(reason);
+    return {
+      provider,
+      status: success ? "success" : (skipped ? "skipped" : "failed"),
+      reason,
+      attempted: !skipped,
+    };
+  });
 }
 
 function safeProviderStage(input = {}) {
@@ -228,6 +243,9 @@ async function generateAssistantResponse(input = {}) {
   const understanding = input.understanding;
   const plannerDiag = input.plannerDiag;
   const execution = input.execution;
+  const assembledContextTrace = input.contextTrace && typeof input.contextTrace === "object"
+    ? input.contextTrace
+    : {};
   const providerPolicy = getProviderPolicy(providerRuntimeConfig);
   const desiredProviderName = providerFactory.getProviderName(runtimeMode, providerRuntimeConfig);
   const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName, runtimeMode, providerRuntimeConfig);
@@ -240,22 +258,9 @@ async function generateAssistantResponse(input = {}) {
     || runtimeMode !== "public";
   const toolResultsForProvider = buildToolResultsForProvider(toolCalls);
   const projectKnowledgeText = shouldInjectProjectKnowledge
-    ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeMode, safeMessage)
+    ? projectKnowledgeService.getProjectKnowledgePrompt(input.assistantEnvironment || runtimeMode, safeMessage)
     : "";
   // Budgeted response context — never dump unbounded history or full schedule into provider.
-  const responseContext = assembleContext("response", {
-    message: safeMessage,
-    runtimeMode: runtimeMode,
-    currentTeachingWeek: context.currentTeachingWeek,
-    toolResults: toolResultsForProvider,
-    toolCalls: toolResultsForProvider,
-    projectKnowledge: projectKnowledgeText,
-    history: Array.isArray(context.recentMessages) ? context.recentMessages : [],
-    messages: Array.isArray(context.recentMessages) ? context.recentMessages : [],
-    historyLimit: 10,
-    conversationSummary: context.conversationSummary || "",
-    userMemories: context.userMemories || [],
-  });
   const providerInput = {
     message: safeMessage,
     context: buildMinimalProviderContext(context),
@@ -266,11 +271,15 @@ async function generateAssistantResponse(input = {}) {
     toolResults: toolResultsForProvider,
     history: sanitizeResponseHistory(context.recentMessages),
     userMemories: (Array.isArray(context.userMemories) ? context.userMemories : []).slice(0, 5),
+    principal,
     contextMeta: {
-      contextTokenEstimate: responseContext.contextTokenEstimate,
-      contextSections: responseContext.sections,
-      truncatedSections: responseContext.truncatedSections,
-      compressionUsed: responseContext.compressionUsed === true,
+      contextId: String(assembledContextTrace.contextId || input.contextId || "").slice(0, 64),
+      schemaVersion: String(assembledContextTrace.schemaVersion || "agent-context.v2").slice(0, 48),
+      contextTokenEstimate: Math.max(0, Number(assembledContextTrace.contextTokenEstimate || 0)),
+      contextSections: Object.keys(assembledContextTrace.sectionFingerprints || {}).slice(0, 16),
+      truncatedSections: (Array.isArray(assembledContextTrace.truncatedSections)
+        ? assembledContextTrace.truncatedSections : []).slice(0, 16),
+      compressionUsed: assembledContextTrace.compressionUsed === true,
     },
   };
   const deterministicGenerated = mockProvider.generate(providerInput);
@@ -280,23 +289,44 @@ async function generateAssistantResponse(input = {}) {
   let providerPayload = null;
   let externalProviderUsed = false;
   let fallbackReason = "";
+  let responseFailureClass = "";
+  // P2R：失败链路的 intendedProvider/actualFirstProvider/remainingBudget 随阶段产物透传；
+  // Trace 统一落点由 Wave 2 收尾。
+  let responseIntendedProvider = "";
+  let responseActualFirstProvider = "";
+  let responseRemainingFallbackBudget = null;
   let responseLatencyMs = 0;
   let responseProviderChain = [];
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
+  const responseStartedAt = Date.now();
   try {
-    const responseStartedAt = Date.now();
-    const generated = policyDecision.useExternal
-      ? await providerChainService.generateWithChain(providerInput, {
-        runtimeMode: runtimeMode,
-        providerRuntimeConfig,
-        principal: principal,
+    let generated = deterministicGenerated;
+    if (policyDecision.useExternal) {
+      const selection = providerRuntimeComposition.resolveResponseProviders(runtimeMode, providerRuntimeConfig);
+      const runtimeResult = await providerRuntimeComposition.getProviderRuntime().generate({
+        runtimeMode,
+        executionPolicy: input.executionPolicy || "strict_model_first",
+        intendedProvider: selection.intendedProvider,
+        fallbackProvider: selection.fallbackProvider,
+        request: providerInput,
+        deadline: input.deadline,
+        signal: input.signal || null,
         stage: "response",
+        stageCapMs: Math.max(1, Number(input.responseBudgetMs || 1500) || 1500),
+        finishReserveMs: 0,
+        providerAttemptLedger: input.providerAttemptLedger,
         onEvent: (event) => emitChatEvent(eventInput, Object.assign({
           runtimeMode: runtimeMode,
           intentName: intent.name,
         }, event)),
-      })
-      : deterministicGenerated;
+      });
+      generated = Object.assign({}, runtimeResult.payload || {}, {
+        provider: runtimeResult.provider,
+        providerChain: providerChainFromRuntimePath(runtimeResult.fallbackPath),
+      });
+      responseIntendedProvider = String(runtimeResult.intendedProvider || "");
+      responseActualFirstProvider = String(runtimeResult.actualFirstProvider || "");
+    }
     responseLatencyMs = Date.now() - responseStartedAt;
     if (!policyDecision.useExternal) {
       emitChatEvent(eventInput, {
@@ -322,8 +352,42 @@ async function generateAssistantResponse(input = {}) {
       }
     }
   } catch (error) {
+    if ((input.signal && input.signal.aborted) || String(error && error.code || "") === "ABORTED") throw error;
+    // P2R：单一 fallback eligibility 分类（与 Provider Runtime / Decision 共用）。
+    const classification = classifyFallbackEligibility(error);
+    if (classification.failureClass === "config") {
+      // 配置类错误 fail fast：不得包装成降级成功；给出后台可操作原因。
+      const actionable = new Error(
+        "Response Provider 配置缺失或不可用：请在后台检查 AI_RESPONSE_PROVIDER / AI_PROVIDER_CHAIN、AI_BASE_URL 与 API Key 配置后重试"
+      );
+      actionable.code = classification.reasonCode;
+      actionable.failureClass = "config";
+      actionable.failFast = true;
+      actionable.fallbackEligible = false;
+      actionable.fallbackReason = classification.reason;
+      actionable.intendedProvider = String(error && error.intendedProvider || "");
+      actionable.actualFirstProvider = String(error && error.actualFirstProvider || "");
+      actionable.fallbackPath = Array.isArray(error && error.fallbackPath) ? error.fallbackPath.slice() : [];
+      emitChatEvent(eventInput, {
+        type: "provider.failed",
+        runtimeMode: runtimeMode,
+        intentName: intent.name,
+        reasonCode: "config",
+        failureClass: "config",
+        providerUsed: false,
+      });
+      throw actionable;
+    }
     providerName = "mock";
     externalProviderUsed = false;
+    responseLatencyMs = Date.now() - responseStartedAt;
+    responseProviderChain = providerChainFromRuntimePath(error && error.fallbackPath);
+    responseFailureClass = classification.failureClass;
+    responseIntendedProvider = String(error && error.intendedProvider || "");
+    responseActualFirstProvider = String(error && error.actualFirstProvider || "");
+    responseRemainingFallbackBudget = Number.isFinite(error && error.remainingFallbackBudget)
+      ? error.remainingFallbackBudget
+      : null;
     fallbackReason = classifyProviderFailure(error);
     emitChatEvent(eventInput, {
       type: "provider.failed",
@@ -372,6 +436,11 @@ async function generateAssistantResponse(input = {}) {
     providerPayload,
     externalProviderUsed: responseExternalProviderUsed,
     fallbackReason,
+    // P2R：与 Decision / Provider Runtime 同一 failureClass 口径；Trace 统一落点由 Wave 2 收尾。
+    failureClass: responseFailureClass,
+    intendedProvider: responseIntendedProvider,
+    actualFirstProvider: responseActualFirstProvider,
+    remainingFallbackBudget: responseRemainingFallbackBudget,
     responseLatencyMs,
     responseProviderChain,
     providerTruth,
@@ -390,6 +459,7 @@ module.exports = {
   classifyProviderFailure,
   summarizeProviderChainFallback,
   providerChainAttempts,
+  providerChainFromRuntimePath,
   safeProviderStage,
   deriveProviderRunTruth,
   resolveRuntimeProviderConfig,

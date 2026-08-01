@@ -8,6 +8,7 @@ const { emitChatEvent } = require("./runEventPublisher");
  * execution, and planner diagnostics reconciliation.
  */
 async function executePlanner(input = {}) {
+  const executionKernel = input.agentKernel || agentKernel;
   const message = input.message;
   const context = input.context;
   const runtimeMode = input.runtimeMode;
@@ -18,10 +19,12 @@ async function executePlanner(input = {}) {
   const requestId = input.requestId;
   const conversationId = input.conversationId;
   const runId = input.runId;
+  const protocolVersion = input.protocolVersion;
   const onEvent = input.onEvent;
   const eventInput = input.eventInput;
   // Dedicated planner model adapter (trial/dev only). public never calls models.
-  const plannerGenerate = plannerModelAdapter.createModelGenerate({
+  const unifiedDecision = input.unifiedDecision === true;
+  const plannerGenerate = unifiedDecision ? null : plannerModelAdapter.createModelGenerate({
     runtimeMode: runtimeMode,
     providerRuntimeConfig,
     onEvent: (event) => emitChatEvent(eventInput, Object.assign({
@@ -30,9 +33,10 @@ async function executePlanner(input = {}) {
     }, event)),
   });
 
-  const execution = await agentKernel.execute({
+  const execution = await executionKernel.execute({
     message: message,
     context,
+    toolContext: input.toolContext || context,
     contextAlreadySanitized: true,
     runtimeDecision,
     intent,
@@ -48,15 +52,31 @@ async function executePlanner(input = {}) {
     requestId,
     conversationId,
     runId,
+    protocolVersion,
     onEvent,
-    modelGenerate: runtimeMode === "public" ? undefined : plannerGenerate,
+    signal: input.signal || null,
+    deadline: input.deadline,
+    budget: input.budget,
+    providerAttemptLedger: input.providerAttemptLedger,
+    principal: input.principal || null,
+    modelGenerate: runtimeMode === "public" || unifiedDecision ? undefined : plannerGenerate,
+    unifiedDecision,
+    decisionContract: input.decisionContract || null,
+    decisionSource: input.decisionSource || "",
     plannerEnv: providerRuntimeConfig,
   });
   const plan = execution.plan;
   const toolCalls = execution.toolCalls;
-  const plannerDiag = typeof plannerGenerate.getDiagnostics === "function"
+  const plannerDiag = plannerGenerate && typeof plannerGenerate.getDiagnostics === "function"
     ? plannerGenerate.getDiagnostics()
-    : { plannerProvider: "none", plannerLatency: 0, plannerFallback: false, plannerStatus: "not_called" };
+    : {
+      plannerProvider: "none",
+      plannerLatency: 0,
+      plannerFallback: false,
+      plannerStatus: unifiedDecision ? "unified_decision" : "not_called",
+      successCount: 0,
+      failureCount: 0,
+    };
   // Prefer structured plan metadata when available (array plan loses plannerType).
   const planType = (plan && plan.plannerType)
     || (Array.isArray(plan) ? "" : "")
@@ -79,6 +99,9 @@ async function executePlanner(input = {}) {
   } else if (planType === "deterministic_fallback" || plannerDiag.plannerStatus === "failed") {
     plannerDiag.plannerFallback = true;
     plannerDiag.inferredPlannerType = planType || "deterministic_fallback";
+  } else if (unifiedDecision) {
+    plannerDiag.inferredPlannerType = "deterministic_after_decision";
+    plannerDiag.plannerProvider = "none";
   } else if (runtimeMode === "public") {
     plannerDiag.inferredPlannerType = "deterministic";
     plannerDiag.plannerProvider = "none";

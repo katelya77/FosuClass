@@ -1,0 +1,11 @@
+{
+  "name": "@xiaofu-agent/agent-protocol",
+  "version": "0.1.0",
+  "description": "Runtime-neutral contracts for Agent runs, events, traces, and protocol compatibility.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

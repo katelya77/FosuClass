@@ -263,6 +263,10 @@
     preferences="{{memoryPreferences}}"
     preferences-loading="{{memoryPreferencesLoading}}"
     auto-memory-enabled="{{autoMemoryEnabled}}"
+    memory-policy="{{memoryPolicy}}"
+    memory-revision="{{memoryRevision}}"
+    episodes="{{memoryEpisodes}}"
+    operation-pending="{{memoryOperationPending}}"
     bind:close="closeMemorySheet"
     bind:change="onMemoryModeChange"
     bind:clearlocal="onClearLocalMemory"
@@ -271,6 +275,7 @@
     bind:deletepreference="onDeleteMemoryPreference"
     bind:editpreference="onEditMemoryPreference"
     bind:toggleautomemory="onToggleAutoMemory"
+    bind:exportmemory="onExportMemory"
   />
 
   <xiaofu-reminder-sheet

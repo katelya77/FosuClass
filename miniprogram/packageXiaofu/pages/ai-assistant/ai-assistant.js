@@ -9,6 +9,7 @@ const xiaofuFloatService = require("../../../services/xiaofuFloatService");
 const agentMemoryClient = require("../../../services/agentMemoryClient");
 const agentReadinessClient = require("../../../services/agentReadinessClient");
 const agentRunClient = require("../../../services/agentRunClient");
+const agentRunShell = require("../../../services/agentRunShell");
 const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
 const courseReminderClient = require("../../../services/courseReminderClient");
 const currentScheduleService = require("../../../services/currentScheduleService");
@@ -20,8 +21,10 @@ const xiaofuPresentation = require("../../services/xiaofuPresentationAdapter");
 const xiaofuMessageActions = require("../../services/xiaofuMessageActions");
 const xiaofuConversationViewModel = require("../../services/xiaofuConversationViewModel");
 const { createActionBus } = require("../../services/xiaofuActionBus");
+const uiBlockAdapter = require("../../services/uiBlockAdapter");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
+const AUTO_MEMORY_ENABLED_KEY = "xiaofu_auto_memory_enabled";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
 const TASK_PANEL_CACHE_VERSION = "2026-07-campus-query-v7";
 const TASK_PANEL_DEBOUNCE_MS = 180;
@@ -128,10 +131,12 @@ function normalizeMemoryPreferenceItems(items) {
   (Array.isArray(items) ? items : []).forEach((item) => {
     const source = item && typeof item === "object" ? item : {};
     if (!labels[source.key] && !source.label && !source.category) return;
-    const key = source.key;
+    const memoryId = source.memoryId || source.id || source.key;
+    const key = source.key || memoryId;
     if (!key) return;
-    let displayValue = source.value;
-    if (key === "defaultReminderLeadMinutes") displayValue = `提前 ${source.value} 分钟`;
+    const value = source.normalizedValue !== undefined ? source.normalizedValue : source.value;
+    let displayValue = value;
+    if (key === "defaultReminderLeadMinutes") displayValue = `提前 ${value} 分钟`;
     let updatedAtText = "";
     if (source.updatedAt) {
       const ms = Date.parse(String(source.updatedAt));
@@ -141,8 +146,9 @@ function normalizeMemoryPreferenceItems(items) {
       }
     }
     map[key] = {
+      memoryId,
       key,
-      value: source.value,
+      value,
       displayValue,
       label: labels[key] || source.label || source.category || key,
       category: source.category || labels[key] || key,
@@ -150,11 +156,26 @@ function normalizeMemoryPreferenceItems(items) {
       scopeText: scopeLabels[source.scope] || scopeLabels.local,
       updatedAt: source.updatedAt || "",
       updatedAtText,
-      editable: source.editable !== false && Boolean(labels[key]),
+      editable: source.editable !== false,
+      confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : undefined,
+      provenance: source.provenance || source.source || "",
+      expiresAt: source.expiresAt || "",
     };
   });
   return Object.keys(labels).map((key) => map[key]).filter(Boolean)
     .concat(Object.keys(map).filter((k) => !labels[k]).map((k) => map[k]));
+}
+
+function normalizeMemoryEpisodes(items) {
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const source = item && typeof item === "object" ? item : {};
+    return {
+      episodeId: source.episodeId || source.id || "",
+      goal: safeText(source.goal || source.taskType || "", 80),
+      summary: safeText(source.outcomeSummary || source.summary || source.outcome || "", 240),
+      createdAt: source.createdAt || source.updatedAt || "",
+    };
+  }).filter((item) => item.episodeId || item.goal || item.summary).slice(0, 20);
 }
 
 function mapMemoryChip(mode) {
@@ -1045,6 +1066,18 @@ function isGenericAssistantCard(card) {
   return false;
 }
 
+// 通用 UI Block 增强的触发前提：消息带有可推导的原始响应信封字段。
+// 只认能产生展示卡片/文本的通用字段；steps/taskSteps 单独出现时推导不出卡片，不算。
+function hasRawResponseEnvelope(source) {
+  if (!source || typeof source !== "object") return false;
+  return Boolean(
+    source.answer
+    || (Array.isArray(source.uiBlocks) && source.uiBlocks.length)
+    || (source.ui && Array.isArray(source.ui.blocks) && source.ui.blocks.length)
+    || (Array.isArray(source.errors) && source.errors.length)
+  );
+}
+
 function resolveAssistantIntentName(source) {
   return xiaofuPresentation.resolveIntentName(source || {});
 }
@@ -1080,6 +1113,30 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     rawCards,
     presentationMode || (isPlain ? "plain" : (rawCards.length > 1 ? "composite" : "single_card"))
   );
+
+  // P6b W4：通用 UI Block 增强。仅当消息本身没有任何可用卡片、且带有原始
+  // 响应信封字段时，才由通用 Block 推导展示卡片/文本；已有卡片的消息与推导
+  // 为空的情况完全保持原行为（适配器纯函数、绝不抛出）。
+  let augmentText = "";
+  if (role !== "user" && !rawCards.length) {
+    const rawResponse = source.response && typeof source.response === "object" && !Array.isArray(source.response)
+      ? source.response
+      : source;
+    if (hasRawResponseEnvelope(rawResponse)) {
+      const augment = uiBlockAdapter.responseToDisplayAugment(rawResponse);
+      const augmentDisplay = augment && augment.display || {};
+      const augmentCards = Array.isArray(augmentDisplay.cards) ? augmentDisplay.cards : [];
+      if (augmentCards.length) {
+        rawCards = xiaofuPresentation.limitDisplayCards(
+          augmentCards,
+          presentationMode || (isPlain ? "plain" : (augmentCards.length > 1 ? "composite" : "single_card"))
+        );
+      }
+      if (!safeText(source.content || "", 2000)) {
+        augmentText = safeText(augmentDisplay.text || "", 2000);
+      }
+    }
+  }
 
   const displaySteps = isPlain ? [] : normalizeDisplaySteps(source);
   // Product UX: never dump tool chips into the default message area
@@ -1151,7 +1208,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
   return Object.assign({}, source, {
     id,
     role,
-    content: safeText(source.content || "", 2000),
+    content: safeText(source.content || "", 2000) || augmentText,
     intentName: resolvedIntentName || source.intentName || "",
     userQuery: source.userQuery || lastUserText || "",
     presentationMode: presentationMode || (isPlain ? "plain" : ""),
@@ -1176,7 +1233,12 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     metrics,
     metricsText: "",
     fallback: fallback && !isPlain,
-    fallbackBanner: fallback && !isPlain ? "增强推理暂不可用，已使用本地确定性能力完成本次任务" : "",
+    // 横幅只讲用户能感知的事：本地降级说「能力变化」，兼容模式说「实时进度不可见」。
+    fallbackBanner: fallback && !isPlain
+      ? "增强推理暂不可用，已使用本地确定性能力完成本次任务"
+      : (source.compatMode === "direct_chat" && !isPlain
+        ? "服务端版本较低 · 已用兼容模式回答，实时进度不可见"
+        : ""),
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
     showCompactFeedback: false,
@@ -1229,6 +1291,51 @@ function makeMessage(role, content, patch) {
   }, patch || {});
 }
 
+// 由服务端响应信封构建助手消息：sendMessage 成功分支与断线恢复
+// （resumeActiveAgentRun）共用同一套构建逻辑，保证两条路径产出的消息一致。
+// extra.userQuery 供发送路径带上原始提问；恢复路径没有原文提问，留空。
+function buildAssistantMessageFromResponse(response, extra) {
+  const options = extra || {};
+  const resolvedIntentName = (typeof response.intent === "string" && response.intent)
+    || (response.intent && response.intent.name)
+    || response.intentName
+    || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
+    || "";
+  const presentationMode = response.presentationMode
+    || (response.presentation && response.presentation.presentationMode)
+    || "";
+  const responseCards = Array.isArray(response.cards) ? response.cards : [];
+  const waitingConfirmation = responseCards.some((card) => (Array.isArray(card && card.actions) ? card.actions : [])
+    .some((action) => action && action.type === "confirmReminder"));
+  const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
+    cards: responseCards,
+    suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
+    toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
+    taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+    steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
+    evidence: response.evidence || response.evidenceDisplay || null,
+    safety: response.safety || {},
+    metrics: response.metrics || null,
+    fallback: response.fallback === true,
+    fallbackLayer: response.fallbackLayer || "",
+    status: response.status || "completed",
+    memory: response.memory || null,
+    intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
+    intentName: resolvedIntentName,
+    userQuery: options.userQuery || "",
+    presentationMode,
+    presentation: response.presentation || null,
+    runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
+    taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
+    plan: response.plan || null,
+    // direct chat 兼容通道标记（compatibility-only）：供展示层如实提示
+    // 「实时进度不可见」，不得被当作普通成功路径隐藏。
+    compatMode: response.compatMode || "",
+    compatReason: response.compatReason || "",
+  });
+  return { assistantMessage, resolvedIntentName, waitingConfirmation, responseCards };
+}
+
 function formatConversationTime(value) {
   const time = Date.parse(value || "");
   if (!time) return "";
@@ -1277,12 +1384,27 @@ function buildConversationDisplayList(activeConversationId, mergedList) {
       active: item.conversationId === activeConversationId || item.active === true,
       memoryMode: item.memoryMode || "local_only",
       memoryModeText: mapMemoryModeText(item.memoryMode || "local_only"),
-      sourceBadge: "本机",
+      source: item.source || "local",
+      sourceBadge: item.sourceBadge || (item.source === "cloud" || item.source === "cloud_projection" ? "已同步" : "本机"),
+      revision: Number(item.revision || 0) || 0,
       conflict: item.conflict === true,
-      lastTaskType: "",
+      lastTaskType: item.lastTaskType || "",
       pinned: pinned.has(item.conversationId) || item.pinned === true,
     };
   });
+}
+
+function findConversationDescriptor(pageData, conversationId) {
+  return (pageData && Array.isArray(pageData.conversations) ? pageData.conversations : [])
+    .find((item) => item && item.conversationId === conversationId) || null;
+}
+
+function isCloudOnlyConversation(pageData, localConversation, conversationId) {
+  const descriptor = findConversationDescriptor(pageData, conversationId);
+  return Boolean(
+    descriptor && (descriptor.source === "cloud" || descriptor.source === "cloud_projection")
+    || localConversation && localConversation.source === "cloud_projection"
+  );
 }
 
 function buildHeaderSubtitle(state) {
@@ -1397,6 +1519,10 @@ Page({
     memoryPreferences: [],
     memoryPreferencesLoading: false,
     autoMemoryEnabled: true,
+    memoryPolicy: { autoMemoryEnabled: true, paused: false },
+    memoryRevision: 0,
+    memoryEpisodes: [],
+    memoryOperationPending: false,
     serverProactiveSuggestion: null,
     messages: [],
     conversations: [],
@@ -1486,6 +1612,8 @@ Page({
     this._isComposing = false;
     this._recorderManager = null;
     this._composerInsetSyncTimer = null;
+    this._resumeInFlight = false;
+    this._networkListener = null;
     try {
       const storage = require("../../../utils/storage");
       if (storage.clearLegacyTeacherIndexCaches) storage.clearLegacyTeacherIndexCaches();
@@ -1525,6 +1653,9 @@ Page({
     }, privacyState, providerState, buildXiaofuFloatState());
     nextState.conversationTitle = activeConversation.title || "新对话";
     nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
+    nextState.autoMemoryEnabled = aiAssistantService.isAutoMemoryEnabled
+      ? aiAssistantService.isAutoMemoryEnabled()
+      : wx.getStorageSync(AUTO_MEMORY_ENABLED_KEY) !== "0";
     Object.assign(nextState, applyHeaderStatusPatch(nextState));
 
     this.setData(Object.assign(nextState, bottomScrollPatch(false)));
@@ -1538,6 +1669,16 @@ Page({
     if (!demoMode && question) {
       setTimeout(() => this.sendMessage(question), 260);
     }
+
+    // 网络恢复时尝试续跑未完成的任务（监听器在 onUnload 注销）。
+    if (typeof wx !== "undefined" && typeof wx.onNetworkStatusChange === "function") {
+      this._networkListener = (res) => {
+        if (res && res.isConnected && !this.data.sending) this.resumeActiveAgentRun();
+      };
+      wx.onNetworkStatusChange(this._networkListener);
+    }
+    // 页面重开后恢复未完成的 Run：凭 shell 持久句柄续跑，绝不重建第二个 Run。
+    this.resumeActiveAgentRun();
   },
 
   refreshConnectionStatus() {
@@ -1838,6 +1979,8 @@ Page({
         }
       });
     }
+    // 回到页面时恢复未完成的 Run（进行中的发送独占 UI 时跳过）。
+    if (!this.data.sending) this.resumeActiveAgentRun();
   },
 
   onResize() {
@@ -1851,6 +1994,10 @@ Page({
     if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
     if (this._onKeyboardHeightChange && typeof wx !== "undefined" && typeof wx.offKeyboardHeightChange === "function") {
       try { wx.offKeyboardHeightChange(this._onKeyboardHeightChange); } catch (e) { /* ignore */ }
+    }
+    if (this._networkListener && typeof wx !== "undefined" && typeof wx.offNetworkStatusChange === "function") {
+      try { wx.offNetworkStatusChange(this._networkListener); } catch (e) { /* ignore */ }
+      this._networkListener = null;
     }
   },
 
@@ -1910,16 +2057,43 @@ Page({
     return conversation;
   },
 
-  switchConversationById(conversationId) {
-    if (!conversationId || conversationId === this.data.activeConversationId) {
+  async switchConversationById(conversationId) {
+    if (!conversationId) {
       this.setData({ showConversationSheet: false });
-      return;
+      return null;
     }
     if (this.data.sending) {
       wx.showToast({ title: "请等待当前回复完成", icon: "none" });
-      return;
+      return null;
     }
-    const conversation = conversationStore.setActiveConversation(conversationId);
+    const localStore = conversationStore.getStore();
+    let conversation = (localStore.conversations || []).find((item) => item.conversationId === conversationId) || null;
+    if (conversationId === this.data.activeConversationId && conversation) {
+      this.setData({ showConversationSheet: false });
+      return conversation;
+    }
+    if (!conversation) {
+      let cloud;
+      try {
+        cloud = await agentMemoryClient.getCloudConversation(conversationId);
+      } catch (error) {
+        cloud = { success: false, error };
+      }
+      if (!cloud || cloud.success === false || !cloud.conversation) {
+        wx.showToast({
+          title: agentClientErrorMapper.userMessage(cloud, "无法恢复这条云端会话，请检查登录和网络"),
+          icon: "none",
+        });
+        return null;
+      }
+      conversation = conversationStore.upsertCloudProjection(cloud.conversation, { activate: true });
+      if (!conversation) {
+        wx.showToast({ title: "云端会话内容无效，未写入本机", icon: "none" });
+        return null;
+      }
+    } else {
+      conversation = conversationStore.setActiveConversation(conversationId);
+    }
     const messages = normalizeMessagesForDisplay(trimMessages(conversation.messages), this.data.expandedCards);
     const providerState = resolveProviderState(messages);
     const nextState = Object.assign({
@@ -1936,6 +2110,8 @@ Page({
     }, providerState);
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
+    this.refreshConversationList();
+    return conversation;
   },
 
   onConversationTap(event) {
@@ -1944,16 +2120,39 @@ Page({
 
   renameConversation(event) {
     const conversationId = event.currentTarget.dataset.conversationId;
-    const conversation = (conversationStore.getStore().conversations || []).find((item) => item.conversationId === conversationId);
-    if (!conversation) return;
+    const conversation = (conversationStore.getStore().conversations || []).find((item) => item.conversationId === conversationId) || null;
+    const descriptor = findConversationDescriptor(this.data, conversationId);
+    if (!conversation && !descriptor) return;
     wx.showModal({
       title: "重命名查询",
       editable: true,
       placeholderText: "输入查询标题",
-      content: conversation.title || "",
-      success: (res) => {
+      content: conversation && conversation.title || descriptor && descriptor.title || "",
+      success: async (res) => {
         if (!res.confirm) return;
-        const next = conversationStore.renameConversation(conversationId, res.content || "");
+        const nextTitle = String(res.content || "").trim();
+        if (isCloudOnlyConversation(this.data, conversation, conversationId)) {
+          const remote = await agentMemoryClient.renameCloudConversation(
+            conversationId,
+            nextTitle,
+            descriptor && descriptor.revision || conversation && conversation.revision || 0
+          );
+          if (!remote || remote.success === false) {
+            wx.showToast({
+              title: agentClientErrorMapper.userMessage(remote, "云端会话重命名失败"),
+              icon: "none",
+            });
+            return;
+          }
+          const projection = remote.conversation || Object.assign({}, descriptor || conversation || {}, {
+            conversationId,
+            title: nextTitle,
+            revision: remote.revision || descriptor && descriptor.revision || 0,
+            source: "cloud_projection",
+          });
+          conversationStore.upsertCloudProjection(projection, { activate: conversationId === this.data.activeConversationId });
+        }
+        const next = conversationStore.renameConversation(conversationId, nextTitle);
         if (!next) return;
         this.refreshConversationState(
           next.conversationId === this.data.activeConversationId ? next : conversationStore.getActiveConversation()
@@ -1964,14 +2163,33 @@ Page({
 
   clearConversation(event) {
     const conversationId = event && event.currentTarget && event.currentTarget.dataset.conversationId || this.data.activeConversationId;
+    const localConversation = (conversationStore.getStore().conversations || [])
+      .find((item) => item.conversationId === conversationId) || null;
     wx.showModal({
       title: "清空当前查询",
       content: "只清空这条对话的内容和结果，不影响其他对话和课表数据。",
       confirmText: "清空",
-      success: (res) => {
+      success: async (res) => {
         if (!res.confirm) return;
+        if (isCloudOnlyConversation(this.data, localConversation, conversationId)) {
+          const remote = await agentMemoryClient.deleteCloudConversation(conversationId);
+          if (!remote || remote.success === false) {
+            wx.showToast({
+              title: agentClientErrorMapper.userMessage(remote, "云端会话清空失败"),
+              icon: "none",
+            });
+            return;
+          }
+        }
         const next = conversationStore.clearConversation(conversationId);
-        aiAssistantService.clearPendingClarification();
+        if (next && next.source === "cloud_projection") {
+          conversationStore.updateConversation(conversationId, {
+            source: "local",
+            revision: 0,
+            memoryMode: "local_only",
+          });
+        }
+        if (conversationId === this.data.activeConversationId) aiAssistantService.clearPendingClarification();
         if (conversationId === this.data.activeConversationId) {
           this.setMessages([], {
             activeConversationContext: contextManager.normalizeContextSlots(next && next.contextSlots),
@@ -1986,13 +2204,25 @@ Page({
   deleteConversation(event) {
     const conversationId = event.currentTarget.dataset.conversationId;
     if (!conversationId) return;
+    const localConversation = (conversationStore.getStore().conversations || [])
+      .find((item) => item.conversationId === conversationId) || null;
     wx.showModal({
       title: "删除查询",
       content: "删除后无法恢复，但不会影响课表数据。",
       confirmText: "删除",
       confirmColor: "#c62828",
-      success: (res) => {
+      success: async (res) => {
         if (!res.confirm) return;
+        if (isCloudOnlyConversation(this.data, localConversation, conversationId)) {
+          const remote = await agentMemoryClient.deleteCloudConversation(conversationId);
+          if (!remote || remote.success === false) {
+            wx.showToast({
+              title: agentClientErrorMapper.userMessage(remote, "云端会话删除失败"),
+              icon: "none",
+            });
+            return;
+          }
+        }
         const store = conversationStore.deleteConversation(conversationId);
         const activeConversation = store.conversations.find((item) => item.conversationId === store.activeConversationId) ||
           store.conversations[0];
@@ -2968,39 +3198,10 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
-        const resolvedIntentName = (typeof response.intent === "string" && response.intent)
-          || (response.intent && response.intent.name)
-          || response.intentName
-          || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
-          || "";
-        const presentationMode = response.presentationMode
-          || (response.presentation && response.presentation.presentationMode)
-          || "";
-        const responseCards = Array.isArray(response.cards) ? response.cards : [];
-        const waitingConfirmation = responseCards.some((card) => (Array.isArray(card && card.actions) ? card.actions : [])
-          .some((action) => action && action.type === "confirmReminder"));
-        const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
-          cards: responseCards,
-          suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
-          toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
-          taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
-          steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
-          evidence: response.evidence || response.evidenceDisplay || null,
-          safety,
-          metrics: response.metrics || null,
-          fallback: response.fallback === true,
-          fallbackLayer: response.fallbackLayer || "",
-          status: response.status || "completed",
-          memory: response.memory || null,
-          intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
-          intentName: resolvedIntentName,
-          userQuery: message,
-          presentationMode,
-          presentation: response.presentation || null,
-          runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
-          taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
-          plan: response.plan || null,
-        });
+        const built = buildAssistantMessageFromResponse(response, { userQuery: message });
+        const resolvedIntentName = built.resolvedIntentName;
+        const waitingConfirmation = built.waitingConfirmation;
+        const assistantMessage = built.assistantMessage;
         if (response.memory && response.memory.mode) {
           this.setData(Object.assign({
             memoryMode: response.memory.mode,
@@ -3110,6 +3311,123 @@ Page({
           this._activeAiRequestId = "";
         }
       });
+  },
+
+  // P6b W4：断线/页面重开后的运行恢复唯一入口。
+  // 凭 agentRunShell 持久句柄续跑同一个 Run，绝不重建第二个 Run；
+  // 所有 Loading/状态文案只来自真实恢复路径与服务端 Run Events，绝不伪造。
+  resumeActiveAgentRun() {
+    if (this.data.sending || this._resumeInFlight) return;
+    const handle = agentRunShell.shell.getActiveRun();
+    if (!handle) return;
+    this._resumeInFlight = true;
+    this.setData({
+      sending: true,
+      slowRequest: false,
+      liveRunVisible: true,
+      liveRunEvents: [],
+      liveRunExpanded: false,
+      activeRunId: handle.runId,
+      activePollToken: handle.pollToken,
+      sendingStatusText: "正在恢复未完成的任务",
+      agentActivityState: "composing",
+      statusCapsuleText: "正在恢复未完成的任务",
+      statusCapsuleDetail: "将凭服务端真实运行事件继续，不会重新发起任务。",
+      statusCapsuleExpanded: true,
+    });
+    agentRunShell.shell.resumeActiveRun({
+      onRunEvents: (allEvents) => {
+        if (this._aiPageUnloaded) return;
+        this.setData({
+          liveRunEvents: Array.isArray(allEvents) ? allEvents.slice(-12) : [],
+        });
+      },
+      onStatus: (status) => {
+        if (this._aiPageUnloaded) return;
+        const activityPatch = agentActivityState.activityPatchForRunEvent(status);
+        this.setData(Object.assign({
+          sendingStatusText: status && status.text || this.data.sendingStatusText,
+        }, activityPatch));
+      },
+    }).then((outcome) => {
+      this._resumeInFlight = false;
+      if (this._aiPageUnloaded) return;
+      if (outcome && outcome.result) {
+        // 终态且取回真实结果：与 sendMessage 成功分支同一套消息构建与投递逻辑。
+        const response = outcome.result;
+        const built = buildAssistantMessageFromResponse(response, { userQuery: "" });
+        const nextContext = contextManager.updateFromResponse(this.data.activeConversationContext, response);
+        const terminalActivity = agentActivityState.activityPatchForResponse(response, {
+          waitingConfirmation: built.waitingConfirmation,
+        });
+        const finalMessages = (this.data.messages || []).slice().concat(built.assistantMessage);
+        this.setMessages(finalMessages, Object.assign({
+          activeConversationContext: nextContext,
+          sending: false,
+          slowRequest: false,
+          liveRunVisible: false,
+          liveRunEvents: [],
+          activeRunId: "",
+          activePollToken: "",
+        }, terminalActivity), { save: true });
+        this.executeResponseActions(response);
+        if (!built.waitingConfirmation) this.scheduleStatusCapsuleReset();
+        return;
+      }
+      if (outcome && outcome.cancelled) {
+        // 真实取消：只如实清理运行 UI，不补任何结果。
+        this.setData({
+          sending: false,
+          slowRequest: false,
+          liveRunVisible: false,
+          liveRunEvents: [],
+          sendingStatusText: "已取消",
+          agentActivityState: "idle",
+          statusCapsuleText: "任务已取消",
+          statusCapsuleDetail: "未继续执行后续工具或写操作。",
+          statusCapsuleExpanded: false,
+          activeRunId: "",
+          activePollToken: "",
+        });
+        return;
+      }
+      // 句柄竞态消失 / RUN_GONE / 超时未取回结果：如实重置运行 UI，绝不伪造成功。
+      const runGone = Boolean(outcome && outcome.reason === "RUN_GONE");
+      this.setData(Object.assign({
+        sending: false,
+        slowRequest: false,
+        liveRunVisible: false,
+        liveRunEvents: [],
+        activeRunId: "",
+        activePollToken: "",
+        agentActivityState: "idle",
+        statusCapsuleExpanded: false,
+      }, runGone ? {
+        sendingStatusText: "任务已过期",
+        statusCapsuleText: "任务已过期",
+        statusCapsuleDetail: "服务端已不存在该任务，请重新发起。",
+      } : {
+        statusCapsuleText: "待命 · 校园工具可用",
+        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
+      }));
+      if (runGone) this.scheduleStatusCapsuleReset();
+    }).catch((error) => {
+      this._resumeInFlight = false;
+      if (this._aiPageUnloaded) return;
+      console.warn("[ai-assistant] resumeActiveRun failed", error && error.message || error);
+      this.setData({
+        sending: false,
+        slowRequest: false,
+        liveRunVisible: false,
+        liveRunEvents: [],
+        activeRunId: "",
+        activePollToken: "",
+        agentActivityState: "idle",
+        statusCapsuleExpanded: false,
+        statusCapsuleText: "待命 · 校园工具可用",
+        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
+      });
+    });
   },
 
   dismissPrivacyTip() {
@@ -3244,22 +3562,60 @@ Page({
     const localItems = aiAssistantService.getUserPreferenceItems();
     if (this.data.memoryMode !== "cloud_sync") {
       this.setData({
-        memoryPreferences: normalizeMemoryPreferenceItems(localItems),
+        memoryPreferences: this.data.memoryMode === "local_only"
+          ? normalizeMemoryPreferenceItems(localItems)
+          : [],
         memoryPreferencesLoading: false,
+        memoryEpisodes: [],
       });
       return;
     }
     this.setData({ memoryPreferencesLoading: true });
-    const cloud = await agentMemoryClient.listCloudPreferences();
-    const merged = {};
-    localItems.forEach((item) => { merged[item.key] = item; });
-    if (cloud.success) {
-      (cloud.items || []).forEach((item) => { merged[item.key] = item; });
+    let snapshot = null;
+    let cloudItems = null;
+    try {
+      [snapshot, cloudItems] = await Promise.all([
+        agentMemoryClient.getMemorySnapshot({
+          conversationId: this.data.activeConversationId,
+          memoryMode: this.data.memoryMode,
+        }),
+        agentMemoryClient.listMemoryItems({ page: 1, pageSize: 100 }),
+      ]);
+    } catch (error) {
+      snapshot = null;
+      cloudItems = null;
     }
-    this.setData({
+    const snapshotBody = snapshot && (snapshot.snapshot || snapshot.memory || snapshot.data || snapshot) || {};
+    const policy = snapshotBody.policy && typeof snapshotBody.policy === "object"
+      ? snapshotBody.policy
+      : {};
+    const revision = Number(
+      cloudItems && cloudItems.revision
+      || snapshotBody.revision
+      || snapshot && snapshot.revision
+      || this.data.memoryRevision
+      || 0
+    ) || 0;
+    const merged = {};
+    localItems.forEach((item) => { merged[item.memoryId || item.key] = item; });
+    const remoteItems = cloudItems && cloudItems.success !== false && Array.isArray(cloudItems.items)
+      ? cloudItems.items
+      : (Array.isArray(snapshotBody.items) ? snapshotBody.items : []);
+    remoteItems.forEach((item) => {
+      const identity = item && (item.memoryId || item.id || item.key);
+      if (identity) merged[identity] = item;
+    });
+    const next = {
       memoryPreferences: normalizeMemoryPreferenceItems(Object.keys(merged).map((key) => merged[key])),
       memoryPreferencesLoading: false,
-    });
+      memoryRevision: revision,
+      memoryPolicy: Object.assign({}, this.data.memoryPolicy || {}, policy),
+      memoryEpisodes: normalizeMemoryEpisodes(snapshotBody.episodes || snapshot && snapshot.episodes),
+    };
+    if (typeof policy.autoMemoryEnabled === "boolean") {
+      next.autoMemoryEnabled = policy.autoMemoryEnabled;
+    }
+    this.setData(next);
   },
 
   closeMemorySheet() {
@@ -3329,11 +3685,14 @@ Page({
     if (mode === "local_only") {
       // local_only can apply immediately; cloud delete is best-effort and must not claim success on failure
       if (options.deleteCloudData === true) {
-        const cleared = await agentMemoryClient.clearCloudMemory();
-        if (!cleared.success) {
+        const cleared = await agentMemoryClient.withMemoryRevisionRetry(
+          (expectedRevision) => agentMemoryClient.clearCloudMemory(expectedRevision),
+          { type: "clear", expectedRevision: this.data.memoryRevision || 0 }
+        );
+        if (!cleared || cleared.success === false) {
           this.setData({ memorySwitching: false });
           wx.showToast({
-            title: agentClientErrorMapper.userMessage(cleared, "云端清除失败，请稍后再试"),
+            title: (cleared && cleared.error) || agentClientErrorMapper.userMessage(cleared, "云端清除失败，请稍后再试"),
             icon: "none",
           });
           return;
@@ -3393,36 +3752,110 @@ Page({
   },
 
   onDeleteMemoryPreference(event) {
+    const memoryId = event.detail && event.detail.memoryId || "";
     const key = event.detail && event.detail.key || "";
-    if (!key) return;
+    if (!memoryId && !key) return;
     wx.showModal({
       title: "删除这项记忆",
       content: "删除后，小佛不会再把它作为长期偏好使用。",
       confirmText: "删除",
       success: async (res) => {
         if (!res.confirm) return;
-        if (this.data.memoryMode === "cloud_sync") {
-          const cloud = await agentMemoryClient.deleteCloudPreference(key);
-          if (!cloud.success) {
-            wx.showToast({ title: cloud.error || "云端删除失败", icon: "none" });
+        if (this.data.memoryMode !== "local_only") {
+          const cloud = await agentMemoryClient.withMemoryRevisionRetry(
+            (expectedRevision) => (memoryId
+              ? agentMemoryClient.deleteMemoryItem(memoryId, { expectedRevision })
+              : agentMemoryClient.deleteCloudPreference(key, { expectedRevision })),
+            {
+              type: "delete",
+              kind: memoryId ? "item" : "preference",
+              targetId: memoryId || key,
+              expectedRevision: this.data.memoryRevision || 0,
+            }
+          );
+          if (!cloud || cloud.success === false) {
+            wx.showToast({ title: cloud && cloud.error || "云端删除失败", icon: "none" });
             return;
           }
+          if (cloud.alreadyGone === true) {
+            // 404 收敛：目标已不存在，移除本机项并刷新列表，温和提示
+            if (key) aiAssistantService.deleteUserPreference(key);
+            await this.loadMemoryPreferences();
+            wx.showToast({ title: "该记忆已不存在，已为你刷新", icon: "none" });
+            return;
+          }
+          const revision = Number(cloud.revision || cloud.memory && cloud.memory.revision || 0) || 0;
+          if (revision) this.setData({ memoryRevision: revision });
         }
-        aiAssistantService.deleteUserPreference(key);
+        if (key) aiAssistantService.deleteUserPreference(key);
         await this.loadMemoryPreferences();
         wx.showToast({ title: "已删除", icon: "none" });
       },
     });
   },
 
-  onToggleAutoMemory(event) {
+  async onToggleAutoMemory(event) {
     const enabled = event.detail && event.detail.autoMemoryEnabled !== false;
-    try {
-      wx.setStorageSync("xiaofu_auto_memory_enabled", enabled ? "1" : "0");
-    } catch (_) { /* ignore */ }
-    this.setData({ autoMemoryEnabled: enabled });
-    if (this.data.memoryMode === "cloud_sync") {
-      agentMemoryClient.patchCloudPreference({ autoMemoryEnabled: enabled }).catch(() => {});
+    const previous = this.data.autoMemoryEnabled !== false;
+    if (enabled === previous || this.data.memoryOperationPending) return;
+    if (this.data.memoryMode !== "cloud_sync") {
+      try { wx.setStorageSync(AUTO_MEMORY_ENABLED_KEY, enabled ? "1" : "0"); } catch (_) { /* ignore */ }
+      this.setData({
+        autoMemoryEnabled: enabled,
+        memoryPolicy: Object.assign({}, this.data.memoryPolicy || {}, {
+          autoMemoryEnabled: enabled,
+          paused: !enabled,
+        }),
+      });
+    } else {
+      this.setData({ memoryOperationPending: true });
+      let result;
+      try {
+        // pause/resume 按期望终态写入（绝对值 patch，非 toggle）；409 时经
+        // refresh-on-conflict 用最新 revision 按同一终态仅重放一次。
+        result = await agentMemoryClient.withMemoryRevisionRetry(
+          (expectedRevision) => agentMemoryClient.patchMemoryPolicy({
+            autoMemoryEnabled: enabled,
+            paused: !enabled,
+          }, expectedRevision),
+          { type: "pause", expectedRevision: this.data.memoryRevision || 0 }
+        );
+      } catch (error) {
+        result = { success: false, error };
+      }
+      if (!result || result.success === false) {
+        this.setData({
+          autoMemoryEnabled: previous,
+          memoryOperationPending: false,
+        });
+        wx.showToast({
+          title: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
+            ? result.error
+            : agentClientErrorMapper.userMessage(result, "自动记忆设置失败，请稍后重试"),
+          icon: "none",
+        });
+        return;
+      }
+      const policy = result.policy
+        || result.memory && result.memory.policy
+        || result.memory
+        || {};
+      const revision = Number(
+        result.revision
+        || result.memory && result.memory.revision
+        || this.data.memoryRevision
+        || 0
+      ) || 0;
+      try { wx.setStorageSync(AUTO_MEMORY_ENABLED_KEY, enabled ? "1" : "0"); } catch (_) { /* ignore */ }
+      this.setData({
+        autoMemoryEnabled: enabled,
+        memoryPolicy: Object.assign({}, this.data.memoryPolicy || {}, policy, {
+          autoMemoryEnabled: enabled,
+          paused: !enabled,
+        }),
+        memoryRevision: revision,
+        memoryOperationPending: false,
+      });
     }
     wx.showToast({
       title: enabled ? "已恢复自动记忆" : "已暂停自动记忆",
@@ -3431,9 +3864,10 @@ Page({
   },
 
   onEditMemoryPreference(event) {
+    const memoryId = event.detail && event.detail.memoryId || "";
     const key = event.detail && event.detail.key || "";
     const current = event.detail && event.detail.value;
-    if (!key) return;
+    if (!memoryId && !key) return;
     const titles = {
       preferredName: "修改称呼",
       campus: "修改常用校区（仙溪校区/江湾校区）",
@@ -3470,18 +3904,107 @@ Page({
           return;
         }
         if (key === "campus" && value.indexOf("校区") < 0) value = `${value}校区`;
-        if (this.data.memoryMode === "cloud_sync") {
-          const cloud = await agentMemoryClient.patchCloudPreference({ key, value });
-          if (!cloud.success) {
-            wx.showToast({ title: cloud.error || "保存失败", icon: "none" });
+        if (this.data.memoryMode !== "local_only") {
+          const cloud = await agentMemoryClient.withMemoryRevisionRetry(
+            (expectedRevision) => (memoryId
+              ? agentMemoryClient.patchMemoryItem(memoryId, {
+                content: String(value),
+                normalizedValue: value,
+              }, expectedRevision)
+              : agentMemoryClient.patchCloudPreference({
+                key,
+                value,
+                expectedRevision,
+              })),
+            {
+              type: "edit",
+              kind: memoryId ? "item" : "preference",
+              targetId: memoryId || key,
+              expectedRevision: this.data.memoryRevision || 0,
+            }
+          );
+          if (!cloud || cloud.success === false) {
+            if (cloud && cloud.notFound === true) await this.loadMemoryPreferences();
+            wx.showToast({ title: cloud && cloud.error || "保存失败", icon: "none" });
             return;
           }
+          const revision = Number(cloud.revision || cloud.memory && cloud.memory.revision || 0) || 0;
+          if (revision) this.setData({ memoryRevision: revision });
         }
         try {
+          if (!key) throw new Error("memory key unavailable");
           aiAssistantService.setUserPreference && aiAssistantService.setUserPreference(key, value);
         } catch (_) { /* ignore */ }
         await this.loadMemoryPreferences();
         wx.showToast({ title: "已更新", icon: "none" });
+      },
+    });
+  },
+
+  async onExportMemory() {
+    if (this.data.memoryOperationPending) return;
+    // 明确模式分支：local_only 不经过云端导出接口，导出本机偏好副本
+    if (this.data.memoryMode === "local_only") {
+      let localContent;
+      try {
+        localContent = JSON.stringify({
+          schemaVersion: "local-memory.export.v1",
+          mode: "local_only",
+          items: aiAssistantService.getUserPreferenceItems(),
+        }, null, 2);
+      } catch (error) {
+        wx.showToast({ title: "记忆导出内容无法读取", icon: "none" });
+        return;
+      }
+      wx.setClipboardData({
+        data: localContent,
+        success: () => {
+          wx.showToast({ title: "本机记忆副本已复制", icon: "none" });
+        },
+        fail: () => {
+          wx.showToast({ title: "复制失败，请稍后重试", icon: "none" });
+        },
+      });
+      return;
+    }
+    if (this.data.memoryMode !== "cloud_sync") {
+      wx.showToast({ title: "当前模式暂无可导出的长期记忆", icon: "none" });
+      return;
+    }
+    // export 为只读操作，不经过 refresh-on-conflict 写重试
+    this.setData({ memoryOperationPending: true });
+    let result;
+    try {
+      result = await agentMemoryClient.exportCloudMemory();
+    } catch (error) {
+      result = { success: false, error };
+    }
+    if (!result || result.success === false) {
+      this.setData({ memoryOperationPending: false });
+      wx.showToast({
+        title: agentClientErrorMapper.userMessage(result, "记忆导出失败，请检查登录和网络"),
+        icon: "none",
+      });
+      return;
+    }
+    const payload = result.export || {};
+    let content;
+    try {
+      content = JSON.stringify(payload, null, 2);
+    } catch (error) {
+      this.setData({ memoryOperationPending: false });
+      wx.showToast({ title: "记忆导出内容无法读取", icon: "none" });
+      return;
+    }
+    wx.setClipboardData({
+      data: content,
+      success: () => {
+        this.setData({ memoryOperationPending: false });
+        wx.showToast({ title: "记忆副本已复制", icon: "none" });
+      },
+      fail: () => {
+        this.setData({ memoryOperationPending: false });
+        wx.showToast({ title: "复制失败，请稍后重试", icon: "none" });
       },
     });
   },
@@ -3569,18 +4092,27 @@ Page({
       confirmText: "清除",
       success: async (res) => {
         if (!res.confirm) return;
-        const result = await agentMemoryClient.clearCloudMemory();
-        if (!result.success) {
+        // H1：携带当前持有的 memoryRevision；409 时刷新后仅重试一次
+        const result = await agentMemoryClient.withMemoryRevisionRetry(
+          (expectedRevision) => agentMemoryClient.clearCloudMemory(expectedRevision),
+          { type: "clear", expectedRevision: this.data.memoryRevision || 0 }
+        );
+        if (!result || result.success === false) {
           wx.showToast({
-            title: agentClientErrorMapper.userMessage(result, "清除失败，请稍后再试"),
+            title: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
+              ? result.error
+              : agentClientErrorMapper.userMessage(result, "清除失败，请稍后再试"),
             icon: "none",
           });
           return;
         }
+        // 按服务端响应契约同步列表、数量与最新 revision
         this.setData(Object.assign({
           memoryMode: "local_only",
           showMemorySheet: false,
           memoryPreferences: [],
+          memoryEpisodes: [],
+          memoryRevision: Number(result.revision || 0) || 0,
         }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: "local_only" }))));
         aiAssistantService.clearUserPreferences();
         try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", "local_only"); } catch (error) { /* ignore */ }
@@ -4418,5 +4950,6 @@ if (typeof module !== "undefined") {
     normalizeMessageForDisplay,
     makeMessage,
     resolveAssistantIntentName,
+    buildAssistantMessageFromResponse,
   };
 }

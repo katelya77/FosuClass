@@ -16,6 +16,7 @@ try {
   router.use(require("../modules/audit/routes"));
   router.use(require("../modules/dashboard/routes"));
   router.use(require("../modules/ai-provider/routes"));
+  router.use(require("../modules/agent-platform/routes"));
 } catch (error) {
   // Domain modules must not prevent legacy admin routes from loading.
   console.warn("[admin] optional domain modules failed to load:", error.message);
@@ -49,6 +50,9 @@ const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
 const publisherReceiptService = require("../services/publisherReceiptService");
 const agentService = require("../services/ai/agentService");
+const platformComposition = require("../services/ai/platformComposition");
+const runtimeModeService = require("../services/ai/runtimeModeService");
+const { createPlatformAdminHandlers } = require("../../../apps/agent-admin");
 const aiProviderConfigService = require("../services/ai/providerConfigService");
 const providerChainService = require("../services/ai/providerChainService");
 const evaluationService = require("../services/ai/evaluationService");
@@ -56,6 +60,23 @@ const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
 const { createKnowledgeControlPlane } = require("../services/ai/knowledgeControlPlane");
 const agentProtocol = require("../services/ai/agentProtocol");
 const knowledgeControlPlane = createKnowledgeControlPlane();
+
+// maybe-async 透传（P5a WS6）：file 后端同步直返；postgres 后端（PG 幂等/审计）
+// 返回 Promise。handler 不改 async——`await 非 thenable` 会把响应推迟到微任务，
+// 破坏同步调用 handler 的既有测试与工具。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+const platformAdminHandlers = createPlatformAdminHandlers({
+  getPlatformDiagnostics: platformComposition.getDiagnostics,
+  listRecentPlatformTraces: platformComposition.listRecentPlatformTraces,
+  getExecutionPolicy: platformComposition.getExecutionPolicyTruth,
+});
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");
 const campusMapAssetService = require("../services/campusMapAssetService");
@@ -537,6 +558,10 @@ router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
   });
 });
 
+router.get("/agent-platform/topology", adminAuth.verifyAdminAccess, platformAdminHandlers.getTopology);
+// 与 modules/agent-platform/routes.js 的 /runs/:runId 详情端点对齐：列表同样要求 agent-config:read。
+router.get("/agent-platform/runs", adminAuth.verifyAdminAccess, adminAuth.requireScopes(["agent-config:read"]), platformAdminHandlers.getRecentRuns);
+
 // 自定义 Provider（CCSwitch 式）CRUD 与模型拉取已迁入 modules/ai-provider/routes.js。
 
 router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
@@ -747,6 +772,10 @@ function kbOperatorFromReq(req) {
 }
 
 router.get("/assistant-kb", adminAuth.verifyAdminAccess, (req, res) => {
+  const fail = (error) => {
+    safeLog("assistant-kb-list-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_LIST_FAILED", message: error.message });
+  };
   try {
     const status = req.query.status === "published" ? "published" : "draft";
     const payload = status === "published"
@@ -759,16 +788,15 @@ router.get("/assistant-kb", adminAuth.verifyAdminAccess, (req, res) => {
         environment: req.query.environment,
       });
     const version = knowledgeControlPlane.versionService.getCurrentVersion();
-    return res.json(Object.assign({}, payload, {
+    return chain(knowledgeControlPlane.auditService.list(8), (auditRecent) => res.json(Object.assign({}, payload, {
       controlPlane: {
         version,
-        auditRecent: knowledgeControlPlane.auditService.list(8),
+        auditRecent,
         mcpNote: "MCP 仅草稿读写与校验；发布/回滚仍须后台人工确认。",
       },
-    }));
+    })), fail);
   } catch (error) {
-    safeLog("assistant-kb-list-failed", { error: error.message, code: error.code || "" });
-    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_LIST_FAILED", message: error.message });
+    return fail(error);
   }
 });
 
@@ -786,13 +814,14 @@ router.get("/assistant-kb/export", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.get("/assistant-kb/audit", adminAuth.verifyAdminAccess, (req, res) => {
+  const fail = (error) => res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_AUDIT_FAILED", message: error.message });
   try {
-    return res.json({
+    return chain(knowledgeControlPlane.auditService.list(Number(req.query.limit || 50) || 50), (entries) => res.json({
       success: true,
-      entries: knowledgeControlPlane.auditService.list(Number(req.query.limit || 50) || 50),
-    });
+      entries,
+    }), fail);
   } catch (error) {
-    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_AUDIT_FAILED", message: error.message });
+    return fail(error);
   }
 });
 
@@ -829,34 +858,26 @@ router.post("/assistant-kb/test", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.post("/assistant-kb", verifyAdminWriteAccess, (req, res) => {
-  try {
-    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const operator = kbOperatorFromReq(req);
-    const payload = knowledgeControlPlane.repository.createDraft((req.body && req.body.type) || "doc", req.body || {}, operator);
-    writeAuditLog(req, "create", "assistant-kb", payload.entry && payload.entry.id, `assistant kb entry created: ${payload.entry && payload.entry.title}`);
-    return res.json(payload);
-  } catch (error) {
+  const fail = (error) => {
     safeLog("assistant-kb-create-failed", { error: error.message, code: error.code || "" });
     const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400
       : (error.code === "IDEMPOTENCY_KEY_CONFLICT" || error.code === "ASSISTANT_KB_CONFLICT" ? 409 : 500);
     return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_CREATE_FAILED", message: error.message, risks: error.risks || [] });
+  };
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const operator = kbOperatorFromReq(req);
+    return chain(knowledgeControlPlane.repository.createDraft((req.body && req.body.type) || "doc", req.body || {}, operator), (payload) => {
+      writeAuditLog(req, "create", "assistant-kb", payload.entry && payload.entry.id, `assistant kb entry created: ${payload.entry && payload.entry.title}`);
+      return res.json(payload);
+    }, fail);
+  } catch (error) {
+    return fail(error);
   }
 });
 
 router.put("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
-  try {
-    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const operator = kbOperatorFromReq(req);
-    const ifMatch = req.headers["if-match"] || req.body && req.body.expectedRevision;
-    const payload = knowledgeControlPlane.repository.updateDraft(
-      req.body && req.body.type,
-      req.params.id,
-      req.body || {},
-      Object.assign({}, operator, { ifMatch, expectedRevision: ifMatch })
-    );
-    writeAuditLog(req, "update", "assistant-kb", req.params.id, `assistant kb entry updated: ${payload.entry && payload.entry.title}`);
-    return res.json(payload);
-  } catch (error) {
+  const fail = (error) => {
     safeLog("assistant-kb-update-failed", { error: error.message, code: error.code || "" });
     const statusCode = error.code === "ASSISTANT_KB_NOT_FOUND" ? 404
       : (error.code === "ASSISTANT_KB_REVISION_CONFLICT" || error.code === "IDEMPOTENCY_KEY_CONFLICT" ? 409
@@ -868,6 +889,22 @@ router.put("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
       risks: error.risks || [],
       currentRevision: error.currentRevision,
     });
+  };
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const operator = kbOperatorFromReq(req);
+    const ifMatch = req.headers["if-match"] || req.body && req.body.expectedRevision;
+    return chain(knowledgeControlPlane.repository.updateDraft(
+      req.body && req.body.type,
+      req.params.id,
+      req.body || {},
+      Object.assign({}, operator, { ifMatch, expectedRevision: ifMatch })
+    ), (payload) => {
+      writeAuditLog(req, "update", "assistant-kb", req.params.id, `assistant kb entry updated: ${payload.entry && payload.entry.title}`);
+      return res.json(payload);
+    }, fail);
+  } catch (error) {
+    return fail(error);
   }
 });
 

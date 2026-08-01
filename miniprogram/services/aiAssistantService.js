@@ -23,6 +23,7 @@ const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
 const LAST_IMPORT_CONTEXT_KEY = "FOSU_AI_LAST_IMPORT_CONTEXT";
 const PENDING_CLARIFICATION_KEY = "FOSU_AI_PENDING_CLARIFICATION";
 const USER_PREFERENCES_KEY = "FOSU_AI_USER_PREFERENCES";
+const AUTO_MEMORY_ENABLED_KEY = "xiaofu_auto_memory_enabled";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
@@ -176,6 +177,11 @@ function isPersonalContextAllowed() {
 function setPersonalContextAllowed(allowed) {
   writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
   return allowed === true;
+}
+
+function isAutoMemoryEnabled() {
+  const stored = readStorage(AUTO_MEMORY_ENABLED_KEY, "1");
+  return stored !== false && stored !== 0 && stored !== "0" && stored !== "false";
 }
 
 function normalizeUserPreferences(value) {
@@ -544,6 +550,9 @@ function buildClientContext(extra = {}) {
     },
     contextSlots,
     memoryMode: extra.memoryMode || readStorage("FOSU_AI_MEMORY_MODE", "local_only") || "local_only",
+    autoMemoryEnabled: typeof extra.autoMemoryEnabled === "boolean"
+      ? extra.autoMemoryEnabled
+      : isAutoMemoryEnabled(),
     cloudSyncEnabled: extra.cloudSyncEnabled === true
       || (extra.memoryMode || readStorage("FOSU_AI_MEMORY_MODE", "local_only")) === "cloud_sync",
   };
@@ -1794,6 +1803,10 @@ function isClientFallbackTransportError(error) {
     "SERVICE_UNAVAILABLE",
     "ECONNRESET",
     "ECONNREFUSED",
+    // Run 契约破坏（应答缺 runId 等服务端失败类）：与旧 agentRunClient 同码，
+    // 走离线降级而不是把异常直接抛给页面。
+    "RUN_CREATE_FAILED",
+    "AGENT_SDK_RUN_ID_MISSING",
   ].indexOf(code) >= 0) return true;
   if (code) return false;
   if (typeof wx === "undefined" || typeof wx.request !== "function") return true;
@@ -1890,6 +1903,7 @@ async function chat(message, context, options = {}) {
 
 module.exports = {
   ALLOW_PERSONAL_CONTEXT_KEY,
+  AUTO_MEMORY_ENABLED_KEY,
   HISTORY_KEY,
   LAST_IMPORT_CONTEXT_KEY,
   PENDING_CLARIFICATION_KEY,
@@ -1914,6 +1928,7 @@ module.exports = {
   getUserPreferenceItems,
   hasUsableAgentAnswer,
   isAiEnhancedClientEnv,
+  isAutoMemoryEnabled,
   isPersonalContextAllowed,
   isStructuredLocalHelp,
   offlineChat,

@@ -1,0 +1,8 @@
+{
+  "name": "@agent-platform/mcp-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Governed MCP client runtime: streamable HTTP / controlled stdio transports, registry publication, scoped tool invocation.",
+  "main": "index.js",
+  "license": "MIT"
+}

@@ -23,6 +23,12 @@ const SCOPES = Object.freeze({
   ASSISTANT_KB_AUDIT_READ: "assistant-kb:audit:read",
   ASSISTANT_KB_PUBLISH: "assistant-kb:publish",
   ASSISTANT_KB_ROLLBACK: "assistant-kb:rollback",
+  AGENT_CONFIG_READ: "agent-config:read",
+  AGENT_CONFIG_DRAFT_WRITE: "agent-config:draft:write",
+  AGENT_CONFIG_VALIDATE: "agent-config:validate",
+  AGENT_CONFIG_PUBLISH: "agent-config:publish",
+  AGENT_CONFIG_ROLLBACK: "agent-config:rollback",
+  AGENT_CONFIG_AUDIT_READ: "agent-config:audit:read",
   ADMIN_FULL: "admin:full",
 });
 

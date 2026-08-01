@@ -32,7 +32,8 @@ async function run() {
   assert.strictEqual(normal.intent, "get_today_courses");
   assert.strictEqual(normal.selectedSkill, "today_schedule");
   assert.strictEqual(normal.providerUsed, false);
-  assert.strictEqual(normal.evidenceComplete, true);
+  assert.strictEqual(normal.evidenceComplete, false, "missing personal schedule is not complete factual evidence");
+  assert.ok(normal.toolCalls.some((call) => call.name === "get_today_courses" && call.status === "failed"));
   assert.strictEqual(sensitive.errorCode, "SENSITIVE_CREDENTIAL_BLOCKED");
   const text = JSON.stringify(traces);
   assert.ok(!/trace-secret-password|trace-secret-token|password:|token:/i.test(text));

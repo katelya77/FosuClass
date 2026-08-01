@@ -20,6 +20,9 @@ process.env.AI_RUNTIME_MODE = "competition";
 process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.AI_DECISION_PROVIDER = "deepseek";
+process.env.AI_RESPONSE_PROVIDER = "deepseek";
+process.env.AI_EXECUTION_POLICY = "strict_model_first";
 process.env.NODE_ENV = "development";
 process.env.AI_PROVIDER_ENVIRONMENTS = deepseekProfiles;
 
@@ -60,26 +63,16 @@ async function run() {
 
   const originalGenerate = deepseekProvider.generate;
   const originalGenerateStructured = deepseekProvider.generateStructured;
-  deepseekProvider.generateStructured = async (input) => ({
+  deepseekProvider.generateStructured = async () => ({
     provider: "deepseek",
-    content: JSON.stringify(input.purpose === "understanding" ? {
-      goal: "project_qa",
-      entityType: "none",
-      entity: "",
-      normalizedEntity: "",
+    content: JSON.stringify({
+      schemaVersion: "decision.v2",
+      goal: { name: "project_qa", confidence: 0.99, requiresClarification: false },
+      entities: [],
       constraints: {},
-      followUpMode: "new_goal",
-      confidence: 0.99,
-      needsClarification: false,
-    } : {
-      goal: "回答 FosuClass 项目问题",
-      intent: "project_qa",
-      confidence: 0.99,
-      slots: {},
-      needsClarification: false,
-      clarification: null,
-      steps: [{ toolName: "rag_search", args: { q: "FosuClass" }, reasonCode: "NEED_KNOWLEDGE" }],
-      stopCondition: "all_steps_done",
+      skillCandidates: [{ skillId: "knowledge_search", confidence: 0.99 }],
+      plan: { steps: [{ id: "answer", skillId: "knowledge_search", purpose: "Answer from published knowledge" }] },
+      responseMode: "natural_language",
     }),
   });
   deepseekProvider.generate = async () => {

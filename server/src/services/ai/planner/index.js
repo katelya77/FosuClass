@@ -11,6 +11,7 @@ const { normalizePlan } = require("./planSchema");
 const { validatePlan } = require("./planValidator");
 
 async function plan(input = {}) {
+  if (input.unifiedDecision === true) return deterministicPlanner.plan(input);
   const policy = getPlannerPolicy(input.runtimeMode, input.plannerEnv || input.providerRuntimeConfig || process.env);
   if (policy.useModelPlanner) {
     return modelPlanner.plan(input);
@@ -19,6 +20,7 @@ async function plan(input = {}) {
 }
 
 async function replan(input = {}) {
+  if (input.unifiedDecision === true) return deterministicPlanner.replan(input);
   const policy = getPlannerPolicy(input.runtimeMode, input.plannerEnv || input.providerRuntimeConfig || process.env);
   if (policy.useModelPlanner) {
     return modelPlanner.replan(input);

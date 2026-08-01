@@ -69,10 +69,13 @@ function extractText(data) {
     .trim();
 }
 
-async function postMessages(entry, body, timeoutMs) {
+async function postMessages(entry, body, timeoutMs, requestOptions = {}) {
   try {
     return await axios.post(`${entry.baseUrl}/messages`, body, {
       timeout: timeoutMs,
+      signal: requestOptions.signal || undefined,
+      httpAgent: requestOptions.httpAgent || undefined,
+      httpsAgent: requestOptions.httpsAgent || undefined,
       headers: {
         "x-api-key": entry.apiKey,
         "anthropic-version": ANTHROPIC_VERSION,
@@ -87,11 +90,12 @@ async function postMessages(entry, body, timeoutMs) {
   }
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories }) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig, history, userMemories, timeoutMs, signal, httpAgent, httpsAgent }) {
   const runtimeConfig = providerRuntimeConfig || {};
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
-  const timeout = Math.max(1000, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const configuredTimeout = Math.max(50, Math.min(60000, Number(runtimeConfig.AI_TIMEOUT_MS || 15000) || 15000));
+  const timeout = Math.max(50, Math.min(configuredTimeout, Number(timeoutMs || configuredTimeout) || configuredTimeout));
   const maxTokens = Math.max(128, Math.min(4096, Number(runtimeConfig.AI_MAX_TOKENS || 1200) || 1200));
   const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
@@ -117,7 +121,7 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
     temperature: conversational ? 0.7 : 0.1,
     system: systemPrompt,
     messages: conversation,
-  }, timeout);
+  }, timeout, { signal, httpAgent, httpsAgent });
   const content = extractText(response.data);
   if (!useJsonMode) {
     const parsedTextMode = deepseekProvider.parseJsonFromText(content);
@@ -141,11 +145,11 @@ async function generateStructured(input = {}) {
   const entry = resolve(runtimeConfig);
   if (!entry) throw notConfiguredError();
   const timeoutMs = input.timeoutMs || Math.max(1000, Math.min(30000, Number(runtimeConfig.AI_STRUCTURED_TIMEOUT_MS || 8000) || 8000));
-  const model = String(
-    input.purpose === "understanding"
+  const model = String(input.purpose === "decision"
+    ? runtimeConfig.AI_DECISION_MODEL || runtimeConfig.AI_UNDERSTANDING_MODEL || ""
+    : (input.purpose === "understanding"
       ? runtimeConfig.AI_UNDERSTANDING_MODEL || ""
-      : runtimeConfig.AI_PLANNER_MODEL || ""
-  ) || entry.model;
+      : runtimeConfig.AI_PLANNER_MODEL || "")) || entry.model;
   const shaped = toAnthropicMessages(input.messages);
   const started = Date.now();
   const response = await postMessages(entry, {
@@ -156,7 +160,11 @@ async function generateStructured(input = {}) {
       ? `${shaped.system}\n\n只输出一个 JSON 对象，不要输出 Markdown 代码块或任何解释。`
       : "只输出一个 JSON 对象，不要输出 Markdown 代码块或任何解释。",
     messages: shaped.messages,
-  }, timeoutMs);
+  }, timeoutMs, {
+    signal: input.signal || null,
+    httpAgent: input.httpAgent,
+    httpsAgent: input.httpsAgent,
+  });
   const content = extractText(response.data);
   if (!content) {
     const error = new Error("Custom Anthropic-compatible provider returned an empty response");

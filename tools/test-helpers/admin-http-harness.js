@@ -118,6 +118,8 @@ async function startAdminHttpHarness(options = {}) {
     FOSU_ADMIN_NEXT_WRITE_MODULES: options.enabledModules === undefined ? "catalog,quality,settings" : options.enabledModules,
     FOSU_RELEASE_WORKER_ENABLED: "false",
     FOSU_CONFIG_HARD_FAIL: "false",
+    // 全链验收单进程内请求数远超生产 60/min 默认阈值；抬限只影响 harness 生命周期。
+    FOSU_GLOBAL_RATE_LIMIT_MAX: "10000",
     FOSU_ALLOWED_ADMIN_ORIGINS: "http://admin.test",
     FOSU_ALLOWED_PUBLIC_ORIGINS: "http://public.test",
     ADMIN_SERVICE_TOKENS: JSON.stringify([

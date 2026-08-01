@@ -224,11 +224,30 @@ function testWeatherCardContract() {
   assert.strictEqual(rendered.cards[0].type, "weather", "mock/provider fallback should produce weather card");
 }
 
+async function testDeadlineTransport() {
+  weatherService.__resetForTest();
+  const controller = new AbortController();
+  let requestOptions = null;
+  weatherService.__setFetcherForTest(async (_url, options) => {
+    requestOptions = options;
+    return sampleWeather(3);
+  });
+  const result = await weatherService.getCampusWeather({
+    campus: XIANXI,
+    timeoutMs: 600,
+    abortSignal: controller.signal,
+  });
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(requestOptions.signal, controller.signal);
+  assert.ok(requestOptions.timeout <= 450, "weather request must preserve a stage completion reserve");
+}
+
 async function run() {
   await testOpenMeteoFieldsAndCache();
   await testSingleflightAndStaleLimit();
   await testCampusSeparationAndHebin();
   await testTomorrowRunningAdvice();
+  await testDeadlineTransport();
   testWeatherCardContract();
   weatherService.__resetForTest();
   console.log("test-weather-service-and-card passed");

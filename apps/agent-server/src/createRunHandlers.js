@@ -1,0 +1,442 @@
+const AGENT_PROTOCOL = require("../../../packages/agent-protocol");
+
+const APP_SERVICE = "@xiaofu-agent/agent-server";
+const TERMINAL_TYPES = new Set(["run.completed", "run.degraded", "run.failed", "run.cancelled"]);
+
+function codedError(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
+}
+
+function requireMethod(owner, method, dependencyName) {
+  if (!owner || typeof owner[method] !== "function") {
+    throw codedError("AGENT_RUN_HANDLER_DEPENDENCY_INVALID", `${dependencyName}.${method} is required`);
+  }
+}
+
+function noStore(res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+}
+
+function requestContext(body = {}) {
+  const context = Object.assign({}, body.context || {});
+  if (body.memoryMode) context.memoryMode = body.memoryMode;
+  if (body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
+  return context;
+}
+
+function messageRequired(res) {
+  return res.status(400).json({
+    success: false,
+    code: "MESSAGE_REQUIRED",
+    message: "请输入要咨询的问题。",
+    serverTime: new Date().toISOString(),
+  });
+}
+
+function terminalTypeFor(status) {
+  if (status === "cancelled") return "run.cancelled";
+  if (status === "degraded") return "run.degraded";
+  if (status === "failed") return "run.failed";
+  return "run.completed";
+}
+
+function terminalSummary(payload, runtimeMode, status) {
+  return {
+    type: terminalTypeFor(status),
+    runtimeMode,
+    status: payload && payload.status || status,
+    success: payload ? payload.success !== false : status !== "failed",
+    fallback: Boolean(payload && payload.fallback),
+    partialCompletion: Boolean(payload && (payload.partialCompletion === true || payload.status === "partial")),
+    verificationOk: payload && payload.verification && payload.verification.ok === true,
+    errorCount: payload && Array.isArray(payload.errors) ? payload.errors.length : 0,
+    reasonCode: status === "degraded" ? String(payload && payload.fallbackReason || "").slice(0, 80) : "",
+  };
+}
+
+function attachTransport(payload, path, diagnostics = {}) {
+  return Object.assign({}, payload || {}, {
+    transport: Object.freeze({
+      appService: APP_SERVICE,
+      path,
+      runRepository: diagnostics.runRepository || "run-repository",
+      idempotencyKeyAccepted: diagnostics.idempotencyKeyAccepted === true,
+    }),
+  });
+}
+
+function createRunHandlers(options = {}) {
+  const platform = options.platform;
+  const runRepository = options.runRepository;
+  const protocol = options.protocol;
+  const agui = options.agui;
+  const buildFailureResponse = options.buildFailureResponse;
+  const log = typeof options.log === "function" ? options.log : () => {};
+  const schedule = typeof options.schedule === "function" ? options.schedule : setImmediate;
+  const resolvePrincipal = typeof options.resolvePrincipal === "function"
+    ? options.resolvePrincipal
+    : () => ({ repositoryPrincipal: null, runtimePrincipal: null });
+  const resolvePollCredential = typeof options.resolvePollCredential === "function"
+    ? options.resolvePollCredential
+    : (req) => String(req && req.query && req.query.pollToken || req && req.body && req.body.pollToken || "");
+  const runRepositoryId = String(options.runRepositoryId || "run-repository").slice(0, 100);
+  // P2R Wave 2：首事件延迟经组合层注入的共享 Metrics Store 聚合（firstEvent 桶）。
+  const metricsStore = options.metrics && typeof options.metrics.record === "function" ? options.metrics : null;
+
+  requireMethod(platform, "executeTurn", "platform");
+  ["createRun", "createEventEmitter", "getRunView", "cancelRun", "isCancelled", "setResult", "statusFromResult"]
+    .forEach((method) => requireMethod(runRepository, method, "runRepository"));
+  requireMethod(protocol, "createRequestId", "protocol");
+  requireMethod(agui, "mapRunToAguiEvents", "agui");
+  requireMethod(agui, "serializeSse", "agui");
+  if (typeof buildFailureResponse !== "function") {
+    throw codedError("AGENT_RUN_FAILURE_BUILDER_REQUIRED");
+  }
+
+  const controllers = new Map();
+
+  function runtimeModeFor(req) {
+    return String(req && req.agentRuntimeDecision && req.agentRuntimeDecision.runtimeMode || "public");
+  }
+
+  function platformInput(req, overrides = {}) {
+    const body = req.body || {};
+    const principal = resolvePrincipal(req) || {};
+    const input = Object.assign({
+      message: String(body.message || "").trim(),
+      context: requestContext(body),
+      protocolVersion: body.protocolVersion,
+      requestId: String(body.requestId || protocol.createRequestId()).slice(0, 96),
+      conversationId: String(body.conversationId || "").slice(0, 96),
+      serverSession: principal.runtimePrincipal || principal.repositoryPrincipal || null,
+    }, overrides);
+    // 请求作用域 runtimeMode（bindRuntimeDecision 中间件的授权感知决策）必须随
+    // 平台输入传递，createRun 才能绑定与本次请求同一环境的配置快照；缺省时由
+    // 平台侧回落 configuredMode，绝不默认成 "public" 造成跨环境串绑。
+    if (!input.runtimeMode && req && req.agentRuntimeDecision && req.agentRuntimeDecision.runtimeMode) {
+      input.runtimeMode = String(req.agentRuntimeDecision.runtimeMode);
+    }
+    return input;
+  }
+
+  function orderedEmitter(emit) {
+    let terminal = null;
+    return {
+      onEvent(event = {}) {
+        if (TERMINAL_TYPES.has(String(event.type || ""))) {
+          terminal = event;
+          return null;
+        }
+        return emit(event);
+      },
+      terminal() {
+        return terminal;
+      },
+    };
+  }
+
+  async function executeCompat(req, path, collectEvents) {
+    const input = platformInput(req);
+    const events = [];
+    const ordered = orderedEmitter((event) => {
+      if (collectEvents) events.push(event);
+    });
+    try {
+      const payload = attachTransport(await platform.executeTurn(Object.assign({}, input, {
+        onEvent: ordered.onEvent,
+      })), path, { runRepository: runRepositoryId });
+      const status = runRepository.statusFromResult(payload);
+      events.push(Object.assign({}, ordered.terminal() || {}, terminalSummary(payload, payload.runtimeMode || runtimeModeFor(req), status)));
+      return { payload, events, input };
+    } catch (error) {
+      const failure = attachTransport(buildFailureResponse(input, error), path, {
+        runRepository: runRepositoryId,
+      });
+      events.push(Object.assign({}, ordered.terminal() || {}, terminalSummary(failure, runtimeModeFor(req), "failed")));
+      return { payload: failure, events, input, error };
+    }
+  }
+
+  async function chatCompat(req, res) {
+    noStore(res);
+    if (!String(req.body && req.body.message || "").trim()) return messageRequired(res);
+    const execution = await executeCompat(req, "chat", false);
+    log(execution.error ? "ai-agent-chat-failed" : "ai-agent-chat", {
+      metrics: execution.payload.metrics || {},
+      provider: execution.payload.safety && execution.payload.safety.provider,
+      toolCalls: execution.payload.toolCalls,
+      memoryMode: execution.payload.memory && execution.payload.memory.mode,
+      code: execution.error && String(execution.error.code || "AGENT_SERVICE_UNAVAILABLE").slice(0, 80),
+    });
+    return res.status(200).json(execution.payload);
+  }
+
+  async function aguiCompat(req, res) {
+    noStore(res);
+    if (!String(req.body && req.body.message || "").trim()) return messageRequired(res);
+    const execution = await executeCompat(req, "agui", true);
+    const payload = execution.payload;
+    const conversationId = String(req.body.conversationId || payload.conversationId || "").slice(0, 120);
+    const runId = String(payload.runId || payload.requestId || req.body.requestId || "agui-run").slice(0, 120);
+    const events = agui.mapRunToAguiEvents({
+      conversationId,
+      runId,
+      events: execution.events,
+      response: payload,
+      answer: payload.answer,
+      cards: payload.cards,
+      actionCommands: payload.actionCommands,
+      runtimeMode: payload.runtimeMode || (payload.safety && payload.safety.runtimeMode),
+      failed: Boolean(execution.error),
+      error: execution.error,
+    });
+    log(execution.error ? "ai-agent-agui-failed" : "ai-agent-agui", {
+      eventCount: events.length,
+      runId,
+      provider: payload.safety && payload.safety.provider,
+      code: execution.error && String(execution.error.code || "AGUI_FAILED").slice(0, 80),
+    });
+    const wantStream = req.body.stream === true || String(req.headers.accept || "").includes("text/event-stream");
+    if (wantStream) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("X-Accel-Buffering", "no");
+      return res.status(200).send(agui.serializeSse(events));
+    }
+    return res.status(200).json({
+      success: !execution.error,
+      protocol: "ag-ui",
+      threadId: conversationId,
+      runId,
+      events,
+      response: payload,
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  function createRun(req, res) {
+    const createRunStartedAt = Date.now();
+    noStore(res);
+    const body = req.body || {};
+    const message = String(body.message || "").trim();
+    if (!message) return messageRequired(res);
+    // P6a 协议协商：显式未知版本 fail clearly；run.v1 受控兼容（如实记录
+    // compatibilityMode，不静默改变产品语义）。
+    const negotiation = AGENT_PROTOCOL.negotiateProtocol(body.protocolVersion);
+    if (!negotiation.ok) {
+      return res.status(400).json({
+        success: false,
+        code: negotiation.code,
+        errorClass: negotiation.errorClass,
+        message: "客户端协议版本不受支持，请升级客户端。",
+        protocolVersion: negotiation.protocolVersion,
+        capabilities: negotiation.capabilities,
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const runtimeMode = runtimeModeFor(req);
+    const requestId = String(body.requestId || protocol.createRequestId()).slice(0, 96);
+    const conversationId = String(body.conversationId || "").slice(0, 96);
+    const idempotencyKeyAccepted = Boolean(String(body.idempotencyKey || "").trim());
+    const created = runRepository.createRun({
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
+      runtimeMode,
+      requestId,
+      conversationId,
+      idempotencyKey: idempotencyKeyAccepted ? String(body.idempotencyKey).slice(0, 128) : undefined,
+    });
+    if (created.deduplicated === true) {
+      // 幂等重放：既有 Run 已在执行（或已终态），不得重复调度执行链。
+      return res.status(202).json({
+        success: true,
+        appService: APP_SERVICE,
+        runId: created.runId,
+        pollToken: created.pollToken,
+        status: created.status,
+        nextPollMs: created.nextPollMs,
+        expiresAt: created.expiresAt,
+        deadlineAt: created.deadlineAt,
+        eventCursor: created.eventCursor,
+        firstEventLatencyMs: created.firstEventLatencyMs,
+        protocolVersion: created.protocolVersion || negotiation.protocolVersion,
+        capabilities: negotiation.capabilities,
+        diagnostics: {
+          idempotencyKeyAccepted,
+          deduplicated: true,
+          compatibilityMode: negotiation.compatibilityMode === "legacy" ? "legacy" : undefined,
+          runRepository: runRepositoryId,
+        },
+        serverTime: new Date().toISOString(),
+      });
+    }
+    if (metricsStore) {
+      try {
+        // 首事件延迟独立桶（P2R：首个真实 RunEvent ≤500ms 口径）。environment 取自
+        // 服务端已判定的 runtimeMode；词表与 provider-runtime metrics 保持一致。
+        const environment = String(runtimeMode || "").toLowerCase();
+        metricsStore.record("firstEvent", {
+          durationMs: created.firstEventLatencyMs,
+          outcome: "ok",
+          labels: ["public", "trial", "dev"].includes(environment) ? { environment } : {},
+        });
+      } catch (metricsError) {
+        // 观测不得改变执行（与 providerRuntime emit 同一原则）。
+      }
+    }
+    const controller = new AbortController();
+    controllers.set(created.runId, controller);
+
+    schedule(async () => {
+      const repositoryEmit = runRepository.createEventEmitter(created.runId, runtimeMode);
+      const ordered = orderedEmitter(repositoryEmit);
+      const input = platformInput(req, {
+        message,
+        requestId,
+        conversationId,
+        runId: created.runId,
+        runStartedAt: Date.parse(created.createdAt),
+        deadlineAt: created.deadlineAt,
+        totalTimeoutMs: Math.max(1, Date.parse(created.deadlineAt) - Date.parse(created.createdAt)),
+        createRunDurationMs: Math.max(0, Date.now() - createRunStartedAt),
+        signal: controller.signal,
+        onEvent: ordered.onEvent,
+      });
+      try {
+        const payload = attachTransport(await platform.executeTurn(input), "run", {
+          runRepository: runRepositoryId,
+          idempotencyKeyAccepted,
+        });
+        if (runRepository.isCancelled(created.runId)) {
+          runRepository.setResult(created.runId, null, "cancelled");
+          return;
+        }
+        const status = runRepository.statusFromResult(payload);
+        repositoryEmit(Object.assign({}, ordered.terminal() || {}, terminalSummary(payload, runtimeMode, status)));
+        runRepository.setResult(created.runId, payload, status);
+      } catch (error) {
+        if (runRepository.isCancelled(created.runId) || error && error.code === "ABORTED") {
+          runRepository.setResult(created.runId, null, "cancelled");
+          return;
+        }
+        const failure = attachTransport(buildFailureResponse(input, error), "run", {
+          runRepository: runRepositoryId,
+          idempotencyKeyAccepted,
+        });
+        repositoryEmit(Object.assign({}, ordered.terminal() || {}, terminalSummary(failure, runtimeMode, "failed")));
+        runRepository.setResult(created.runId, failure, "failed");
+      } finally {
+        controllers.delete(created.runId);
+      }
+    });
+
+    return res.status(202).json({
+      success: true,
+      appService: APP_SERVICE,
+      runId: created.runId,
+      pollToken: created.pollToken,
+      status: created.status,
+      nextPollMs: created.nextPollMs,
+      expiresAt: created.expiresAt,
+      deadlineAt: created.deadlineAt,
+      eventCursor: created.eventCursor,
+      firstEventLatencyMs: created.firstEventLatencyMs,
+      protocolVersion: created.protocolVersion || negotiation.protocolVersion,
+      capabilities: negotiation.capabilities,
+      diagnostics: {
+        idempotencyKeyAccepted,
+        compatibilityMode: negotiation.compatibilityMode === "legacy" ? "legacy" : undefined,
+        runRepository: runRepositoryId,
+      },
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  async function getRun(req, res) {
+    noStore(res);
+    const viewOptions = {
+      pollToken: resolvePollCredential(req),
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
+      afterSequence: req.query.afterSequence,
+    };
+    // P6a：cursor 早于内存投影窗口时经持久层深重放（pg 全量流；journal 与投影
+    // 同窗口）。无 deep 能力的仓储回落同步视图。
+    const view = typeof runRepository.getRunViewDeep === "function"
+      ? await runRepository.getRunViewDeep(req.params.runId, viewOptions)
+      : runRepository.getRunView(req.params.runId, viewOptions);
+    if (!view.ok) {
+      return res.status(view.status || 404).json({
+        success: false,
+        code: view.code || "RUN_NOT_FOUND",
+        errorClass: AGENT_PROTOCOL.classifyRunError(view.code),
+        message: "无法读取该运行任务。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    return res.json({
+      success: true,
+      appService: APP_SERVICE,
+      runId: view.runId,
+      status: view.status,
+      events: view.events,
+      result: view.result,
+      nextPollMs: view.nextPollMs,
+      checkedAt: view.checkedAt,
+      eventCursor: view.eventCursor,
+      deadlineAt: view.deadlineAt,
+      protocolVersion: AGENT_PROTOCOL.PROTOCOL_VERSION,
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  function cancelRun(req, res) {
+    noStore(res);
+    const result = runRepository.cancelRun(req.params.runId, {
+      pollToken: resolvePollCredential(req),
+      serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
+    });
+    if (!result.ok) {
+      return res.status(result.status || 404).json({
+        success: false,
+        code: result.code || "RUN_NOT_FOUND",
+        message: "无法取消该运行任务。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const controller = controllers.get(String(req.params.runId || ""));
+    if (controller && !controller.signal.aborted) controller.abort();
+    return res.json({
+      success: true,
+      appService: APP_SERVICE,
+      runId: req.params.runId,
+      status: result.status || "cancelled",
+      alreadyFinished: result.alreadyFinished === true,
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  function diagnostics() {
+    return Object.freeze({
+      appService: APP_SERVICE,
+      platform: platform.diagnostics ? platform.diagnostics() : {},
+      runRepository: runRepositoryId,
+      activeRunCount: controllers.size,
+    });
+  }
+
+  return Object.freeze({
+    createRun,
+    getRun,
+    cancelRun,
+    chatCompat,
+    aguiCompat,
+    diagnostics,
+  });
+}
+
+module.exports = {
+  APP_SERVICE,
+  createRunHandlers,
+};

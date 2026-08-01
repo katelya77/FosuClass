@@ -21,6 +21,7 @@ const termRegistryService = require("./services/termRegistryService");
 const runtimePointerService = require("./services/runtimePointerService");
 const performanceMonitorService = require("./services/performanceMonitorService");
 const campusMapAssetService = require("./services/campusMapAssetService");
+const adminAuth = require("./services/adminAuth");
 const { defaultCourseReminderDispatchService } = require("./services/ai/reminders/courseReminderDispatchService");
 
 // 路由引入
@@ -35,6 +36,11 @@ const fosuApaasImportRouter = require("./routes/fosuApaasImport");
 const relayRouter = require("./routes/relay");
 const aiRouter = require("./routes/ai");
 const cozeToolGatewayRouter = require("./routes/cozeToolGateway");
+const platformComposition = require("./services/ai/platformComposition");
+
+// Integrated deployment composition root: API, Agent Runtime and compatibility
+// transports are bound to one platform singleton before Express mounts routes.
+aiRouter.configureAgentRunHandlers(platformComposition.getRunHandlers());
 
 const app = express();
 
@@ -245,6 +251,48 @@ function redirectAdminAlias(prefix) {
 // Legacy is the only admin UI. Historical bookmarks keep their deep path and query.
 app.use("/admin-next", redirectAdminAlias("/admin-next"));
 app.use("/admin-legacy", redirectAdminAlias("/admin-legacy"));
+
+// P4e：Agent 控制面静态页（apps/agent-admin/public，无构建纯静态）。
+// 页面本身只是 UI 外壳，数据全部来自 /api/admin/agent-platform/* 真实 API；
+// 未登录先跳 Legacy 登录页（与 adminPages 同一 Cookie 会话）。
+function requireAgentAdminPageSession(req, res, next) {
+  if (!adminAuth.isAdminCookieValid(req)) {
+    const nextTarget = encodeURIComponent(String(req.originalUrl || "/admin/agent-platform"));
+    return res.redirect(302, `/admin/login?next=${nextTarget}`);
+  }
+  return next();
+}
+
+// 部署方运行时注入：页面是 apps/ 通用静态资产（边界守卫禁部署方字样），
+// 品牌/CSRF 头名/登录与后台路径/API 前缀由本端点下发，页面仅有通用默认值兜底。
+app.get("/admin/agent-platform/runtime-config.js", requireAgentAdminPageSession, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.type("application/javascript");
+  res.send(`window.AGENT_ADMIN_RUNTIME_CONFIG = ${JSON.stringify({
+    brand: "FosuClass Admin",
+    csrfHeader: adminAuth.CSRF_HEADER,
+    loginPath: "/admin/login",
+    sessionPath: "/api/admin/session",
+    dashboardPath: "/admin/dashboard",
+    apiBase: "/api/admin/agent-platform",
+  })};`);
+});
+
+app.use("/admin/agent-platform", requireAgentAdminPageSession, express.static(path.join(__dirname, "../../apps/agent-admin/public"), {
+  index: "agent-platform.html",
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    );
+  },
+}));
+
 app.use("/admin", adminPageRouter);
 
 app.use("/api/relay", relayRouter);

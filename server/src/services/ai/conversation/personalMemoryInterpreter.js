@@ -9,6 +9,16 @@ const { normalizeValue } = require("./userPreferenceService");
 const { extractFromMessage } = require("../memory/memoryCandidateExtractor");
 const { mayAutoPersistUserMemory, filterAndMergeCandidates } = require("../memory/memoryPolicy");
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 function command(key, value, persist, kind) {
   const normalized = normalizeValue(key, value);
   if (normalized === null && key !== "preferPersonalSchedule") return null;
@@ -45,6 +55,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
   const candidates = filterAndMergeCandidates(extractFromMessage(text), {
     memoryMode,
     autoMemoryEnabled: options.autoMemoryEnabled !== false,
+    policy: options.policy || null,
   });
 
   const output = [];
@@ -55,7 +66,7 @@ function parsePersonalMemoryCommands(message, options = {}) {
     if (c.reasonCode === "one_off_study_spot") return;
     if (c.scope === "working" && !WORKING_IDENTITY_KEYS.includes(c.key)) return;
     // Durable User Memory only under cloud_sync (or explicit under cloud_sync).
-    const canPersistUser = (explicit || mayAutoPersistUserMemory(memoryMode, c)
+    const canPersistUser = (explicit || mayAutoPersistUserMemory(memoryMode, c, options.policy || null)
       || (reminderPref && c.key === "defaultReminderLeadMinutes"))
       && memoryMode === "cloud_sync";
     const item = command(
@@ -174,6 +185,7 @@ function resolvePersonalMemoryTurn(input = {}) {
   const commands = parsePersonalMemoryCommands(message, {
     memoryMode,
     autoMemoryEnabled,
+    policy: input.policy || null,
   });
   const preferencePatch = {};
   commands.filter((item) => item.persist).forEach((item) => {
@@ -292,17 +304,7 @@ function resolvePersonalMemoryTurn(input = {}) {
     preferredName = findRecentName(context.recentMessages);
     if (preferredName) source = "recent_messages";
   }
-  // Cross-conversation User Memory only for cloud_sync
-  if (!preferredName && memoryMode === "cloud_sync" && input.preferenceService) {
-    try {
-      const cloud = input.preferenceService.getObject({ principal: input.principal });
-      preferredName = normalizeValue("preferredName", cloud.preferredName) || "";
-      if (preferredName) source = "cloud_preference";
-    } catch (_) {
-      preferredName = "";
-    }
-  }
-  return {
+  const finishNameAnswer = () => ({
     handled: true,
     intentName: "conversation_memory",
     answer: preferredName
@@ -313,7 +315,31 @@ function resolvePersonalMemoryTurn(input = {}) {
     memoryCandidates: [],
     persisted: false,
     source: source || "none",
-  };
+  });
+  // Cross-conversation User Memory only for cloud_sync
+  if (!preferredName && memoryMode === "cloud_sync" && input.preferenceService) {
+    let cloud;
+    try {
+      cloud = input.preferenceService.getObject({ principal: input.principal });
+    } catch (_) {
+      cloud = null;
+    }
+    return chain(cloud, (cloudValues) => {
+      if (cloudValues) {
+        try {
+          preferredName = normalizeValue("preferredName", cloudValues.preferredName) || "";
+          if (preferredName) source = "cloud_preference";
+        } catch (_) {
+          preferredName = "";
+        }
+      }
+      return finishNameAnswer();
+    }, () => {
+      preferredName = "";
+      return finishNameAnswer();
+    });
+  }
+  return finishNameAnswer();
 }
 
 const IDENTITY_LABELS = { college: "学院", major: "专业", grade: "年级" };
@@ -326,49 +352,53 @@ function resolveIdentityQuestionTurn(input = {}, keys = []) {
   const contextPreferences = context.userPreferences && typeof context.userPreferences === "object"
     ? context.userPreferences
     : {};
-  let cloudValues = {};
-  if (memoryMode === "cloud_sync" && input.preferenceService) {
-    try {
-      cloudValues = input.preferenceService.getObject({ principal: input.principal }) || {};
-    } catch (_) {
-      cloudValues = {};
-    }
-  }
-  const found = [];
-  const missing = [];
-  keys.forEach((key) => {
-    let value = normalizeValue(key, contextPreferences[key]) || "";
-    if (!value && context.workingMemory && context.workingMemory[key]) {
-      value = normalizeValue(key, context.workingMemory[key]) || "";
-    }
-    if (!value) value = normalizeValue(key, findRecentFact(context.recentMessages, key)) || "";
-    if (!value) value = normalizeValue(key, cloudValues[key]) || "";
-    if (value) found.push({ key, value });
-    else missing.push(key);
-  });
+  const finishWithCloud = (cloudValues) => {
+    const found = [];
+    const missing = [];
+    keys.forEach((key) => {
+      let value = normalizeValue(key, contextPreferences[key]) || "";
+      if (!value && context.workingMemory && context.workingMemory[key]) {
+        value = normalizeValue(key, context.workingMemory[key]) || "";
+      }
+      if (!value) value = normalizeValue(key, findRecentFact(context.recentMessages, key)) || "";
+      if (!value) value = normalizeValue(key, cloudValues[key]) || "";
+      if (value) found.push({ key, value });
+      else missing.push(key);
+    });
 
-  let answer;
-  if (found.length) {
-    const parts = found.map((item) => (item.key === "college" ? `学院是${item.value}`
-      : item.key === "major" ? `专业是${item.value}` : `年级是${item.value}`));
-    answer = `你${parts.join("，")}。`;
-    if (missing.length) {
-      answer += `还不知道你的${missing.map((k) => IDENTITY_LABELS[k]).join("和")}，告诉我就记住啦。`;
+    let answer;
+    if (found.length) {
+      const parts = found.map((item) => (item.key === "college" ? `学院是${item.value}`
+        : item.key === "major" ? `专业是${item.value}` : `年级是${item.value}`));
+      answer = `你${parts.join("，")}。`;
+      if (missing.length) {
+        answer += `还不知道你的${missing.map((k) => IDENTITY_LABELS[k]).join("和")}，告诉我就记住啦。`;
+      }
+    } else {
+      const asked = keys.map((k) => IDENTITY_LABELS[k]).join("和");
+      answer = `我还不知道你的${asked}。你可以直接告诉我，比如“我是……学院的大二学生”，开启跨设备同步后会自动记住。`;
     }
-  } else {
-    const asked = keys.map((k) => IDENTITY_LABELS[k]).join("和");
-    answer = `我还不知道你的${asked}。你可以直接告诉我，比如“我是……学院的大二学生”，开启跨设备同步后会自动记住。`;
-  }
-  return {
-    handled: true,
-    intentName: "conversation_memory",
-    answer,
-    preferencePatch: {},
-    sessionFacts: {},
-    memoryCandidates: [],
-    persisted: false,
-    source: found.length ? "identity_memory" : "none",
+    return {
+      handled: true,
+      intentName: "conversation_memory",
+      answer,
+      preferencePatch: {},
+      sessionFacts: {},
+      memoryCandidates: [],
+      persisted: false,
+      source: found.length ? "identity_memory" : "none",
+    };
   };
+  if (memoryMode === "cloud_sync" && input.preferenceService) {
+    let cloud;
+    try {
+      cloud = input.preferenceService.getObject({ principal: input.principal });
+    } catch (_) {
+      cloud = null;
+    }
+    return chain(cloud, (resolved) => finishWithCloud(resolved || {}), () => finishWithCloud({}));
+  }
+  return finishWithCloud({});
 }
 
 module.exports = {
