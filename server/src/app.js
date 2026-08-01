@@ -286,9 +286,10 @@ app.use("/admin/agent-platform", requireAgentAdminPageSession, express.static(pa
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    // frame-ancestors 'self'：仅允许同源后台 SPA 内嵌（/admin/agent 分区），仍禁止跨站点击劫持。
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
     );
   },
 }));

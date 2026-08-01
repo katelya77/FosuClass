@@ -7,13 +7,15 @@
 <script src="runtime-config.js"></script>
 <style>
   :root {
-    color-scheme: light;
+    color-scheme: light dark;
     --page-bg: #f4f2ed;
     --surface: #fbfaf7;
     --surface-raised: #fffefa;
     --surface-muted: #eeece6;
+    --surface-sunken: #e8e5de;
     --border: #d9d5cc;
     --border-strong: #b8b2a7;
+    --border-hover: #aaa398;
     --text-primary: #181b20;
     --text-secondary: #4b515b;
     --text-muted: #626a75;
@@ -29,20 +31,53 @@
     --danger-soft: #f8e6e3;
     --shadow: 0 1px 2px rgba(31, 28, 23, 0.06);
     --shadow-lg: 0 18px 42px rgba(31, 28, 23, 0.16);
-    --code-bg: #f0eee8;
+    --code-bg: #ebe8e1;
     --table-hover: #f0f3fb;
     --focus-ring: rgba(49, 88, 199, 0.3);
+    --scrollbar-track: #ebe8e1;
+    --scrollbar-thumb: #bcb6aa;
     --radius: 9px;
     --font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
     --transition: color 180ms cubic-bezier(0.4, 0, 0.2, 1), background-color 180ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
   }
+  html[data-resolved-theme="dark"] {
+    --page-bg: #101318;
+    --surface: #171b21;
+    --surface-raised: #1d222a;
+    --surface-muted: #222832;
+    --surface-sunken: #0c0f13;
+    --border: #303742;
+    --border-strong: #46505e;
+    --border-hover: #586474;
+    --text-primary: #f0f2f4;
+    --text-secondary: #c2c8d0;
+    --text-muted: #949eaa;
+    --primary: #7f9df2;
+    --primary-hover: #a1b6f6;
+    --primary-soft: rgba(127, 157, 242, 0.16);
+    --on-primary: #111827;
+    --success: #5bc69a;
+    --success-soft: rgba(91, 198, 154, 0.14);
+    --warning: #e3ad55;
+    --warning-soft: rgba(227, 173, 85, 0.14);
+    --danger: #f0877f;
+    --danger-soft: rgba(240, 135, 127, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.26);
+    --shadow-lg: 0 24px 52px rgba(0, 0, 0, 0.44);
+    --code-bg: #0d1117;
+    --table-hover: #222b3a;
+    --focus-ring: rgba(127, 157, 242, 0.38);
+    --scrollbar-track: #11161c;
+    --scrollbar-thumb: #46515f;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: var(--font-family); background: var(--page-bg); color: var(--text-primary); line-height: 1.5; }
+  html { background: var(--page-bg); }
+  body { margin: 0; font-family: var(--font-family); background: var(--page-bg); color: var(--text-primary); line-height: 1.5; transition: var(--transition); }
   ::selection { background: var(--primary-soft); color: var(--text-primary); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--surface-muted); }
-  ::-webkit-scrollbar-thumb { background: var(--border-strong); border: 2px solid var(--surface-muted); border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid var(--scrollbar-track); border-radius: 999px; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -54,46 +89,51 @@
   }
   .icon { width: 15px; height: 15px; flex: none; }
 
-  header { position: sticky; top: 0; z-index: 5; background: var(--surface-raised); border-bottom: 1px solid var(--border); padding: 0 20px; min-height: 57px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; min-height: 57px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
   .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
   .brand-mark svg { width: 17px; height: 17px; }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  .nav-link { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13px; text-decoration: none; padding: 5px 9px; border-radius: 7px; transition: var(--transition); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: -0.015em; }
+  .nav-link { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 13px; text-decoration: none; padding: 6px 10px; border-radius: 6px; transition: var(--transition); }
   .nav-link:hover { color: var(--primary); background: var(--primary-soft); }
   .header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; }
-  .env-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+  .env-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
   .env-label .icon { color: var(--text-muted); }
 
-  main { padding: 18px 20px 28px; max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; }
+  main { padding: 18px 20px 28px; max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; }
   @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
   @media (max-width: 720px) { main { padding: 14px 12px 24px; } header { padding: 0 12px; } }
 
-  section { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 18px; }
-  h2 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin: 0 0 4px; }
-  .h2-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 7px; background: var(--surface-muted); color: var(--text-secondary); }
-  .h2-icon svg { width: 14px; height: 14px; }
+  .embed-toolbar { display: none; grid-column: 1 / -1; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+  body.embed { background: transparent; }
+  body.embed header { display: none; }
+  body.embed main { padding: 0; max-width: none; }
+  body.embed .embed-toolbar { display: flex; }
+  @media (max-width: 720px) { body.embed main { padding: 0; } }
+
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 4px; color: var(--text-primary); }
   .section-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; letter-spacing: 0.01em; }
 
-  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; padding: 4px; background: var(--surface-muted); border-radius: 10px; }
-  .tabs button { border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--text-secondary); letter-spacing: 0.02em; transition: var(--transition); }
-  .tabs button:hover { color: var(--primary); background: var(--surface-raised); }
-  .tabs button[aria-selected="true"] { background: var(--surface-raised); color: var(--primary); border-color: var(--border); box-shadow: var(--shadow); font-weight: 600; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; padding: 4px; background: var(--surface-muted); border-radius: 8px; }
+  .tabs button { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.02em; transition: var(--transition); }
+  .tabs button:hover { color: var(--primary); background: var(--surface); }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--primary); border-color: var(--border); box-shadow: var(--shadow); font-weight: 600; }
 
-  .btn-row { margin: 10px 0 12px; display: flex; flex-wrap: wrap; gap: 2px 0; }
-  button.action { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--surface-raised); color: var(--text-primary); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: var(--font-family); letter-spacing: 0.02em; margin: 2px 6px 2px 0; transition: var(--transition); }
-  button.action:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+  .btn-row { margin: 10px 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  button.action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; background: var(--primary-soft); color: var(--primary); border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--font-family); line-height: 1; letter-spacing: 0.02em; transition: var(--transition); }
+  button.action:hover { border-color: var(--primary); }
   button.action.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
   button.action.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
-  button.action.danger { border-color: var(--danger); color: var(--danger); }
-  button.action.danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
-  button.action:disabled { opacity: 0.55; cursor: not-allowed; }
+  button.action.danger { background: var(--danger-soft); color: var(--danger); }
+  button.action.danger:hover { border-color: var(--danger); }
+  button.action:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  textarea { width: 100%; min-height: 260px; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; background: var(--code-bg); color: var(--text-primary); transition: var(--transition); resize: vertical; }
-  textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); background: var(--surface-raised); }
+  textarea { width: 100%; min-height: 260px; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: var(--code-bg); color: var(--text-primary); transition: var(--transition); resize: vertical; }
+  textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); background: var(--surface); }
 
-  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-  th, td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   tbody tr:last-child td { border-bottom: none; }
   th { background: var(--surface-muted); color: var(--text-secondary); font-weight: 600; font-size: 12px; letter-spacing: 0.02em; border-bottom: 1px solid var(--border-strong); }
   td { font-variant-numeric: tabular-nums; }
@@ -112,10 +152,13 @@
   #toast { position: fixed; right: 18px; bottom: 18px; max-width: 420px; padding: 11px 16px; border-radius: var(--radius); color: #fff; font-size: 13px; display: none; z-index: 10; box-shadow: var(--shadow-lg); animation: toast-in 180ms cubic-bezier(0.4, 0, 0.2, 1); }
   #toast.success { background: var(--success); }
   #toast.error { background: var(--danger); }
+  html[data-resolved-theme="dark"] #toast.success { color: #102119; }
+  html[data-resolved-theme="dark"] #toast.error { color: #2a1010; }
   @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-  pre.details { background: var(--code-bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; font-size: 11px; font-family: var(--font-mono); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-  select, input[type="text"] { border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; font-size: 13px; background: var(--surface-raised); color: var(--text-primary); font-family: var(--font-family); transition: var(--transition); }
+  pre.details { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px; font-size: 11px; font-family: var(--font-mono); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  select, input[type="text"] { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; background: var(--surface); color: var(--text-primary); font-family: var(--font-family); transition: var(--transition); }
+  select:focus, input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
 </style>
 </head>
 <body>
@@ -125,7 +168,7 @@
     <h1>Agent 控制面</h1>
   </div>
   <a href="/admin/dashboard" id="dashboardLink" class="nav-link"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>返回后台</a>
-  <div class="header-actions">
+  <div class="header-actions" id="headerActions">
     <label class="env-label" for="envSelect"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14.5 14.5 0 0 0 0 18 14.5 14.5 0 0 0 0-18"/></svg>环境
       <select id="envSelect">
         <option value="public">public（正式）</option>
@@ -137,9 +180,10 @@
   </div>
 </header>
 <main>
+  <div class="embed-toolbar" id="embedToolbar"></div>
   <div>
     <section id="configSection" aria-labelledby="h2-config">
-      <h2 id="h2-config"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 8.5 4.5L12 11 3.5 6.5 12 2z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16.5 8.5 4.5 8.5-4.5"/></svg></span>配置域发布链</h2>
+      <h2 id="h2-config">配置域发布链</h2>
       <p class="section-desc">草稿 → 校验 → 测试 → 发布；每一步都可追溯，发现问题可回滚到任一历史版本。</p>
       <div class="status-line" id="configStatus">加载中…</div>
       <div class="tabs" id="domainTabs" role="tablist"></div>
@@ -156,24 +200,24 @@
       <div class="muted" id="editorHint">草稿内容不会进入生产；发布只接受通过校验与测试的同一份草稿。</div>
     </section>
     <section aria-labelledby="h2-versions">
-      <h2 id="h2-versions"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3.5 2"/></svg></span>版本历史</h2>
+      <h2 id="h2-versions">版本历史</h2>
       <p class="section-desc">不可变版本记录；回滚会生成新的 configVersion，仅影响新 Run。</p>
       <div id="versionHistory"><span class="muted">加载中…</span></div>
     </section>
     <section aria-labelledby="h2-audit">
-      <h2 id="h2-audit"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>内核审计</h2>
+      <h2 id="h2-audit">内核审计</h2>
       <p class="section-desc">配置面全部写操作的审计流水（已脱敏）。</p>
       <div id="auditList"><span class="muted">加载中…</span></div>
     </section>
   </div>
   <div>
     <section aria-labelledby="h2-runs">
-      <h2 id="h2-runs"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>最近 Run</h2>
+      <h2 id="h2-runs">最近 Run</h2>
       <p class="section-desc">最近运行的决策链；点击任意一行查看完整 Trace。</p>
       <div id="runList"><span class="muted">加载中…</span></div>
     </section>
     <section aria-labelledby="h2-trace">
-      <h2 id="h2-trace"><span class="h2-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>Run Trace 详情</h2>
+      <h2 id="h2-trace">Run Trace 详情</h2>
       <p class="section-desc">阶段归属、耗时与脱敏后的验证细节。</p>
       <div id="runDetail"><span class="muted">未选择 Run。</span></div>
     </section>
@@ -195,6 +239,35 @@
     dashboardPath: typeof injected.dashboardPath === "string" && injected.dashboardPath ? injected.dashboardPath : "/admin/dashboard",
     apiBase: typeof injected.apiBase === "string" && injected.apiBase ? injected.apiBase : "/api/admin/agent-platform"
   };
+
+  // 与佛课后台 SPA 共用同一主题偏好键，保证内嵌时亮暗模式实时一致。
+  var THEME_STORAGE_KEY = "fosu-admin-theme";
+  var themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function resolveTheme() {
+    var preference = "system";
+    try { preference = localStorage.getItem(THEME_STORAGE_KEY) || "system"; } catch (error) { preference = "system"; }
+    var dark = preference === "dark"
+      || (preference !== "light" && themeMediaQuery && themeMediaQuery.matches);
+    document.documentElement.setAttribute("data-resolved-theme", dark ? "dark" : "light");
+  }
+  resolveTheme();
+  window.addEventListener("storage", function (event) {
+    if (!event.key || event.key === THEME_STORAGE_KEY) resolveTheme();
+  });
+  if (themeMediaQuery && themeMediaQuery.addEventListener) {
+    themeMediaQuery.addEventListener("change", resolveTheme);
+  }
+
+  // embed 模式：作为后台 SPA 右侧内容区内嵌运行，隐藏自有页头并上报内容高度。
+  var EMBED = /(?:\?|&)embed=1(?:&|$)/.test(location.search) || window.self !== window.top;
+  var lastPostedHeight = 0;
+  function postHeight() {
+    if (!EMBED || !window.parent || window.parent === window) return;
+    var height = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
+    if (!height || Math.abs(height - lastPostedHeight) < 2) return;
+    lastPostedHeight = height;
+    window.parent.postMessage({ type: "agent-platform:height", height: height }, location.origin);
+  }
 
   var state = {
     env: "dev",
@@ -521,9 +594,25 @@
     });
   }
 
+  function applyEmbedMode() {
+    if (!EMBED) return;
+    document.body.classList.add("embed");
+    // 页头在嵌入时隐藏，环境选择与刷新迁入内容区工具条。
+    var toolbar = $("embedToolbar");
+    var envLabel = document.querySelector(".env-label");
+    if (toolbar && envLabel) toolbar.appendChild(envLabel);
+    if (toolbar && $("btnRefresh")) toolbar.appendChild($("btnRefresh"));
+    if (window.ResizeObserver && document.body) {
+      new ResizeObserver(postHeight).observe(document.body);
+    }
+    window.addEventListener("load", postHeight);
+    window.addEventListener("resize", postHeight);
+  }
+
   function bootstrap() {
     document.title = "Agent 控制面 · " + runtimeConfig.brand;
     $("dashboardLink").setAttribute("href", runtimeConfig.dashboardPath);
+    applyEmbedMode();
     api(runtimeConfig.sessionPath).then(function (session) {
       if (!session.authenticated) { redirectToLogin(); return; }
       state.csrfToken = session.csrfToken || "";
