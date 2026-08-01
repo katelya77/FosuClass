@@ -23,6 +23,26 @@ function codedError(code, message) {
   return error;
 }
 
+// 错误纪律与 server 侧 pgClient 对齐（rag-runtime 不反向依赖 agent-runtime，
+// 保持最小副本）：连接类失败 RAG_PG_UNAVAILABLE，其余语句级失败
+// RAG_PG_QUERY_FAILED；message 剔除任何 password= 片段。
+const PG_CONNECTION_FAILURE_PATTERN = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNRESET|EPIPE|ENETUNREACH|EHOSTUNREACH|timeout exceeded when trying to connect|connection terminated|server closed the connection|could not connect/i;
+
+function wrapPgError(error) {
+  const raw = String((error && error.message) || error || "unknown pg error");
+  const unavailable = PG_CONNECTION_FAILURE_PATTERN.test(raw)
+    || PG_CONNECTION_FAILURE_PATTERN.test(String((error && error.code) || ""));
+  return codedError(unavailable ? "RAG_PG_UNAVAILABLE" : "RAG_PG_QUERY_FAILED", raw.replace(/\s*password=\S*/gi, "").slice(0, 300));
+}
+
+async function runQuery(pool, text, params) {
+  try {
+    return await pool.query(text, params);
+  } catch (error) {
+    throw wrapPgError(error);
+  }
+}
+
 function vectorLiteral(vector) {
   return `[${(vector || []).map((value) => Number(value)).join(",")}]`;
 }
@@ -58,7 +78,8 @@ function createPgVectorSearch(options = {}) {
     const text = cleanText(String(input.query || ""));
     const queryTokens = Array.from(new Set(tokenizeSemantic(text)));
     const queryVector = encodeSemanticVector(text);
-    const result = await pool.query(
+    const result = await runQuery(
+      pool,
       `SELECT chunk_id AS "chunkId", 1 - (embedding <=> $1::vector) AS score ` +
         `FROM ${table} WHERE environment = $2 AND kb_id = $3 AND version = $4 ` +
         `ORDER BY embedding <=> $1::vector ASC, chunk_id ASC LIMIT $5`,

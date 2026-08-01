@@ -11,11 +11,12 @@
  *     （传输层簿记，非权威源）。
  *
  * 权威源纪律（design.md §8.3）：Redis 永不作权威源。配置 pool 时任务状态
- * 镜像落 PostgreSQL `agent_durable_tasks`（migration 0003，task_id 为
- * `tq:<namespace>:<jobId>`）：
+ * 镜像落 PostgreSQL `agent_task_queue_mirror`（migration 0007，task_id 为
+ * `tq:<namespace>:<jobId>`；与 durable 任务存储分表，互不抹除）：
  *   - enqueue 先查镜像去重（跨重启幂等），PG 不可用 → 明确失败，不伪造已入队；
- *   - ack/retry/reclaim 同步镜像最终状态，镜像写失败 → coded error 传播
- *     （任务可经 reclaim 重投，消费方构建幂等，不会制造不一致）；
+ *   - ack/retry 先落状态簿记（hash + 镜像 + dead-letter/重投 XADD）再 XACK：
+ *     簿记失败 → 条目留 PEL 可经 reclaim 重投；XACK 失败 → 至多重复投递，
+ *     由 claim/reclaim 的 done/failed 陈旧守卫与消费方幂等吸收；
  *   - Redis 连接不可用 → 一律 TASK_QUEUE_REDIS_UNAVAILABLE coded error，
  *     任何入口都不返回伪造的入队/认领成功。
  */
@@ -146,13 +147,13 @@ function createRedisStreamsTaskQueue(options = {}) {
     return groupReady;
   }
 
-  // ---- PG 镜像（agent_durable_tasks，migration 0003）----
+  // ---- PG 镜像（agent_task_queue_mirror，migration 0007）----
   const mirrorTaskId = (jobId) => `tq:${mirrorNamespace}:${jobId}`;
 
   async function mirrorGet(jobId) {
     if (!pool) return null;
     const { query } = require("../../../../../packages/agent-runtime");
-    const result = await query(pool, "SELECT doc FROM agent_durable_tasks WHERE task_id = $1", [mirrorTaskId(jobId)]);
+    const result = await query(pool, "SELECT doc FROM agent_task_queue_mirror WHERE task_id = $1", [mirrorTaskId(jobId)]);
     const row = result.rows && result.rows[0];
     return row && row.doc && typeof row.doc === "object" ? row.doc : null;
   }
@@ -172,7 +173,7 @@ function createRedisStreamsTaskQueue(options = {}) {
     };
     await query(
       pool,
-      "INSERT INTO agent_durable_tasks (task_id, status, expires_at, doc, updated_at) VALUES ($1, $2, NULL, $3, now()) " +
+      "INSERT INTO agent_task_queue_mirror (task_id, status, doc, updated_at) VALUES ($1, $2, $3, now()) " +
         "ON CONFLICT (task_id) DO UPDATE SET status = EXCLUDED.status, doc = EXCLUDED.doc, updated_at = now()",
       [mirrorTaskId(job.jobId), status, JSON.stringify(doc)]
     );
@@ -181,7 +182,7 @@ function createRedisStreamsTaskQueue(options = {}) {
   async function mirrorDelete(jobId) {
     if (!pool) return;
     const { query } = require("../../../../../packages/agent-runtime");
-    await query(pool, "DELETE FROM agent_durable_tasks WHERE task_id = $1", [mirrorTaskId(jobId)]);
+    await query(pool, "DELETE FROM agent_task_queue_mirror WHERE task_id = $1", [mirrorTaskId(jobId)]);
   }
 
   async function writeHash(job, status) {
@@ -302,11 +303,13 @@ function createRedisStreamsTaskQueue(options = {}) {
     return guarded(async () => {
       const jobId = String(claimed.jobId || "");
       const receipt = String(claimed.receipt || "");
-      if (receipt) await redis.xack(stream, group, receipt);
       const recorded = hashToJob(await redis.hgetall(hashKey(jobId))) || { jobId, kind: claimed.kind || "", payload: claimed.payload || {}, attempts: claimed.attempts || 0 };
       recorded.errorClass = "";
+      // 先落终态簿记再 XACK：簿记失败 → 条目留 PEL 可 reclaim 重投；
+      // XACK 失败 → 至多重复投递，由陈旧守卫与消费方幂等吸收。
       await writeHash(recorded, "done");
       await mirrorUpsert(recorded, "done");
+      if (receipt) await redis.xack(stream, group, receipt);
       return Object.freeze({ jobId, status: "done" });
     });
   }
@@ -324,7 +327,8 @@ function createRedisStreamsTaskQueue(options = {}) {
       recorded.attempts = (recorded.attempts || 0) + 1;
       recorded.errorClass = String(retryInput.errorClass || "TASK_QUEUE_JOB_FAILED");
       const exhausted = recorded.attempts >= maxAttempts;
-      if (receipt) await redis.xack(stream, group, receipt);
+      // 与 ack 同序：先落簿记（dead-letter/重投 XADD + hash + 镜像）再 XACK，
+      // 任一簿记失败条目留 PEL 可 reclaim；XACK 失败至多重复投递。
       if (exhausted) {
         const deadAt = new Date().toISOString();
         await redis.xadd(
@@ -338,6 +342,7 @@ function createRedisStreamsTaskQueue(options = {}) {
         );
         await writeHash(recorded, "failed");
         await mirrorUpsert(recorded, "failed");
+        if (receipt) await redis.xack(stream, group, receipt);
         return Object.freeze({ jobId, status: "failed", attempts: recorded.attempts });
       }
       await redis.xadd(
@@ -349,6 +354,7 @@ function createRedisStreamsTaskQueue(options = {}) {
       );
       await writeHash(recorded, "pending");
       await mirrorUpsert(recorded, "pending");
+      if (receipt) await redis.xack(stream, group, receipt);
       return Object.freeze({ jobId, status: "pending", attempts: recorded.attempts });
     });
   }
@@ -388,6 +394,12 @@ function createRedisStreamsTaskQueue(options = {}) {
         const job = entryToJob(entryId, fields);
         if (!job) continue;
         const recorded = hashToJob(await redis.hgetall(hashKey(job.jobId)));
+        // 终态陈旧副本（ack/retry 簿记已落、XACK 丢失的 PEL 残迹）：直接 XACK
+        // 清出 PEL，不再投递——与 claim 的 done/failed 陈旧守卫对称。
+        if (recorded && (recorded.status === "done" || recorded.status === "failed")) {
+          await redis.xack(stream, group, entryId);
+          continue;
+        }
         if (recorded) {
           job.attempts = recorded.attempts;
           job.errorClass = recorded.errorClass;

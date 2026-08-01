@@ -135,7 +135,11 @@ function wrapPgError(error, secrets) {
   const unavailable = isConnectionFailure(error);
   const code = unavailable ? "PG_UNAVAILABLE" : "PG_QUERY_FAILED";
   const wrapped = codedError(code, sanitizeMessage(error, secrets));
-  wrapped.cause = error;
+  // cause 只挂脱敏副本（code + 脱敏 message）：原始 pg 错误可能携带连接
+  // 细节，Node 默认序列化会沿 cause 链打印。
+  const safeCause = new Error(sanitizeMessage(error, secrets));
+  if (error && error.code) safeCause.code = error.code;
+  wrapped.cause = safeCause;
   return wrapped;
 }
 

@@ -7,8 +7,11 @@
 //     requeue 重置、显式 deadLetter、remove、重启后去重仍成立（业务幂等锚）；
 //   - Redis 不可用降级诚实语义：enqueue/claim 一律 TASK_QUEUE_REDIS_UNAVAILABLE
 //     coded error，任何入口不伪造已入队（本段不依赖 docker，始终执行）；
-//   - PG 镜像（Redis 永不作权威源）：任务状态镜像落 agent_durable_tasks，
-//     簿记 hash 被删后镜像仍权威去重，ack/retry 终态同步（需 PG + Redis）。
+//   - PG 镜像（Redis 永不作权威源）：任务状态镜像落 agent_task_queue_mirror
+//     （migration 0007，与 durable 任务存储分表），簿记 hash 被删后镜像仍
+//     权威去重，ack/retry 终态同步（需 PG + Redis）；
+//   - reclaim 终态陈旧守卫：簿记已落 done、XACK 丢失的 PEL 残迹被 XACK 清出，
+//     不再重投（ack/retry 先簿记后 XACK 顺序的对称吸收侧）。
 //
 // 环境：AGENT_TEST_REDIS_URL / AGENT_TEST_PG_URL 优先，否则 docker 临时容器
 // （redis:7-alpine / postgres:16-alpine）；不可用 → 对应段落 UNVERIFIED 并 exit 0。
@@ -238,8 +241,8 @@ async function testPgMirror(redisEnv, pgEnv) {
       const input = jobInput("mirrored");
       await queue.enqueue(input);
       const taskId = `tq:${mirrorNamespace}:${input.jobId}`;
-      let row = (await query(pool, "SELECT status, doc FROM agent_durable_tasks WHERE task_id = $1", [taskId])).rows[0];
-      assert.ok(row, "enqueue mirrors into agent_durable_tasks");
+      let row = (await query(pool, "SELECT status, doc FROM agent_task_queue_mirror WHERE task_id = $1", [taskId])).rows[0];
+      assert.ok(row, "enqueue mirrors into agent_task_queue_mirror");
       assert.strictEqual(row.status, "pending");
       assert.strictEqual(row.doc.payload.kbId, "kb");
 
@@ -251,7 +254,7 @@ async function testPgMirror(redisEnv, pgEnv) {
       // ack → 终态落 PG
       const claimed = await queue.claim({ consumer: "c1" });
       await queue.ack(claimed);
-      row = (await query(pool, "SELECT status FROM agent_durable_tasks WHERE task_id = $1", [taskId])).rows[0];
+      row = (await query(pool, "SELECT status FROM agent_task_queue_mirror WHERE task_id = $1", [taskId])).rows[0];
       assert.strictEqual(row.status, "done", "ack mirrors the final state to PG");
 
       // 重试预算耗尽 → failed 终态落 PG + dead-letter stream
@@ -262,10 +265,29 @@ async function testPgMirror(redisEnv, pgEnv) {
         await queue.retry(picked, { errorClass: "RAG_INDEX_BUILD_FAILED", maxAttempts: MAX_ATTEMPTS });
       }
       const retryTaskId = `tq:${mirrorNamespace}:${retryInput.jobId}`;
-      row = (await query(pool, "SELECT status FROM agent_durable_tasks WHERE task_id = $1", [retryTaskId])).rows[0];
+      row = (await query(pool, "SELECT status FROM agent_task_queue_mirror WHERE task_id = $1", [retryTaskId])).rows[0];
       assert.strictEqual(row.status, "failed", "retry exhaustion mirrors failed to PG");
       const dead = await queue.listDead();
       assert.ok(dead.some((entry) => entry.jobId === retryInput.jobId), "dead-letter stream carries the record");
+
+      // reclaim 终态陈旧守卫：簿记已落 done、XACK 丢失的 PEL 残迹必须被
+      // XACK 清出，不再重投（ack/retry 先簿记后 XACK 顺序的对称吸收侧）。
+      const staleInput = jobInput("stale-acked");
+      await queue.enqueue(staleInput);
+      const picked = await queue.claim({ consumer: "c1" });
+      assert.ok(picked && picked.jobId === staleInput.jobId, "stale-guard setup claims the job");
+      // 模拟 ack 簿记已落、XACK 前崩溃：直接写 done 簿记，PEL 条目保留。
+      await janitor.hset(`${stream}:job:${staleInput.jobId}`, "status", "done", "updatedAt", new Date().toISOString());
+      const reclaimed = await queue.reclaimPending({ minIdleMs: 0 });
+      assert.ok(
+        !reclaimed.some((job) => job.jobId === staleInput.jobId),
+        "terminal-stale PEL entry must not be redelivered"
+      );
+      const reclaimedAgain = await queue.reclaimPending({ minIdleMs: 0 });
+      assert.ok(
+        !reclaimedAgain.some((job) => job.jobId === staleInput.jobId),
+        "stale entry is XACKed out of the PEL by the guard"
+      );
     } finally {
       await queue.close();
       let cursor = "0";
@@ -276,7 +298,7 @@ async function testPgMirror(redisEnv, pgEnv) {
       } while (cursor !== "0");
       await janitor.quit();
     }
-    console.log("✓ pg mirror: enqueue dedup anchored in agent_durable_tasks, final states (done/failed) persisted, redis never authoritative");
+    console.log("✓ pg mirror: enqueue dedup anchored in agent_task_queue_mirror, final states (done/failed) persisted, redis never authoritative, terminal-stale reclaim guarded");
   } finally {
     await pgPersistenceService.closeForTests();
     delete process.env.AGENT_PG_URL;

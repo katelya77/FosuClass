@@ -2,8 +2,10 @@
  * P5a WS5：RAG 索引产物的 PostgreSQL 存储（standalone 模式，migration 0005）。
  *
  * 与文件实现同一接口（ragIndexFileStore），语义对齐：
- *   - 版本索引不可变；写入在单事务内完成「版本行 upsert + 分块向量替换 +
- *     回读 digest 校验」，任一失败整体回滚（fail closed），lkg 不推进；
+ *   - 版本行按 (environment, kb_id, version) 主键覆盖写（重建幂等，digest
+ *     自校验保证同版本内容一致）；写入在单事务内完成「版本行 upsert +
+ *     分块向量替换 + 回读 digest 校验」，任一失败整体回滚（fail closed），
+ *     lkg 不推进；
  *   - 序列化索引存 text（与文件字节一致），读路径 parseIndex digest 校验，
  *     损坏/篡改一律视为不可读（null），由服务层回退 lkg/扫描兜底；
  *   - 分块向量同事务落 agent_rag_chunk_vectors（pgvector 列）：先删后插，
