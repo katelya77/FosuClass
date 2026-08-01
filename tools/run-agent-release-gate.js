@@ -24,6 +24,7 @@ const STEPS = [
   ["test:agent-platform-p4e", "Product platform P4e agent control plane"],
   ["test:agent-platform-p5a", "Product platform P5a standalone durable storage"],
   ["test:agent-platform-p5b", "Product platform P5b standalone service topology"],
+  ["test:agent-platform-p7a", "Product platform P7a engine adapter contract and conformance"],
   ["test:xiaofu-final-suite", "Open-schedule / AG-UI / Coze / college / UI final + core experience"],
   ["test:xiaofu-core-experience", "Core experience: follow-up / college A-B / voice / geometry"],
   ["test:agent-memory-autonomy", "Memory + autonomy wiring"],

@@ -32,7 +32,9 @@ const {
   createConfigKernel,
   createConfigKernelFileRepository,
   createConfigKernelPgRepository,
+  createEngineRegistry,
   createMemoryPolicyPublicationAdapter,
+  engineTraceMetadata,
   sha256Digest,
 } = require("../../../packages/agent-runtime");
 const { createProviderPublicationAdapter } = require("../../../packages/provider-runtime");
@@ -42,7 +44,7 @@ const { createSkillCatalog, createSkillPublicationAdapter } = require("../../../
 const { createToolRuntime, createToolPublicationAdapter } = require("../../../packages/tool-runtime");
 const { createMcpPublicationAdapter, createMcpRuntime } = require("../../../packages/mcp-runtime");
 const { createRagPublicationAdapter } = require("../../../packages/rag-runtime");
-const { createAgentPlatform, createRunHandlers } = require("../../../apps/agent-server");
+const { createAgentPlatform, createRunHandlers, createRuntimeEngine } = require("../../../apps/agent-server");
 
 const { createStandalonePlugin, createStandaloneStages, normalizeRuntimeMode } = require("./standalonePlugin");
 const { errorClassOf } = require("./standaloneLogger");
@@ -393,8 +395,19 @@ function createStandaloneComposition(options = {}) {
     resolveSkillCatalog: resolveSkillCatalogForSnapshot,
     logger,
   });
+  // P7a：standalone 平台与生产共用同一 Engine 模型（通用包装、参数化
+  // engineId，无 Fosu 名称依赖）；默认引擎即当前 Runtime，未注册实验引擎。
+  const engineRegistry = createEngineRegistry({ featureFlags: { allowExperimentalEngines: false } });
+  engineRegistry.register(createRuntimeEngine({
+    runtime,
+    engineId: "standalone-runtime",
+    engineVersion: "0.1.0",
+    conformanceSuite: "p7a-conformance-1",
+  }), { makeDefault: true });
   const platform = createAgentPlatform({
     runtime,
+    engineRegistry,
+    engineTraceMetadata,
     plugin,
     stages,
     createRunId: () => `run_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`,

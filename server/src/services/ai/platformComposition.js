@@ -1,4 +1,4 @@
-const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, createConfigKernelPgRepository, createMemoryPolicyPublicationAdapter, sha256Digest } = require("../../../../packages/agent-runtime");
+const { createAgentRuntime, createContextAssembler, createConfigKernel, createConfigKernelFileRepository, createConfigKernelPgRepository, createMemoryPolicyPublicationAdapter, createEngineRegistry, engineTraceMetadata, sha256Digest } = require("../../../../packages/agent-runtime");
 const { EXECUTION_POLICIES, createMetricsStore, createProviderPublicationAdapter, overlayToRuntimeConfig, resolveExecutionPolicy } = require("../../../../packages/provider-runtime");
 const platformProtocol = require("../../../../packages/agent-protocol");
 const uiSchema = require("../../../../packages/ui-schema");
@@ -8,6 +8,7 @@ const { createMcpPublicationAdapter, createMcpRuntime } = require("../../../../p
 const { createRagPublicationAdapter } = require("../../../../packages/rag-runtime");
 const { createRagIndexService } = require("./ragIndexService");
 const { createAgentPlatform, createRunHandlers } = require("../../../../apps/agent-server");
+const { createFosuEngine } = require("./engine/fosuEngine");
 const { createFosuCampusPlugin, createFosuStages } = require("../../../../plugins/fosu-campus");
 const path = require("path");
 
@@ -388,8 +389,17 @@ const runtime = createAgentRuntime({
     if (recentPlatformTraces.length > 200) recentPlatformTraces.splice(0, recentPlatformTraces.length - 200);
   },
 });
+// P7a：现有生产 Runtime 经 AgentEngineAdapter 成为默认 Engine。生产链：
+// Run API → createAgentPlatform → engineRegistry.resolve → fosu engine
+// → runtime.executeTurn（薄委托，不改行为、不复制状态）。public 与
+// trial/dev 默认均 fosu-runtime；experimental 引擎只允许经显式
+// feature flag 在 dev 注册（当前无实验引擎注册，P7b/P7c deferred）。
+const engineRegistry = createEngineRegistry({ featureFlags: { allowExperimentalEngines: false } });
+engineRegistry.register(createFosuEngine({ runtime }), { makeDefault: true });
 const platform = createAgentPlatform({
   runtime,
+  engineRegistry,
+  engineTraceMetadata,
   plugin,
   stages,
   createRunId: agentProtocol.createRunId,

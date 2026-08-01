@@ -28,6 +28,16 @@ async function main() {
   assert(response.platformTrace, "production response must expose the safe platform Trace");
   assert.strictEqual(response.platformTrace.runtimePackage, "@xiaofu-agent/agent-runtime");
   assert.deepStrictEqual(response.platformTrace.pluginIds, ["fosu-campus"]);
+  // P7a：Fosu Engine 真实经 Adapter 位于生产调用链（Trace 证明）。
+  assert.deepStrictEqual(response.platformTrace.engine, {
+    intendedEngine: "fosu-runtime",
+    actualEngine: "fosu-runtime",
+    engineVersion: "0.1.0",
+    contractVersion: "agent-engine.v1",
+    conformanceVersion: "p7a-conformance-1",
+    fallbackPath: null,
+    outcome: "success",
+  });
   const stageNames = response.platformTrace.stages.map((stage) => stage.stage);
   assert.deepStrictEqual(stageNames, [
     "context",
@@ -57,6 +67,13 @@ async function main() {
   assert.strictEqual(diagnostics.runtimePackage, "@xiaofu-agent/agent-runtime");
   assert.deepStrictEqual(diagnostics.pluginIds, ["fosu-campus"]);
   assert.strictEqual(diagnostics.legacyWholeChatCallback, false);
+  // P7a：Engine Registry 诊断——默认引擎即生产 fosu-runtime，无实验引擎。
+  assert.strictEqual(diagnostics.engines.defaultEngineId, "fosu-runtime");
+  assert.strictEqual(diagnostics.engines.engines.length, 1);
+  assert.strictEqual(diagnostics.engines.engines[0].engineId, "fosu-runtime");
+  assert.strictEqual(diagnostics.engines.engines[0].isDefault, true);
+  assert.strictEqual(diagnostics.engines.engines[0].experimental, false);
+  assert.strictEqual(diagnostics.engines.engines[0].conformance.suiteVersion, "p7a-conformance-1");
   assert.deepStrictEqual(diagnostics.stageOwners, {
     context: "plugins/fosu-campus",
     decision: "plugins/fosu-campus",
