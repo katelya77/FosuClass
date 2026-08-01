@@ -165,6 +165,10 @@ function publicEventSummary(event = {}) {
   return {
     type,
     sequence: Math.max(0, Number(event.sequence || 0) || 0),
+    // P6a：稳定 eventId 与协议版本随事件持久化（至少一次可重放 + 客户端幂等
+    // 消费的契约基础）；eventId 由服务层 appendEvent 在缺失时生成一次。
+    eventId: safeText(event.eventId || "", 128),
+    protocolVersion: safeText(event.protocolVersion || "run.v2", 32),
     at: String(event.at || new Date().toISOString()),
     intentName: safeText(event.intentName || "", 80),
     skillId: safeText(event.skillId || "", 80),

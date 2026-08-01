@@ -160,11 +160,11 @@
 
 ### P6a — Recoverable Run Protocol and Agent SDK
 
-- [ ] `packages/agent-protocol`：RunEvent 标准结构、UI Schema、protocolVersion、能力协商、cursor/sequence、cancel、result recovery、错误分类、旧协议兼容契约。
-- [ ] `packages/agent-sdk`：环境无关 Run 状态机（createRun/poll/SSE adapter/reconnect/resumeFromCursor/cancelRun/recoverFinalResult/幂等 reducer/依赖注入）；不依赖 wx、DOM、Node HTTP 或 Fosu 业务。
-- [ ] 服务端 RunEvent 可恢复：立即返回 runId、稳定 eventId、严格单调 sequence（不用时间戳）、按 cursor 重放、终态不可覆盖、事件持久化经 Repository 接口（integrated 文件/SQLite，standalone PostgreSQL，同一模型）。
-- [ ] 交付语义：服务端至少一次可重放 + 客户端幂等消费 = 状态不重复不回退；取消端到端真实传播。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p6a-evidence.md`。提交：`feat(agent): add recoverable run protocol and agent sdk`。
+- [x] `packages/agent-protocol`：RunEvent 标准结构、UI Schema、protocolVersion、能力协商、cursor/sequence、cancel、result recovery、错误分类、旧协议兼容契约。
+- [x] `packages/agent-sdk`：环境无关 Run 状态机（createRun/poll/SSE adapter/reconnect/resumeFromCursor/cancelRun/recoverFinalResult/幂等 reducer/依赖注入）；不依赖 wx、DOM、Node HTTP 或 Fosu 业务。
+- [x] 服务端 RunEvent 可恢复：立即返回 runId、稳定 eventId、严格单调 sequence（不用时间戳）、按 cursor 重放、终态不可覆盖、事件持久化经 Repository 接口（integrated 文件/SQLite，standalone PostgreSQL，同一模型）。
+- [x] 交付语义：服务端至少一次可重放 + 客户端幂等消费 = 状态不重复不回退；取消端到端真实传播。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p6a-evidence.md`。提交：`feat(agent): add recoverable run protocol and agent sdk`。
   - _Requirements: R4.1–R4.3, R10.2_
 
 ### P6b — Miniprogram Agent Shell and UI Block Runtime

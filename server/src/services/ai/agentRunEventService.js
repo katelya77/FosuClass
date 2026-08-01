@@ -23,6 +23,7 @@
 const crypto = require("crypto");
 const { publicEventSummary, loadingTextForEvent } = require("./runEventCatalog");
 const { createMemoryRunStore } = require("./persistence/memoryRunStore");
+const AGENT_PROTOCOL = require("../../../../packages/agent-protocol");
 
 const DEFAULT_TTL_MS = Math.max(30_000, Number(process.env.AI_AGENT_RUN_TTL_MS || 180_000) || 180_000);
 const DEFAULT_MAX_RUNS = Math.max(32, Number(process.env.AI_AGENT_RUN_MAX || 256) || 256);
@@ -137,6 +138,8 @@ function createRunEventService(options = {}) {
           eventCursor: existing.sequence,
           firstEventLatencyMs: 0,
           deduplicated: true,
+          protocolVersion: AGENT_PROTOCOL.PROTOCOL_VERSION,
+          capabilities: AGENT_PROTOCOL.PROTOCOL_CAPABILITIES,
         };
       }
     }
@@ -179,6 +182,8 @@ function createRunEventService(options = {}) {
       deadlineAt: new Date(run.deadlineAtMs).toISOString(),
       eventCursor: run.sequence,
       firstEventLatencyMs: accepted ? Math.max(0, Date.parse(accepted.at) - createdAtMs) : 0,
+      protocolVersion: AGENT_PROTOCOL.PROTOCOL_VERSION,
+      capabilities: AGENT_PROTOCOL.PROTOCOL_CAPABILITIES,
     };
   }
 
@@ -220,6 +225,10 @@ function createRunEventService(options = {}) {
     }
     run.sequence += 1;
     const payload = publicEventSummary(Object.assign({}, event, {
+      // P6a：稳定 eventId（缺失时生成一次，随后经 store 持久化；重放/水合
+      // 保留原 eventId，客户端按 eventId+sequence 幂等消费）。
+      eventId: event.eventId || createId("evt"),
+      protocolVersion: event.protocolVersion || AGENT_PROTOCOL.PROTOCOL_VERSION,
       sequence: run.sequence,
       at: event.at || nowIso(),
       runtimeMode: event.runtimeMode || run.runtimeMode,
@@ -293,6 +302,35 @@ function createRunEventService(options = {}) {
     };
   }
 
+  // P6a 深重放：内存投影是 read-your-writes 在线事实源；当客户端 cursor 早于
+  // 投影窗口（环形缓冲 80 条或重启水合截断）时，经 store.listEventsAfter 兜底
+  // 取完整持久流，与内存投影按 sequence 去重合并（内存优先）。pg 后端保留全量
+  // 事件流；journal 后端与投影同窗口（保留策略如实见 runRetentionPolicy）。
+  async function getRunViewDeep(runId, options = {}) {
+    const view = getRunView(runId, options);
+    if (!view.ok) return view;
+    const afterSequence = Math.max(0, Number(options.afterSequence || 0) || 0);
+    const run = getRunRecord(runId);
+    if (!run || !run.events.length) return view;
+    const floor = run.events[0] ? Number(run.events[0].sequence) || 1 : 1;
+    if (afterSequence >= floor - 1) return view; // 投影完整覆盖 cursor 之后
+    if (typeof store.listEventsAfter !== "function") return view;
+    let persisted = store.listEventsAfter(run.runId, afterSequence);
+    if (isThenable(persisted)) persisted = await persisted;
+    if (!Array.isArray(persisted) || !persisted.length) return view;
+    const bySequence = new Map();
+    persisted.forEach((item) => {
+      if (item && Number.isInteger(item.sequence)) bySequence.set(item.sequence, item);
+    });
+    view.events.forEach((item) => {
+      if (item && Number.isInteger(item.sequence)) bySequence.set(item.sequence, item); // 内存优先
+    });
+    const merged = Array.from(bySequence.values())
+      .filter((item) => item.sequence > afterSequence)
+      .sort((a, b) => a.sequence - b.sequence);
+    return Object.assign({}, view, { events: merged, eventSource: "store+memory" });
+  }
+
   function createEventEmitter(runId, runtimeMode = "public") {
     return function onEvent(event = {}) {
       if (isCancelled(runId)) return null;
@@ -350,6 +388,7 @@ function createRunEventService(options = {}) {
     createRun,
     getRunRecord,
     getRunView,
+    getRunViewDeep,
     isCancelled,
     resetForTests,
     setResult,
@@ -398,6 +437,9 @@ module.exports = {
   },
   getRunView(runId, options) {
     return activeService.getRunView(runId, options);
+  },
+  getRunViewDeep(runId, options) {
+    return activeService.getRunViewDeep(runId, options);
   },
   isCancelled(runId) {
     return activeService.isCancelled(runId);

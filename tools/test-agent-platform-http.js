@@ -5,6 +5,11 @@ process.env.NODE_ENV = "test";
 process.env.AI_RUNTIME_MODE = "public";
 process.env.AI_AGENT_ENABLED = "false";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
+// P6a 起 idempotencyKey 真实转发并触发跨进程去重：Run Store 必须按测试进程隔离，
+// 否则上一轮遗留的固定幂等键会被如实重放（pollToken 明文只在首发返回一次）。
+process.env.FOSU_AGENT_RUN_STORE_PATH = require("fs").mkdtempSync(
+  require("path").join(require("os").tmpdir(), "agent-platform-http-store-")
+);
 
 const app = require("../server/src/app");
 

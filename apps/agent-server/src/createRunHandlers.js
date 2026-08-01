@@ -1,3 +1,5 @@
+const AGENT_PROTOCOL = require("../../../packages/agent-protocol");
+
 const APP_SERVICE = "@xiaofu-agent/agent-server";
 const TERMINAL_TYPES = new Set(["run.completed", "run.degraded", "run.failed", "run.cancelled"]);
 
@@ -221,15 +223,55 @@ function createRunHandlers(options = {}) {
     const body = req.body || {};
     const message = String(body.message || "").trim();
     if (!message) return messageRequired(res);
+    // P6a 协议协商：显式未知版本 fail clearly；run.v1 受控兼容（如实记录
+    // compatibilityMode，不静默改变产品语义）。
+    const negotiation = AGENT_PROTOCOL.negotiateProtocol(body.protocolVersion);
+    if (!negotiation.ok) {
+      return res.status(400).json({
+        success: false,
+        code: negotiation.code,
+        errorClass: negotiation.errorClass,
+        message: "客户端协议版本不受支持，请升级客户端。",
+        protocolVersion: negotiation.protocolVersion,
+        capabilities: negotiation.capabilities,
+        serverTime: new Date().toISOString(),
+      });
+    }
     const runtimeMode = runtimeModeFor(req);
     const requestId = String(body.requestId || protocol.createRequestId()).slice(0, 96);
     const conversationId = String(body.conversationId || "").slice(0, 96);
+    const idempotencyKeyAccepted = Boolean(String(body.idempotencyKey || "").trim());
     const created = runRepository.createRun({
       serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
       runtimeMode,
       requestId,
       conversationId,
+      idempotencyKey: idempotencyKeyAccepted ? String(body.idempotencyKey).slice(0, 128) : undefined,
     });
+    if (created.deduplicated === true) {
+      // 幂等重放：既有 Run 已在执行（或已终态），不得重复调度执行链。
+      return res.status(202).json({
+        success: true,
+        appService: APP_SERVICE,
+        runId: created.runId,
+        pollToken: created.pollToken,
+        status: created.status,
+        nextPollMs: created.nextPollMs,
+        expiresAt: created.expiresAt,
+        deadlineAt: created.deadlineAt,
+        eventCursor: created.eventCursor,
+        firstEventLatencyMs: created.firstEventLatencyMs,
+        protocolVersion: created.protocolVersion || negotiation.protocolVersion,
+        capabilities: negotiation.capabilities,
+        diagnostics: {
+          idempotencyKeyAccepted,
+          deduplicated: true,
+          compatibilityMode: negotiation.compatibilityMode === "legacy" ? "legacy" : undefined,
+          runRepository: runRepositoryId,
+        },
+        serverTime: new Date().toISOString(),
+      });
+    }
     if (metricsStore) {
       try {
         // 首事件延迟独立桶（P2R：首个真实 RunEvent ≤500ms 口径）。environment 取自
@@ -246,7 +288,6 @@ function createRunHandlers(options = {}) {
     }
     const controller = new AbortController();
     controllers.set(created.runId, controller);
-    const idempotencyKeyAccepted = Boolean(String(body.idempotencyKey || "").trim());
 
     schedule(async () => {
       const repositoryEmit = runRepository.createEventEmitter(created.runId, runtimeMode);
@@ -302,25 +343,34 @@ function createRunHandlers(options = {}) {
       deadlineAt: created.deadlineAt,
       eventCursor: created.eventCursor,
       firstEventLatencyMs: created.firstEventLatencyMs,
+      protocolVersion: created.protocolVersion || negotiation.protocolVersion,
+      capabilities: negotiation.capabilities,
       diagnostics: {
         idempotencyKeyAccepted,
+        compatibilityMode: negotiation.compatibilityMode === "legacy" ? "legacy" : undefined,
         runRepository: runRepositoryId,
       },
       serverTime: new Date().toISOString(),
     });
   }
 
-  function getRun(req, res) {
+  async function getRun(req, res) {
     noStore(res);
-    const view = runRepository.getRunView(req.params.runId, {
+    const viewOptions = {
       pollToken: resolvePollCredential(req),
       serverSession: (resolvePrincipal(req) || {}).repositoryPrincipal || null,
       afterSequence: req.query.afterSequence,
-    });
+    };
+    // P6a：cursor 早于内存投影窗口时经持久层深重放（pg 全量流；journal 与投影
+    // 同窗口）。无 deep 能力的仓储回落同步视图。
+    const view = typeof runRepository.getRunViewDeep === "function"
+      ? await runRepository.getRunViewDeep(req.params.runId, viewOptions)
+      : runRepository.getRunView(req.params.runId, viewOptions);
     if (!view.ok) {
       return res.status(view.status || 404).json({
         success: false,
         code: view.code || "RUN_NOT_FOUND",
+        errorClass: AGENT_PROTOCOL.classifyRunError(view.code),
         message: "无法读取该运行任务。",
         serverTime: new Date().toISOString(),
       });
@@ -334,6 +384,9 @@ function createRunHandlers(options = {}) {
       result: view.result,
       nextPollMs: view.nextPollMs,
       checkedAt: view.checkedAt,
+      eventCursor: view.eventCursor,
+      deadlineAt: view.deadlineAt,
+      protocolVersion: AGENT_PROTOCOL.PROTOCOL_VERSION,
       serverTime: new Date().toISOString(),
     });
   }
