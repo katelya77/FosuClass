@@ -138,6 +138,7 @@ function localProductionTests() {
     run("admin UTF-8", "node", ["tools/test-admin-utf8.js"]),
     run("AI public safety", "node", ["tools/test-public-ai-safety.js"]),
     run("AI input and voice", "node", ["tools/test-ai-assistant-input-and-voice.js"]),
+    run("Agent real-device reliability", "npm", ["run", "test:agent-reliability-convergence"], { timeoutMs: 240000 }),
     run("canonical stable sorting", "node", ["tools/test-staging-fingerprint.js"]),
     run("publisher integration", "node", ["tools/test-fosu-publisher.js"]),
     run("publisher receipt storage", "node", ["tools/test-publisher-receipts.js"]),

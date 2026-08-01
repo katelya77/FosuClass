@@ -15,6 +15,7 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 
 const STEPS = [
+  ["test:agent-reliability-convergence", "Real-device reliability and product convergence"],
   ["test:agent-platform-p1", "Product platform P1 production wiring"],
   ["test:agent-platform-p2", "Product platform P2 model-first runtime and budgets"],
   ["test:agent-platform-p3", "Product platform P3 context and memory"],
