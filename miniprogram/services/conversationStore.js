@@ -159,6 +159,7 @@ function normalizeMessage(message) {
     evidence: source.evidence && typeof source.evidence === "object" && !Array.isArray(source.evidence) ? Object.assign({}, source.evidence) : null,
     safety: source.safety && typeof source.safety === "object" && !Array.isArray(source.safety) ? Object.assign({}, source.safety) : null,
     metrics: source.metrics && typeof source.metrics === "object" && !Array.isArray(source.metrics) ? Object.assign({}, source.metrics) : null,
+    recoveryAction: source.recoveryAction ? normalizeCardAction(source.recoveryAction) : null,
     timeText: safeText(source.timeText, 20),
   };
 }

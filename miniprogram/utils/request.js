@@ -232,6 +232,40 @@ function getRequestDiagnostics() {
   }
 }
 
+function sanitizeRequestErrMsg(value) {
+  return String(value || "")
+    .replace(/(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,;]+/ig, "$1[redacted]")
+    .replace(/((?:token|ticket|session|secret|password|cookie|api[-_]?key)\s*[:=]\s*)[^\s,;]+/ig, "$1[redacted]")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function classifyTransportCode(messageText) {
+  const lower = String(messageText || "").toLowerCase();
+  if (/network is disconnected|network unavailable|not connected to internet|offline|errno\s*[:=]\s*-1009/.test(lower)) return "NETWORK_OFFLINE";
+  if (/err_name_not_resolved|enotfound|eai_again|dns/.test(lower)) return "DNS_FAILED";
+  if (/url not in domain list|not in valid domain|domain (?:is )?not configured|domain not allowed/.test(lower)) return "WECHAT_DOMAIN_NOT_ALLOWED";
+  if (/ssl|tls|handshake|certificate|cert path/.test(lower)) return "TLS_FAILED";
+  if (/connect(?:ion)?[^\n]{0,20}timeout|connect_timeout/.test(lower)) return "CONNECT_TIMEOUT";
+  if (/timeout|timed out|etimedout/.test(lower)) return "REQUEST_TIMEOUT";
+  return "WECHAT_NETWORK_REQUEST_FAILED";
+}
+
+function failureLayerForCode(code) {
+  const normalized = String(code || "").toUpperCase();
+  if (normalized === "WECHAT_DOMAIN_NOT_ALLOWED" || normalized === "WECHAT_NETWORK_REQUEST_FAILED") return "wechat";
+  if (/^(NETWORK_OFFLINE|DNS_FAILED|TLS_FAILED|CONNECT_TIMEOUT|REQUEST_TIMEOUT|HTTP_4XX|HTTP_5XX)$/.test(normalized)) return "network";
+  if (/SESSION|FOSU_SESSION/.test(normalized)) return "session";
+  if (/^RUNTIME_/.test(normalized)) return "runtime";
+  if (/^RUN_/.test(normalized)) return "run";
+  if (/^PROVIDER_/.test(normalized)) return "provider";
+  if (/^TOOL_/.test(normalized)) return "tool";
+  if (/^MEMORY_/.test(normalized)) return "memory";
+  return "application";
+}
+
 function normalizeRequestError(input, meta = {}) {
   const rawMessage = input && (input.errMsg || input.message || input.statusText || "");
   const messageText = String(rawMessage || "");
@@ -239,6 +273,10 @@ function normalizeRequestError(input, meta = {}) {
   const payloadCode = meta.payload && (meta.payload.reasonCode || meta.payload.code);
   let code = meta.code || "";
   let retriable = meta.retriable;
+
+  if (!code && !payloadCode && !meta.invalidPayload && !meta.statusCode) {
+    code = classifyTransportCode(messageText);
+  }
 
   if (!code) {
     if (payloadCode) {
@@ -257,23 +295,36 @@ function normalizeRequestError(input, meta = {}) {
   }
 
   if (retriable === undefined) {
-    retriable = code === "TIMEOUT" || code === "NETWORK" || code === "HTTP_5XX";
+    retriable = ["NETWORK_OFFLINE", "DNS_FAILED", "CONNECT_TIMEOUT", "REQUEST_TIMEOUT", "WECHAT_NETWORK_REQUEST_FAILED", "HTTP_5XX"].includes(code);
   }
 
   const displayMessage = code === "TIMEOUT"
     ? "网络较慢，请稍后重试"
     : translateErrorMessage(meta.payload || null, messageText || meta.defaultMessage || "请求服务发生网络异常");
 
-  const error = new Error(displayMessage);
+  const transportMessage = {
+    NETWORK_OFFLINE: "当前设备没有可用网络，请恢复连接后重试",
+    DNS_FAILED: "域名解析失败，请稍后重试或运行连接诊断",
+    TLS_FAILED: "安全连接建立失败，请运行连接诊断",
+    WECHAT_DOMAIN_NOT_ALLOWED: "当前 API 域名未通过微信合法域名校验",
+    CONNECT_TIMEOUT: "连接服务器超时，请稍后重试",
+    REQUEST_TIMEOUT: "请求处理超时，请稍后重试",
+    WECHAT_NETWORK_REQUEST_FAILED: "微信网络层请求失败，请运行连接诊断",
+  }[code] || "";
+  const error = new Error(transportMessage || displayMessage);
   error.code = code;
-  error.reasonCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : (meta.reasonCode || payloadCode || code);
-  error.legacyCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : "";
-  error.message = displayMessage;
+  error.reasonCode = meta.reasonCode || payloadCode || code;
+  error.legacyCode = code === "REQUEST_TIMEOUT" ? "TIMEOUT" : "";
+  error.message = transportMessage || displayMessage;
   error.retriable = Boolean(retriable);
   error.url = redactUrl(meta.url || "");
   error.elapsedMs = Number(meta.elapsedMs || 0);
   error.statusCode = meta.statusCode || 0;
   error.payload = meta.payload;
+  error.failureLayer = meta.failureLayer || failureLayerForCode(error.reasonCode || code);
+  error.safeErrMsg = sanitizeRequestErrMsg(rawMessage || "request:fail");
+  error.requestId = String(meta.requestId || meta.payload && meta.payload.requestId || "").slice(0, 96);
+  error.runId = String(meta.runId || meta.payload && meta.payload.runId || "").slice(0, 100);
   error.originalError = input || null;
   return error;
 }
@@ -313,7 +364,7 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt, opt
       timeout,
       success: (res) => {
         const elapsedMs = Date.now() - startedAt;
-        if (res.statusCode !== 200) {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
           reject(normalizeRequestError(new Error(`HTTP status error: ${res.statusCode}`), {
             url: requestUrl,
             statusCode: res.statusCode,
@@ -369,6 +420,9 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt, opt
 async function buildSecurityHeaders(requestUrl, headers, options) {
   const sessionHeaders = await securitySessionService.buildSessionHeaders(requestUrl, options);
   const staticHeaders = await staticAccessService.buildStaticHeaders(requestUrl, options);
+  const runtimeHeaders = securitySessionService.isTrustedApiUrl(requestUrl)
+    ? { "X-Fosu-Env-Version": platform.getMiniProgramEnvVersion() }
+    : {};
   if (platform.isDeveloperEnv()) {
     const sessionHeaderAttached = Boolean(sessionHeaders["X-Fosu-Session"]);
     const mode = securitySessionService.getCachedSecurityMode();
@@ -382,7 +436,7 @@ async function buildSecurityHeaders(requestUrl, headers, options) {
       },
     });
   }
-  return Object.assign({}, headers, sessionHeaders, staticHeaders);
+  return Object.assign({}, headers, runtimeHeaders, sessionHeaders, staticHeaders);
 }
 
 function isClientCheckUrl(requestUrl) {
@@ -508,6 +562,11 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
     retriable: Boolean(lastError && lastError.retriable),
     url: lastError && lastError.url || redactUrl(requestUrl),
     elapsedMs: lastError && lastError.elapsedMs || 0,
+    statusCode: lastError && lastError.statusCode || 0,
+    failureLayer: lastError && lastError.failureLayer || "application",
+    safeErrMsg: lastError && lastError.safeErrMsg || "",
+    requestId: lastError && lastError.requestId || "",
+    runId: lastError && lastError.runId || "",
     at: new Date().toISOString(),
   };
   const classification = classifyRequest(requestUrl, options);
@@ -586,6 +645,7 @@ module.exports = {
   getRequestDiagnostics,
   getRequestProfile,
   normalizeRequestError,
+  sanitizeRequestErrMsg,
   request,
   get: (url, data = {}, options = {}) => request(url, "GET", data, options),
   post: (url, data = {}, options = {}) => request(url, "POST", data, options),

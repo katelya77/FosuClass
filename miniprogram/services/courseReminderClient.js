@@ -5,23 +5,15 @@
 const http = require("../utils/request");
 const agentClientErrorMapper = require("./agentClientErrorMapper");
 const scheduleChangeTracker = require("./scheduleChangeTracker");
+const platform = require("../utils/platform");
 
 function safeText(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max || 160);
 }
 
-function envVersion() {
-  try {
-    const info = wx.getAccountInfoSync && wx.getAccountInfoSync();
-    return safeText(info && info.miniProgram && info.miniProgram.envVersion || "release", 20) || "release";
-  } catch (error) {
-    return "release";
-  }
-}
-
 function withEnv(path) {
   const joiner = path.indexOf("?") >= 0 ? "&" : "?";
-  return `${path}${joiner}envVersion=${encodeURIComponent(envVersion())}`;
+  return `${path}${joiner}envVersion=${encodeURIComponent(platform.getMiniProgramEnvVersion())}`;
 }
 
 function options(extra) {

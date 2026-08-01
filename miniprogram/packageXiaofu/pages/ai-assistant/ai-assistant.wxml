@@ -62,7 +62,7 @@
 
   <scroll-view
     class="message-scroll"
-    scroll-y="{{!(showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet)}}"
+    scroll-y="{{!(showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet || showDiagnosticsSheet)}}"
     scroll-top="{{scrollTop}}"
     scroll-into-view="{{scrollIntoView}}"
     scroll-with-animation="{{scrollWithAnimation}}"
@@ -141,7 +141,15 @@
           <view class="send-fail-retry" wx:if="{{message.role == 'user' && message.sendFailed}}" data-message-id="{{message.id}}" catchtap="onRetryUserMessage">重试</view>
         </view>
 
-        <view class="fallback-banner" wx:if="{{message.fallbackBanner}}">{{message.fallbackBanner}}</view>
+        <view class="fallback-banner" wx:if="{{message.fallbackBanner}}">
+          <text>{{message.fallbackBanner}}</text>
+          <button
+            wx:if="{{message.recoveryAction}}"
+            class="fallback-retry"
+            data-message-index="{{messageIndex}}"
+            bindtap="onRecoveryAction"
+          >{{message.recoveryAction.label}}</button>
+        </view>
 
         <!-- Collapsed task trace from real Run Events only -->
         <view
@@ -240,7 +248,7 @@
 
   <view
     class="sheet-mask"
-    wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet}}"
+    wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet || showDiagnosticsSheet}}"
     catchtap="closeSheets"
     catchtouchmove="preventScrollPassThrough"
   ></view>
@@ -267,6 +275,8 @@
     memory-revision="{{memoryRevision}}"
     episodes="{{memoryEpisodes}}"
     operation-pending="{{memoryOperationPending}}"
+    inline-error="{{memoryInlineError}}"
+    undo-item="{{memoryUndo}}"
     bind:close="closeMemorySheet"
     bind:change="onMemoryModeChange"
     bind:clearlocal="onClearLocalMemory"
@@ -276,6 +286,8 @@
     bind:editpreference="onEditMemoryPreference"
     bind:toggleautomemory="onToggleAutoMemory"
     bind:exportmemory="onExportMemory"
+    bind:dismissinlineerror="onDismissMemoryInlineError"
+    bind:undodelete="onUndoMemoryDelete"
   />
 
   <xiaofu-reminder-sheet
@@ -291,14 +303,28 @@
     memoryStatusText="{{memoryStatusText}}"
     privacyStatusText="{{privacyStatusText}}"
     floatEnabled="{{xiaofuFloatEnabled}}"
+    diagnosticsVisible="{{diagnosticsVisible}}"
     bind:close="closeHeaderMenu"
     bind:conversations="openConversationSheetFromMenu"
     bind:memory="openMemorySheet"
     bind:privacy="openPrivacySheet"
     bind:capability="openCapabilityGuide"
     bind:privacyhelp="openPrivacyHelp"
+    bind:diagnostics="openDiagnosticsSheet"
     bind:clear="clearHistory"
     bind:floatchange="onFloatSwitchChangeFromSheet"
+  />
+
+  <xiaofu-diagnostics-sheet
+    wx:if="{{diagnosticsVisible}}"
+    visible="{{showDiagnosticsSheet}}"
+    running="{{diagnosticsRunning}}"
+    report="{{diagnosticsReport}}"
+    envVersion="{{diagnosticsEnvVersion}}"
+    apiHostname="{{diagnosticsApiHostname}}"
+    bind:close="closeDiagnosticsSheet"
+    bind:run="runConnectionDiagnostics"
+    bind:copy="copyConnectionDiagnostics"
   />
 
   <!-- Composer + quick actions sheet -->

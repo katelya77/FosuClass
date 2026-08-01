@@ -4,6 +4,28 @@
  */
 
 const CODE_MESSAGES = Object.freeze({
+  NETWORK_OFFLINE: "当前设备没有可用网络，请恢复连接后重试",
+  DNS_FAILED: "域名解析失败，请稍后重试或打开连接诊断",
+  TLS_FAILED: "安全连接建立失败，请打开连接诊断",
+  WECHAT_DOMAIN_NOT_ALLOWED: "当前 API 域名未通过微信合法域名校验，请联系管理员配置",
+  WECHAT_NETWORK_REQUEST_FAILED: "微信网络层请求失败，请打开连接诊断并复制脱敏报告",
+  CONNECT_TIMEOUT: "连接服务器超时，请稍后重试",
+  REQUEST_TIMEOUT: "请求处理超时，请稍后重试",
+  HTTP_4XX: "请求未被服务器接受，请刷新会话后重试",
+  HTTP_5XX: "服务器处理失败，请稍后重试",
+  FOSU_SESSION_INVALID: "当前会话已失效，请重新连接后重试",
+  FOSU_SESSION_EXPIRED: "当前会话已过期，请重新连接后重试",
+  SESSION_REQUIRED: "需要有效会话才能执行此操作",
+  SESSION_INVALID: "当前会话无效，请重新连接后重试",
+  RUNTIME_NOT_AUTHORIZED: "当前体验环境未获增强能力授权，将继续使用公开能力",
+  RUN_CREATE_FAILED: "任务创建失败，可运行连接诊断后重试",
+  RUN_POLL_FAILED: "任务状态读取中断，网络恢复后可继续",
+  RUN_EXECUTOR_LOST: "服务重启导致任务中断，请重新执行",
+  PROVIDER_NOT_CONFIGURED: "增强理解服务尚未配置，确定性校园工具仍可使用",
+  PROVIDER_KEY_MISSING: "增强理解服务尚未配置，确定性校园工具仍可使用",
+  PROVIDER_UNVERIFIED: "增强理解服务已配置但尚未真实验证",
+  TOOL_FAILED: "校园工具执行失败，请查看诊断详情后重试",
+  MEMORY_STORE_UNAVAILABLE: "云端记忆暂不可用，本机记忆仍可查看",
   FOSU_SESSION_REQUIRED: "需要先登录会话后才能使用云端记忆",
   CONVERSATION_NOT_FOUND: "会话尚未同步，请重试一次",
   CONVERSATION_REVISION_CONFLICT: "会话状态有更新，请刷新后再试",
@@ -64,6 +86,10 @@ function mapAgentError(errorOrCode, fallbackMessage) {
     rawMessage = String(errorOrCode.message || errorOrCode.error || errorOrCode.errMsg || "");
   } else if (errorOrCode != null) {
     rawMessage = String(errorOrCode);
+  }
+
+  if (!code && /^request:fail(?:\s|$)/i.test(rawMessage)) {
+    code = "WECHAT_NETWORK_REQUEST_FAILED";
   }
 
   if (CODE_MESSAGES[code]) {

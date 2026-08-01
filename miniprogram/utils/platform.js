@@ -19,10 +19,20 @@ function getWxSystemInfo() {
   return Object.assign({}, legacy, windowInfo, deviceInfo, appBaseInfo);
 }
 
-function getMiniProgramEnvVersion() {
+function normalizeMiniProgramEnvVersion(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "develop" || normalized === "development" || normalized === "dev" || normalized === "devtools") {
+    return "develop";
+  }
+  if (normalized === "trial") return "trial";
+  return "release";
+}
+
+function getMiniProgramEnvVersion(wxLike) {
   try {
-    const account = wx && typeof wx.getAccountInfoSync === "function" ? wx.getAccountInfoSync() : {};
-    return account && account.miniProgram && account.miniProgram.envVersion || "release";
+    const runtime = wxLike || (typeof wx !== "undefined" ? wx : null);
+    const account = runtime && typeof runtime.getAccountInfoSync === "function" ? runtime.getAccountInfoSync() : {};
+    return normalizeMiniProgramEnvVersion(account && account.miniProgram && account.miniProgram.envVersion);
   } catch (error) {
     return "release";
   }
@@ -38,4 +48,5 @@ module.exports = {
   getMiniProgramEnvVersion,
   getWxSystemInfo,
   isDeveloperEnv,
+  normalizeMiniProgramEnvVersion,
 };

@@ -40,7 +40,7 @@ function terminalActivityPatch(source, options) {
       statusCapsuleExpanded: true,
     };
   }
-  if (payload.success === false || status === "failed" || status === "error" || verificationFailed || errorCount > 0) {
+  if (payload.success === false || status === "failed" || status === "error" || verificationFailed) {
     return {
       agentActivityState: "network_error",
       sendingStatusText: "未完成",
@@ -52,9 +52,11 @@ function terminalActivityPatch(source, options) {
   if (payload.fallback === true || status === "degraded") {
     return {
       agentActivityState: "degraded",
-      sendingStatusText: "已安全降级",
-      statusCapsuleText: "已完成 · 使用安全降级链路",
-      statusCapsuleDetail: "确定性工具结果已保留；增强推理未被伪装成成功调用。",
+      sendingStatusText: payload.resultOrigin === "local_device" ? "本机结果" : "已安全降级",
+      statusCapsuleText: payload.resultOrigin === "local_device" ? "本机结果 · 可联网重试" : "已完成 · 使用安全降级链路",
+      statusCapsuleDetail: payload.resultOrigin === "local_device"
+        ? "结果只来自本机缓存或确定性入口，没有伪装成服务端任务。"
+        : "确定性工具结果已保留；增强推理未被伪装成成功调用。",
       statusCapsuleExpanded: true,
     };
   }
