@@ -12,6 +12,11 @@ const { createFileMemoryDocumentStore } = require("./fileMemoryDocumentStore");
 const { principalShard } = require("./conversationPrincipalService");
 const { resolveRepositoryBackend } = require("../persistence/repositoryBackend");
 const { encodeSemanticVector, semanticScores, ENCODER_VERSION } = require("../../../../../packages/agent-runtime");
+const {
+  isInvalidPreferredName,
+  migrateInvalidStoredMemories,
+  validateStoredMemory,
+} = require("../memory/memorySemanticValidator");
 
 // P5a WS6：maybe-async 基元。documentStore 在 file 后端为同步实现（原行为
 // 逐字保持），postgres 后端为异步同形 seam（pgMemoryDocumentStoreAdapter）；
@@ -82,7 +87,7 @@ function typedError(message, code, statusCode) {
 function normalizeValue(key, value) {
   if (key === "preferredName") {
     const name = String(value || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 24);
-    if (!name || !/^[\u3400-\u9fffA-Za-z0-9·\-\s]{1,24}$/.test(name)) return null;
+    if (!name || !/^[\u3400-\u9fffA-Za-z0-9·\-\s]{1,24}$/.test(name) || isInvalidPreferredName(name)) return null;
     return name;
   }
   if (key === "campus") {
@@ -212,6 +217,9 @@ function normalizeProvenance(value = {}, now) {
     turnId: safeText(source.turnId || "", 80),
     runId: safeText(source.runId || "", 100),
     sourceId: safeText(source.sourceId || "", 120),
+    source: safeText(source.source || "", 40),
+    reasonCode: safeText(source.reasonCode || "", 60),
+    sourceSummary: safeText(source.sourceSummary || "", 120),
     recordedAt: safeText(source.recordedAt || now, 40),
   };
 }
@@ -224,12 +232,15 @@ function normalizeStoredItem(item = {}) {
     content: safeText(item.content, 240),
     normalizedValue: item.normalizedValue,
     provenance: normalizeProvenance(item.provenance, item.createdAt || new Date().toISOString()),
+    source: safeText(item.source || item.provenance && item.provenance.source || "", 40),
+    reasonCode: safeText(item.reasonCode || item.provenance && item.provenance.reasonCode || "", 60),
+    sourceSummary: safeText(item.sourceSummary || item.provenance && item.provenance.sourceSummary || "", 120),
     confidence: Math.max(0, Math.min(1, Number(item.confidence || 0))),
     scope: ALLOWED_SCOPES.includes(item.scope) ? item.scope : "user",
     expiresAt: safeText(item.expiresAt, 40),
     supersedes: safeText(item.supersedes, 100),
     supersededBy: safeText(item.supersededBy, 100),
-    status: ["active", "superseded", "expired_context"].includes(item.status) ? item.status : "active",
+    status: ["active", "superseded", "expired_context", "invalid_semantic"].includes(item.status) ? item.status : "active",
     termId: safeText(item.termId, 60),
     releaseVersion: safeText(item.releaseVersion, 100),
     revision: Math.max(1, Number(item.revision || 1)),
@@ -544,6 +555,22 @@ class UserPreferenceService {
 
   readDocumentUnlocked(filePath, principalKey) {
     const now = this.nowIso();
+    const persistSemanticMigration = (document, previousRevision) => {
+      const migration = migrateInvalidStoredMemories(document, now);
+      if (!migration.invalidatedCount) return document;
+      const baselineRevision = Math.max(0, Number(previousRevision === undefined ? document.revision : previousRevision));
+      document.revision = baselineRevision + 1;
+      document.items.forEach((item) => {
+        if (item.status === "invalid_semantic" && item.updatedAt === now) item.revision = document.revision;
+      });
+      document.audit.forEach((entry) => {
+        if (entry.action === "invalidate_semantic" && entry.at === now) entry.revision = document.revision;
+      });
+      return chain(this.writeDocumentUnlocked(filePath, principalKey, document, {
+        expectedRevision: baselineRevision,
+        revision: document.revision,
+      }), () => document);
+    };
     return chain(this.documentStore.load(filePath), (storedText) => {
       if (storedText === null) return emptyDocument(now);
       if (!this.secret) {
@@ -562,7 +589,8 @@ class UserPreferenceService {
         try {
           const decrypted = decryptObject(raw.encrypted, this.secret, principalKey);
           assertV2DocumentShape(decrypted, raw.revision);
-          return normalizeDocument(decrypted, now);
+          const normalized = normalizeDocument(decrypted, now);
+          return persistSemanticMigration(normalized, normalized.revision);
         } catch (error) {
           if (error && error.code === "MEMORY_DOCUMENT_CORRUPT") throw error;
           throw typedError("Memory document is corrupt", "MEMORY_DOCUMENT_CORRUPT", 500);
@@ -582,7 +610,19 @@ class UserPreferenceService {
           const legacyRecordedAt = new Date(legacyBaseMs).toISOString();
           Object.entries(values).forEach(([key, rawValue]) => {
             const value = normalizeValue(key, rawValue);
-            if (!ALLOWED_KEYS.includes(key) || value === null) return;
+            if (!ALLOWED_KEYS.includes(key)) return;
+            if (value === null) {
+              if (key === "preferredName") {
+                document.audit.push({
+                  auditId: `audit_legacy_semantic_${principalShard(principalKey)}`,
+                  action: "invalidate_semantic",
+                  targetId: "legacy:preferredName",
+                  revision: document.revision,
+                  at: legacyRecordedAt,
+                });
+              }
+              return;
+            }
             const content = `${key}=${String(value)}`;
             document.items.push(normalizeStoredItem({
               memoryId: `mem_legacy_${crypto.createHash("sha256").update(`${principalKey}|${key}`).digest("hex").slice(0, 16)}`,
@@ -604,8 +644,15 @@ class UserPreferenceService {
           });
           return document;
         };
-        if (Number.isFinite(updatedAtMs)) return buildLegacyDocument(updatedAtMs);
-        return chain(this.documentStore.statMtimeMs(filePath), buildLegacyDocument);
+        const persistLegacy = (legacyBaseMs) => {
+          const document = buildLegacyDocument(legacyBaseMs);
+          return chain(this.writeDocumentUnlocked(filePath, principalKey, document, {
+            expectedRevision: Number(raw.revision || 0),
+            revision: document.revision,
+          }), () => document);
+        };
+        if (Number.isFinite(updatedAtMs)) return persistLegacy(updatedAtMs);
+        return chain(this.documentStore.statMtimeMs(filePath), persistLegacy);
       }
       throw typedError("Memory schema is unsupported", "MEMORY_SCHEMA_UNSUPPORTED", 409);
     });
@@ -669,6 +716,10 @@ class UserPreferenceService {
     if (!ALLOWED_KEYS.includes(key)) throw typedError("Memory key is invalid", "MEMORY_KEY_INVALID", 400);
     const normalizedValue = normalizeValue(key, entry.normalizedValue !== undefined ? entry.normalizedValue : entry.value);
     if (normalizedValue === null) throw typedError("Memory value is invalid", "MEMORY_VALUE_INVALID", 400);
+    const semanticValidation = validateStoredMemory({ key, normalizedValue, status: "active" });
+    if (!semanticValidation.accepted) {
+      throw typedError("Memory value is semantically invalid", semanticValidation.reasonCode || "MEMORY_SEMANTIC_INVALID", 400);
+    }
     const content = safeText(entry.content || `${key}=${String(normalizedValue)}`, 240);
     if (!content || SENSITIVE_PATTERN.test(`${key} ${content} ${JSON.stringify(normalizedValue)}`)) {
       throw typedError("Memory contains sensitive data", "MEMORY_SENSITIVE_REJECTED", 400);
@@ -686,6 +737,9 @@ class UserPreferenceService {
       content,
       normalizedValue,
       provenance: normalizeProvenance(entry.provenance, now),
+      source: safeText(entry.source || entry.provenance && entry.provenance.source || "", 40),
+      reasonCode: safeText(entry.reasonCode || entry.provenance && entry.provenance.reasonCode || "", 60),
+      sourceSummary: safeText(entry.sourceSummary || entry.provenance && entry.provenance.sourceSummary || "", 120),
       confidence: Math.max(0, Math.min(1, Number(entry.confidence === undefined ? 0.9 : entry.confidence))),
       scope,
       expiresAt: Number.isFinite(explicitExpiry) ? new Date(explicitExpiry).toISOString() : new Date(this.clock.now() + ttlMs).toISOString(),
@@ -721,6 +775,9 @@ class UserPreferenceService {
       }
       previous.content = memory.content;
       previous.provenance = memory.provenance;
+      previous.source = memory.source;
+      previous.reasonCode = memory.reasonCode;
+      previous.sourceSummary = memory.sourceSummary;
       previous.confidence = Math.max(previous.confidence, memory.confidence);
       previous.expiresAt = memory.expiresAt;
       previous.updatedAt = now;
