@@ -14,6 +14,7 @@
 | `272b3846` | feat(agent): add durable run event stores（WS3，11 文件 +1704/-207） |
 | `20e905ad` | feat(agent): add task queue and rag index pg stores（WS5，19 文件 +2262/-222，含 ioredis） |
 | `1fa1d9c8` | feat(agent): wire pg backends into consumption chains（WS6，19 文件 +2392/-1075） |
+| `8de7c601` | fix(agent): isolate task queue pg mirror and harden delivery ordering（独立审查修复，8 文件 +144/-25，含 migration 7） |
 
 ## 2. 交付内容（按工作流）
 
@@ -76,6 +77,17 @@
 - 新测试 `tools/test-agent-p5a-consumer-wiring.js`（离线 file 同步契约 / 死后端 503 / 真实 PG 全链三段；regression runner 自动纳入）。
 - file 后端行为逐字保持、local_only 语义不变；既有测试零修改。
 
+### 2.8 独立审查与加固（`8de7c601`）
+
+P5a 落地后经独立两轴 code review（Standards / Spec，agent-37）：**双轴 PASS、0 Critical、2 Important**。Important 已全部修复并随本阶段门禁复绿：
+
+- **I-1（一表两主）**：Redis 队列 PG 镜像原写 `agent_durable_tasks`，durable 整集合重写/清空会抹掉队列跨重启幂等锚、镜像行会被 durable load 读成幽灵任务。修复：migration 7 独立 `agent_task_queue_mirror` 表（doc jsonb），durable 与队列彻底分表。
+- **I-2（ack 顺序）**：`ack()`/`retry()` 原把 XACK 放在状态簿记之前，部分失败窗口内任务出 PEL 后不可重投成孤儿。修复：先落簿记（hash + 镜像 + dead-letter/重投 XADD）再 XACK；`reclaimPending` 新增 done/failed 陈旧守卫（XACK 清出 PEL 不再重投），与 claim 守卫对称。
+
+Minor 加固（同提交）：journalRunStore `appendRecord` fold 无条件且先于 compact（修复持久化失败路径 fold 跳过 + compact 边界记录重启丢失两个潜伏缺陷）；pgClient/pgRepository 错误 `cause` 只挂脱敏副本；ragIndexPgStore 头注与覆盖写行为一致化；pgVectorSearch 查询 coded 包装（RAG_PG_UNAVAILABLE / RAG_PG_QUERY_FAILED，剔除 password=）。
+
+保留为已知限制/设计确认：migration 无历史缺口检测（篡改/异常路径，低概率）；pgRunStore onEvent 事务内裸 client.query 当前无 API 暴露面（P6a 暴露 getLastWriteError 前需评估）；PG 后端并发 mutate 负者表面化 MEMORY_REVISION_CONFLICT(409) 为 adapter 头注声明的设计（file 后端锁串行无此失败面）。审查范围含夹在链中的 `afd9738f`（P4e UI 打磨），单提交独立可回滚，不构成违规。
+
 ## 3. migration 全景（getMigrationList 目录自动发现）
 
 | 版本 | 内容 | 引入提交 |
@@ -86,6 +98,7 @@
 | 4 | user_memory | `7f7724cd` |
 | 5 | RAG 索引 + `CREATE EXTENSION vector` | `20e905ad` |
 | 6 | runs / run_events / run_traces | `272b3846` |
+| 7 | task_queue_mirror（队列镜像独立表，审查修复 I-1） | `8de7c601` |
 
 ## 4. 测试证据
 
@@ -95,10 +108,12 @@
 | --- | --- |
 | `npm run test:agent-platform-p5a`（聚合 10 个 P5a 测试文件） | PASS（exit 0）：persistence-migrations / pg-client / repository-parity / config-kernel-backend / migrations-0003 / memory-doc-store / run-store / task-queue / rag-index-store / consumer-wiring，全部含真实 PG（pgvector/pgvector:pg16）或 Redis（redis:7-alpine）ephemeral 容器段 |
 | `npm run test:agent-phase2` | 11/11 PASS |
-| `npm run test:agent-release-gate` | 22/22 OK，无 UNVERIFIED，durationMs=698859（含新步骤 `test:agent-platform-p5a` OK） |
+| `npm run test:agent-release-gate` | 22/22 OK，无 UNVERIFIED；WS6 收尾跑 durationMs=698859，审查修复（`8de7c601`）后复跑 durationMs=702823（含步骤 `test:agent-platform-p5a` OK） |
 | 前置阶段回归（release-gate 输出） | p1 / p2 / p4a / p4b / p4c / p4d / p4e 全 OK |
 | `git diff --check` | 通过 |
 | `npm run test:no-ai-secret-committed` | 通过 |
+
+门禁 flake 记录：审查修复后首次全门禁跑中 `test-coze-provider-v3` 出现一次无输出 [FAIL]（527ms）；该测试单跑与 phase3 整组复跑均过，其领域（Coze Provider）与修复文件无交集，第二次全门禁跑 22/22 全绿——确认为环境偶发，非改动引入。
 
 已核事实：
 
