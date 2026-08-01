@@ -166,7 +166,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,.dockerignore"
+          # server/Dockerfile builds with the monorepo root as context
+          # (docker-compose build.context: ..), so the VPS needs the workspace
+          # packages/plugins/apps and root manifests next to server/.
+          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,packages/**,!packages/**/node_modules/**,plugins/**,!plugins/**/node_modules/**,apps/**,!apps/**/node_modules/**,package.json,package-lock.json,.dockerignore"
           target: "${{ secrets.VPS_APP_DIR }}"
 
       - name: SSH Remote Deploy & Health Check
