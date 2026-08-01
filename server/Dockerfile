@@ -81,7 +81,34 @@ CMD ["node", "src/app.js"]
 # ---------- core (no browser runtime) ----------
 FROM runtime-common AS core
 
+# ---------- standalone agent platform (server / worker / admin / migrate) ----------
+# P5b: single image, four roles selected by AGENT_PLATFORM_ROLE (default server).
+# Entry: server/src/standalone/agentServerMain.js; probes /health/live,
+# /health/startup, /health/ready on AGENT_PLATFORM_PORT (default 8080).
+# No Chromium, no campus data baked in. Multi-arch safe (linux/amd64+arm64 via
+# buildx): runtime-common only adds ca-certificates and pure-JS npm deps,
+# no x86-only native binaries.
+FROM runtime-common AS standalone
+
+LABEL org.opencontainers.image.title="fosu-agent-platform" \
+      org.opencontainers.image.description="Xiaofu Agent Platform standalone: server/worker/admin/migrate roles, PostgreSQL+Redis durable backends"
+
+ENV AGENT_PLATFORM_ROLE=server \
+    AGENT_PLATFORM_PORT=8080 \
+    FOSU_AGENT_REPOSITORY_BACKEND=postgres
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD node scripts/test-standalone-health.js || exit 1
+
+CMD ["node", "src/standalone/agentServerMain.js"]
+
 # ---------- browser (production default until APaaS is proven browser-free) ----------
+# NOTE: keep 'browser' as the LAST stage -- default docker build (no --target)
+# produces the fosuclass-api image; the docker smoke gate, container-publish
+# workflow and 1Panel/vps deploys rely on that default. Use --target standalone
+# explicitly for the agent platform image.
 FROM runtime-common AS browser
 
 RUN apk add --no-cache \
