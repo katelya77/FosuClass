@@ -388,3 +388,46 @@
     width: 100%;
   }
 }
+
+.memory-inline-error,
+.memory-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 14rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.memory-inline-error { border: 1rpx solid rgba(185, 28, 28, 0.24); background: #fff4f2; color: #842f2a; }
+.memory-undo { border: 1rpx solid rgba(59, 109, 90, 0.22); background: #f1f7f3; color: #315f4d; }
+.memory-inline-error-copy { flex: 1; min-width: 0; }
+.memory-inline-error button,
+.memory-undo button { flex: 0 0 auto; min-height: 52rpx; margin: 0; padding: 0 14rpx; background: transparent; color: inherit; font-size: 21rpx; line-height: 52rpx; }
+.memory-inline-error button::after,
+.memory-undo button::after { border: none; }
+
+.memory-preference-reason,
+.memory-preference-source { margin-top: 4rpx; color: #756d65; font-size: 19rpx; line-height: 1.4; white-space: normal; word-break: break-word; }
+.memory-preference-source { color: #91887f; }
+
+@media (prefers-color-scheme: dark) {
+  .memory-sheet { background: #1e1b18; }
+  .sheet-handle { background: rgba(255, 255, 255, 0.16); }
+  .memory-title, .memory-mode-title, .memory-section-title,
+  .memory-preference-value, .memory-episode-goal { color: #f4f0ea; }
+  .memory-subtitle, .memory-mode-desc, .memory-section-meta,
+  .memory-preference-meta, .memory-preference-loading, .memory-preference-empty,
+  .memory-policy-status, .memory-preference-source { color: #aaa198; }
+  .memory-mode-item, .memory-auto-row, .memory-preference-item,
+  .memory-episode-item { border-color: #403a35; background: #25211e; }
+  .memory-mode-item.active { border-color: #8d4944; background: #30211f; }
+  .sheet-close-icon, .memory-action { background: #302b27; color: #ddd5cd; }
+  .memory-note { background: #2b2723; color: #c8beb5; }
+  .memory-inline-error { border-color: #673b37; background: #30211f; color: #f0aaa4; }
+  .memory-undo { border-color: #3e6754; background: #202b25; color: #9bd0b2; }
+  .memory-preference-reason { color: #c6bcb3; }
+}

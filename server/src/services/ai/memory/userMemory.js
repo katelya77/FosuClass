@@ -13,6 +13,7 @@ const {
   isLowRiskKey,
   resolveTtlMs,
 } = require("./memoryPolicy");
+const { validateMemoryCandidates } = require("./memorySemanticValidator");
 
 const EXTENDED_KEYS = Object.freeze([
   ...ALLOWED_KEYS,
@@ -104,7 +105,7 @@ function classifyMemoryWriteError(error) {
   if (code === "MEMORY_SECRET_UNAVAILABLE" || code.indexOf("USER_PREFERENCE_LOCK") === 0) return "storage_unavailable";
   if (code === "MEMORY_DOCUMENT_CORRUPT") return "storage_corrupt";
   if (code === "MEMORY_SCHEMA_UNSUPPORTED") return "schema_unsupported";
-  if (/^(MEMORY_KIND_FORBIDDEN|MEMORY_KEY_INVALID|MEMORY_VALUE_INVALID|MEMORY_SENSITIVE_REJECTED|PREFERENCE_INVALID)$/.test(code)) {
+  if (/^(MEMORY_KIND_FORBIDDEN|MEMORY_KEY_INVALID|MEMORY_VALUE_INVALID|MEMORY_SEMANTIC_INVALID(?:_PREFERRED_NAME)?|MEMORY_QUESTION_NOT_FACT|MEMORY_SENSITIVE_REJECTED|PREFERENCE_INVALID)$/.test(code)) {
     return "schema_validation";
   }
   return "storage_error";
@@ -292,7 +293,11 @@ class UserMemoryStore {
 
     // Low#5：pause/autoMemoryEnabled=false 只停自动抽取/implicit 写入；
     // explicit 候选（用户明确纠正/确认/手动编辑）不在此处拦截，由服务层豁免放行。
-    const filtered = filterAndMergeCandidates(input.candidates || [], {
+    const semanticValidation = validateMemoryCandidates(input.candidates || [], {
+      message: input.message,
+      memoryMode,
+    });
+    const filtered = filterAndMergeCandidates(semanticValidation.accepted, {
       memoryMode,
       autoMemoryEnabled,
       policy: input.policy || null,
@@ -328,6 +333,9 @@ class UserMemoryStore {
           type: candidate.correction ? "user_correction" : (candidate.source === "explicit_user" ? "user_explicit" : "auto_extract"),
           turnId: candidate.sourceTurnIds && candidate.sourceTurnIds[0] || "",
           runId: input.runId || "",
+          source: candidate.source || "",
+          reasonCode: candidate.reasonCode || "",
+          sourceSummary: candidate.sourceSummary || "",
         },
         confidence: candidate.confidence,
         scope,
@@ -352,7 +360,15 @@ class UserMemoryStore {
       : null;
 
     if (!entries.length && !episodePlan) {
-      return { persisted: false, keys: [], items: [] };
+      return {
+        persisted: false,
+        keys: [],
+        items: [],
+        semanticValidation: {
+          acceptedCount: semanticValidation.accepted.length,
+          rejectedCount: semanticValidation.rejected.length,
+        },
+      };
     }
 
     const mutationCategories = Array.from(new Set(

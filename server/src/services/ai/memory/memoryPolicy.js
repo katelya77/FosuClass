@@ -202,7 +202,9 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
     // 显式用户指令（"叫我小明"，解析器置信 0.95）豁免置信门槛——与
     // mayAutoPersistUserMemory 的豁免一致：门槛面向推断型记忆，发布的
     // minConfidence > 0.95 不得把显式偏好在归并期静默丢弃（P4b 审查 Minor #8）。
-    if (raw.source !== "explicit_user" && Number(raw.confidence || 0) < minConfidence) return;
+    const workingOnly = raw.semanticDisposition === "working_only"
+      || raw.scope === "working" || raw.scope === "turn";
+    if (!workingOnly && raw.source !== "explicit_user" && Number(raw.confidence || 0) < minConfidence) return;
     if (!autoMemoryEnabled && raw.source !== "explicit_user") return;
 
     const candidate = {
@@ -228,6 +230,9 @@ function filterAndMergeCandidates(candidates = [], options = {}) {
       termId: String(raw.termId || "").slice(0, 60),
       releaseVersion: String(raw.releaseVersion || "").slice(0, 100),
       durable: false,
+      semanticValidated: raw.semanticValidated === true,
+      semanticDisposition: String(raw.semanticDisposition || "").slice(0, 24),
+      sourceSummary: String(raw.sourceSummary || "").slice(0, 100),
     };
 
     if (["user", "long_term", "term", "release"].includes(candidate.scope)) {

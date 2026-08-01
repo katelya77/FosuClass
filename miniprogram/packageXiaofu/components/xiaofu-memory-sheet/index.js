@@ -9,6 +9,8 @@ Component({
     memoryRevision: { type: Number, value: 0 },
     episodes: { type: Array, value: [] },
     operationPending: { type: Boolean, value: false },
+    inlineError: { type: String, value: "" },
+    undoItem: { type: Object, value: null },
   },
   data: {
     privacyExpanded: false,
@@ -58,6 +60,12 @@ Component({
     },
     onExportMemory() {
       this.triggerEvent("exportmemory");
+    },
+    onDismissInlineError() {
+      this.triggerEvent("dismissinlineerror");
+    },
+    onUndoDelete() {
+      this.triggerEvent("undodelete");
     },
   },
 });

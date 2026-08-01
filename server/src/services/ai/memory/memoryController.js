@@ -15,6 +15,7 @@ const {
 } = require("./threadMemory");
 const { extractMemoryCandidates } = require("./memoryCandidateExtractor");
 const { filterAndMergeCandidates } = require("./memoryPolicy");
+const { validateMemoryCandidates, isInvalidPreferredName } = require("./memorySemanticValidator");
 const safetyGuard = require("../safetyGuard");
 
 // maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
@@ -347,8 +348,7 @@ class MemoryController {
       ),
     });
 
-    const candidates = filterAndMergeCandidates(
-      (input.memoryCandidates || extractMemoryCandidates({
+    const rawCandidates = (input.memoryCandidates || extractMemoryCandidates({
         message: input.message,
         runId: input.runId,
         providerPayload: input.providerPayload,
@@ -364,11 +364,22 @@ class MemoryController {
             source: "explicit_user",
           }))
           : []
-      ),
+      );
+    const semanticValidation = validateMemoryCandidates(rawCandidates, {
+      message: input.message,
+      memoryMode,
+    });
+    const candidates = filterAndMergeCandidates(
+      semanticValidation.accepted,
       { memoryMode, autoMemoryEnabled, policy: input.policy || null }
     );
 
     // Apply durable name/campus into working memory for this thread immediately.
+    // Never retain an unvalidated name written by an upstream interpreter or a
+    // legacy working snapshot. Accepted candidates below are the only updater.
+    workingMemory.preferredName = isInvalidPreferredName(prevWorking.preferredName)
+      ? ""
+      : prevWorking.preferredName;
     candidates.forEach((c) => {
       if (c.key === "preferredName") workingMemory.preferredName = c.value;
       if (c.key === "campus" && c.scope === "user") workingMemory.campus = c.value;
@@ -419,12 +430,14 @@ class MemoryController {
       durableUserMessage,
       durableAssistantAnswer,
       episodeRequested,
+      semanticValidation,
     };
     return chain(this.userMemory.commit({
       principal,
       memoryMode,
       autoMemoryEnabled,
       candidates,
+      message: input.message,
       policy: input.policy || null,
       episode: episodeRequested
         ? {
@@ -464,6 +477,7 @@ class MemoryController {
       durableUserMessage,
       durableAssistantAnswer,
       episodeRequested,
+      semanticValidation,
     } = ctx;
     const episodeCommit = userCommit && userCommit.episode
       ? userCommit.episode
@@ -547,6 +561,11 @@ class MemoryController {
         status: userCommit && userCommit.writeStatus || "succeeded",
         attemptCount: userCommit && userCommit.attemptCount || 0,
         revision: userCommit && userCommit.revision || 0,
+      },
+      memoryValidation: {
+        acceptedCount: semanticValidation.accepted.length,
+        rejectedCount: semanticValidation.rejected.length,
+        rejected: semanticValidation.rejected,
       },
       autoMemoryHints: userCommit.persisted
         ? userCommit.keys.map((key) => {
