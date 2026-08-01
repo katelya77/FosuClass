@@ -183,12 +183,12 @@
 
 ### P7a — Engine Contract and Fosu Conformance
 
-- [ ] `AgentEngineAdapter` 单一权威契约（engineId/version/capabilities/readiness/createRun/resume/cancel/probe/shutdown/conformance metadata；统一受控依赖注入；统一归一化输出）。
-- [ ] Engine Registry：服务端受控选择（defaultEngine/allowedEngines/environment scope/feature flag/readiness/conformance status/experimental 标记/rollback）；public 恒 Fosu Engine；未过 conformance 不得默认；Run 创建绑定 Engine 版本。
-- [ ] Fosu Engine 真实经 Adapter 接入生产链（Trace 证明），行为不变，全部门禁通过。
-- [ ] Engine conformance suite（22 项，见 p7a 验收）；Fosu Engine 首先完整通过。
-- [ ] OpenAI/Pi Adapter：仅研究文档、依赖与许可证审计、API 映射、缺口与完成条件；不实现、不加依赖、不写空 Adapter。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p7a-evidence.md`。提交：`refactor(agent): introduce engine adapter contract`。
+- [x] `AgentEngineAdapter` 单一权威契约（engineId/version/capabilities/readiness/createRun/resume/cancel/probe/shutdown/conformance metadata；统一受控依赖注入；统一归一化输出）。
+- [x] Engine Registry：服务端受控选择（defaultEngine/allowedEngines/environment scope/feature flag/readiness/conformance status/experimental 标记/rollback）；public 恒 Fosu Engine；未过 conformance 不得默认；Run 创建绑定 Engine 版本。
+- [x] Fosu Engine 真实经 Adapter 接入生产链（Trace 证明），行为不变，全部门禁通过。
+- [x] Engine conformance suite（22 项，见 p7a 验收）；Fosu Engine 首先完整通过。
+- [x] OpenAI/Pi Adapter：仅研究文档、依赖与许可证审计、API 映射、缺口与完成条件；不实现、不加依赖、不写空 Adapter。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p7a-evidence.md`。提交：`refactor(agent): introduce engine adapter contract`。
   - _Requirements: R9, R10.2–R10.3, R11.1_
 
 ### P7b — OpenAI Agents SDK Adapter（deferred）
