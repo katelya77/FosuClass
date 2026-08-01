@@ -5901,7 +5901,7 @@ const adminConsoleHtml = `<!doctype html>
 
             <li class="nav-group-label" data-nav-group="系统与安全">系统与安全</li>
             <li class="nav-item" data-section="ai-provider"><button type="button" title="查询服务"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 4h.01M15 14h.01M9 17h6"/></svg><span class="nav-label">查询服务</span></button></li>
-            <li class="nav-item"><button type="button" id="agentPlatformNavBtn" title="Agent 控制面"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg><span class="nav-label">Agent 控制面</span></button></li>
+            <li class="nav-item" data-section="agent-platform"><button type="button" id="agentPlatformNavBtn" title="Agent 控制面"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg><span class="nav-label">Agent 控制面</span></button></li>
             <li class="nav-item" data-section="security"><button type="button" title="安全状态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm0 5v4m0 4h.01"/></svg><span class="nav-label">安全状态</span></button></li>
             <li class="nav-item" data-section="settings"><button type="button" title="系统设置"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4a7.7 7.7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8.7 8.7 0 0 0-1.8-1L14.8 3h-4l-.3 2.7a8.7 8.7 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.7 7.7 0 0 0 0 2.8l-2 1.5 2 3.4 2.4-1a8.7 8.7 0 0 0 1.8 1l.3 2.7h4l.3-2.7a8.7 8.7 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5a7.7 7.7 0 0 0 .1-1.4Z"/></svg><span class="nav-label">系统设置</span></button></li>
           </ul>
@@ -7689,6 +7689,11 @@ const adminConsoleHtml = `<!doctype html>
         </div>
       </section>
 
+      <!-- 面板八·扩展：Agent 控制面（内嵌独立应用，iframe + postMessage 自适应高度，与其他分区同为右侧内容区） -->
+      <section id="section-agent-platform" class="section">
+        <iframe id="agentPlatformFrame" data-src="/admin/agent-platform/?embed=1" title="Agent 控制面" style="width:100%;border:0;display:block;min-height:560px;background:transparent;" scrolling="no"></iframe>
+      </section>
+
       <!-- 面板九：系统设置 System Settings -->
       <section id="section-settings" class="section">
         <div class="stats-grid">
@@ -8254,6 +8259,7 @@ const adminConsoleHtml = `<!doctype html>
         "campus-map": "/admin/map",
         feedback: "/admin/feedback",
         security: "/admin/security",
+        "agent-platform": "/admin/agent",
         settings: "/admin/settings"
       };
       var ADMIN_CATALOG_TYPE_PATHS = {
@@ -8287,6 +8293,7 @@ const adminConsoleHtml = `<!doctype html>
         "/admin/map": { section: "campus-map" },
         "/admin/feedback": { section: "feedback" },
         "/admin/security": { section: "security" },
+        "/admin/agent": { section: "agent-platform" },
         "/admin/settings": { section: "settings" },
         "/admin/logs": { section: "settings" }
       };
@@ -8935,6 +8942,7 @@ const adminConsoleHtml = `<!doctype html>
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
+          "agent-platform": "Agent 控制面",
           settings: "系统设置与日志"
         };
         var nextTitle = titles[targetSection] || "Admin Console";
@@ -8952,6 +8960,7 @@ const adminConsoleHtml = `<!doctype html>
           feedback: "内容管理 / 用户反馈",
           "ai-provider": "系统与安全 / 查询服务",
           security: "系统与安全 / 安全状态",
+          "agent-platform": "系统与安全 / Agent 平台",
           settings: "系统与安全 / 设置与日志"
         };
         if ($("pageTitle")) {
@@ -8997,6 +9006,12 @@ const adminConsoleHtml = `<!doctype html>
           ignoreLoadError(loadCampusMapState());
         } else if (targetSection === "feedback") {
           ignoreLoadError(loadFeedbacks());
+        } else if (targetSection === "agent-platform") {
+          // 控制面为内嵌 iframe 应用，首次进入才挂载，避免后台首屏并发其 API。
+          var agentFrame = $("agentPlatformFrame");
+          if (agentFrame && !agentFrame.getAttribute("src")) {
+            agentFrame.setAttribute("src", agentFrame.getAttribute("data-src"));
+          }
         }
       }
 
@@ -16165,19 +16180,27 @@ const adminConsoleHtml = `<!doctype html>
           });
           setStatus("正在获取佛课后台全局配置...");
 
-          return Promise.allSettled([
-            loadDashboard(),
-            loadConfig(),
-            loadAiProviderConfig(),
-            loadNotices(),
-            loadNews(),
-            loadFeedbacks()
-          ]).then(function (results) {
-            var failed = results.filter(function (r) { return r.status === "rejected"; });
+          var moduleLoaders = [
+            ["数据概览", loadDashboard()],
+            ["全局配置", loadConfig()],
+            ["查询服务", loadAiProviderConfig()],
+            ["公告管理", loadNotices()],
+            ["最新动态", loadNews()],
+            ["反馈管理", loadFeedbacks()]
+          ];
+          return Promise.allSettled(moduleLoaders.map(function (entry) { return entry[1]; })).then(function (results) {
+            var failedNames = [];
+            var failed = [];
+            results.forEach(function (r, index) {
+              if (r.status === "rejected") {
+                failed.push(r);
+                failedNames.push(moduleLoaders[index][0]);
+              }
+            });
             if (failed.length > 0) {
-              console.warn("[Admin Console] partial load failed:", failed);
-              setStatus("部分模块加载失败，但后台基础功能可用。失败模块数：" + failed.length);
-              showToast("部分模块加载失败，请查看 Console 或接口状态。", "warning");
+              console.warn("[Admin Console] partial load failed:", failedNames, failed);
+              setStatus("部分模块加载失败（" + failedNames.join("、") + "），后台基础功能可用。");
+              showToast("部分模块加载失败：" + failedNames.join("、") + "，可稍后刷新重试。", "warning");
             } else {
               setStatus("最近一键刷新时间：" + formatDate(new Date().toISOString()));
               showToast("控制台面板状态已同步", "success");
@@ -16204,6 +16227,15 @@ const adminConsoleHtml = `<!doctype html>
       window.addEventListener("popstate", function() {
         applyAdminRouteFromLocation();
       });
+      // 内嵌 Agent 控制面经 postMessage 上报内容高度，父页据此伸缩 iframe，避免双滚动条。
+      window.addEventListener("message", function (event) {
+        if (event.origin !== location.origin) return;
+        var data = event.data || {};
+        if (data.type === "agent-platform:height" && $("agentPlatformFrame")) {
+          var nextHeight = Math.max(480, Math.min(Number(data.height) || 0, 6000));
+          if (nextHeight) $("agentPlatformFrame").style.height = nextHeight + "px";
+        }
+      });
 
       // 绑定导航与事件
       document.querySelectorAll(".sidebar nav ul li[data-section]").forEach(function (item) {
@@ -16211,8 +16243,6 @@ const adminConsoleHtml = `<!doctype html>
           switchSection(item.dataset.section);
         });
       });
-      // Agent 控制面为独立页面（非 SPA section），无 data-section，单独绑定跳转
-      safeBind("agentPlatformNavBtn", "click", function () { location.href = "/admin/agent-platform/"; });
 
       // 实时预览监听
       ["noticeTitle", "noticeContent", "noticeVersion"].forEach(function (id) {
