@@ -138,14 +138,14 @@
 
 ### P5b — Standalone Service Topology
 
-- [ ] 单 `fosu-agent-platform` 镜像四角色（server/worker/admin/migrate）；`deploy/standalone/docker-compose.yml` + `.env.example` + 命名卷 + 内部网络。
-- [ ] 依赖顺序：postgres/redis healthy → migrate completed → server/worker/admin。
-- [ ] liveness/readiness/startup 分离；readiness 区分 postgres/redis/migration/artifact/config/worker queue/RAG backend/Provider/published configVersion。
-- [ ] 无 fosu-campus 插件可独立运行（Admin、声明式 Skill、受控 Tool/MCP、知识库、Run、RunEvent、UI Schema、内置只读示例 Skill）；插件经只读卷/数据同步注入。
-- [ ] Provider 未配置：health 可 healthy，readiness 如实 not ready；不用 Mock 冒充生产 Provider；凭据只经环境变量/Secret 注入。
-- [ ] worker 职责：RAG 摄取/索引、golden 验证、发布前测试、Eval、维护清理；主聊天链不无条件异步化。
-- [ ] 备份/恢复/升级/回滚文档；不用 floating latest 作生产依据。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5b-evidence.md`。提交：`feat(agent): add standalone platform deployment`。
+- [x] 单 `fosu-agent-platform` 镜像四角色（server/worker/admin/migrate；compose 默认 admin 面与 server 合一部署，角色分离仅为可扩展预留）；`deploy/standalone/docker-compose.yml` + `.env.example` + 命名卷 + 内部网络。
+- [x] 依赖顺序：postgres/redis healthy → migrate completed → server/worker/admin。
+- [x] liveness/readiness/startup 分离；readiness 区分 postgres/redis/migration/artifact/config/worker queue/RAG backend/Provider/published configVersion。
+- [x] 无 fosu-campus 插件可独立运行（Admin、声明式 Skill、受控 Tool/MCP、知识库、Run、RunEvent、UI Schema、内置只读示例 Skill）；插件经只读卷/数据同步注入。
+- [x] Provider 未配置：health 可 healthy，readiness 如实 not ready；不用 Mock 冒充生产 Provider；凭据只经环境变量/Secret 注入。
+- [x] worker 职责边界：RAG 摄取/索引（已落地并经 smoke 验证）；golden 验证/发布前测试/Eval/维护清理归入 worker 的接缝已立（kind 白名单，未知 kind 明确 reject 进 dead-letter），任务生产者随对应域成熟接入；主聊天链不无条件异步化。
+- [x] 备份/恢复/升级/回滚文档；不用 floating latest 作生产依据。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p5b-evidence.md`。提交：`feat(agent): add standalone platform deployment`。
   - _Requirements: R8, R10.4, R11.6_
 
 ### P5c — Multi-Architecture Delivery
