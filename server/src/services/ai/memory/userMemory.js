@@ -22,6 +22,17 @@ const EXTENDED_KEYS = Object.freeze([
   "preferPersonalSchedule",
 ]);
 
+// maybe-async 透传（P5a WS6）：file 后端同步返回原值；postgres 后端返回 Promise。
+// 吞错语义用 chain 的 onRejected 保持——原 try/catch 的"任何异常 → 空结果"不变。
+function isThenable(value) {
+  return Boolean(value) && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled, onRejected) {
+  if (!isThenable(value)) return onFulfilled(value);
+  return value.then(onFulfilled, onRejected);
+}
+
 /**
  * memory.write_* 结构化事件（M1）：区分 write_succeeded / write_retried /
  * write_skipped / write_failed。事件只携带非敏感标识（revision 数字、变更类别、
@@ -172,34 +183,43 @@ class UserMemoryStore {
   load(input = {}) {
     const principal = input.principal;
     const memoryMode = input.memoryMode || "local_only";
+    const empty = { items: [], values: {}, episodes: [], revision: 0, policy: null };
     if (!principal || principal.authenticated !== true) {
-      return { items: [], values: {}, episodes: [], revision: 0, policy: null };
+      return empty;
     }
     // User Memory is cloud_sync only; session_state must not restore cross-conversation prefs.
     if (memoryMode !== "cloud_sync") {
-      return { items: [], values: {}, episodes: [], revision: 0, policy: null };
+      return empty;
     }
+    const finish = (listed) => {
+      try {
+        const items = listed
+          ? listed.items.map((item) => ({ ...item, value: item.normalizedValue }))
+          : enforceUserMemoryCap(toMemoryItems(this.preferenceService.getObject({ principal }) || {}, {}, input.policy || null), undefined, input.policy || null);
+        const values = Object.fromEntries(items.map((item) => [item.key, item.value]));
+        return { items, values, episodes: [], revision: listed && listed.revision || 0, policy: listed && listed.policy || null };
+      } catch (_) {
+        return empty;
+      }
+    };
     try {
       const listed = typeof this.preferenceService.listMemoryItems === "function"
         ? this.preferenceService.listMemoryItems({ principal, pageSize: MAX_USER_MEMORIES })
         : null;
-      const items = listed
-        ? listed.items.map((item) => ({ ...item, value: item.normalizedValue }))
-        : enforceUserMemoryCap(toMemoryItems(this.preferenceService.getObject({ principal }) || {}, {}, input.policy || null), undefined, input.policy || null);
-      const values = Object.fromEntries(items.map((item) => [item.key, item.value]));
-      return { items, values, episodes: [], revision: listed && listed.revision || 0, policy: listed && listed.policy || null };
+      return chain(listed, finish, () => empty);
     } catch (_) {
-      return { items: [], values: {}, episodes: [], revision: 0, policy: null };
+      return empty;
     }
   }
 
   prepareTurnSnapshot(input = {}) {
     const principal = input.principal;
     const memoryMode = input.memoryMode || "local_only";
+    const empty = {
+      allItems: [], values: {}, items: [], episodes: [], revision: 0, policy: null,
+    };
     if (!principal || principal.authenticated !== true || memoryMode !== "cloud_sync") {
-      return {
-        allItems: [], values: {}, items: [], episodes: [], revision: 0, policy: null,
-      };
+      return empty;
     }
     try {
       if (typeof this.preferenceService.prepareTurnSnapshot === "function") {
@@ -212,29 +232,32 @@ class UserMemoryStore {
           memoryLimit: resolveMemoryLimit(input),
           episodeLimit: input.episodeLimit || 3,
         });
-        return {
-          allItems: prepared.allItems.map((item) => ({ ...item, value: item.normalizedValue })),
-          values: { ...prepared.values },
-          items: prepared.items.map((item) => ({ ...item, value: item.normalizedValue })),
-          episodes: prepared.episodes,
-          revision: prepared.revision || 0,
-          policy: prepared.policy || null,
-        };
+        return chain(prepared, (resolved) => {
+          try {
+            return {
+              allItems: resolved.allItems.map((item) => ({ ...item, value: item.normalizedValue })),
+              values: { ...resolved.values },
+              items: resolved.items.map((item) => ({ ...item, value: item.normalizedValue })),
+              episodes: resolved.episodes,
+              revision: resolved.revision || 0,
+              policy: resolved.policy || null,
+            };
+          } catch (_) {
+            return empty;
+          }
+        }, () => empty);
       }
-      const loaded = this.load(input);
-      const retrieved = this.retrieve(input);
-      return {
+      // load/retrieve 内部已吞错（永不 reject），直接串联即可。
+      return chain(this.load(input), (loaded) => chain(this.retrieve(input), (retrieved) => ({
         allItems: loaded.items,
         values: loaded.values,
         items: retrieved.items,
         episodes: retrieved.episodes,
         revision: Math.max(loaded.revision || 0, retrieved.revision || 0),
         policy: loaded.policy,
-      };
+      })));
     } catch (_) {
-      return {
-        allItems: [], values: {}, items: [], episodes: [], revision: 0, policy: null,
-      };
+      return empty;
     }
   }
 
@@ -357,23 +380,16 @@ class UserMemoryStore {
     }
 
     const maxAttempts = 2;
-    let expectedRevision = input.expectedRevision === undefined || input.expectedRevision === null
-      ? null
-      : Number(input.expectedRevision);
-    const firstExpectedRevision = expectedRevision;
-    let attemptCount = 0;
-    let latestPolicyVersion = eventBase.policyVersion;
-    while (attemptCount < maxAttempts) {
-      attemptCount += 1;
+    const state = {
+      expectedRevision: input.expectedRevision === undefined || input.expectedRevision === null
+        ? null
+        : Number(input.expectedRevision),
+      latestPolicyVersion: eventBase.policyVersion,
+    };
+    const firstExpectedRevision = state.expectedRevision;
+
+    const succeed = (saved, attemptCount) => {
       try {
-        const saved = this.preferenceService.applyMutationPlan({
-          principal,
-          memoryMode,
-          entries,
-          episode: episodePlan,
-          verified: input.verified === true,
-          expectedRevision,
-        });
         const stored = (saved.items || []).map((item) => ({ ...item, value: item.normalizedValue }));
         emitMemoryWriteEvent(Object.assign({}, eventBase, {
           event: "memory.write_succeeded",
@@ -381,7 +397,7 @@ class UserMemoryStore {
           attemptCount,
           oldRevision: firstExpectedRevision,
           latestRevision: saved.revision,
-          policyVersion: latestPolicyVersion || eventBase.policyVersion,
+          policyVersion: state.latestPolicyVersion || eventBase.policyVersion,
         }));
         return {
           persisted: saved.persisted === true,
@@ -396,41 +412,39 @@ class UserMemoryStore {
           boundaryConflicts,
         };
       } catch (error) {
-        if (error && error.code === "MEMORY_REVISION_CONFLICT") {
-          if (attemptCount >= maxAttempts) {
-            // 两次仍冲突：fail-soft 跳过，不让聊天 Turn 失败、不产生技术 409。
-            emitMemoryWriteEvent(Object.assign({}, eventBase, {
-              event: "memory.write_skipped",
-              reason: "revision_conflict_exhausted",
-              attemptCount,
-              oldRevision: firstExpectedRevision,
-              latestRevision: expectedRevision,
-              policyVersion: latestPolicyVersion || eventBase.policyVersion,
-            }));
-            return {
-              persisted: false,
-              keys: [],
-              items: [],
-              reason: "revision_conflict_exhausted",
-              revision: 0,
-              episode: episodePlan ? { persisted: false, reason: "revision_conflict_exhausted" } : undefined,
-              writeStatus: "skipped",
-              attemptCount,
-              retried: true,
-              boundaryConflicts,
-            };
-          }
-          // 冲突 → 重读最新状态 → 以最新 revision 为基线仅重试一次。
-          let latestRevision = null;
-          try {
-            const latest = typeof this.preferenceService.readRevision === "function"
-              ? this.preferenceService.readRevision({ principal })
-              : null;
-            latestRevision = latest && Number(latest.revision);
-            if (latest && latest.policyVersion) latestPolicyVersion = latest.policyVersion;
-          } catch (_) {
-            latestRevision = null;
-          }
+        return fail(error, attemptCount);
+      }
+    };
+
+    const fail = (error, attemptCount) => {
+      if (error && error.code === "MEMORY_REVISION_CONFLICT") {
+        if (attemptCount >= maxAttempts) {
+          // 两次仍冲突：fail-soft 跳过，不让聊天 Turn 失败、不产生技术 409。
+          emitMemoryWriteEvent(Object.assign({}, eventBase, {
+            event: "memory.write_skipped",
+            reason: "revision_conflict_exhausted",
+            attemptCount,
+            oldRevision: firstExpectedRevision,
+            latestRevision: state.expectedRevision,
+            policyVersion: state.latestPolicyVersion || eventBase.policyVersion,
+          }));
+          return {
+            persisted: false,
+            keys: [],
+            items: [],
+            reason: "revision_conflict_exhausted",
+            revision: 0,
+            episode: episodePlan ? { persisted: false, reason: "revision_conflict_exhausted" } : undefined,
+            writeStatus: "skipped",
+            attemptCount,
+            retried: true,
+            boundaryConflicts,
+          };
+        }
+        // 冲突 → 重读最新状态 → 以最新 revision 为基线仅重试一次。
+        const onBaseline = (latest) => {
+          const latestRevision = latest && Number(latest.revision);
+          if (latest && latest.policyVersion) state.latestPolicyVersion = latest.policyVersion;
           if (!Number.isFinite(latestRevision)) {
             // 无法获得可信基线时不盲目无 revision 写入；准确分类为基线不可用。
             emitMemoryWriteEvent(Object.assign({}, eventBase, {
@@ -439,7 +453,7 @@ class UserMemoryStore {
               attemptCount,
               oldRevision: firstExpectedRevision,
               latestRevision: null,
-              policyVersion: latestPolicyVersion || eventBase.policyVersion,
+              policyVersion: state.latestPolicyVersion || eventBase.policyVersion,
             }));
             return {
               persisted: false,
@@ -458,37 +472,65 @@ class UserMemoryStore {
             event: "memory.write_retried",
             reason: "revision_conflict",
             attemptCount: attemptCount + 1,
-            oldRevision: expectedRevision,
+            oldRevision: state.expectedRevision,
             latestRevision,
-            policyVersion: latestPolicyVersion || eventBase.policyVersion,
+            policyVersion: state.latestPolicyVersion || eventBase.policyVersion,
           }));
-          expectedRevision = latestRevision;
-          continue;
-        }
-        const category = classifyMemoryWriteError(error);
-        emitMemoryWriteEvent(Object.assign({}, eventBase, {
-          event: "memory.write_failed",
-          reason: category,
-          attemptCount,
-          oldRevision: firstExpectedRevision,
-          latestRevision: expectedRevision,
-          policyVersion: latestPolicyVersion || eventBase.policyVersion,
-        }));
-        return {
-          persisted: false,
-          keys: [],
-          items: [],
-          reason: category,
-          revision: 0,
-          episode: episodePlan ? { persisted: false, reason: category } : undefined,
-          writeStatus: "failed",
-          attemptCount,
-          retried: attemptCount > 1,
-          boundaryConflicts,
+          state.expectedRevision = latestRevision;
+          return attempt(attemptCount);
         };
+        let latestRead = null;
+        try {
+          latestRead = typeof this.preferenceService.readRevision === "function"
+            ? this.preferenceService.readRevision({ principal })
+            : null;
+        } catch (_) {
+          latestRead = null;
+        }
+        return chain(latestRead, onBaseline, () => onBaseline(null));
       }
-    }
-    return { persisted: false, keys: [], items: [], reason: "unreachable", writeStatus: "failed", attemptCount };
+      const category = classifyMemoryWriteError(error);
+      emitMemoryWriteEvent(Object.assign({}, eventBase, {
+        event: "memory.write_failed",
+        reason: category,
+        attemptCount,
+        oldRevision: firstExpectedRevision,
+        latestRevision: state.expectedRevision,
+        policyVersion: state.latestPolicyVersion || eventBase.policyVersion,
+      }));
+      return {
+        persisted: false,
+        keys: [],
+        items: [],
+        reason: category,
+        revision: 0,
+        episode: episodePlan ? { persisted: false, reason: category } : undefined,
+        writeStatus: "failed",
+        attemptCount,
+        retried: attemptCount > 1,
+        boundaryConflicts,
+      };
+    };
+
+    const attempt = (previousAttemptCount) => {
+      const attemptCount = (previousAttemptCount || 0) + 1;
+      let saved;
+      try {
+        saved = this.preferenceService.applyMutationPlan({
+          principal,
+          memoryMode,
+          entries,
+          episode: episodePlan,
+          verified: input.verified === true,
+          expectedRevision: state.expectedRevision,
+        });
+      } catch (error) {
+        return fail(error, attemptCount);
+      }
+      return chain(saved, (resolved) => succeed(resolved, attemptCount), (error) => fail(error, attemptCount));
+    };
+
+    return attempt(0);
   }
 
   /**
@@ -496,35 +538,9 @@ class UserMemoryStore {
    * upsertMemory + appendEpisode），保持 Low#5 explicit 豁免去服务层判定。
    */
   commitLegacy({ principal, memoryMode, entries, episodePlan, verified }) {
-    try {
-      let saved;
-      let stored;
-      if (typeof this.preferenceService.upsertMemoryBatch === "function") {
-        saved = this.preferenceService.upsertMemoryBatch({ principal, memoryMode, entries });
-        stored = (saved.items || []).map((item) => ({ ...item, value: item.normalizedValue }));
-      } else {
-        stored = [];
-        entries.forEach((entry) => {
-          if (typeof this.preferenceService.upsertMemory !== "function") return;
-          const result = this.preferenceService.upsertMemory({
-            principal,
-            memoryMode,
-            explicit: entry.explicit,
-            entry,
-          });
-          if (result.persisted && result.memory) stored.push({ ...result.memory, value: result.memory.normalizedValue });
-        });
-        saved = stored.length ? { persisted: true, reason: "" } : { persisted: false, reason: "" };
-      }
-      const episode = episodePlan && typeof this.preferenceService.appendEpisode === "function"
-        ? this.preferenceService.appendEpisode({
-          principal,
-          memoryMode,
-          verified,
-          episode: episodePlan,
-        })
-        : (episodePlan ? { persisted: false, reason: "episode_store_unavailable" } : undefined);
-      return {
+    const failed = { persisted: false, keys: [], items: [] };
+    const finishWith = (saved, stored) => {
+      const finishEpisode = (episode) => ({
         persisted: saved.persisted === true,
         keys: Array.from(new Set(stored.map((item) => item.key))),
         items: stored,
@@ -533,9 +549,63 @@ class UserMemoryStore {
         episode,
         writeStatus: "succeeded",
         attemptCount: 1,
+      });
+      let episodeResult;
+      try {
+        episodeResult = episodePlan && typeof this.preferenceService.appendEpisode === "function"
+          ? this.preferenceService.appendEpisode({
+            principal,
+            memoryMode,
+            verified,
+            episode: episodePlan,
+          })
+          : (episodePlan ? { persisted: false, reason: "episode_store_unavailable" } : undefined);
+      } catch (_) {
+        return failed;
+      }
+      return chain(episodeResult, finishEpisode, () => failed);
+    };
+    try {
+      if (typeof this.preferenceService.upsertMemoryBatch === "function") {
+        const saved = this.preferenceService.upsertMemoryBatch({ principal, memoryMode, entries });
+        return chain(saved, (resolved) => {
+          try {
+            const stored = (resolved.items || []).map((item) => ({ ...item, value: item.normalizedValue }));
+            return finishWith(resolved, stored);
+          } catch (_) {
+            return failed;
+          }
+        }, () => failed);
+      }
+      const stored = [];
+      const runEntries = (index) => {
+        if (index >= entries.length || typeof this.preferenceService.upsertMemory !== "function") {
+          const saved = stored.length ? { persisted: true, reason: "" } : { persisted: false, reason: "" };
+          return finishWith(saved, stored);
+        }
+        let result;
+        try {
+          result = this.preferenceService.upsertMemory({
+            principal,
+            memoryMode,
+            explicit: entries[index].explicit,
+            entry: entries[index],
+          });
+        } catch (_) {
+          return failed;
+        }
+        return chain(result, (resolved) => {
+          try {
+            if (resolved.persisted && resolved.memory) stored.push({ ...resolved.memory, value: resolved.memory.normalizedValue });
+          } catch (_) {
+            return failed;
+          }
+          return runEntries(index + 1);
+        }, () => failed);
       };
+      return runEntries(0);
     } catch (_) {
-      return { persisted: false, keys: [], items: [] };
+      return failed;
     }
   }
 
@@ -544,7 +614,8 @@ class UserMemoryStore {
   }
 
   retrieve(input = {}) {
-    if (!input.principal || input.memoryMode !== "cloud_sync") return { items: [], episodes: [], revision: 0 };
+    const empty = { items: [], episodes: [], revision: 0 };
+    if (!input.principal || input.memoryMode !== "cloud_sync") return empty;
     try {
       const memories = this.preferenceService.retrieveMemories({
         principal: input.principal,
@@ -554,69 +625,86 @@ class UserMemoryStore {
         releaseVersion: input.releaseVersion || "",
         limit: resolveMemoryLimit(input),
       });
-      const episodes = this.preferenceService.retrieveEpisodes({
-        principal: input.principal,
-        query: input.message || input.query,
-        goal: input.goal || input.intentName,
-        termId: input.termId || "",
-        releaseVersion: input.releaseVersion || "",
-        limit: input.episodeLimit || 3,
-      });
-      return {
-        items: memories.items.map((item) => ({ ...item, value: item.normalizedValue })),
-        episodes: episodes.items,
-        revision: Math.max(memories.revision || 0, episodes.revision || 0),
-      };
+      return chain(memories, (memoriesResolved) => {
+        let episodes;
+        try {
+          episodes = this.preferenceService.retrieveEpisodes({
+            principal: input.principal,
+            query: input.message || input.query,
+            goal: input.goal || input.intentName,
+            termId: input.termId || "",
+            releaseVersion: input.releaseVersion || "",
+            limit: input.episodeLimit || 3,
+          });
+        } catch (_) {
+          return empty;
+        }
+        return chain(episodes, (episodesResolved) => {
+          try {
+            return {
+              items: memoriesResolved.items.map((item) => ({ ...item, value: item.normalizedValue })),
+              episodes: episodesResolved.items,
+              revision: Math.max(memoriesResolved.revision || 0, episodesResolved.revision || 0),
+            };
+          } catch (_) {
+            return empty;
+          }
+        }, () => empty);
+      }, () => empty);
     } catch (_) {
-      return { items: [], episodes: [], revision: 0 };
+      return empty;
     }
   }
 
   invalidateContext(input = {}) {
-    if (!input.principal || input.memoryMode !== "cloud_sync") return { invalidatedIds: [], revision: 0 };
+    const empty = { invalidatedIds: [], revision: 0 };
+    if (!input.principal || input.memoryMode !== "cloud_sync") return empty;
     try {
-      return this.preferenceService.invalidateContext({
+      return chain(this.preferenceService.invalidateContext({
         principal: input.principal,
         termId: input.termId,
         releaseVersion: input.releaseVersion,
         expectedRevision: input.expectedRevision,
-      });
+      }), (result) => result, () => empty);
     } catch (_) {
-      return { invalidatedIds: [], revision: 0 };
+      return empty;
     }
   }
 
   appendEpisode(input = {}) {
+    const empty = { persisted: false, reason: "episode_store_failed" };
     if (!input.principal || input.memoryMode !== "cloud_sync") return { persisted: false, reason: "not_cloud_sync" };
     try {
-      return this.preferenceService.appendEpisode(input);
+      return chain(this.preferenceService.appendEpisode(input), (result) => result, () => empty);
     } catch (_) {
-      return { persisted: false, reason: "episode_store_failed" };
+      return empty;
     }
   }
 
   remove(input = {}) {
-    if (!input.principal || !input.key) return { deleted: false };
+    const empty = { deleted: false };
+    if (!input.principal || !input.key) return empty;
     try {
-      return this.preferenceService.remove({
+      return chain(this.preferenceService.remove({
         principal: input.principal,
         key: input.key,
         expectedRevision: input.expectedRevision,
-      });
+      }), (result) => result, () => empty);
     } catch (_) {
-      return { deleted: false };
+      return empty;
     }
   }
 
   clear(input = {}) {
-    if (!input.principal) return { deleted: 0 };
+    const empty = { deleted: 0 };
+    if (!input.principal) return empty;
     try {
-      return this.preferenceService.clear({
+      return chain(this.preferenceService.clear({
         principal: input.principal,
         expectedRevision: input.expectedRevision,
-      });
+      }), (result) => result, () => empty);
     } catch (_) {
-      return { deleted: 0 };
+      return empty;
     }
   }
 }

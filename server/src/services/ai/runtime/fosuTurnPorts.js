@@ -327,7 +327,7 @@ function createFosuTurnPorts(options = {}) {
       providerRuntimeConfig: state.providerRuntimeConfig,
     });
 
-    const loadedMemory = memoryCoordinator.loadConversationMemory({
+    const loadedMemory = await memoryCoordinator.loadConversationMemory({
       serverSession: request.serverSession,
       runtimeMode: state.runtimeDecision.runtimeMode,
       conversationId: state.conversationId,
@@ -542,7 +542,7 @@ function createFosuTurnPorts(options = {}) {
     if (understanding && understanding.source && !intent.understandingSource) {
       intent.understandingSource = String(understanding.source).slice(0, 40);
     }
-    const personalMemoryEarly = memoryCoordinator.handlePersonalMemoryTurn({
+    const personalMemoryEarly = await memoryCoordinator.handlePersonalMemoryTurn({
       message: state.safeMessage,
       context: mutableContext,
       memoryBundle: state.memoryBundle,
@@ -740,7 +740,7 @@ function createFosuTurnPorts(options = {}) {
         steps: [],
         generalAssistant: false,
       });
-      const publicResponse = attachMemory(buildResponse({
+      const publicResponse = await attachMemory(buildResponse({
         protocolVersion: state.protocolVersion,
         runId: state.runId,
         answer: publicPlain.answer,
@@ -875,7 +875,7 @@ function createFosuTurnPorts(options = {}) {
     const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
     const pendingAction = derivePendingAction(actionCommands, { runId: state.runId })
       || deriveReminderPendingAction(toolCalls, state.memoryBundle && state.memoryBundle.principal, { runId: state.runId });
-    registerReminderReceiptWaitBestEffort(pendingAction, state.memoryBundle && state.memoryBundle.principal);
+    await registerReminderReceiptWaitBestEffort(pendingAction, state.memoryBundle && state.memoryBundle.principal);
     const responsePlan = state.protocolVersion === agentProtocol.PROTOCOL_VERSION
       ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
       : (execution.plan || plan);
@@ -948,7 +948,7 @@ function createFosuTurnPorts(options = {}) {
     }));
     const finalOutcome = deriveFinalResponseOutcome(builtResponse, generatedResponse.providerTruth);
     applyFinalResponseOutcome(builtResponse, finalOutcome);
-    const finalResponse = attachMemory(builtResponse, state.memoryBundle, {
+    const finalResponse = await attachMemory(builtResponse, state.memoryBundle, {
       message: state.safeMessage,
       intentName: intent.name,
       context: responseContext,

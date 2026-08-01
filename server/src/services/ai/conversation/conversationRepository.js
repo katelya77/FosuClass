@@ -14,9 +14,14 @@ let defaultRepository = null;
 function createConversationRepository(options = {}) {
   if (resolveRepositoryBackend(options.repositoryBackend) === "postgres") {
     // lazy require：file 模式不加载 pg 依赖链。
-    const { getPool } = require("../persistence/pgPersistenceService");
+    // P5a WS6：gated lazy pool（WS2 同款）——构造同步、不触网、未配置 PG
+    // 也不在 require 期抛错（PG_CONFIG_REQUIRED 延迟到首次查询）；每次
+    // query/connect 先过 initPlatform 就绪门（migration 0003 的
+    // agent_conversations 表由迁移链保证）。显式 options.pool 仍然优先
+    // （测试注入真实池）。
+    const { createLazyPool } = require("../persistence/pgReadiness");
     const { PgConversationRepository } = require("./pgConversationRepository");
-    return new PgConversationRepository(Object.assign({ pool: getPool() }, options));
+    return new PgConversationRepository(Object.assign({ pool: createLazyPool({ gated: true }) }, options));
   }
   return new FileConversationRepository(options);
 }

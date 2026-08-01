@@ -21,6 +21,19 @@ const { getConversationRepository } = require("./conversationRepository");
 const { buildConversationSummary, buildTitleFromMessage } = require("./conversationSummaryService");
 const { defaultUserPreferenceService } = require("./userPreferenceService");
 
+// P5a WS6：maybe-async 基元。repository / userPreferenceService 在 file 后端
+// 为同步实现（逐字保持原同步行为），postgres 后端同名方法返回 Promise；
+// 消费方统一经 chain 透传，双后端同一返回形状（file 同步值 / PG Promise）。
+function isThenable(value) {
+  return value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && typeof value.then === "function";
+}
+
+function chain(value, onFulfilled) {
+  return isThenable(value) ? value.then(onFulfilled) : onFulfilled(value);
+}
+
 function isNewTaskMessage(message = "") {
   const text = String(message || "").trim();
   if (!text) return false;
@@ -146,13 +159,23 @@ class ConversationMemoryService {
       };
     }
 
-    let state = null;
+    // 与抽取前一致：存储读取失败（含 PG 拒绝）一律降级为无服务端状态。
+    let stateResult = null;
     try {
-      state = this.repository.get(principal.principalKey, conversationId);
+      stateResult = this.repository.get(principal.principalKey, conversationId);
     } catch (error) {
-      state = null;
+      stateResult = null;
     }
+    if (isThenable(stateResult)) {
+      return stateResult.then(
+        (state) => this._loadForChatWithState(input, principal, state),
+        () => this._loadForChatWithState(input, principal, null)
+      );
+    }
+    return this._loadForChatWithState(input, principal, stateResult);
+  }
 
+  _loadForChatWithState(input, principal, state) {
     const mode = this.resolveMemoryMode({
       principal,
       existingMode: state && state.memoryPolicy && state.memoryPolicy.mode,
@@ -191,33 +214,52 @@ class ConversationMemoryService {
         recentMessages: mergedRecent.slice(-12),
         workingMemory: state && state.workingMemory || context.workingMemory || null,
       });
-      if (mode === "cloud_sync") try {
-        const cloudPreferences = this.userPreferenceService.getObject({ principal });
-        context.userPreferences = Object.assign({}, context.userPreferences || {}, cloudPreferences, {
-          localOnly: false,
-        });
-      } catch (_) {
-        // Preference storage is an optional privacy-preserving layer. Chat remains usable.
-      }
-    }
-    if (state && state.evidenceRefs) {
-      context = Object.assign({}, context, {
-        serverEvidenceRefs: filterEvidenceRefsForRelease(
-          state.evidenceRefs,
-          context.releaseVersion || ""
-        ),
-      });
-    }
-    if (input.message && isNewTaskMessage(input.message) && context.pendingClarification) {
-      context = Object.assign({}, context, { pendingClarification: null, clearPendingClarification: true });
     }
 
-    return {
-      principal,
-      state,
-      memory: publicMemoryStatus(state, { authenticated: true, mode }),
-      context,
+    const finish = (finalContext) => {
+      let out = finalContext;
+      if (state && state.evidenceRefs) {
+        out = Object.assign({}, out, {
+          serverEvidenceRefs: filterEvidenceRefsForRelease(
+            state.evidenceRefs,
+            out.releaseVersion || ""
+          ),
+        });
+      }
+      if (input.message && isNewTaskMessage(input.message) && out.pendingClarification) {
+        out = Object.assign({}, out, { pendingClarification: null, clearPendingClarification: true });
+      }
+      return {
+        principal,
+        state,
+        memory: publicMemoryStatus(state, { authenticated: true, mode }),
+        context: out,
+      };
     };
+
+    // Preference storage is an optional privacy-preserving layer. Chat remains usable.
+    if (mode === "cloud_sync") {
+      const SKIP = Symbol("preference-unavailable");
+      let prefResult = SKIP;
+      try {
+        prefResult = this.userPreferenceService.getObject({ principal });
+      } catch (_) {
+        prefResult = SKIP;
+      }
+      const withPreferences = (cloudPreferences) => {
+        if (cloudPreferences !== SKIP) {
+          context.userPreferences = Object.assign({}, context.userPreferences || {}, cloudPreferences, {
+            localOnly: false,
+          });
+        }
+        return finish(context);
+      };
+      if (isThenable(prefResult)) {
+        return prefResult.then(withPreferences, () => withPreferences(SKIP));
+      }
+      return withPreferences(prefResult);
+    }
+    return finish(context);
   }
 
   persistAfterSuccess(input = {}) {
@@ -324,15 +366,8 @@ class ConversationMemoryService {
       }
     }
 
-    try {
-      const saved = this.repository.update(principal.principalKey, conversationId, patch, {
-        createIfMissing: true,
-        expectedRevision: input.expectedRevision,
-        runtimeMode: principal.runtimeMode,
-        memoryMode: mode,
-      });
-      return publicMemoryStatus(saved, { authenticated: true, mode });
-    } catch (error) {
+    const onSaved = (saved) => publicMemoryStatus(saved, { authenticated: true, mode });
+    const onPersistError = (error) => {
       if (error && error.code === "CONVERSATION_REVISION_CONFLICT") {
         // Do not fail the agent response; report non-persisted memory.
         return Object.assign(
@@ -341,19 +376,31 @@ class ConversationMemoryService {
         );
       }
       return publicMemoryStatus(null, { authenticated: true, mode: "local_only" });
+    };
+    let savedResult;
+    try {
+      savedResult = this.repository.update(principal.principalKey, conversationId, patch, {
+        createIfMissing: true,
+        expectedRevision: input.expectedRevision,
+        runtimeMode: principal.runtimeMode,
+        memoryMode: mode,
+      });
+    } catch (error) {
+      return onPersistError(error);
     }
+    if (isThenable(savedResult)) return savedResult.then(onSaved, onPersistError);
+    return onSaved(savedResult);
   }
 
   listConversations(input = {}) {
     const principal = this.resolvePrincipal(input);
     if (!principal.authenticated) return { success: true, items: [], memory: publicMemoryStatus(null, { authenticated: false }) };
-    const items = this.repository.list(principal.principalKey);
-    return {
+    return chain(this.repository.list(principal.principalKey), (items) => ({
       success: true,
       items,
       conversations: items,
       memory: publicMemoryStatus(null, { authenticated: true, mode: "session_state" }),
-    };
+    }));
   }
 
   getConversation(input = {}) {
@@ -364,24 +411,25 @@ class ConversationMemoryService {
       error.statusCode = 401;
       throw error;
     }
-    const state = this.repository.get(principal.principalKey, input.conversationId);
-    if (!state) {
-      const error = new Error("Conversation not found");
-      error.code = "CONVERSATION_NOT_FOUND";
-      error.statusCode = 404;
-      throw error;
-    }
-    return {
-      success: true,
-      conversation: publicConversationView(state),
-      memory: publicMemoryStatus(state, {
-        authenticated: true,
-        mode: state.memoryPolicy && state.memoryPolicy.mode,
-      }),
-      contextSlots: state.contextSlots,
-      pendingClarification: state.pendingClarification,
-      recentTurns: state.memoryPolicy && state.memoryPolicy.mode !== "local_only" ? state.recentTurns : [],
-    };
+    return chain(this.repository.get(principal.principalKey, input.conversationId), (state) => {
+      if (!state) {
+        const error = new Error("Conversation not found");
+        error.code = "CONVERSATION_NOT_FOUND";
+        error.statusCode = 404;
+        throw error;
+      }
+      return {
+        success: true,
+        conversation: publicConversationView(state),
+        memory: publicMemoryStatus(state, {
+          authenticated: true,
+          mode: state.memoryPolicy && state.memoryPolicy.mode,
+        }),
+        contextSlots: state.contextSlots,
+        pendingClarification: state.pendingClarification,
+        recentTurns: state.memoryPolicy && state.memoryPolicy.mode !== "local_only" ? state.recentTurns : [],
+      };
+    });
   }
 
   patchConversation(input = {}) {
@@ -399,52 +447,52 @@ class ConversationMemoryService {
       error.statusCode = 400;
       throw error;
     }
-    const existing = this.repository.get(principal.principalKey, conversationId);
-    const created = !existing;
-    const patch = {
-      runtimeMode: principal.runtimeMode,
-    };
-    if (input.title !== undefined) patch.title = safeText(input.title, 80);
-    else if (created && input.title) patch.title = safeText(input.title, 80);
-    if (input.memoryMode || input.memoryPolicy) {
-      const mode = this.resolveMemoryMode({
-        principal,
-        existingMode: existing && existing.memoryPolicy && existing.memoryPolicy.mode,
-        requestedMode: input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode,
-        explicitCloudSync: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
-        allowCloudSyncRequest: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
-        disableCloudSync: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "local_only"
-          || (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "session_state",
-      });
-      patch.memoryPolicy = {
-        mode,
-        cloudSyncEnabled: mode === "cloud_sync",
-        updatedAt: nowIso(),
+    return chain(this.repository.get(principal.principalKey, conversationId), (existing) => {
+      const created = !existing;
+      const patch = {
+        runtimeMode: principal.runtimeMode,
       };
-      if (mode === "local_only") patch.recentTurns = [];
-      if (input.deleteCloudData === true && mode !== "cloud_sync") {
-        patch.recentTurns = [];
-        patch.conversationSummary = "";
+      if (input.title !== undefined) patch.title = safeText(input.title, 80);
+      else if (created && input.title) patch.title = safeText(input.title, 80);
+      if (input.memoryMode || input.memoryPolicy) {
+        const mode = this.resolveMemoryMode({
+          principal,
+          existingMode: existing && existing.memoryPolicy && existing.memoryPolicy.mode,
+          requestedMode: input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode,
+          explicitCloudSync: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
+          allowCloudSyncRequest: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
+          disableCloudSync: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "local_only"
+            || (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "session_state",
+        });
+        patch.memoryPolicy = {
+          mode,
+          cloudSyncEnabled: mode === "cloud_sync",
+          updatedAt: nowIso(),
+        };
+        if (mode === "local_only") patch.recentTurns = [];
+        if (input.deleteCloudData === true && mode !== "cloud_sync") {
+          patch.recentTurns = [];
+          patch.conversationSummary = "";
+        }
       }
-    }
-    // Safe upsert: first enable of session_state/cloud_sync for a local conversationId
-    // must create a minimal server conversation bound to the current principal.
-    const saved = this.repository.update(principal.principalKey, conversationId, patch, {
-      createIfMissing: true,
-      expectedRevision: created ? undefined : input.expectedRevision,
-      runtimeMode: principal.runtimeMode,
-      memoryMode: patch.memoryPolicy && patch.memoryPolicy.mode || "session_state",
+      // Safe upsert: first enable of session_state/cloud_sync for a local conversationId
+      // must create a minimal server conversation bound to the current principal.
+      return chain(this.repository.update(principal.principalKey, conversationId, patch, {
+        createIfMissing: true,
+        expectedRevision: created ? undefined : input.expectedRevision,
+        runtimeMode: principal.runtimeMode,
+        memoryMode: patch.memoryPolicy && patch.memoryPolicy.mode || "session_state",
+      }), (saved) => ({
+        success: true,
+        created,
+        upserted: true,
+        conversation: publicConversationView(saved),
+        memory: publicMemoryStatus(saved, {
+          authenticated: true,
+          mode: saved.memoryPolicy && saved.memoryPolicy.mode,
+        }),
+      }));
     });
-    return {
-      success: true,
-      created,
-      upserted: true,
-      conversation: publicConversationView(saved),
-      memory: publicMemoryStatus(saved, {
-        authenticated: true,
-        mode: saved.memoryPolicy && saved.memoryPolicy.mode,
-      }),
-    };
   }
 
   deleteConversation(input = {}) {
@@ -484,11 +532,10 @@ class ConversationMemoryService {
       allowCloudSyncRequest: input.mode === "cloud_sync",
     });
     if (mode === "local_only" && input.clearExisting === true) {
-      this.repository.clearPrincipal(principal.principalKey);
-      return {
+      return chain(this.repository.clearPrincipal(principal.principalKey), () => ({
         success: true,
         memory: publicMemoryStatus(null, { authenticated: true, mode: "local_only" }),
-      };
+      }));
     }
     if (input.conversationId) {
       return this.patchConversation({
