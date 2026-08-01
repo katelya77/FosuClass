@@ -55,16 +55,19 @@ case "$ACTION" in
       echo "newCommitSha=$COMMIT_SHA"
       echo "backupAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     } > "$BACKUP_DIR/pre-deploy-state.txt"
-    tar czf "$BACKUP_DIR/server-storage.tar.gz" -C "$APP_DIR/server" storage
+    # storage subtrees written by the root-owned API container (storage/secure,
+    # publisher-receipts) are unreadable to the deploy user; archive via sudo so
+    # the backup is complete instead of aborting the deploy (exit 2 from tar).
+    sudo tar czf "$BACKUP_DIR/server-storage.tar.gz" -C "$APP_DIR/server" storage
     if [ -f "$APP_DIR/server/.env" ]; then
-      cp -a "$APP_DIR/server/.env" "$BACKUP_DIR/env.backup"
-      chmod 600 "$BACKUP_DIR/env.backup"
+      sudo cp -a "$APP_DIR/server/.env" "$BACKUP_DIR/env.backup"
+      sudo chmod 600 "$BACKUP_DIR/env.backup"
     fi
     if [ -f "$RUNTIME_DIR/active.json" ]; then
       sudo cp -a "$RUNTIME_DIR/active.json" "$BACKUP_DIR/runtime-active.json" || true
     fi
     # Verify the critical archive is readable before allowing the deploy on.
-    tar tzf "$BACKUP_DIR/server-storage.tar.gz" > /dev/null
+    sudo tar tzf "$BACKUP_DIR/server-storage.tar.gz" > /dev/null
     ln -sfn "$BACKUP_DIR" "$BACKUP_ROOT/latest"
     # Retention: keep the newest 15 backups (symlinks excluded via -type d).
     find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
