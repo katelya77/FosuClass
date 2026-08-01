@@ -187,23 +187,8 @@ jobs:
             OPENRESTY_HOST_RUNTIME_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime'
             STARTED_AT="$(date +%s)"
 
-            sanitize() {
-              sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|FOSU_AGENT_MEMORY_SECRET|FOSU_AGENT_REMINDER_SECRET|FOSU_WECHAT_RECIPIENT_SECRET|AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
-                -e 's/(Authorization: Bearer )[A-Za-z0-9._~+\/=-]+/\1***/gi' \
-                -e 's/(token|password|secret|key)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
-            }
-
-            on_error() {
-              echo "::error::Remote deploy failed"
-              sudo docker compose ps 2>&1 | sanitize || true
-              sudo docker inspect "$CONTAINER_NAME" --format '{{json .State}}' 2>&1 | sanitize || true
-              sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
-              sudo docker logs "$CONTAINER_NAME" --tail=200 2>&1 | sanitize || true
-              sudo docker compose logs --tail=200 2>&1 | sanitize || true
-              ss -lntp 2>/dev/null | grep 18318 || true
-            }
-            trap on_error ERR
+            GUARD="$APP_DIR/server/scripts/deploy-guard.sh"
+            trap 'bash "$GUARD" diagnose "$CONTAINER_NAME" || true' ERR
 
             cd "$APP_DIR/server"
 
@@ -213,6 +198,9 @@ jobs:
             sudo mkdir -p "$OPENRESTY_HOST_RUNTIME_DIR"
             sudo chmod 755 "$OPENRESTY_HOST_RELEASE_DIR"
             sudo chmod 755 "$OPENRESTY_HOST_RUNTIME_DIR"
+
+            # Pre-deploy backup + state record; failure aborts before any mutation.
+            bash scripts/deploy-guard.sh pre "$APP_DIR" "$CONTAINER_NAME" "$COMMIT_SHA"
 
             restart_before="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME" 2>/dev/null || echo 0)"
 
@@ -491,7 +479,7 @@ jobs:
                 unhealthy_count=$((unhealthy_count + 1))
                 if [ "$unhealthy_count" -ge 5 ]; then
                   echo "Recent healthcheck log after ${unhealthy_count} unhealthy checks:"
-                  sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
+                  sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | bash "$GUARD" sanitize || true
                   unhealthy_count=0
                 fi
               else
@@ -529,7 +517,7 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true" && test "$FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB" = "3072"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | bash "$GUARD" sanitize
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
             read_reconcile() {
@@ -592,6 +580,9 @@ jobs:
             echo "url_status=${url_status}"
             echo "elapsed_seconds=${elapsed}"
             echo "================================"
+
+            # Record verified production version markers (read by next pre-backup).
+            bash scripts/deploy-guard.sh post "$APP_DIR" "$CONTAINER_NAME" "$COMMIT_SHA"
 
       - name: Show Deployment Info
         run: |

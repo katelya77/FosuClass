@@ -17,6 +17,7 @@ const ROOT = path.resolve(__dirname, "..");
 const STEPS = [
   ["test:agent-platform-p1", "Product platform P1 production wiring"],
   ["test:agent-platform-p2", "Product platform P2 model-first runtime and budgets"],
+  ["test:agent-platform-p3", "Product platform P3 context and memory"],
   ["test:agent-platform-p4a", "Product platform P4a config publication kernel"],
   ["test:agent-platform-p4b", "Product platform P4b hot-publish core runtime domains"],
   ["test:agent-platform-p4c", "Product platform P4c governed MCP runtime"],
