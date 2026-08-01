@@ -117,8 +117,11 @@ function projectView(view) {
     events: view.events.map((event) => {
       const clone = Object.assign({}, event);
       delete clone.at;
+      delete clone.eventId; // 随机事件 id：跨后端不可比（稳定性/唯一性由协议测试覆盖）
       return clone;
     }),
+    // P6a：eventId 存在性与形态仍纳入 parity（三后端必须一致地为每事件发 id）。
+    eventIdsPresent: view.events.every((event) => /^evt_/.test(String(event.eventId || ""))),
     result: view.result,
   };
 }
