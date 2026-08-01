@@ -10,8 +10,13 @@ DeepSeek 配置与数据合规说明见既有文档
 
 - `server/Dockerfile` 的 `standalone` target 基于 `node:20-alpine`，不引入任何
   仅 x86 的原生二进制（无 Chromium；依赖均为纯 JS），可原样构建 linux/arm64。
-- linux/amd64 + linux/arm64 双架构镜像由 **CI 的 buildx/QEMU** 产出并发布为
-  同一 manifest（标签含 commit SHA，记录 digest；禁 floating latest）：
+- linux/amd64 + linux/arm64 双架构镜像由 CI 工作流
+  `.github/workflows/agent-platform-publish.yml` 产出并发布为同一 manifest：
+  ubuntu-latest（amd64）与 ubuntu-24.04-arm（arm64）**双原生架构 runner** 各自
+  build → 以 `tools/standalone-compose-smoke.js` 跑真实 compose smoke →
+  push `sha-<sha>-<arch>`（含 provenance/sbom）→ `imagetools create` 合并为
+  `sha-<sha>` manifest（标签含 commit SHA，digest 以 artifact 记录；禁 floating latest）。
+  手工等价构建（非发布依据）：
 
   ```bash
   docker buildx build --platform linux/amd64,linux/arm64 \
@@ -21,10 +26,11 @@ DeepSeek 配置与数据合规说明见既有文档
   ```
 
 - 验证口径纪律（如实标注，不混淆）：
-  - **build verified**：arm64 镜像在 CI（QEMU 或原生 runner）构建成功；
-  - **smoke verified**：arm64 镜像在真实 aarch64 机器上 compose 起栈并通过 smoke。
-  - 未取得真实 aarch64 环境前，交付物只能标 build verified；Oracle ARM 机器上的
-    smoke 通过后才能在证据文档升级为 smoke verified。
+  - **build verified**：镜像在对应架构构建成功（CI 双原生 runner 或本地 buildx）；
+  - **smoke verified**：镜像在真实对应架构机器上 compose 起栈并通过
+    `tools/standalone-compose-smoke.js` 18 条验收。CI 的 `ubuntu-24.04-arm`
+    即真实 aarch64 环境，其 smoke 通过可如实标 arm64 smoke verified；
+    若某次 CI 仅完成构建未起容器，只能标 build verified，不得写 smoke verified。
 - `pgvector/pgvector:pg16` 与 `redis:7-alpine` 官方均提供 arm64 manifest，
   compose 内无需改动。
 

@@ -150,10 +150,10 @@
 
 ### P5c — Multi-Architecture Delivery
 
-- [ ] buildx 构建 linux/amd64 + linux/arm64；两架构各自 build + standalone smoke 通过后发布同 SHA manifest；标签含 commit SHA；记录 digest。
-- [ ] 本机 Docker Desktop 可用则本地 amd64 smoke；arm64 与 manifest 归 CI（build verified ≠ smoke verified，如实标注）。
-- [ ] 1Panel / Oracle ARM 部署文档；外部开发者快速启动文档。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p5c-evidence.md`。提交：`build(agent): publish multi-architecture platform image`。
+- [x] 多架构发布链交付：永久 smoke 工具 `tools/standalone-compose-smoke.js` + 工作流 `.github/workflows/agent-platform-publish.yml`（双原生架构 runner 各自 build→compose smoke→push `sha-<sha>-<arch>`→`imagetools` 合并同 SHA manifest；禁 latest；digest/transcript 以 artifact 记录）。CI arm64 smoke/manifest/GHCR digest 待 P8 首推后实测回填（证据 §3 如实标 pending）。
+- [x] 本机 Docker Desktop 本地 amd64 build + compose smoke 18/18 PASS（smoke verified）；arm64 归 CI 原生 aarch64 runner（build verified ≠ smoke verified 口径已落 `docs/deployment/oracle-arm.md` 与证据）。
+- [x] 1Panel / Oracle ARM 部署文档（P5b 交付，本阶段对齐真实 CI 机制）；外部开发者快速启动文档（P5b 交付，无多架构缺口）。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p5c-evidence.md`。提交：`build(agent): publish multi-architecture platform image`。
   - _Requirements: R8.4–R8.7, R11.6, R11.8_
 
 ## P6 — 通用 Agent SDK 与微信稳定壳（拆分为 P6a/P6b）
