@@ -1803,6 +1803,10 @@ function isClientFallbackTransportError(error) {
     "SERVICE_UNAVAILABLE",
     "ECONNRESET",
     "ECONNREFUSED",
+    // Run 契约破坏（应答缺 runId 等服务端失败类）：与旧 agentRunClient 同码，
+    // 走离线降级而不是把异常直接抛给页面。
+    "RUN_CREATE_FAILED",
+    "AGENT_SDK_RUN_ID_MISSING",
   ].indexOf(code) >= 0) return true;
   if (code) return false;
   if (typeof wx === "undefined" || typeof wx.request !== "function") return true;

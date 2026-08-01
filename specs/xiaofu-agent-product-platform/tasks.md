@@ -169,14 +169,14 @@
 
 ### P6b — Miniprogram Agent Shell and UI Block Runtime
 
-- [ ] 小程序 SDK Adapter（wx.request/流式/cursor polling/storage/网络监听/生命周期/协议协商）。
-- [ ] 12 类通用 UI Block renderer（text/markdown/plan/tool_progress/list/detail/schedule/clarification/confirmation/action_receipt/warning/error）；未知 Block 安全 fallback。
-- [ ] ai-assistant 绞杀式迁移：传输/事件归并/恢复/取消抽离，页面只留生命周期/输入/组合/导航；不同时保留两个活跃 Run 状态源；不伪造执行状态。
-- [ ] Fosu 卡片经插件 mapper 映射为通用 Block；通用 SDK 不硬编码佛大字段。
-- [ ] 新增声明式测试 Skill 小程序零改动即可渲染（R4.5/R4.6 在此验收）。
-- [ ] direct chat fallback 标记 compatibility-only/deprecated：仅协议协商或显式开关触发、不伪造状态、记录原因；退役门槛（新 API 全覆盖 + 旧量归零 + DevTools/真机通过 + release-gate 绿）达成前不删。旧 modelPlanner 同门槛退役。
-- [ ] DevTools smoke：探测 CLI 可用且已登录则真实执行；否则如实标未验证 + 交付人工验收清单与证据模板。真机/体验版归 P8 人工。
-- [ ] Evidence：`docs/xiaofu-agent/product-platform-p6b-evidence.md`。提交：`refactor(miniprogram): adopt agent sdk and ui block shell`。
+- [x] 小程序 SDK Adapter（wx.request/流式/cursor polling/storage/网络监听/生命周期/协议协商）。
+- [x] 12 类通用 UI Block renderer（text/markdown/plan/tool_progress/list/detail/schedule/clarification/confirmation/action_receipt/warning/error）；未知 Block 安全 fallback。
+- [x] ai-assistant 绞杀式迁移：传输/事件归并/恢复/取消抽离，页面只留生命周期/输入/组合/导航；不同时保留两个活跃 Run 状态源；不伪造执行状态。
+- [x] Fosu 卡片经插件 mapper 映射为通用 Block；通用 SDK 不硬编码佛大字段。
+- [x] 新增声明式测试 Skill 小程序零改动即可渲染（R4.5/R4.6 在此验收）。
+- [x] direct chat fallback 标记 compatibility-only/deprecated：仅协议协商或显式开关触发、不伪造状态、记录原因；退役门槛（新 API 全覆盖 + 旧量归零 + DevTools/真机通过 + release-gate 绿）达成前不删。旧 modelPlanner 同门槛退役。
+- [x] DevTools smoke：探测 CLI 可用且已登录则真实执行；否则如实标未验证 + 交付人工验收清单与证据模板。真机/体验版归 P8 人工。
+- [x] Evidence：`docs/xiaofu-agent/product-platform-p6b-evidence.md`。提交：`refactor(miniprogram): adopt agent sdk and ui block shell`。
   - _Requirements: R4.5–R4.6, R11.6–R11.7_
 
 ## P7 — Engine Adapter（仅 P7a；P7b/P7c deferred）
