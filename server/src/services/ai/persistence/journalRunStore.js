@@ -184,20 +184,33 @@ function createJournalRunStore(options = {}) {
   }
 
   function appendRecord(record) {
+    // fold 纪律：无条件执行，且必须先于 compact——内存投影是在线事实源；
+    // compact 的 snapshot 只能序列化已 fold 的状态，否则触发 compact 的
+    // 边界记录会只进 seq 不进 snapshot，journal 又被截断，重启后丢失。
     try {
       fs.mkdirSync(root, { recursive: true, mode: 0o700 });
       state.journalSeq += 1;
       const line = JSON.stringify(Object.assign({ v: 1, seq: state.journalSeq, at: new Date().toISOString() }, record));
       fs.appendFileSync(journalPath, `${line}\n`, "utf8");
       state.recordsSinceCompaction += 1;
-      if (state.recordsSinceCompaction >= compactAfterRecords) compact();
     } catch (error) {
-      // 持久化失败（卷满 / 权限 / 锁超时）只记录：内存投影仍是在线事实源，
-      // 不得让 journal I/O 击落 Run 执行链（与 pgRunStore 写失败降级同规）。
+      // 持久化失败（卷满 / 权限）只记录：fold 仍执行（内存投影是在线事实源），
+      // 崩溃恢复只丢未落盘尾部（与 pgRunStore 写失败降级同规）；下一次成功
+      // 的 compact 会把已 fold 的状态写进 snapshot 自愈。
       logStoreEvent({ op: String(record && record.kind || "append"), code: String((error && error.code) || "UNKNOWN").slice(0, 80) });
+      fold(record);
       return;
     }
     fold(record);
+    if (state.recordsSinceCompaction >= compactAfterRecords) {
+      try {
+        compact();
+      } catch (error) {
+        // compact 失败（锁超时等）只记录：内存投影完整，journal 未截断，
+        // 下一次 append 会再次尝试 compact。
+        logStoreEvent({ op: "compact", code: String((error && error.code) || "UNKNOWN").slice(0, 80) });
+      }
+    }
   }
 
   replay();

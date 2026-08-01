@@ -49,7 +49,10 @@ function wrapTxError(error) {
   );
   const message = String((error && error.message) || error || "unknown pg error").replace(/\s*password=\S*/gi, "");
   const wrapped = codedError(unavailable ? "PG_UNAVAILABLE" : "PG_QUERY_FAILED", message);
-  wrapped.cause = error;
+  // cause 只挂脱敏副本（与 pgClient.wrapPgError 同纪律）。
+  const safeCause = new Error(message);
+  if (error && error.code) safeCause.code = error.code;
+  wrapped.cause = safeCause;
   return wrapped;
 }
 
