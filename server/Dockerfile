@@ -62,6 +62,9 @@ COPY server/data ./data
 COPY server/public ./server/public
 COPY server/config/admin-rollout-manifest.json ./server/config/admin-rollout-manifest.json
 COPY server/config/agent-capability-manifest.json ./server/config/agent-capability-manifest.json
+# adminRolloutManifestService hardcodes its production target at /app/config
+# (tools/test-admin-rollout-runtime-contract.js); keep the legacy path live.
+COPY server/config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
 
 RUN mkdir -p /app/storage /app/data/backups \
     && chmod -R a+rX /app/server/src /app/server/public /app/server/scripts /app/server/assets /app/packages /app/plugins /app/apps /app/data \
