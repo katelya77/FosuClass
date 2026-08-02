@@ -22,6 +22,7 @@
     let advancedPending = null;
     let advancedLoaded = false;
     let stopped = false;
+    const health = { operations: null, runs: null };
 
     function visible() {
       return !doc || doc.hidden !== true;
@@ -55,8 +56,23 @@
       }
       onStatus("refreshing");
       const result = await Promise.allSettled([refreshOperations(), refreshRuns()]);
-      onStatus(result.every(function isRejected(item) { return item.status === "rejected"; }) ? "retrying" : "live");
+      health.operations = result[0].status === "fulfilled";
+      health.runs = result[1].status === "fulfilled";
+      onStatus(health.operations && health.runs ? "live" : "retrying");
       return result;
+    }
+
+    function scheduledRefresh(key, loader) {
+      if (!visible()) return Promise.resolve(false);
+      return loader().then(function markHealthy(value) {
+        health[key] = true;
+        onStatus(health.operations === false || health.runs === false ? "retrying" : "live");
+        return value;
+      }, function markUnhealthy(error) {
+        health[key] = false;
+        onStatus("retrying");
+        return Promise.reject(error);
+      });
     }
 
     function handleVisibility() {
@@ -70,10 +86,10 @@
     function start() {
       if (operationsTimer !== null || stopped) return;
       operationsTimer = schedule(function refreshOperationsTimer() {
-        return refreshOperations().catch(function markRetry() { onStatus("retrying"); });
+        return scheduledRefresh("operations", refreshOperations).catch(function swallowScheduledFailure() { return false; });
       }, operationsIntervalMs);
       runsTimer = schedule(function refreshRunsTimer() {
-        return refreshRuns().catch(function markRetry() { onStatus("retrying"); });
+        return scheduledRefresh("runs", refreshRuns).catch(function swallowScheduledFailure() { return false; });
       }, runsIntervalMs);
       if (doc && typeof doc.addEventListener === "function") doc.addEventListener("visibilitychange", handleVisibility);
     }

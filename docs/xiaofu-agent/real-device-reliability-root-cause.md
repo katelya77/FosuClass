@@ -111,3 +111,11 @@ run client --------(missing)----> run route --------public/default
 真实 Probe 还确认了一个仓库代码无法代替外部配置修复的事实：当前开发机 trial 配置中的 DeepSeek 结构化调用返回 HTTP 401（映射为 `PROVIDER_UNAUTHORIZED`），而 Coze workload 结构化调用在 12 秒内未完成。二者都不能记为“Provider 已验证”。部署前必须更新有效凭据或配置一个真实返回严格 DecisionContract 的 Provider，然后重新 Probe；不得用 mock 或 `configured=true` 冒充通过。
 
 助手运行中心的“返回后台”故障来自嵌入 iframe 内把自身导航到 `/admin/dashboard`，该页面的 frame policy 正确拒绝了嵌入，最终显示“拒绝连接”。页内链接现已移除；首屏只加载概览和近期 Run，高级配置惰性加载，运行事实按页面可见性自动刷新。
+
+## 2026-08-03 线上诊断真值复查
+
+部署 `main@2c8211426bb66f72f09b5b1f31470c7a0fcb3681` 后，线上一键诊断曾把 `trial Provider Decision` 显示为 `passed / real-provider-probe / OK`，但同一请求的运行事实是 `provider=mock`、`status=degraded`，readiness 仍为 `providerVerified=false`，并且“最近实际调用”为空。这不是 Provider 已验证，而是诊断把 run-level `externalProviderUsed=true`（含义是“至少发生过外部调用尝试”）错误解释成“调用成功”。
+
+修复后，Decision Probe 必须同时满足两个独立事实才通过：响应的 `providerStages.understanding.completed=true`，以及同一 `requestId` 的 durable `provider.completed` 事件存在且 Provider 非 `mock`。只有 started/failed、只有响应标志、Provider 不一致或缺少持久化完成事件都会失败并保留具体 reasonCode。诊断本身改为创建真实 durable Run 并把事件写入 Run/Event Store，因此“查询服务”和 Run 监控可用同一 `runId/requestId` 复核结果。
+
+另一个线上复现是实时状态会在任意一次周期请求失败后永久停留于“连接重试中”，即使后续请求已经成功。原因是定时刷新只在失败时更新状态，成功路径没有清除旧失败。修复为分别维护 Operations 与 Runs 两路健康状态；两路恢复成功后自动显示“实时”，页面隐藏时仍暂停轮询，且不会产生重叠请求。

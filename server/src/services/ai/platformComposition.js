@@ -24,7 +24,11 @@ const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
 const { createDecisionService } = require("./decision/decisionService");
 const providerRuntimeComposition = require("./providerRuntimeComposition");
 const providerConfigService = require("./providerConfigService");
-const { findLatestDurableProviderAttempt } = require("./providerOperationsLogService");
+const providerOperationsLogService = require("./providerOperationsLogService");
+const {
+  evaluateProviderDecisionProbe,
+  findLatestDurableProviderAttempt,
+} = providerOperationsLogService;
 const providerReadinessService = require("./providerReadinessService");
 const runtimeModeService = require("./runtimeModeService");
 const safetyGuard = require("./safetyGuard");
@@ -673,20 +677,47 @@ async function runOperationsSmokeTest(requestedEnvironment = "public") {
   });
   await check("trial_provider", environment === "public" ? "not-applicable" : "real-provider-probe", async () => {
     if (environment === "public") return { passed: true, status: "skipped", reasonCode: "PUBLIC_PROVIDER_FORBIDDEN" };
-    const payload = await agentService.chat({
-      message: "请简要说明你当前可以完成哪些校园任务。",
-      requestId: `ops-provider-${Date.now()}`,
-      context: { envVersion, runtimeMode: environment, memoryMode: "local_only", currentPage: "admin-operations-smoke" },
-      runtimeMode: environment,
-      serverSession: { adminProviderVerification: true },
+    const requestId = `ops-provider-${Date.now()}`;
+    const probeStartedAt = new Date(Date.now() - 1000).toISOString();
+    const repository = require("./agentRunEventService");
+    const created = repository.createRun({ runtimeMode: environment, requestId });
+    const emit = repository.createEventEmitter(created.runId, environment);
+    let payload;
+    try {
+      payload = await agentService.chat({
+        message: "请简要说明你当前可以完成哪些校园任务。",
+        requestId,
+        runId: created.runId,
+        runStartedAt: Date.parse(created.createdAt),
+        deadlineAt: created.deadlineAt,
+        totalTimeoutMs: Math.max(1, Date.parse(created.deadlineAt) - Date.parse(created.createdAt)),
+        context: { envVersion, runtimeMode: environment, memoryMode: "local_only", currentPage: "admin-operations-smoke" },
+        runtimeMode: environment,
+        serverSession: { adminProviderVerification: true },
+        onEvent: emit,
+      });
+      const status = repository.statusFromResult(payload);
+      const terminalType = status === "failed" ? "run.failed" : (status === "degraded" ? "run.degraded" : "run.completed");
+      emit({
+        type: terminalType,
+        status,
+        reasonCode: status === "degraded" ? String(payload && payload.fallbackReason || "").slice(0, 80) : "",
+      });
+      repository.setResult(created.runId, payload, status);
+    } catch (error) {
+      emit({ type: "run.failed", status: "failed", reasonCode: String(error && error.code || "PROVIDER_PROBE_FAILED").slice(0, 80) });
+      repository.setResult(created.runId, { success: false, status: "failed" }, "failed");
+      throw error;
+    }
+    const operationLog = await providerOperationsLogService.list({ limit: 120, after: probeStartedAt });
+    const outcome = evaluateProviderDecisionProbe({
+      requestId,
+      payload,
+      events: operationLog.events,
     });
-    const safety = payload && payload.safety || {};
-    const external = safety.externalProviderUsed === true;
-    return {
-      passed: external,
-      reasonCode: external ? "OK" : String(safety.fallbackReason || "PROVIDER_UNVERIFIED"),
-      details: { provider: String(safety.resolvedProvider || safety.provider || "mock"), externalProviderUsed: external },
-    };
+    return Object.assign({}, outcome, {
+      details: Object.assign({}, outcome.details, { runId: created.runId, source: operationLog.source }),
+    });
   });
   await check("run_create_poll", "real-durable-run-store", async () => {
     const repository = require("./agentRunEventService");
