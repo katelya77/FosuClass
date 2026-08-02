@@ -32,6 +32,15 @@
 
 ## 验证类型边界
 
+### 2026-08-02 首次生产部署与热修复验证
+
+- PR #44 已合并，部署 SHA 为 `b3949ab23b7a78d39c20da0cf14a0eda68228ad6`；GitHub Actions `Deploy to VPS` 的 CI 与 deploy Job 均通过。
+- 生产 `/api/health`、public/trial readiness 返回 HTTP 200；public 为 fail-closed，trial 如实显示 `PROVIDER_UNVERIFIED`、`providerReachable=false`，没有再把“已配置”冒充“已验证”。
+- 生产 public “你好” Run create/poll 完成，事件链只有一个终态，绑定 `cfg-public-0006-5952082a4982`。
+- 生产 trial “你好”稳定复现回复阶段 `STAGE_TIMEOUT → run.failed`，证明首次部署成功不等于体验效果通过；热修复使用真实 Provider Runtime 定时器建立 RED 测试后再实现预算预留。
+- 热修复聚焦测试：`node tools/test-agent-fallback-eligibility.js` 在修复前以 `ABORTED` 失败，修复后通过；`test-response-provider-runtime`、`test-agent-deadline-runtime`、`test-provider-runtime-contracts` 均通过。
+- Provider 配置步骤在首次部署工作流中被跳过，真实 Probe 仍未执行；`memoryAvailable=false` 仍是线上事实。
+
 - 代码测试：已通过上述自动化。
 - Mock/故障注入：Provider timeout/401/429、DNS/TLS/微信通用网络失败等使用结构化故障注入，只证明分类与 UI 契约。
 - 本地集成：HTTP Run、Memory、RAG、PostgreSQL/Redis、Docker 和浏览器后台已执行。
@@ -39,7 +48,7 @@
 - 微信 DevTools：未执行上传/预览；体验版外部门禁未通过。
 - 真机：未执行；iOS 5G/Wi-Fi、前后台、断网恢复均待人工验收。
 - 体验版：未上传，原因见上。
-- 生产：未部署、未合并 main、未观察 15 分钟。
+- 生产：PR #44 已合并并成功部署；由于随后发现 trial 问候回复阶段超时，当前效果状态为“热修复待门禁、合并和再次部署”，尚未完成最终 15 分钟观察。
 
 ## 回滚
 
