@@ -14198,50 +14198,80 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       var aiCallLogTimer = null;
+      var aiCallLogPending = null;
+      var aiCallLogVisibilityBound = false;
 
       function renderAiCallLog() {
         var box = $("aiCallLogBox");
         if (!box) return;
         var events = Array.isArray(state.aiCallLogEvents) ? state.aiCallLogEvents : [];
+        var meta = $("aiCallLogMeta");
+        if (meta) {
+          var sourceLabel = state.aiCallLogSource === "durable-run-event-store+runtime-probe"
+            ? "持久化 Run/Event + 实时 Probe"
+            : (state.aiCallLogSource === "durable-run-event-store" ? "持久化 Run/Event" : (state.aiCallLogSource || "等待数据源"));
+          meta.textContent = sourceLabel + (state.aiCallLogCheckedAt ? " · 更新 " + String(state.aiCallLogCheckedAt).replace("T", " ").slice(5, 19) : "");
+        }
         if (!events.length) {
-          box.innerHTML = "<span class='badge muted'>暂无调用记录（发起一次真实问答或探测后可见）</span>";
+          box.innerHTML = "<div style='padding:10px 0;color:var(--muted);font-size:12px;'>暂无真实调用记录。发起一次体验版问答或 Provider Probe 后，这里会在 2 秒内自动出现。</div>";
           return;
         }
-        var kindLabel = { structured: "结构化", generate: "生成", probe: "探测" };
-        var stageLabel = { understanding: "理解", planner: "规划", response: "回复", health: "健康检查" };
+        var kindLabel = { structured: "结构化", generate: "生成", probe: "探测", run: "Run" };
+        var stageLabel = { understanding: "理解", decision: "决策", planner: "规划", response: "回复", health: "健康检查", probe: "探测" };
         var rows = events.map(function(item) {
           var at = String(item.at || "").replace("T", " ").slice(5, 19);
-          var result = item.ok ? "<span class='badge success'>成功</span>" : "<span class='badge danger'>失败</span>";
+          var result = item.ok === true ? "<span class='badge success'>成功</span>" : (item.ok === false ? "<span class='badge danger'>失败</span>" : "<span class='badge warning'>进行中</span>");
           var kind = kindLabel[item.kind] || item.kind || "-";
           var stage = stageLabel[item.stage] || item.stage || "-";
           return "<tr>" +
             "<td style='white-space:nowrap;'>" + escapeHtml(at) + "</td>" +
+            "<td>" + escapeHtml(item.environment || "-") + "</td>" +
             "<td><code>" + escapeHtml(item.provider || "-") + "</code></td>" +
             "<td>" + escapeHtml(kind) + "</td>" +
             "<td>" + escapeHtml(stage) + "</td>" +
             "<td>" + result + "</td>" +
             "<td>" + Number(item.latencyMs || 0) + "ms</td>" +
-            "<td>" + escapeHtml(item.ok ? "-" : (item.reason || "failed")) + "</td>" +
+            "<td>" + escapeHtml(item.reasonCode || item.reason || "-") + "</td>" +
+            "<td><code title='" + escapeHtml(item.runId || "") + "'>" + escapeHtml(String(item.runId || "-").slice(0, 14)) + "</code></td>" +
+            "<td><code title='" + escapeHtml(item.requestId || "") + "'>" + escapeHtml(String(item.requestId || "-").slice(0, 14)) + "</code></td>" +
           "</tr>";
         }).join("");
         box.innerHTML = "<table style='width:100%;border-collapse:collapse;font-size:12px;'><thead><tr>" +
-          ["时间", "Provider", "类型", "阶段", "结果", "延迟", "失败分类"].map(function(head) {
+          ["时间", "环境", "Provider", "类型", "阶段", "结果", "延迟", "失败分类", "runId", "requestId"].map(function(head) {
             return "<th style='text-align:left;padding:4px 6px;border-bottom:1px solid rgba(128,128,128,.3);'>" + head + "</th>";
           }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table>";
       }
 
       function loadAiCallLog() {
-        return api("/api/admin/ai-provider/call-log?limit=60")
+        if (aiCallLogPending) return aiCallLogPending;
+        var after = state.aiCallLogCursor ? "&after=" + encodeURIComponent(state.aiCallLogCursor) : "";
+        var request = api("/api/admin/ai-provider/call-log?limit=60" + after)
           .then(function(res) {
             var data = res.data || {};
-            state.aiCallLogEvents = Array.isArray(data.events) ? data.events : [];
+            var incoming = Array.isArray(data.events) ? data.events : [];
+            var merged = new Map();
+            incoming.concat(Array.isArray(state.aiCallLogEvents) ? state.aiCallLogEvents : []).forEach(function(item) {
+              var key = item.eventId || [item.at, item.provider, item.stage, item.status].join("|");
+              if (!merged.has(key)) merged.set(key, item);
+            });
+            state.aiCallLogEvents = Array.from(merged.values()).sort(function(a, b) {
+              return Date.parse(b.at || 0) - Date.parse(a.at || 0);
+            }).slice(0, 60);
+            state.aiCallLogCursor = data.cursor || state.aiCallLogCursor || "";
+            state.aiCallLogSource = data.source || "";
+            state.aiCallLogCheckedAt = data.checkedAt || new Date().toISOString();
             renderAiCallLog();
             return state.aiCallLogEvents;
           })
           .catch(function(error) {
-            var box = $("aiCallLogBox");
-            if (box) box.innerHTML = "<span class='badge danger'>" + escapeHtml(error.message || "加载失败") + "</span>";
+            var meta = $("aiCallLogMeta");
+            if (meta) meta.innerHTML = "<span class='badge danger'>实时日志读取失败：" + escapeHtml(error.message || "加载失败") + "</span>";
+          })
+          .finally(function() {
+            if (aiCallLogPending === request) aiCallLogPending = null;
           });
+        aiCallLogPending = request;
+        return request;
       }
 
       function setAiCallLogAutoRefresh(enabled) {
@@ -14251,8 +14281,16 @@ const adminConsoleHtml = `<!doctype html>
         }
         if (enabled) {
           aiCallLogTimer = setInterval(function() {
-            if ($("aiCallLogBox")) ignoreLoadError(loadAiCallLog());
-          }, 10000);
+            if (!document.hidden && $("aiCallLogBox")) ignoreLoadError(loadAiCallLog());
+          }, 2000);
+          if (!aiCallLogVisibilityBound) {
+            aiCallLogVisibilityBound = true;
+            document.addEventListener("visibilitychange", function() {
+              if (!document.hidden && state.aiCallLogAutoOn !== false && $("aiCallLogBox")) {
+                ignoreLoadError(loadAiCallLog());
+              }
+            });
+          }
         }
       }
 
@@ -14554,8 +14592,8 @@ const adminConsoleHtml = `<!doctype html>
             "<div id='aiReadinessMatrixBox' style='padding:0 12px 12px;'><span class='badge muted'>尚未加载</span></div>" +
           "</section>" +
           "<section class='provider-mode-card' style='margin-top:16px;'>" +
-            "<div class='provider-card-head'><div><div class='provider-card-title'>调用日志（进程内 · 已脱敏）</div><div class='ai-secret-note'>仅记录 Provider / 调用类型 / 阶段 / 耗时 / 成败分类等元信息，绝不记录用户消息与密钥。进程重启后清空。</div></div><div style='display:flex;gap:8px;align-items:center;'><label style='font-size:12px;display:flex;gap:4px;align-items:center;'><input id='aiCallLogAuto' type='checkbox'" + (state.aiCallLogAutoOn === false ? "" : " checked") + "> 10s 自动刷新</label><button id='reloadAiCallLogBtn' class='ghost'>刷新日志</button></div></div>" +
-            "<div id='aiCallLogBox' style='padding:0 12px 12px;max-height:320px;overflow:auto;'><span class='badge muted'>尚未加载</span></div>" +
+            "<div class='provider-card-head'><div><div class='provider-card-title'>调用日志（持久化 · 已脱敏）</div><div class='ai-secret-note'>来自 durable Run/Event Store 与真实 Probe，只记录 Provider / 阶段 / 耗时 / 成败分类及脱敏关联 ID；绝不记录用户消息、身份与密钥。</div><div id='aiCallLogMeta' class='ai-secret-note'>等待数据源</div></div><div style='display:flex;gap:8px;align-items:center;'><label style='font-size:12px;display:flex;gap:4px;align-items:center;'><input id='aiCallLogAuto' type='checkbox'" + (state.aiCallLogAutoOn === false ? "" : " checked") + "> 2s 实时刷新</label><button id='reloadAiCallLogBtn' class='ghost'>刷新日志</button></div></div>" +
+            "<div id='aiCallLogBox' style='padding:0 12px 12px;max-height:320px;overflow:auto;'><span class='badge muted'>正在读取持久化调用记录</span></div>" +
           "</section>" +
           "<details class='diagnostic-panel'><summary>高级诊断</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未测试。运行后会显示 resolvedProvider、latencyMs、fallback、toolCalls、answerSnippet。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行真实测试</button><button id='forceAiProviderChatBtn' class='secondary'>测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details>" +
         "</div>";
