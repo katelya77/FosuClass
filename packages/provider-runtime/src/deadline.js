@@ -70,7 +70,32 @@ function createStageSignal(parentSignal, timeoutMs) {
   };
 }
 
+function providerAttemptCount(selection = {}, providerAttemptLedger = null) {
+  const intendedProvider = String(selection.intendedProvider || "").trim().toLowerCase();
+  const fallbackProvider = String(selection.fallbackProvider || "").trim().toLowerCase();
+  if (!fallbackProvider || fallbackProvider === intendedProvider) return 1;
+  if (!providerAttemptLedger || typeof providerAttemptLedger.snapshot !== "function") return 2;
+  const snapshot = providerAttemptLedger.snapshot() || {};
+  const remainingFallbacks = Math.max(0,
+    Number(snapshot.maxFallbacks || 0) - Number(snapshot.fallbacksUsed || 0));
+  return remainingFallbacks > 0 ? 2 : 1;
+}
+
+function deriveProviderStageLease(options = {}) {
+  const outerBudgetMs = Math.max(1, Number(options.outerBudgetMs || 1) || 1);
+  const finishReserveMs = outerBudgetMs > 1
+    ? Math.min(outerBudgetMs - 1, Math.max(0, Number(options.finishReserveMs || 0) || 0))
+    : 0;
+  const attemptCount = providerAttemptCount(options.selection, options.providerAttemptLedger);
+  return Object.freeze({
+    stageCapMs: Math.max(1, Math.floor((outerBudgetMs - finishReserveMs) / attemptCount)),
+    finishReserveMs,
+    attemptCount,
+  });
+}
+
 module.exports = {
   createDeadline,
   createStageSignal,
+  deriveProviderStageLease,
 };

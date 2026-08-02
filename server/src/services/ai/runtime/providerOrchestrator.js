@@ -5,7 +5,7 @@ const providerConfigService = require("../providerConfigService");
 const capabilityManifestService = require("../capabilityManifestService");
 const projectKnowledgeService = require("../projectKnowledgeService");
 const safetyGuard = require("../safetyGuard");
-const { classifyFallbackEligibility } = require("../../../../../packages/provider-runtime");
+const { classifyFallbackEligibility, deriveProviderStageLease } = require("../../../../../packages/provider-runtime");
 const { stableGeneratedPayload, configValue, getProviderPolicy } = require("./shared");
 const { emitChatEvent } = require("./runEventPublisher");
 const { deriveExecutionOutcome } = require("./responseComposerBridge");
@@ -143,27 +143,17 @@ function providerChainFromRuntimePath(path = []) {
   });
 }
 
-function responseProviderAttemptCount(selection = {}, providerAttemptLedger = null) {
-  const intendedProvider = String(selection.intendedProvider || "").trim().toLowerCase();
-  const fallbackProvider = String(selection.fallbackProvider || "").trim().toLowerCase();
-  if (!fallbackProvider || fallbackProvider === intendedProvider) return 1;
-  if (!providerAttemptLedger || typeof providerAttemptLedger.snapshot !== "function") return 2;
-  const snapshot = providerAttemptLedger.snapshot() || {};
-  const remainingFallbacks = Math.max(0,
-    Number(snapshot.maxFallbacks || 0) - Number(snapshot.fallbacksUsed || 0));
-  return remainingFallbacks > 0 ? 2 : 1;
-}
-
-function responseProviderLease(responseBudgetMs, attemptCount = 1) {
+function responseProviderLease(responseBudgetMs, selection, providerAttemptLedger) {
   const outerBudgetMs = Math.max(1, Number(responseBudgetMs || 1500) || 1500);
   const completionReserveMs = outerBudgetMs > 1
     ? Math.min(outerBudgetMs - 1, 250, Math.max(25, Math.floor(outerBudgetMs * 0.2)))
     : 0;
-  const boundedAttemptCount = Math.max(1, Math.min(2, Number(attemptCount) || 1));
-  return {
-    stageCapMs: Math.max(1, Math.floor((outerBudgetMs - completionReserveMs) / boundedAttemptCount)),
+  return deriveProviderStageLease({
+    outerBudgetMs,
     finishReserveMs: completionReserveMs,
-  };
+    selection,
+    providerAttemptLedger,
+  });
 }
 
 function safeProviderStage(input = {}) {
@@ -326,8 +316,7 @@ async function generateAssistantResponse(input = {}) {
     let generated = deterministicGenerated;
     if (policyDecision.useExternal) {
       const selection = providerRuntimeComposition.resolveResponseProviders(runtimeMode, providerRuntimeConfig);
-      const providerLease = responseProviderLease(input.responseBudgetMs,
-        responseProviderAttemptCount(selection, input.providerAttemptLedger));
+      const providerLease = responseProviderLease(input.responseBudgetMs, selection, input.providerAttemptLedger);
       const runtimeResult = await providerRuntimeComposition.getProviderRuntime().generate({
         runtimeMode,
         executionPolicy: input.executionPolicy || "strict_model_first",

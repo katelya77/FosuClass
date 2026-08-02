@@ -444,6 +444,48 @@ async function testDecisionEligibleFallback() {
   console.log("✓ decision: timeout falls back once through the shared runtime");
 }
 
+async function testDecisionParentStageTimeoutFallback() {
+  const slowAdapter = (id) => ({
+    id,
+    generateStructured({ signal }) {
+      return new Promise((resolve, reject) => {
+        const fail = () => reject(coded("PROVIDER_TIMEOUT"));
+        if (signal.aborted) fail();
+        else signal.addEventListener("abort", fail, { once: true });
+      });
+    },
+  });
+  const runtime = createProviderRuntime({
+    adapters: [slowAdapter("deepseek"), slowAdapter("cloudbase-openai")],
+  });
+  const service = createDecisionService({
+    providerRuntime: runtime,
+    skillCatalog: createTestSkillCatalog(),
+    deterministicResolve: () => ({ name: "get_teaching_week", confidence: 1, slots: {}, ruleScore: 10 }),
+  });
+  const parentStage = createStageSignal(null, 100);
+  const keepAlive = setInterval(() => {}, 20);
+  try {
+    const result = await service.decide(decideInput({
+      signal: parentStage.signal,
+      deadline: createDeadline({ timeoutMs: 1000 }),
+      decisionBudgetMs: 100,
+      finishReserveMs: 20,
+      providerAttemptLedger: createLedger(),
+    }));
+    assert.strictEqual(result.decisionSource, "deterministic_fallback");
+    assert.strictEqual(result.failureClass, "timeout");
+    assert.deepStrictEqual(result.fallbackPath, [
+      "deepseek:PROVIDER_TIMEOUT",
+      "cloudbase-openai:PROVIDER_TIMEOUT",
+    ]);
+  } finally {
+    clearInterval(keepAlive);
+    parentStage.cleanup();
+  }
+  console.log("✓ decision: Provider chain times out before the parent stage and degrades deterministically");
+}
+
 async function testDecisionSchemaControlledFallback() {
   let fallbackCalls = 0;
   const runtime = createProviderRuntime({
@@ -702,6 +744,7 @@ async function run() {
   await testRuntimeEligibleFallback();
   await testRuntimeNoThirdFallback();
   await testDecisionEligibleFallback();
+  await testDecisionParentStageTimeoutFallback();
   await testDecisionSchemaControlledFallback();
   await testDecisionConfigFailFast();
   await testResponseOrchestrator();
