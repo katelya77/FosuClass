@@ -13,6 +13,7 @@ const {
   classifyFallbackEligibility,
   createDeadline,
   createProviderRuntime,
+  createStageSignal,
   normalizeDecisionContract,
   resolveProviderRootCause,
 } = require("../packages/provider-runtime");
@@ -545,6 +546,7 @@ async function testResponseOrchestrator() {
   const orchestratorPath = require.resolve("../server/src/services/ai/runtime/providerOrchestrator");
   const providerRuntimeComposition = require("../server/src/services/ai/providerRuntimeComposition");
   const originalGetRuntime = providerRuntimeComposition.getProviderRuntime;
+  const originalResolveResponse = providerRuntimeComposition.resolveResponseProviders;
 
   // classifyProviderFailure 保留导出签名、内部委托共享分类（禁 message 正则）
   delete require.cache[orchestratorPath];
@@ -632,8 +634,62 @@ async function testResponseOrchestrator() {
       degraded.responseProviderChain.map((item) => `${item.provider}:${item.reason}`),
       ["deepseek:PROVIDER_TIMEOUT"]
     );
+
+    // The response Provider must time out before the enclosing response stage so
+    // the deterministic payload can be returned. Giving both timers the same
+    // budget makes the parent abort win and reproduces the production
+    // `provider.started -> STAGE_TIMEOUT -> run.failed` race.
+    const slowRuntime = createProviderRuntime({
+      adapters: [{
+        id: "deepseek",
+        async generateStructured() { return {}; },
+        generate({ signal }) {
+          return new Promise((resolve, reject) => {
+            const fail = () => reject(coded("PROVIDER_TIMEOUT"));
+            if (signal.aborted) fail();
+            else signal.addEventListener("abort", fail, { once: true });
+          });
+        },
+      }, {
+        id: "cloudbase-openai",
+        async generateStructured() { return {}; },
+        generate({ signal }) {
+          return new Promise((resolve, reject) => {
+            const fail = () => reject(coded("PROVIDER_TIMEOUT"));
+            if (signal.aborted) fail();
+            else signal.addEventListener("abort", fail, { once: true });
+          });
+        },
+      }],
+    });
+    providerRuntimeComposition.getProviderRuntime = () => slowRuntime;
+    providerRuntimeComposition.resolveResponseProviders = () => ({
+      intendedProvider: "deepseek",
+      fallbackProvider: "cloudbase-openai",
+    });
+    const parentStage = createStageSignal(null, 100);
+    const keepAlive = setInterval(() => {}, 20);
+    try {
+      const timedFallback = await orchestrator.generateAssistantResponse(responseInput({
+        signal: parentStage.signal,
+        deadline: createDeadline({ timeoutMs: 1000 }),
+        responseBudgetMs: 100,
+      }));
+      assert.strictEqual(timedFallback.providerName, "mock");
+      assert.strictEqual(timedFallback.externalProviderUsed, false);
+      assert.strictEqual(timedFallback.failureClass, "timeout");
+      assert.strictEqual(timedFallback.providerTruth.stages.response.fallback, true);
+      assert.deepStrictEqual(
+        timedFallback.responseProviderChain.map((item) => `${item.provider}:${item.reason}`),
+        ["deepseek:PROVIDER_TIMEOUT", "cloudbase-openai:PROVIDER_TIMEOUT"]
+      );
+    } finally {
+      clearInterval(keepAlive);
+      parentStage.cleanup();
+    }
   } finally {
     providerRuntimeComposition.getProviderRuntime = originalGetRuntime;
+    providerRuntimeComposition.resolveResponseProviders = originalResolveResponse;
     delete require.cache[orchestratorPath];
   }
   console.log("✓ response: classifyProviderFailure delegates to the shared classifier; config fails fast");
