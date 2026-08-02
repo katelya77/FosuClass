@@ -152,7 +152,11 @@ async function main() {
     assert.ok(injectedConfig && injectedConfig.csrfHeader === "x-fosu-csrf", `csrf header must be injected by the server: ${JSON.stringify(injectedConfig)}`);
     assert.ok(injectedConfig.brand && injectedConfig.brand !== "Agent Admin", `brand must come from injection, not the generic default: ${JSON.stringify(injectedConfig)}`);
     assert.strictEqual(await page.title(), `助手运行中心 · ${injectedConfig.brand}`);
-    await page.waitForFunction(() => document.querySelectorAll("[data-domain-tab]").length === 6, null, { timeout: 15000 });
+    assert.strictEqual(
+      await page.locator("[data-domain-tab]").count(),
+      0,
+      "advanced config domains must not block the operations-center first paint",
+    );
 
     // 未登录访问必须跳登录页（另起无 Cookie 上下文验证）。
     const anonymousContext = await browser.newContext();
@@ -163,12 +167,13 @@ async function main() {
     await anonymousContext.close();
 
     // ── UI 编辑并发布（public / memory 域）────────────────────────────
+    await page.locator("#advancedConfig summary").click();
+    await page.waitForFunction(() => document.querySelectorAll("[data-domain-tab]").length === 6, null, { timeout: 15000 });
     await page.locator("#envSelect").selectOption("public");
     await page.waitForFunction(() => {
       const el = document.getElementById("configStatus");
       return el && el.textContent.indexOf("public") >= 0 && el.textContent.indexOf("cfg-public-") >= 0;
     }, null, { timeout: 15000 });
-    await page.locator("#advancedConfig summary").click();
     await page.locator('[data-domain-tab="memory"]').click();
     await page.locator("#btnLoadPublished").click();
     await page.waitForFunction(() => {

@@ -21,10 +21,10 @@ async function main() {
       const validated = input.validate(contract);
       return {
         contract: validated,
-        provider: "primary",
-        intendedProvider: "primary",
-        actualFirstProvider: "primary",
-        fallbackPath: ["primary:success"],
+        provider: "deepseek",
+        intendedProvider: "deepseek",
+        actualFirstProvider: "deepseek",
+        fallbackPath: ["deepseek:success"],
       };
     },
   };
@@ -47,8 +47,9 @@ async function main() {
     executionPolicy: "strict_model_first",
     providerRuntimeConfig: {
       AI_AGENT_ENABLED: "true",
-      AI_DECISION_PROVIDER: "primary",
-      AI_PROVIDER: "primary",
+      AI_DECISION_PROVIDER: "deepseek",
+      AI_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "unit-test-placeholder",
     },
     context: {},
     conversationState: {},

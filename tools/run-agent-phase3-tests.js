@@ -12,6 +12,8 @@ const tests = [
   "tools/test-agent-terminal-truth.js",
   "tools/test-voice-state-sequence.js",
   "tools/test-provider-readiness.js",
+  "tools/test-agent-provider-stage-capabilities.js",
+  "tools/test-agent-provider-live-operations.js",
   "tools/test-provider-runtime-matrix.js",
   "tools/test-coze-provider-v3.js",
   "tools/test-coze-workload-bootstrap.js",
@@ -31,6 +33,7 @@ const tests = [
   "tools/test-xiaofu-full-width-reminder-entry.js",
   "tools/test-xiaofu-quick-actions-ui.js",
   "tools/test-coze-connection-config-ux.js",
+  "tools/test-agent-admin-live-controller.js",
 ];
 
 let failed = 0;

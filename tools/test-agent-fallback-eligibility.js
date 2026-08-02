@@ -412,6 +412,9 @@ function decideInput(overrides = {}) {
       AI_AGENT_ENABLED: "true",
       AI_PROVIDER_CHAIN: "deepseek,cloudbase-openai",
       AI_DECISION_PROVIDER: "",
+      DEEPSEEK_API_KEY: "unit-test-placeholder",
+      CLOUDBASE_OPENAI_ENABLED: "true",
+      CLOUDBASE_OPENAI_API_KEY: "unit-test-placeholder",
     },
     context: {},
     conversationState: {},
@@ -564,6 +567,7 @@ async function testDecisionConfigFailFast() {
         AI_AGENT_ENABLED: "true",
         AI_PROVIDER_CHAIN: "deepseek",
         AI_DECISION_PROVIDER: "",
+        DEEPSEEK_API_KEY: "unit-test-placeholder",
       },
     })),
     (error) => {
@@ -678,9 +682,9 @@ async function testResponseOrchestrator() {
     );
 
     // The response Provider must time out before the enclosing response stage so
-    // the deterministic payload can be returned. Giving both timers the same
-    // budget makes the parent abort win and reproduces the production
-    // `provider.started -> STAGE_TIMEOUT -> run.failed` race.
+    // the deterministic payload can be returned. Keep a clear parent-stage
+    // margin: equal timers are a scheduler race and can legitimately surface
+    // ABORTED before the two bounded Provider attempts finish.
     const slowRuntime = createProviderRuntime({
       adapters: [{
         id: "deepseek",
@@ -709,7 +713,7 @@ async function testResponseOrchestrator() {
       intendedProvider: "deepseek",
       fallbackProvider: "cloudbase-openai",
     });
-    const parentStage = createStageSignal(null, 100);
+    const parentStage = createStageSignal(null, 500);
     const keepAlive = setInterval(() => {}, 20);
     try {
       const timedFallback = await orchestrator.generateAssistantResponse(responseInput({

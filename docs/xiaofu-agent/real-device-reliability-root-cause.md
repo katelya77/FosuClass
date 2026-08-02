@@ -99,3 +99,15 @@ run client --------(missing)----> run route --------public/default
 ## 未经验证的外部环节
 
 仓库测试不能证明以下项目已经通过：微信公众平台合法域名配置、Cloudflare 控制台规则、1Panel/OpenResty 当前生效配置、iOS 5G/IPv6 路径、真实 Provider 凭据、体验版上传及真机执行。它们必须按《真机诊断与验收》和《外部运行配置清单》逐项验证，未验证前不得写“真机通过”或“Provider 健康”。
+
+## 2026-08-02 增强理解与后台实时性复查
+
+本轮从 `origin/main@9d093596846b734c6185cebfb06e2ba646ccbad9` 重新复现了用户截图中的三个独立问题：
+
+1. `goalParser` 已能把“帮我查看一下二五级动物科学三班的课表”识别为班级课表目标，但 `classAliasResolver` 只接受阿拉伯数字，实体原样进入索引后查无结果。修复把中文数字转换限定在班级实体的“开头年级”和“末尾班号”，再由真实班级索引唯一匹配；不会全局改写专业名，多个候选仍必须澄清。
+2. trial Decision 默认把 Coze workload 当作严格 JSON Provider，同时旧 Decision 外层预算只有 3.5 秒并在主备之间均分。普通 Coze 工作流并不保证 DecisionContract；本机真实结构化 Probe 在 12 秒边界超时。修复后 workload 默认只进入 Response，Decision 选择已配置且支持严格结构化输出的 Provider，并获得 6.5 秒有界阶段预算；总 Run 截止仍不超过 15 秒，public 外部调用仍为 0。
+3. 新 `packages/provider-runtime` 发出了真实 Provider 事件，但 readiness 与“查询服务”仍读取旧 `providerChainService` 的进程内数组，因此真实调用发生后后台仍可能显示“未验证”且日志为空。修复增加单向脱敏观察桥，Provider 成功/失败会更新状态投影；调用日志从 durable Run/Event Store 查询，非 Run Probe 才使用内存补充。
+
+真实 Probe 还确认了一个仓库代码无法代替外部配置修复的事实：当前开发机 trial 配置中的 DeepSeek 结构化调用返回 HTTP 401（映射为 `PROVIDER_UNAUTHORIZED`），而 Coze workload 结构化调用在 12 秒内未完成。二者都不能记为“Provider 已验证”。部署前必须更新有效凭据或配置一个真实返回严格 DecisionContract 的 Provider，然后重新 Probe；不得用 mock 或 `configured=true` 冒充通过。
+
+助手运行中心的“返回后台”故障来自嵌入 iframe 内把自身导航到 `/admin/dashboard`，该页面的 frame policy 正确拒绝了嵌入，最终显示“拒绝连接”。页内链接现已移除；首屏只加载概览和近期 Run，高级配置惰性加载，运行事实按页面可见性自动刷新。

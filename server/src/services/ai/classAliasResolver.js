@@ -33,19 +33,74 @@ function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, "");
 }
 
+const CHINESE_DIGITS = Object.freeze({
+  零: 0,
+  〇: 0,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+});
+
+function parseChineseDigitSequence(value) {
+  const text = String(value || "");
+  if (!text || !Array.from(text).every((char) => Object.prototype.hasOwnProperty.call(CHINESE_DIGITS, char))) {
+    return null;
+  }
+  return Number(Array.from(text).map((char) => CHINESE_DIGITS[char]).join(""));
+}
+
+function parseChineseClassNumber(value) {
+  const text = String(value || "");
+  if (!text) return null;
+  if (!text.includes("十")) return parseChineseDigitSequence(text);
+  const match = text.match(/^([一二两三四五六七八九])?十([一二两三四五六七八九])?$/);
+  if (!match) return null;
+  const tens = match[1] ? CHINESE_DIGITS[match[1]] : 1;
+  const ones = match[2] ? CHINESE_DIGITS[match[2]] : 0;
+  return tens * 10 + ones;
+}
+
+/**
+ * 只规范化班级实体的两个受控位置：开头年级和末尾班号。
+ * 不对专业名或整句做全局中文数字替换，避免改写真实课程/专业名称。
+ */
+function normalizeClassEntity(entity) {
+  let text = normalizeText(entity);
+  if (!text) return "";
+  text = text.replace(/^([零〇一二两三四五六七八九]{2,4})级/, (raw, token) => {
+    const parsed = parseChineseDigitSequence(token);
+    if (!Number.isInteger(parsed)) return raw;
+    if (token.length === 2) return String(parsed).padStart(2, "0");
+    if (token.length === 4) return `${String(parsed).padStart(4, "0")}级`;
+    return raw;
+  });
+  text = text.replace(/([零〇一二两三四五六七八九十]{1,3})班$/, (raw, token) => {
+    const parsed = parseChineseClassNumber(token);
+    return Number.isInteger(parsed) && parsed > 0 && parsed <= 99 ? `${parsed}班` : raw;
+  });
+  return text;
+}
+
 /**
  * 解析班级实体短语。
  * 支持：24动医1 / 24动医1班 / 24动物医学1班 / 2024级动物医学1班 / 动物医学1班
  * @returns {null|{grade:string, majorAlias:string, classNo:number}}
  */
 function parseClassEntity(entity) {
-  const text = normalizeText(entity);
+  const text = normalizeClassEntity(entity);
   if (!text) return null;
   // 2024级动物医学1班
   let m = text.match(/^(20\d{2})级?([\u3400-\u9fffA-Za-z]{2,16}?)(\d{1,2})班?$/);
   if (m) return { grade: m[1], majorAlias: m[2], classNo: Number(m[3]) };
   // 24动医1（两位年级 → 20xx）
-  m = text.match(/^(\d{2})([\u3400-\u9fffA-Za-z]{2,16}?)(\d{1,2})班?$/);
+  m = text.match(/^(\d{2})级?([\u3400-\u9fffA-Za-z]{2,16}?)(\d{1,2})班?$/);
   if (m) return { grade: `20${m[1]}`, majorAlias: m[2], classNo: Number(m[3]) };
   // 动物医学1班（无年级）
   m = text.match(/^([\u3400-\u9fffA-Za-z]{2,16}?)(\d{1,2})班$/);
@@ -95,7 +150,7 @@ function resolveClass(entity, classIndex) {
   const items = Array.isArray(classIndex) ? classIndex : [];
   if (!items.length) return { status: "not_found", candidates: [] };
 
-  const exact = normalizeText(entity);
+  const exact = normalizeClassEntity(entity);
   // 0. 先精确匹配 name/className（“24动物医学1班”直接命中）
   const exactHits = items.filter((item) => {
     const name = normalizeText(item.name || item.className);
@@ -176,6 +231,7 @@ function addAlias(map, alias, major) {
 }
 
 module.exports = {
+  normalizeClassEntity,
   parseClassEntity,
   resolveClass,
   autoAliases,

@@ -27,6 +27,10 @@ async function run() {
       configVersion: "cfg-trial-0002-abc",
       provider: {
         name: "deepseek",
+        decisionProvider: "deepseek",
+        responseProvider: "coze",
+        lastActualProvider: "deepseek",
+        lastActualAt: "2026-08-02T01:59:59.000Z",
         configured: true,
         verified: false,
         reachable: false,
@@ -65,6 +69,9 @@ async function run() {
   assert.strictEqual(res.payload.operations.provider.configured, true);
   assert.strictEqual(res.payload.operations.provider.verified, false);
   assert.strictEqual(res.payload.operations.provider.reachable, false);
+  assert.strictEqual(res.payload.operations.provider.decisionProvider, "deepseek");
+  assert.strictEqual(res.payload.operations.provider.responseProvider, "coze");
+  assert.strictEqual(res.payload.operations.provider.lastActualProvider, "deepseek");
   assert.strictEqual(res.payload.operations.metrics15m.p50Ms, null, "no samples must not render fake 0 ms");
 
   const smokeRes = responseRecorder();
@@ -89,6 +96,10 @@ async function run() {
   ].forEach((label) => assert.ok(html.includes(label), `operations UI missing: ${label}`));
   assert.ok(html.indexOf("运行概览") < html.indexOf("高级配置"), "runtime truth must precede raw config");
   assert.ok(!/height\s*[:=]\s*["']?6000/i.test(html), "must not use a fixed 6000px iframe workaround");
+  assert.ok(html.includes("校园课表运行脉冲") && html.includes("agent-platform-live.js"),
+    "operations center must use the accessible SVG mark and live controller");
+  assert.ok(!html.includes("返回后台") && !html.includes('id="dashboardLink"'),
+    "the embedded operations module must not navigate its iframe back to the dashboard");
   console.log("test-agent-admin-operations-dashboard: PASS");
 }
 
