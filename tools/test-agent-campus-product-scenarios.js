@@ -18,6 +18,7 @@ const suites = [
   { id: "environment", file: "tools/test-agent-env-version-propagation.js", type: "client-server-integration" },
   { id: "memory_semantics", file: "tools/test-agent-memory-semantic-validator.js", type: "memory-boundary-integration" },
   { id: "memory_migration", file: "tools/test-agent-memory-invalid-migration.js", type: "encrypted-store-migration" },
+  { id: "spoken_class", file: "tools/test-agent-class-spoken-numerals.js", type: "deterministic-class-entity-integration" },
 ];
 
 const scenarios = [
@@ -32,6 +33,7 @@ const scenarios = [
   ["VPS 不可达", "diagnostics"], ["Run poll 中断后恢复", "run_protocol"], ["小程序重开后恢复 active Run", "run_protocol"],
   ["public 外部调用保持 0", "environment"], ["trial 绑定 trial configVersion", "environment"], ["服务器异常时本地课表接管", "local_fallback"],
   ["无重复终态和错误卡片", "local_fallback"], ["旧错误记忆安全迁移", "memory_migration"],
+  ["二五级动物科学三班口语规范化", "spoken_class"],
 ];
 
 function runSuite(suite) {
