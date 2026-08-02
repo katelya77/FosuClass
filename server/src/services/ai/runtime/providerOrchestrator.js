@@ -143,6 +143,29 @@ function providerChainFromRuntimePath(path = []) {
   });
 }
 
+function responseProviderAttemptCount(selection = {}, providerAttemptLedger = null) {
+  const intendedProvider = String(selection.intendedProvider || "").trim().toLowerCase();
+  const fallbackProvider = String(selection.fallbackProvider || "").trim().toLowerCase();
+  if (!fallbackProvider || fallbackProvider === intendedProvider) return 1;
+  if (!providerAttemptLedger || typeof providerAttemptLedger.snapshot !== "function") return 2;
+  const snapshot = providerAttemptLedger.snapshot() || {};
+  const remainingFallbacks = Math.max(0,
+    Number(snapshot.maxFallbacks || 0) - Number(snapshot.fallbacksUsed || 0));
+  return remainingFallbacks > 0 ? 2 : 1;
+}
+
+function responseProviderLease(responseBudgetMs, attemptCount = 1) {
+  const outerBudgetMs = Math.max(1, Number(responseBudgetMs || 1500) || 1500);
+  const completionReserveMs = outerBudgetMs > 1
+    ? Math.min(outerBudgetMs - 1, 250, Math.max(25, Math.floor(outerBudgetMs * 0.2)))
+    : 0;
+  const boundedAttemptCount = Math.max(1, Math.min(2, Number(attemptCount) || 1));
+  return {
+    stageCapMs: Math.max(1, Math.floor((outerBudgetMs - completionReserveMs) / boundedAttemptCount)),
+    finishReserveMs: completionReserveMs,
+  };
+}
+
 function safeProviderStage(input = {}) {
   return {
     provider: String(input.provider || "none").slice(0, 40),
@@ -303,6 +326,8 @@ async function generateAssistantResponse(input = {}) {
     let generated = deterministicGenerated;
     if (policyDecision.useExternal) {
       const selection = providerRuntimeComposition.resolveResponseProviders(runtimeMode, providerRuntimeConfig);
+      const providerLease = responseProviderLease(input.responseBudgetMs,
+        responseProviderAttemptCount(selection, input.providerAttemptLedger));
       const runtimeResult = await providerRuntimeComposition.getProviderRuntime().generate({
         runtimeMode,
         executionPolicy: input.executionPolicy || "strict_model_first",
@@ -312,8 +337,8 @@ async function generateAssistantResponse(input = {}) {
         deadline: input.deadline,
         signal: input.signal || null,
         stage: "response",
-        stageCapMs: Math.max(1, Number(input.responseBudgetMs || 1500) || 1500),
-        finishReserveMs: 0,
+        stageCapMs: providerLease.stageCapMs,
+        finishReserveMs: providerLease.finishReserveMs,
         providerAttemptLedger: input.providerAttemptLedger,
         onEvent: (event) => emitChatEvent(eventInput, Object.assign({
           runtimeMode: runtimeMode,

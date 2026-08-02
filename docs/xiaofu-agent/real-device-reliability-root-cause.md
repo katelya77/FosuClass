@@ -17,6 +17,22 @@
 
 记忆中的 `preferredName=什么` 是另一条独立的数据正确性故障：候选来源很多，但最终持久化边界没有统一语义校验，疑问句或 Provider 结构化候选可以污染长期记忆。
 
+### 合并后生产验证发现的回复阶段预算竞争
+
+PR #44 合并并部署到 `main@b3949ab23b7a78d39c20da0cf14a0eda68228ad6` 后，生产 HTTP Run 进一步暴露了一个独立故障。`public` 的“你好”能够完成，但 `trial` 的同一输入稳定出现：
+
+```text
+provider.started (understanding)
+→ understanding.fallback
+→ provider.started (response)
+→ STAGE_TIMEOUT
+→ run.failed
+```
+
+根因是 Agent Runtime 为简单回复阶段分配 800ms 外层预算，`providerOrchestrator` 又把完整预算交给 Provider，且没有为确定性 fallback 保留完成时间。父阶段定时器先创建；当两个计时器同时到期时，父阶段先把请求标记为 `ABORTED/STAGE_TIMEOUT`，已有的 Provider timeout fallback 尚未来得及返回，整个 Run 就进入失败终态。
+
+热修复为响应 Provider 分配严格小于外层回复阶段的 lease，并预留有上限的完成时间。它不改变 `strict_model_first`，不放宽 Session/capability authorization，也不吞掉配置、鉴权或用户取消错误；只让 timeout/network/429/5xx 等既有 fallback-eligible 失败有时间返回真实的确定性结果。
+
 ## 证据链
 
 ### 线上入口当前可达
@@ -75,6 +91,7 @@ run client --------(missing)----> run route --------public/default
 - 网络失败只允许进入确定性 Local Tool Fallback；本机结果不伪装成服务端 Run。
 - `MemoryController.commit` 和最终 User Memory 写入边界统一经过 `memorySemanticValidator`，并对明显无效旧数据做幂等失效迁移和审计。
 - Run 监控改读持久化 Run/Event/Trace Store，进程重启后仍可查询。
+- 回复 Provider 的执行预算小于外层 response stage，Provider timeout 先进入统一分类器，确定性 fallback 可以在外层硬截止前完成。
 
 ## 未经验证的外部环节
 
