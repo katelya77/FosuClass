@@ -145,3 +145,47 @@ Expected: PR checks are green, the merge SHA triggers `Deploy to VPS`, CI and de
 - [ ] **Step 5: Observe production for at least 15 minutes**
 
 Check `/api/health`, public/trial readiness, Run create/poll, and Provider truth at the beginning and end of the observation window. Do not claim iPhone, DevTools, real Provider Probe, or experience-build verification unless each was actually performed.
+
+### Task 4: Apply the same parent-stage invariant to Decision
+
+**Files:**
+- Modify: `packages/provider-runtime/src/deadline.js`
+- Modify: `packages/provider-runtime/index.js`
+- Modify: `server/src/services/ai/decision/decisionService.js`
+- Modify: `server/src/services/ai/runtime/providerOrchestrator.js`
+- Test: `tools/test-agent-fallback-eligibility.js`
+
+**Interfaces:**
+- Consumes: the Decision/Response parent-stage budget, resolved primary/fallback Provider pair, and shared fallback ledger.
+- Produces: `deriveProviderStageLease(options)` so every one-or-two Provider chain ends before its enclosing Agent Runtime stage.
+
+- [ ] **Step 1: Add the Decision RED case discovered after the first hotfix deployment**
+
+Use two real slow Provider Runtime adapters, a 100ms parent Decision signal, a 100ms Decision budget, and a 20ms completion reserve. Assert that Decision returns `deterministic_fallback` with two `PROVIDER_TIMEOUT` path entries. Before the shared fix this must fail with `ABORTED` because the parent signal wins.
+
+- [ ] **Step 2: Move the attempt-count and lease calculation into the existing deadline module**
+
+```js
+function deriveProviderStageLease(options = {}) {
+  const outerBudgetMs = Math.max(1, Number(options.outerBudgetMs || 1) || 1);
+  const finishReserveMs = outerBudgetMs > 1
+    ? Math.min(outerBudgetMs - 1, Math.max(0, Number(options.finishReserveMs || 0) || 0))
+    : 0;
+  const attemptCount = providerAttemptCount(options.selection, options.providerAttemptLedger);
+  return Object.freeze({
+    stageCapMs: Math.max(1, Math.floor((outerBudgetMs - finishReserveMs) / attemptCount)),
+    finishReserveMs,
+    attemptCount,
+  });
+}
+```
+
+- [ ] **Step 3: Consume the shared lease in both Decision and Response**
+
+Decision uses its existing 500ms finish reserve. Response keeps its bounded 20%/250ms completion reserve. Neither caller changes failure classification, execution policy, authorization, or cancellation semantics.
+
+- [ ] **Step 4: Verify RED→GREEN and rerun the full gate/deployment loop**
+
+Run: `node tools/test-agent-fallback-eligibility.js`
+
+Expected: the Decision case fails with `ABORTED` before implementation and passes with two timeout path entries after implementation; the existing Response case remains green. Then rerun repository-required gates, merge only green PR checks, deploy the resulting merge SHA, and repeat the production trial greeting plus 15-minute observation.

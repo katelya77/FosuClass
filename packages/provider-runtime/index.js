@@ -1,6 +1,6 @@
 const protocol = require("@xiaofu-agent/agent-protocol");
 const { EXECUTION_POLICIES, resolveExecutionPolicy } = require("./src/executionPolicy");
-const { createDeadline, createStageSignal } = require("./src/deadline");
+const { createDeadline, createStageSignal, deriveProviderStageLease } = require("./src/deadline");
 const { METRIC_LABEL_VALUES, createMetricsStore, percentile } = require("./src/metrics");
 const { createKeepAliveRegistry } = require("./src/keepAliveRegistry");
 const { createProviderRuntime } = require("./src/providerRuntime");
@@ -13,6 +13,7 @@ module.exports = Object.freeze({
   METRIC_LABEL_VALUES,
   classifyFallbackEligibility,
   createDeadline,
+  deriveProviderStageLease,
   createKeepAliveRegistry,
   createMetricsStore,
   createProviderPublicationAdapter,
