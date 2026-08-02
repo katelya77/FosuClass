@@ -412,6 +412,9 @@ function decideInput(overrides = {}) {
       AI_AGENT_ENABLED: "true",
       AI_PROVIDER_CHAIN: "deepseek,cloudbase-openai",
       AI_DECISION_PROVIDER: "",
+      DEEPSEEK_API_KEY: "unit-test-placeholder",
+      CLOUDBASE_OPENAI_ENABLED: "true",
+      CLOUDBASE_OPENAI_API_KEY: "unit-test-placeholder",
     },
     context: {},
     conversationState: {},
@@ -564,6 +567,7 @@ async function testDecisionConfigFailFast() {
         AI_AGENT_ENABLED: "true",
         AI_PROVIDER_CHAIN: "deepseek",
         AI_DECISION_PROVIDER: "",
+        DEEPSEEK_API_KEY: "unit-test-placeholder",
       },
     })),
     (error) => {
