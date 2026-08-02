@@ -65,6 +65,19 @@ async function run() {
     assert.strictEqual(topology.json.platform.providerRuntime.connectionReuse.keepAlive, true);
     assertSafePayload(topology.json);
 
+    const operations = await harness.request("/api/admin/agent-platform/operations?environment=public", {
+      cookie: session.cookie,
+    });
+    assert.strictEqual(operations.status, 200, operations.text);
+    assert.strictEqual(operations.json.operations.environment, "public");
+    assert.ok(operations.json.operations.configVersion);
+    assert.strictEqual(operations.json.operations.provider.configured, false);
+    assert.strictEqual(operations.json.operations.provider.verified, false);
+    assert.strictEqual(operations.json.operations.provider.reachable, false);
+    assert.notStrictEqual(operations.json.operations.metrics15m.p50Ms, 0,
+      "an empty latency window must be null rather than fake 0 ms");
+    assertSafePayload(operations.json);
+
     const chat = await harness.request("/api/ai/agent/chat", {
       method: "POST",
       body: {
@@ -85,6 +98,13 @@ async function run() {
     assert.ok(recent.json.runs.some((trace) => trace.runId === chat.json.runId));
     assert.ok(recent.json.runs.every((trace) => trace.configVersion));
     const trace = recent.json.runs.find((item) => item.runId === chat.json.runId);
+    assert.strictEqual(trace.environment, "public");
+    assert.strictEqual(trace.runtimeMode, "public");
+    assert.strictEqual(trace.status, "completed");
+    assert.strictEqual(trace.provider, "mock");
+    assert.strictEqual(trace.externalProviderUsed, false);
+    assert.strictEqual(typeof trace.failureLayer, "string");
+    assert.ok(trace.recordedAt);
     assert.deepStrictEqual(Object.keys(trace.timings), [
       "createRun", "decision", "tool", "verification", "response", "total",
     ]);
@@ -111,6 +131,25 @@ async function run() {
     assert.strictEqual(providerMetrics.response && providerMetrics.response.count || 0, 0,
       "public must keep external Response attempts at zero even with credentials configured");
     assertSafePayload(recent.json);
+
+    const smoke = await harness.request("/api/admin/agent-platform/smoke", {
+      method: "POST",
+      cookie: session.cookie,
+      headers: { "x-fosu-csrf": session.csrfToken },
+      body: { environment: "public" },
+    });
+    assert.strictEqual(smoke.status, 200, smoke.text);
+    assert.ok(Array.isArray(smoke.json.checks));
+    assert.deepStrictEqual(smoke.json.checks.map((item) => item.id), [
+      "public_tool", "tool_call", "trial_provider", "run_create_poll", "memory_rollback", "rag_query",
+    ]);
+    ["public_tool", "tool_call", "run_create_poll", "memory_rollback", "rag_query"].forEach((id) => {
+      const item = smoke.json.checks.find((check) => check.id === id);
+      assert.strictEqual(item.status, "passed", `${id}: ${JSON.stringify(item)}`);
+    });
+    assert.strictEqual(smoke.json.checks.find((item) => item.id === "trial_provider").status, "skipped");
+    assert.strictEqual(smoke.json.checks.find((item) => item.id === "trial_provider").verificationType, "not-applicable");
+    assertSafePayload(smoke.json);
 
     console.log("test-agent-platform-admin: PASS");
   } finally {

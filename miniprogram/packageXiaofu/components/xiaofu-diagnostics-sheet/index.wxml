@@ -1,0 +1,67 @@
+<view class="diag-sheet" wx:if="{{visible}}">
+  <view class="diag-handle"></view>
+  <view class="diag-head">
+    <view>
+      <view class="diag-title">连接诊断</view>
+      <view class="diag-subtitle">仅体验版与开发版可见 · 不包含密钥和原始消息</view>
+    </view>
+    <button class="diag-close" bindtap="onClose" aria-label="关闭连接诊断">✕</button>
+  </view>
+
+  <scroll-view class="diag-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="diag-context">
+      <view class="diag-context-item"><text>环境</text><text>{{report.envVersion || envVersion}}</text></view>
+      <view class="diag-context-item"><text>API</text><text selectable>{{report.apiHostname || apiHostname}}</text></view>
+      <view class="diag-context-item" wx:if="{{report.runtimeMode}}"><text>运行模式</text><text>{{report.runtimeMode}}</text></view>
+      <view class="diag-context-item" wx:if="{{report.configVersion}}"><text>配置版本</text><text selectable>{{report.configVersion}}</text></view>
+    </view>
+
+    <view class="diag-empty" wx:if="{{!report && !running}}">点击“开始诊断”后，将按真实链路逐项请求，不用 Mock 冒充通过。</view>
+    <view class="diag-running" wx:if="{{running}}"><view class="diag-spinner"></view><text>正在逐项检查，请保持页面在前台…</text></view>
+
+    <view class="diag-rail" wx:if="{{report && report.steps}}">
+      <view class="diag-step {{item.status}}" wx:for="{{report.steps}}" wx:key="id">
+        <view class="diag-marker"><view class="diag-dot"></view></view>
+        <view class="diag-step-main">
+          <view class="diag-step-line">
+            <text class="diag-step-label">{{item.label}}</text>
+            <text class="diag-step-status">{{item.status === 'passed' ? '通过' : '失败'}}</text>
+          </view>
+          <view class="diag-step-meta">
+            <text>{{item.elapsedMs}}ms</text>
+            <text wx:if="{{item.detail}}">{{item.detail}}</text>
+            <text wx:if="{{item.reasonCode}}" selectable>{{item.reasonCode}}</text>
+            <text wx:if="{{item.statusCode}}">HTTP {{item.statusCode}}</text>
+          </view>
+          <view class="diag-step-id" wx:if="{{item.requestId || item.runId}}" selectable>
+            {{item.requestId ? 'requestId ' + item.requestId : ''}}{{item.runId ? ' · runId ' + item.runId : ''}}
+          </view>
+          <view class="diag-suggestion" wx:if="{{item.suggestion}}">{{item.suggestion}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="diag-provider" wx:if="{{report && report.provider}}">
+      <view class="diag-section-title">Provider 真实状态</view>
+      <view class="diag-provider-grid">
+        <view><text>名称</text><text>{{report.provider.name || '未选择'}}</text></view>
+        <view><text>已配置</text><text>{{report.provider.configured ? '是' : '否'}}</text></view>
+        <view><text>已验证</text><text>{{report.provider.verified ? '是' : '否'}}</text></view>
+        <view><text>当前可达</text><text>{{report.provider.reachable ? '是' : '否'}}</text></view>
+        <view><text>熔断</text><text>{{report.provider.circuitState || 'unknown'}}</text></view>
+        <view><text>最近成功</text><text>{{report.provider.lastSuccessAt || '无'}}</text></view>
+      </view>
+    </view>
+
+    <view class="diag-failure" wx:if="{{report && report.lastFailure}}">
+      <view class="diag-section-title">最近一次失败</view>
+      <view class="diag-failure-code" selectable>{{report.lastFailure.failureLayer}} · {{report.lastFailure.reasonCode}}</view>
+      <view class="diag-failure-copy">{{report.lastFailure.suggestion}}</view>
+    </view>
+  </scroll-view>
+
+  <view class="diag-actions">
+    <button class="diag-button secondary" bindtap="onCopy" disabled="{{!report || running}}">复制脱敏报告</button>
+    <button class="diag-button primary" bindtap="onRun" loading="{{running}}" disabled="{{running}}">{{report ? '重新诊断' : '开始诊断'}}</button>
+  </view>
+</view>

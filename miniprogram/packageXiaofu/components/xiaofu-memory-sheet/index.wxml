@@ -3,12 +3,20 @@
   <view class="memory-head">
     <view class="memory-head-text">
       <view class="memory-title">记忆</view>
-      <view class="memory-subtitle">选择小佛在后续对话中保留哪些上下文。</view>
+      <view class="memory-subtitle">选择保存范围；本机内容在服务器不可用时仍可查看。</view>
     </view>
     <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
   </view>
 
   <scroll-view class="memory-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="memory-inline-error" wx:if="{{inlineError}}">
+      <view class="memory-inline-error-copy">{{inlineError}}</view>
+      <button bindtap="onDismissInlineError" aria-label="关闭错误提示">知道了</button>
+    </view>
+    <view class="memory-undo" wx:if="{{undoItem}}">
+      <text>已遗忘“{{undoItem.label || undoItem.key}}”</text>
+      <button bindtap="onUndoDelete">撤销遗忘</button>
+    </view>
     <view class="memory-mode-list">
       <view
         class="memory-mode-item {{mode === 'local_only' ? 'active' : ''}}"
@@ -17,9 +25,9 @@
       >
         <view class="memory-mode-row">
           <view class="memory-mode-check {{mode === 'local_only' ? 'on' : ''}}"></view>
-          <view class="memory-mode-title">仅保存在本机</view>
+          <view class="memory-mode-title">仅本机</view>
         </view>
-        <view class="memory-mode-desc">完整消息只留在当前设备。</view>
+        <view class="memory-mode-desc">保存本机消息与偏好，直到你清除；不会跨设备。</view>
       </view>
       <view
         class="memory-mode-item {{mode === 'session_state' ? 'active' : ''}}"
@@ -28,9 +36,9 @@
       >
         <view class="memory-mode-row">
           <view class="memory-mode-check {{mode === 'session_state' ? 'on' : ''}}"></view>
-          <view class="memory-mode-title">保存任务状态</view>
+          <view class="memory-mode-title">保留当前对话状态</view>
         </view>
-        <view class="memory-mode-desc">保存当前对话的班级、摘要与工作记忆，约 7 天；不跨对话形成个人偏好。</view>
+        <view class="memory-mode-desc">保存本对话的任务槽位与脱敏摘要约 7 天；不会跨对话或设备。</view>
       </view>
       <view
         class="memory-mode-item {{mode === 'cloud_sync' ? 'active' : ''}}"
@@ -39,9 +47,9 @@
       >
         <view class="memory-mode-row">
           <view class="memory-mode-check {{mode === 'cloud_sync' ? 'on' : ''}}"></view>
-          <view class="memory-mode-title">跨设备同步</view>
+          <view class="memory-mode-title">跨设备记忆</view>
         </view>
-        <view class="memory-mode-desc">在任务状态基础上，保存低风险偏好，可跨对话与设备恢复。</view>
+        <view class="memory-mode-desc">保存低风险偏好与脱敏对话状态，按期限保留；可跨对话与设备恢复。</view>
       </view>
     </view>
 
@@ -73,6 +81,8 @@
               <text wx:if="{{item.scopeText}}">{{item.scopeText}}</text>
               <text wx:if="{{item.updatedAtText}}"> · {{item.updatedAtText}}</text>
             </view>
+            <view class="memory-preference-reason" wx:if="{{item.whyText}}">为什么记住：{{item.whyText}}</view>
+            <view class="memory-preference-source" wx:if="{{item.sourceText}}">来源：{{item.sourceText}}</view>
           </view>
           <view class="memory-preference-actions">
             <button

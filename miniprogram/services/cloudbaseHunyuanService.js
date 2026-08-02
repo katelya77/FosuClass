@@ -1,4 +1,5 @@
 const cloudbaseConfig = require("../config/cloudbase");
+const platform = require("../utils/platform");
 
 const DAILY_LIMIT_KEY = "FOSU_AI_HUNYUAN_DAILY_LIMIT";
 const REQUEST_TIMEOUT_MS = 22000;
@@ -72,13 +73,10 @@ function getSdkVersion() {
 }
 
 function getMiniProgramEnvVersion() {
-  if (testOverrides && testOverrides.envVersion) return testOverrides.envVersion;
-  try {
-    const info = wx.getAccountInfoSync && wx.getAccountInfoSync();
-    return info && info.miniProgram && info.miniProgram.envVersion || "";
-  } catch (error) {
-    return "";
+  if (testOverrides && testOverrides.envVersion) {
+    return platform.normalizeMiniProgramEnvVersion(testOverrides.envVersion);
   }
+  return platform.getMiniProgramEnvVersion();
 }
 
 function isCompetitionEnv(envVersion) {

@@ -349,7 +349,7 @@ function createRagIndexService(options = {}) {
   }
 
   // 测试/运维辅助：等待队列排空（有界）。生产请求路径不调用。
-  async function drainQueueForTest(timeoutMs = 15000) {
+  async function waitForIdle(timeoutMs = 15000) {
     await ensureInit();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -368,7 +368,8 @@ function createRagIndexService(options = {}) {
     query,
     getIndexStatus,
     listJobs,
-    drainQueueForTest,
+    waitForIdle,
+    drainQueueForTest: waitForIdle,
   });
 }
 

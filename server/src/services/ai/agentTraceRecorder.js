@@ -58,7 +58,9 @@ function sanitizeTrace(input = {}) {
     runId: safeText(input.runId, 100),
     requestId: safeText(input.requestId, 100),
     conversationIdHash: hashConversationId(input.conversationId),
+    environment: safeText(input.environment || input.runtimeMode || "public", 16),
     runtimeMode: safeText(input.runtimeMode || "public", 16),
+    configVersion: safeText(input.configVersion, 120),
     intent: safeText(input.intent && input.intent.name || input.intent, 80),
     selectedSkill: safeText(input.selectedSkill && input.selectedSkill.id || input.selectedSkill, 80),
     stepCount: Math.max(0, Number(input.stepCount || (Array.isArray(input.steps) ? input.steps.length : 0)) || 0),
@@ -66,10 +68,14 @@ function sanitizeTrace(input = {}) {
     steps: sanitizeSteps(input.steps),
     totalDurationMs: Math.max(0, Number(input.totalDurationMs || 0) || 0),
     providerUsed: input.providerUsed === true,
+    provider: safeText(input.provider || (input.providerUsed === true ? "unknown" : "mock"), 80),
+    externalProviderUsed: input.providerUsed === true,
     fallbackLayer: safeText(input.fallbackLayer || "none", 24),
+    failureLayer: safeText(input.failureLayer || (input.errorCode ? input.fallbackLayer || "server" : ""), 40),
     fallbackReason: safeText(input.fallbackReason, 120),
     evidenceComplete: input.evidenceComplete === true,
     errorCode: safeText(input.errorCode, 80),
+    status: safeText(input.status || (input.errorCode ? "failed" : "completed"), 24),
     recordedAt: now,
   };
 }
@@ -111,6 +117,11 @@ function createAgentTraceRecorder(options = {}) {
       toolCalls: item.toolCalls.map((call) => Object.assign({}, call)),
       steps: item.steps.map((step) => Object.assign({}, step)),
     }));
+  }
+
+  async function listRecent() {
+    if (persistenceReady) await persistenceReady;
+    return listForTest().slice().reverse();
   }
 
   function clearForTest() {
@@ -157,6 +168,7 @@ function createAgentTraceRecorder(options = {}) {
     clearForTest,
     configureForTest,
     listForTest,
+    listRecent,
     record,
     // 组合/测试观察口：
     persistenceReady,
@@ -186,6 +198,9 @@ module.exports = {
   hashConversationId,
   listForTest() {
     return activeRecorder.listForTest();
+  },
+  listRecent() {
+    return activeRecorder.listRecent();
   },
   record(input) {
     return activeRecorder.record(input);

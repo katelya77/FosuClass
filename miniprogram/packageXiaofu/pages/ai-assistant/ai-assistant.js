@@ -11,6 +11,9 @@ const agentReadinessClient = require("../../../services/agentReadinessClient");
 const agentRunClient = require("../../../services/agentRunClient");
 const agentRunShell = require("../../../services/agentRunShell");
 const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
+const agentConnectionDiagnostics = require("../../../services/agentConnectionDiagnostics");
+const miniProgramPlatform = require("../../../utils/platform");
+const { API_BASE_URL } = require("../../../config/api");
 const courseReminderClient = require("../../../services/courseReminderClient");
 const currentScheduleService = require("../../../services/currentScheduleService");
 const scheduleChangeTracker = require("../../../services/scheduleChangeTracker");
@@ -92,6 +95,7 @@ const SHEET_MODAL_FLAGS = [
   "showMemorySheet",
   "showComposerPlus",
   "showReminderSheet",
+  "showDiagnosticsSheet",
 ];
 
 function computeModalOpen(source = {}) {
@@ -128,6 +132,16 @@ function normalizeMemoryPreferenceItems(items) {
     user: "跨设备",
   };
   const map = {};
+  const reasonLabels = {
+    name_statement: "你明确告诉了我称呼",
+    campus_preference: "你设置了常用校区",
+    reminder_preference: "你设置了默认提醒",
+    building_preference: "你设置了常用楼栋",
+    user_correction: "你纠正了之前的内容",
+    preference_patch: "你在对话中明确设置",
+    interpreter_command: "你在对话中明确要求记住",
+    provider_structured: "本轮结构化候选经语义校验通过",
+  };
   (Array.isArray(items) ? items : []).forEach((item) => {
     const source = item && typeof item === "object" ? item : {};
     if (!labels[source.key] && !source.label && !source.category) return;
@@ -135,6 +149,13 @@ function normalizeMemoryPreferenceItems(items) {
     const key = source.key || memoryId;
     if (!key) return;
     const value = source.normalizedValue !== undefined ? source.normalizedValue : source.value;
+    const provenance = source.provenance && typeof source.provenance === "object"
+      ? source.provenance
+      : {};
+    const reasonCode = source.reasonCode || provenance.reasonCode || "";
+    const sourceSummary = source.sourceSummary || provenance.sourceSummary || "";
+    const sourceKind = source.source || provenance.source || provenance.type || "";
+    const sourceTurnId = provenance.turnId || (source.sourceTurnIds && source.sourceTurnIds[0]) || "";
     let displayValue = value;
     if (key === "defaultReminderLeadMinutes") displayValue = `提前 ${value} 分钟`;
     let updatedAtText = "";
@@ -159,6 +180,11 @@ function normalizeMemoryPreferenceItems(items) {
       editable: source.editable !== false,
       confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : undefined,
       provenance: source.provenance || source.source || "",
+      whyText: reasonLabels[reasonCode] || (source.correction ? "你纠正了之前的内容" : "通过统一语义校验后保存"),
+      sourceText: sourceSummary || (sourceTurnId
+        ? `对话 ${String(sourceTurnId).slice(-8)}`
+        : (sourceKind === "provider_payload" ? "本轮 Provider 结构化候选" : "本轮对话")),
+      reasonCode,
       expiresAt: source.expiresAt || "",
     };
   });
@@ -1239,6 +1265,9 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
       : (source.compatMode === "direct_chat" && !isPlain
         ? "服务端版本较低 · 已用兼容模式回答，实时进度不可见"
         : ""),
+    recoveryAction: source.recoveryAction && source.recoveryAction.type === "retry"
+      ? normalizeCardAction(source.recoveryAction, 0)
+      : null,
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
     showCompactFeedback: false,
@@ -1318,6 +1347,7 @@ function buildAssistantMessageFromResponse(response, extra) {
     metrics: response.metrics || null,
     fallback: response.fallback === true,
     fallbackLayer: response.fallbackLayer || "",
+    recoveryAction: response.recoveryAction || null,
     status: response.status || "completed",
     memory: response.memory || null,
     intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
@@ -1523,6 +1553,8 @@ Page({
     memoryRevision: 0,
     memoryEpisodes: [],
     memoryOperationPending: false,
+    memoryInlineError: "",
+    memoryUndo: null,
     serverProactiveSuggestion: null,
     messages: [],
     conversations: [],
@@ -1542,6 +1574,12 @@ Page({
     showHeaderMenu: false,
     showMemorySheet: false,
     showReminderSheet: false,
+    showDiagnosticsSheet: false,
+    diagnosticsVisible: false,
+    diagnosticsRunning: false,
+    diagnosticsReport: null,
+    diagnosticsEnvVersion: "release",
+    diagnosticsApiHostname: "",
     showPrivacySheet: false,
     connectionStatusText: "检测中",
     connectionStatusClass: "unknown",
@@ -1552,6 +1590,8 @@ Page({
     statusCapsuleText: "待命 · 校园工具可用",
     statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
     statusCapsuleExpanded: false,
+    localCapabilities: [],
+    localCapabilityAvailable: false,
     inAppReminderBanner: null,
     inAppReminderAcknowledging: false,
     proactiveInsight: null,
@@ -1628,6 +1668,7 @@ Page({
     const showPrivacyTip = wx.getStorageSync(PRIVACY_TIP_KEY) !== true;
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
+    const diagnosticsEnvVersion = miniProgramPlatform.getMiniProgramEnvVersion();
     const panelName = decodeQuery(options && options.panel).trim().toLowerCase();
     const activeConversation = conversationStore.getActiveConversation();
     const floatContext = options && options.from === "float" ? xiaofuFloatService.consumePendingContext() : null;
@@ -1650,6 +1691,9 @@ Page({
       activeConversationContext: activeContextSlots,
       showReminderSheet: panelName === "reminders",
       reminderSheetOpenCreate: panelName === "reminders",
+      diagnosticsVisible: agentConnectionDiagnostics.isDiagnosticsVisible(diagnosticsEnvVersion),
+      diagnosticsEnvVersion,
+      diagnosticsApiHostname: String(API_BASE_URL || "").replace(/^https?:\/\//, "").split(/[/:?#]/)[0],
     }, privacyState, providerState, buildXiaofuFloatState());
     nextState.conversationTitle = activeConversation.title || "新对话";
     nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
@@ -1684,6 +1728,12 @@ Page({
   refreshConnectionStatus() {
     detectConnectionStatus().then((status) => {
       if (this._aiPageUnloaded) return;
+      const localContext = aiAssistantService.buildClientContext({
+        conversationId: this.data.activeConversationId,
+        contextSlots: this.data.activeConversationContext,
+        memoryMode: this.data.memoryMode,
+      });
+      const localStatus = aiAssistantService.getLocalCapabilityStatus(localContext);
       const runtimeModeLabel = mapRuntimeModeLabel(status.runtimeMode || this.data.runtimeMode || "public", status.connectionStatusClass, status);
       const headerPatch = applyHeaderStatusPatch({
         runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
@@ -1696,8 +1746,8 @@ Page({
         if (status.statusMachine === "network_offline" || status.connectionStatusClass === "offline") {
           Object.assign(connectionPatch, {
             agentActivityState: "network_error",
-            statusCapsuleText: "网络异常 · 可使用本机能力",
-            statusCapsuleDetail: "联网工具暂不可用；已缓存的个人课表和正式版规则仍可继续使用。",
+            statusCapsuleText: localStatus.statusText,
+            statusCapsuleDetail: localStatus.detailText,
             statusCapsuleExpanded: false,
           });
         } else {
@@ -1717,6 +1767,8 @@ Page({
         statusMachine: status.statusMachine || "public_ready",
         runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
         runtimeModeLabel,
+        localCapabilities: localStatus.capabilities,
+        localCapabilityAvailable: localStatus.canExecute,
       }, headerPatch, connectionPatch));
     });
   },
@@ -1913,11 +1965,19 @@ Page({
     if (this._statusCapsuleResetTimer) clearTimeout(this._statusCapsuleResetTimer);
     this._statusCapsuleResetTimer = setTimeout(() => {
       if (this._aiPageUnloaded || this.data.sending || this.data.agentActivityState === "waiting_confirmation") return;
+      const offline = this.data.connectionStatusClass === "offline" || this.data.statusMachine === "network_offline";
+      const localStatus = aiAssistantService.getLocalCapabilityStatus(aiAssistantService.buildClientContext({
+        conversationId: this.data.activeConversationId,
+        contextSlots: this.data.activeConversationContext,
+        memoryMode: this.data.memoryMode,
+      }));
       this.setData({
         agentActivityState: "idle",
-        statusCapsuleText: "待命 · 校园工具可用",
-        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
+        statusCapsuleText: offline ? localStatus.statusText : "待命 · 校园工具可用",
+        statusCapsuleDetail: offline ? localStatus.detailText : "课表与提醒由本机课表、Release Pack 与校园工具核验。",
         statusCapsuleExpanded: false,
+        localCapabilities: localStatus.capabilities,
+        localCapabilityAvailable: localStatus.canExecute,
       });
     }, 1800);
   },
@@ -2345,6 +2405,69 @@ Page({
 
   openPrivacyHelp() {
     this.setData({ showHeaderMenu: false, showMemorySheet: true });
+  },
+
+  openDiagnosticsSheet() {
+    if (!this.data.diagnosticsVisible) return;
+    this.setData(withModalOpen({
+      showHeaderMenu: false,
+      showDiagnosticsSheet: true,
+    }, this.data));
+    if (!this.data.diagnosticsReport && !this.data.diagnosticsRunning) this.runConnectionDiagnostics();
+  },
+
+  closeDiagnosticsSheet() {
+    this.setData(withModalOpen({ showDiagnosticsSheet: false }, this.data));
+  },
+
+  async runConnectionDiagnostics() {
+    if (!this.data.diagnosticsVisible || this.data.diagnosticsRunning) return;
+    this.setData({ diagnosticsRunning: true, diagnosticsReport: null });
+    try {
+      const report = await agentConnectionDiagnostics.runConnectionDiagnostics({
+        envVersion: this.data.diagnosticsEnvVersion,
+      });
+      if (!this._aiPageUnloaded) this.setData({ diagnosticsRunning: false, diagnosticsReport: report });
+    } catch (error) {
+      if (this._aiPageUnloaded) return;
+      const mapped = agentClientErrorMapper.mapAgentError(error, "连接诊断未完成");
+      this.setData({
+        diagnosticsRunning: false,
+        diagnosticsReport: {
+          schemaVersion: "fosu.real-device-diagnostics.v1",
+          checkedAt: new Date().toISOString(),
+          envVersion: this.data.diagnosticsEnvVersion,
+          apiHostname: this.data.diagnosticsApiHostname,
+          steps: [{
+            id: "diagnostics",
+            label: "连接诊断",
+            status: "failed",
+            elapsedMs: Number(error && error.elapsedMs || 0) || 0,
+            reasonCode: mapped.code,
+            failureLayer: error && error.failureLayer || "unknown",
+            statusCode: Number(error && error.statusCode || 0) || 0,
+            suggestion: mapped.userMessage,
+          }],
+          lastFailure: {
+            failureLayer: error && error.failureLayer || "unknown",
+            reasonCode: mapped.code,
+            statusCode: Number(error && error.statusCode || 0) || 0,
+            elapsedMs: Number(error && error.elapsedMs || 0) || 0,
+            suggestion: mapped.userMessage,
+          },
+          overallStatus: "fault",
+        },
+      });
+    }
+  },
+
+  copyConnectionDiagnostics() {
+    if (!this.data.diagnosticsReport) return;
+    const data = agentConnectionDiagnostics.serializeDiagnosticReport(this.data.diagnosticsReport);
+    wx.setClipboardData({
+      data,
+      success: () => wx.showToast({ title: "已复制脱敏报告", icon: "none" }),
+    });
   },
 
   onFloatSwitchChange(event) {
@@ -3558,6 +3681,10 @@ Page({
     this.loadMemoryPreferences();
   },
 
+  onDismissMemoryInlineError() {
+    this.setData({ memoryInlineError: "" });
+  },
+
   async loadMemoryPreferences() {
     const localItems = aiAssistantService.getUserPreferenceItems();
     if (this.data.memoryMode !== "cloud_sync") {
@@ -3611,6 +3738,12 @@ Page({
       memoryRevision: revision,
       memoryPolicy: Object.assign({}, this.data.memoryPolicy || {}, policy),
       memoryEpisodes: normalizeMemoryEpisodes(snapshotBody.episodes || snapshot && snapshot.episodes),
+      memoryInlineError: (snapshot && snapshot.success === false) || (cloudItems && cloudItems.success === false) || (!snapshot && !cloudItems)
+        ? agentClientErrorMapper.userMessage(
+          (cloudItems && cloudItems.success === false ? cloudItems : snapshot) || { code: "MEMORY_STORE_UNAVAILABLE" },
+          "云端记忆暂不可用；本机记忆仍可浏览和使用。"
+        )
+        : "",
     };
     if (typeof policy.autoMemoryEnabled === "boolean") {
       next.autoMemoryEnabled = policy.autoMemoryEnabled;
@@ -3690,10 +3823,9 @@ Page({
           { type: "clear", expectedRevision: this.data.memoryRevision || 0 }
         );
         if (!cleared || cleared.success === false) {
-          this.setData({ memorySwitching: false });
-          wx.showToast({
-            title: (cleared && cleared.error) || agentClientErrorMapper.userMessage(cleared, "云端清除失败，请稍后再试"),
-            icon: "none",
+          this.setData({
+            memorySwitching: false,
+            memoryInlineError: (cleared && cleared.error) || agentClientErrorMapper.userMessage(cleared, "云端清除失败；本机记忆未受影响。"),
           });
           return;
         }
@@ -3721,11 +3853,8 @@ Page({
       this.setData(Object.assign({
         memoryMode: previous,
         memorySwitching: false,
+        memoryInlineError: agentClientErrorMapper.userMessage(result, "记忆模式更新失败；将继续使用当前本机模式。"),
       }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: previous }))));
-      wx.showToast({
-        title: agentClientErrorMapper.userMessage(result, "记忆模式更新失败，将继续保存在本机"),
-        icon: "none",
-      });
       return;
     }
     try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
@@ -3755,6 +3884,9 @@ Page({
     const memoryId = event.detail && event.detail.memoryId || "";
     const key = event.detail && event.detail.key || "";
     if (!memoryId && !key) return;
+    const undoItem = (this.data.memoryPreferences || []).find((item) => (
+      (memoryId && item.memoryId === memoryId) || (key && item.key === key)
+    )) || null;
     wx.showModal({
       title: "删除这项记忆",
       content: "删除后，小佛不会再把它作为长期偏好使用。",
@@ -3774,7 +3906,7 @@ Page({
             }
           );
           if (!cloud || cloud.success === false) {
-            wx.showToast({ title: cloud && cloud.error || "云端删除失败", icon: "none" });
+            this.setData({ memoryInlineError: cloud && cloud.error || "云端遗忘失败；本机记忆未更改。" });
             return;
           }
           if (cloud.alreadyGone === true) {
@@ -3789,9 +3921,34 @@ Page({
         }
         if (key) aiAssistantService.deleteUserPreference(key);
         await this.loadMemoryPreferences();
-        wx.showToast({ title: "已删除", icon: "none" });
+        this.setData({ memoryUndo: undoItem });
       },
     });
+  },
+
+  async onUndoMemoryDelete() {
+    const item = this.data.memoryUndo;
+    if (!item || !item.key) return;
+    const value = item.value !== undefined ? item.value : item.displayValue;
+    if (this.data.memoryMode === "cloud_sync") {
+      const restored = await agentMemoryClient.withMemoryRevisionRetry(
+        (expectedRevision) => agentMemoryClient.patchCloudPreference({
+          key: item.key,
+          value,
+          expectedRevision,
+        }),
+        { type: "edit", kind: "preference", targetId: item.key, expectedRevision: this.data.memoryRevision || 0 }
+      );
+      if (!restored || restored.success === false) {
+        this.setData({ memoryInlineError: restored && restored.error || "撤销失败，请稍后重试。" });
+        return;
+      }
+      const revision = Number(restored.revision || 0) || 0;
+      if (revision) this.setData({ memoryRevision: revision });
+    }
+    aiAssistantService.setUserPreference(item.key, value);
+    this.setData({ memoryUndo: null, memoryInlineError: "" });
+    await this.loadMemoryPreferences();
   },
 
   async onToggleAutoMemory(event) {
@@ -3827,12 +3984,9 @@ Page({
         this.setData({
           autoMemoryEnabled: previous,
           memoryOperationPending: false,
-        });
-        wx.showToast({
-          title: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
+          memoryInlineError: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
             ? result.error
-            : agentClientErrorMapper.userMessage(result, "自动记忆设置失败，请稍后重试"),
-          icon: "none",
+            : agentClientErrorMapper.userMessage(result, "自动记忆设置失败；当前设置未改变。"),
         });
         return;
       }
@@ -3925,7 +4079,7 @@ Page({
           );
           if (!cloud || cloud.success === false) {
             if (cloud && cloud.notFound === true) await this.loadMemoryPreferences();
-            wx.showToast({ title: cloud && cloud.error || "保存失败", icon: "none" });
+            this.setData({ memoryInlineError: cloud && cloud.error || "云端修改失败；本机记忆未更改。" });
             return;
           }
           const revision = Number(cloud.revision || cloud.memory && cloud.memory.revision || 0) || 0;
@@ -3980,10 +4134,9 @@ Page({
       result = { success: false, error };
     }
     if (!result || result.success === false) {
-      this.setData({ memoryOperationPending: false });
-      wx.showToast({
-        title: agentClientErrorMapper.userMessage(result, "记忆导出失败，请检查登录和网络"),
-        icon: "none",
+      this.setData({
+        memoryOperationPending: false,
+        memoryInlineError: agentClientErrorMapper.userMessage(result, "云端记忆导出失败；本机内容仍可查看。"),
       });
       return;
     }
@@ -4074,7 +4227,7 @@ Page({
         if (conversationId) {
           const result = await agentMemoryClient.deleteCloudConversation(conversationId);
           if (!result.success) {
-            wx.showToast({ title: result.error || "服务端清除失败", icon: "none" });
+            this.setData({ memoryInlineError: result.error || "服务端会话状态清除失败；本机内容未更改。" });
             return;
           }
         }
@@ -4098,11 +4251,10 @@ Page({
           { type: "clear", expectedRevision: this.data.memoryRevision || 0 }
         );
         if (!result || result.success === false) {
-          wx.showToast({
-            title: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
+          this.setData({
+            memoryInlineError: (result && typeof result.error === "string" && /[一-鿿]/.test(result.error))
               ? result.error
-              : agentClientErrorMapper.userMessage(result, "清除失败，请稍后再试"),
-            icon: "none",
+              : agentClientErrorMapper.userMessage(result, "云端清除失败；本机内容未更改。"),
           });
           return;
         }
@@ -4248,6 +4400,7 @@ Page({
       showMemorySheet: false,
       showComposerPlus: false,
       showReminderSheet: false,
+      showDiagnosticsSheet: false,
       privacyExpanded: false,
     }, this.data));
   },
@@ -4328,6 +4481,19 @@ Page({
       messages,
     });
     this.scrollMessagesToBottom(true);
+  },
+
+  onRecoveryAction(event) {
+    const messageIndex = Number(event.currentTarget.dataset.messageIndex);
+    const message = (this.data.messages || [])[messageIndex] || {};
+    const action = message.recoveryAction || {};
+    const payload = action.payload && typeof action.payload === "object" ? action.payload : {};
+    const originalQuestion = firstActionText([payload.message, message.userQuery, this.findLastUserMessage()]);
+    if (!originalQuestion) {
+      this.showActionFallback("暂无可重试的问题");
+      return;
+    }
+    this.sendMessage(originalQuestion, { retryAssistantIndex: messageIndex });
   },
 
   onCardAction(event) {

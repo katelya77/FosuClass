@@ -273,7 +273,7 @@ async function run() {
   await clearPage.applyMemoryMode("local_only", { previous: "cloud_sync", deleteCloudData: true });
   assert.strictEqual(clearRevision, 22, "destructive cloud clear must carry the last observed revision");
 
-  // Pause/resume is server-authoritative: failure rolls back without a success toast.
+  // Pause/resume is server-authoritative: failure rolls back and stays inline.
   storage.xiaofu_auto_memory_enabled = "1";
   memoryPage.data.autoMemoryEnabled = true;
   const toastCountBeforeFailure = toasts.length;
@@ -281,7 +281,8 @@ async function run() {
   await memoryPage.onToggleAutoMemory({ detail: { autoMemoryEnabled: false } });
   assert.strictEqual(memoryPage.data.autoMemoryEnabled, true);
   assert.strictEqual(storage.xiaofu_auto_memory_enabled, "1");
-  assert.strictEqual(toasts.length, toastCountBeforeFailure + 1, "failure may show one error toast only");
+  assert.strictEqual(toasts.length, toastCountBeforeFailure, "cloud failure must not add a blocking toast");
+  assert(memoryPage.data.memoryInlineError, "cloud failure must remain visible as an inline error");
 
   agentMemoryClient.patchMemoryPolicy = async (patch, expectedRevision) => ({
     success: true,
@@ -438,7 +439,7 @@ async function run() {
   assert.strictEqual(retryPage.data.memoryRevision, 71);
   assert(toasts.indexOf("已清除云端记忆") >= 0);
 
-  // H1 — second conflict stops: exactly two writes, one Chinese error, no success toast.
+  // H1 — second conflict stops: exactly two writes, one Chinese inline error, no toast.
   clearRevisions = [];
   refreshCalls = 0;
   agentMemoryClient.clearCloudMemory = async (expectedRevision) => {
@@ -453,9 +454,8 @@ async function run() {
   assert.deepStrictEqual(clearRevisions, [80, 70], "at most one replay — no infinite retry, no repeated clear");
   assert.strictEqual(refreshCalls, 1);
   assert.strictEqual(twiceConflictPage.data.memoryMode, "cloud_sync", "failed clear must not flip memory mode");
-  assert.strictEqual(toasts.length, toastsBeforeTwice + 1);
-  assert(/[一-鿿]/.test(toasts[toasts.length - 1]), "error must be understandable Chinese");
-  assert(toasts.indexOf("已清除云端记忆") < 0 || toasts.length - 1 > toasts.indexOf("已清除云端记忆"));
+  assert.strictEqual(toasts.length, toastsBeforeTwice, "failed clear must not add a blocking toast");
+  assert(/[一-鿿]/.test(twiceConflictPage.data.memoryInlineError), "inline error must be understandable Chinese");
 
   // H1 — refresh failure must not continue with the DELETE.
   clearRevisions = [];
@@ -466,8 +466,8 @@ async function run() {
   const toastsBeforeRefreshFail = toasts.length;
   await confirmClearAll(refreshFailPage);
   assert.deepStrictEqual(clearRevisions, [85], "refresh failure stops before any retry write");
-  assert.strictEqual(toasts.length, toastsBeforeRefreshFail + 1);
-  assert.strictEqual(toasts[toasts.length - 1], "网络异常，请检查连接后重试");
+  assert.strictEqual(toasts.length, toastsBeforeRefreshFail, "refresh failure must stay inline");
+  assert.strictEqual(refreshFailPage.data.memoryInlineError, "网络异常，请检查连接后重试");
 
   // H1 — non-409 failures never trigger refresh/retry.
   clearRevisions = [];
@@ -487,7 +487,8 @@ async function run() {
   await confirmClearAll(serverErrorPage);
   assert.deepStrictEqual(clearRevisions, [88], "non-409 must not retry");
   assert.strictEqual(unexpectedRefresh, 0, "non-409 must not refresh either");
-  assert.strictEqual(toasts.length, toastsBeforeServerError + 1);
+  assert.strictEqual(toasts.length, toastsBeforeServerError, "server error must stay inline");
+  assert.strictEqual(serverErrorPage.data.memoryInlineError, "清除失败，请稍后再试");
 
   // M5 — delete: 409 → refresh → replay once with refreshed revision.
   let deleteRevisions = [];
@@ -509,13 +510,19 @@ async function run() {
     revision: 31,
     items: [],
   });
-  const deletePage = makePage({ memoryMode: "cloud_sync", memoryRevision: 29 });
+  const deletePage = makePage({
+    memoryMode: "cloud_sync",
+    memoryRevision: 29,
+    memoryPreferences: [{ memoryId: "mem-1", key: "campus", value: "Xianxi", scope: "user" }],
+  });
+  const toastsBeforeDelete = toasts.length;
   deletePage.onDeleteMemoryPreference({ detail: { memoryId: "mem-1", key: "campus" } });
   const deletePrefModal = modals.pop();
   await deletePrefModal.success({ confirm: true });
   assert.deepStrictEqual(deleteRevisions, [29, 30], "delete replays once with the refreshed revision");
   assert.strictEqual(deletePage.data.memoryRevision, 31);
-  assert.strictEqual(toasts[toasts.length - 1], "已删除");
+  assert.strictEqual(toasts.length, toastsBeforeDelete, "successful forget uses inline undo instead of a transient toast");
+  assert.strictEqual(deletePage.data.memoryUndo.memoryId, "mem-1");
 
   // M5 / Low#2 — delete 404 converges: no retry, local item removed, gentle Chinese notice.
   let goneDeleteCalls = 0;
@@ -566,7 +573,7 @@ async function run() {
   const editModal = modals.pop();
   await editModal.success({ confirm: true, content: "新称呼" });
   assert.deepStrictEqual(editRevisions, [40], "edit must stop after refresh when the target is gone");
-  assert.strictEqual(toasts[toasts.length - 1], "该记忆已不存在，请刷新列表后重新确认");
+  assert.strictEqual(editPage.data.memoryInlineError, "该记忆已不存在，请刷新列表后重新确认");
   assert(!aiAssistantService.getUserPreferenceItems().some((item) => item.key === "preferredName"),
     "failed cloud edit must not write the local preference");
 

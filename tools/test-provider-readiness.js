@@ -2,6 +2,7 @@
 const assert = require("assert");
 const providerReadinessService = require("../server/src/services/ai/providerReadinessService");
 const agentReadinessService = require("../server/src/services/ai/agentReadinessService");
+const providerChainService = require("../server/src/services/ai/providerChainService");
 
 function withEnv(patch, fn) {
   const previous = {};
@@ -20,7 +21,7 @@ function withEnv(patch, fn) {
   }
 }
 
-function run() {
+async function run() {
   withEnv({
     AI_RUNTIME_MODE: "public",
     AI_AGENT_ENABLED: "false",
@@ -79,7 +80,39 @@ function run() {
   assert.ok(matrix.environments.dev);
   assert.ok(matrix.checkedAt);
 
+  providerChainService.resetForTest();
+  const runtimeConfig = {
+    AI_AGENT_ENABLED: "true",
+    AI_PROVIDER: "deepseek",
+    AI_MODEL: "deepseek-chat",
+    DEEPSEEK_API_KEY: "test-only-placeholder",
+  };
+  const configuredOnly = providerReadinessService.publicProviderFlags("trial", runtimeConfig);
+  assert.strictEqual(configuredOnly.providerConfigured, true);
+  assert.strictEqual(configuredOnly.configuredAvailable, true);
+  assert.strictEqual(configuredOnly.verified, false);
+  assert.strictEqual(configuredOnly.providerReachable, false, "configured must not be reported as reachable");
+  assert.strictEqual(configuredOnly.reasonCode, "PROVIDER_UNVERIFIED");
+  assert.strictEqual(configuredOnly.lastProbeAt, "");
+  assert.strictEqual(configuredOnly.lastSuccessAt, "");
+  assert.strictEqual(configuredOnly.circuitState, "closed");
+
+  await providerChainService.probeProvider("deepseek", {
+    runtimeMode: "trial",
+    providerRuntimeConfig: runtimeConfig,
+    probeGenerate: async () => ({ ok: true }),
+  });
+  const verified = providerReadinessService.publicProviderFlags("trial", runtimeConfig);
+  assert.strictEqual(verified.verified, true);
+  assert.strictEqual(verified.providerReachable, true);
+  assert.ok(verified.lastProbeAt);
+  assert.ok(verified.lastSuccessAt);
+  assert.strictEqual(verified.reasonCode, "PROVIDER_HEALTHY");
+
   console.log("test-provider-readiness: PASS");
 }
 
-run();
+run().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

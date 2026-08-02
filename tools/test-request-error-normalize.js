@@ -8,7 +8,7 @@ const timeout = request.normalizeRequestError({ errMsg: "request:fail timeout" }
   url: "https://example.test/api/fosu/release-pack/index/class?token=secret",
   elapsedMs: 8010,
 });
-assert.strictEqual(timeout.code, "TIMEOUT");
+assert.strictEqual(timeout.code, "REQUEST_TIMEOUT");
 assert.strictEqual(timeout.reasonCode, "REQUEST_TIMEOUT");
 assert.strictEqual(timeout.retriable, true);
 assert(timeout.url.includes("[redacted]"), "sensitive query values should be redacted");

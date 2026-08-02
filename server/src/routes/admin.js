@@ -75,6 +75,9 @@ function chain(value, onFulfilled, onRejected) {
 const platformAdminHandlers = createPlatformAdminHandlers({
   getPlatformDiagnostics: platformComposition.getDiagnostics,
   listRecentPlatformTraces: platformComposition.listRecentPlatformTraces,
+  listDurableRunTraces: platformComposition.listDurableRunTraces,
+  getOperationsSnapshot: platformComposition.getOperationsSnapshot,
+  runOperationsSmokeTest: platformComposition.runOperationsSmokeTest,
   getExecutionPolicy: platformComposition.getExecutionPolicyTruth,
 });
 const campusMapService = require("../services/ai/campusMapService");
@@ -559,6 +562,11 @@ router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.get("/agent-platform/topology", adminAuth.verifyAdminAccess, platformAdminHandlers.getTopology);
+router.get("/agent-platform/operations", adminAuth.verifyAdminAccess, adminAuth.requireScopes(["agent-config:read"]), platformAdminHandlers.getOperations);
+router.post("/agent-platform/smoke", verifyAdminWriteAccess, async (req, res) => {
+  writeAuditLog(req, "smoke", "agent-platform", String(req.body && req.body.environment || "public"), "Assistant operations smoke test started");
+  return platformAdminHandlers.postSmokeTest(req, res);
+});
 // 与 modules/agent-platform/routes.js 的 /runs/:runId 详情端点对齐：列表同样要求 agent-config:read。
 router.get("/agent-platform/runs", adminAuth.verifyAdminAccess, adminAuth.requireScopes(["agent-config:read"]), platformAdminHandlers.getRecentRuns);
 

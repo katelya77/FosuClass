@@ -4,22 +4,14 @@
  */
 const http = require("../utils/request");
 const agentClientErrorMapper = require("./agentClientErrorMapper");
+const platform = require("../utils/platform");
 
 function safeText(value, max = 200) {
   return String(value == null ? "" : value).trim().slice(0, max);
 }
 
-function getEnvVersion() {
-  try {
-    const info = wx.getAccountInfoSync && wx.getAccountInfoSync();
-    return String(info && info.miniProgram && info.miniProgram.envVersion || "release");
-  } catch (error) {
-    return "release";
-  }
-}
-
 function withEnvQuery(path) {
-  const envVersion = encodeURIComponent(getEnvVersion());
+  const envVersion = encodeURIComponent(platform.getMiniProgramEnvVersion());
   const joiner = path.indexOf("?") >= 0 ? "&" : "?";
   return `${path}${joiner}envVersion=${envVersion}`;
 }
@@ -788,7 +780,7 @@ module.exports = {
   evaluateProactive,
   exportCloudMemory,
   getCloudConversation,
-  getEnvVersion,
+  getEnvVersion: platform.getMiniProgramEnvVersion,
   getMemoryPolicy,
   getMemorySnapshot,
   isNotFoundResult,

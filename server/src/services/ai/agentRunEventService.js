@@ -192,6 +192,14 @@ function createRunEventService(options = {}) {
     return runs.get(String(runId || "")) || null;
   }
 
+  async function listRunRecords() {
+    if (persistenceReady) await persistenceReady;
+    pruneExpired();
+    return Array.from(runs.values())
+      .sort((left, right) => Number(right.createdAtMs || 0) - Number(left.createdAtMs || 0))
+      .map(snapshotOf);
+  }
+
   function authorizeRunAccess(run, options = {}) {
     if (!run) return { ok: false, code: "RUN_NOT_FOUND", status: 404 };
     if (run.expiresAtMs <= Date.now()) {
@@ -389,6 +397,7 @@ function createRunEventService(options = {}) {
     getRunRecord,
     getRunView,
     getRunViewDeep,
+    listRunRecords,
     isCancelled,
     resetForTests,
     setResult,
@@ -440,6 +449,9 @@ module.exports = {
   },
   getRunViewDeep(runId, options) {
     return activeService.getRunViewDeep(runId, options);
+  },
+  listRunRecords() {
+    return activeService.listRunRecords();
   },
   isCancelled(runId) {
     return activeService.isCancelled(runId);

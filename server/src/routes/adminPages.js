@@ -5901,7 +5901,7 @@ const adminConsoleHtml = `<!doctype html>
 
             <li class="nav-group-label" data-nav-group="系统与安全">系统与安全</li>
             <li class="nav-item" data-section="ai-provider"><button type="button" title="查询服务"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 4h.01M15 14h.01M9 17h6"/></svg><span class="nav-label">查询服务</span></button></li>
-            <li class="nav-item" data-section="agent-platform"><button type="button" id="agentPlatformNavBtn" title="Agent 控制面"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg><span class="nav-label">Agent 控制面</span></button></li>
+            <li class="nav-item" data-section="agent-platform"><button type="button" id="agentPlatformNavBtn" title="助手运行中心"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="7" r="2.4"/><circle cx="12" cy="17" r="2.4"/><path d="M9.3 8.3 10.8 15"/><path d="M14.7 8.3 13.2 15"/><path d="M9.4 7h5.2"/></svg><span class="nav-label">助手运行中心</span></button></li>
             <li class="nav-item" data-section="security"><button type="button" title="安全状态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm0 5v4m0 4h.01"/></svg><span class="nav-label">安全状态</span></button></li>
             <li class="nav-item" data-section="settings"><button type="button" title="系统设置"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4a7.7 7.7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8.7 8.7 0 0 0-1.8-1L14.8 3h-4l-.3 2.7a8.7 8.7 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.7 7.7 0 0 0 0 2.8l-2 1.5 2 3.4 2.4-1a8.7 8.7 0 0 0 1.8 1l.3 2.7h4l.3-2.7a8.7 8.7 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5a7.7 7.7 0 0 0 .1-1.4Z"/></svg><span class="nav-label">系统设置</span></button></li>
           </ul>
@@ -7691,7 +7691,7 @@ const adminConsoleHtml = `<!doctype html>
 
       <!-- 面板八·扩展：Agent 控制面（内嵌独立应用，iframe + postMessage 自适应高度，与其他分区同为右侧内容区） -->
       <section id="section-agent-platform" class="section">
-        <iframe id="agentPlatformFrame" data-src="/admin/agent-platform/?embed=1" title="Agent 控制面" style="width:100%;border:0;display:block;min-height:560px;background:transparent;" scrolling="no"></iframe>
+        <iframe id="agentPlatformFrame" data-src="/admin/agent-platform/?embed=1" title="助手运行中心" style="width:100%;height:min(82vh,900px);border:0;display:block;min-height:620px;background:transparent;" scrolling="yes"></iframe>
       </section>
 
       <!-- 面板九：系统设置 System Settings -->
@@ -8942,7 +8942,7 @@ const adminConsoleHtml = `<!doctype html>
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
-          "agent-platform": "Agent 控制面",
+          "agent-platform": "助手运行中心",
           settings: "系统设置与日志"
         };
         var nextTitle = titles[targetSection] || "Admin Console";
@@ -8960,7 +8960,7 @@ const adminConsoleHtml = `<!doctype html>
           feedback: "内容管理 / 用户反馈",
           "ai-provider": "系统与安全 / 查询服务",
           security: "系统与安全 / 安全状态",
-          "agent-platform": "系统与安全 / Agent 平台",
+          "agent-platform": "系统与安全 / 助手运行中心",
           settings: "系统与安全 / 设置与日志"
         };
         if ($("pageTitle")) {
@@ -16230,10 +16230,13 @@ const adminConsoleHtml = `<!doctype html>
       // 内嵌 Agent 控制面经 postMessage 上报内容高度，父页据此伸缩 iframe，避免双滚动条。
       window.addEventListener("message", function (event) {
         if (event.origin !== location.origin) return;
+        var agentFrame = $("agentPlatformFrame");
+        if (!agentFrame || event.source !== agentFrame.contentWindow) return;
         var data = event.data || {};
-        if (data.type === "agent-platform:height" && $("agentPlatformFrame")) {
-          var nextHeight = Math.max(480, Math.min(Number(data.height) || 0, 6000));
-          if (nextHeight) $("agentPlatformFrame").style.height = nextHeight + "px";
+        if (data.type === "agent-platform:height") {
+          var viewportLimit = Math.max(620, Math.floor(window.innerHeight * 0.82));
+          var nextHeight = Math.max(620, Math.min(Number(data.height) || 0, viewportLimit));
+          if (nextHeight) agentFrame.style.height = nextHeight + "px";
         }
       });
 

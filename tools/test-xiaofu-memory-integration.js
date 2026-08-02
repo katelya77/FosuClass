@@ -41,7 +41,16 @@ function run() {
 
   mustInclude(memorySheet, "memory-mode-check", "memory sheet");
   mustInclude(memorySheet, "memory-preference-list", "memory sheet preference list");
+  mustInclude(memorySheet, ">仅本机<", "memory mode A");
+  mustInclude(memorySheet, ">保留当前对话状态<", "memory mode B");
+  mustInclude(memorySheet, ">跨设备记忆<", "memory mode C");
+  mustInclude(memorySheet, "memory-inline-error", "memory inline cloud error");
+  mustInclude(memorySheet, "item.whyText", "memory reason provenance");
+  mustInclude(memorySheet, "item.sourceText", "memory source provenance");
+  mustInclude(memorySheet, "撤销遗忘", "memory undo");
   mustInclude(memorySheetJs, "deletepreference", "memory sheet preference delete event");
+  mustInclude(memorySheetJs, "dismissinlineerror", "memory sheet inline error event");
+  mustInclude(memorySheetJs, "undodelete", "memory sheet undo event");
   mustInclude(memorySheet, "清空本机消息", "memory sheet");
   assert.ok(
     memorySheet.includes("清除服务端会话状态") || memorySheet.includes("清除当前会话状态"),
@@ -51,6 +60,7 @@ function run() {
   mustInclude(memoryCss, "width: 100%", "memory css");
   mustInclude(memoryCss, "min-width: 0", "memory css");
   mustInclude(memoryCss, "flex-direction: row", "memory css");
+  mustInclude(memoryCss, "prefers-color-scheme: dark", "memory dark mode");
 
   assert.ok(
     conversationSheet.includes("source-badge")

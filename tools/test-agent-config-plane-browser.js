@@ -146,12 +146,12 @@ async function main() {
 
     await page.goto(`${harness.baseUrl}/admin/agent-platform/`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("h1");
-    assert.match(await page.locator("h1").textContent(), /Agent 控制面/);
+    assert.match(await page.locator("h1").textContent(), /助手运行中心/);
     // 页面品牌/CSRF 头名必须来自注入而非通用默认值；写操作（下方发布链）经注入头名仍 200。
     const injectedConfig = await page.evaluate(() => window.AGENT_ADMIN_RUNTIME_CONFIG || null);
     assert.ok(injectedConfig && injectedConfig.csrfHeader === "x-fosu-csrf", `csrf header must be injected by the server: ${JSON.stringify(injectedConfig)}`);
     assert.ok(injectedConfig.brand && injectedConfig.brand !== "Agent Admin", `brand must come from injection, not the generic default: ${JSON.stringify(injectedConfig)}`);
-    assert.strictEqual(await page.title(), `Agent 控制面 · ${injectedConfig.brand}`);
+    assert.strictEqual(await page.title(), `助手运行中心 · ${injectedConfig.brand}`);
     await page.waitForFunction(() => document.querySelectorAll("[data-domain-tab]").length === 6, null, { timeout: 15000 });
 
     // 未登录访问必须跳登录页（另起无 Cookie 上下文验证）。
@@ -168,6 +168,7 @@ async function main() {
       const el = document.getElementById("configStatus");
       return el && el.textContent.indexOf("public") >= 0 && el.textContent.indexOf("cfg-public-") >= 0;
     }, null, { timeout: 15000 });
+    await page.locator("#advancedConfig summary").click();
     await page.locator('[data-domain-tab="memory"]').click();
     await page.locator("#btnLoadPublished").click();
     await page.waitForFunction(() => {
@@ -211,7 +212,7 @@ async function main() {
     await page.locator("[data-run-id]").first().click();
     await page.waitForFunction(() => {
       const el = document.getElementById("runDetail");
-      return el && el.textContent.indexOf("configVersion") >= 0 && el.querySelector("table tbody tr");
+      return el && el.textContent.indexOf("configVersion") >= 0 && el.querySelector(".timeline-item");
     }, null, { timeout: 15000 });
 
     assert.deepStrictEqual(pageErrors, [], `page errors: ${pageErrors.join("; ")}`);

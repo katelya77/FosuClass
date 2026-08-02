@@ -21,8 +21,15 @@ function noStore(res) {
   res.setHeader("Expires", "0");
 }
 
-function requestContext(body = {}) {
+function requestContext(req, body = {}) {
   const context = Object.assign({}, body.context || {});
+  const runtimeContext = req && req.agentRuntimeContext && typeof req.agentRuntimeContext === "object"
+    ? req.agentRuntimeContext
+    : {};
+  if (runtimeContext.envVersion) context.envVersion = String(runtimeContext.envVersion).slice(0, 24);
+  if (runtimeContext.miniprogramVersion) {
+    context.miniprogramVersion = String(runtimeContext.miniprogramVersion).slice(0, 24);
+  }
   if (body.memoryMode) context.memoryMode = body.memoryMode;
   if (body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
   return context;
@@ -108,7 +115,7 @@ function createRunHandlers(options = {}) {
     const principal = resolvePrincipal(req) || {};
     const input = Object.assign({
       message: String(body.message || "").trim(),
-      context: requestContext(body),
+      context: requestContext(req, body),
       protocolVersion: body.protocolVersion,
       requestId: String(body.requestId || protocol.createRequestId()).slice(0, 96),
       conversationId: String(body.conversationId || "").slice(0, 96),

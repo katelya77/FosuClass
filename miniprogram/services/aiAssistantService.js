@@ -17,6 +17,7 @@ const {
   getTodayTeachingInfo,
   getTodayWeekday,
 } = require("../utils/week");
+const { getMiniProgramEnvVersion } = require("../utils/platform");
 
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
@@ -292,18 +293,6 @@ function formatLocalIsoWithOffset(date) {
     `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`,
     `${sign}${pad(Math.floor(absOffset / 60))}:${pad(absOffset % 60)}`,
   ].join("");
-}
-
-function getMiniProgramEnvVersion() {
-  try {
-    if (wx && typeof wx.getAccountInfoSync === "function") {
-      const accountInfo = wx.getAccountInfoSync() || {};
-      return accountInfo.miniProgram && accountInfo.miniProgram.envVersion || "";
-    }
-  } catch (error) {
-    // DevTools mocks may not expose account info.
-  }
-  return "";
 }
 
 function buildScheduleFingerprint(target, courses) {
@@ -1557,6 +1546,12 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
   const fallbackReason = safeText(reason || "CLIENT_OFFLINE_FALLBACK", 120);
   const plain = isPlainOfflineIntent(canonicalIntent, source);
   const meta = metadata || {};
+  const localCards = plain ? [] : canonicalizeFallbackCards(source.cards, canonicalIntent).map((card) => {
+    const badges = Array.isArray(card.badges) ? card.badges.filter(Boolean) : [];
+    return Object.assign({}, card, {
+      badges: ["本机结果"].concat(badges.filter((badge) => badge !== "本机结果")).slice(0, 3),
+    });
+  });
   return Object.assign({}, source, {
     protocolVersion: "agent.v2",
     requestId: meta.requestId,
@@ -1568,6 +1563,13 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
     fallback: true,
     fallbackLayer: "client",
     fallbackReason,
+    resultOrigin: "local_device",
+    resultLabel: "本机结果",
+    recoveryAction: {
+      label: "联网后重新执行",
+      type: "retry",
+      payload: { message: safeText(message, 600) },
+    },
     // Product UX: plain offline greetings must not show task Evidence chrome
     presentationMode: plain ? "plain" : (source.presentationMode || ""),
     evidence: plain ? null : normalizeOfflineEvidence(source.evidence),
@@ -1582,7 +1584,7 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
     plan: [],
     steps: [],
     observations: [],
-    cards: plain ? [] : canonicalizeFallbackCards(source.cards, canonicalIntent),
+    cards: localCards,
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2) : [],
     toolCalls: plain ? [] : (Array.isArray(source.toolCalls) ? source.toolCalls : []),
     safety: Object.assign({}, source.safety || {}, {
@@ -1784,6 +1786,67 @@ async function offlineChat(message, context, options = {}) {
   return buildSmalltalkResponse(message, localContext, route);
 }
 
+function isOfflineNetworkRequiredTask(message) {
+  const text = String(message || "").trim();
+  if (!text) return false;
+  return /(总结|分析|改写|翻译).*(论文|文件|链接|网页|附件)|(?:发送|发).*(邮件|短信|消息)|(?:生成|写).*(代码|长文|报告|申请书)/i.test(text);
+}
+
+function getLocalCapabilityStatus(context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  const courses = Array.isArray(summary.courses) ? summary.courses : [];
+  const capabilities = [];
+  if (summary.enabled === true && courses.length) capabilities.push("personal_schedule");
+  if (safeText(context.releaseVersion || context.release && context.release.releaseVersion, 96)) {
+    capabilities.push("cached_release_pack");
+  }
+  if (Number(context.currentTeachingWeek || 0) > 0) capabilities.push("cached_teaching_week");
+  const canExecute = capabilities.length > 0;
+  return {
+    canExecute,
+    capabilities,
+    statusText: canExecute ? "网络异常 · 本地可用" : "离线 · 仅可查看已缓存页面",
+    detailText: canExecute
+      ? "可继续使用本机课表、已缓存 Release Pack 与确定性校园入口；联网任务可稍后重试。"
+      : "未检测到可执行的本机数据工具；仍可打开页面查看已有缓存，联网任务不会被伪装成成功。",
+  };
+}
+
+function buildOfflineNetworkRequiredResponse(message) {
+  return {
+    success: false,
+    status: "failed",
+    answer: "这个任务需要联网并由服务端安全执行；当前只能使用本机已缓存的校园能力。网络恢复后可一键重新执行原问题。",
+    cards: [{
+      type: "generic",
+      variant: "error",
+      title: "此任务需要联网",
+      subtitle: "未生成内容，也没有伪装成服务端任务。",
+      badges: ["未执行"],
+      items: [],
+      actions: [],
+    }],
+    suggestions: ["打开全校课表", "打开空教室"],
+    toolCalls: [],
+    evidence: null,
+    externalProviderUsed: false,
+    errors: [{ code: "LOCAL_TASK_REQUIRES_NETWORK" }],
+    safety: {
+      provider: "local-device",
+      resolvedProvider: "local-device",
+      externalProviderUsed: false,
+      mode: "offline-fallback",
+    },
+    metrics: {
+      intentName: "offline_network_required",
+      canonicalIntent: "conversational_help",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: 0,
+    },
+  };
+}
+
 function isCompatibleAgentResponse(response) {
   return Boolean(
     response &&
@@ -1797,6 +1860,12 @@ function isClientFallbackTransportError(error) {
   if ([
     "NETWORK",
     "NETWORK_UNAVAILABLE",
+    "NETWORK_OFFLINE",
+    "DNS_FAILED",
+    "TLS_FAILED",
+    "WECHAT_DOMAIN_NOT_ALLOWED",
+    "WECHAT_NETWORK_REQUEST_FAILED",
+    "CONNECT_TIMEOUT",
     "TIMEOUT",
     "REQUEST_TIMEOUT",
     "HTTP_5XX",
@@ -1851,15 +1920,23 @@ async function buildClientFallback(message, resolvedContext, options, metadata, 
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
   let response;
   try {
-    response = await offlineChat(message, resolvedContext, Object.assign({}, options, {
-      offlineReason: reason,
-    }));
+    response = isOfflineNetworkRequiredTask(message)
+      ? buildOfflineNetworkRequiredResponse(message)
+      : await offlineChat(message, resolvedContext, Object.assign({}, options, {
+        offlineReason: reason,
+      }));
   } catch (offlineError) {
     response = buildSmalltalkResponse(message, localContext, route);
     response.answer = "当前服务端和本地数据工具暂时不可用。你仍可打开课表、个人课表同步、校园地图或空教室页面查看已缓存内容。";
     response.suggestions = ["打开全校课表", "打开个人课表同步", "打开校园地图"];
   }
   return standardizeClientFallback(response, message, route, reason, metadata);
+}
+
+function buildClientFallbackForTest(message, context, reason) {
+  const resolvedContext = context || buildClientContext();
+  const metadata = createAgentRequestMetadata(resolvedContext, {});
+  return buildClientFallback(message, resolvedContext, {}, metadata, reason || "NETWORK_UNAVAILABLE");
 }
 
 async function chat(message, context, options = {}) {
@@ -1909,6 +1986,7 @@ module.exports = {
   PENDING_CLARIFICATION_KEY,
   USER_PREFERENCES_KEY,
   buildClientContext,
+  buildClientFallbackForTest,
   buildProactiveWorkspace,
   buildSmalltalkResponse,
   standardizeClientFallback,
@@ -1921,6 +1999,7 @@ module.exports = {
   setUserPreference,
   formatLocalIsoWithOffset,
   getAiHistory,
+  getLocalCapabilityStatus,
   getLatestScheduleImport,
   getPendingClarification,
   getRememberedPersonalization,
