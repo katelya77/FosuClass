@@ -19,6 +19,73 @@ function asTime(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isExternalProvider(value) {
+  const provider = safeText(value, 40).toLowerCase();
+  return Boolean(provider) && provider !== "mock" && provider !== "none";
+}
+
+function operationalReason(value, fallback = "PROVIDER_UNVERIFIED") {
+  const text = safeText(value, 240);
+  if (!text) return fallback;
+  const match = text.match(/(?:PROVIDER|RUNTIME|HTTP|SESSION|RUN|TOOL|MEMORY)_[A-Z0-9_]+/);
+  return safeText(match ? match[0] : text, 80) || fallback;
+}
+
+function evaluateProviderDecisionProbe(input = {}) {
+  const requestId = safeText(input.requestId, 96);
+  const payload = input.payload && typeof input.payload === "object" ? input.payload : {};
+  const safety = payload.safety && typeof payload.safety === "object" ? payload.safety : {};
+  const stages = payload.providerStages && typeof payload.providerStages === "object" ? payload.providerStages : {};
+  const decisionStage = stages.understanding && typeof stages.understanding === "object"
+    ? stages.understanding
+    : {};
+  const events = (Array.isArray(input.events) ? input.events : []).filter((event) => {
+    if (!event || safeText(event.requestId, 96) !== requestId) return false;
+    const stage = safeText(event.stage, 40).toLowerCase();
+    return (stage === "decision" || stage === "understanding") && isExternalProvider(event.provider);
+  });
+  const completedEvent = events.find((event) => event.ok === true || safeText(event.status, 24).toLowerCase() === "success") || null;
+  const failedEvent = events.find((event) => event.ok === false || safeText(event.status, 24).toLowerCase() === "failed") || null;
+  const stageProvider = safeText(decisionStage.provider, 40);
+  const completedProvider = safeText(completedEvent && completedEvent.provider, 40);
+  const provider = completedProvider
+    || stageProvider
+    || safeText(failedEvent && failedEvent.provider, 40)
+    || safeText(safety.resolvedProvider || safety.provider, 40)
+    || "mock";
+  const attempted = decisionStage.attempted === true
+    || safety.externalProviderUsed === true
+    || events.length > 0;
+  const completed = decisionStage.completed === true && isExternalProvider(stageProvider);
+  const durableCompletionRecorded = Boolean(completedEvent);
+  const providerMismatch = completed && durableCompletionRecorded
+    && stageProvider.toLowerCase() !== completedProvider.toLowerCase();
+  const passed = completed && durableCompletionRecorded && !providerMismatch;
+  let reasonCode = "OK";
+  if (!passed) {
+    if (providerMismatch) reasonCode = "PROVIDER_TRUTH_MISMATCH";
+    else if (completed && !durableCompletionRecorded) reasonCode = "PROVIDER_COMPLETION_NOT_RECORDED";
+    else if (!completed && durableCompletionRecorded) reasonCode = "PROVIDER_COMPLETION_NOT_REFLECTED";
+    else if (failedEvent) reasonCode = operationalReason(failedEvent.reasonCode);
+    else if (decisionStage.reasonCode) reasonCode = operationalReason(decisionStage.reasonCode);
+    else if (safety.fallbackReason) reasonCode = operationalReason(safety.fallbackReason);
+    else if (attempted) reasonCode = "PROVIDER_ATTEMPT_INCOMPLETE";
+    else reasonCode = "PROVIDER_UNVERIFIED";
+  }
+  return Object.freeze({
+    passed,
+    reasonCode,
+    details: Object.freeze({
+      provider,
+      attempted,
+      completed,
+      durableCompletionRecorded,
+      providerMismatch,
+      requestId,
+    }),
+  });
+}
+
 function runtimeProbeId(event) {
   const material = [event.at, event.provider, event.stage, event.kind, event.status, event.reason].join("|");
   return `probe_${crypto.createHash("sha256").update(material).digest("hex").slice(0, 20)}`;
@@ -142,6 +209,7 @@ function getDefaultService() {
 
 module.exports = {
   createProviderOperationsLogService,
+  evaluateProviderDecisionProbe,
   findLatestDurableProviderAttempt,
   list(query) { return getDefaultService().list(query); },
 };
