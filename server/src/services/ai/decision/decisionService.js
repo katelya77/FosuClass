@@ -2,6 +2,7 @@ const {
   EXECUTION_POLICIES,
   classifyFallbackEligibility,
   createDeadline,
+  deriveProviderStageLease,
   normalizeDecisionContract,
   resolveExecutionPolicy,
 } = require("../../../../../packages/provider-runtime");
@@ -188,6 +189,13 @@ function createDecisionService(options = {}) {
     const skills = skillOptions(input.skillCatalog || skillCatalog, runtimeMode);
     const validatorOptions = validationOptions(skills);
     const providers = resolveDecisionProviders(runtimeMode, input.providerRuntimeConfig || {});
+    const decisionBudgetMs = Math.max(1, Number(input.decisionBudgetMs || 3500) || 3500);
+    const providerLease = deriveProviderStageLease({
+      outerBudgetMs: decisionBudgetMs,
+      finishReserveMs: Math.max(0, Number(input.finishReserveMs || 500) || 0),
+      selection: providers,
+      providerAttemptLedger: input.providerAttemptLedger || null,
+    });
     const startedAt = Date.now();
     try {
       if (!providers.intendedProvider) throw codedError("DECISION_PROVIDER_UNAVAILABLE", "No external Decision Provider is configured");
@@ -198,8 +206,8 @@ function createDecisionService(options = {}) {
         intendedProvider: providers.intendedProvider,
         fallbackProvider: providers.fallbackProvider,
         deadline: input.deadline || createDeadline({ timeoutMs: 15000 }),
-        stageCapMs: Math.max(1, Number(input.decisionBudgetMs || 3500) || 3500),
-        finishReserveMs: Math.max(0, Number(input.finishReserveMs || 500) || 0),
+        stageCapMs: providerLease.stageCapMs,
+        finishReserveMs: providerLease.finishReserveMs,
         signal: input.signal || null,
         providerAttemptLedger: input.providerAttemptLedger || null,
         request: {

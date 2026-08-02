@@ -40,6 +40,8 @@
 - 生产 trial “你好”稳定复现回复阶段 `STAGE_TIMEOUT → run.failed`，证明首次部署成功不等于体验效果通过；热修复使用真实 Provider Runtime 定时器建立 RED 测试后再实现预算预留。
 - 热修复聚焦测试：`node tools/test-agent-fallback-eligibility.js` 在修复前以 `ABORTED` 失败，修复后通过；`test-response-provider-runtime`、`test-agent-deadline-runtime`、`test-provider-runtime-contracts` 均通过。
 - Provider 配置步骤在首次部署工作流中被跳过，真实 Probe 仍未执行；`memoryAvailable=false` 仍是线上事实。
+- PR #45 的 response 热修复已部署为 `5819e949a63744ad8602e953bcf62d1c3fd2cc15`，部署流水线再次成功；随后生产 trial Run 在 Decision 阶段复现同构 `STAGE_TIMEOUT`，因此仍未判定体验效果通过。
+- 第二个 RED 用例使用两个真实慢 Provider Runtime adapter 和父 Decision signal，修复前稳定抛 `ABORTED`；共享 Decision/Response stage lease 后返回 `deterministic_fallback`，并保留两次 `PROVIDER_TIMEOUT` 路径事实。
 
 - 代码测试：已通过上述自动化。
 - Mock/故障注入：Provider timeout/401/429、DNS/TLS/微信通用网络失败等使用结构化故障注入，只证明分类与 UI 契约。
@@ -48,7 +50,7 @@
 - 微信 DevTools：未执行上传/预览；体验版外部门禁未通过。
 - 真机：未执行；iOS 5G/Wi-Fi、前后台、断网恢复均待人工验收。
 - 体验版：未上传，原因见上。
-- 生产：PR #44 已合并并成功部署；由于随后发现 trial 问候回复阶段超时，当前效果状态为“热修复待门禁、合并和再次部署”，尚未完成最终 15 分钟观察。
+- 生产：PR #44 与 response 热修复 PR #45 均已合并并成功部署；Decision/Response 共享预算修复待门禁、合并和再次部署，尚未完成最终 15 分钟观察。
 
 ## 回滚
 

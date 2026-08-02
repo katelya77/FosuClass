@@ -33,6 +33,8 @@ provider.started (understanding)
 
 热修复为响应 Provider 分配严格小于外层回复阶段的 lease，并预留有上限的完成时间。它不改变 `strict_model_first`，不放宽 Session/capability authorization，也不吞掉配置、鉴权或用户取消错误；只让 timeout/network/429/5xx 等既有 fallback-eligible 失败有时间返回真实的确定性结果。
 
+该响应阶段热修复部署为 `main@5819e949a63744ad8602e953bcf62d1c3fd2cc15` 后，trial “你好”不再到达 response，而是在更早的 Decision Provider 阶段出现同构的父/子预算竞争：`provider.started → stage.failed → run.failed`。这证明问题不是某个 composer catch，而是 Decision 与 Response 两个 Provider 子阶段没有共同遵守“子链必须早于父阶段结束”的不变量。最终修复把 attempt-count 与 lease 计算下沉到既有 `provider-runtime/deadline`，由两个阶段共同使用。
+
 ## 证据链
 
 ### 线上入口当前可达
@@ -92,6 +94,7 @@ run client --------(missing)----> run route --------public/default
 - `MemoryController.commit` 和最终 User Memory 写入边界统一经过 `memorySemanticValidator`，并对明显无效旧数据做幂等失效迁移和审计。
 - Run 监控改读持久化 Run/Event/Trace Store，进程重启后仍可查询。
 - 回复 Provider 的执行预算小于外层 response stage，Provider timeout 先进入统一分类器，确定性 fallback 可以在外层硬截止前完成。
+- Decision 与 Response 共用 Provider stage lease；主/备用链共享父阶段可用窗口并保留收尾时间。
 
 ## 未经验证的外部环节
 
