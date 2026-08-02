@@ -55,6 +55,7 @@ const runtimeModeService = require("../services/ai/runtimeModeService");
 const { createPlatformAdminHandlers } = require("../../../apps/agent-admin");
 const aiProviderConfigService = require("../services/ai/providerConfigService");
 const providerChainService = require("../services/ai/providerChainService");
+const providerOperationsLogService = require("../services/ai/providerOperationsLogService");
 const evaluationService = require("../services/ai/evaluationService");
 const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
 const { createKnowledgeControlPlane } = require("../services/ai/knowledgeControlPlane");
@@ -548,17 +549,23 @@ router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
   });
 });
 
-// 进程内调用日志（仅元信息：provider/阶段/耗时/成败分类），供后台"调用日志"窗口实时展示。
-router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
+// 持久化 Run/Event + 非 Run Probe 元信息；绝不返回消息正文、身份或密钥。
+router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const limit = Math.max(1, Math.min(120, Number(req.query && req.query.limit) || 60));
-  return res.json({
-    success: true,
-    data: {
-      events: providerChainService.getRecentCallEvents(limit),
-      checkedAt: new Date().toISOString(),
-    },
-  });
+  try {
+    const data = await providerOperationsLogService.list({
+      limit,
+      after: req.query && req.query.after,
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(503).json({
+      success: false,
+      code: "PROVIDER_LOG_UNAVAILABLE",
+      message: "Provider 调用记录暂时不可读取。",
+    });
+  }
 });
 
 router.get("/agent-platform/topology", adminAuth.verifyAdminAccess, platformAdminHandlers.getTopology);

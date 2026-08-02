@@ -80,13 +80,39 @@ function createProviderAdapters(options = {}) {
   }).filter(Boolean);
 }
 
+function configFlag(runtimeConfig, key, fallback = false) {
+  const source = runtimeConfig || {};
+  const raw = Object.prototype.hasOwnProperty.call(source, key) ? source[key] : process.env[key];
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  return String(raw).trim().toLowerCase() === "true";
+}
+
+function supportsStage(name, stage, runtimeConfig = {}) {
+  const provider = providerChainService.getProviderModule(name);
+  if (!provider) return false;
+  if (stage === "response") return typeof provider.generate === "function";
+  if (stage !== "decision") return typeof provider.generateStructured === "function";
+  if (typeof provider.generateStructured !== "function") return false;
+  if (name === "coze" && typeof provider.getConfig === "function") {
+    const config = provider.getConfig(runtimeConfig);
+    if (config && config.apiMode === "workload") {
+      // 普通 Coze 工作流返回面向用户的答案流，不保证 DecisionContract JSON。
+      // 只有经过专门结构化设计和真实 Probe 的工作流才可显式加入 Decision。
+      return configFlag(runtimeConfig, "COZE_STRUCTURED_DECISION_ENABLED", false);
+    }
+  }
+  return true;
+}
+
 function resolveStageProviders(stage, runtimeMode, runtimeConfig = {}) {
   if (String(runtimeMode || "public") === "public") {
     return Object.freeze({ intendedProvider: "", fallbackProvider: "", chain: Object.freeze([]) });
   }
   const chain = providerChainService.resolveStageChain(stage, runtimeConfig, runtimeMode)
     .map((name) => providerChainService.normalizeProviderName(name))
-    .filter((name) => name && name !== "mock" && PROVIDER_IDS.includes(name));
+    .filter((name) => name && name !== "mock" && PROVIDER_IDS.includes(name))
+    .filter((name) => providerChainService.isProviderConfigured(name, runtimeConfig))
+    .filter((name) => supportsStage(name, stage, runtimeConfig));
   const unique = Array.from(new Set(chain)).slice(0, 2);
   return Object.freeze({
     intendedProvider: unique[0] || "",
@@ -115,6 +141,7 @@ const keepAliveRegistry = createKeepAliveRegistry({ maxSockets: 32, maxFreeSocke
 const providerRuntime = createProviderRuntime({
   adapters: createProviderAdapters(),
   metrics,
+  onEvent: providerChainService.observeRuntimeEvent,
 });
 
 function getProviderRuntime() {
@@ -136,4 +163,5 @@ module.exports = {
   resolveDecisionProviders,
   resolveResponseProviders,
   resolveStageProviders,
+  supportsStage,
 };

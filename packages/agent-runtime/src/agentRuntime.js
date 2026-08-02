@@ -10,7 +10,7 @@ const {
 const DEFAULT_STAGE_BUDGETS = Object.freeze({
   simple: Object.freeze({
     context: 1000,
-    decision: 3500,
+    decision: 6500,
     skillTool: 1200,
     verification: 500,
     response: 800,
@@ -19,7 +19,7 @@ const DEFAULT_STAGE_BUDGETS = Object.freeze({
   }),
   multi: Object.freeze({
     context: 1000,
-    decision: 3500,
+    decision: 6500,
     skillTool: 5500,
     verification: 1000,
     response: 1500,

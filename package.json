@@ -668,7 +668,7 @@
     "test:xiaofu-product-experience": "node tools/test-xiaofu-product-experience.js",
     "test:agent-e2e-matrix": "node tools/test-agent-e2e-matrix.js",
     "test:agent-final-convergence": "node tools/run-agent-final-convergence-tests.js",
-    "test:agent-reliability-convergence": "node tools/test-agent-env-version-propagation.js && node tools/test-agent-real-device-diagnostics-contract.js && node tools/test-agent-local-tool-fallback.js && node tools/test-agent-memory-semantic-validator.js && node tools/test-agent-memory-invalid-migration.js && node tools/test-agent-admin-operations-dashboard.js && node tools/test-agent-admin-durable-run-query.js && node tools/test-agent-campus-product-scenarios.js",
+    "test:agent-reliability-convergence": "node tools/test-agent-env-version-propagation.js && node tools/test-agent-real-device-diagnostics-contract.js && node tools/test-agent-local-tool-fallback.js && node tools/test-agent-memory-semantic-validator.js && node tools/test-agent-memory-invalid-migration.js && node tools/test-agent-provider-stage-capabilities.js && node tools/test-agent-provider-live-operations.js && node tools/test-agent-admin-live-controller.js && node tools/test-agent-admin-operations-dashboard.js && node tools/test-agent-admin-durable-run-query.js && node tools/test-agent-campus-product-scenarios.js",
     "test:agent-release-gate": "node tools/run-agent-release-gate.js",
     "test:open-schedule-goal": "node tools/test-open-schedule-goal.js",
     "test:agui-adapter": "node tools/test-agui-adapter.js",

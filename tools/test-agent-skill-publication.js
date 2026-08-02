@@ -240,10 +240,10 @@ async function testModelPathValidateUsesBoundCatalog() {
       const validated = input.validate(contract);
       return {
         contract: validated,
-        provider: "primary",
-        intendedProvider: "primary",
-        actualFirstProvider: "primary",
-        fallbackPath: ["primary:success"],
+        provider: "deepseek",
+        intendedProvider: "deepseek",
+        actualFirstProvider: "deepseek",
+        fallbackPath: ["deepseek:success"],
       };
     },
   };
@@ -256,7 +256,12 @@ async function testModelPathValidateUsesBoundCatalog() {
     message: "现在第几教学周？",
     runtimeMode: "trial",
     executionPolicy: "strict_model_first",
-    providerRuntimeConfig: { AI_AGENT_ENABLED: "true", AI_PROVIDER: "primary" },
+    providerRuntimeConfig: {
+      AI_AGENT_ENABLED: "true",
+      AI_PROVIDER: "deepseek",
+      AI_DECISION_PROVIDER: "deepseek",
+      DEEPSEEK_API_KEY: "unit-test-placeholder",
+    },
     context: {},
     skillCatalog: boundCatalog,
     contextView: {

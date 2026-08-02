@@ -18,6 +18,18 @@ function errorCode(error) {
   return String(error && error.code || "PROVIDER_FAILED").replace(/[^A-Z0-9_.-]/gi, "_").slice(0, 80) || "PROVIDER_FAILED";
 }
 
+function operationalReasonCode(code, classification = {}) {
+  const byClass = {
+    auth: "PROVIDER_UNAUTHORIZED",
+    rate_limited: "PROVIDER_RATE_LIMITED",
+    timeout: "PROVIDER_TIMEOUT",
+    network: "PROVIDER_NETWORK",
+    server_error: "PROVIDER_SERVER_ERROR",
+    config: "PROVIDER_NOT_CONFIGURED",
+  };
+  return byClass[classification.failureClass] || code;
+}
+
 function parsePayload(payload) {
   if (typeof payload === "string") return JSON.parse(payload);
   if (payload && typeof payload === "object") {
@@ -43,6 +55,7 @@ function createProviderRuntime(options = {}) {
   const failureThreshold = Math.max(1, Number(options.failureThreshold || 3) || 3);
   const circuitCooldownMs = Math.max(100, Number(options.circuitCooldownMs || 30000) || 30000);
   const circuits = new Map();
+  const runtimeObserver = typeof options.onEvent === "function" ? options.onEvent : null;
 
   function circuit(provider) {
     if (!circuits.has(provider)) circuits.set(provider, { failures: 0, openedAt: 0, lastFailureCode: "" });
@@ -75,8 +88,13 @@ function createProviderRuntime(options = {}) {
   }
 
   function emit(onEvent, event) {
-    if (typeof onEvent !== "function") return;
-    try { onEvent(Object.freeze(event)); } catch (error) { /* observability cannot change execution */ }
+    const frozen = Object.freeze(event);
+    const observers = [];
+    if (runtimeObserver) observers.push(runtimeObserver);
+    if (typeof onEvent === "function" && onEvent !== runtimeObserver) observers.push(onEvent);
+    observers.forEach((observer) => {
+      try { observer(frozen); } catch (error) { /* observability cannot change execution */ }
+    });
   }
 
   async function invokeAttempt(input, provider, fallback, beforeAttempt = null) {
@@ -130,12 +148,13 @@ function createProviderRuntime(options = {}) {
       const code = errorCode(error);
       const durationMs = Math.max(0, clock.now() - startedAt);
       const cancelled = code === "ABORTED";
-      if (!cancelled) markFailure(provider, code);
+      const classification = classifyFallbackEligibility(error);
+      const reasonCode = operationalReasonCode(code, classification);
+      if (!cancelled) markFailure(provider, reasonCode);
       metrics.record(input.stage, { durationMs, outcome: cancelled ? "cancelled" : "failed", fallback });
-      emit(input.onEvent, { type: "provider.failed", provider, stage: input.stage, status: "failed", latencyMs: durationMs, reasonCode: code, providerUsed: true, fallback });
+      emit(input.onEvent, { type: "provider.failed", provider, stage: input.stage, status: "failed", latencyMs: durationMs, reasonCode, providerUsed: true, fallback });
       // P2R：每次尝试的失败分类随 codedError 透传（failureClass/fallbackEligible/failFast），
       // Trace 统一落点由 Wave 2 收尾。
-      const classification = classifyFallbackEligibility(error);
       throw codedError(code, error && error.message, {
         cause: error,
         attempted: true,

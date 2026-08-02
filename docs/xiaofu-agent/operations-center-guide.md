@@ -13,6 +13,8 @@
 
 “暂无样本”表示没有足够的持久化事件，不能解释为 0ms 或 100% 成功。`providerVerified=false` 时，即使凭据存在，也不能写“已验证”。
 
+`Decision / Response` 会分别显示语义决策与回答组织阶段的真实选择；“最近实际调用”按当前环境从持久化 Runtime 尝试事件恢复，并同时显示成功、失败或进行中状态，不再用主配置名冒充最近调用。部署 SHA 优先读取部署流程实际注入的 `FOSU_DEPLOY_COMMIT_SHA`。
+
 ## 一键诊断
 
 Smoke Test 的每一项显示验证类型、通过状态、耗时、reasonCode 和时间：
@@ -32,6 +34,10 @@ public 的 Provider 测试应显示“跳过/public 禁止外部调用”，不�
 
 列表不默认展示完整用户原文、OpenID、个人课表或私人记忆。点击一条 Run 后显示真实时间轴；失败阶段突出，并依据 reasonCode 给处理建议。服务重启后历史 Run 仍应存在。
 
+页面可见时，运行概览每 5 秒、Run 每 3 秒更新；切到其他标签页会暂停轮询，恢复可见后立即补拉。首屏只并行读取这两组运行事实，高级配置在首次展开后才加载，不再阻塞概览。助手运行中心是后台内嵌模块，因此页内不提供“返回后台”链接，也不会把后台首页导航进 iframe。
+
+“查询服务”的调用日志每 2 秒增量读取 durable Run/Event Store，并合并不属于 Run 的真实 Probe。每条记录可显示脱敏的 runId/requestId、Provider、阶段、耗时和 reasonCode；进程重启不会清空已经持久化的 Run 事件。页面隐藏时同样暂停轮询。
+
 ## 记忆运行状态与能力管理
 
 记忆区只显示后端、可用性、写入/失败、冲突、无效候选拒绝、迁移、scope 计数和 TTL 清理等聚合事实，不浏览私人内容。
@@ -46,6 +52,8 @@ public 的 Provider 测试应显示“跳过/public 禁止外部调用”，不�
 
 - readiness 可达但 Run 失败：按 requestId 查询 Run，先看 Session、environment/configVersion，再看 failureLayer。
 - configured=true、verified=false：执行对应环境的真实 Provider Probe；不要先改成 reachable。
+- `PROVIDER_UNAUTHORIZED`：更新该环境的 Provider Token/API Key 后重新 Probe；代码不能把无效凭据修成有效。
+- Coze workload 可达但 Decision 仍降级：普通工作流只适合 Response；只有专门返回严格 DecisionContract JSON 且已真实验证的工作流才可开启 `COZE_STRUCTURED_DECISION_ENABLED=true`。
 - Run create 有记录但客户端报网络错：确认客户端已包含 HTTP 202 修复，并检查 poll token/header 是否被反代丢弃。
 - Memory unavailable：本机记忆仍可浏览；检查持久化后端、密钥和最近写入错误，不要把 cloud_sync 显示为成功。
 - 没有 Run：先检查小程序诊断中的 API host、Session、Run create requestId，再核对 Cloudflare/OpenResty 日志。
