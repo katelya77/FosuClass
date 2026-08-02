@@ -300,6 +300,33 @@ function extractPendingQuery(message, type) {
   return type === "teacher" ? (stripPersonHonorifics(cleaned) || cleaned) : cleaned;
 }
 
+function buildSchoolSearchSlots(type, query, extra = {}) {
+  const q = normalizeText(query);
+  const slots = Object.assign({ type, q }, extra);
+  if (type !== "class" || !q) return slots;
+  const index = releaseService.readActiveIndex("class") || {};
+  const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+  const resolution = classAliasResolver.resolveClass(q, items);
+  const normalized = classAliasResolver.normalizeClassEntity(q) || q;
+  const spokenNumeralsNormalized = normalized !== q;
+  slots.q = normalized;
+  if (resolution.status === "unique" && resolution.match) {
+    const match = resolution.match;
+    // Preserve an established Arabic shorthand (for example 25动医6班) in
+    // multi-turn memory, while spoken Chinese numerals use the fact-source name.
+    if (spokenNumeralsNormalized) slots.q = String(match.name || match.className || slots.q);
+    const preferredId = String(match.id || match.detailId || "");
+    if (preferredId) slots.preferredId = preferredId;
+  } else if (resolution.status === "ambiguous") {
+    slots.candidates = (resolution.candidates || []).slice(0, 5).map((item) => ({
+      detailId: String(item.id || item.detailId || ""),
+      name: String(item.name || item.className || ""),
+      type: "class",
+    }));
+  }
+  return slots;
+}
+
 function resolvePendingClarificationIntent(message, context = {}) {
   const pending = getPendingClarification(context);
   if (!pending || isCompleteNewTask(message)) return null;
@@ -307,12 +334,10 @@ function resolvePendingClarificationIntent(message, context = {}) {
   if (needsClarification(pending.type, q)) return null;
   return {
     name: "search_school_index",
-    slots: {
-      type: pending.type,
-      q,
+    slots: buildSchoolSearchSlots(pending.type, q, {
       filledFromPendingClarification: true,
       missing: pending.missing,
-    },
+    }),
   };
 }
 
@@ -402,7 +427,7 @@ function resolveIntentChinese(message, context = {}) {
     if (needsClarification(type, q)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
     }
-    return { name: "search_school_index", slots: { type, q } };
+    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q) };
   }
   return null;
 }
@@ -955,7 +980,7 @@ function resolveIntent(message, context = {}) {
     if (needsClarification(type, q)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
     }
-    return { name: "search_school_index", slots: { type, q } };
+    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q) };
   }
   if (isConversationalHelp(text)) {
     return { name: "conversational_help", slots: {} };

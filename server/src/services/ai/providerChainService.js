@@ -213,6 +213,7 @@ function markSuccess(name, latencyMs, meta = {}) {
   item.latencies = item.latencies.concat(latencyMs).slice(-100);
   recordCallEvent({
     provider: publicProviderName(name),
+    status: "success",
     ok: true,
     latencyMs: Math.max(0, Math.round(Number(latencyMs) || 0)),
     kind: String(meta.kind || "").slice(0, 24),
@@ -264,6 +265,7 @@ function markFailure(name, reason, meta = {}) {
   }
   recordCallEvent({
     provider: publicProviderName(name),
+    status: "failed",
     ok: false,
     latencyMs: Math.max(0, Math.round(Number(meta.latencyMs) || 0)),
     reason: String(reason || "").slice(0, 80),
@@ -284,6 +286,39 @@ function recordCallEvent(entry) {
 function getRecentCallEvents(limit = 60) {
   const size = Math.max(1, Math.min(CALL_LOG_LIMIT, Number(limit) || 60));
   return callLog.slice(-size).reverse();
+}
+
+/**
+ * 接收 packages/provider-runtime 的真实尝试事件，维护旧 readiness/status
+ * 投影。只消费固定字段，不接收 prompt、响应正文、Principal 或凭据。
+ */
+function observeRuntimeEvent(event = {}) {
+  const type = String(event.type || "");
+  const name = normalizeProviderName(event.provider);
+  if (!name || name === "mock") return;
+  const stage = String(event.stage || "").slice(0, 24);
+  if (type === "provider.started") {
+    recordCallEvent({
+      provider: publicProviderName(name),
+      status: "started",
+      ok: null,
+      latencyMs: 0,
+      kind: "runtime",
+      stage,
+    });
+    return;
+  }
+  if (type === "provider.completed") {
+    markSuccess(name, Math.max(0, Number(event.latencyMs || 0) || 0), { kind: "runtime", stage });
+    return;
+  }
+  if (type === "provider.failed") {
+    markFailure(name, String(event.reasonCode || "PROVIDER_FAILED").slice(0, 80), {
+      kind: "runtime",
+      stage,
+      latencyMs: Math.max(0, Number(event.latencyMs || 0) || 0),
+    });
+  }
 }
 
 function emitProviderEvent(options, event) {
@@ -648,6 +683,7 @@ module.exports = {
   isProviderConfigured,
   isProviderVerified,
   normalizeProviderName,
+  observeRuntimeEvent,
   probeProvider,
   resetCircuitState,
   resolveStageChain,
