@@ -582,6 +582,24 @@ button::after {
   border: 1rpx solid rgba(194, 120, 40, 0.18);
 }
 
+.fallback-retry {
+  display: inline-flex;
+  align-items: center;
+  margin: 10rpx 0 0;
+  padding: 0;
+  min-height: 40rpx;
+  border: 0;
+  background: transparent;
+  color: #9a3412;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.fallback-retry::after {
+  border: 0;
+}
+
 
 
 .send-btn.icon-send {

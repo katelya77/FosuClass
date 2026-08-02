@@ -52,6 +52,8 @@ async function executePlanner(input = {}) {
     requestId,
     conversationId,
     runId,
+    environment: input.environment || runtimeMode,
+    configVersion: input.configVersion || "",
     protocolVersion,
     onEvent,
     signal: input.signal || null,

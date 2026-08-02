@@ -2,15 +2,7 @@
  * Client-safe Agent readiness probe.
  */
 const request = require("../utils/request");
-
-function getEnvVersion() {
-  try {
-    const info = wx.getAccountInfoSync && wx.getAccountInfoSync();
-    return String(info && info.miniProgram && info.miniProgram.envVersion || "release");
-  } catch (error) {
-    return "release";
-  }
-}
+const platform = require("../utils/platform");
 
 function statusCopy(statusMachine) {
   switch (String(statusMachine || "")) {
@@ -30,7 +22,7 @@ function statusCopy(statusMachine) {
 
 async function fetchReadiness() {
   try {
-    const envVersion = encodeURIComponent(getEnvVersion());
+    const envVersion = encodeURIComponent(platform.getMiniProgramEnvVersion());
     const response = await request.get(`/api/ai/agent/readiness?envVersion=${envVersion}`, {}, {
       showLoading: false,
       silentError: true,
@@ -60,13 +52,23 @@ async function fetchReadiness() {
       enhancedMode: response.enhancedMode || "disabled",
       authorization: response.authorization || "allowed",
       providerConfigured: response.providerConfigured === true,
+      configuredAvailable: response.configuredAvailable === true,
+      providerVerified: response.providerVerified === true,
       providerReachable: response.providerReachable === true,
+      provider: response.provider || response.providerName || "",
+      configVersion: response.configVersion || "",
+      lastProbeAt: response.lastProbeAt || "",
+      lastSuccessAt: response.lastSuccessAt || "",
+      lastFailureAt: response.lastFailureAt || "",
+      circuitState: response.circuitState || "unknown",
       memoryAvailable: response.memoryAvailable === true,
       runEventsSupported: response.runEventsSupported !== false,
       reasonCode: response.reasonCode || "",
+      requestId: response.requestId || "",
       checkedAt: response.checkedAt || new Date().toISOString(),
     }, statusCopy(statusMachine));
   } catch (error) {
+    const reasonCode = error && (error.reasonCode || error.code) || "WECHAT_NETWORK_REQUEST_FAILED";
     return {
       ok: false,
       network: "unknown",
@@ -74,7 +76,12 @@ async function fetchReadiness() {
       runtimeMode: "public",
       enhancedMode: "disabled",
       statusMachine: "server_unreachable",
-      reasonCode: "SERVER_UNREACHABLE",
+      reasonCode,
+      failureLayer: error && error.failureLayer || "network",
+      statusCode: Number(error && error.statusCode || 0) || 0,
+      elapsedMs: Number(error && error.elapsedMs || 0) || 0,
+      requestId: error && error.requestId || "",
+      safeErrMsg: error && error.safeErrMsg || "",
       checkedAt: new Date().toISOString(),
       label: "服务不可达",
       className: "warn",

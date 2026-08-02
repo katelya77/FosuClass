@@ -48,7 +48,11 @@ function getAgentRunHandlers() {
 }
 
 function bindRuntimeDecision(req) {
-  req.agentRuntimeDecision = resolveRequestRuntimeDecision(req, req.body && req.body.context || {});
+  req.agentRuntimeContext = resolveRequestRuntimeContext(req);
+  req.agentRuntimeDecision = runtimeModeService.resolveRuntimeMode({
+    context: req.agentRuntimeContext,
+    serverSession: req.fosuSession || null,
+  });
 }
 
 function requireSessionGuard(req, res, next) {
@@ -136,22 +140,30 @@ function handleDurableError(res, error) {
  * Resolve request-scoped runtime mode for memory/run APIs.
  * Never trust client-supplied runtimeMode as authorization; use session + envVersion.
  */
-function resolveRequestRuntimeDecision(req, extraContext = {}) {
+function resolveRequestRuntimeContext(req, extraContext = {}) {
   const bodyContext = req.body && req.body.context && typeof req.body.context === "object"
     ? req.body.context
     : {};
-  const context = Object.assign({}, bodyContext, extraContext, {
-    envVersion: extraContext.envVersion
-      || req.query.envVersion
-      || req.headers["x-fosu-env-version"]
+  const query = req.query || {};
+  const headers = req.headers || {};
+  const envVersion = headers["x-fosu-env-version"]
+      || extraContext.envVersion
+      || query.envVersion
       || bodyContext.envVersion
       || bodyContext.miniprogramVersion
-      || "",
-    miniprogramVersion: extraContext.miniprogramVersion
-      || req.query.miniprogramVersion
+      || "";
+  return Object.assign({}, bodyContext, extraContext, {
+    envVersion: String(envVersion).trim().slice(0, 24),
+    miniprogramVersion: String(extraContext.miniprogramVersion
+      || query.miniprogramVersion
       || bodyContext.miniprogramVersion
-      || "",
+      || envVersion
+      || "").trim().slice(0, 24),
   });
+}
+
+function resolveRequestRuntimeDecision(req, extraContext = {}) {
+  const context = resolveRequestRuntimeContext(req, extraContext);
   return runtimeModeService.resolveRuntimeMode({
     context,
     serverSession: req.fosuSession || null,
@@ -1416,15 +1428,16 @@ router.delete("/agent/reminders/:reminderId", scheduleLimiter, requireSessionGua
 router.get("/agent/readiness", scheduleLimiter, optionalSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
-    const decision = resolveRequestRuntimeDecision(req, {
+    const runtimeContext = resolveRequestRuntimeContext(req, {
       envVersion: req.query.envVersion,
       miniprogramVersion: req.query.miniprogramVersion,
     });
+    const decision = runtimeModeService.resolveRuntimeMode({
+      context: runtimeContext,
+      serverSession: req.fosuSession || null,
+    });
     const readiness = agentReadinessService.resolveRequestReadiness({
-      context: {
-        envVersion: req.query.envVersion || req.headers["x-fosu-env-version"] || "",
-        miniprogramVersion: req.query.miniprogramVersion || "",
-      },
+      context: runtimeContext,
       serverSession: req.fosuSession || null,
       runtimeMode: decision.runtimeMode,
     });

@@ -60,6 +60,29 @@ jobs:
       - name: Xiaofu Agent release gate
         run: npm run test:agent-release-gate
 
+      - name: Record release truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "deployment_sha=${GITHUB_SHA}" | tee agent-release-truth.txt
+          node <<'NODE' | tee -a agent-release-truth.txt
+          const composition = require('./server/src/services/ai/platformComposition');
+          (async () => {
+            await composition.initPlatform();
+            for (const environment of ['public', 'trial', 'dev']) {
+              const snapshot = await composition.getConfigKernel().getCurrentSnapshot(environment);
+              console.log(`${environment}_config_version=${snapshot.configVersion}`);
+            }
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Upload release truth
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-release-truth-${{ github.sha }}
+          path: agent-release-truth.txt
+          if-no-files-found: error
+
   deploy:
     needs: ci
     runs-on: ubuntu-latest

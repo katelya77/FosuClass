@@ -303,7 +303,7 @@ function createAgentRunClient(options = {}) {
       context: Object.assign({}, opts.context || {}),
       protocolVersion,
     };
-    if (opts.idempotencyKey) body.idempotencyKey = String(opts.idempotencyKey).slice(0, 128);
+    body.idempotencyKey = String(opts.idempotencyKey || body.requestId).slice(0, 128);
     const created = await callApi("POST", routes.createRun, body);
     if (!created.ok) {
       const error = new Error(created.failure.message);

@@ -540,6 +540,8 @@ class AgentKernel {
       runId: input.runId || agentProtocol.createRunId(),
       requestId: input.requestId || agentProtocol.createRequestId(),
       conversationId: String(input.conversationId || context.conversationId || "").slice(0, 80),
+      environment: String(input.environment || runtimeMode).slice(0, 16),
+      configVersion: String(input.configVersion || "").slice(0, 120),
       runtimeDecision,
       runtimeMode,
       message,
@@ -574,7 +576,9 @@ class AgentKernel {
       runId: execution.runId,
       requestId: execution.requestId,
       conversationId: execution.conversationId,
+      environment: execution.environment,
       runtimeMode: execution.runtimeMode,
+      configVersion: execution.configVersion,
       intent: execution.intent,
       selectedSkill: execution.skill,
       stepCount: execution.steps.length,
@@ -582,10 +586,13 @@ class AgentKernel {
       steps: execution.steps,
       totalDurationMs: Math.max(0, Number(result.totalDurationMs || Date.now() - execution.startedAt) || 0),
       providerUsed: result.providerUsed === true,
+      provider: result.provider || (result.providerUsed === true ? "unknown" : "mock"),
       fallbackLayer: result.fallbackLayer || "none",
       fallbackReason: result.fallbackReason || "",
       evidenceComplete: result.evidenceComplete === true || execution.evidenceComplete === true,
       errorCode: result.errorCode || "",
+      failureLayer: result.failureLayer || "",
+      status: result.status || (result.errorCode ? "failed" : "completed"),
     });
   }
 }

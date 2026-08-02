@@ -57,6 +57,7 @@ function readState(name) {
       enabled: true,
       model: "",
       health: "unknown",
+      lastProbeAt: "",
       lastSuccessAt: "",
       lastFailureAt: "",
       latencyMs: 0,
@@ -201,6 +202,7 @@ function isCircuitOpen(name) {
 
 function markSuccess(name, latencyMs, meta = {}) {
   const item = readState(name);
+  if (String(meta.kind || "") === "probe") item.lastProbeAt = nowIso();
   item.health = "ok";
   item.lastSuccessAt = nowIso();
   item.latencyMs = latencyMs;
@@ -245,6 +247,7 @@ function isTransientRetryable(reason) {
 
 function markFailure(name, reason, meta = {}) {
   const item = readState(name);
+  if (String(meta.kind || "") === "probe") item.lastProbeAt = nowIso();
   const cfg = getCircuitConfig();
   item.health = reason === "not_configured" ? "disabled" : "degraded";
   item.lastFailureAt = nowIso();

@@ -24,9 +24,15 @@ function safePayload(value) {
 function createPlatformAdminHandlers(options = {}) {
   const getPlatformDiagnostics = options.getPlatformDiagnostics;
   const listRecentPlatformTraces = options.listRecentPlatformTraces;
+  const listDurableRunTraces = options.listDurableRunTraces;
+  const getOperationsSnapshot = options.getOperationsSnapshot;
+  const runOperationsSmokeTest = options.runOperationsSmokeTest;
   const getExecutionPolicy = options.getExecutionPolicy;
   requireFunction(getPlatformDiagnostics, "getPlatformDiagnostics");
   requireFunction(listRecentPlatformTraces, "listRecentPlatformTraces");
+  requireFunction(listDurableRunTraces, "listDurableRunTraces");
+  requireFunction(getOperationsSnapshot, "getOperationsSnapshot");
+  requireFunction(runOperationsSmokeTest, "runOperationsSmokeTest");
   requireFunction(getExecutionPolicy, "getExecutionPolicy");
 
   async function topologyPayload() {
@@ -75,14 +81,41 @@ function createPlatformAdminHandlers(options = {}) {
     }
   }
 
-  function getRecentRuns(req, res) {
+  function traceMatches(trace, query = {}) {
+    const exact = (field, expected) => !expected || String(field || "") === String(expected);
+    const tools = Array.isArray(trace && trace.toolCalls) ? trace.toolCalls : [];
+    const recordedAtMs = Date.parse(trace && (trace.recordedAt || trace.createdAt) || "");
+    const fromMs = Date.parse(query.from || "");
+    const toMs = Date.parse(query.to || "");
+    return exact(trace && (trace.environment || trace.runtimeMode), query.environment)
+      && exact(trace && trace.status, query.status)
+      && exact(trace && trace.provider, query.provider)
+      && exact(trace && trace.errorCode, query.errorCode)
+      && (!query.tool || tools.some((call) => String(call && (call.name || call.toolName) || "") === String(query.tool)))
+      && (!Number.isFinite(fromMs) || Number.isFinite(recordedAtMs) && recordedAtMs >= fromMs)
+      && (!Number.isFinite(toMs) || Number.isFinite(recordedAtMs) && recordedAtMs <= toMs);
+  }
+
+  async function getRecentRuns(req, res) {
     noStore(res);
     try {
       const limit = Math.max(1, Math.min(100, Number(req.query && req.query.limit) || 20));
-      const traces = listRecentPlatformTraces().slice(0, limit).map((trace) => safePayload(trace));
+      const durable = await listDurableRunTraces();
+      const platformByRunId = new Map((listRecentPlatformTraces() || [])
+        .filter((trace) => trace && trace.runId)
+        .map((trace) => [String(trace.runId), trace]));
+      const traces = (Array.isArray(durable) ? durable : [])
+        .filter((trace) => traceMatches(trace, req.query || {}))
+        .slice(0, limit)
+        .map((trace) => safePayload(Object.assign(
+          {},
+          platformByRunId.get(String(trace && trace.runId || "")) || {},
+          trace,
+        )));
       return res.json(safePayload({
         success: true,
         app: ADMIN_APP,
+        source: "durable-run-trace-store",
         runs: traces,
         count: traces.length,
         serverTime: new Date().toISOString(),
@@ -97,9 +130,48 @@ function createPlatformAdminHandlers(options = {}) {
     }
   }
 
+  async function getOperations(req, res) {
+    noStore(res);
+    try {
+      const environment = String(req.query && req.query.environment || "public").slice(0, 16);
+      const operations = safePayload(await getOperationsSnapshot(environment));
+      return res.json(safePayload({
+        success: true,
+        app: ADMIN_APP,
+        operations,
+        serverTime: new Date().toISOString(),
+      }));
+    } catch (error) {
+      return res.status(503).json({
+        success: false,
+        code: String(error && error.code || "AGENT_OPERATIONS_UNAVAILABLE").slice(0, 80),
+        message: "Assistant operations truth is temporarily unavailable.",
+        serverTime: new Date().toISOString(),
+      });
+    }
+  }
+
+  async function postSmokeTest(req, res) {
+    noStore(res);
+    try {
+      const environment = String(req.body && req.body.environment || "public").slice(0, 16);
+      const report = safePayload(await runOperationsSmokeTest(environment));
+      return res.json(Object.assign({ success: true }, report));
+    } catch (error) {
+      return res.status(503).json({
+        success: false,
+        code: String(error && error.code || "AGENT_SMOKE_UNAVAILABLE").slice(0, 80),
+        message: "Assistant smoke test could not be completed.",
+        serverTime: new Date().toISOString(),
+      });
+    }
+  }
+
   return Object.freeze({
     getTopology,
     getRecentRuns,
+    getOperations,
+    postSmokeTest,
     topologyPayload,
   });
 }
