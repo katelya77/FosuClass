@@ -24,6 +24,7 @@ const { createFosuTurnPorts } = require("./runtime/fosuTurnPorts");
 const { createDecisionService } = require("./decision/decisionService");
 const providerRuntimeComposition = require("./providerRuntimeComposition");
 const providerConfigService = require("./providerConfigService");
+const { findLatestDurableProviderAttempt } = require("./providerOperationsLogService");
 const providerReadinessService = require("./providerReadinessService");
 const runtimeModeService = require("./runtimeModeService");
 const safetyGuard = require("./safetyGuard");
@@ -507,6 +508,9 @@ async function getOperationsSnapshot(requestedEnvironment = "public") {
   const lastFailure = failed[0] || null;
   const durations = recent.map((trace) => trace.totalDurationMs);
   const runtimeConfig = providerConfigService.getRuntimeConfigForEnvironment(environment) || {};
+  const decisionProviders = providerRuntimeComposition.resolveDecisionProviders(environment, runtimeConfig);
+  const responseProviders = providerRuntimeComposition.resolveResponseProviders(environment, runtimeConfig);
+  const lastExternalCall = findLatestDurableProviderAttempt(runRecords, environment);
   const configuredProvider = providerReadinessService.evaluateEnvironment(environment);
   const providerFlags = providerReadinessService.publicProviderFlags(environment, runtimeConfig);
   const chainItem = (configuredProvider.chainStatus || [])
@@ -562,10 +566,16 @@ async function getOperationsSnapshot(requestedEnvironment = "public") {
   return Object.freeze({
     overallStatus,
     environment,
-    deploymentSha: String(process.env.DEPLOY_SHA || process.env.GITHUB_SHA || process.env.COMMIT_SHA || "unknown").slice(0, 40),
+    deploymentSha: String(process.env.FOSU_DEPLOY_COMMIT_SHA || process.env.DEPLOY_SHA || process.env.GITHUB_SHA || process.env.COMMIT_SHA || "unknown").slice(0, 40),
     configVersion: snapshot && snapshot.configVersion || `manifest:${plugin.manifestVersion}`,
     provider: {
       name: configuredProvider.provider,
+      decisionProvider: decisionProviders.intendedProvider || "",
+      responseProvider: responseProviders.intendedProvider || "",
+      lastActualProvider: lastExternalCall && lastExternalCall.provider || "",
+      lastActualAt: lastExternalCall && lastExternalCall.at || "",
+      lastActualStatus: lastExternalCall && lastExternalCall.status || "",
+      lastActualReasonCode: lastExternalCall && lastExternalCall.reasonCode || "",
       configured: providerFlags.providerConfigured,
       configuredAvailable: providerFlags.configuredAvailable,
       verified: providerFlags.verified,
