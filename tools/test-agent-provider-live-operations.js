@@ -5,6 +5,7 @@ const { createProviderRuntime } = require("../packages/provider-runtime");
 const providerChainService = require("../server/src/services/ai/providerChainService");
 const {
   createProviderOperationsLogService,
+  evaluateProviderDecisionProbe,
   findLatestDurableProviderAttempt,
 } = require("../server/src/services/ai/providerOperationsLogService");
 
@@ -183,11 +184,102 @@ async function testDurableEventsRemainQueryableAndSanitized() {
     "durable provider events remain visible when the process-local projection is empty");
 }
 
+function testDecisionProbeRequiresCompletedStageAndDurableEvidence() {
+  const requestId = "req_provider_smoke_truth";
+  const attemptedOnly = evaluateProviderDecisionProbe({
+    requestId,
+    payload: {
+      safety: {
+        externalProviderUsed: true,
+        resolvedProvider: "mock",
+        fallbackReason: "understanding:PROVIDER_TIMEOUT",
+      },
+      providerStages: {
+        understanding: {
+          provider: "custom-openai",
+          attempted: true,
+          completed: false,
+          fallback: true,
+          reasonCode: "PROVIDER_TIMEOUT",
+        },
+      },
+    },
+    events: [{
+      requestId,
+      provider: "custom-openai",
+      stage: "decision",
+      status: "failed",
+      ok: false,
+      reasonCode: "PROVIDER_TIMEOUT",
+    }],
+  });
+  assert.strictEqual(attemptedOnly.passed, false,
+    "starting an external Provider must not be reported as a successful real Probe");
+  assert.strictEqual(attemptedOnly.reasonCode, "PROVIDER_TIMEOUT");
+  assert.strictEqual(attemptedOnly.details.attempted, true);
+  assert.strictEqual(attemptedOnly.details.completed, false);
+  assert.strictEqual(attemptedOnly.details.durableCompletionRecorded, false);
+
+  const completed = evaluateProviderDecisionProbe({
+    requestId,
+    payload: {
+      safety: { externalProviderUsed: true, resolvedProvider: "custom-openai" },
+      providerStages: {
+        understanding: {
+          provider: "custom-openai",
+          attempted: true,
+          completed: true,
+          fallback: false,
+          reasonCode: "",
+        },
+      },
+    },
+    events: [{
+      requestId,
+      provider: "custom-openai",
+      stage: "decision",
+      status: "success",
+      ok: true,
+      reasonCode: "",
+    }],
+  });
+  assert.strictEqual(completed.passed, true);
+  assert.strictEqual(completed.reasonCode, "OK");
+  assert.strictEqual(completed.details.provider, "custom-openai");
+  assert.strictEqual(completed.details.durableCompletionRecorded, true);
+
+  const unrecorded = evaluateProviderDecisionProbe({
+    requestId,
+    payload: {
+      safety: { externalProviderUsed: true, resolvedProvider: "custom-openai" },
+      providerStages: {
+        understanding: {
+          provider: "custom-openai",
+          attempted: true,
+          completed: true,
+          fallback: false,
+        },
+      },
+    },
+    events: [{
+      requestId: "req_different_run",
+      provider: "custom-openai",
+      stage: "decision",
+      status: "success",
+      ok: true,
+    }],
+  });
+  assert.strictEqual(unrecorded.passed, false,
+    "a response flag without a correlated durable provider.completed event is not verified");
+  assert.strictEqual(unrecorded.reasonCode, "PROVIDER_COMPLETION_NOT_RECORDED");
+}
+
 async function run() {
   await testRuntimeObserverReceivesRealAttempts();
   await testHttpFailuresUseActionableOperationalCodes();
   testRuntimeEventsUpdateReadinessProjection();
   await testDurableEventsRemainQueryableAndSanitized();
+  testDecisionProbeRequiresCompletedStageAndDurableEvidence();
   console.log("test-agent-provider-live-operations: PASS");
 }
 

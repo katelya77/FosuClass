@@ -61,6 +61,36 @@ async function run() {
 
   controller.stop();
   assert.deepStrictEqual(cancelled, [1, 2]);
+
+  const recoveryDoc = fakeDocument();
+  const recoveryTimers = [];
+  const recoveryStatuses = [];
+  let operationsShouldFail = false;
+  const recoveryController = createLiveRefreshController({
+    document: recoveryDoc,
+    loadOperations: async () => {
+      if (operationsShouldFail) throw new Error("temporary operations failure");
+    },
+    loadRuns: async () => {},
+    onStatus: (status) => recoveryStatuses.push(status),
+    schedule: (callback, delayMs) => {
+      recoveryTimers.push({ callback, delayMs });
+      return recoveryTimers.length;
+    },
+    cancel: () => {},
+    operationsIntervalMs: 5000,
+    runsIntervalMs: 3000,
+  });
+  await recoveryController.bootstrap();
+  operationsShouldFail = true;
+  await recoveryTimers[0].callback();
+  assert.strictEqual(recoveryStatuses[recoveryStatuses.length - 1], "retrying");
+  operationsShouldFail = false;
+  await recoveryTimers[0].callback();
+  assert.strictEqual(recoveryStatuses[recoveryStatuses.length - 1], "live",
+    "a successful periodic refresh must clear a stale retrying indicator without a manual reload");
+  recoveryController.stop();
+
   console.log("test-agent-admin-live-controller: PASS");
 }
 
