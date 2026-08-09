@@ -56,7 +56,7 @@
 - [ ] ADP 应用基础配置核对（名称/简介/角色指令/欢迎语/示例问题/对话设置/模型参数）
 - [ ] 知识库上传 ADP（7 份 MD + 32 组问答）并检查解析状态
 - [ ] 4 条工作流在 ADP 搭建并逐条调试（先 01 跑通再复制）
-- [ ] CampusTools 公网可达部署（或 ADP 自定义插件走 OpenAPI/MCP）
+- [x] CampusTools 公网可达部署：独立 CloudBase HTTP Function，health/401/200 确定性调用均实测
 - [ ] Widget 在 ADP 创建并接入工作流 01/02
 - [ ] 评测集导入 ADP 并跑评测任务，失败用例定位修复
 - [ ] 应用变量/API 参数核对补齐
@@ -90,7 +90,7 @@
 - `competition/adp-kit npm test`：通过；最终汇总为 7 文档、32 问答、80 评测、4 工作流、6 工具、6 卡型，CampusTools 26 项服务测试通过。
 - `test:agent-release-gate`：26/26 阶段通过；Docker Desktop 启动后真实执行 PostgreSQL/Redis、standalone 编排、默认服务镜像、容器健康/API、发布预检与安全验收，耗时约 42 分钟。
 - CampusTools Docker 冒烟：镜像构建通过；`health=ok`、`dataVersion=competition-demo-v1`、教师课表返回 2 项且 `evidence.verified=true`、MCP `tools/list` 返回 6 个工具；临时容器已清理。
-- ADP 资产清单现覆盖 53 个实际交付文件并进入 `npm test` 门禁；Widget 样例 queryId/computedAt 已固定，重复生成哈希稳定。
+- ADP 资产清单现覆盖 65 个实际交付文件并进入 `npm test` 门禁；Widget 样例 queryId/computedAt 已固定，重复生成哈希稳定。
 
 ### ADP 页面实际核验
 
@@ -112,3 +112,14 @@
 - 四条工作流当前都仍只有开始/结束，未搭建参数提取、条件分支、CampusTools、结果核验、Widget/回复节点；不得将启动参数完成描述为工作流跑通。
 - 文档上传控件已实际打开且支持多选 Markdown；扩展调用 `setFiles` 返回 `Not allowed`。需要在 Chrome 扩展详情中开启“允许访问文件网址”后再上传。该权限问题不影响普通 DOM 配置。
 - 浏览器扩展访问自身 Statsig 服务偶发 10 秒超时，但 ADP DOM 操作和自动保存有效；每次不确定结果均先重读页面后再补缺项，未盲目重复写入。
+
+### 2026-08-09 18:00–18:45 CampusTools 比赛测试部署与回归
+
+- CloudBase 当前环境未开通云托管资源；三次安全尝试均在创建服务前失败，未生成残留云托管服务。随后按 CloudBase 托管运行时能力改用独立 HTTP Function，没有更改佛课小表生产服务。
+- 已部署函数 `campusflowAdpTools`（Node.js 18 HTTP Function，Active/Available）和独立网关 `/campusflow-adp-tools`。
+- 公网入口：`https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools`。只读取 `competition-demo-v1`，使用 Bearer token；token 不进入仓库、报告或截图。
+- 公网实测：`GET /health` → 200，`status=ok`、6 tools；无 token 的 `POST /api/query_schedule` → 401；轮换 token 后的同请求 → 200、`success=true`、`evidence.verified=true`、4 items。
+- 新增 `cloudfunctions/campusflowAdpTools/` 可复现部署包、权威源同步检查和本地 HTTP Function 冒烟；OpenAPI 已包含实际比赛测试 server；资产清单增至 65 个文件。
+- ADP 已保存 `campus_api_base_url`；`campus_api_token` 通过一次性本机桥接安全粘贴并点击确定，只核验过长度（43），未回显值。由于浏览器控制端 Statsig 超时，仍需重新打开变量页确认变量名称出现，不应重复粘贴或创建。
+- 本轮修改后重新执行：ADP Kit 全量测试通过；`test:agent-foundation` 42/42、`test:agent-regression` 197/197、`test:ai-competition`、`test:agent-final-convergence`（120 cases）和 `test:agent-phase2` 11/11 全部退出码 0。
+- CloudBase 交付审阅发现托管包装不应继承通用服务的本地无鉴权模式；已改为缺少 `CAMPUS_API_TOKEN` 时拒绝冷启动并强制 token 模式，新增失败关闭测试，重新部署函数后再次实测 health=200、无 token=401、授权查询 4 项且 verified=true。

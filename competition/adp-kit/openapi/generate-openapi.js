@@ -31,6 +31,10 @@ const spec = {
   },
   servers: [
     { url: "http://127.0.0.1:8787", description: "本地测试" },
+    {
+      url: "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools",
+      description: "校园智序独立比赛测试环境（CloudBase HTTP Function）",
+    },
     { url: "https://{host}", description: "比赛测试环境；导入ADP后填写实际匿名测试域名", variables: { host: { default: "example.invalid" } } },
   ],
   tags: [{ name: "CampusTools", description: "只读匿名校园工具" }],

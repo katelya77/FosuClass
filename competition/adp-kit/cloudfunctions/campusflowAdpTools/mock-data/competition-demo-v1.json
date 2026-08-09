@@ -1,0 +1,1764 @@
+{
+  "meta": {
+    "dataVersion": "competition-demo-v1",
+    "schema": "campus-demo/v1",
+    "timezone": "Asia/Shanghai",
+    "demoReferenceDate": "2026-03-02",
+    "generatedBy": "competition/adp-kit/mock-data/generate-competition-demo-v1.js",
+    "anonymization": "本数据集全部为虚构匿名演示数据，不对应任何真实学校、学院、教师、学生、用户与团队身份。",
+    "semester": {
+      "id": "2025-2026-2",
+      "name": "2025-2026学年第二学期",
+      "startDate": "2026-03-02",
+      "endDate": "2026-07-19",
+      "totalWeeks": 20
+    },
+    "periods": [
+      {
+        "period": 1,
+        "start": "08:00",
+        "end": "08:45"
+      },
+      {
+        "period": 2,
+        "start": "08:55",
+        "end": "09:40"
+      },
+      {
+        "period": 3,
+        "start": "10:00",
+        "end": "10:45"
+      },
+      {
+        "period": 4,
+        "start": "10:55",
+        "end": "11:40"
+      },
+      {
+        "period": 5,
+        "start": "14:00",
+        "end": "14:45"
+      },
+      {
+        "period": 6,
+        "start": "14:55",
+        "end": "15:40"
+      },
+      {
+        "period": 7,
+        "start": "16:00",
+        "end": "16:45"
+      },
+      {
+        "period": 8,
+        "start": "16:55",
+        "end": "17:40"
+      },
+      {
+        "period": 9,
+        "start": "19:00",
+        "end": "19:45"
+      },
+      {
+        "period": 10,
+        "start": "19:55",
+        "end": "20:40"
+      }
+    ],
+    "weekdayNames": [
+      "周一",
+      "周二",
+      "周三",
+      "周四",
+      "周五",
+      "周六",
+      "周日"
+    ],
+    "designedScenarios": [
+      "fri-afternoon-ab-overlap",
+      "teacher003-mon-cross-campus",
+      "demo-user-fri-full-day",
+      "sz-weeks-1-9",
+      "art-even-weeks"
+    ],
+    "entityCounts": {
+      "campuses": 2,
+      "colleges": 2,
+      "classes": 4,
+      "teachers": 8,
+      "courses": 16,
+      "rooms": 22,
+      "lessons": 32,
+      "demoUsers": 1
+    }
+  },
+  "campuses": [
+    {
+      "id": "campus-a",
+      "name": "校区A",
+      "buildings": [
+        "教学楼A1",
+        "教学楼A2",
+        "实验楼A1",
+        "体育场馆A1"
+      ]
+    },
+    {
+      "id": "campus-b",
+      "name": "校区B",
+      "buildings": [
+        "教学楼B1",
+        "实验楼B1",
+        "体育场馆B1"
+      ]
+    }
+  ],
+  "colleges": [
+    {
+      "id": "college-a",
+      "name": "学院A"
+    },
+    {
+      "id": "college-b",
+      "name": "学院B"
+    }
+  ],
+  "classes": [
+    {
+      "id": "cls-2025-a",
+      "name": "2025级A班",
+      "collegeId": "college-a",
+      "campusId": "campus-a",
+      "size": 45
+    },
+    {
+      "id": "cls-2025-b",
+      "name": "2025级B班",
+      "collegeId": "college-a",
+      "campusId": "campus-a",
+      "size": 44
+    },
+    {
+      "id": "cls-2025-c",
+      "name": "2025级C班",
+      "collegeId": "college-b",
+      "campusId": "campus-b",
+      "size": 40
+    },
+    {
+      "id": "cls-2025-d",
+      "name": "2025级D班",
+      "collegeId": "college-b",
+      "campusId": "campus-b",
+      "size": 42
+    }
+  ],
+  "teachers": [
+    {
+      "id": "t-001",
+      "name": "教师001",
+      "collegeId": "college-a",
+      "title": "副教授"
+    },
+    {
+      "id": "t-002",
+      "name": "教师002",
+      "collegeId": "college-a",
+      "title": "讲师"
+    },
+    {
+      "id": "t-003",
+      "name": "教师003",
+      "collegeId": "college-a",
+      "title": "教授"
+    },
+    {
+      "id": "t-004",
+      "name": "教师004",
+      "collegeId": "college-a",
+      "title": "讲师"
+    },
+    {
+      "id": "t-005",
+      "name": "教师005",
+      "collegeId": "college-a",
+      "title": "副教授"
+    },
+    {
+      "id": "t-006",
+      "name": "教师006",
+      "collegeId": "college-b",
+      "title": "讲师"
+    },
+    {
+      "id": "t-007",
+      "name": "教师007",
+      "collegeId": "college-b",
+      "title": "副教授"
+    },
+    {
+      "id": "t-008",
+      "name": "教师008",
+      "collegeId": "college-b",
+      "title": "讲师"
+    }
+  ],
+  "courses": [
+    {
+      "id": "c-01",
+      "name": "高等数学A",
+      "credits": 5,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-02",
+      "name": "大学英语A",
+      "credits": 4,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-03",
+      "name": "程序设计基础",
+      "credits": 4,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-04",
+      "name": "程序设计基础实验",
+      "credits": 1,
+      "collegeId": "college-a",
+      "category": "实验"
+    },
+    {
+      "id": "c-05",
+      "name": "大学物理B",
+      "credits": 4,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-06",
+      "name": "线性代数",
+      "credits": 3,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-07",
+      "name": "大学体育",
+      "credits": 1,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-08",
+      "name": "思政通识",
+      "credits": 2,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-09",
+      "name": "数据结构",
+      "credits": 4,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-10",
+      "name": "概率论",
+      "credits": 3,
+      "collegeId": "college-a",
+      "category": "必修"
+    },
+    {
+      "id": "c-11",
+      "name": "电路分析",
+      "credits": 3,
+      "collegeId": "college-b",
+      "category": "必修"
+    },
+    {
+      "id": "c-12",
+      "name": "数据库基础",
+      "credits": 3,
+      "collegeId": "college-b",
+      "category": "必修"
+    },
+    {
+      "id": "c-13",
+      "name": "软件工程导论",
+      "credits": 3,
+      "collegeId": "college-b",
+      "category": "必修"
+    },
+    {
+      "id": "c-14",
+      "name": "计算机组成原理",
+      "credits": 4,
+      "collegeId": "college-b",
+      "category": "必修"
+    },
+    {
+      "id": "c-15",
+      "name": "大学化学",
+      "credits": 3,
+      "collegeId": "college-b",
+      "category": "必修"
+    },
+    {
+      "id": "c-16",
+      "name": "通识选修·艺术鉴赏",
+      "credits": 2,
+      "collegeId": "college-b",
+      "category": "选修"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r-a1-101",
+      "name": "A1-101",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 60,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-a1-102",
+      "name": "A1-102",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 60,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-a1-103",
+      "name": "A1-103",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 80,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-a1-104",
+      "name": "A1-104",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 60,
+      "type": "普通"
+    },
+    {
+      "id": "r-a1-105",
+      "name": "A1-105",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 60,
+      "type": "普通"
+    },
+    {
+      "id": "r-a1-106",
+      "name": "A1-106",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 80,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-a1-201",
+      "name": "A1-201",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 120,
+      "type": "阶梯"
+    },
+    {
+      "id": "r-a1-202",
+      "name": "A1-202",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 120,
+      "type": "阶梯"
+    },
+    {
+      "id": "r-a1-203",
+      "name": "A1-203",
+      "campusId": "campus-a",
+      "building": "教学楼A1",
+      "capacity": 90,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-a2-301",
+      "name": "A2-301",
+      "campusId": "campus-a",
+      "building": "教学楼A2",
+      "capacity": 50,
+      "type": "机房"
+    },
+    {
+      "id": "r-a2-302",
+      "name": "A2-302",
+      "campusId": "campus-a",
+      "building": "教学楼A2",
+      "capacity": 50,
+      "type": "机房"
+    },
+    {
+      "id": "r-la-401",
+      "name": "实验楼A1-401",
+      "campusId": "campus-a",
+      "building": "实验楼A1",
+      "capacity": 40,
+      "type": "实验室"
+    },
+    {
+      "id": "r-gym-a",
+      "name": "体育场馆A1",
+      "campusId": "campus-a",
+      "building": "体育场馆A1",
+      "capacity": 200,
+      "type": "体育场地"
+    },
+    {
+      "id": "r-b1-101",
+      "name": "B1-101",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 70,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-b1-102",
+      "name": "B1-102",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 70,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-b1-103",
+      "name": "B1-103",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 80,
+      "type": "普通"
+    },
+    {
+      "id": "r-b1-104",
+      "name": "B1-104",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 70,
+      "type": "普通"
+    },
+    {
+      "id": "r-b1-105",
+      "name": "B1-105",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 100,
+      "type": "阶梯"
+    },
+    {
+      "id": "r-b1-106",
+      "name": "B1-106",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 80,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-b1-201",
+      "name": "B1-201",
+      "campusId": "campus-b",
+      "building": "教学楼B1",
+      "capacity": 90,
+      "type": "多媒体"
+    },
+    {
+      "id": "r-lb-301",
+      "name": "实验楼B1-301",
+      "campusId": "campus-b",
+      "building": "实验楼B1",
+      "capacity": 45,
+      "type": "实验室"
+    },
+    {
+      "id": "r-gym-b",
+      "name": "体育场馆B1",
+      "campusId": "campus-b",
+      "building": "体育场馆B1",
+      "capacity": 200,
+      "type": "体育场地"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "les-001",
+      "courseId": "c-01",
+      "teacherIds": [
+        "t-001"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-101",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-002",
+      "courseId": "c-01",
+      "teacherIds": [
+        "t-001"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-101",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-003",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-102",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-004",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-102",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-005",
+      "courseId": "c-03",
+      "teacherIds": [
+        "t-003"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a2-301",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-006",
+      "courseId": "c-04",
+      "teacherIds": [
+        "t-003"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-la-401",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-007",
+      "courseId": "c-05",
+      "teacherIds": [
+        "t-004"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-201",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-008",
+      "courseId": "c-06",
+      "teacherIds": [
+        "t-005"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-103",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-009",
+      "courseId": "c-07",
+      "teacherIds": [
+        "t-006"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-gym-a",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-010",
+      "courseId": "c-08",
+      "teacherIds": [
+        "t-007"
+      ],
+      "classIds": [
+        "cls-2025-a"
+      ],
+      "roomId": "r-a1-201",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-9",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    {
+      "id": "les-011",
+      "courseId": "c-01",
+      "teacherIds": [
+        "t-001"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-104",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-012",
+      "courseId": "c-01",
+      "teacherIds": [
+        "t-001"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-104",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-013",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-105",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-014",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-105",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-015",
+      "courseId": "c-09",
+      "teacherIds": [
+        "t-003"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a2-302",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-016",
+      "courseId": "c-09",
+      "teacherIds": [
+        "t-003"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a2-302",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-017",
+      "courseId": "c-05",
+      "teacherIds": [
+        "t-008"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-202",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-018",
+      "courseId": "c-10",
+      "teacherIds": [
+        "t-005"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-106",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-019",
+      "courseId": "c-11",
+      "teacherIds": [
+        "t-008"
+      ],
+      "classIds": [
+        "cls-2025-b"
+      ],
+      "roomId": "r-a1-203",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-020",
+      "courseId": "c-12",
+      "teacherIds": [
+        "t-007"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-101",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-021",
+      "courseId": "c-12",
+      "teacherIds": [
+        "t-007"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-101",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-022",
+      "courseId": "c-13",
+      "teacherIds": [
+        "t-008"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-102",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-023",
+      "courseId": "c-13",
+      "teacherIds": [
+        "t-008"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-102",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-024",
+      "courseId": "c-14",
+      "teacherIds": [
+        "t-003"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-201",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-025",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-b1-103",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-026",
+      "courseId": "c-07",
+      "teacherIds": [
+        "t-006"
+      ],
+      "classIds": [
+        "cls-2025-c"
+      ],
+      "roomId": "r-gym-b",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-027",
+      "courseId": "c-15",
+      "teacherIds": [
+        "t-004"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-lb-301",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-028",
+      "courseId": "c-06",
+      "teacherIds": [
+        "t-005"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-b1-104",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-029",
+      "courseId": "c-12",
+      "teacherIds": [
+        "t-007"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-b1-104",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-030",
+      "courseId": "c-02",
+      "teacherIds": [
+        "t-002"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-b1-106",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "id": "les-031",
+      "courseId": "c-16",
+      "teacherIds": [
+        "t-006"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-b1-105",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 9,
+      "periodEnd": 10,
+      "weeks": "2,4,6,8,10,12,14,16,18,20",
+      "weekList": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20
+      ]
+    },
+    {
+      "id": "les-032",
+      "courseId": "c-07",
+      "teacherIds": [
+        "t-006"
+      ],
+      "classIds": [
+        "cls-2025-d"
+      ],
+      "roomId": "r-gym-b",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-20",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    }
+  ],
+  "demoUsers": [
+    {
+      "id": "demo-user-001",
+      "name": "演示用户001",
+      "visitorId": "visitor-demo-001",
+      "classId": "cls-2025-a",
+      "electiveCourseIds": [
+        "c-16"
+      ],
+      "preferredCampus": "campus-a"
+    }
+  ],
+  "nameIndex": {
+    "campus:校区A": "campus-a",
+    "campus:校区B": "campus-b",
+    "college:学院A": "college-a",
+    "college:学院B": "college-b",
+    "class:2025级A班": "cls-2025-a",
+    "class:2025级B班": "cls-2025-b",
+    "class:2025级C班": "cls-2025-c",
+    "class:2025级D班": "cls-2025-d",
+    "teacher:教师001": "t-001",
+    "teacher:教师002": "t-002",
+    "teacher:教师003": "t-003",
+    "teacher:教师004": "t-004",
+    "teacher:教师005": "t-005",
+    "teacher:教师006": "t-006",
+    "teacher:教师007": "t-007",
+    "teacher:教师008": "t-008",
+    "course:高等数学A": "c-01",
+    "course:大学英语A": "c-02",
+    "course:程序设计基础": "c-03",
+    "course:程序设计基础实验": "c-04",
+    "course:大学物理B": "c-05",
+    "course:线性代数": "c-06",
+    "course:大学体育": "c-07",
+    "course:思政通识": "c-08",
+    "course:数据结构": "c-09",
+    "course:概率论": "c-10",
+    "course:电路分析": "c-11",
+    "course:数据库基础": "c-12",
+    "course:软件工程导论": "c-13",
+    "course:计算机组成原理": "c-14",
+    "course:大学化学": "c-15",
+    "course:通识选修·艺术鉴赏": "c-16",
+    "room:A1-101": "r-a1-101",
+    "room:A1-102": "r-a1-102",
+    "room:A1-103": "r-a1-103",
+    "room:A1-104": "r-a1-104",
+    "room:A1-105": "r-a1-105",
+    "room:A1-106": "r-a1-106",
+    "room:A1-201": "r-a1-201",
+    "room:A1-202": "r-a1-202",
+    "room:A1-203": "r-a1-203",
+    "room:A2-301": "r-a2-301",
+    "room:A2-302": "r-a2-302",
+    "room:实验楼A1-401": "r-la-401",
+    "room:体育场馆A1": "r-gym-a",
+    "room:B1-101": "r-b1-101",
+    "room:B1-102": "r-b1-102",
+    "room:B1-103": "r-b1-103",
+    "room:B1-104": "r-b1-104",
+    "room:B1-105": "r-b1-105",
+    "room:B1-106": "r-b1-106",
+    "room:B1-201": "r-b1-201",
+    "room:实验楼B1-301": "r-lb-301",
+    "room:体育场馆B1": "r-gym-b"
+  },
+  "dataHash": "sha1:41781288b655"
+}

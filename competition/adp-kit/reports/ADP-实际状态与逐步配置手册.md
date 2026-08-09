@@ -47,7 +47,7 @@
 | 对话设置 | 逐字回复开、兜底开、上下文改写开；联网搜索关、推荐问题关、长期记忆关；图片知识库回答关、问答对润色关 | 保持；四条工作流稳定后再考虑推荐问题 |
 | 应用变量 | 六项齐全，值正确 | 保持并复核类型 |
 | API 参数 | 四项齐全，当前均为空 | 保持；由调用端传入 |
-| 环境变量 | 空 | 工具公网测试地址就绪后才创建，不填虚假地址或密钥 |
+| 环境变量 | `campus_api_base_url` 已保存；`campus_api_token` 已安全粘贴并点击确定，因浏览器控制统计请求超时需重新打开弹窗做一次名称核验 | 保持 token 模式；不创建 signing secret，不回显变量值 |
 | 文档知识 | 分类“校园智序赛事知识”存在，文档数 0 | 上传本地 7 份 Markdown，等待解析成功 |
 | 问答知识 | 0 条 | 导入本地 32 条标准问答 |
 | 工作流 | 01、02、03、04 均已存在且待发布；04 已于本轮创建 | 四条启动输入已齐；继续按本手册搭建画布节点 |
@@ -89,6 +89,7 @@
 | 机器可读蓝图 | `competition/adp-kit/workflows/workflow-specs.json` | 四条工作流的统一结构 |
 | OpenAPI | `competition/adp-kit/openapi/campus-tools.openapi.json` | 创建自定义 API 插件 |
 | MCP 服务 | `competition/adp-kit/mcp/campus-tools-mcp/` | MCP / SSE / REST 三协议只读服务 |
+| CloudBase 部署包 | `competition/adp-kit/cloudfunctions/campusflowAdpTools/` | 已部署的 HTTP Function 包装；由同步脚本从 MCP 权威源生成 |
 | Widget 设计 | `competition/adp-kit/widget/校园任务结果卡.md` | ADP Widget 字段和交互 |
 | H5 兜底 | `competition/adp-kit/widget/h5/` | ADP Widget 受限时的匿名演示端 |
 | 80 条评测 | `competition/adp-kit/evaluation/evaluation-dataset.json` | ADP 评测导入源 |
@@ -191,13 +192,13 @@ API 参数：
 | `API.client_type` | 空 | `adp_web` 或 `competition_widget` |
 | `API.request_trace_id` | 空 | 贯穿工作流与后端查询 |
 
-只有当独立比赛测试服务已经通过公网 HTTPS 健康检查后，才添加：
+独立比赛测试服务已经通过公网 HTTPS 健康检查。ADP 环境变量应为：
 
-- `campus_api_base_url`
-- `campus_api_token`
-- `campus_api_signing_secret`
+- `campus_api_base_url`：`https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools`
+- `campus_api_token`：使用已安全写入的赛事 token；只核对变量名称和非空状态，不显示内容
+- `campus_api_signing_secret`：不创建，本环境使用 Bearer token 模式
 
-不得把真实值写进提示词、知识库、截图、调试输入或本文件。若采用 token 模式，可以不启用 signing secret；若平台必须显示变量，则保留空值并禁止工作流上线，直到安全值配置完成。
+不得把 token 写进提示词、知识库、截图、调试输入或本文件。首次进入变量管理页时只确认 `campus_api_base_url` 与 `campus_api_token` 两个名称存在；不要复制、展开或截图变量值。若 token 名称未出现，停止重填并先检查是否仍有“新建环境变量”子弹窗，避免重复创建。
 
 ## 5. 检查点 C：知识库
 
@@ -274,26 +275,29 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 }
 ```
 
-服务入口能力：`GET /health`、`POST /mcp`、`GET /sse`、`POST /messages` 和六条 `/api/*` REST 路由。默认本地端口 8787，但 ADP 必须连接单独部署的公网 HTTPS 测试地址，不能连接正式佛课小表服务。
+服务入口能力：`GET /health` 和六条 `/api/*` REST 路由已由独立 CloudBase HTTP Function 对外提供；完整本地服务还支持 `POST /mcp`、`GET /sse`、`POST /messages`。本地默认端口 8787，CloudBase 托管运行时端口 9000。ADP 使用上述独立 HTTPS 比赛入口，绝不连接正式佛课小表服务。
 
 ### 6.2 部署验收顺序
 
-1. 用独立比赛测试环境部署 `competition/adp-kit/mcp/campus-tools-mcp/`；可使用 Dockerfile，但不能改生产服务。
+1. 使用已部署的 `competition/adp-kit/cloudfunctions/campusflowAdpTools/`；其运行源码由 `cloudfunctions/sync-campusflow-function.js` 从 MCP 权威源同步，不能在生成副本里单独改业务逻辑。
 2. 配置随机高强度 token；不要写进仓库。
 3. 访问 `/health`，要求 HTTP 200，且数据版本为 `competition-demo-v1`。
 4. 调用一次 `get_academic_context` 和一次 `query_schedule`，确认统一 envelope 与 `evidence.verified=true`。
 5. 故意传不存在实体，确认得到结构化错误或空结果，而不是模型补造。
 6. 保存脱敏后的请求/响应截图。
 
-本机已于 2026-08-09 完成 CampusTools Docker 镜像构建与容器冒烟：`/health` 返回 `competition-demo-v1`，课表 REST 查询成功并返回 2 项核验结果，MCP `tools/list` 返回 6 个工具。该证据只证明本地容器可运行；公网 HTTPS 比赛测试部署仍未完成，不能把本机结果描述为 ADP 已接入。
+本机已于 2026-08-09 完成 CampusTools Docker 镜像构建与容器冒烟：`/health` 返回 `competition-demo-v1`，课表 REST 查询成功并返回核验结果，MCP `tools/list` 返回 6 个工具。
+
+独立公网比赛测试环境也已实际部署并验证：CloudBase 函数 `campusflowAdpTools` 为 Node.js 18 HTTP Function，函数状态 Active/Available；公网 `GET /health` 返回 HTTP 200、`status=ok`、`dataVersion=competition-demo-v1` 和 6 个工具；无 token 的 `POST /api/query_schedule` 返回 401；使用已轮换 token 返回 200、`success=true`、`evidence.verified=true` 和 4 项结果。云托管尝试在创建服务前因环境未开通资源失败，故改用托管 HTTP Function，没有创建云托管服务，也没有修改佛课小表生产服务。
 
 ### 6.3 在 ADP 中接入
 
 优先顺序：
 
-1. 若平台支持 Streamable HTTP MCP，新建 MCP 连接，地址指向公网服务 `/mcp`，完成 `tools/list`，确认六个工具全部出现。
-2. 若 MCP 配置不支持当前服务，再导入 `campus-tools.openapi.json` 创建自定义 API 插件。
-3. 若平台只允许逐接口创建，则按 OpenAPI 中六条 `/api/*` 路由分别配置。
+1. 当前公网包装优先使用 REST/OpenAPI：导入 `campus-tools.openapi.json` 创建自定义 API 插件，服务器选择描述为“校园智序独立比赛测试环境（CloudBase HTTP Function）”的地址。
+2. 认证选择 Bearer token，值绑定 ADP 环境变量 `campus_api_token`；不要把 token 粘到节点提示词或普通参数。
+3. 若平台只允许逐接口创建，则以 `campus_api_base_url` 为前缀，按 OpenAPI 中六条 `/api/*` 路由分别配置。
+4. 若后续部署完整 MCP 入口，再新增 Streamable HTTP MCP 连接并用 `tools/list` 核对六个工具；不要把当前 REST 网关误写为已提供公网 `/mcp`。
 
 认证头只引用环境变量，不在节点中写明文。导入后逐个测试六个工具。工具说明中明确：“只读匿名比赛数据；结果是动态校园事实的唯一来源；失败时禁止模型替代”。
 

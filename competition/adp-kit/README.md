@@ -11,6 +11,7 @@
 - `workflows/`：应用配置、角色指令、4条工作流规格和调试样例。
 - `openapi/`：CampusTools OpenAPI 3.0定义。
 - `mcp/`：只读CampusTools MCP/REST服务。
+- `cloudfunctions/`：从 CampusTools 权威实现同步生成的 CloudBase HTTP Function 部署包与冒烟测试。
 - `widget/`：校园任务结果卡与独立匿名H5兜底。
 - `screenshots/`：ADP阶段截图；不得包含账号、密钥或真实身份。
 - `reports/`：页面差异、实际配置、测试、评测和失败修复记录。
@@ -29,4 +30,6 @@ npm test --prefix competition/adp-kit
 
 动态校园事实不得写入知识库；只能从匿名数据经CampusTools返回。比赛接口失败后禁止回退读取production真实数据。
 
-知识文档、工作流说明和评测集是经过人工审阅的权威文件，`generate` 不覆盖它们；命令只重建匿名数据、问答 CSV、OpenAPI、Widget 样例和资产哈希清单，并在最后执行整包校验。
+独立比赛测试入口为 `https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools`。该地址只承载匿名 `competition-demo-v1`，需要 Bearer token；token 仅保存在部署环境和 ADP 环境变量中，不进入仓库。
+
+知识文档、工作流说明和评测集是经过人工审阅的权威文件，`generate` 不覆盖它们；命令只重建匿名数据、问答 CSV、OpenAPI、Widget 样例、HTTP Function 部署包和资产哈希清单，并在最后执行整包校验。

@@ -16,6 +16,7 @@ const ASSET_ROOTS = [
   "workflows",
   "openapi",
   "mcp/campus-tools-mcp",
+  "cloudfunctions",
   "widget",
 ];
 const EXCLUDED_SEGMENTS = new Set(["node_modules", "dist", ".tmp"]);

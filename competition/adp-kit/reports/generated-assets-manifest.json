@@ -1,8 +1,68 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-09T07:14:37.317Z",
+  "generatedAt": "2026-08-09T10:56:52.233Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
+    {
+      "path": "cloudfunctions/campusflowAdpTools/index.js",
+      "bytes": 1081,
+      "sha256": "92594b815cf17dcf8cc6c412ac4fe6b747c4c7efbad34de16b6878995a36c5bc"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v1.json",
+      "bytes": 30285,
+      "sha256": "5f8950b68e36fc446b4418cc127ce50ee4801f6c9d24142703e9df329a6cedc8"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/package.json",
+      "bytes": 294,
+      "sha256": "207895b310a509c4212ad8f58dc1efc17ae44c2c87642dafbccd6a3cef3d2ad0"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/scf_bootstrap",
+      "bytes": 52,
+      "sha256": "0e6adf53e51220100ca3ff894e3ad102277cdccc186456d30a72c346d13e8cf2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/data.js",
+      "bytes": 5506,
+      "sha256": "0c9d2b42962f887ff6d7a3c3bedf80ba8554e81aa55461dcbbff1440e1ad41d2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/envelope.js",
+      "bytes": 1842,
+      "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/ratelimit.js",
+      "bytes": 1071,
+      "sha256": "420b74b8f0bdbc2d8796b19650a52b6e0f6aa64dfdb2a1c0dc79772fe1489150"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/server.js",
+      "bytes": 11310,
+      "sha256": "39e28c9a7f3d517b70da460aa654fea13a068fde841180277dcee0ea91562f6e"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
+      "bytes": 24201,
+      "sha256": "757323e18d1a1434e07db0ae7f6aa84311669a46ef7c7c46b132cd2c9d40e80b"
+    },
+    {
+      "path": "cloudfunctions/README.md",
+      "bytes": 1689,
+      "sha256": "a318cc1c065de05e5c7d789d990f3589b13f4e78f930de72992cef6760c84a35"
+    },
+    {
+      "path": "cloudfunctions/sync-campusflow-function.js",
+      "bytes": 1660,
+      "sha256": "6ca11118a34cb632638f02c390c90aa8e65bef477d0ef59225de3f3c351fc81f"
+    },
+    {
+      "path": "cloudfunctions/test-http-function.js",
+      "bytes": 2710,
+      "sha256": "77980c7842466b141c4b5ef66a9472fb858b8e2bc8d5d62e79aad3c7b0bbca06"
+    },
     {
       "path": "evaluation/eval-dataset-v1.json",
       "bytes": 16989,
@@ -155,13 +215,13 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 22783,
-      "sha256": "930e5ea2745a2bcb186bdcfc4b86f4081d92818bb621e9b2f1ea16b62b4d44f3"
+      "bytes": 22997,
+      "sha256": "5cb260830e8107f8c74e115d378cd99cf0a28819089370d3a1e75ccd55291fb9"
     },
     {
       "path": "openapi/generate-openapi.js",
-      "bytes": 5119,
-      "sha256": "0bc783b62bd53674f4bdc6523a1642572c98b0416c817c6161f036c6fff4ce94"
+      "bytes": 5330,
+      "sha256": "398abd5392f9a75d14c447d556410adf03c47e9d8743659566bb01a04eeb1e0e"
     },
     {
       "path": "qa/README.md",
