@@ -18,7 +18,7 @@ https://github.com/katelya77/FosuClass/pull/49
 不要直接认同已有实现，也不要把测试全绿等同于比赛作品已经完成。请先用辩证、可验证的方式审阅：
 1. FosuClass 正式产品是否保持原有课程数据、旧缓存、旧会话、组件路径、协议和生产部署兼容；
 2. 参赛数据是否与 production 严格隔离，工具失败是否可能读取真实数据；
-3. ADP Kit 中知识、工作流、OpenAPI、Widget 和 80 条评测是否自洽，是否存在设计过度、缺分支或不可在 ADP 页面落地的问题；
+3. ADP Kit 中知识、工作流、OpenAPI、Widget、80 条 ADP 评测、33 条 Golden 事实预言和 submission-package 是否自洽，是否存在设计过度、缺分支或不可在 ADP 页面落地的问题；
 4. 哪些内容已经在真实 ADP 页面配置，哪些只是本地文件或设计蓝图；
 5. 是否有更简单、稳定、容易答辩和容易由评委体验的实现方式。
 
@@ -76,10 +76,11 @@ https://github.com/katelya77/FosuClass/pull/49
 - 仓库：`katelya77/FosuClass`
 - 分支：`feat/campusflow-adp-integration`
 - PR：`https://github.com/katelya77/FosuClass/pull/49`
-- 当前最新提交：`637f526d docs(adp): record verified runtime settings`
-- PR 状态：`CLEAN`、`MERGEABLE`
-- 远端检查：`admin-checks = SUCCESS`、`agent-release-gate = SUCCESS`
-- 相对 `main`：128 个文件有差异，约 17059 行新增、197 行删除；大量新增来自匿名 JSON、评测集、OpenAPI 和 CloudBase 函数部署副本，不能只按行数评价实现质量。
+- 本轮收口实现 head：`0ba7a9ba0514163be6ddd1d3c6899661099c192c`（`fix(competition): align ADP contracts and submission oracle`）
+- 说明：本文档的元数据更新会作为后置 docs 提交出现在上述实现 head 之后；最终 PR head 以 GitHub 页面为准。
+- PR 状态：`OPEN`、`MERGEABLE`；由于必需 CI 仍在运行，`mergeStateStatus=UNSTABLE`。
+- 推送上述 head 后的远端检查：`admin-checks = SUCCESS`、`agent-release-gate = IN_PROGRESS`；本地完整门禁已实跑通过，不得把本地结果写成 GitHub CI 已完成。
+- 相对 `main`：190 个文件有差异，32295 行新增、201 行删除；新增量主要来自匿名 JSON、评测/Golden、OpenAPI、CloudBase 同步副本和独立 submission-package，不能只按行数评价实现质量。
 - 尚未合并 `main`，没有触发佛课小表生产部署。
 
 网页端 GPT 必须检查 PR 的实际 diff，尤其关注：
@@ -104,7 +105,10 @@ https://github.com/katelya77/FosuClass/pull/49
   - `legacyNames: 小佛助手、小佛AI`
 - 小程序助手入口、浮窗、助手页、设置、记忆面板、结果表达和服务端公开回复已迁移到“小序”。
 - “小佛正在查询 / 小佛助手设置 / 小佛助手知识库 / 小佛助手运行中心”等用户可见词已迁移为“小序正在查询 / 小序设置 / 小序知识库 / 小序服务状态”。
-- 新增独立 `competition/adp-kit/`，包含匿名数据、知识、问答、工作流、OpenAPI、MCP/REST、CloudBase 函数、Widget/H5、80 条评测和报告。
+- 新增独立 `competition/adp-kit/`，包含匿名数据、知识、问答、工作流、OpenAPI、MCP/REST、CloudBase 函数、Widget/H5、80 条 ADP 评测、33 条 Golden 事实预言和报告。
+- 赛事时间系统已收口为 2026-2027 学年第一学期（2026-08-31 至 2027-01-17）；`get_academic_context` 确定性解析相对日期。
+- 四条工作流的本地契约已简化为 12 / 11 / 12 / 9 节点，01/03 不在 ADP 重复做实体解析，04 固定注入匿名 visitor。
+- 新增可独立交给评委的 `competition/submission-package/`，递归匿名扫描结果为 0 发现。
 
 ### 4.2 明确保留，不能机械重命名
 
@@ -115,11 +119,10 @@ https://github.com/katelya77/FosuClass/pull/49
 - 能力清单中的兼容标识
 - 对“小佛助手”“小佛AI”旧口令的识别兼容
 
-### 4.3 仍需网页端 GPT 重点质疑
+### 4.3 本轮已收口与仍需网页端 GPT 质疑
 
-- 集中品牌配置是否已经覆盖所有用户可见文案，还是仍有少量服务端硬编码；
-- `assistantWithSuffix: 小序助手` 是否会与“用户可见名称统一为小序”产生不必要的不一致；
-- 大量由测试产生的截图变化是否应该进入最终 PR；
+- `assistantWithSuffix` 已收口为“小序”；四条旧称输入的行为测试 4/4 通过，旧称仅作输入兼容，UI 头像 fallback 为“序”。仍可审阅是否有未被测试触达的用户可见硬编码。
+- 3 张 ADP 后台截图已删除，测试产生的二进制截图已还原且不在本轮 diff。
 - CloudBase 部署副本提交进仓库是否是比赛可复现性的必要代价，是否需要在合并前进一步说明生成关系；
 - 本地通过不等于微信开发者工具真机回归，合并前是否还需要一次正式小程序构建/预览检查。
 
@@ -244,6 +247,8 @@ API参数
 
 这意味着：工作流名称、触发描述和启动参数取得了进展，但参数提取、判断、工具调用、结果核验、Widget/回复节点都尚未在 ADP 画布落地，不能说“工作流已跑通”。
 
+本轮没有覆盖上述已保存输入。按新契约，01 的旧 `campus` 输入保留但不映射，04 的旧 `visitor_id` 输入保留但忽略任何值；待手工搭建稳定后再选择隐藏，不要为了追求表面一致而重建工作流。
+
 ### 5.6 Widget、评测与发布真实状态
 
 - 空间内尚无 `校园任务结果卡`；本地只有设计、Schema、H5 和六种样例。
@@ -271,12 +276,16 @@ API参数
 | Widget 设计 | `competition/adp-kit/widget/校园任务结果卡.md` | 待在 ADP 创建 |
 | H5 兜底 | `competition/adp-kit/widget/` | 本地匿名演示，不替代 ADP 工作流 |
 | 80 条评测 | `competition/adp-kit/evaluation/evaluation-dataset.csv` | 待导入 ADP |
+| 33 条 Golden 事实预言 | `competition/adp-kit/evaluation/golden-results.json` | CampusTools 确定性执行基线；本地 33/33 通过 |
+| 评委匿名工程包 | `competition/submission-package/` | 52 个文本文件，递归扫描 0 发现，OpenAPI 仅 `{host}` 占位符 |
 
 独立比赛测试服务健康检查地址：
 
 `https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools/health`
 
 服务已实测：health 200、无 token 的工具请求 401、授权课表查询 200、`success=true`、`dataVersion=competition-demo-v1`、`evidence.verified=true`。这只能证明服务可用，不能证明 ADP 已接入。
+
+本地确定性示例：`get_academic_context({dateText:"明天",baseDate:"2026-09-02"})` 实际返回 `resolvedDate=2026-09-03`、`week=1`、`weekday=4`、`weekdayName=周四`、`inSemester=true`，学期区间为 2026-08-31 至 2027-01-17。本轮本地验证：CampusTools 30/30、Golden 33/33、Agent Foundation 42/42、Regression 197/197、Final Convergence 120 cases、Phase 2 11/11、Release Gate 26/26；GitHub CI 仍按本文第 3 节的实时状态判定。
 
 ## 7. 网页端 GPT 的批判性审阅任务
 
@@ -304,7 +313,8 @@ API参数
 
 ### 7.4 工作流可落地性
 
-- 不能因为本地蓝图有 14 个节点就默认 ADP 必须照搬；应根据 ADP 实际节点类型提出更少但边界清楚的可执行结构；
+- 以已收口的 12 / 11 / 12 / 9 节点蓝图为上限参考；如 ADP 节点能合并回复/卡片分支，可继续减少，但不得合并掉缺参、实体错误、工具失败、空结果和未核验边界；
+- 01/03 不得在业务工具前重复调用 `resolve_entity`；歧义和未找到直接按 `query_schedule/compare_schedules` 的 `error.code` 分支。
 - 明确哪些参数由开始节点接收、哪些由模型提取、哪些由时间工具计算；
 - 明确缺参、歧义、实体不存在、工具失败、空结果、版本不匹配和未核验结果的不同分支；
 - 给出四条工作流互斥的正例和反例，避免路由冲突；
@@ -325,11 +335,11 @@ API参数
 2. **处理应用名**：寻找平台官方编辑入口或询问平台支持；没有官方入口时保留“校园智序-小序”，不要复制/删除应用。
 3. **知识上传**：用户为浏览器扩展开启“允许访问文件网址”，上传 7 份 Markdown，等待 7/7 解析成功；再导入 32 条问答。
 4. **插件接入**：导入 OpenAPI，绑定 `ENV.campus_api_base_url` 和 Bearer token；逐个测试 6 个 REST 工具。
-5. **先完成 01**：搭建参数提取、缺参、实体解析、时间归一化、课表工具、核验、空结果/错误和结果输出；用至少 12 条样例调试。
+5. **先完成 01**：搭建参数提取、只针对实体类型/名称的缺参判断、时间归一化、课表工具、`AMBIGUOUS_ENTITY/ENTITY_NOT_FOUND`、核验、空结果/其他错误和结果输出；不添加单独 resolve 节点，用至少 12 条样例调试。
 6. **验证多轮**：先证明“查询教师001”后“那周五下午呢”会继承对象，再复制经验到其他工作流。
-7. **完成 02/03/04**：不要直接复制 01 的实体或空结果判断；冲突数为 0 仍是成功，今日无课也不是工具失败。
+7. **完成 02/03/04**：02 由空教室工具校验 campus/building；03 只用 `date_range`且不预解析实体；04 忽略页面旧 `visitor_id` 输入并固定注入 `visitor-demo-001`。冲突数为 0 仍是成功，今日无课也不是工具失败。
 8. **Widget**：先接入 01、02；平台能力不足时使用本地 H5 展示，但答辩中明确 H5 是表现层兜底。
-9. **平台评测**：导入 80 条，保存首轮结果，按意图/参数/工具/数据/Widget/安全归因，修改后全量复测。
+9. **平台评测**：导入 80 条，保存首轮结果，按意图/参数/工具/数据/Widget/安全归因，修改后全量复测；平台结果需与本地 33 条 Golden 事实预言对照。
 10. **测试发布**：只有知识、工具、四工作流、Widget 和评测均达标后发布测试版本。
 11. **最终发布**：整理访问方式、评测、失败项和回滚方式，停下来向用户总确认。
 
