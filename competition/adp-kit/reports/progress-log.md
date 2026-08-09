@@ -120,6 +120,9 @@
 - 公网入口：`https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools`。只读取 `competition-demo-v1`，使用 Bearer token；token 不进入仓库、报告或截图。
 - 公网实测：`GET /health` → 200，`status=ok`、6 tools；无 token 的 `POST /api/query_schedule` → 401；轮换 token 后的同请求 → 200、`success=true`、`evidence.verified=true`、4 items。
 - 新增 `cloudfunctions/campusflowAdpTools/` 可复现部署包、权威源同步检查和本地 HTTP Function 冒烟；OpenAPI 已包含实际比赛测试 server；资产清单增至 65 个文件。
-- ADP 已保存 `campus_api_base_url`；`campus_api_token` 通过一次性本机桥接安全粘贴并点击确定，只核验过长度（43），未回显值。由于浏览器控制端 Statsig 超时，仍需重新打开变量页确认变量名称出现，不应重复粘贴或创建。
+- ADP 环境变量表已确认 `ENV.campus_api_base_url`、`ENV.campus_api_token` 两项存在；token 通过一次性本机桥接安全传递，不应再次读取变量列表全文。
 - 本轮修改后重新执行：ADP Kit 全量测试通过；`test:agent-foundation` 42/42、`test:agent-regression` 197/197、`test:ai-competition`、`test:agent-final-convergence`（120 cases）和 `test:agent-phase2` 11/11 全部退出码 0。
 - CloudBase 交付审阅发现托管包装不应继承通用服务的本地无鉴权模式；已改为缺少 `CAMPUS_API_TOKEN` 时拒绝冷启动并强制 token 模式，新增失败关闭测试，重新部署函数后再次实测 health=200、无 token=401、授权查询 4 项且 verified=true。
+- ADP 生成模型参数已改为并回读 `temperature=0.2`、`top_p=0.6`、`max_output=2000`、`context_rounds=8`。
+- 一次变量列表全文读取使旧 token 进入浏览器工具日志；旧值已立即在 CloudBase 与 ADP 双端轮换作废，新值只经一次性 localhost 桥接和虚拟剪贴板传递，公网授权查询再次通过，临时文件已删除。
+- 应用名仍为“校园智序-小序”。实际检查应用列表“更多”菜单仅有复制、导出、删除，应用设置标题无编辑控件；为避免破坏四条既有工作流，未采用复制/删除应用的高风险绕行。
