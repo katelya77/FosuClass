@@ -96,6 +96,19 @@
 
 - 应用基础配置大部分正确；当前名称仍为“校园智序-小序”，最大输出长度仍为 4000，需改为中点名称和约 2000。
 - 文档知识 0、问答知识 0；已有分类但尚未上传。
-- 工作流 01/02/03 已创建但均待发布；01 实际只有开始/结束且缺 3 个输入参数；04 尚未创建。
+- 工作流 01/02/03 已创建但均待发布；初始画布均只有开始/结束。
 - “校园任务结果卡”尚未创建；评测集和评测任务均为 0；应用未上线。
 - 已生成 `ADP-实际状态与逐步配置手册.md`，包含所有配置值、节点、分支、调试样例、评测和最终发布闸门。
+
+### 2026-08-09 15:50–17:06 ADP 自动化实录
+
+- 保持 v2rayN `10808` 的“自动配置代理 + 绕过大陆”，未切换全局代理；ADP 始终由大陆直连。
+- 实际创建 `04-今日校园计划`，workflow_id 为 `6445d4f9-e89c-446d-9f50-a4e6143562ca`，触发描述已填写。
+- 01 开始节点从 4 个输入补齐为 7 个：`entity_type, entity_name, date_text, week, weekday, period_scope, campus`；页面显示自动保存。
+- 02 开始节点从 0 个输入补齐为 9 个：`campus, date_text, week, weekday, start_period, end_period, consecutive_periods, building, capacity`；页面回读 9/9，自动保存时间 17:06。
+- 03 开始节点从 0 个输入补齐为 6 个：`first_entity_type, first_entity_name, second_entity_type, second_entity_name, date_range, period_scope`；超时后重新读取页面，确认 6/6 均已写入。
+- 已保存脱敏页面证据 `screenshots/adp-workflow-03-inputs.jpg`：可见 03 仅有开始/结束，右侧 6 个启动输入完整，截图不含账号身份、手机号或内部密钥。
+- 04 开始节点补齐 4 个输入：`visitor_id, date_text, preferred_campus, preferred_study_duration`；页面自动保存时间 16:38。
+- 四条工作流当前都仍只有开始/结束，未搭建参数提取、条件分支、CampusTools、结果核验、Widget/回复节点；不得将启动参数完成描述为工作流跑通。
+- 文档上传控件已实际打开且支持多选 Markdown；扩展调用 `setFiles` 返回 `Not allowed`。需要在 Chrome 扩展详情中开启“允许访问文件网址”后再上传。该权限问题不影响普通 DOM 配置。
+- 浏览器扩展访问自身 Statsig 服务偶发 10 秒超时，但 ADP DOM 操作和自动保存有效；每次不确定结果均先重读页面后再补缺项，未盲目重复写入。
