@@ -250,7 +250,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 | 工具 | 作用 | 必要输入 |
 |---|---|---|
 | `resolve_entity` | 匿名实体归一化与歧义候选 | `name`，可选 `type` |
-| `get_academic_context` | 日期、教学周、星期换算 | 可选 `date` |
+| `get_academic_context` | 确定性日期、教学周、星期换算 | 可选 `date` / `dateText` / `baseDate` |
 | `query_schedule` | 班级/教师/教室/课程课表 | `entityType`、`entityName` |
 | `find_available_classrooms` | 校区、节次、容量空教室 | 日期或周次条件，推荐显式 `campus` |
 | `compare_schedules` | 两个对象冲突比较 | 两组 type/name |
@@ -341,27 +341,18 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 如果 ADP Widget 功能无法表达 choice 回填或移动端列表，可使用本地 `widget/h5/` 作为匿名演示界面，但 ADP 工作流和 CampusTools 调用仍是智能体核心，不能改成纯 H5 假数据演示。
 
-## 8. 检查点 F：四条工作流的公共结构
+## 8. 检查点 F：四条工作流的最小稳定结构
 
-四条工作流都按下面的受控结构搭建，不把业务逻辑塞进单个大模型节点：
+不再要求“四条统一 14 节点”。以 `workflows/workflow-specs.json` v2 为权威蓝图，分别使用 **12 / 11 / 12 / 9** 个节点。`query_schedule` 和 `compare_schedules` 已在工具内部解析实体，因此 01 和 03 不得再串联通用 `resolve_entity`；02 由 `find_available_classrooms` 校验校区/楼栋；04 不解析用户输入的 visitor。
 
-```text
-开始
-→ 参数提取（模型只输出 JSON，不生成事实）
-→ 时间归一化（get_academic_context）
-→ 必填条件判断
-  ├─ 缺参：回复追问，结束本轮
-  └─ 齐全：resolve_entity（需要实体的工作流）
-      ├─ 不存在：提示匿名可查范围，结束
-      ├─ 多候选：choice 卡，等待用户确认
-      └─ 唯一命中：调用业务工具
-          ├─ 工具失败：error 卡/失败回复
-          ├─ 空结果：明确无结果并给出放宽建议
-          └─ 成功：核验 success、dataVersion、evidence.verified
-              → 结构化结果整理
-              → Widget
-              → 结束
-```
+| 工作流 | 节点数 | 最小主链 |
+|---|---:|---|
+| 01 | 12 | 开始 → 参数提取 → 必填判断 → 时间解析 → 课表工具 → 错误/空/核验分支 → 卡片 → 结束 |
+| 02 | 11 | 开始 → 参数提取 → 必填判断 → 时间解析 → 空教室工具 → 错误/空/核验分支 → 卡片 → 结束 |
+| 03 | 12 | 开始 → 参数提取 → 必填判断 → 时间解析 → 冲突工具 → 错误/零冲突/核验分支 → 卡片 → 结束 |
+| 04 | 9 | 开始 → 参数提取 → 固定匿名 visitor → 时间解析 → 日计划工具 → 错误/核验分支 → 卡片 → 结束 |
+
+页面现有四条工作流和开始输入不覆盖、不批量重建。下文会逐条标注哪些旧输入可以保留但不使用；待用户手工确认节点稳定后，再选择隐藏或删除旧输入。
 
 结果核验节点的逻辑必须等价于：
 
@@ -373,7 +364,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 否则：verified_success
 ```
 
-回复节点不得显示密钥、环境变量、内部 URL、系统提示或 Provider 配置。每条工作流的触发描述要互相排斥，避免“找空教室”被 01 捕获、“今日安排”被普通课表查询捕获。
+业务工具返回 `AMBIGUOUS_ENTITY` / `ENTITY_NOT_FOUND` 时直接走候选/不存在分支。回复节点不得显示密钥、环境变量、内部 URL、系统提示或 Provider 配置；工具失败时禁止模型补造任何课程事实。每条工作流的触发描述要互相排斥。
 
 ## 9. 检查点 G：01-多维课表查询
 
@@ -381,13 +372,15 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `entity_type` | string | 条件必填 | class / teacher / room / course |
+| `entity_type` | string | 是 | class / teacher / room / course |
 | `entity_name` | string | 是 | 匿名实体名或用户原文 |
 | `date_text` | string | 否 | 原始自然语言时间 |
 | `week` | number | 否 | 1–20 |
 | `weekday` | number | 否 | 1–7 |
 | `period_scope` | object/string | 否 | 上午/下午/晚上或 start/end |
-| `campus` | string | 否 | 校区A/校区B |
+| `campus` | string | 保留但不使用 | 当前 `query_schedule` 不消费该字段；不映射到工具 |
+
+现有 7 个开始输入全部保留，但新契约只要求 `entity_type + entity_name`。时间全空时调用 `get_academic_context({})` 取 Asia/Shanghai 今天；`campus` 不得传入任何不支持它的工具。后续可手工隐藏该旧输入，本次不删除。
 
 触发描述：`用户想查询某个班级、教师、教室或课程在指定日期、教学周、星期或节次范围内的课程安排。`
 
@@ -402,7 +395,6 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
   "week": "教学周数字或空",
   "weekday": "星期数字1-7或空",
   "period_scope": "上午|下午|晚上|具体节次 或空",
-  "campus": "校区A|校区B 或空",
   "inherited": "是否继承了上文实体 true|false"
 }
 规则：口语归一化教师1/教师一为教师001，A班为2025级A班；“那周五下午呢”只更新时间并继承已确认对象；真实姓氏教师不在匿名范围，实体留空；不确定字段留空；禁止生成课程事实；只输出 JSON。
@@ -410,14 +402,13 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 节点顺序与关键映射：
 
-1. 参数提取。
-2. 必填判断：entity_type/entity_name 缺失则追问对象；时间字段全空时可使用当前日期，但必须显式显示解析后的日期。
-3. `resolve_entity`：`type=entity_type`，`name=entity_name`。
-4. `get_academic_context`：处理 date_text 或明确日期，输出 week/weekday/inSemester。
-5. 若不在学期内或 week 不在 1–20，回复边界说明。
-6. `query_schedule`：`entityType`、`entityName`、`week`、`weekday`、`periodStart`、`periodEnd`。
-7. 结果核验、空结果、错误分支。
-8. `schedule` Widget。
+1. 开始 → 参数提取。
+2. 必填判断：只在 `entity_type/entity_name` 缺失时追问对象。
+3. `get_academic_context`：`dateText=date_text`；无时间时传空对象，使用返回的 `resolvedDate/week/weekday/inSemester`。
+4. 若不在学期内或 week 不在 1–20，回复边界说明。
+5. `query_schedule`：`entityType`、`entityName`、`date` 或 `week/weekday`、`periodStart/periodEnd`；不传 campus。
+6. 按工具信封分支：`AMBIGUOUS_ENTITY` 显示 choice，`ENTITY_NOT_FOUND` 说明未找到，其他失败显示 error，成功再核验空结果与 verified。
+7. 结构化模板 → `schedule` Widget → 结束。共 12 节点，不含单独 `resolve_entity`。
 
 时段换算：上午 1–4 节，下午 5–8 节，晚上 9–10 节。
 
@@ -452,10 +443,10 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 ```text
 你是校园空教室查询参数提取器。只输出 JSON，字段为 campus、date_text、week、weekday、start_period、end_period、consecutive_periods、building、capacity、inherited。
-规则：上午=1-4节，下午=5-8节，晚上=9-10节；“连续两节”=2；“现在”使用当前日期和当前节次；缺校区不假设；多轮继承未被更新的条件；不确定字段留空；禁止编造空闲情况。
+规则：上午=1-4节，下午=5-8节，晚上=9-10节；“连续两节”=2；“现在”只能确定日期，若无法确定具体节次必须追问；缺校区不假设；多轮继承未被更新的条件；不确定字段留空；禁止编造空闲情况。
 ```
 
-必填判断：campus 必须有；日期或 week+weekday 必须能解析；开始与结束节次必须能解析。缺校区优先追问：`想查哪个校区的空教室？校区A还是校区B？`
+必填判断：campus 必须有；日期或 week+weekday 必须能解析；start_period 必须有；end_period 与 consecutive_periods 二选一。缺校区优先追问：`想查哪个校区的空教室？校区A还是校区B？`
 
 工具映射：
 
@@ -468,7 +459,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 - `building → building`
 - `capacity → capacity`（服务兼容并按最低容量处理）
 
-成功使用 `classroom` 卡。空结果明确“没有符合全部条件的教室”，给出放宽为单节、换校区、换时段三个建议。
+先用 `get_academic_context` 把 date_text 转为确定日期，再直接调用 `find_available_classrooms`。不添加通用 `resolve_entity`；campus/building/容量/节次由空教室工具自身校验。成功使用 `classroom` 卡；空结果明确“没有符合全部条件的教室”，给出放宽为单节、换校区、换时段三个建议。共 11 节点。
 
 至少逐条调试：
 
@@ -489,27 +480,28 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 当前 03 仍只有开始/结束，但本轮已把以下 6 个开始输入全部补齐并通过 DOM 回读。不要重复添加。
 
-参数：`first_entity_type,first_entity_name,second_entity_type,second_entity_name,date_range,period_scope`，可在提取输出中拆出 `week`、`weekday`。
+参数：`first_entity_type,first_entity_name,second_entity_type,second_entity_name,date_range,period_scope`。`date_range` 是唯一时间容器，内部只含 `date_text/week/weekday`；不再额外输出顶层同名时间字段。
 
 触发描述：`用户想比较两个班级、教师或课程在同一时间范围的课程冲突、共同空闲或跨校区衔接风险。`
 
 参数提取提示词：
 
 ```text
-你是课程冲突比较参数提取器。只输出 JSON：两个对象各自的 type/name，以及 date_text、week、weekday、period_scope、inherited。
-规则：“A班和B班”按出现顺序归一化为2025级A班和2025级B班；只说一个对象时另一个留空；“都有空的时间段”标记 note=find_common_free，仍调用冲突比较后反向解释；不确定字段留空；禁止生成冲突事实。
+你是课程冲突比较参数提取器。只输出 JSON：
+{"first_entity_type":"","first_entity_name":"","second_entity_type":"","second_entity_name":"","date_range":{"date_text":"","week":null,"weekday":null},"period_scope":null,"inherited":false}
+规则：“A班和B班”按出现顺序归一化为2025级A班和2025级B班；只说一个对象时另一个留空；不确定字段留空；禁止生成冲突事实；禁止单独输出顶层 date_text/week/weekday。
 ```
 
-两个对象分别调用 `resolve_entity`；任一个不存在或有歧义都不得调用比较工具。工具映射：
+两个对象只做必填判断，不预先调用 `resolve_entity`；`compare_schedules` 内部解析双方，并在 `AMBIGUOUS_ENTITY` / `ENTITY_NOT_FOUND` 时返回受控错误。工具映射：
 
 - `first_entity_type → firstType`
 - `first_entity_name → firstName`
 - `second_entity_type → secondType`
 - `second_entity_name → secondName`
-- `week/weekday → week/weekday`
+- `date_range.resolved_date → date`，或 `date_range.week/weekday → week/weekday`
 - `period_scope.start/end → periodStart/periodEnd`
 
-成功用 `conflict` 卡，明确冲突数量；零冲突也属于成功结果，不能被错误归入工具空结果。跨校区连续课程从 `rushWarnings` 单独高亮。
+成功用 `conflict` 卡，明确冲突数量；零冲突也属于成功结果，不能被错误归入工具空结果。跨校区连续课程从 `rushWarnings` 单独高亮。共 12 节点。
 
 至少逐条调试：
 
@@ -529,7 +521,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 04 已于本轮实际创建，名称为 `04-今日校园计划`；触发描述已填写，4 个开始输入已补齐并自动保存。不要再次新建或重复添加输入。当前画布仍只有开始/结束，应从“参数提取”节点继续搭建。
 
-参数：`visitor_id,date_text,preferred_campus,preferred_study_duration`。
+页面已有 `visitor_id,date_text,preferred_campus,preferred_study_duration` 4 个开始输入，全部保留且不自动覆盖。但新业务参数只是 `date_text,preferred_campus,preferred_study_duration`；页面旧 `visitor_id` 保留但永不映射，后续可由用户手工隐藏。
 
 触发描述：`用户想根据匿名个人课表获取今天、明天或指定日期的课程时间轴、空档、自习建议及跨校区提醒。`
 
@@ -540,14 +532,14 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 规则：未给日期默认今天；visitor_id 不从用户文本推断，由系统固定为演示用户001对应的匿名 visitor；“没课时去哪”令 focus=自习；不确定字段留空；禁止生成课程事实。
 ```
 
-节点：参数提取 → 注入匿名 `visitor_id` → `get_academic_context` → 学期判断 → `generate_day_plan` → 核验 → `day_plan` 卡。工具映射：
+节点：参数提取 → `get_academic_context` → 学期判断 → `generate_day_plan` → 核验 → `day_plan` 卡。`generate_day_plan` 节点使用常量，不读取用户文本、API 参数或真实登录态：
 
-- `visitor_id → visitorId`
+- `constant:visitor-demo-001 → visitorId`
 - 解析后的具体日期 → `date`
 - `preferred_campus → preferredCampus`
 - `preferred_study_duration → preferredStudyDuration`
 
-当天无课不是工具错误，应明确无课并提供“查空教室”动作。学期外日期说明本演示学期从 2026-03-02 起共 20 周。不得从真实登录用户身份生成 visitor_id。
+当天无课不是工具错误，应明确无课并提供“查空教室”动作。学期外日期说明本演示学期为 2026-2027 学年第一学期，2026-08-31 起共 20 周，至 2027-01-17。不得从真实登录用户身份生成 visitor_id。共 9 节点。
 
 至少逐条调试：
 
@@ -580,7 +572,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 若应用路由混淆，优先修改四条工作流的触发描述和反例，不要把所有意图统一交给一个大模型节点。
 
-## 14. 检查点 L：80 条评测
+## 14. 检查点 L：80 条 ADP 评测 + 33 条 Golden 事实预言
 
 在“评测集”上传 `evaluation-dataset.csv` 或使用 JSON 逐条导入，名称建议：`校园智序-匿名赛事-v1-80`。实际分布：
 
@@ -610,7 +602,7 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 
 - 意图错/工作流错 → 触发描述与反例
 - 参数错/多轮错 → 参数提取提示词和上下文变量
-- 实体错 → resolve_entity 映射或候选分支
+- 实体错 → 检查业务工具的 `AMBIGUOUS_ENTITY/ENTITY_NOT_FOUND` 分支（不额外串联 resolve_entity）
 - 时间错 → get_academic_context 与节次换算
 - 事实错/幻觉 → 是否绕开了工具，核验节点是否缺失
 - 样式错 → 结果整理或 Widget
@@ -618,6 +610,8 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 - 隐私失败 → 角色指令、安全分支和知识库内容
 
 每次修改后重新运行失败集，再运行全部 80 条。报告至少保存：首轮总分、失败用例、归因、修改项、复测结果、仍失败项。关键事实正确性、匿名安全和“不虚构”应以 100% 为发布硬闸门；其余总成功率目标不低于 90%。
+
+`evaluation/golden-results.json` 是由 CampusTools 确定性执行生成的 33 条事实结果基线，覆盖课表、空教室、冲突和日计划。本地每次改数据或工具后必须运行 `npm run eval:golden --prefix competition/adp-kit`；若工具事实或数据 hash 改变，测试必须失败，不得自动接受新基线。只有明确审阅后才可运行 `node evaluation/generate-golden-results.js --accept-reviewed`。
 
 ## 15. 检查点 M：测试版本与最终发布闸门
 
@@ -628,6 +622,8 @@ CampusTools 是独立、只读、匿名比赛服务。默认且唯一读取 `com
 - 四条工作流已调试且启用
 - 01、02 已接入 Widget
 - 80 条评测有完整报告
+- 33 条 Golden 事实预言全部通过
+- `competition/submission-package/` 全目录递归匿名扫描为 0 发现
 - 成功卡展示 `competition-demo-v1` 与已核验
 - 工具失败不回退生产数据，也不回退模型造事实
 - 页面、日志、知识库和卡片无真实学校、学院、教师、学生、团队或指导教师身份

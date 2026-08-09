@@ -3,7 +3,7 @@
   <view class="xiaofu-header xiaofu-header-compact">
     <view class="xiaofu-avatar-wrap" aria-hidden="true">
       <image wx:if="{{hasHeroLogo}}" class="xiaofu-avatar" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
-      <view wx:else class="xiaofu-avatar-text">佛</view>
+      <view wx:else class="xiaofu-avatar-text">序</view>
     </view>
     <view class="xiaofu-title-block" bindtap="openConversationSheet" aria-label="打开对话列表">
       <view class="xiaofu-title-line xiaofu-title-sr"><text class="xiaofu-title">{{assistantBrand.assistantName}}</text></view>
@@ -107,7 +107,7 @@
     >
       <view wx:if="{{message.role == 'assistant' && message.showAvatar}}" class="assistant-avatar">
         <image wx:if="{{hasHeroLogo}}" class="avatar-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
-        <text wx:else>佛</text>
+        <text wx:else>序</text>
       </view>
       <view wx:elif="{{message.role == 'assistant'}}" class="assistant-avatar-spacer"></view>
 

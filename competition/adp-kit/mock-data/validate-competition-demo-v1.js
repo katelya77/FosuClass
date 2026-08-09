@@ -19,6 +19,14 @@ const fs = require("fs");
 const path = require("path");
 
 const DATA_PATH = path.join(__dirname, "competition-demo-v1.json");
+const DAY_MS = 86400000;
+
+function expectedEndDate(startDate, totalWeeks) {
+  const [year, month, day] = String(startDate).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day) + (Number(totalWeeks) * 7 - 1) * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
 
 let failures = 0;
 function check(name, ok, detail) {
@@ -62,6 +70,14 @@ function main() {
   check("dataVersion 正确", data.meta.dataVersion === "competition-demo-v1");
   check("演示参考日期存在", /^\d{4}-\d{2}-\d{2}$/.test(data.meta.demoReferenceDate || ""));
   check("演示参考日期在学期内", data.meta.demoReferenceDate >= data.meta.semester.startDate && data.meta.demoReferenceDate <= data.meta.semester.endDate);
+  check("学期标识正确", data.meta.semester.id === "2026-2027-1" && data.meta.semester.name === "2026-2027学年第一学期");
+  check("学期从 2026-08-31 周一开始", data.meta.semester.startDate === "2026-08-31");
+  check("学期共 20 周", data.meta.semester.totalWeeks === 20);
+  check(
+    "学期结束日期由 startDate + totalWeeks 自动确定",
+    data.meta.semester.endDate === expectedEndDate(data.meta.semester.startDate, data.meta.semester.totalWeeks),
+    `${data.meta.semester.endDate} != ${expectedEndDate(data.meta.semester.startDate, data.meta.semester.totalWeeks)}`,
+  );
   check("dataHash 存在", /^sha1:[0-9a-f]{12}$/.test(data.dataHash || ""));
 
   console.log("== 2. 引用完整 ==");

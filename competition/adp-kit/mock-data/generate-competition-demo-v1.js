@@ -27,6 +27,17 @@ const path = require("path");
 const crypto = require("crypto");
 
 const DATA_VERSION = "competition-demo-v1";
+const SEMESTER_START_DATE = "2026-08-31";
+const TOTAL_WEEKS = 20;
+
+function addCalendarDays(dateStr, days) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day) + Number(days) * 86400000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+const SEMESTER_END_DATE = addCalendarDays(SEMESTER_START_DATE, TOTAL_WEEKS * 7 - 1);
 
 // ---------------------------------------------------------------------------
 // 元信息：学期与节次时间轴
@@ -35,18 +46,18 @@ const META = {
   dataVersion: DATA_VERSION,
   schema: "campus-demo/v1",
   timezone: "Asia/Shanghai",
-  // 比赛演示时钟：相对时间（今天/明天/本周）固定从该日期解析，避免评测随真实日期漂移。
-  demoReferenceDate: "2026-03-02",
+  // 只用于固定评测基准；真实请求默认按 Asia/Shanghai 当前日期解析。
+  demoReferenceDate: SEMESTER_START_DATE,
   generatedBy: "competition/adp-kit/mock-data/generate-competition-demo-v1.js",
   anonymization:
     "本数据集全部为虚构匿名演示数据，不对应任何真实学校、学院、教师、学生、用户与团队身份。",
   semester: {
-    id: "2025-2026-2",
-    name: "2025-2026学年第二学期",
-    // 2026-03-02 为周一，教学周 1 起点
-    startDate: "2026-03-02",
-    endDate: "2026-07-19",
-    totalWeeks: 20,
+    id: "2026-2027-1",
+    name: "2026-2027学年第一学期",
+    // 2026-08-31 为周一；结束日期始终由起始日和总周数确定性计算。
+    startDate: SEMESTER_START_DATE,
+    endDate: SEMESTER_END_DATE,
+    totalWeeks: TOTAL_WEEKS,
   },
   // 节次时间轴：1-10 节，两节为一大节
   periods: [
@@ -313,9 +324,10 @@ function main() {
 
   dataset.nameIndex = buildIndexes(dataset);
 
-  // 数据指纹：对核心事实（lessons + 实体）做稳定哈希，用于版本核验话术
+  // 数据指纹：覆盖学期、节次与核心事实。修改时间规则或课程事实都会改变哈希。
   const hash = crypto.createHash("sha1");
   hash.update(JSON.stringify({
+    semester: META.semester, periods: META.periods,
     campuses: CAMPUSES, colleges: COLLEGES, classes: CLASSES,
     teachers: TEACHERS, courses: COURSES, rooms: ROOMS, lessons,
   }));

@@ -87,14 +87,14 @@
 - `test:agent-phase2`：11/11 通过。
 - `test:agent-phase3`：通过。
 - `test:campus-assistant-copy`：通过。
-- `competition/adp-kit npm test`：通过；最终汇总为 7 文档、32 问答、80 评测、4 工作流、6 工具、6 卡型，CampusTools 26 项服务测试通过。
-- `test:agent-release-gate`：26/26 阶段通过；Docker Desktop 启动后真实执行 PostgreSQL/Redis、standalone 编排、默认服务镜像、容器健康/API、发布预检与安全验收，耗时约 42 分钟。
+- `competition/adp-kit npm test`：通过；最终汇总为 7 文档、32 问答、80 评测、4 工作流、6 工具、6 卡型，CampusTools 30/30、Golden 33/33、提交包递归扫描 0 发现。
+- `test:agent-release-gate`：26/26 阶段通过；Docker Desktop 启动后真实执行 PostgreSQL/Redis、standalone 编排、默认服务镜像、容器健康/API、发布预检与安全验收，本轮耗时约 31 分 58 秒。
 - CampusTools Docker 冒烟：镜像构建通过；`health=ok`、`dataVersion=competition-demo-v1`、教师课表返回 2 项且 `evidence.verified=true`、MCP `tools/list` 返回 6 个工具；临时容器已清理。
-- ADP 资产清单现覆盖 65 个实际交付文件并进入 `npm test` 门禁；Widget 样例 queryId/computedAt 已固定，重复生成哈希稳定。
+- ADP 内部资产清单现覆盖 73 个实际交付文件；Widget 样例 queryId/computedAt 已固定，重复生成哈希稳定。
 
 ### ADP 页面实际核验
 
-- 应用基础配置大部分正确；当前名称仍为“校园智序-小序”，最大输出长度仍为 4000，需改为中点名称和约 2000。
+- 应用模型与对话参数已核验为目标值（含最大输出 2000）；当前名称仍为“校园智序-小序”，页面未找到安全的原地重命名入口。
 - 文档知识 0、问答知识 0；已有分类但尚未上传。
 - 工作流 01/02/03 已创建但均待发布；初始画布均只有开始/结束。
 - “校园任务结果卡”尚未创建；评测集和评测任务均为 0；应用未上线。
@@ -107,7 +107,7 @@
 - 01 开始节点从 4 个输入补齐为 7 个：`entity_type, entity_name, date_text, week, weekday, period_scope, campus`；页面显示自动保存。
 - 02 开始节点从 0 个输入补齐为 9 个：`campus, date_text, week, weekday, start_period, end_period, consecutive_periods, building, capacity`；页面回读 9/9，自动保存时间 17:06。
 - 03 开始节点从 0 个输入补齐为 6 个：`first_entity_type, first_entity_name, second_entity_type, second_entity_name, date_range, period_scope`；超时后重新读取页面，确认 6/6 均已写入。
-- 已保存脱敏页面证据 `screenshots/adp-workflow-03-inputs.jpg`：可见 03 仅有开始/结束，右侧 6 个启动输入完整，截图不含账号身份、手机号或内部密钥。
+- 03 的 6 个启动输入已经 DOM 回读确认；原页面截图因存在后台/账号上下文风险，已从 PR 删除，只保留文字证据。
 - 04 开始节点补齐 4 个输入：`visitor_id, date_text, preferred_campus, preferred_study_duration`；页面自动保存时间 16:38。
 - 四条工作流当前都仍只有开始/结束，未搭建参数提取、条件分支、CampusTools、结果核验、Widget/回复节点；不得将启动参数完成描述为工作流跑通。
 - 文档上传控件已实际打开且支持多选 Markdown；扩展调用 `setFiles` 返回 `Not allowed`。需要在 Chrome 扩展详情中开启“允许访问文件网址”后再上传。该权限问题不影响普通 DOM 配置。
@@ -126,3 +126,15 @@
 - ADP 生成模型参数已改为并回读 `temperature=0.2`、`top_p=0.6`、`max_output=2000`、`context_rounds=8`。
 - 一次变量列表全文读取使旧 token 进入浏览器工具日志；旧值已立即在 CloudBase 与 ADP 双端轮换作废，新值只经一次性 localhost 桥接和虚拟剪贴板传递，公网授权查询再次通过，临时文件已删除。
 - 应用名仍为“校园智序-小序”。实际检查应用列表“更多”菜单仅有复制、导出、删除，应用设置标题无编辑控件；为避免破坏四条既有工作流，未采用复制/删除应用的高风险绕行。
+
+### 2026-08-09 PR #49 比赛收口与契约修正
+
+- 将匿名演示学期调整为 2026-2027 学年第一学期：2026-08-31 至 2027-01-17，20 周；新 `dataHash=sha1:fefef4bf425b`，CloudBase 本地同步副本一致。
+- `get_academic_context` 新增确定性 `date/dateText/baseDate` 契约和受控中文相对时间解析；新增测试全部通过。
+- 四条工作流蓝图收口为 12 / 11 / 12 / 9 节点；删除无意义的 ADP 预解析节点，统一 03 时间容器，04 固定注入匿名 visitor。ADP 现有开始输入未被覆盖。
+- 新增 33 条 Golden Result 事实预言与源 hash 锁，实测 33/33、verified=100%。
+- 新增独立 `competition/submission-package/`；52 个文本文件递归扫描，findings=0、credentialCandidates=0，OpenAPI 仅留 `{host}` 占位符。
+- 旧称“小佛助手浮窗怎么开”“打开小佛浮窗”“小佛可以做什么”“你是小佛吗”行为回归 4/4 通过；UI 仅显示“小序/小序浮窗/小序设置”，头像文字 fallback 改为“序”。
+- 删除 3 张 ADP 后台截图，发布门禁生成的 2 张二进制截图已还原，不进入本轮差异。
+- 本轮实跑：`test:campus-assistant-copy`、ADP Kit 全套、Agent Foundation 42/42、Regression 197/197、AI Competition、Final Convergence（120 cases）、Phase 2 11/11、Release Gate 26/26 全部通过。
+- 未合并 main，未部署正式产品，未发布 ADP 测试版或最终比赛版。ADP 真实未完成状态仍为：7 文档/32 问答未上传，四画布只有开始/结束，插件/Widget/平台评测/发布未完成。

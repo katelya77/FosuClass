@@ -18,6 +18,7 @@ const {
   getTodayWeekday,
 } = require("../utils/week");
 const { getMiniProgramEnvVersion } = require("../utils/platform");
+const assistantBrand = require("../config/assistantBrand");
 
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
@@ -752,17 +753,18 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
   const value = String(message || "").replace(/\s+/g, "");
   const isImportHelp = /导入.*个人课表|个人课表.*导入|导入课表|xls/i.test(value);
   const isDataSourceHelp = /数据来源|来源说明|知识来源|课表来源/.test(value);
-  const isFloatHelp = /小序助手浮窗|小序浮窗|浮窗/.test(value);
+  const isFloatHelp = /小佛助手浮窗|小佛浮窗|小序助手浮窗|小序浮窗|浮窗/.test(value);
+  const assistantName = assistantBrand.assistantName;
   const card = isFloatHelp
     ? {
         type: "help",
-        title: "小序助手浮窗",
+        title: `${assistantName}浮窗`,
         subtitle: "可点击、拖拽、隐藏或关闭",
         badges: ["使用帮助", "浮窗"],
         items: [
           { title: "打开方式", subtitle: "单击浮窗会打开校园服务管家；拖动后会吸附到左右边缘", value: "" },
           { title: "关闭与开启", subtitle: "页面右上角更多操作里可以开启或关闭浮窗", value: "" },
-          { title: "长按菜单", subtitle: "可打开小序校园助手、隐藏本页或关闭浮窗", value: "" },
+          { title: "长按菜单", subtitle: `可打开${assistantName}、隐藏本页或关闭浮窗`, value: "" },
         ],
         actions: [
           { label: "关闭浮窗", type: "toggleFloat", payload: { enabled: false } },
@@ -825,7 +827,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
   ], value);
   return {
     answer: isFloatHelp
-      ? "小序助手浮窗已可通过更多操作开启或关闭。单击会打开校园服务管家，拖拽会吸附到左右边缘，长按可以打开菜单。"
+      ? `${assistantName}浮窗可通过更多操作开启或关闭。单击会打开校园服务管家，拖拽会吸附到左右边缘，长按可以打开菜单。`
       : isImportHelp
       ? "已根据关键词匹配到导入个人课表说明。导入后，可查询“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排。"
       : (isDataSourceHelp
@@ -835,7 +837,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
       card,
     ],
     suggestions: isFloatHelp
-      ? ["关闭小序助手浮窗", "打开小序校园助手", "可以查询什么"]
+      ? [`关闭${assistantName}浮窗`, `打开${assistantName}`, "可以查询什么"]
       : isImportHelp
       ? ["今天有什么课", "查班级本周课表", "课表数据更新到什么时候"]
       : (isDataSourceHelp
@@ -1343,7 +1345,7 @@ function hasUsableAgentAnswer(response) {
 
 function isStructuredLocalHelp(message) {
   const value = String(message || "").replace(/\s+/g, "");
-  return /导入.*个人课表|个人课表.*导入|导入课表|xls|excel|小序助手浮窗|小序浮窗|浮窗|数据来源|来源说明|知识来源/i.test(value);
+  return /导入.*个人课表|个人课表.*导入|导入课表|xls|excel|小佛助手浮窗|小佛浮窗|小序助手浮窗|小序浮窗|浮窗|数据来源|来源说明|知识来源/i.test(value);
 }
 
 function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
@@ -1365,7 +1367,7 @@ function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
     answer = pickResponseVariant([
       "我是小序，佛课小表里的校园助手。擅长查课表、空教室、教学周、天气和校园入口，也可以帮你理解怎么导入个人课表。",
       "叫我小序就好。我是佛课小表的校园服务助手，能帮你查全校课表、找自习教室、看天气和校区信息；具体课程事实会以工具数据为准。",
-      "我是小序助手，不是万能聊天机器人。校园课表、空教室、教学周和常用入口我比较熟，你也可以直接问“今天有什么课”。",
+      "我是小序，不是万能聊天机器人。校园课表、空教室、教学周和常用入口我比较熟，你也可以直接问“今天有什么课”。",
     ], compact);
   } else if (/^(你好|您好|嗨|哈喽|在吗|早上好|中午好|晚上好|hello|hi)/i.test(compact)) {
     answer = pickResponseVariant([

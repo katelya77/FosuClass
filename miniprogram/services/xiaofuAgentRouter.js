@@ -130,7 +130,7 @@ function isHelpQuery(message) {
     /^(这个|这款|小程序|app|应用).*(怎么用|如何用|怎么使用|使用方法|使用说明)$/.test(value) ||
     /^(如何问得更准确|怎么问得更准确|问法建议|数据来源说明)$/.test(value) ||
     /^(怎么用|如何使用|如何使用校园查询|校园查询怎么用|使用帮助|帮助|功能|功能说明|功能介绍)$/.test(value) ||
-    /(小佛助手浮窗|小佛浮窗|浮窗).*(开启|关闭|打开|隐藏|怎么用|如何用|设置)|^(开启|关闭|打开|隐藏)(小佛助手浮窗|小佛浮窗|小序浮窗|小序助手浮窗)$/.test(value) ||
+    /(小佛助手浮窗|小佛浮窗|小序助手浮窗|小序浮窗|浮窗).*(开启|关闭|打开|隐藏|怎么开|如何开|怎么用|如何用|设置)|^(开启|关闭|打开|隐藏)(小佛助手浮窗|小佛浮窗|小序浮窗|小序助手浮窗)$/.test(value) ||
     /^(怎么|如何|怎样).*(查课表|查全校课表|查班级|查老师|查教师|查教室|查课程)/.test(value);
 }
 
@@ -257,6 +257,14 @@ function routeMessage(message, clientContext = {}) {
       shouldUseScheduleTool: false,
       cardType: "personal_schedule",
       reason: hasPersonal ? "personal schedule wording with local summary" : "personal schedule wording without imported schedule",
+    });
+  }
+
+  // 历史与当前助手名称的明确身份询问必须保持等价；避免被宽泛校园知识词表截获。
+  if (isIdentityOrPersonaQuery(query)) {
+    return baseRoute(INTENTS.SMALLTALK, {
+      confidence: 0.92,
+      reason: "matched assistant identity/persona wording",
     });
   }
 

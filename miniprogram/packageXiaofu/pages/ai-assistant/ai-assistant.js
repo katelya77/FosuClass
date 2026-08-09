@@ -4362,7 +4362,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: "已开启小序助手浮窗", icon: "none" });
+    wx.showToast({ title: `已开启${assistantBrand.assistantName}浮窗`, icon: "none" });
   },
 
   toggleXiaofuFloat() {
@@ -4377,7 +4377,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小序助手浮窗" : "已关闭小序助手浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? `已开启${assistantBrand.assistantName}浮窗` : `已关闭${assistantBrand.assistantName}浮窗`, icon: "none" });
   },
 
   onCapabilityExampleTap(event) {
@@ -5055,7 +5055,7 @@ Page({
       xiaofuFloatService.setEnabled(false);
     }
     this.setData(Object.assign({}, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小序助手浮窗" : "已关闭小序助手浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? `已开启${assistantBrand.assistantName}浮窗` : `已关闭${assistantBrand.assistantName}浮窗`, icon: "none" });
   },
 
   findLastUserMessage() {

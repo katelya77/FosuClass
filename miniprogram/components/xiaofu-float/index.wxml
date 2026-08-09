@@ -18,6 +18,6 @@
     bindlongpress="onLongPress"
   >
     <image class="xiaofu-float-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onLogoError" wx:if="{{logoReady}}" />
-    <text wx:else class="xiaofu-float-text">佛</text>
+    <text wx:else class="xiaofu-float-text">序</text>
   </view>
 </view>

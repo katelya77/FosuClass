@@ -23,7 +23,7 @@ const ASSISTANT_BRAND = {
     knowledgeBase: '小序知识库',
     serviceStatus: '小序服务状态',
     assistantEntry: '小序',
-    assistantWithSuffix: '小序助手'
+    assistantWithSuffix: '小序'
   }
 };
 

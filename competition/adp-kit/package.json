@@ -4,8 +4,11 @@
   "private": true,
   "description": "校园智序 · 小序 ADP 匿名赛事交付包",
   "scripts": {
-    "generate": "node mock-data/generate-competition-demo-v1.js && node qa/sync-standard-qa.js && node openapi/generate-openapi.js && node widget/generate-samples.js && node cloudfunctions/sync-campusflow-function.js && node sync-assets-manifest.js && node validate-kit.js",
+    "generate": "node mock-data/generate-competition-demo-v1.js && node qa/sync-standard-qa.js && node evaluation/sync-evaluation-dataset.js && node workflows/generate-workflows.js && node openapi/generate-openapi.js && node widget/generate-samples.js && node cloudfunctions/sync-campusflow-function.js && node build-submission-package.js && node sync-assets-manifest.js && node validate-kit.js",
+    "eval:golden": "node evaluation/eval-golden.js",
+    "build:submission": "node build-submission-package.js",
+    "validate:submission": "node validate-submission-package.js",
     "validate": "node validate-kit.js",
-    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && node widget/generate-samples.js && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && node sync-assets-manifest.js --check"
+    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && node evaluation/sync-evaluation-dataset.js --check && node workflows/generate-workflows.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && npm run eval:golden && node widget/generate-samples.js && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && npm run build:submission && npm run validate:submission && node sync-assets-manifest.js --check"
   }
 }

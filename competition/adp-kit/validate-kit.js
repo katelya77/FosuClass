@@ -84,16 +84,31 @@ function validateEvaluation() {
 
 function validateWorkflows() {
   const specs = json("workflows/workflow-specs.json");
+  assert.strictEqual(specs.schema, "campus-adp-workflows/v2", "工作流契约必须为 v2 简化版");
   assert.strictEqual(specs.workflows.length, 4, "核心工作流必须恰好 4 条");
   assert.deepStrictEqual(specs.workflows.map((workflow) => workflow.name), WORKFLOW_NAMES);
+  assert.deepStrictEqual(specs.workflows.map((workflow) => workflow.nodeCount), [12, 11, 12, 9], "工作流节点数必须保持最小稳定结构");
   specs.workflows.forEach((workflow) => {
     assert(workflow.trigger, `${workflow.name} 缺少触发描述`);
     assert(workflow.params.length > 0, `${workflow.name} 缺少参数`);
-    assert.strictEqual(workflow.samples.length, 10, `${workflow.name} 调试样例必须为 10 条`);
-    assert(workflow.nodes.length >= 10, `${workflow.name} 节点数过少`);
-    assert(workflow.failurePolicy && workflow.emptyPolicy && workflow.contextPolicy, `${workflow.name} 缺少分支策略`);
-    assert.strictEqual(workflow.replanLimit, 2, `${workflow.name} replan 上限必须为 2`);
+    assert(workflow.samples.length >= 10, `${workflow.name} 调试样例必须至少 10 条`);
+    assert.strictEqual(workflow.nodes.length, workflow.nodeCount, `${workflow.name} nodeCount 不一致`);
+    assert(!workflow.nodes.some((item) => item.tool === "resolve_entity"), `${workflow.name} 不应重复调用 resolve_entity`);
+    assert(workflow.failurePolicy && workflow.contextPolicy && workflow.branchPolicy.length > 0, `${workflow.name} 缺少分支策略`);
+    assert.strictEqual(workflow.replanLimit, 0, `${workflow.name} 不应在 ADP 蓝图内扩建重规划 Runtime`);
   });
+
+  const [schedule, classroom, conflict, dayPlan] = specs.workflows;
+  const names = (workflow) => workflow.params.map((item) => item.name);
+  assert.deepStrictEqual(schedule.required, ["entity_type", "entity_name"], "01 只强制实体类型和名称");
+  assert(!names(schedule).includes("campus"), "01 不得保留未使用的 campus 业务参数");
+  assert(schedule.legacyStartInputs.some((item) => item.name === "campus"), "01 必须说明已有 campus 输入的兼容策略");
+  assert(classroom.required.includes("campus"), "02 必须要求校区");
+  assert(names(conflict).includes("date_range"), "03 必须统一使用 date_range");
+  assert(!names(conflict).includes("date_text") && !names(conflict).includes("week") && !names(conflict).includes("weekday"), "03 不得同时使用两套顶层时间字段");
+  assert(!names(dayPlan).includes("visitor_id"), "04 不得从用户业务参数获取 visitor_id");
+  assert.strictEqual(dayPlan.constants.demoVisitorId, "visitor-demo-001", "04 必须注入固定匿名 visitor");
+  assert(dayPlan.legacyStartInputs.some((item) => item.name === "visitor_id"), "04 必须说明已有 visitor_id 输入的兼容策略");
 }
 
 function validateApplication() {
@@ -106,6 +121,10 @@ function validateApplication() {
   assert.strictEqual(app.appVariables.environment, "competition");
   assert.strictEqual(app.appVariables.data_mode, "anonymous");
   assert.strictEqual(app.appVariables.data_version, "competition-demo-v1");
+  assert.deepStrictEqual(Object.keys(app.appVariables), [
+    "environment", "data_mode", "data_version", "timezone", "default_language", "default_campus",
+  ], "应用变量必须保持 6 个已核验项，不添加评测时钟等业务变量");
+  assert.deepStrictEqual(app.environmentVariables, ["campus_api_base_url", "campus_api_token"], "当前 ADP 使用 Bearer token 的两个环境变量");
   ["visitor_id", "session_id", "client_type", "request_trace_id"].forEach((key) => {
     assert(app.apiParameters.includes(key), `缺少 API 参数：${key}`);
   });
@@ -125,6 +144,10 @@ function validateInterfaces() {
     "compare_schedules",
     "generate_day_plan",
   ].forEach((tool) => assert(operations.includes(tool), `OpenAPI 缺少 ${tool}`));
+  const academicSchema = openapi.paths["/api/get_academic_context"].post.requestBody.content["application/json"].schema;
+  ["date", "dateText", "baseDate"].forEach((field) => {
+    assert(academicSchema.properties[field], `get_academic_context 缺少 ${field}`);
+  });
 
   const schema = json("widget/widget-schema.json");
   assert.deepStrictEqual(schema.properties.cardType.enum, CARD_TYPES, "Widget cardType 不完整");

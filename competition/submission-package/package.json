@@ -1,0 +1,11 @@
+{
+  "name": "campusflow-competition-submission",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园智序 · 小序匿名评审工程包",
+  "scripts": {
+    "eval:golden": "node evaluation/eval-golden.js",
+    "validate:anonymous": "node tools/validate-submission-package.js",
+    "test": "npm --prefix tools/campus-tools-mcp test && npm run eval:golden && npm run validate:anonymous"
+  }
+}

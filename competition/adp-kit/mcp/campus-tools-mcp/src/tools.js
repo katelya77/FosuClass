@@ -20,6 +20,7 @@ const {
   dateToWeekday,
   weekWeekdayToDate,
   lessonDisplay,
+  parseCalendarDate,
 } = require("./data");
 const { ok, fail, ERR } = require("./envelope");
 
@@ -49,6 +50,92 @@ function normalizeName(raw) {
 
 function periodsOverlap(aPs, aPe, bPs, bPe) {
   return aPs <= bPe && bPs <= aPe;
+}
+
+const WEEKDAY_BY_TEXT = Object.freeze({
+  一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
+  1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7,
+});
+
+function shanghaiCurrentDate() {
+  // Asia/Shanghai 不使用夏令时，UTC+8 可稳定取得当地日历日期。
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function addCalendarDays(dateStr, days) {
+  const timestamp = parseCalendarDate(dateStr);
+  if (timestamp == null) return null;
+  return new Date(timestamp + Number(days) * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * 受控相对日期解析。模型可以提取 dateText，但最终日期只由这里确定性计算。
+ * 优先级：date > dateText > baseDate；baseDate 缺省为 Asia/Shanghai 当前日期。
+ */
+function resolveAcademicDate(params, data) {
+  const input = params || {};
+  const explicitDate = String(input.date || "").trim();
+  const baseDate = String(input.baseDate || shanghaiCurrentDate()).trim();
+  if (parseCalendarDate(baseDate) == null) {
+    return { error: fail(ERR.INVALID_PARAM, "baseDate 需为有效的 YYYY-MM-DD", { baseDate }) };
+  }
+  if (explicitDate) {
+    if (parseCalendarDate(explicitDate) == null) {
+      return { error: fail(ERR.INVALID_PARAM, "date 需为有效的 YYYY-MM-DD", { date: explicitDate }) };
+    }
+    return { resolvedDate: explicitDate, baseDate, source: "date" };
+  }
+
+  const dateText = String(input.dateText || "").replace(/\s+/g, "");
+  if (!dateText) return { resolvedDate: baseDate, baseDate, source: "baseDate" };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    if (parseCalendarDate(dateText) == null) {
+      return { error: fail(ERR.INVALID_PARAM, "dateText 中的日期无效", { dateText }) };
+    }
+    return { resolvedDate: dateText, baseDate, source: "dateText.absolute" };
+  }
+
+  const relativeDays = { 今天: 0, 今日: 0, 明天: 1, 明日: 1, 后天: 2 };
+  if (Object.prototype.hasOwnProperty.call(relativeDays, dateText)) {
+    return {
+      resolvedDate: addCalendarDays(baseDate, relativeDays[dateText]),
+      baseDate,
+      source: "dateText.relativeDay",
+    };
+  }
+
+  const relativeWeek = dateText.match(/^(本周|这周|下周)([一二三四五六日天1-7])$/);
+  if (relativeWeek) {
+    const targetWeekday = WEEKDAY_BY_TEXT[relativeWeek[2]];
+    const baseWeekday = dateToWeekday(baseDate);
+    const weekOffset = relativeWeek[1] === "下周" ? 7 : 0;
+    return {
+      resolvedDate: addCalendarDays(baseDate, weekOffset + targetWeekday - baseWeekday),
+      baseDate,
+      source: "dateText.relativeWeek",
+    };
+  }
+
+  const teachingWeek = dateText.match(/^第(\d{1,2})周(?:周|星期)?([一二三四五六日天1-7])$/);
+  if (teachingWeek) {
+    const week = Number(teachingWeek[1]);
+    const weekday = WEEKDAY_BY_TEXT[teachingWeek[2]];
+    if (week < 1 || week > data.meta.semester.totalWeeks) {
+      return { error: fail(ERR.OUT_OF_RANGE, "dateText 中的教学周超出本学期范围", { dateText, week }) };
+    }
+    return {
+      resolvedDate: weekWeekdayToDate(week, weekday),
+      baseDate,
+      source: "dateText.teachingWeek",
+    };
+  }
+
+  return {
+    error: fail(ERR.INVALID_PARAM, "不支持的 dateText；请使用受控相对日期或 YYYY-MM-DD", {
+      dateText,
+      supported: ["今天", "明天", "后天", "本周一~周日", "这周一~周日", "下周一~周日", "第N周周一~周日", "YYYY-MM-DD"],
+    }),
+  };
 }
 
 function resolveTimeRange(params) {
@@ -127,21 +214,23 @@ function resolveEntity(params) {
 // ---------------------------------------------------------------------------
 function getAcademicContext(params) {
   const { data, dataVersion, dataHash } = loadDataset();
-  const date = (params && params.date) || new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return fail(ERR.INVALID_PARAM, "date 需为 YYYY-MM-DD", { date });
-  }
-  const week = dateToWeek(date);
-  const weekday = dateToWeekday(date);
+  const resolved = resolveAcademicDate(params, data);
+  if (resolved.error) return resolved.error;
+  const resolvedDate = resolved.resolvedDate;
+  const week = dateToWeek(resolvedDate);
+  const weekday = dateToWeekday(resolvedDate);
   const env = ok({
     items: [{
-      date,
+      resolvedDate,
+      date: resolvedDate,
       week,
       weekday,
       weekdayName: weekday ? data.meta.weekdayNames[weekday - 1] : null,
       inSemester: week != null,
       semester: data.meta.semester,
       periods: data.meta.periods,
+      baseDate: resolved.baseDate,
+      resolutionSource: resolved.source,
     }],
     actions: [],
   });
@@ -476,10 +565,14 @@ const TOOL_DEFS = [
   },
   {
     name: "get_academic_context",
-    description: "获取指定日期（默认今天）的教学周、星期、学期与节次时间轴等教务上下文。",
+    description: "确定性解析绝对/相对日期，并返回教学周、星期、学期与节次时间轴；默认按 Asia/Shanghai 今天。",
     inputSchema: {
       type: "object",
-      properties: { date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "YYYY-MM-DD，缺省为今天" } },
+      properties: {
+        date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "显式日期 YYYY-MM-DD，优先级最高" },
+        dateText: { type: "string", description: "今天/明天/后天/本周X/这周X/下周X/第N周周X/YYYY-MM-DD" },
+        baseDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "评测固定基准；缺省使用 Asia/Shanghai 当前日期" },
+      },
     },
     handler: getAcademicContext,
   },

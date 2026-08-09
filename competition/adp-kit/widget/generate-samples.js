@@ -11,20 +11,20 @@ function card(cardType, envelope, extra = {}) {
 function stableSample(envelope, queryId) {
   return Object.assign({}, envelope, {
     queryId,
-    evidence: Object.assign({}, envelope.evidence, { computedAt: "2026-03-02T00:00:00.000Z" }),
+    evidence: Object.assign({}, envelope.evidence, { computedAt: "2026-08-31T00:00:00.000Z" }),
   });
 }
 
 const schedule = stableSample(callTool("query_schedule", { entityType: "teacher", entityName: "教师001", week: 1, weekday: 3 }), "q-sample-schedule");
 const classroom = stableSample(callTool("find_available_classrooms", { campus: "校区A", week: 1, weekday: 1, periodStart: 1, periodEnd: 2, capacity: 60 }), "q-sample-classroom");
 const conflict = stableSample(callTool("compare_schedules", { firstType: "class", firstName: "2025级A班", secondType: "class", secondName: "2025级B班", week: 1, weekday: 5, periodStart: 5, periodEnd: 8 }), "q-sample-conflict");
-const dayPlan = stableSample(callTool("generate_day_plan", { visitorId: "visitor-demo-001", date: "2026-03-06", preferredCampus: "校区A", preferredStudyDuration: 2 }), "q-sample-day-plan");
+const dayPlan = stableSample(callTool("generate_day_plan", { visitorId: "visitor-demo-001", date: "2026-09-04", preferredCampus: "校区A", preferredStudyDuration: 2 }), "q-sample-day-plan");
 
 const samples = {
   schedule: card("schedule", schedule, { title: "教师001", timeText: "第1周 · 周三", sectionLabel: "课程安排" }),
-  classroom: card("classroom", classroom, { title: "校区A · 空教室", timeText: "2026-03-02 · 第1-2节", sectionLabel: `找到 ${classroom.items.length} 间，展示前5间` }),
+  classroom: card("classroom", classroom, { title: "校区A · 空教室", timeText: "2026-08-31 · 第1-2节", sectionLabel: `找到 ${classroom.items.length} 间，展示前5间` }),
   conflict: card("conflict", conflict, { title: "A班 ↔ B班", timeText: "第1周 · 周五下午", sectionLabel: "重叠时段" }),
-  day_plan: card("day_plan", dayPlan, { title: "演示用户001", timeText: "2026-03-06 · 周五", sectionLabel: "课程与空档" }),
+  day_plan: card("day_plan", dayPlan, { title: "演示用户001", timeText: "2026-09-04 · 周五", sectionLabel: "课程与空档" }),
   choice: {
     cardType: "choice", success: false, queryId: "q-choice-demo", dataVersion: "competition-demo-v1",
     title: "“A”存在多个候选", timeText: "请选择要继续查询的对象", evidence: { verified: false },

@@ -15,7 +15,7 @@
 | 工具 | 说明 |
 | --- | --- |
 | `resolve_entity` | 解析班级/教师/教室/课程/校区/学院/演示用户，返回唯一实体或歧义候选 |
-| `get_academic_context` | 日期 → 教学周/星期/学期/节次时间轴 |
+| `get_academic_context` | 确定性解析绝对/相对日期 → 教学周/星期/学期/节次时间轴 |
 | `query_schedule` | 按班级/教师/教室/课程查课表（教学周+星期 或 具体日期，支持节次过滤） |
 | `find_available_classrooms` | 指定日期/星期 + 连续节次范围的空闲教室（校区/楼栋/容量过滤） |
 | `compare_schedules` | 比较两实体课表冲突，附跨校区赶场提醒 |
@@ -38,6 +38,10 @@
 
 错误码：`MISSING_PARAM` / `INVALID_PARAM` / `ENTITY_NOT_FOUND` / `AMBIGUOUS_ENTITY` / `OUT_OF_RANGE` / `EMPTY_RESULT` / `DATA_GUARD` / `UNAUTHORIZED` / `RATE_LIMITED` / `TIMEOUT` / `NOT_FOUND` / `INTERNAL`。
 所有错误都返回统一信封，供 ADP 工作流做确定性分支。
+
+## 确定性时间契约
+
+`get_academic_context` 接受可选 `date`、`dateText`、`baseDate`，优先级为 `date > dateText > baseDate`。`dateText` 支持今天、明天、后天、本周/这周/下周的周一至周日、第 N 周周一至周日和 `YYYY-MM-DD`。`baseDate` 仅用于固定评测基准；未传时使用 Asia/Shanghai 当前日期。输出含 `resolvedDate/week/weekday/weekdayName/inSemester/semester/periods`，最终日期不经过生成模型计算。
 
 ## 协议
 

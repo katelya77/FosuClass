@@ -27,7 +27,7 @@ const spec = {
   info: {
     title: "CampusTools 校园确定性工具 API",
     description: "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v1 匿名数据确定性计算，不调用生成式模型，也绝不回退到 production 数据。",
-    version: "1.1.0",
+    version: "1.2.0",
   },
   servers: [
     { url: "http://127.0.0.1:8787", description: "本地测试" },
