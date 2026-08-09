@@ -46,7 +46,7 @@ function isGenericAssistantCard(card) {
   const type = String(card.type || "generic");
   const title = String(card.title || "");
   const subtitle = String(card.subtitle || "");
-  if (type === "generic" && /^(小佛助手|小佛校园助手|结果)$/.test(title)) return true;
+  if (type === "generic" && /^(小佛助手|小佛校园助手|小序|小序助手|小序校园助手|结果)$/.test(title)) return true;
   if (/智能体表达层|来自智能体|自然对话/.test(subtitle)) return true;
   return false;
 }

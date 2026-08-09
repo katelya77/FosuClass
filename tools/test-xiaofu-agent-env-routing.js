@@ -158,12 +158,12 @@ async function run() {
   assert.ok(!/CloudBase|DeepSeek|API\s*Key|Oracle/i.test(mockA.answer || ""), "public mock must not leak internals");
 
   const prompt = deepseekProvider.buildSystemPrompt("公开能力摘要", { useJsonMode: false, conversational: true });
-  assert.match(prompt, /小佛/);
+  assert.match(prompt, /小序/);
   assert.match(prompt, /不要机械复读|换种说法/);
   assert.match(prompt, /不得|不要/);
 
   const knowledge = projectKnowledgeService.getProjectKnowledgePrompt("public", "你是谁");
-  assert.match(knowledge, /小佛/);
+  assert.match(knowledge, /小序/);
   assert.ok(!/密钥清单|内部服务器地址/.test(knowledge));
 
   restoreTransport();

@@ -307,9 +307,9 @@ const AI_CAPABILITY_REGISTRY = Object.freeze([
     "iconPath": "/assets/icons/ai-tasks/app.svg",
     "label": "开启浮窗",
     "taskGroup": "使用帮助",
-    "taskLabel": "开启小佛助手浮窗",
-    "taskDesc": "恢复右下角可拖拽小佛入口",
-    "message": "开启小佛助手浮窗"
+    "taskLabel": "开启小序浮窗",
+    "taskDesc": "恢复右下角可拖拽小序入口",
+    "message": "开启小序浮窗"
   },
   {
     "id": "termSync",

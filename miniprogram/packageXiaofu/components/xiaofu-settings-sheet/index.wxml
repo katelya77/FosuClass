@@ -30,7 +30,7 @@
       <view class="header-menu-row settings-row settings-row-switch">
         <view class="settings-row-icon">◇</view>
         <view class="settings-row-body">
-          <view class="header-menu-row-title">小佛浮窗</view>
+          <view class="header-menu-row-title">{{assistantBrand.assistantName}}浮窗</view>
           <view class="settings-row-desc">在其他页面快速唤起</view>
         </view>
         <switch class="settings-switch" checked="{{floatEnabled}}" color="#c0392b" bindchange="onFloatChange" />
@@ -58,7 +58,7 @@
       <button class="header-menu-row settings-row" bindtap="onCapability">
         <view class="settings-row-icon">?</view>
         <view class="settings-row-body">
-          <view class="header-menu-row-title">小佛能做什么</view>
+          <view class="header-menu-row-title">{{assistantBrand.assistantName}}能做什么</view>
           <view class="settings-row-desc">校园任务示例</view>
         </view>
         <text class="header-menu-row-arrow">›</text>

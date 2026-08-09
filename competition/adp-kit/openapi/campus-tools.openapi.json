@@ -1,0 +1,842 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CampusTools 校园确定性工具 API",
+    "description": "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v1 匿名数据确定性计算，不调用生成式模型，也绝不回退到 production 数据。",
+    "version": "1.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787",
+      "description": "本地测试"
+    },
+    {
+      "url": "https://{host}",
+      "description": "比赛测试环境；导入ADP后填写实际匿名测试域名",
+      "variables": {
+        "host": {
+          "default": "example.invalid"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "CampusTools",
+      "description": "只读匿名校园工具"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "campusToolsHealth",
+        "summary": "健康检查",
+        "responses": {
+          "200": {
+            "description": "服务可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resolve_entity": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "resolve_entity",
+        "summary": "解析校园实体（班级/教师/教室/课程/校区/学院/演示用户），返回唯一实体或歧义候选。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "class",
+                      "teacher",
+                      "room",
+                      "course",
+                      "campus",
+                      "college",
+                      "user"
+                    ],
+                    "description": "实体类型（可选，缩小搜索范围）"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "实体名称，如 教师001 / 2025级A班 / A1-101"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/get_academic_context": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "get_academic_context",
+        "summary": "获取指定日期（默认今天）的教学周、星期、学期与节次时间轴等教务上下文。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                    "description": "YYYY-MM-DD，缺省为今天"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/query_schedule": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "query_schedule",
+        "summary": "按班级/教师/教室/课程查询课表，支持教学周+星期或具体日期，支持节次过滤。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "class",
+                      "teacher",
+                      "room",
+                      "course"
+                    ]
+                  },
+                  "entityName": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "week": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "weekday": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "periodStart": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "periodEnd": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/find_available_classrooms": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "find_available_classrooms",
+        "summary": "查询指定日期/星期与连续节次范围内的空闲教室，支持校区、楼栋、容量过滤。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campus": {
+                    "type": "string",
+                    "description": "校区A / 校区B（可选）"
+                  },
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "week": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "weekday": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "periodStart": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "periodEnd": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "startPeriod": {
+                    "type": "integer"
+                  },
+                  "consecutivePeriods": {
+                    "type": "integer"
+                  },
+                  "building": {
+                    "type": "string"
+                  },
+                  "minCapacity": {
+                    "type": "integer"
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "description": "最小容量；兼容 ADP 工作流字段名"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/compare_schedules": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "compare_schedules",
+        "summary": "比较两个实体（班级/教师/教室/课程）在指定周的课表冲突，并给出跨校区赶场提醒。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstType": {
+                    "type": "string",
+                    "enum": [
+                      "class",
+                      "teacher",
+                      "room",
+                      "course"
+                    ]
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "secondType": {
+                    "type": "string",
+                    "enum": [
+                      "class",
+                      "teacher",
+                      "room",
+                      "course"
+                    ]
+                  },
+                  "secondName": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "week": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "weekday": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "periodStart": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "periodEnd": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "firstType",
+                  "firstName",
+                  "secondType",
+                  "secondName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generate_day_plan": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "generate_day_plan",
+        "summary": "为演示用户生成指定日期的校园计划：课程、空闲时段与自习教室建议、跨校区提醒。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "visitorId": {
+                    "type": "string",
+                    "description": "演示用户 visitorId / id / 名称"
+                  },
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "preferredCampus": {
+                    "type": "string",
+                    "description": "优先校区（可选）"
+                  },
+                  "preferredStudyDuration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "期望连续自习节数（可选）"
+                  }
+                },
+                "required": [
+                  "visitorId",
+                  "date"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      },
+      "hmacSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Campus-Signature",
+        "description": "HMAC-SHA256(timestamp\\nMETHOD\\n/path)"
+      },
+      "hmacTimestamp": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Campus-Timestamp",
+        "description": "Unix秒；允许误差5分钟"
+      }
+    },
+    "schemas": {
+      "ResolvedEntity": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "name"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "Evidence": {
+        "type": "object",
+        "required": [
+          "dataVersion",
+          "dataHash",
+          "source",
+          "computedAt",
+          "verified"
+        ],
+        "properties": {
+          "dataVersion": {
+            "type": "string",
+            "enum": [
+              "competition-demo-v1"
+            ]
+          },
+          "dataHash": {
+            "type": "string",
+            "pattern": "^sha1:"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "campus-tools-mcp"
+            ]
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "MISSING_PARAM",
+              "INVALID_PARAM",
+              "ENTITY_NOT_FOUND",
+              "AMBIGUOUS_ENTITY",
+              "OUT_OF_RANGE",
+              "EMPTY_RESULT",
+              "DATA_GUARD",
+              "UNAUTHORIZED",
+              "RATE_LIMITED",
+              "TIMEOUT",
+              "NOT_FOUND",
+              "INTERNAL"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "nullable": true
+          }
+        }
+      },
+      "Envelope": {
+        "type": "object",
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "resolvedEntity",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string",
+            "pattern": "^q-"
+          },
+          "dataVersion": {
+            "type": "string",
+            "enum": [
+              "competition-demo-v1"
+            ]
+          },
+          "resolvedEntity": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedEntity"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Error"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

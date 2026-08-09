@@ -1,4 +1,5 @@
 const BRAND = require("../../config/brand");
+const ASSISTANT_BRAND = require("../../config/assistantBrand");
 const {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
@@ -176,6 +177,7 @@ function summarizeSelectedSchedule(selected) {
 Page({
   data: {
     brand: BRAND,
+    assistantBrand: ASSISTANT_BRAND,
     settings: {},
     teachingInfo: {},
     termStartDate: "",
@@ -373,7 +375,7 @@ Page({
       xiaofuFloatEnabled: enabled,
       xiaofuFloatEnabledText: enabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
     });
-    wx.showToast({ title: enabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
+    wx.showToast({ title: enabled ? `已开启${ASSISTANT_BRAND.assistantName}浮窗` : `已关闭${ASSISTANT_BRAND.assistantName}浮窗`, icon: "none" });
   },
 
   goSchool() {

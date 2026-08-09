@@ -45,6 +45,8 @@ assert(
 );
 assert(
   wxml.includes("小佛能做什么")
+  || wxml.includes("assistantName}}能做什么")
+  || wxml.includes("小序能做什么")
   || wxml.includes("小佛助手可以帮你完成什么？")
   || wxml.includes("小佛校园助手可以查询什么？"),
   "bottom sheet title should exist"

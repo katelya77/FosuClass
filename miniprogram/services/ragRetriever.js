@@ -26,7 +26,7 @@ const CATEGORY_HINTS = {
   personal_schedule: ["个人课表", "导入", "xls", "excel"],
   schedule: ["全校课表", "课表数据", "当前教学周", "更新时间"],
   weather: ["天气", "下雨", "带伞", "温度"],
-  app_help: ["小佛", "小佛校园助手", "校园服务管家", "校园查询", "怎么用", "能做什么"],
+  app_help: ["小佛", "小佛校园助手", "小序", "小序校园助手", "校园服务管家", "校园查询", "怎么用", "能做什么"],
   student_affairs: ["学工", "团委", "第二课堂", "易班", "志愿"],
   service_boundary: ["办事", "后勤", "报修", "校园卡", "校园网", "宿舍"],
 };
@@ -271,7 +271,7 @@ function isCampusKnowledgeQuery(query) {
   const value = normalizeText(query);
   if (!value) return false;
   if (isDynamicToolQuery(value)) return false;
-  return /(佛大|佛山大学|fosu|校区|仙溪|江湾|河滨|教务|信息门户|统一身份|图书馆|校医院|医务室|校园卡|校园网|宿舍|后勤|报修|电话|联系方式|开放时间|办公室|办事窗口|团委|第二课堂|易班|i志愿|学院|部门|招生|就业|招聘|研究生|学报|校园|办事|学生事务|地址|在哪里|怎么进|怎么用|入口|官网|通知|公告|小佛|知识库|期刊|投稿)/i.test(value);
+  return /(佛大|佛山大学|fosu|校区|仙溪|江湾|河滨|教务|信息门户|统一身份|图书馆|校医院|医务室|校园卡|校园网|宿舍|后勤|报修|电话|联系方式|开放时间|办公室|办事窗口|团委|第二课堂|易班|i志愿|学院|部门|招生|就业|招聘|研究生|学报|校园|办事|学生事务|地址|在哪里|怎么进|怎么用|入口|官网|通知|公告|小佛|小序|知识库|期刊|投稿)/i.test(value);
 }
 
 function inferPreferredEntryType(query) {

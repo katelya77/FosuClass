@@ -6,7 +6,7 @@
       <view wx:else class="xiaofu-avatar-text">佛</view>
     </view>
     <view class="xiaofu-title-block" bindtap="openConversationSheet" aria-label="打开对话列表">
-      <view class="xiaofu-title-line xiaofu-title-sr"><text class="xiaofu-title">小佛助手</text></view>
+      <view class="xiaofu-title-line xiaofu-title-sr"><text class="xiaofu-title">{{assistantBrand.assistantName}}</text></view>
       <view class="xiaofu-conversation-sub xiaofu-conversation-primary">{{activeConversationTitle || conversationTitle || '新对话'}}</view>
       <view class="xiaofu-status-line" wx:if="{{headerStatusLine}}">{{headerStatusLine}}</view>
     </view>
@@ -73,7 +73,7 @@
   >
     <!-- Empty state: one verified contextual insight and at most three actions -->
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-brand">小佛助手</view>
+      <view class="empty-brand">{{assistantBrand.assistantName}}</view>
       <view class="empty-title">可以直接告诉我你想完成的校园任务。</view>
       <button
         wx:if="{{proactiveInsight}}"
@@ -410,7 +410,7 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">小佛能做什么</view>
+        <view class="task-panel-title">{{assistantBrand.assistantName}}能做什么</view>
         <view class="task-panel-subtitle">选择示例后，会在当前对话中整理结果</view>
       </view>
       <button class="sheet-close-icon" bindtap="closeCapabilityGuide" aria-label="关闭">✕</button>
@@ -466,7 +466,7 @@
         <image class="composer-icon" src="/assets/icons/composer/plus.svg" mode="aspectFit" aria-hidden="true" />
       </button>
       <view class="composer-input-wrap">
-        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉小佛你想完成什么…</view>
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉{{assistantBrand.assistantName}}你想完成什么…</view>
         <textarea
           class="composer-input"
           value="{{inputValue}}"

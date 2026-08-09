@@ -162,7 +162,7 @@ router.post("/ai-provider/diagnose-enhanced", adminAuth.verifyAdminAccess, async
     let probe = null;
     if (active !== "public" && envSnapshot.agentEnabled) {
       const payload = await agentService.chat({
-        message: "请用一句话回复“小佛增强能力连接成功”。",
+        message: "请用一句话回复“小序增强能力连接成功”。",
         context: {
           currentPage: "admin-ai-provider-diagnose",
           timezone: "Asia/Shanghai",

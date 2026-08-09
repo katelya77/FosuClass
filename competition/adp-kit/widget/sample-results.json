@@ -1,0 +1,503 @@
+{
+  "schedule": {
+    "cardType": "schedule",
+    "success": true,
+    "queryId": "q-sample-schedule",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": {
+      "type": "teacher",
+      "id": "t-001",
+      "name": "教师001"
+    },
+    "items": [
+      {
+        "lessonId": "les-012",
+        "courseId": "c-01",
+        "courseName": "高等数学A",
+        "teachers": [
+          "教师001"
+        ],
+        "classes": [
+          "2025级B班"
+        ],
+        "roomId": "r-a1-104",
+        "roomName": "A1-104",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "periodStart": 1,
+        "periodEnd": 2,
+        "periodText": "第1-2节",
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "weeks": "1-20",
+        "date": "2026-03-04"
+      },
+      {
+        "lessonId": "les-002",
+        "courseId": "c-01",
+        "courseName": "高等数学A",
+        "teachers": [
+          "教师001"
+        ],
+        "classes": [
+          "2025级A班"
+        ],
+        "roomId": "r-a1-101",
+        "roomName": "A1-101",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "periodStart": 3,
+        "periodEnd": 4,
+        "periodText": "第3-4节",
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "weeks": "1-20",
+        "date": "2026-03-04"
+      }
+    ],
+    "actions": [
+      {
+        "type": "open_widget",
+        "cardType": "schedule",
+        "label": "以卡片查看"
+      }
+    ],
+    "evidence": {
+      "dataVersion": "competition-demo-v1",
+      "dataHash": "sha1:41781288b655",
+      "source": "campus-tools-mcp",
+      "computedAt": "2026-03-02T00:00:00.000Z",
+      "verified": true
+    },
+    "error": null,
+    "query": {
+      "week": 1,
+      "weekday": 3,
+      "date": "2026-03-04"
+    },
+    "title": "教师001",
+    "timeText": "第1周 · 周三",
+    "sectionLabel": "课程安排"
+  },
+  "classroom": {
+    "cardType": "classroom",
+    "success": true,
+    "queryId": "q-sample-classroom",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": null,
+    "items": [
+      {
+        "roomId": "r-a1-102",
+        "roomName": "A1-102",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 60,
+        "type": "多媒体",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-104",
+        "roomName": "A1-104",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 60,
+        "type": "普通",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-105",
+        "roomName": "A1-105",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 60,
+        "type": "普通",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-103",
+        "roomName": "A1-103",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 80,
+        "type": "多媒体",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-106",
+        "roomName": "A1-106",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 80,
+        "type": "多媒体",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-203",
+        "roomName": "A1-203",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 90,
+        "type": "多媒体",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-201",
+        "roomName": "A1-201",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 120,
+        "type": "阶梯",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      },
+      {
+        "roomId": "r-a1-202",
+        "roomName": "A1-202",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "capacity": 120,
+        "type": "阶梯",
+        "freePeriodStart": 1,
+        "freePeriodEnd": 2,
+        "periodText": "第1-2节",
+        "date": "2026-03-02"
+      }
+    ],
+    "actions": [
+      {
+        "type": "open_widget",
+        "cardType": "classroom",
+        "label": "以卡片查看空教室"
+      }
+    ],
+    "evidence": {
+      "dataVersion": "competition-demo-v1",
+      "dataHash": "sha1:41781288b655",
+      "source": "campus-tools-mcp",
+      "computedAt": "2026-03-02T00:00:00.000Z",
+      "verified": true
+    },
+    "error": null,
+    "query": {
+      "week": 1,
+      "weekday": 1,
+      "date": "2026-03-02",
+      "campus": "校区A",
+      "periodStart": 1,
+      "periodEnd": 2
+    },
+    "title": "校区A · 空教室",
+    "timeText": "2026-03-02 · 第1-2节",
+    "sectionLabel": "找到 8 间，展示前5间"
+  },
+  "conflict": {
+    "cardType": "conflict",
+    "success": true,
+    "queryId": "q-sample-conflict",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": null,
+    "items": [
+      {
+        "weekday": 5,
+        "weekdayName": "周五",
+        "date": "2026-03-06",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "first": {
+          "lessonId": "les-007",
+          "courseId": "c-05",
+          "courseName": "大学物理B",
+          "teachers": [
+            "教师004"
+          ],
+          "classes": [
+            "2025级A班"
+          ],
+          "roomId": "r-a1-201",
+          "roomName": "A1-201",
+          "building": "教学楼A1",
+          "campusId": "campus-a",
+          "campusName": "校区A",
+          "weekday": 5,
+          "weekdayName": "周五",
+          "periodStart": 5,
+          "periodEnd": 6,
+          "periodText": "第5-6节",
+          "startTime": "14:00",
+          "endTime": "15:40",
+          "weeks": "1-20"
+        },
+        "second": {
+          "lessonId": "les-017",
+          "courseId": "c-05",
+          "courseName": "大学物理B",
+          "teachers": [
+            "教师008"
+          ],
+          "classes": [
+            "2025级B班"
+          ],
+          "roomId": "r-a1-202",
+          "roomName": "A1-202",
+          "building": "教学楼A1",
+          "campusId": "campus-a",
+          "campusName": "校区A",
+          "weekday": 5,
+          "weekdayName": "周五",
+          "periodStart": 5,
+          "periodEnd": 6,
+          "periodText": "第5-6节",
+          "startTime": "14:00",
+          "endTime": "15:40",
+          "weeks": "1-20"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "type": "open_widget",
+        "cardType": "conflict",
+        "label": "以卡片查看冲突对比"
+      }
+    ],
+    "evidence": {
+      "dataVersion": "competition-demo-v1",
+      "dataHash": "sha1:41781288b655",
+      "source": "campus-tools-mcp",
+      "computedAt": "2026-03-02T00:00:00.000Z",
+      "verified": true
+    },
+    "error": null,
+    "query": {
+      "week": 1,
+      "date": "2026-03-06"
+    },
+    "compared": [
+      {
+        "type": "class",
+        "id": "cls-2025-a",
+        "name": "2025级A班"
+      },
+      {
+        "type": "class",
+        "id": "cls-2025-b",
+        "name": "2025级B班"
+      }
+    ],
+    "rushWarnings": [],
+    "summary": {
+      "conflictCount": 1,
+      "firstBusySlots": 1,
+      "secondBusySlots": 2,
+      "hasConflict": true
+    },
+    "title": "A班 ↔ B班",
+    "timeText": "第1周 · 周五下午",
+    "sectionLabel": "重叠时段"
+  },
+  "day_plan": {
+    "cardType": "day_plan",
+    "success": true,
+    "queryId": "q-sample-day-plan",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": {
+      "type": "user",
+      "id": "demo-user-001",
+      "name": "演示用户001"
+    },
+    "items": [
+      {
+        "type": "lesson",
+        "lessonId": "les-010",
+        "courseId": "c-08",
+        "courseName": "思政通识",
+        "teachers": [
+          "教师007"
+        ],
+        "classes": [
+          "2025级A班"
+        ],
+        "roomId": "r-a1-201",
+        "roomName": "A1-201",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 5,
+        "weekdayName": "周五",
+        "periodStart": 1,
+        "periodEnd": 2,
+        "periodText": "第1-2节",
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "weeks": "1-9",
+        "date": "2026-03-06"
+      },
+      {
+        "type": "gap",
+        "periodStart": 3,
+        "periodEnd": 4,
+        "periodText": "第3-4节",
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "suggestion": "空闲时段，可安排自习",
+        "studyRooms": [
+          "A1-101（60人）",
+          "A1-102（60人）"
+        ]
+      },
+      {
+        "type": "lesson",
+        "lessonId": "les-007",
+        "courseId": "c-05",
+        "courseName": "大学物理B",
+        "teachers": [
+          "教师004"
+        ],
+        "classes": [
+          "2025级A班"
+        ],
+        "roomId": "r-a1-201",
+        "roomName": "A1-201",
+        "building": "教学楼A1",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 5,
+        "weekdayName": "周五",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "weeks": "1-20",
+        "date": "2026-03-06"
+      }
+    ],
+    "actions": [
+      {
+        "type": "open_widget",
+        "cardType": "day_plan",
+        "label": "以卡片查看今日计划"
+      }
+    ],
+    "evidence": {
+      "dataVersion": "competition-demo-v1",
+      "dataHash": "sha1:41781288b655",
+      "source": "campus-tools-mcp",
+      "computedAt": "2026-03-02T00:00:00.000Z",
+      "verified": true
+    },
+    "error": null,
+    "query": {
+      "date": "2026-03-06",
+      "week": 1,
+      "weekday": 5
+    },
+    "summary": {
+      "lessonCount": 2,
+      "hasCrossCampus": false
+    },
+    "title": "演示用户001",
+    "timeText": "2026-03-06 · 周五",
+    "sectionLabel": "课程与空档"
+  },
+  "choice": {
+    "cardType": "choice",
+    "success": false,
+    "queryId": "q-choice-demo",
+    "dataVersion": "competition-demo-v1",
+    "title": "“A”存在多个候选",
+    "timeText": "请选择要继续查询的对象",
+    "evidence": {
+      "verified": false
+    },
+    "items": [
+      {
+        "id": "cls-2025-a",
+        "type": "class",
+        "name": "2025级A班"
+      },
+      {
+        "id": "campus-a",
+        "type": "campus",
+        "name": "校区A"
+      },
+      {
+        "id": "college-a",
+        "type": "college",
+        "name": "学院A"
+      }
+    ],
+    "actions": [
+      {
+        "type": "cancel_choice",
+        "label": "重新描述"
+      }
+    ],
+    "error": {
+      "code": "AMBIGUOUS_ENTITY",
+      "message": "需要确认",
+      "details": null
+    }
+  },
+  "error": {
+    "cardType": "error",
+    "success": false,
+    "queryId": "q-error-demo",
+    "dataVersion": "competition-demo-v1",
+    "title": "CampusTools 暂时不可用",
+    "timeText": "本次动态事实尚未核验",
+    "evidence": {
+      "verified": false
+    },
+    "items": [],
+    "actions": [
+      {
+        "type": "retry",
+        "label": "重新查询"
+      },
+      {
+        "type": "edit_query",
+        "label": "修改条件"
+      }
+    ],
+    "error": {
+      "code": "TIMEOUT",
+      "message": "查询超时。小序没有使用模型生成内容代替工具结果。",
+      "details": null
+    }
+  }
+}

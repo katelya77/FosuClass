@@ -149,7 +149,7 @@ function run() {
   instance.onLongPress();
   assert.deepStrictEqual(
     calls.showActionSheet[0] && calls.showActionSheet[0].itemList,
-    ["打开小佛校园助手", "隐藏本页", "关闭浮窗"],
+    ["打开小序", "隐藏本页", "关闭浮窗"],
     "long press menu should expose open, hide and close actions"
   );
 

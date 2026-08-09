@@ -1,6 +1,7 @@
 const floatService = require("../../services/xiaofuFloatService");
 const courseReminderClient = require("../../services/courseReminderClient");
 const securitySessionService = require("../../services/securitySessionService");
+const assistantBrand = require("../../config/assistantBrand");
 
 const FLOAT_SIZE = 58;
 const EDGE_MARGIN = 6;
@@ -327,7 +328,7 @@ Component({
     onLongPress() {
       this._longPressed = true;
       wx.showActionSheet({
-        itemList: ["打开小佛校园助手", "隐藏本页", "关闭浮窗"],
+        itemList: [`打开${assistantBrand.assistantName}`, "隐藏本页", "关闭浮窗"],
         success: (res) => {
           if (res.tapIndex === 0) {
             this.openAssistant();
@@ -338,7 +339,7 @@ Component({
           } else if (res.tapIndex === 2) {
             floatService.setEnabled(false);
             this.setData({ visible: false });
-            wx.showToast({ title: "可在设置或小佛页面重新开启", icon: "none" });
+            wx.showToast({ title: `可在设置或${assistantBrand.assistantName}页面重新开启`, icon: "none" });
           }
         },
         complete: () => {
@@ -357,7 +358,7 @@ Component({
         fail: () => {
           wx.redirectTo({
             url: "/packageXiaofu/pages/ai-assistant/ai-assistant?from=float",
-            fail: () => wx.showToast({ title: "暂时无法打开小佛校园助手", icon: "none" }),
+            fail: () => wx.showToast({ title: `暂时无法打开${assistantBrand.assistantName}`, icon: "none" }),
           });
         },
       });

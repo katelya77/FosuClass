@@ -14,7 +14,7 @@ const PRESENTATION_MODES = Object.freeze([
   "recovery",
 ]);
 
-const GENERIC_CARD_TITLES = /^(小佛助手|小佛校园助手|结果|助手)$/;
+const GENERIC_CARD_TITLES = /^(小佛助手|小佛校园助手|小序|小序助手|结果|助手)$/;
 const GENERIC_CARD_SUBTITLES = /智能体表达层|来自智能体|自然对话/;
 const FIXED_SUGGESTIONS = new Set([
   "你能做什么",
@@ -355,7 +355,7 @@ function compose(input = {}) {
     const failCode = (input.toolFailure && input.toolFailure.code)
       || (errors[0] && (errors[0].code || errors[0].reasonCode))
       || "";
-    if (!answer || /小佛可以|你能做什么|校园工具/.test(answer)) {
+    if (!answer || /小佛可以|小序可以|你能做什么|校园工具/.test(answer)) {
       answer = domainFailureMessage(failCode, input.recoveryMessage || input.answer);
     }
     presentationMode = "recovery";
@@ -410,8 +410,8 @@ function compose(input = {}) {
   // public: never mention models
   if (runtimeMode === "public") {
     answer = answer
-      .replace(/DeepSeek|Coze|Hunyuan|混元|大模型|GPT|OpenAI/gi, "小佛助手")
-      .replace(/我是(?:一个)?(?:AI|人工智能|语言模型).{0,20}/g, "我是小佛校园助手，");
+      .replace(/DeepSeek|Coze|Hunyuan|混元|大模型|GPT|OpenAI/gi, "小序")
+      .replace(/我是(?:一个)?(?:AI|人工智能|语言模型).{0,20}/g, "我是小序，");
   }
 
   const suggestions = relatedSuggestions({

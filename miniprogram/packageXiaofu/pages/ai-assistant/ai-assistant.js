@@ -25,6 +25,7 @@ const xiaofuMessageActions = require("../../services/xiaofuMessageActions");
 const xiaofuConversationViewModel = require("../../services/xiaofuConversationViewModel");
 const { createActionBus } = require("../../services/xiaofuActionBus");
 const uiBlockAdapter = require("../../services/uiBlockAdapter");
+const assistantBrand = require("../../../config/assistantBrand");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const AUTO_MEMORY_ENABLED_KEY = "xiaofu_auto_memory_enabled";
@@ -1087,7 +1088,7 @@ function isGenericAssistantCard(card) {
   const type = String(card.type || "generic");
   const title = String(card.title || "");
   const subtitle = String(card.subtitle || "");
-  if (type === "generic" && /^(小佛助手|小佛校园助手|结果)$/.test(title)) return true;
+  if (type === "generic" && /^(小佛助手|小佛校园助手|小序|小序助手|小序校园助手|结果)$/.test(title)) return true;
   if (/智能体表达层|来自智能体|自然对话/.test(subtitle)) return true;
   return false;
 }
@@ -1531,13 +1532,14 @@ function buildXiaofuFloatState() {
   const enabled = xiaofuFloatService.isEnabled();
   return {
     xiaofuFloatEnabled: enabled,
-    xiaofuFloatToggleText: "小佛浮窗",
+    xiaofuFloatToggleText: `${assistantBrand.assistantName}浮窗`,
     xiaofuFloatToggleDesc: "在其他页面快速唤起",
   };
 }
 
 Page({
   data: {
+    assistantBrand,
     quickActions: QUICK_ACTIONS,
     welcomeExamples: WELCOME_EXAMPLES,
     welcomeTaskCards: WELCOME_TASK_CARDS,
@@ -1624,7 +1626,7 @@ Page({
     historyTrimNotice: false,
     hasHeroLogo: true,
     xiaofuFloatEnabled: true,
-    xiaofuFloatToggleText: "小佛浮窗",
+    xiaofuFloatToggleText: `${assistantBrand.assistantName}浮窗`,
     xiaofuFloatToggleDesc: "在其他页面快速唤起",
     demoMode: "",
     scrollTop: 0,
@@ -1825,7 +1827,7 @@ Page({
     if (serverSuggestion && serverSuggestion.title) {
       insight = {
         kind: serverSuggestion.type || "suggestion",
-        eyebrow: "小佛建议",
+        eyebrow: "小序建议",
         title: serverSuggestion.title,
         detail: serverSuggestion.body || "",
         actionLabel: serverSuggestion.actions && serverSuggestion.actions[0]
@@ -3889,7 +3891,7 @@ Page({
     )) || null;
     wx.showModal({
       title: "删除这项记忆",
-      content: "删除后，小佛不会再把它作为长期偏好使用。",
+      content: "删除后，小序不会再把它作为长期偏好使用。",
       confirmText: "删除",
       success: async (res) => {
         if (!res.confirm) return;
@@ -4199,7 +4201,7 @@ Page({
         const s = result.proactiveSuggestion;
         const insight = {
           kind: s.type || "suggestion",
-          eyebrow: "小佛建议",
+          eyebrow: "小序建议",
           title: s.title,
           detail: s.body || "",
           actionLabel: s.actions && s.actions[0] ? s.actions[0].label : "知道了",
@@ -4360,7 +4362,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: "已开启小佛助手浮窗", icon: "none" });
+    wx.showToast({ title: "已开启小序助手浮窗", icon: "none" });
   },
 
   toggleXiaofuFloat() {
@@ -4375,7 +4377,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? "已开启小序助手浮窗" : "已关闭小序助手浮窗", icon: "none" });
   },
 
   onCapabilityExampleTap(event) {
@@ -4539,7 +4541,7 @@ Page({
     this.performCardAction(safeAction, context || {});
   },
 
-  // 小佛助手 Action Command Bus（懒加载单例）。context 承载真正干活的 UI 能力，
+  // 小序助手 Action Command Bus（懒加载单例）。context 承载真正干活的 UI 能力，
   // 写操作在 executeCardAction 完成用户确认后才到达这里（confirmed: true）。
   getXiaofuActionBus() {
     if (this._xiaofuActionBus) return this._xiaofuActionBus;
@@ -5053,7 +5055,7 @@ Page({
       xiaofuFloatService.setEnabled(false);
     }
     this.setData(Object.assign({}, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? "已开启小序助手浮窗" : "已关闭小序助手浮窗", icon: "none" });
   },
 
   findLastUserMessage() {

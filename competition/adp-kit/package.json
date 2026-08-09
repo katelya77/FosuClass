@@ -1,0 +1,11 @@
+{
+  "name": "campusflow-adp-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园智序 · 小序 ADP 匿名赛事交付包",
+  "scripts": {
+    "generate": "node mock-data/generate-competition-demo-v1.js && node qa/sync-standard-qa.js && node openapi/generate-openapi.js && node widget/generate-samples.js && node sync-assets-manifest.js && node validate-kit.js",
+    "validate": "node validate-kit.js",
+    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && node widget/generate-samples.js && node validate-kit.js && node sync-assets-manifest.js --check"
+  }
+}

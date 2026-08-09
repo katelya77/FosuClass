@@ -32,7 +32,7 @@ const FACT_RULES = [
 ];
 
 const PROJECT_RULES = [
-  { intentName: "project_qa", pattern: /(FosuClass|佛课小表|小佛|项目|架构|Release Pack|Oracle|CloudBase|云开发|混元|DeepSeek|Coze|比赛|隐私|安全|开源|README)/i },
+  { intentName: "project_qa", pattern: /(FosuClass|佛课小表|小佛|小序|项目|架构|Release Pack|Oracle|CloudBase|云开发|混元|DeepSeek|Coze|比赛|隐私|安全|开源|README)/i },
   { intentName: "conversational_help", pattern: /(怎么用|如何使用|帮助|功能|入口|说明|你是谁|介绍一下|能做什么|使用指南|新手)/i },
 ];
 

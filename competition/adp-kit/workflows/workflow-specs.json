@@ -1,0 +1,934 @@
+{
+  "schema": "campus-adp-workflows/v1",
+  "workflows": [
+    {
+      "id": "wf-schedule",
+      "name": "01-多维课表查询",
+      "intent": "query_schedule",
+      "trigger": "用户查询班级、教师、教室或课程在指定日期、教学周、星期或节次范围内的课程安排。",
+      "params": [
+        "entity_type",
+        "entity_name",
+        "date_text",
+        "week",
+        "weekday",
+        "period_scope",
+        "campus"
+      ],
+      "requiredAny": [
+        [
+          "date_text",
+          "week"
+        ],
+        [
+          "entity_name"
+        ]
+      ],
+      "tool": "query_schedule",
+      "mapping": {
+        "entity_type": "entityType",
+        "entity_name": "entityName",
+        "week": "week",
+        "weekday": "weekday",
+        "period_scope.start": "periodStart",
+        "period_scope.end": "periodEnd"
+      },
+      "cardType": "schedule",
+      "samples": [
+        "查询教师001第1周周三的课程",
+        "教师1第2周周五下午有什么课",
+        "2025级A班第1周课表",
+        "A1-101第1周周一占用情况",
+        "高等数学A第1周安排",
+        "查询2025级B班2026-03-06课程",
+        "教师003第1周周一第1-4节",
+        "查教室B1-201第3周周四",
+        "查询程序设计基础第2周",
+        "查教师002的课表"
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "开始",
+          "output": "用户消息+会话上下文"
+        },
+        {
+          "id": "extract",
+          "type": "llm_parameter_extract",
+          "label": "参数提取",
+          "constraint": "只提取结构化字段，不生成校园事实"
+        },
+        {
+          "id": "normalize_time",
+          "type": "code_or_tool",
+          "label": "时间归一化",
+          "tool": "get_academic_context",
+          "condition": "存在 date_text/相对时间"
+        },
+        {
+          "id": "check_required",
+          "type": "condition",
+          "label": "必填字段检查"
+        },
+        {
+          "id": "clarify",
+          "type": "reply",
+          "label": "缺参追问",
+          "terminal": false
+        },
+        {
+          "id": "resolve",
+          "type": "tool",
+          "label": "实体解析",
+          "tool": "resolve_entity",
+          "condition": "工作流含实体参数"
+        },
+        {
+          "id": "choice",
+          "type": "widget_or_reply",
+          "label": "歧义候选确认",
+          "cardType": "choice",
+          "condition": "error.code=AMBIGUOUS_ENTITY"
+        },
+        {
+          "id": "call",
+          "type": "tool",
+          "label": "调用确定性校园工具",
+          "tool": "query_schedule"
+        },
+        {
+          "id": "verify",
+          "type": "condition",
+          "label": "结果核验",
+          "checks": [
+            "success",
+            "queryId",
+            "dataVersion",
+            "evidence.verified"
+          ]
+        },
+        {
+          "id": "tool_error",
+          "type": "widget_or_reply",
+          "label": "工具失败",
+          "cardType": "error",
+          "condition": "success=false 且非歧义/缺参"
+        },
+        {
+          "id": "empty",
+          "type": "widget_or_reply",
+          "label": "空结果",
+          "cardType": "schedule",
+          "condition": "success=true 且 items.length=0"
+        },
+        {
+          "id": "compose",
+          "type": "template",
+          "label": "结构化结果整理",
+          "constraint": "不得增删改工具事实"
+        },
+        {
+          "id": "widget",
+          "type": "widget_or_reply",
+          "label": "校园任务结果卡",
+          "cardType": "schedule"
+        },
+        {
+          "id": "end",
+          "type": "end",
+          "label": "结束"
+        }
+      ],
+      "edges": [
+        {
+          "from": "start",
+          "to": "extract",
+          "condition": "always"
+        },
+        {
+          "from": "extract",
+          "to": "normalize_time",
+          "condition": "always"
+        },
+        {
+          "from": "normalize_time",
+          "to": "check_required",
+          "condition": "always"
+        },
+        {
+          "from": "check_required",
+          "to": "clarify",
+          "condition": "missing"
+        },
+        {
+          "from": "check_required",
+          "to": "resolve",
+          "condition": "complete"
+        },
+        {
+          "from": "resolve",
+          "to": "choice",
+          "condition": "ambiguous"
+        },
+        {
+          "from": "resolve",
+          "to": "call",
+          "condition": "unique_or_not_required"
+        },
+        {
+          "from": "call",
+          "to": "verify",
+          "condition": "always"
+        },
+        {
+          "from": "verify",
+          "to": "tool_error",
+          "condition": "failed"
+        },
+        {
+          "from": "verify",
+          "to": "empty",
+          "condition": "empty"
+        },
+        {
+          "from": "verify",
+          "to": "compose",
+          "condition": "verified"
+        },
+        {
+          "from": "compose",
+          "to": "widget",
+          "condition": "always"
+        },
+        {
+          "from": "widget",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "empty",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "tool_error",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "choice",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "clarify",
+          "to": "end",
+          "condition": "always"
+        }
+      ],
+      "failurePolicy": "失败时保留错误信封并给出重试建议，禁止生成模型补写动态事实",
+      "emptyPolicy": "明确当前条件无结果，提供扩大时间/校区/节次范围的下一步操作",
+      "contextPolicy": "只继承最近一次已确认的实体与时间槽位；用户明确新值时覆盖",
+      "replanLimit": 2
+    },
+    {
+      "id": "wf-classroom",
+      "name": "02-空教室规划",
+      "intent": "find_available_classrooms",
+      "trigger": "用户希望在指定校区、日期/教学周、星期和节次范围查找空闲教室或连续空闲空间。",
+      "params": [
+        "campus",
+        "date_text",
+        "week",
+        "weekday",
+        "start_period",
+        "end_period",
+        "consecutive_periods",
+        "building",
+        "capacity"
+      ],
+      "requiredAny": [
+        [
+          "date_text",
+          "week"
+        ],
+        [
+          "start_period"
+        ],
+        [
+          "end_period",
+          "consecutive_periods"
+        ]
+      ],
+      "tool": "find_available_classrooms",
+      "mapping": {
+        "campus": "campus",
+        "week": "week",
+        "weekday": "weekday",
+        "start_period": "periodStart",
+        "end_period": "periodEnd",
+        "consecutive_periods": "consecutivePeriods",
+        "building": "building",
+        "capacity": "capacity"
+      },
+      "cardType": "classroom",
+      "samples": [
+        "校区A第1周周一1-2节空教室",
+        "校区A明天下午连续两节空教室",
+        "第2周周三5-6节容量60以上",
+        "校区B第3周周四7-8节",
+        "教学楼A1第1周周五下午空教室",
+        "第1周周二从第3节起连续2节",
+        "校区B第2周周一晚上空教室",
+        "第3周周五1-4节空教室",
+        "找能坐80人的空教室",
+        "校区A第1周周三空教室"
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "开始",
+          "output": "用户消息+会话上下文"
+        },
+        {
+          "id": "extract",
+          "type": "llm_parameter_extract",
+          "label": "参数提取",
+          "constraint": "只提取结构化字段，不生成校园事实"
+        },
+        {
+          "id": "normalize_time",
+          "type": "code_or_tool",
+          "label": "时间归一化",
+          "tool": "get_academic_context",
+          "condition": "存在 date_text/相对时间"
+        },
+        {
+          "id": "check_required",
+          "type": "condition",
+          "label": "必填字段检查"
+        },
+        {
+          "id": "clarify",
+          "type": "reply",
+          "label": "缺参追问",
+          "terminal": false
+        },
+        {
+          "id": "resolve",
+          "type": "tool",
+          "label": "实体解析",
+          "tool": "resolve_entity",
+          "condition": "工作流含实体参数"
+        },
+        {
+          "id": "choice",
+          "type": "widget_or_reply",
+          "label": "歧义候选确认",
+          "cardType": "choice",
+          "condition": "error.code=AMBIGUOUS_ENTITY"
+        },
+        {
+          "id": "call",
+          "type": "tool",
+          "label": "调用确定性校园工具",
+          "tool": "find_available_classrooms"
+        },
+        {
+          "id": "verify",
+          "type": "condition",
+          "label": "结果核验",
+          "checks": [
+            "success",
+            "queryId",
+            "dataVersion",
+            "evidence.verified"
+          ]
+        },
+        {
+          "id": "tool_error",
+          "type": "widget_or_reply",
+          "label": "工具失败",
+          "cardType": "error",
+          "condition": "success=false 且非歧义/缺参"
+        },
+        {
+          "id": "empty",
+          "type": "widget_or_reply",
+          "label": "空结果",
+          "cardType": "classroom",
+          "condition": "success=true 且 items.length=0"
+        },
+        {
+          "id": "compose",
+          "type": "template",
+          "label": "结构化结果整理",
+          "constraint": "不得增删改工具事实"
+        },
+        {
+          "id": "widget",
+          "type": "widget_or_reply",
+          "label": "校园任务结果卡",
+          "cardType": "classroom"
+        },
+        {
+          "id": "end",
+          "type": "end",
+          "label": "结束"
+        }
+      ],
+      "edges": [
+        {
+          "from": "start",
+          "to": "extract",
+          "condition": "always"
+        },
+        {
+          "from": "extract",
+          "to": "normalize_time",
+          "condition": "always"
+        },
+        {
+          "from": "normalize_time",
+          "to": "check_required",
+          "condition": "always"
+        },
+        {
+          "from": "check_required",
+          "to": "clarify",
+          "condition": "missing"
+        },
+        {
+          "from": "check_required",
+          "to": "resolve",
+          "condition": "complete"
+        },
+        {
+          "from": "resolve",
+          "to": "choice",
+          "condition": "ambiguous"
+        },
+        {
+          "from": "resolve",
+          "to": "call",
+          "condition": "unique_or_not_required"
+        },
+        {
+          "from": "call",
+          "to": "verify",
+          "condition": "always"
+        },
+        {
+          "from": "verify",
+          "to": "tool_error",
+          "condition": "failed"
+        },
+        {
+          "from": "verify",
+          "to": "empty",
+          "condition": "empty"
+        },
+        {
+          "from": "verify",
+          "to": "compose",
+          "condition": "verified"
+        },
+        {
+          "from": "compose",
+          "to": "widget",
+          "condition": "always"
+        },
+        {
+          "from": "widget",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "empty",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "tool_error",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "choice",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "clarify",
+          "to": "end",
+          "condition": "always"
+        }
+      ],
+      "failurePolicy": "失败时保留错误信封并给出重试建议，禁止生成模型补写动态事实",
+      "emptyPolicy": "明确当前条件无结果，提供扩大时间/校区/节次范围的下一步操作",
+      "contextPolicy": "只继承最近一次已确认的实体与时间槽位；用户明确新值时覆盖",
+      "replanLimit": 2
+    },
+    {
+      "id": "wf-conflict",
+      "name": "03-课程冲突比较",
+      "intent": "compare_schedules",
+      "trigger": "用户比较两个班级、教师、教室或课程在指定时间范围内的重叠课程与跨校区赶场风险。",
+      "params": [
+        "first_entity_type",
+        "first_entity_name",
+        "second_entity_type",
+        "second_entity_name",
+        "date_range",
+        "period_scope"
+      ],
+      "requiredAny": [
+        [
+          "first_entity_name"
+        ],
+        [
+          "second_entity_name"
+        ],
+        [
+          "date_range"
+        ]
+      ],
+      "tool": "compare_schedules",
+      "mapping": {
+        "first_entity_type": "firstType",
+        "first_entity_name": "firstName",
+        "second_entity_type": "secondType",
+        "second_entity_name": "secondName",
+        "date_range.week": "week",
+        "date_range.weekday": "weekday",
+        "period_scope.start": "periodStart",
+        "period_scope.end": "periodEnd"
+      },
+      "cardType": "conflict",
+      "samples": [
+        "比较2025级A班与B班第1周周五下午冲突",
+        "教师001和教师002第2周冲突",
+        "A1-101和A1-102第1周占用重叠",
+        "高等数学A与大学英语A第1周冲突",
+        "比较2025级C班和D班第3周",
+        "教师003和自己第1周跨校区提醒",
+        "比较教师004和教师005第2周周三",
+        "比较A班与C班第1周1-4节",
+        "B1-201和B1-202第3周周四",
+        "程序设计基础和数据结构第2周"
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "开始",
+          "output": "用户消息+会话上下文"
+        },
+        {
+          "id": "extract",
+          "type": "llm_parameter_extract",
+          "label": "参数提取",
+          "constraint": "只提取结构化字段，不生成校园事实"
+        },
+        {
+          "id": "normalize_time",
+          "type": "code_or_tool",
+          "label": "时间归一化",
+          "tool": "get_academic_context",
+          "condition": "存在 date_text/相对时间"
+        },
+        {
+          "id": "check_required",
+          "type": "condition",
+          "label": "必填字段检查"
+        },
+        {
+          "id": "clarify",
+          "type": "reply",
+          "label": "缺参追问",
+          "terminal": false
+        },
+        {
+          "id": "resolve",
+          "type": "tool",
+          "label": "实体解析",
+          "tool": "resolve_entity",
+          "condition": "工作流含实体参数"
+        },
+        {
+          "id": "choice",
+          "type": "widget_or_reply",
+          "label": "歧义候选确认",
+          "cardType": "choice",
+          "condition": "error.code=AMBIGUOUS_ENTITY"
+        },
+        {
+          "id": "call",
+          "type": "tool",
+          "label": "调用确定性校园工具",
+          "tool": "compare_schedules"
+        },
+        {
+          "id": "verify",
+          "type": "condition",
+          "label": "结果核验",
+          "checks": [
+            "success",
+            "queryId",
+            "dataVersion",
+            "evidence.verified"
+          ]
+        },
+        {
+          "id": "tool_error",
+          "type": "widget_or_reply",
+          "label": "工具失败",
+          "cardType": "error",
+          "condition": "success=false 且非歧义/缺参"
+        },
+        {
+          "id": "empty",
+          "type": "widget_or_reply",
+          "label": "空结果",
+          "cardType": "conflict",
+          "condition": "success=true 且 items.length=0"
+        },
+        {
+          "id": "compose",
+          "type": "template",
+          "label": "结构化结果整理",
+          "constraint": "不得增删改工具事实"
+        },
+        {
+          "id": "widget",
+          "type": "widget_or_reply",
+          "label": "校园任务结果卡",
+          "cardType": "conflict"
+        },
+        {
+          "id": "end",
+          "type": "end",
+          "label": "结束"
+        }
+      ],
+      "edges": [
+        {
+          "from": "start",
+          "to": "extract",
+          "condition": "always"
+        },
+        {
+          "from": "extract",
+          "to": "normalize_time",
+          "condition": "always"
+        },
+        {
+          "from": "normalize_time",
+          "to": "check_required",
+          "condition": "always"
+        },
+        {
+          "from": "check_required",
+          "to": "clarify",
+          "condition": "missing"
+        },
+        {
+          "from": "check_required",
+          "to": "resolve",
+          "condition": "complete"
+        },
+        {
+          "from": "resolve",
+          "to": "choice",
+          "condition": "ambiguous"
+        },
+        {
+          "from": "resolve",
+          "to": "call",
+          "condition": "unique_or_not_required"
+        },
+        {
+          "from": "call",
+          "to": "verify",
+          "condition": "always"
+        },
+        {
+          "from": "verify",
+          "to": "tool_error",
+          "condition": "failed"
+        },
+        {
+          "from": "verify",
+          "to": "empty",
+          "condition": "empty"
+        },
+        {
+          "from": "verify",
+          "to": "compose",
+          "condition": "verified"
+        },
+        {
+          "from": "compose",
+          "to": "widget",
+          "condition": "always"
+        },
+        {
+          "from": "widget",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "empty",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "tool_error",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "choice",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "clarify",
+          "to": "end",
+          "condition": "always"
+        }
+      ],
+      "failurePolicy": "失败时保留错误信封并给出重试建议，禁止生成模型补写动态事实",
+      "emptyPolicy": "明确当前条件无结果，提供扩大时间/校区/节次范围的下一步操作",
+      "contextPolicy": "只继承最近一次已确认的实体与时间槽位；用户明确新值时覆盖",
+      "replanLimit": 2
+    },
+    {
+      "id": "wf-day-plan",
+      "name": "04-今日校园计划",
+      "intent": "generate_day_plan",
+      "trigger": "用户希望基于匿名演示用户的个人课表生成指定日期的课程、自习空档、教室建议和赶场提醒。",
+      "params": [
+        "visitor_id",
+        "date_text",
+        "preferred_campus",
+        "preferred_study_duration"
+      ],
+      "requiredAny": [
+        [
+          "visitor_id"
+        ],
+        [
+          "date_text"
+        ]
+      ],
+      "tool": "generate_day_plan",
+      "mapping": {
+        "visitor_id": "visitorId",
+        "date_text": "date",
+        "preferred_campus": "preferredCampus",
+        "preferred_study_duration": "preferredStudyDuration"
+      },
+      "cardType": "day_plan",
+      "samples": [
+        "生成演示用户001在2026-03-06的校园计划",
+        "演示用户001第1周周一计划",
+        "帮我安排明天",
+        "生成2026-03-04今日计划",
+        "优先校区A安排自习",
+        "想连续自习2节",
+        "演示用户001周五有什么安排",
+        "生成第2周周二计划",
+        "查看演示用户001今天的课间空档",
+        "给我一个含跨校区提醒的计划"
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "开始",
+          "output": "用户消息+会话上下文"
+        },
+        {
+          "id": "extract",
+          "type": "llm_parameter_extract",
+          "label": "参数提取",
+          "constraint": "只提取结构化字段，不生成校园事实"
+        },
+        {
+          "id": "normalize_time",
+          "type": "code_or_tool",
+          "label": "时间归一化",
+          "tool": "get_academic_context",
+          "condition": "存在 date_text/相对时间"
+        },
+        {
+          "id": "check_required",
+          "type": "condition",
+          "label": "必填字段检查"
+        },
+        {
+          "id": "clarify",
+          "type": "reply",
+          "label": "缺参追问",
+          "terminal": false
+        },
+        {
+          "id": "resolve",
+          "type": "tool",
+          "label": "实体解析",
+          "tool": "resolve_entity",
+          "condition": "工作流含实体参数"
+        },
+        {
+          "id": "choice",
+          "type": "widget_or_reply",
+          "label": "歧义候选确认",
+          "cardType": "choice",
+          "condition": "error.code=AMBIGUOUS_ENTITY"
+        },
+        {
+          "id": "call",
+          "type": "tool",
+          "label": "调用确定性校园工具",
+          "tool": "generate_day_plan"
+        },
+        {
+          "id": "verify",
+          "type": "condition",
+          "label": "结果核验",
+          "checks": [
+            "success",
+            "queryId",
+            "dataVersion",
+            "evidence.verified"
+          ]
+        },
+        {
+          "id": "tool_error",
+          "type": "widget_or_reply",
+          "label": "工具失败",
+          "cardType": "error",
+          "condition": "success=false 且非歧义/缺参"
+        },
+        {
+          "id": "empty",
+          "type": "widget_or_reply",
+          "label": "空结果",
+          "cardType": "day_plan",
+          "condition": "success=true 且 items.length=0"
+        },
+        {
+          "id": "compose",
+          "type": "template",
+          "label": "结构化结果整理",
+          "constraint": "不得增删改工具事实"
+        },
+        {
+          "id": "widget",
+          "type": "widget_or_reply",
+          "label": "校园任务结果卡",
+          "cardType": "day_plan"
+        },
+        {
+          "id": "end",
+          "type": "end",
+          "label": "结束"
+        }
+      ],
+      "edges": [
+        {
+          "from": "start",
+          "to": "extract",
+          "condition": "always"
+        },
+        {
+          "from": "extract",
+          "to": "normalize_time",
+          "condition": "always"
+        },
+        {
+          "from": "normalize_time",
+          "to": "check_required",
+          "condition": "always"
+        },
+        {
+          "from": "check_required",
+          "to": "clarify",
+          "condition": "missing"
+        },
+        {
+          "from": "check_required",
+          "to": "resolve",
+          "condition": "complete"
+        },
+        {
+          "from": "resolve",
+          "to": "choice",
+          "condition": "ambiguous"
+        },
+        {
+          "from": "resolve",
+          "to": "call",
+          "condition": "unique_or_not_required"
+        },
+        {
+          "from": "call",
+          "to": "verify",
+          "condition": "always"
+        },
+        {
+          "from": "verify",
+          "to": "tool_error",
+          "condition": "failed"
+        },
+        {
+          "from": "verify",
+          "to": "empty",
+          "condition": "empty"
+        },
+        {
+          "from": "verify",
+          "to": "compose",
+          "condition": "verified"
+        },
+        {
+          "from": "compose",
+          "to": "widget",
+          "condition": "always"
+        },
+        {
+          "from": "widget",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "empty",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "tool_error",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "choice",
+          "to": "end",
+          "condition": "always"
+        },
+        {
+          "from": "clarify",
+          "to": "end",
+          "condition": "always"
+        }
+      ],
+      "failurePolicy": "失败时保留错误信封并给出重试建议，禁止生成模型补写动态事实",
+      "emptyPolicy": "明确当前条件无结果，提供扩大时间/校区/节次范围的下一步操作",
+      "contextPolicy": "只继承最近一次已确认的实体与时间槽位；用户明确新值时覆盖",
+      "replanLimit": 2
+    }
+  ]
+}

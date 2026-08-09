@@ -679,7 +679,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
       answerPreview: String(payload.answer || "").slice(0, 120),
     });
     const deterministicPayload = await runProbe("今天还有课吗？");
-    const projectPayload = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+    const projectPayload = await runProbe("FosuClass 是什么？小序你了解当前项目吗？");
     const previousPolicy = process.env.AI_PROVIDER_POLICY;
     let forcePayload;
     let releaseBlockPayload;

@@ -86,7 +86,7 @@ async function run() {
   }
 
   const deterministicToolTest = await runProbe("今天还有课吗？");
-  const projectQaTest = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+  const projectQaTest = await runProbe("FosuClass 是什么？小序你了解当前项目吗？");
   const projectQaMode = status.provider === "deepseek" && status.strictJsonMode ? "json" : "text";
   const jsonModeTest = buildJsonModeTest(status);
   const previousPolicy = process.env.AI_PROVIDER_POLICY;
