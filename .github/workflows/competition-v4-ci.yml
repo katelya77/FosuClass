@@ -1,0 +1,32 @@
+name: Competition V4 CI
+
+on:
+  push:
+    branches:
+      - feat/campusflow-adp-integration-v4-execution
+    paths:
+      - "competition/adp-kit/**"
+      - ".github/workflows/competition-v4-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  campus-tools-v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install CampusTools dev dependencies
+        run: npm --prefix competition/adp-kit/mcp/campus-tools-mcp install --ignore-scripts
+
+      - name: CampusTools check
+        run: npm --prefix competition/adp-kit/mcp/campus-tools-mcp run check
+
+      - name: CampusTools tests
+        run: npm --prefix competition/adp-kit/mcp/campus-tools-mcp test
