@@ -194,6 +194,17 @@ test("query_schedule: 实体不存在", () => {
   assert.equal(env.error.code, "ENTITY_NOT_FOUND");
 });
 
+test("query_schedule: weekday=0 仍为非法参数", () => {
+  const env = callTool("query_schedule", {
+    entityType: "teacher",
+    entityName: "教师001",
+    week: 1,
+    weekday: 0,
+  });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "INVALID_PARAM");
+});
+
 // ---------------------------------------------------------------------------
 // find_available_classrooms
 // ---------------------------------------------------------------------------
@@ -271,6 +282,54 @@ test("compare_schedules: 教师003 周一跨校区提醒（设计场景）", () 
   assert.ok(Array.isArray(env.rushWarnings), "应输出 rushWarnings 字段");
   assert.ok(env.rushWarnings.length >= 1, "教师003 周一跨校区赶场应被识别");
   assert.equal(env.rushWarnings[0].weekday, 1);
+});
+
+test("compare_schedules: weekday=0 仅在本工具兼容为整周", () => {
+  const env = callTool("compare_schedules", {
+    firstType: "room",
+    firstName: "A1-101",
+    secondType: "room",
+    secondName: "A1-102",
+    week: 1,
+    weekday: 0,
+  });
+  assert.equal(env.success, true);
+  assert.equal(env.query.week, 1);
+  assert.equal(env.query.weekday, null);
+  assert.ok(env.items.every((item) => item.weekday >= 1 && item.weekday <= 7));
+});
+
+test("compare_schedules: 同实体不产生相同 lessonId 的伪冲突", () => {
+  const env = callTool("compare_schedules", {
+    firstType: "teacher",
+    firstName: "教师003",
+    secondType: "teacher",
+    secondName: "教师003",
+    week: 1,
+    weekday: 1,
+  });
+  assert.equal(env.success, true);
+  assert.equal(env.summary.selfCompare, true);
+  assert.equal(
+    env.items.some((item) => item.first.lessonId === item.second.lessonId),
+    false,
+  );
+});
+
+test("compare_schedules: 同实体赶场提醒唯一", () => {
+  const env = callTool("compare_schedules", {
+    firstType: "teacher",
+    firstName: "教师003",
+    secondType: "teacher",
+    secondName: "教师003",
+    week: 1,
+  });
+  assert.equal(env.success, true);
+  const keys = env.rushWarnings.map((item) =>
+    `${item.entity}|${item.weekday}|${item.from.lessonId}|${item.to.lessonId}`,
+  );
+  assert.equal(new Set(keys).size, keys.length);
+  assert.equal(env.summary.rushWarningCount, env.rushWarnings.length);
 });
 
 // ---------------------------------------------------------------------------
