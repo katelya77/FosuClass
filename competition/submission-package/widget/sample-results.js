@@ -378,8 +378,8 @@ window.CampusTaskSamples = {
         "endTime": "11:40",
         "suggestion": "空闲时段，可安排自习",
         "studyRooms": [
-          "实验楼A1-401（40人）",
-          "A1-101（60人）"
+          "A1-101（60人）",
+          "A1-102（60人）"
         ]
       },
       {

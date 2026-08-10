@@ -138,3 +138,18 @@
 - 删除 3 张 ADP 后台截图，发布门禁生成的 2 张二进制截图已还原，不进入本轮差异。
 - 本轮实跑：`test:campus-assistant-copy`、ADP Kit 全套、Agent Foundation 42/42、Regression 197/197、AI Competition、Final Convergence（120 cases）、Phase 2 11/11、Release Gate 26/26 全部通过。
 - 未合并 main，未部署正式产品，未发布 ADP 测试版或最终比赛版。ADP 真实未完成状态仍为：7 文档/32 问答未上传，四画布只有开始/结束，插件/Widget/平台评测/发布未完成。
+
+### 2026-08-10 20:05–20:32 03-课程冲突比较 V4 收尾（Kimi Code）
+
+- Git 基线：本地 `feat/campusflow-adp-integration` 经 ff-only 同步至 `1c805e92234fdeedffa42cbde0b6ce1ccdc209e0`；未 rebase、未 force push、未覆盖工作区改动。
+- 本地门禁：CampusTools `check` + 34 项单测全过；`sync-campusflow-function.js --check`、HTTP Function 本地冒烟、Golden 33/33（`dataHash=sha1:fefef4bf425b`）、ADP Kit 全量测试全过。
+- 本机 `localeCompare` 中文排序环境与生成机不一致导致 widget 空教室样例顺序漂移（实验楼A1-401 vs A1-101/A1-102）；按仓库 `generate` 流程重生成 `sample-results`、`SHA256SUMS` 并同步资产清单（73 files），未改动任何工具逻辑。
+- CloudBase code-only 更新：`tcb fn code update campusflowAdpTools --dir competition/adp-kit/cloudfunctions/campusflowAdpTools -e cloud1-d3g17rpe7566d3d5c`（COS 上传）成功；未使用 deploy --force，未新建/删除函数，未改 URL/triggers/环境变量。
+- 部署前后不变量全部一致：Environment `cloud1-d3g17rpe7566d3d5c`、FunctionId `lam-c1osizbf`、Runtime Nodejs18.15、内存 256MB、超时 60s、路由 `/campusflow-adp-tools`（WEB_SCF）；环境变量 key 集合（CAMPUS_API_AUTH_MODE/CAMPUS_API_TOKEN/CORS_ORIGIN/LOG_LEVEL/REQUEST_TIMEOUT_MS）与各值 hash 一致；CAMPUS_API_TOKEN 存在且未被读取明文（平台脱敏返回）。
+- 公网验证：`GET /health` → 200，`dataVersion=competition-demo-v1`、`dataHash=sha1:fefef4bf425b`、6 tools；无 token `POST /api/compare_schedules` → 401；`tcb fn code download` 回读比对：线上代码与权威源逐字节一致（含 src/tools.js V4 与数据文件）。
+- 带 token 的公网 CASE 1–5（整周 room/course/teacher、self compare、query_schedule weekday=0 负向）：token 仅存于 CloudBase 环境变量与 ADP 变量表（平台均脱敏），本机无安全副本，标记为 SMOKE_TOKEN_PENDING；已准备本地可复跑脚本，token 经安全渠道提供后即可补验。
+- V4 ADP 包：由真实导出 `export-03-课程冲突比较-V3-全新ID修复版.zip`（只读）生成 `output/competition-adp/03-课程冲突比较-V4-Final-可直接导入.zip`，SHA256 `fac50032d0db2bd8132243bf1545374081d1466d199eaa2a21e1fa3d13b2d845`。
+- V4 改动仅限：WorkflowName/Description 更新；呈现节点 `02a6cfe5` 增加 `summary.selfCompare` 分支（自比较标题“<实体> · 课程安排风险检查”、忙碌课次只显示一次）与 `summary.rushWarningCount` 展示；`example_queries` 将“教师001和教师002第1周周三有冲突吗”改为“教师001和教师002第1周是否存在冲突”。WorkflowID、11 个 NodeID、6 个 ParameterId、VariableId `a39583c8-2484-46f2-8ba8-e7384a0365e8`（ENV_VARIABLE 绑定）全部保持不变；未新增明文 token。
+- V4 ZIP 静态校验 17 项 ALL_PASS（结构、ProtoVersion V2_6、引用完整性、参数/变量 ID 基线、无明文 token、第N周→week=N+weekday=0 归一化行为、核心示例句齐全）。
+- 呈现节点 V4 代码本地单测 4/4（self compare 渲染、普通整周渲染、verified/dataVersion 门禁、ENTITY_NOT_FOUND suggestions）。
+- ADP_IMPORT_PENDING：ZIP 未导入 ADP 网页端，需人工导入后按 6 条验收句实测。
