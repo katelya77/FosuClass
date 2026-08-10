@@ -21,6 +21,8 @@ const WORKFLOW_NAMES = [
   "04-今日校园计划",
 ];
 const CARD_TYPES = ["schedule", "classroom", "conflict", "day_plan", "error", "choice"];
+const DYNAMIC_CARD_TYPES = ["schedule", "classroom", "conflict", "day_plan"];
+const WIDGET_ACTION_TYPES = ["sys.chat", "sys.go_to_url", "sys.download"];
 const REQUIRED_KNOWLEDGE_SECTIONS = [
   "适用范围",
   "规则",
@@ -130,6 +132,15 @@ function validateApplication() {
   });
 }
 
+function validateWidgetAction(action, label) {
+  assert(action && action.id && action.label && action.type, `${label} Action 缺少 id/label/type`);
+  assert(WIDGET_ACTION_TYPES.includes(action.type), `${label} Action 类型不允许：${action.type}`);
+  const serialized = JSON.stringify(action);
+  ["authorization", "campus_api_token", "nodeid", "varbizid", "system prompt", "系统提示词"].forEach((term) => {
+    assert(!serialized.toLowerCase().includes(term.toLowerCase()), `${label} Action 含内部敏感字段：${term}`);
+  });
+}
+
 function validateInterfaces() {
   const openapi = json("openapi/campus-tools.openapi.json");
   const operations = Object.values(openapi.paths)
@@ -150,9 +161,29 @@ function validateInterfaces() {
   });
 
   const schema = json("widget/widget-schema.json");
+  assert.strictEqual(schema.properties.schemaVersion.const, "campus-widget/v2", "Widget Schema 必须为 campus-widget/v2");
   assert.deepStrictEqual(schema.properties.cardType.enum, CARD_TYPES, "Widget cardType 不完整");
+  assert.strictEqual(schema.properties.actions.maxItems, 3, "Widget 主动作必须最多 3 个");
+  assert.deepStrictEqual(schema.properties.actions.items.properties.type.enum, WIDGET_ACTION_TYPES, "Widget Action 类型合同不一致");
+
   const samples = json("widget/sample-results.json");
-  CARD_TYPES.forEach((type) => assert(samples[type], `Widget 缺少 ${type} 样例`));
+  CARD_TYPES.forEach((type) => {
+    const sample = samples[type];
+    assert(sample, `Widget 缺少 ${type} 样例`);
+    assert.strictEqual(sample.schemaVersion, "campus-widget/v2", `${type} 样例不是 v2 ViewModel`);
+    assert.strictEqual(sample.cardType, type, `${type} cardType 不匹配`);
+    assert(Array.isArray(sample.actions) && sample.actions.length <= 3, `${type} Action 数量超过限制`);
+    sample.actions.forEach((action) => validateWidgetAction(action, type));
+    if (type === "choice") {
+      assert.strictEqual(sample.interaction.waitForUser, true, "Choice Widget 必须等待用户操作");
+      sample.items.forEach((item) => validateWidgetAction(item.action, "choice item"));
+    }
+  });
+  DYNAMIC_CARD_TYPES.forEach((type) => {
+    assert.strictEqual(samples[type].success, true, `${type} 动态样例必须成功`);
+    assert.strictEqual(samples[type].dataVersion, "competition-demo-v1", `${type} 数据版本不正确`);
+    assert.strictEqual(samples[type].evidence.verified, true, `${type} 动态样例必须 verified=true`);
+  });
 }
 
 function validateAnonymousCompetitionAssets() {
@@ -176,7 +207,7 @@ function run() {
   validateInterfaces();
   validateAnonymousCompetitionAssets();
   const qaCount = json("qa/standard-qa.json").items.length;
-  console.log(`ADP kit validation passed: 7 docs, ${qaCount} QA, 80 evals, 4 workflows, 6 tools, 6 card types`);
+  console.log(`ADP kit validation passed: 7 docs, ${qaCount} QA, 80 evals, 4 workflows, 6 tools, 6 widget v2 card types`);
 }
 
 run();
