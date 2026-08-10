@@ -454,7 +454,7 @@
           "CampusTools"
         ],
         "operationId": "compare_schedules",
-        "summary": "比较两个实体（班级/教师/教室/课程）在指定周的课表冲突，并给出跨校区赶场提醒。",
+        "summary": "比较两个实体（班级/教师/教室/课程）在指定周的课表冲突；支持整周比较（weekday 可省略），并给出跨校区赶场提醒。",
         "security": [
           {
             "bearerAuth": []

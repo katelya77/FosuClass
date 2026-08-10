@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-09T14:04:46.123Z",
+  "generatedAt": "2026-08-10T11:42:25.431Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -45,8 +45,8 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
-      "bytes": 27999,
-      "sha256": "d4c1bd3f815fbdc3fa97bc83c363ddd82a662e6be062fd4ea3d184f806c0c93d"
+      "bytes": 29099,
+      "sha256": "0762c45f5641e261b3dcdf85df64417c9302fb966bfcc9b2b27e60a49c567914"
     },
     {
       "path": "cloudfunctions/README.md",
@@ -105,8 +105,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27774,
-      "sha256": "77c06075c689ae2ac865247ffaf0d5b48bf7ad65e91f32bf69c3951080bb785a"
+      "bytes": 27528,
+      "sha256": "de3834fa3055fdc5a57edfef6392ad473f69fb9df578816c671f2967c7442b40"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -205,8 +205,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/tools.js",
-      "bytes": 27999,
-      "sha256": "d4c1bd3f815fbdc3fa97bc83c363ddd82a662e6be062fd4ea3d184f806c0c93d"
+      "bytes": 29099,
+      "sha256": "0762c45f5641e261b3dcdf85df64417c9302fb966bfcc9b2b27e60a49c567914"
     },
     {
       "path": "mcp/campus-tools-mcp/test/security.test.js",
@@ -215,8 +215,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/test/tools.test.js",
-      "bytes": 15612,
-      "sha256": "1edfe6ad41bd4024bd485517824565897390e80c8327532bb3653a615753a3ab"
+      "bytes": 17345,
+      "sha256": "fd5e02ec9507da6016f838dba87b35e1a40f27aab954a0cdfa87bd3ccb73510b"
     },
     {
       "path": "mcp/campus-tools-mcp/tsconfig.json",
@@ -245,8 +245,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 23474,
-      "sha256": "7551f72dffe010b4c17d2a275d928af58b9920d48c2fc09b09af90294a5f15d2"
+      "bytes": 23518,
+      "sha256": "3780574a6a0b339260795b5b5630e395c84495d431a786e8859cb489a0c03898"
     },
     {
       "path": "openapi/generate-openapi.js",
@@ -295,13 +295,13 @@
     },
     {
       "path": "widget/sample-results.js",
-      "bytes": 12478,
-      "sha256": "fc7e71fd16c2532a2652bdbcd36d70b2cfd881940f1787545cdc9c0fb6505b3e"
+      "bytes": 12564,
+      "sha256": "42f735bc3f3b71e70cb57feefd5f5c7e7fb3fd9ea509ba4a90d39cfbe7e1cb89"
     },
     {
       "path": "widget/sample-results.json",
-      "bytes": 12450,
-      "sha256": "d42e07fc4826f2caee17d709d6af8ce2e36132e06cb1acf6206eb3d90a33fee3"
+      "bytes": 12536,
+      "sha256": "04de839547395904232e9ccb289c11c24d37317a82b0fd05fb9773aa0782762f"
     },
     {
       "path": "widget/serve.js",

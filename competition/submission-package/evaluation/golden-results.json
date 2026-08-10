@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "064418fa6c0341caa716a831327ea859b84929a4a0fc166f0ef020f9fc960148",
+  "oracleSourceSha256": "62a6d236b39b8f99dded40bc7c3c4498d3070ddf203d5f924dd303a19533c9c1",
   "caseCount": 33,
   "cases": [
     {
@@ -779,7 +779,7 @@
         "dataVersion": "competition-demo-v1",
         "dataHash": "sha1:fefef4bf425b",
         "success": true,
-        "itemCount": 2,
+        "itemCount": 0,
         "resolvedEntity": null,
         "comparedEntities": [
           {
@@ -791,21 +791,12 @@
             "name": "教师003"
           }
         ],
-        "lessonIds": [
-          "les-005",
-          "les-024"
-        ],
-        "courseIds": [
-          "c-03",
-          "c-14"
-        ],
-        "roomIds": [
-          "r-a2-301",
-          "r-b1-201"
-        ],
-        "conflictCount": 2,
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": 0,
         "lessonCount": null,
-        "empty": false,
+        "empty": true,
         "verified": true
       }
     },
@@ -823,7 +814,7 @@
         "dataVersion": "competition-demo-v1",
         "dataHash": "sha1:fefef4bf425b",
         "success": true,
-        "itemCount": 2,
+        "itemCount": 1,
         "resolvedEntity": null,
         "comparedEntities": [
           {
@@ -837,22 +828,17 @@
         ],
         "lessonIds": [
           "les-025",
-          "les-026",
-          "les-028",
-          "les-029"
+          "les-028"
         ],
         "courseIds": [
           "c-02",
-          "c-06",
-          "c-07",
-          "c-12"
+          "c-06"
         ],
         "roomIds": [
           "r-b1-103",
-          "r-b1-104",
-          "r-gym-b"
+          "r-b1-104"
         ],
-        "conflictCount": 2,
+        "conflictCount": 1,
         "lessonCount": null,
         "empty": false,
         "verified": true

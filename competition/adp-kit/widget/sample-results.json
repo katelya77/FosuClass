@@ -304,6 +304,7 @@
     "error": null,
     "query": {
       "week": 1,
+      "weekday": 5,
       "date": "2026-09-04"
     },
     "compared": [
@@ -323,7 +324,9 @@
       "conflictCount": 1,
       "firstBusySlots": 1,
       "secondBusySlots": 2,
-      "hasConflict": true
+      "hasConflict": true,
+      "selfCompare": false,
+      "rushWarningCount": 0
     },
     "title": "A班 ↔ B班",
     "timeText": "第1周 · 周五下午",
@@ -375,8 +378,8 @@
         "endTime": "11:40",
         "suggestion": "空闲时段，可安排自习",
         "studyRooms": [
-          "A1-101（60人）",
-          "A1-102（60人）"
+          "实验楼A1-401（40人）",
+          "A1-101（60人）"
         ]
       },
       {

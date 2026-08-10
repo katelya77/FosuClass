@@ -374,8 +374,13 @@ function compareSchedules(params) {
   const r2 = resolveEntity({ type: secondType, name: secondName });
   if (!r2.success) return r2;
 
-  const tr = resolveTimeRange(params);
+  const timeParams = { ...(params || {}) };
+  if (Number(timeParams.weekday) === 0) delete timeParams.weekday;
+  const tr = resolveTimeRange(timeParams);
   if (tr.error) return tr.error;
+
+  const selfCompare = r1.resolvedEntity.type === r2.resolvedEntity.type
+    && r1.resolvedEntity.id === r2.resolvedEntity.id;
 
   const { idx, data } = loadDataset();
   const busyOf = (type, id) => (idx[SCHEDULE_INDEX_OF[type]].get(id) || [])
@@ -389,10 +394,19 @@ function compareSchedules(params) {
   const busy2 = busyOf(secondType, r2.resolvedEntity.id);
 
   const conflicts = [];
+  const conflictKeys = new Set();
   for (const a of busy1) {
     for (const b of busy2) {
+      if (selfCompare && a.lessonId === b.lessonId) continue;
       if (a.weekday !== b.weekday) continue;
       if (!periodsOverlap(a.periodStart, a.periodEnd, b.periodStart, b.periodEnd)) continue;
+      const leftId = String(a.lessonId || "");
+      const rightId = String(b.lessonId || "");
+      const pairKey = selfCompare
+        ? [leftId, rightId].sort().join("::")
+        : `${leftId}::${rightId}`;
+      if (conflictKeys.has(pairKey)) continue;
+      conflictKeys.add(pairKey);
       conflicts.push({
         weekday: a.weekday,
         weekdayName: data.meta.weekdayNames[a.weekday - 1],
@@ -432,20 +446,34 @@ function compareSchedules(params) {
     }
   };
   detectRush(busy1, r1.resolvedEntity.name);
-  detectRush(busy2, r2.resolvedEntity.name);
+  if (!selfCompare) detectRush(busy2, r2.resolvedEntity.name);
+
+  const rushSeen = new Set();
+  const dedupedRushWarnings = rushWarnings.filter((item) => {
+    const key = `${item.entity}|${item.weekday}|${item.from.lessonId}|${item.to.lessonId}`;
+    if (rushSeen.has(key)) return false;
+    rushSeen.add(key);
+    return true;
+  });
 
   const env = ok({
     items: conflicts,
     actions: [{ type: "open_widget", cardType: "conflict", label: "以卡片查看冲突对比" }],
   });
-  env.query = { week: tr.week, date: tr.date || null };
+  env.query = {
+    week: tr.week,
+    weekday: tr.weekday == null ? null : tr.weekday,
+    date: tr.date || null,
+  };
   env.compared = [r1.resolvedEntity, r2.resolvedEntity];
-  env.rushWarnings = rushWarnings;
+  env.rushWarnings = dedupedRushWarnings;
   env.summary = {
     conflictCount: conflicts.length,
     firstBusySlots: busy1.length,
     secondBusySlots: busy2.length,
     hasConflict: conflicts.length > 0,
+    selfCompare,
+    rushWarningCount: dedupedRushWarnings.length,
   };
   if (conflicts.length === 0) env.evidence.note = "EMPTY_RESULT";
   return env;
@@ -617,7 +645,7 @@ const TOOL_DEFS = [
   },
   {
     name: "compare_schedules",
-    description: "比较两个实体（班级/教师/教室/课程）在指定周的课表冲突，并给出跨校区赶场提醒。",
+    description: "比较两个实体（班级/教师/教室/课程）在指定周的课表冲突；支持整周比较（weekday 可省略），并给出跨校区赶场提醒。",
     inputSchema: {
       type: "object",
       properties: {
