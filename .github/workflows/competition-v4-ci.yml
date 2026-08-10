@@ -30,3 +30,6 @@ jobs:
 
       - name: CampusTools tests
         run: npm --prefix competition/adp-kit/mcp/campus-tools-mcp test
+
+      - name: Golden evaluator
+        run: npm --prefix competition/adp-kit run eval:golden
