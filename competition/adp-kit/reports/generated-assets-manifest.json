@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-10T11:42:25.431Z",
+  "generatedAt": "2026-08-10T11:45:31.035Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -335,8 +335,8 @@
     },
     {
       "path": "workflows/03-课程冲突比较.md",
-      "bytes": 3522,
-      "sha256": "3a847746a9583a1523cbb483ad28eff4465df2a5b1f958f464523f7abe3a01a2"
+      "bytes": 4186,
+      "sha256": "be5f085221c9b76c081caecf23eafef1f44df6927946f6c706d528f1eb303da5"
     },
     {
       "path": "workflows/04-今日校园计划.md",
@@ -360,13 +360,13 @@
     },
     {
       "path": "workflows/workflow-definitions.js",
-      "bytes": 19616,
-      "sha256": "42fc58ad6889b8dc8e229e60a9bba9ee9783ecfac7275bc65d081a90f6a4f629"
+      "bytes": 20291,
+      "sha256": "b7d10cbddee02d10f66879e7bdfa958f92e1591b301e9881e681a3752d6125d5"
     },
     {
       "path": "workflows/workflow-specs.json",
-      "bytes": 27772,
-      "sha256": "8aff2f3b1b16267f14badf083c673497296374d35c0fc01524092fb3d9b13933"
+      "bytes": 28459,
+      "sha256": "70362e78239502287b0be2c1496ad7827197c5d812a91f412f5c51d0d2aa049c"
     }
   ]
 }
