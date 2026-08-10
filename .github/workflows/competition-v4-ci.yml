@@ -31,5 +31,81 @@ jobs:
       - name: CampusTools tests
         run: npm --prefix competition/adp-kit/mcp/campus-tools-mcp test
 
-      - name: Golden evaluator
-        run: npm --prefix competition/adp-kit run eval:golden
+      - name: Review V4 conflict outputs
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const { callTool } = require('./competition/adp-kit/mcp/campus-tools-mcp/src/tools');
+          const cases = [
+            ['teacher-pair-week1', {
+              firstType: 'teacher', firstName: '教师001',
+              secondType: 'teacher', secondName: '教师002', week: 1,
+            }],
+            ['teacher-self-week1-mon', {
+              firstType: 'teacher', firstName: '教师003',
+              secondType: 'teacher', secondName: '教师003', week: 1, weekday: 1,
+            }],
+            ['course-math-english-week1', {
+              firstType: 'course', firstName: '高等数学A',
+              secondType: 'course', secondName: '大学英语A', week: 1,
+            }],
+            ['room-a1-101-a1-102-week1', {
+              firstType: 'room', firstName: 'A1-101',
+              secondType: 'room', secondName: 'A1-102', week: 1,
+            }],
+          ];
+
+          for (const [id, input] of cases) {
+            const env = callTool('compare_schedules', input);
+            const review = {
+              id,
+              input,
+              success: env.success,
+              query: env.query,
+              compared: env.compared,
+              summary: env.summary,
+              conflictPairs: (env.items || []).map((item) => ({
+                weekday: item.weekday,
+                periodStart: item.periodStart,
+                periodEnd: item.periodEnd,
+                firstLessonId: item.first && item.first.lessonId,
+                secondLessonId: item.second && item.second.lessonId,
+              })),
+              rushWarnings: env.rushWarnings || [],
+              dataVersion: env.dataVersion,
+              evidence: env.evidence,
+            };
+            console.log(`\n=== V4 REVIEW ${id} ===`);
+            console.log(JSON.stringify(review, null, 2));
+
+            assert.equal(env.success, true, `${id}: success`);
+            assert.equal(env.dataVersion, 'competition-demo-v1', `${id}: dataVersion`);
+            assert.equal(env.evidence && env.evidence.verified, true, `${id}: verified`);
+            assert.equal(env.evidence && env.evidence.dataHash, 'sha1:fefef4bf425b', `${id}: dataHash`);
+            assert.equal(env.query.week, 1, `${id}: week`);
+          }
+
+          const self = callTool('compare_schedules', cases[1][1]);
+          assert.equal(self.summary.selfCompare, true, 'self compare flag');
+          assert.equal(
+            self.items.some((item) => item.first.lessonId === item.second.lessonId),
+            false,
+            'self compare must not pair a lesson with itself',
+          );
+          const rushKeys = self.rushWarnings.map((item) =>
+            `${item.entity}|${item.weekday}|${item.from.lessonId}|${item.to.lessonId}`,
+          );
+          assert.equal(new Set(rushKeys).size, rushKeys.length, 'self compare rush warnings unique');
+          assert.equal(self.summary.rushWarningCount, self.rushWarnings.length, 'rush summary count');
+
+          const sentinel = callTool('compare_schedules', {
+            firstType: 'room', firstName: 'A1-101',
+            secondType: 'room', secondName: 'A1-102',
+            week: 1, weekday: 0,
+          });
+          assert.equal(sentinel.success, true, 'weekday=0 compare sentinel succeeds');
+          assert.equal(sentinel.query.weekday, null, 'weekday=0 is normalized to whole week');
+
+          console.log('\n[pass] V4 conflict review assertions passed');
+          NODE
