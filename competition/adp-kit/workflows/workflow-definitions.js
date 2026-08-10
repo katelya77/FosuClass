@@ -154,14 +154,14 @@ const workflows = [
       { name: "first_entity_name", type: "string", required: true, note: "第一个匿名实体" },
       { name: "second_entity_type", type: "string", required: true, note: "class|teacher|room|course" },
       { name: "second_entity_name", type: "string", required: true, note: "第二个匿名实体" },
-      { name: "date_range", type: "object", required: false, note: "唯一时间容器：{date_text,week,weekday}；缺省今天" },
+      { name: "date_range", type: "object", required: false, note: "唯一时间容器：{date_text,week,weekday}；仅第N周表示整周；缺省今天" },
       { name: "period_scope", type: "object", required: false, note: "{start,end}" },
     ],
     required: ["first_entity_type", "first_entity_name", "second_entity_type", "second_entity_name"],
-    timePolicy: "开始节点和参数提取都只使用 date_range，不再并列输出顶层 date_text/week/weekday；缺省时按今天比较。",
+    timePolicy: "开始节点和参数提取都只使用 date_range，不再并列输出顶层 date_text/week/weekday；“第N周”只给 week、不指定 weekday，表示整周，不得默认周一；ADP 内部若以 0 表示未指定 weekday，compare_schedules 入口仅对本工具将其规范化为整周；缺省时间时按今天比较。",
     extractPrompt: `只输出 JSON：
 {"first_entity_type":"","first_entity_name":"","second_entity_type":"","second_entity_name":"","date_range":{"date_text":"","week":null,"weekday":null},"period_scope":null,"inherited":false}
-A班/B班归一化为2025级A班/2025级B班。只给一个对象时第二对象留空；不预判冲突，不单独输出顶层 date_text/week/weekday。`,
+A班/B班归一化为2025级A班/2025级B班。只给一个对象时第二对象留空；“第N周”只提取 week=N 且 weekday 留空，只有明确周X时才填 1-7；不预判冲突，不单独输出顶层 date_text/week/weekday。`,
     tool: "compare_schedules",
     toolMapping: {
       first_entity_type: "firstType", first_entity_name: "firstName",
@@ -173,6 +173,7 @@ A班/B班归一化为2025级A班/2025级B班。只给一个对象时第二对象
       "compare_schedules 内部解析两个实体；ADP 不预先调用 resolve_entity",
       "AMBIGUOUS_ENTITY/ENTITY_NOT_FOUND → entity_issue",
       "success=true、verified=true 且 conflictCount=0 仍是成功结果",
+      "summary.selfCompare=true 时使用“<实体> · 课程安排风险检查”，忙碌课次只显示一次，不得使用“A vs A”标题；rushWarnings 只展示工具已经去重的结果",
       "success=false / 版本不一致 / verified=false → tool_error",
     ],
     nodes: [
@@ -195,10 +196,11 @@ A班/B班归一化为2025级A班/2025级B班。只给一个对象时第二对象
       ["result_branch", "result", "verified"], ["entity_issue", "end"], ["tool_error", "end"], ["result", "end"],
     ],
     samples: [
-      "比较2025级A班与B班周五下午的课程冲突", "教师001和教师002周三有冲突吗", "A班和C班这周哪天下午都有课",
-      "教师003周一的课和A班冲突吗", "比较A班和B班", "（上文A班后）再和D班比一下",
-      "比较A班", "比较A班和E班", "教师003和教师003周一跨校区来得及吗", "张老师和李老师的课冲突吗",
-      "A班第25周周五和B班冲突吗", "比较A班和B班第1周周日",
+      "比较A1-101和A1-102第1周的占用冲突", "比较高等数学A和大学英语A第1周的时间冲突",
+      "教师003和教师003第1周周一是否存在冲突或跨校区赶场", "教师001和教师002第1周是否存在冲突",
+      "比较2025级A班和2025级B班第1周周五下午的课程冲突", "教师001和教师002周三有冲突吗",
+      "A班和C班这周哪天下午都有课", "教师003周一的课和A班冲突吗", "比较A班和B班", "（上文A班后）再和D班比一下",
+      "比较A班", "比较A班和E班", "张老师和李老师的课冲突吗", "A班第25周周五和B班冲突吗",
     ],
   }),
   finish({
