@@ -1,155 +1,146 @@
-# 校园智序 · 小序 — Agent Session State V3 设计
+# 校园智序 · 小序 — Agent Context V3 设计（修订版）
 
 ## 背景
 
-2026-08-10 应用级真实 ADP 测试确认：
+2026-08-10 至 2026-08-11 的真实 ADP 应用测试确认：
 
 - 01/02/03/04 路由总体正确；
 - 02 两轮 follow-up `校区A 2026-09-03 下午有哪些空教室` → `那校区B呢` 已能继承日期与节次；
-- 第三轮 `要能坐60人的` 再次丢失日期与节次，说明单纯依赖模型上下文改写 + 参数提取提示词不能稳定承载三轮以上累计槽位；
-- 03 单教师赶场和 01→03 handoff 也属于同一类“跨轮结构化状态”问题。
+- 第三轮 `要能坐60人的` 再次丢失日期与节次，说明单纯依赖参数提取器对历史文本的隐式理解不能稳定承载三轮以上累计槽位；
+- 03 单教师赶场和 01→03 handoff 也属于同一类“跨轮上下文补全”问题。
 
-因此停止继续堆叠自然语言提示词，转向 ADP 原生变量能力。
+此前草案计划使用 `APP.task_state_json` 作为“Session 状态”。经重新核对腾讯云 ADP 2025-11 之后的变量隔离规则，该方案不成立：**应用变量 APP.* 是用户隔离但不是 Session 隔离，可跨 Session 读写**。因此不能把它用于比赛主应用的临时会话槽位，否则同一 visitor 的新会话可能读取旧任务状态。
+
+本修订版明确：**比赛主版本不使用 APP.task_state_json 承载临时任务状态。**
 
 ## 设计目标
 
-建立一个**会话级、用户隔离、可跨工作流读写**的结构化任务状态，作为上下文改写的确定性补充，而不是替代模型自然语言理解。
+使用 ADP 原生、Session 隔离的系统上下文能力完成多轮任务补全，同时保持动态校园事实只来自 CampusTools。
 
-动态校园事实仍只来自 CampusTools；状态变量只保存已核验查询参数和路由上下文，不保存或推断课程事实。
+优先使用：
 
-## ADP 原生能力依据
+1. `SYS.RewriteQuery`：模型上下文改写后的本轮自包含问题；
+2. `SYS.ChatHistory`：必要时作为参数提取辅助；
+3. `SYS.UserQuery`：保留原始本轮输入，用于判断用户显式覆盖了哪些字段；
+4. CampusTools：最终事实校验与实体/日期合法性校验。
 
-ADP 支持：
+## ADP 变量隔离结论
 
-- 应用变量 `APP.*` 在应用内各模块读取/写入；
-- 变量赋值节点可为应用变量赋值；
-- `SYS.UserQuery` / `SYS.RewriteQuery` / `SYS.ChatHistory` 可读取当前查询、上下文改写结果和历史；
-- 工作流开始节点可引用应用级变量；
-- 应用变量适合在同一会话中跨工作流传递任务状态。
+### 可以用于本阶段
 
-## 状态模型
+- `SYS.UserQuery`：用户隔离、Session 隔离；
+- `SYS.RewriteQuery`：用户隔离、Session 隔离；
+- `SYS.ChatHistory`：用户隔离、Session 隔离；
+- 工作流节点输入/输出：用户隔离、Session 隔离；
+- 工作流变量 `WF.*`：用户隔离、Session 隔离，但仅当前工作流内有效。
 
-第一版只创建一个应用变量，减少平台配置和 VarId 依赖：
+### 不用于临时会话状态
 
-- `APP.task_state_json` — STRING
-- 默认值：`{}`
+- `APP.*`：用户隔离、**非 Session 隔离**，同 visitor 可跨 Session 读取/写入；
+- `SYS.Memory`：长期记忆，跨 Session；
+- 环境变量：全局永久；
+- API 参数：用户隔离但非 Session 隔离，且由调用方提供。
 
-JSON 结构：
+因此已经手工创建的 `APP.task_state_json` 仅作为节点格式实验变量保留，不接入 01–04 比赛主链路；后续可删除，也可保留为未引用的 seed 变量。
 
-```json
-{
-  "version": 1,
-  "task": "schedule|classroom|conflict|day_plan|",
-  "verified": true,
-  "updated_at": "2026-08-10T23:00:00+08:00",
-  "schedule": {
-    "entity_type": "teacher",
-    "entity_name": "教师003",
-    "date_text": "",
-    "week": 1,
-    "weekday": 1,
-    "period_start": null,
-    "period_end": null
-  },
-  "classroom": {
-    "campus": "校区B",
-    "date_text": "2026-09-03",
-    "week": null,
-    "weekday": null,
-    "start_period": 5,
-    "end_period": 8,
-    "consecutive_periods": null,
-    "building": "",
-    "capacity": 60
-  },
-  "conflict": {
-    "first_entity_type": "class",
-    "first_entity_name": "2025级A班",
-    "second_entity_type": "class",
-    "second_entity_name": "2025级B班",
-    "date_range": "第1周",
-    "period_scope": ""
-  },
-  "day_plan": {
-    "date_text": "2026-09-04",
-    "preferred_campus": "校区A",
-    "preferred_study_duration": 2
-  }
-}
-```
+## V3 核心策略：显式消费 RewriteQuery
 
-实际写入时只需要保留与最近任务相关的部分；上面为完整 schema 示例。
+ADP 的“模型上下文改写”已在应用设置中开启。V3 不再只依赖参数提取器隐式读取历史，而是在需要多轮继承的工作流中**显式引用 `SYS.RewriteQuery`**。
 
-## 安全与隔离
+优先级：
 
-- 只写入 `verified=true` 的成功任务参数；
-- `ENTITY_NOT_FOUND`、`INVALID_PARAM`、`OUT_OF_RANGE`、未核验结果不得覆盖状态；
-- 不保存真实姓名、真实学校、真实身份、token、URL、课程事实列表；
-- 04 的 visitor 身份仍固定为 `visitor-demo-001`，不得写入状态；
-- 新会话必须从 `{}` 开始，不能继承旧 session 的临时任务槽位。
+`用户本轮显式值 > SYS.RewriteQuery 补全值 > 参数提取器历史理解 > 空值`
 
-## 工作流改造策略
+任何课程/教室/冲突/计划事实仍必须由 CampusTools 验证，RewriteQuery 只负责补齐查询条件，不作为事实来源。
 
-### 02 空教室规划
+## 02 空教室规划 V7
 
-在现有 `参数提取 -> 日期解析 -> 空教室参数归一化` 主链路中：
+目标：稳定支持：
 
-1. 参数提取仍提取本轮显式字段；
-2. `空教室参数归一化` 增加 `APP.task_state_json` 输入；
-3. 若 state.task=`classroom` 且 state.verified=true，则使用 state.classroom 补齐本轮未提供字段；
-4. 本轮显式字段优先覆盖 state；
-5. CampusTools 成功、`verified=true` 后构造新的 state JSON；
-6. 通过“变量赋值”节点写回 `APP.task_state_json`；
-7. 然后再回复用户。
+1. `校区A 2026-09-03 下午有哪些空教室`
+2. `那校区B呢`
+3. `要能坐60人的`
+4. `改成第3-4节`
+5. `只看B1楼`
 
-目标链：
+实现：
 
-`校区A 9/3 下午` → `那校区B呢` → `要60人的` → `改成第3-4节`
+- 参数提取节点新增输入 `rewrite_query = SYS.RewriteQuery`；
+- 提示词明确：优先从 `rewrite_query` 提取完整查询条件；只有本轮明确的新值覆盖改写结果中的旧值；
+- 不使用 APP 状态；
+- 现有 CampusTools、日期解析、V6 连续节次语义保持不变。
 
-每轮都能累积为完整确定性查询。
+第三轮期望 RewriteQuery 类似：
 
-### 03 冲突比较
+`校区B 2026-09-03 下午找能坐60人的空教室`
 
-- 单教师赶场：若用户只给一个 teacher 且语义含“赶场/跨校区/来得及”，归一化为 self-compare；
-- 跨工作流 handoff：若 state.task=`schedule` 且最近 verified schedule 有实体和时间，当前消息为“再和X比较”，则把 schedule 实体/时间作为 first side，再提取 X 为 second side；
-- 成功后把 conflict 参数写回 state。
+参数提取器据此得到完整参数后再调用确定性工具。
 
-### 01 课表查询
+## 03 冲突比较 V5
 
-成功后写入最近已核验 schedule 的：实体类型、实体名、日期/周次/星期/节次范围，供显式跨工作流 handoff 使用。
+### 单教师赶场
 
-### 04 今日校园计划
+`教师003第1周周一跨校区来得及吗`
 
-成功后可写入日计划偏好（date/preferred_campus/preferred_study_duration），不写 visitor。
+仍由参数提取器规则转为 self-compare：
 
-## 与模型上下文改写的关系
+- first = 教师003
+- second = 教师003
+- 第1周周一
 
-仍保持“模型上下文改写”开启：
+不得追问第二对象。
 
-- Rewrite 负责自然语言省略理解；
-- `APP.task_state_json` 负责结构化累计槽位；
-- 冲突时以用户本轮显式值 > 已核验 APP state > Rewrite 推断 > 空值 的顺序合并；
-- 任何动态事实最终仍由 CampusTools 校验。
+### 01 -> 03 handoff
 
-## 为什么不用长期记忆
+对话：
 
-长期记忆用于跨会话用户画像与持久化偏好，不适合保存“当前正在查哪个校区/哪一天/哪两个对象”的短时任务状态。赛事匿名环境继续关闭长期记忆。
+1. `教师003第1周周一的课`
+2. `再和A班比较一下有没有冲突`
 
-## 实施前置
+应用层 RewriteQuery 应把第2轮补全为类似：
 
-需要在 ADP `应用设置 -> 变量与记忆 -> 变量` 新建：
+`比较教师003和2025级A班第1周周一的课程冲突`
 
-- 名称：`task_state_json`
-- 类型：string
-- 模块：应用变量
-- 默认值：`{}`
-- 描述：`当前会话最近一次已核验校园任务的结构化参数状态，仅用于多轮任务槽位继承，不保存动态事实或身份信息。`
+03 参数提取节点显式读取 `SYS.RewriteQuery`，从而保留实体、week、weekday；03 仍重新调用 `compare_schedules`，不得使用上一轮课程文本直接推断冲突。
 
-创建后必须取得其平台 VarId/VarBizID，后续自动生成的 01/02/03/04 增强包统一引用该真实 ID，禁止猜造 ID。
+## 01 课表查询
+
+01 当前同任务继承 `教师001第1周周三的课 -> 那周五下午呢` 已真实通过，暂不改主链路。
+
+如果后续评测发现三轮以上课表跟进不稳定，再同样把 `SYS.RewriteQuery` 显式加入参数提取器，而不是引入 APP 状态。
+
+## 04 今日校园计划
+
+04 的 `我偏好校区A -> 那天想连续自习2节` 已真实通过，暂不改。
+
+不启用长期记忆，不保存 visitor。
+
+## 为什么不使用长期记忆
+
+长期记忆用于跨会话用户画像和持久偏好，不适合保存“当前正在查哪个校区/哪一天/哪两个对象”的临时任务上下文。赛事匿名环境继续关闭长期记忆。
+
+## 实施前置：System Variable Seed
+
+为避免猜测 ADP V2_6 ZIP 内系统变量引用的私有序列化结构，需要从真实平台导出一个 system-variable seed。
+
+在 `00-节点格式种子-勿启用` 中任意选一个支持输入变量的节点（推荐 `代码1` 或新增代码节点）：
+
+- 新增输入变量名：`rewrite_query`
+- 数据来源：引用
+- 变量：`SYS.RewriteQuery`
+
+保存后重新导出 00 工作流 ZIP。
+
+拿到真实 seed 后，自动生成：
+
+- `02-空教室规划-V7-RewriteQuery增强版`
+- `03-课程冲突比较-V5-RewriteQuery-Handoff增强版`
+
+只修改 JSON 必要字段，尽量保持已验证 XLSX、WorkflowID、NodeID、CampusTools 配置不变。
 
 ## 验收
 
-### 02 累积状态
+### 02 累积补全
 
 同一会话：
 
@@ -158,7 +149,7 @@ JSON 结构：
 3. `要能坐60人的`
 4. `改成第3-4节`
 
-第 3 轮必须仍是 `校区B + 2026-09-03 + 第5-8节 + capacity>=60`；第4轮只替换节次。
+第3轮必须仍是 `校区B + 2026-09-03 + 第5-8节 + capacity>=60`；第4轮只替换节次。
 
 ### 03 self-compare
 
@@ -175,7 +166,7 @@ JSON 结构：
 
 ## 后续阶段
 
-会话状态硬化通过后，再进入：
+RewriteQuery 硬化通过后再进入：
 
 1. Widget 四类正式卡片；
 2. 标准问答知识库精修与来源展示；
