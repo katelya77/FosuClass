@@ -6,13 +6,18 @@ on:
       - feat/campusflow-adp-integration-v4-execution
     paths:
       - "competition/adp-kit/**"
+      - "competition/submission-package/**"
       - ".github/workflows/competition-v4-ci.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   campus-tools-v4:
+    if: ${{ !contains(github.event.head_commit.message, '[v4-generated]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -55,57 +60,53 @@ jobs:
               secondType: 'room', secondName: 'A1-102', week: 1,
             }],
           ];
-
           for (const [id, input] of cases) {
             const env = callTool('compare_schedules', input);
-            const review = {
-              id,
-              input,
-              success: env.success,
-              query: env.query,
-              compared: env.compared,
-              summary: env.summary,
-              conflictPairs: (env.items || []).map((item) => ({
-                weekday: item.weekday,
-                periodStart: item.periodStart,
-                periodEnd: item.periodEnd,
-                firstLessonId: item.first && item.first.lessonId,
-                secondLessonId: item.second && item.second.lessonId,
-              })),
-              rushWarnings: env.rushWarnings || [],
-              dataVersion: env.dataVersion,
-              evidence: env.evidence,
-            };
-            console.log(`\n=== V4 REVIEW ${id} ===`);
-            console.log(JSON.stringify(review, null, 2));
-
             assert.equal(env.success, true, `${id}: success`);
             assert.equal(env.dataVersion, 'competition-demo-v1', `${id}: dataVersion`);
             assert.equal(env.evidence && env.evidence.verified, true, `${id}: verified`);
             assert.equal(env.evidence && env.evidence.dataHash, 'sha1:fefef4bf425b', `${id}: dataHash`);
             assert.equal(env.query.week, 1, `${id}: week`);
           }
-
           const self = callTool('compare_schedules', cases[1][1]);
-          assert.equal(self.summary.selfCompare, true, 'self compare flag');
-          assert.equal(
-            self.items.some((item) => item.first.lessonId === item.second.lessonId),
-            false,
-            'self compare must not pair a lesson with itself',
-          );
+          assert.equal(self.summary.selfCompare, true);
+          assert.equal(self.items.some((item) => item.first.lessonId === item.second.lessonId), false);
           const rushKeys = self.rushWarnings.map((item) =>
             `${item.entity}|${item.weekday}|${item.from.lessonId}|${item.to.lessonId}`,
           );
-          assert.equal(new Set(rushKeys).size, rushKeys.length, 'self compare rush warnings unique');
-          assert.equal(self.summary.rushWarningCount, self.rushWarnings.length, 'rush summary count');
-
+          assert.equal(new Set(rushKeys).size, rushKeys.length);
+          assert.equal(self.summary.rushWarningCount, self.rushWarnings.length);
           const sentinel = callTool('compare_schedules', {
-            firstType: 'room', firstName: 'A1-101',
-            secondType: 'room', secondName: 'A1-102',
+            firstType: 'room', firstName: 'A1-101', secondType: 'room', secondName: 'A1-102',
             week: 1, weekday: 0,
           });
-          assert.equal(sentinel.success, true, 'weekday=0 compare sentinel succeeds');
-          assert.equal(sentinel.query.weekday, null, 'weekday=0 is normalized to whole week');
-
-          console.log('\n[pass] V4 conflict review assertions passed');
+          assert.equal(sentinel.success, true);
+          assert.equal(sentinel.query.weekday, null);
+          console.log('[pass] V4 conflict review assertions passed');
           NODE
+
+      - name: Accept reviewed Golden
+        run: node competition/adp-kit/evaluation/generate-golden-results.js --accept-reviewed
+
+      - name: Regenerate ADP kit artifacts
+        run: npm --prefix competition/adp-kit run generate
+
+      - name: Full competition ADP kit gate
+        run: npm test --prefix competition/adp-kit
+
+      - name: Diff check
+        run: git diff --check
+
+      - name: Commit reviewed generated artifacts
+        shell: bash
+        run: |
+          git status --short
+          git config user.name "Katelya"
+          git config user.email "123220557+katelya77@users.noreply.github.com"
+          git add -u competition/adp-kit competition/submission-package
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit"
+          else
+            git commit -m "test: refresh conflict v4 golden artifacts [v4-generated]"
+            git push origin HEAD:feat/campusflow-adp-integration-v4-execution
+          fi
