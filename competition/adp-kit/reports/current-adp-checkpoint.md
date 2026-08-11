@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-12 02:46 +08:00
+更新时间：2026-08-12 02:57 +08:00
 
 当前状态：
 
@@ -11,7 +11,8 @@
 - `ADP_WIDGET_RUNTIME_SEED_CAPTURED`
 - `ADP_WIDGET_OFFICIAL_TEMPLATE_RUNTIME_PASS`
 - `ADP_WIDGET_SCHEMA_MODE_MISMATCH_FOUND`
-- `ADP_WIDGET_ZOD_SCHEMA_AUDIT_PENDING`
+- `B2_WIDGET_BASELINE_PASS`
+- `SCHEDULE_EXPORTED_SCHEMA_AUDIT_PENDING`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_INCLUDED_MINUTES_EXHAUSTED`
 
@@ -30,78 +31,75 @@ PR #49：保持 open / unmerged / 未正式发布。
 
 1. 六张 C 方案 Widget 已在 ADP 实机导入并出现独立 UI Preview。
 2. Schedule Runtime V1-V1.3：CampusTools / Adapter / 判断均成功，但自定义 Schedule Widget Runtime 报 `460101 / convert widget view failed / __jsx in undefined`。
-3. 腾讯官方模板 `基础表单澄清-DtR1y` 在 `开始 → Widget → 结束` 最小链中真实 Runtime PASS；因此平台 Widget Runtime 服务不是全局故障。
-4. 官方模板成功节点同样是 `ActionType=WIDGET_ACTION_NONE`，Template 也包含 map / 三元 / ARRAY_OBJECT，因此这些都不能再作为通用根因。
+3. 腾讯官方模板 `基础表单澄清-DtR1y` 在 `开始 → Widget → 结束` 最小链中真实 Runtime PASS；平台 Widget Runtime 不是全局故障。
+4. 官方模板成功节点同样有 map / 三元 / ARRAY_OBJECT / `WIDGET_ACTION_NONE`，因此这些不能再作为通用根因。
+5. B2 官方天气代码 Widget 在 Schema 修正后已完成五方合同一致 + 真实 Runtime PASS。
 
-## 2026-08-12 新发现：B2 的 Zod / JSON Schema 模式错位
+## B2 Schema / Runtime 闭环
 
-用户此前上传真实 `B2.widget`。解析结果：
+初始 B2 的 Template/Default 使用：
 
-- Template 引用：`city / condition / temp / high / low / advice`；
-- Default 也包含这 6 个字段；
-- 但真实保存/导出的 Schema 只有 `title`；
-- 内部 Schema 为 Zod：`z.object({ title: z.string() }).strict()`；
-- 外层 `jsonSchema` 也只包含 `title`；
-- 因此 Preview 出现 `undefined`，工作流 Widget 节点只暴露 `title`，完全符合实际 Schema。
+`city / condition / temp / high / low / advice`
 
-这说明当前赛事空间 Widget 编辑器已经存在 `Zod / JSON Schema` 两种 Schema 表达。B2 当前状态不能用于判断“代码创建 Runtime 是否正常”，因为它的数据合同本身没有正确建立。
+但初始真实导出的内部 Zod Schema 与 outer JSON Schema 都只有 `title`，导致 Preview `undefined` 与工作流只暴露 `title`。
 
-详细报告：
+修正 B2 的 Zod 后，用户新建最小链：
 
-`competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md`
+`开始 → B21 → 结束`
 
-## 2026-08-12 02:46 官方文档二次复核
+六字段全部固定 `USER_INPUT`，下发方式“直接向后流转”，输入 `测试`，2026-08-12 02:45:37 +08:00 实机 Runtime 全链绿色 PASS，耗时约 272 ms。
 
-重新联网核对腾讯云 1759 Widget 官方文档后，结论修正为：
+新上传 `B2(1).widget` 独立解析：
 
-- `126973` 明确：Schema 规范 Template 引入变量；Default 为变量提供默认数据。
-- `127031` 当前公开的“代码创建”天气示例仍使用 **JSON Schema**，并声明 `city / condition / temp / high / low / advice` 六个必填 string 字段。
-- `126979` / `126990` 明确：工作流 Widget 输入数据结构必须与 Widget 所需格式一致，否则无法正常渲染；结果展示卡使用“直接向后流转”。
-- `127283` 明确：需要 Agent 感知点击并继续推理/路由时使用 `sys.chat`。
-- 在当前腾讯云 `1759` 官方文档范围搜索 `Zod` / `z.object`，未找到公开的 Widget Zod 作者态说明。
+- SHA256 `69f38cae45a6ad9c213de634125d16b1a3a844206215dc784cbd4d0f4e41e841`
+- WidgetID `6f073d3dc8544bd99bac13caa47b51b9`
+- `schemaValidity/viewValidity/defaultStateValidity = valid`
+- TemplateVars / DefaultKeys / ZodSchemaKeys / JSONSchemaKeys 均为六字段。
 
-因此禁止再把“Zod 是 ADP 平台全局唯一真源”作为已证实事实。当前正确表述是：
+新上传 `export-B2.zip` 独立解析：
 
-> 用户当前赛事空间的真实 B2 导出内部 `schema` 为 Zod、外层同时有 `jsonSchema`。对 B2 应暂时把 **Zod 作为最小实机修正入口**，随后必须通过重新导出确认 Zod 与 outer jsonSchema 是否同步。
+- SHA256 `c92fcf96b5c2a2720d4fafa5d3a4758eeaea5dbb1c7e8cf7cf7c8c057eb18b02`
+- WorkflowID `888d0fa7-3af3-4920-bce9-07c41f6d7f32`
+- Widget Node `B21`
+- `ActionType=WIDGET_ACTION_NONE`
+- `WidgetParam` 与 `NodeUI.content.inputs` 均严格为六字段
+- 六项 `InputType=USER_INPUT`
 
-## 当前最高优先 Gate
+最终：
 
-### Gate Z1 — 修正 B2 的 Zod Schema
-
-在 B2 的 **Zod** 模式中明确配置：
-
-```ts
-import { z } from "zod";
-
-const widgetSchema = z.object({
-  city: z.string(),
-  condition: z.string(),
-  temp: z.string(),
-  high: z.string(),
-  low: z.string(),
-  advice: z.string(),
-}).strict();
-
-export default widgetSchema;
+```text
+TemplateVars
+= DefaultKeys
+= ZodSchemaKeys
+= JSONSchemaKeys
+= WorkflowWidgetInputs
+= {city, condition, temp, high, low, advice}
 ```
 
-Default 保留 6 个天气字段，Template 不修改。
+且 Preview PASS + Runtime PASS。
 
-为保持本轮只有一个实验变量，保存 B2 后 **新建最小工作流并重新拖入 B2 节点**，不要复用旧节点：
+正式状态：`B2_WIDGET_BASELINE_PASS`。
 
-`开始 → B2 → 结束`
+详细证据：`competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md`
 
-验收：
+## 当前平台合同结论
 
-1. Preview 不再出现 `undefined`；
-2. 新 B2 节点暴露 6 个输入变量；
-3. 六项全部使用固定“输入”值，不使用引用；
-4. 下发方式“直接向后流转”；
-5. 输入 `测试` 做真实 Runtime。
+- 腾讯公开 `127031` 仍以 JSON Schema 展示代码创建天气示例；公开 1759 文档未给出 Widget Zod 作者态优先级。
+- 但在当前赛事空间本次 B2 保存路径中，修改 Zod 后，重新导出的内部 Zod 与 outer JSON Schema 已同步为同一组六字段。
+- 该结论只作为当前赛事空间的实机合同，不外推到 ADP 全平台。
+- `WIDGET_ACTION_NONE`、直接向后流转、固定 USER_INPUT、代码创建 Widget 本身均已被 B2 证明不是 Schedule 失败的通用根因。
 
-### Gate Z2 — 若 B2 Runtime PASS
+## 当前最高优先 Gate：Schedule 真实导出 Schema 审计
 
-立即重新导出 B2，并审计：
+禁止继续生成 Schedule V1.4/V1.5 Template 补丁。
+
+下一步必须先取得当前 ADP 中**实际失败的 Schedule Widget 的真实导出 `.widget`**：
+
+1. 优先导出 RuntimeSafe V3；
+2. 如果 V2 与 RuntimeSafe V3 都仍在 ADP 中，建议两份都导出，便于差分；
+3. 不需要手工抄 Schema/Template，直接上传导出文件即可。
+
+随后由 ChatGPT/Codex 自动审计：
 
 ```text
 TemplateVars
@@ -111,37 +109,46 @@ JSONSchemaKeys
 WorkflowWidgetInputs
 ```
 
-五方必须都等于：
+并重点检查：
 
-```text
-{city, condition, temp, high, low, advice}
-```
+- Zod 与 outer JSON Schema 是否同步；
+- Template 是否存在未声明变量；
+- Default 是否漏字段/多字段；
+- 工作流实际暴露字段是否与 Widget 导出一致；
+- 类型是否一致，尤其 RuntimeSafe V3 的 `shownCount: integer`；
+- 是否有历史 `title` 或其它残留 Schema 字段。
 
-五方一致 + Runtime PASS 后，才标记 `B2_WIDGET_BASELINE_PASS`。
+仓库中的 RuntimeSafe V3 源文件目前在静态层面三方看起来是一致的：
 
-随后优先审计小序 Schedule V2/V3 的真实导出 Schema 五方集合。在完成这个审计前，禁止继续 V1.4/V1.5 Template 补丁。
+- `schedule-runtime-safe-v3-template.txt`
+- `schedule-runtime-safe-v3-schema.json`
+- `schedule-runtime-safe-v3-default.json`
 
-### 若 B2 Runtime FAIL
+但这**不能替代 ADP 真实导出审计**，因为 B2 已证明编辑器实际保存合同可能与我们本地源文件不同。
 
-保存 request_id / trace_id / 时间 / 完整错误；此时才有资格判断代码创建 Widget Runtime 兼容链存在问题。
+## 后续分支
 
-### Gate B1
+### 若 Schedule 实际导出五方不一致
 
-官方基础表单 + 单一 `REFERENCE_OUTPUT` 的 B1 差分实验仍有价值，但优先级下降到 Z1/Z2 之后。
+优先修 Schema 合同，不改 UI Template；保存后重新导出确认一致，再做 Runtime Pilot。
 
-## 当前 B2 文件状态
+### 若 Schedule 实际导出五方完全一致
 
-本轮 GitHub 代码搜索未发现 `B2.widget` 已提交到仓库；本轮新对话也没有新的 B2 二进制附件可直接再次解析。因此当前解析证据沿用此前真实上传并已写入报告的结果。待 B2 Runtime 后重新导出，再做第二次独立解析。
+Schema mismatch 假设被排除。下一步做单变量高信息量差分，而不是继续猜测式删 UI。此时再决定 B1 `REFERENCE_OUTPUT` 实验或最小 Schedule 组件差分。
 
-## 比赛主线并行策略
+### B1
 
-Widget Schema/Runtime 调试只做高信息量差分，不无限打补丁。若 Runtime 仍未收敛，Widget 转支线，同时推进：
+官方基础表单 + 单个 `REFERENCE_OUTPUT` 仍保留，用于验证动态引用与自动 Workflow ZIP 的 Reference 序列化；当前排在 Schedule 导出 Schema 审计之后。
 
-32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖型演示。
+## 比赛主线
+
+Widget 调试只允许少量高信息量实验。若 Schedule 在 Schema 审计后仍不能快速收敛，Widget 转支线，主线立即继续：
+
+32 QA → 80 条 ADP 原生应用评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖型演示。
 
 ## GitHub Actions
 
-Actions included minutes 已用 `3000 / 3000`，与 ADP Widget Runtime 无关。当前 Codex / Kimi 本地执行测试、构建和 Git Gate。
+Actions included minutes 已用 `3000 / 3000`，与 ADP Widget Runtime 无关。Codex / Kimi 本地继续承担测试、构建、ZIP 与 Gate。
 
 ## 新对话接力
 
@@ -149,11 +156,7 @@ Actions included minutes 已用 `3000 / 3000`，与 ADP Widget Runtime 无关。
 
 1. `competition/adp-kit/reports/ChatGPT-project-handoff-current.md`
 2. `competition/adp-kit/reports/current-adp-checkpoint.md`
-3. `competition/adp-kit/widget/native/runtime-integration-runbook.md`
-4. `competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md`
+3. `competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md`
+4. `competition/adp-kit/widget/native/runtime-integration-runbook.md`
 
-新对话第一句：
-
-```text
-@GitHub 请先读取 competition/adp-kit/reports/ChatGPT-project-handoff-current.md、competition/adp-kit/reports/current-adp-checkpoint.md、competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md、competition/adp-kit/widget/native/runtime-integration-runbook.md，然后继续校园智序-小序 ADP 研发；不要重新设计已经冻结的 01–04。优先完成 B2 Zod Schema 修正与 Runtime 实机验证。
-```
+新对话优先事项：**B2 已 PASS，不再重复 B2；直接做失败 Schedule Widget 的真实导出 Schema 五方审计。**
