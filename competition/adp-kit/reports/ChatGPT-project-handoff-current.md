@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — ChatGPT Project 新对话接力主文件
 
-更新时间：2026-08-11 22:50 +08:00
+更新时间：2026-08-11 23:00 +08:00
 
 > 这是 FosuClass Project 内新对话继续研发的单一接力入口。新对话先读本文件，再读 `current-adp-checkpoint.md` 与 `competition/adp-kit/widget/native/runtime-integration-runbook.md`。不要仅依赖聊天历史。
 
@@ -107,21 +107,20 @@ operator to search for '__jsx' in undefined
 
 `competition/adp-kit/reports/2026-08-11-schedule-widget-runtime-v12-converter-failure.md`
 
-## 当前下一步：RuntimeSafe V3
+## 当前下一步：RuntimeSafe V3 + Workflow V1.3
 
-状态：`ADP_WIDGET_RUNTIME_SAFE_V3_READY`
+状态：
 
-新 Widget：
+- `ADP_WIDGET_RUNTIME_SAFE_V3_READY`
+- `ADP_WIDGET_SCHEDULE_V13_READY`
 
-`小序-课表票据-RuntimeSafe-V3`
-
-源码：
+RuntimeSafe 源码：
 
 - `competition/adp-kit/widget/native/schedule-runtime-safe-v3-template.txt`
 - `competition/adp-kit/widget/native/schedule-runtime-safe-v3-schema.json`
 - `competition/adp-kit/widget/native/schedule-runtime-safe-v3-default.json`
 
-RuntimeSafe V3 设计：
+V3 设计：
 
 - 零 `.map()`；
 - 零三元条件；
@@ -132,33 +131,46 @@ RuntimeSafe V3 设计：
 - 3 个静态 `sys.chat` Button；
 - 所有字符串组合在 Adapter 中完成；Template 只做简单变量绑定。
 
-依据：腾讯云官方 `代码创建`（127031）和 `ListView`（126995）示例均以静态组件树 + 简单变量绑定为主；`配置 Widget 节点`（126979）要求运行时输入结构/类型严格匹配；ADP Widget 最终以 JSON View 渲染。
+### 高效率接入策略
 
-下一操作：
+不再新建 V3 Widget 并重新捕获 ID。
 
-1. 用户导入 `小序-课表票据-RuntimeSafe-V3.widget`；
-2. Preview 正常；
-3. 在禁用 `00-节点格式种子-勿启用` 中拖入 V3 Widget，无需接线；
-4. 导出 Seed ZIP；
-5. ChatGPT 捕获平台分配的真实 RuntimeSafe V3 WidgetID / WidgetParam；
-6. 自动生成 `01-多维课表查询-WidgetPilot-V1.3`；
-7. 真实调试同一句；
-8. 成功后进入 `sys.chat → Agent → 03` Action Gate。
+直接在 ADP Widget 开发中打开现有 `小序-课表票据-V2`，原地用 RuntimeSafe V3 的 Template / Schema / Default 替换并保存。
+
+这样原 Schedule WidgetID 继续保持：
+
+`23fbc659efe3482fab588d754e4420a4`
+
+随后导入已经预生成的：
+
+`01-多维课表查询-WidgetPilot-V1.3-RuntimeSafe扁平Widget版-可直接导入.zip`
+
+WorkflowID：
+
+`a1fe44a7-9a4c-4f30-8eb9-015ded06ac67`
+
+SHA256：
+
+`3fe3cdbadfc59b0bfd379006531ddd0fb9f7939c7e970b6c9005235bf974aca7`
+
+V1.3 WidgetParam 共 21 个，全部 STRING / INT 原子引用，零 SubParams。
+
+本地 Gate：Adapter 语法 PASS、教师003两课程 ViewModel 模拟 PASS、`检查风险` Action 语义 PASS、WidgetParam primitive-only PASS、START 可达 PASS、Reference NodeID PASS、XLSX WorkflowID 一致 PASS、ZIP CRC PASS。
+
+下一实机操作：
+
+1. 原地更新 `小序-课表票据-V2` 为 RuntimeSafe V3；
+2. 保存 Widget；
+3. 导入 V1.3；
+4. 调试 `教师003第1周周一的课`；
+5. 目标：Widget 节点转绿并下发原生票据，不再出现 `convert widget view failed`；
+6. 通过后进入应用级 `sys.chat → Agent → 03` Action Gate。
 
 在 V1.3 Runtime 真实成功前，不允许标记 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`。
 
 ## 腾讯云官方 Widget 规则
 
-重点文档：
-
-- Widget 概述 `126973`
-- Card `126981`
-- ListView `126995`
-- 配置 Widget 节点 `126979`
-- Widget 节点 `126990`
-- Action `127283`
-- 代码创建 `127031`
-- ADP-Widget SDK `129230`
+重点文档：Widget 概述 `126973`、Card `126981`、ListView `126995`、配置 Widget 节点 `126979`、Widget 节点 `126990`、Action `127283`、代码创建 `127031`、ADP-Widget SDK `129230`。
 
 已确认原则：
 
@@ -188,7 +200,7 @@ RuntimeSafe V3 设计：
 - `parameters.xlsx` 顶层 `ParameterParentId` 为空；
 - 能只改 workflow JSON 就不改已通过的 XLSX；新 WorkflowID 只最小改 workflows/example_queries/parameters；
 - 每版执行 CRC / 可达性 / 引用 / XLSX-ID 校验；
-- WIDGET 中 OBJECT / ARRAY_OBJECT / ARRAY_STRING 的 SubParams 结构必须保留真实平台合同，不得为了简化而删除必需子槽位。
+- WIDGET 中 OBJECT / ARRAY_OBJECT / ARRAY_STRING 的 SubParams 必须保留真实平台合同。
 
 ## Runtime 通过后的路线
 
