@@ -1,10 +1,10 @@
 # 校园智序 · 小序 — ADP 原生 Widget 运行时接入 Runbook
 
-更新时间：2026-08-11
+更新时间：2026-08-11 21:44 +08:00
 
 ## 当前真实状态
 
-六张 V2 Widget 已在腾讯云智能 ADP 中真实导入成功，列表缩略图与详情预览均能显示不同的 UI：
+六张 V2 Widget 已在腾讯云智能 ADP 中真实导入成功，列表缩略图与详情预览均能显示不同 UI：
 
 1. `小序-课表票据-V2`
 2. `小序-空教室票据-V2`
@@ -13,17 +13,19 @@
 5. `小序-候选确认-V2`
 6. `小序-任务恢复-V2`
 
-因此可以标记：
+已标记：
 
-`ADP_WIDGET_NATIVE_TEMPLATE_PASS`
+- `ADP_WIDGET_NATIVE_TEMPLATE_PASS`
+- `ADP_WIDGET_RUNTIME_SEED_CAPTURED`
+- `ADP_WIDGET_SCHEDULE_PILOT_READY`
 
-但此状态**只代表原生模板导入/预览通过**，还不能写成 `ADP_WIDGET_NATIVE_PASS`。后者必须等真实工作流动态数据渲染 + `sys.chat` Action 回流通过。
+仍不得标记 `ADP_WIDGET_NATIVE_PASS`；必须等真实工作流动态数据渲染 + `sys.chat` Action 回流通过。
 
 ---
 
-## 官方 ADP 约束（运行时接入必须遵守）
+## 官方 ADP 约束
 
-腾讯云官方文档：
+官方文档：
 
 - Widget 概述：https://cloud.tencent.com/document/product/1759/126973
 - Card：https://cloud.tencent.com/document/product/1759/126981
@@ -34,14 +36,14 @@
 - ListView：https://cloud.tencent.com/document/product/1759/126995
 - ListViewItem：https://cloud.tencent.com/document/product/1759/126994
 
-运行时硬规则：
+硬规则：
 
-1. Widget 节点输入变量必须引用前序节点结构化输出；结构或类型不一致时，应先经过代码节点适配。
-2. 结果展示型 Widget 使用“直接向后流转”。
-3. 需要用户确认/选择的 Widget 使用“等待用户操作”。
-4. 希望用户点击后让 Agent 感知并继续路由时，必须使用 `sys.chat`；其 payload 会作为新的用户输入进入当前对话上下文。
-5. Widget 是对话中的功能单元，不承担 CampusTools 事实计算。
-6. Card/ListView/ListViewItem/Button 只负责展示与交互，不复制业务规则。
+1. Widget 输入必须引用前序结构化输出；类型不一致先代码节点转换。
+2. 结果展示型 Widget 使用直接向后流转语义。
+3. 需要确认/选择的 Widget 使用等待用户操作。
+4. 需要 Agent 感知点击并继续路由时使用 `sys.chat`。
+5. Widget 只负责展示/交互，不承担 CampusTools 事实计算。
+6. Card / ListView / ListViewItem / Button 不复制业务规则。
 
 ---
 
@@ -69,171 +71,160 @@ ADP 原生 Widget
 Agent 再次路由 / 跨工作流 handoff
 ```
 
-任何 Widget Adapter 都不得：
-
-- 重新计算日期；
-- 重新解析实体；
-- 推测课程/教室/冲突；
-- 生成未由 CampusTools 返回的动态事实；
-- 暴露 token、NodeID、VarBizID、系统 Prompt。
+任何 Adapter 都不得重新计算日期、重新解析实体、推测校园事实或暴露 token / NodeID / VarBizID / 系统 Prompt。
 
 ---
 
-# Gate B1 — 先做 01 Schedule Runtime Pilot
+# Gate B0 — 工作流 Widget Seed：已完成
 
-正式 01 保持冻结，不直接修改。
+用户导出：
 
-复制测试副本：
+`export-00-节点格式种子-勿启用(3).zip`
+
+真实捕获：
+
+- `NodeType = WIDGET`
+- Schedule WidgetID = `23fbc659efe3482fab588d754e4420a4`
+- Choice WidgetID = `f540588933a4459cbe78a6fe99aa022c`
+- `WidgetNodeData.WidgetParam` 为入参结构
+- OBJECT / ARRAY_OBJECT 通过 `SubParams` 注册
+- NodeUI 输出展示 `Output / Output.Content`
+- 两个未接线 Seed 的 `ActionType = WIDGET_ACTION_NONE`
+
+合同文件：
+
+`competition/adp-kit/widget/native/widget-node-seed-contract.json`
+
+仍未捕获 Choice 等待用户操作的非 NONE 枚举值；这不阻塞 Schedule Pilot。
+
+---
+
+# Gate B1 — 01 Schedule Runtime Pilot：包已生成
+
+正式 01 保持冻结。
+
+Pilot：
 
 `01-多维课表查询-WidgetPilot`
 
-推荐成功分支：
+WorkflowID：
+
+`578e7df1-6290-4218-82e9-cb16b165625a`
+
+导入包：
+
+`01-多维课表查询-WidgetPilot-V1-可直接导入.zip`
+
+SHA256：
+
+`7e65f229eb73f6855432abae355d650382af9b2e5436d6c7ff45d4079bfa1238`
+
+运行链路：
 
 ```text
-课表查询 / 查询结果核验
-  ↓
-Widget数据适配-Schedule
-  ↓
-小序-课表票据-V2
-  ↓
-结束
+课表查询
+→ 结果核验与呈现
+→ Widget数据适配-Schedule
+→ Widget展示判断
+  ├─ route=widget → 小序-课表票据-V2 → 结束
+  └─ else → 查询结果回复 → 结束
 ```
 
-错误、歧义、空结果分支先沿用旧回复逻辑；不要为了第一张 Pilot 一次改完 Choice/Error。
+Adapter 输出：
 
-### Adapter 输出合同
+- `route`
+- `title`
+- `timeText`
+- `queryId`
+- `dataVersion`
+- `summary`
+- `items`
+- `actions`
 
-必须输出 Widget Schema 所需的顶层字段：
+Adapter Gate：
 
-- `title: string`
-- `timeText: string`
-- `queryId: string`
-- `dataVersion: string`
-- `summary: object`
-- `items: array<object>`
-- `actions: array<object>`
+- `success == true`
+- `dataVersion == competition-demo-v1`
+- `evidence.verified == true`
+- `items` 非空
 
-来源必须是 `query_schedule` 的 verified envelope。
+四项全部满足才允许展示 Widget；否则沿用旧文本兜底。
 
-### Schedule Widget 节点
+Adapter 源码：
 
-选择：
+`competition/adp-kit/widget/native/schedule-runtime-adapter.py`
 
-`小序-课表票据-V2`
+### Pilot 实机验收
 
-下发方式：
-
-`直接向后流转`
-
-逐字段引用 `Widget数据适配-Schedule` 的对应输出。
-
-### Pilot 验收
-
-输入：
+先在 Pilot 自身调试：
 
 `教师003第1周周一的课`
 
 必须：
 
-- 路由 01-WidgetPilot；
 - 原生 Schedule 卡出现；
-- 显示 2 条课；
+- 2 条课；
 - 已核验；
 - 第5-6节 / 第7-8节；
 - 校区A / 校区B；
-- 不再重复输出整段 Markdown 课表。
+- 不重复输出整段成功 Markdown。
 
-然后点击：
+教师场景第三 Action 当前优化为：
 
-`比较冲突`
+`检查风险`
 
-必须：
+Action 文本：
 
-- `sys.chat` 被触发；
+`检查教师003第1周周一是否存在时间冲突或跨校区赶场`
+
+应用级验收时点击后必须：
+
+- `sys.chat` 触发；
 - Action 文本进入当前会话；
-- Agent 能继续路由到 03；
-- 不丢教师003 / 第1周周一上下文。
+- Agent 路由到 03 self-compare；
+- 不丢教师003 / 第1周 / 周一。
 
-只有这一整条通过，才能标记：
+只有整条通过才标记：
 
 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`
 
 ---
 
-# Gate B2 — 捕获真实 Widget 工作流节点格式
+# Gate B2 — 4 主卡 Runtime
 
-为了继续保持“用户只做一次，Agent 后续批量自动生成”的工作方式，不手工给 01–04 重复配置 Widget 节点。
-
-建立或复用测试工作流：
-
-`00-Widget节点格式种子-勿启用`
-
-在里面至少加入两个 Widget 节点：
-
-1. `小序-课表票据-V2`，下发方式=`直接向后流转`；
-2. `小序-候选确认-V2`，下发方式=`等待用户操作`。
-
-不要求接入正式业务；目标是获得腾讯云 ADP V2_6 对以下内容的真实序列化：
-
-- Widget 节点 `NodeType` / NodeUI；
-- Widget ID / Widget 引用字段；
-- 输入变量映射结构；
-- “直接向后流转”字段；
-- “等待用户操作”字段；
-- 输出变量结构；
-- Edge / NextNodeIDs。
-
-保存后导出工作流 ZIP，保持原始文件不改名，交给 Agent。
-
-Agent 后续必须先解析真实 seed，再自动生成：
-
-- 01 Schedule WidgetPilot；
-- 02 Classroom WidgetPilot；
-- 03 Conflict WidgetPilot；
-- 04 DayPlan WidgetPilot；
-- Choice/Error 分支增强包。
-
-仍执行既有 ADP ZIP 永久规则：`NextNodeIDs + Edge + 上游引用 + START 可达 + XLSX 不变量 + CRC` 全部校验。
-
----
-
-# Gate B3 — 4 主卡 Runtime
-
-Schedule 通过后按顺序：
+Schedule 通过后，先一次性获取 Classroom / Conflict / Day Plan 的真实 WidgetID，然后自动生成：
 
 1. 02 → `小序-空教室票据-V2`
 2. 03 → `小序-冲突赶场票据-V2`
 3. 04 → `小序-今日校园计划-V2`
 
-结果展示卡统一：`直接向后流转`。
+结果展示卡统一采用直接流转语义。
 
 重点验收：
 
-- 02 五轮累计条件仍正确，并由 filters 可视化；
+- 02 五轮累计条件保持正确，并由 filters 可视化；
 - 03 self-compare 不出现 `教师003 vs 教师003`；
 - 03 一条赶场只显示一次；
-- 04 时间轴能展示课程 + gap + studyRooms；
-- 任何 Widget 化不得改变 CampusTools 返回事实。
+- 04 时间轴展示课程 + gap + studyRooms；
+- Widget 化不得改变 CampusTools 返回事实。
 
 ---
 
-# Gate B4 — 2 辅助卡 Runtime
+# Gate B3 — 2 辅助卡 Runtime
 
 ## Choice
 
 用于歧义实体。
 
-下发方式：`等待用户操作`。
+需要真实捕获并确认“等待用户操作”的 ActionType，再接到 01/03 歧义分支。
 
 候选 Action 使用 `sys.chat`，选择后继续原任务。
 
 ## Error
 
-工具失败 / 非法条件 / 学期范围外等走恢复卡。
+工具失败 / 非法条件 / 学期范围外走恢复卡。
 
-下发方式：默认 `直接向后流转`；如果未来增加表单修改条件，再单独评估等待模式。
-
-不得在未核验状态生成动态事实。
+默认采用结果展示/恢复动作；不得在未核验状态生成动态事实。
 
 ---
 
@@ -241,7 +232,7 @@ Schedule 通过后按顺序：
 
 | 卡 | 输入 | 预期 | Action |
 |---|---|---|---|
-| Schedule | 教师003第1周周一的课 | 2课 + 已核验 | 比较冲突 → 03 |
+| Schedule | 教师003第1周周一的课 | 2课 + 已核验 | 检查风险 → 03 self-compare |
 | Classroom | 校区A 2026-09-03 下午有哪些空教室 | filters + 房间 | 换校区 |
 | Conflict | 教师003第1周周一跨校区来得及吗 | 0伪冲突 + 1赶场 | 查看当天课表 |
 | Day Plan | 帮我看看2026-09-04的安排 | 课程 + 空档时间轴 | 连续自习2节 |
