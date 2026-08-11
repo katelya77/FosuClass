@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-10T12:33:26.598Z",
+  "generatedAt": "2026-08-11T05:25:07.967Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -279,29 +279,49 @@
       "sha256": "082cdd8ca56113c0928c737b4c138db6658960d2482ccee2a1e11f286598665e"
     },
     {
+      "path": "widget/adapter.js",
+      "bytes": 15410,
+      "sha256": "223f7211da0d16663aa42242c0d0f393f72057bdd9715c437f432d2a66102e88"
+    },
+    {
+      "path": "widget/adp-widget-mapping.md",
+      "bytes": 8055,
+      "sha256": "831ec941f84e77f736877ee0bb78f8d63cf6a1000f6eb0802af8f7cb76f76cf5"
+    },
+    {
+      "path": "widget/adp-widget-seed-requirements.md",
+      "bytes": 3825,
+      "sha256": "85ba984bb663dce3945471d234e44f5c7c748cb18aed2f97d2670f087619783e"
+    },
+    {
       "path": "widget/generate-samples.js",
-      "bytes": 3289,
-      "sha256": "5375a1ef5ead95a61c46e88bdf217f233a793f8c2c6595b1c74e941de95b6a5c"
+      "bytes": 3094,
+      "sha256": "8a6b37dd17eec466560f1e8e9cb80fe0e190c3877bee98caf703eb8cd3c8aa8f"
     },
     {
       "path": "widget/index.html",
-      "bytes": 1925,
-      "sha256": "4338a1252def94361f0ef029b81989de3d68963b314786e5c36b77f01d3c4e76"
+      "bytes": 2321,
+      "sha256": "c70334f4dcb2e24b99cde223f22e1e1ca9a8e0e5d4a7ab92398676152e165158"
+    },
+    {
+      "path": "widget/local-agent-handoff.md",
+      "bytes": 4048,
+      "sha256": "99ecc4a38bf182ca14828cf4c3e5ea99ae212016477647beeb4ecbeb3d03cee0"
     },
     {
       "path": "widget/README.md",
-      "bytes": 1110,
-      "sha256": "a4f073a09740bdf1d4dd17e52b5ffcc60fb77fb751c852c34acdee65b723cb8e"
+      "bytes": 3081,
+      "sha256": "0fed0f3359d1183164208ebac60ae8bbfeccf04f8b7e44ce281e65ac5c3a696a"
     },
     {
       "path": "widget/sample-results.js",
-      "bytes": 12555,
-      "sha256": "3c3cd74408d0ef07f37b1b6382dfd5f661743ae5db9b3d99d5d0c03fd69afe90"
+      "bytes": 11540,
+      "sha256": "c2ab83c6d21e6d4086a334cf69dc47a76b9750f3ad6fe1ef64ed073b4ac2e7a3"
     },
     {
       "path": "widget/sample-results.json",
-      "bytes": 12527,
-      "sha256": "55cff0c04c445a17897916832195874bdeaacb0c5d4de790f9b426d6cf3b8b79"
+      "bytes": 11512,
+      "sha256": "97484c22e9f4d1c6fb00dff1457f74b6d11bcc07441fce620059dce045d67762"
     },
     {
       "path": "widget/serve.js",
@@ -310,18 +330,23 @@
     },
     {
       "path": "widget/styles.css",
-      "bytes": 7265,
-      "sha256": "91daf0de96791fa18a4893893301783da8d7790355e617f9558879cbcbbb687b"
+      "bytes": 15018,
+      "sha256": "eea6b20382f75cbcfa2658fcc0520d3ccf1caa9284d8e1d4329a51ca6dcacd11"
+    },
+    {
+      "path": "widget/test-widget-adapter.js",
+      "bytes": 5455,
+      "sha256": "7712c2098e2f6ce0dd9c3d06ac15b3c63fa709fce3ce4e9b97aa724cc55d3a34"
     },
     {
       "path": "widget/widget-schema.json",
-      "bytes": 975,
-      "sha256": "32fcb67921804c8367fdfc2d8996fb238b247cf6786889dda5bdecca9a81d9f6"
+      "bytes": 2682,
+      "sha256": "ff6c5805558c53c250e3339e8647519a9cdd5a744f4c008337ce07fd7bd18d55"
     },
     {
       "path": "widget/widget.js",
-      "bytes": 6451,
-      "sha256": "31435c240bd9daba153281c9b7f8bdb71032861c977d645cb44c6c296c4af619"
+      "bytes": 12004,
+      "sha256": "6a029a6b6c69b710828c7e2b99b7bcbca641a7387a70891316ac9df3a0dcd685"
     },
     {
       "path": "workflows/01-多维课表查询.md",
@@ -345,8 +370,8 @@
     },
     {
       "path": "workflows/application-config.json",
-      "bytes": 3446,
-      "sha256": "fc70acb3e666be6ae12173d1bdba4cdf5520762dd6818f0ffd64946c8d4141e0"
+      "bytes": 2970,
+      "sha256": "ca903be71230fac0ce5082d145b3cb30a6dc7cf2cee3f341c7f340ef3e2b7c09"
     },
     {
       "path": "workflows/generate-workflows.js",
@@ -355,8 +380,8 @@
     },
     {
       "path": "workflows/role-instruction.txt",
-      "bytes": 1458,
-      "sha256": "9e1f6796093d9251a86fb8dba6ed2ef490167898575ca5dd7d55f1e130fd995e"
+      "bytes": 4690,
+      "sha256": "45a2002cee4f5c2c939cbe4006788f541ff3c6fdb6ef6a7ca52850e1add1f147"
     },
     {
       "path": "workflows/workflow-definitions.js",
