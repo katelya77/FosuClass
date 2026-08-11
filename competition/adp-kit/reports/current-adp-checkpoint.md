@@ -1,212 +1,208 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-11 13:35 +08:00
+更新时间：2026-08-11 13:52 +08:00
 
-状态：`WIDGET_V2_LOCAL_GATE_PASS`（本机），`ADP_WIDGET_SEED_PENDING`（原生）
+当前状态：
 
-## 基础能力已全部冻结
+- `CORE_WORKFLOWS_FROZEN`
+- `APP_ROUTING_CONTEXT_FROZEN`
+- `WIDGET_V2_LOCAL_GATE_PASS`
+- `ADP_WIDGET_CODE_PILOT_READY`
+- `GITHUB_ACTIONS_BILLING_BLOCKED`
+
+PR #49：保持 open、未 merge、未正式发布。
+
+---
+
+## 1. 基础能力已全部冻结
 
 - 01 多维课表查询：真实 ADP 调试通过，冻结。
-- 02 空教室规划 V7.2：基础查询、两轮继承、五轮累计槽位全部真实 ADP 通过，冻结。
-- 03 课程冲突比较 V5.1：整周比较、自比较去伪冲突、跨校区赶场去重、单教师 self-compare、01→03 跨工作流 handoff 均真实 ADP 通过，冻结。
-- 04 今日校园计划 V1.1：核心 5 条 + 边界 5 条真实 ADP 验收全部通过，冻结。
+- 02 空教室规划 V7.2：基础查询、两轮继承、五轮累计槽位真实 ADP 通过，冻结。
+- 03 课程冲突比较 V5.1：整周、自比较去伪冲突、赶场去重、单教师 self-compare、01→03 handoff 均真实 ADP 通过，冻结。
+- 04 今日校园计划 V1.1：核心 5 条 + 边界 5 条真实 ADP 通过，冻结。
 
-## 应用级路由与上下文已冻结
+应用级：
 
-- 标准模式应用启用 01/02/03/04 四条工作流。
-- 模型输入上下文改写已开启。
-- 角色指令为 V2.1。
-- 02 五轮累计上下文真实通过。
-- 03 单教师赶场真实通过。
-- 01→03 handoff 真实通过：`教师003第1周周一的课` -> `再和A班比较一下有没有冲突` 正确切换到 03，并保留教师003 + 第1周 + 周一。
-- 不再继续修改 01–04 的确定性业务逻辑，除非后续基准评测发现回归。
+- 标准模式；
+- 01/02/03/04 启用；
+- 模型输入上下文改写开启；
+- 角色指令 V2.1；
+- 02 五轮累计上下文真实通过；
+- 03 单教师赶场真实通过；
+- 01→03 handoff 真实通过。
 
-## ADP 导入包永久规则
+除非后续基准评测发现回归，不再修改 01–04 的确定性业务逻辑。
+
+---
+
+## 2. ADP 工作流导入包永久规则
 
 1. `Nodes[].NextNodeIDs` 与顶层 `Edge` 必须同时更新；
-2. 所有 `REFERENCE_OUTPUT.Reference.NodeID` 必须存在；
+2. `REFERENCE_OUTPUT.Reference.NodeID` 必须存在；
 3. 被引用节点必须位于消费节点真实上游路径；
 4. START 到所有业务节点必须可达；
 5. 能只改 workflow JSON 就不改已经通过 ADP 导入的 XLSX；
-6. 参数提取输出、Tool 输出 Schema 和 NodeUI output 必须同时注册；
-7. 顶层 parameters.xlsx 的 `ParameterParentId` 保持空值；
-8. 每次生成 ZIP 都执行 CRC、节点可达性、引用上游性、XLSX/ID 不变量校验。
+6. 参数提取输出、Tool 输出 Schema、NodeUI output 必须同时注册；
+7. 顶层 `parameters.xlsx` 的 `ParameterParentId` 保持空值；
+8. 每次生成 ZIP 执行 CRC、节点可达性、引用上游性、XLSX/ID 不变量校验。
 
 ---
 
-# 当前阶段：Widget 产品化
-
-## 已确认设计
+## 3. Widget V2 代码层：本机 Gate 已通过
 
 采用 C 方案：
 
-- 4 主 Widget：Schedule / Classroom / Conflict / Day Plan；
-- 2 辅助 Widget：Choice / Error；
-- 统一视觉：`校园任务单 / 时间票据`；
-- 比赛主故事线：一个学生的一天校园任务闭环；
-- 不复制 CampusTools 业务逻辑；
-- 通过独立 Widget Adapter 消费 verified envelope；
-- 原生 ADP Widget 与 H5 fallback 共用 `campus-widget/v2` ViewModel。
+- Schedule
+- Classroom
+- Conflict
+- Day Plan
+- Choice
+- Error
 
-正式设计：
+统一视觉：`校园任务单 / 时间票据`。
 
-`docs/superpowers/specs/2026-08-11-competition-widget-productization-design.md`
+核心链路：
 
-实施计划：
+`CampusTools verified envelope → widget/adapter.js → campus-widget/v2 ViewModel → ADP 原生 Widget / H5 fallback`
 
-`docs/superpowers/plans/2026-08-11-competition-widget-productization.md`
+已经完成：
 
-## 已完成代码/合同
+- `widget/adapter.js` 六类适配器；
+- 动态成功结果强制 `competition-demo-v1 + evidence.verified=true`；
+- Action 最多 3 个，仅允许 `sys.chat / sys.go_to_url / sys.download`；
+- `widget-schema.json` 升级 `campus-widget/v2`；
+- 样例由真实 CampusTools 生成，不手写动态事实；
+- H5 fallback 完成 4+2 产品化视觉；
+- Classroom filters、Conflict 红色冲突/橙色赶场、Day Plan 时间轴、Choice、Error 均完成；
+- H5 事件只回传安全 Action，不回传完整工具 envelope。
 
-已在 PR #49 分支加入：
+### 本机真实验证
 
-- `widget/adapter.js`
-  - `adaptScheduleResult`
-  - `adaptClassroomResult`
-  - `adaptConflictResult`
-  - `adaptDayPlanResult`
-  - `adaptErrorResult`
-  - `adaptChoiceResult`
-  - 动态成功结果强制 `competition-demo-v1 + evidence.verified=true`
-  - Action 最多 3 个，优先 `sys.chat`，不携带 token/NodeID/VarBizID/系统 Prompt
-- `widget/test-widget-adapter.js`
-  - 六卡合同
-  - self-compare 标题/赶场计数
-  - Classroom filters
-  - Choice waitForUser
-  - 未核验/错误 dataVersion 拒绝
-  - Action 安全门禁
-- `widget/widget-schema.json`
-  - 已升级为 `campus-widget/v2`
-  - 新增 filters / summary / interaction / rushWarnings / Action enum
-- `widget/generate-samples.js`
-  - 真实 CampusTools envelope 统一经过 Adapter 生成六类样例
-  - 不再手工拼动态课表/教室事实
-- `widget/widget.js`
-  - H5 fallback 已改为 4+2 产品化渲染
-  - Schedule 节次时间轴
-  - Classroom filters + 容量票据 + 空结果恢复
-  - Conflict 红色冲突 / 橙色赶场分区
-  - Day Plan 时间轴
-  - Choice 候选动作
-  - Error 任务恢复
-  - 事件只回传安全 Action，不回传完整工具 envelope
-- `widget/styles.css`
-  - 暖纸张 + 墨绿任务票据视觉
-  - 移动端 320–430px 优先
-  - filter chips / risk band / timeline / trust strip / action row
-- `widget/index.html`
-  - 六类卡片预览壳
-- `widget/README.md`
-  - Adapter / ADP 原生 / H5 fallback 双路径说明
-- `widget/adp-widget-mapping.md`
-  - 六张原生 Widget 的字段、组件、Action、等待模式、工作流接入点
-- `widget/adp-widget-seed-requirements.md`
-  - 若平台私有格式不可公开生成，只要求一次最小 seed，后续 Agent 自动生成 4+2 模板
-- `validate-kit.js`
-  - 已加入 v2 Schema、六卡、verified、Action 类型/安全验证
-- `package.json`
-  - `widget/test-widget-adapter.js` 已进入 competition/adp-kit test gate
+Kimi Code 在 Windows 本机完成：
 
-## GitHub Actions 状态：外部 Billing 阻塞，不是代码测试失败
+- Adapter tests：PASS；
+- 六类 sample generation：PASS；
+- `validate-kit.js`：PASS；
+- Playwright 390×844 / 430×932 / 768×1024 × 六卡：PASS，无横向溢出；
+- assets manifest：78 files 一致；
+- `npm test --prefix competition/adp-kit`：PASS；
+- Golden：33/33；
+- submission scan：findings=0 / credentialCandidates=0；
+- `git diff --check`：PASS。
 
-新增轻量门禁：
+提交：
 
-`.github/workflows/competition-adp-widget-ci.yml`
+- `c2f9b27d` test(competition): verify widget v2 productization
+- `4ac9e611` docs(competition): mark widget v2 local gate pass
 
-应执行：
-
-1. Widget Adapter contract；
-2. deterministic sample generation；
-3. ADP kit contract validation；
-4. generated sample drift check。
-
-但首次运行没有拿到 runner，Job `steps=[]`、`runner_id=0`。GitHub Check annotation 明确返回：
-
-> The job was not started because recent account payments have failed or your spending limit needs to be increased.
-
-同一 head 上原有 Admin CI / Xiaofu Agent CI 也被相同 Billing/Spending Limit 原因阻止启动。因此当前不能把 GitHub Actions 红灯解释为代码失败，也不能写成 PASS。
-
-状态：`GITHUB_ACTIONS_BILLING_BLOCKED`
-
-## 当前必须完成的本地验证
-
-由于 GitHub Actions 无法获得 runner，需要在用户本机由 Kimi Code / Codex 执行：
-
-```bash
-node competition/adp-kit/widget/test-widget-adapter.js
-node competition/adp-kit/widget/generate-samples.js
-node competition/adp-kit/validate-kit.js
-node competition/adp-kit/sync-assets-manifest.js
-npm test --prefix competition/adp-kit
-```
-
-若全部 PASS：
-
-1. 只提交真实生成变化（预计包括 `sample-results.json/js`、资产清单以及 build/submission 生成物中受影响项）；
-2. `git diff --check`；
-3. push `feat/campusflow-adp-integration`；
-4. 更新本检查点为 `WIDGET_V2_LOCAL_GATE_PASS`。
-
-不得为了通过生成物检查手工编辑 sample-results 或 manifest。
-
-## 本机验证结果：WIDGET_V2_LOCAL_GATE_PASS
-
-2026-08-11 在 Windows 本机（Node 24）于 head `98fb1d4c` 执行，全部真实 PASS：
-
-1. `test-widget-adapter.js`：PASS（6 card types + verified/action safety gates）；
-2. `generate-samples.js`：六类样例全部 `campus-widget/v2`，四张动态主卡 `success=true + dataVersion=competition-demo-v1 + evidence.verified=true`，Action ≤3 且仅 `sys.chat`/`sys.go_to_url`/`sys.download`，密钥扫描无命中；
-3. `validate-kit.js`：PASS（7 docs, 32 QA, 80 evals, 4 workflows, 6 tools, 6 widget v2 card types）；
-4. H5 视觉验收（Playwright 截图 390×844 / 430×932 / 768×1024 × 六卡）：无横向溢出；schedule 节次可扫读、按钮不截断；classroom filters/容量票据/空结果恢复正常；conflict 红色时间冲突分区、标题为 `2025级A班 vs 2025级B班`（无 self-compare 伪标题）；day_plan 课程/空档/自习时间轴层级清楚；choice 无内部实体 ID；error 为任务恢复式而非工程错误页；行入场动画属预期动效；
-5. `sync-assets-manifest.js`：78 files 一致；
-6. `npm test --prefix competition/adp-kit`：真实 PASS（含 Golden 33/33、adapter 合同、validate-kit、submission package 扫描 findings=0、credentialCandidates=0）；
-7. `git diff --check`：干净。
-
-已提交 `c2f9b27d`（test(competition): verify widget v2 productization）并 push 到 `feat/campusflow-adp-integration`。
-
-提交内容仅限确定性生成物：`widget/sample-results.json/js`、`reports/generated-assets-manifest.json`、`competition/submission-package/` 重新构建输出。未发现需要修改的 Widget 真实缺陷。
-
-注意：以上仅证明 H5 fallback 与 Adapter 合同本机通过；ADP 原生 Widget 仍未验收，保持 `ADP_WIDGET_SEED_PENDING`，不得写成 `ADP_WIDGET_NATIVE_PASS`。
-
-## ADP 原生 Widget 状态
-
-当前：`ADP_WIDGET_SEED_PENDING`
-
-原因：尚未获得腾讯云 ADP 原生 Widget 的真实 seed/导出结构，不能猜测平台私有序列化格式。
-
-下一步仅需一次：
-
-1. 在 ADP 创建 `00-Widget格式种子-勿用于正式展示`；
-2. 覆盖 Text / Container / List-Repeater / Button + `sys.chat` / 一个输入绑定 / 条件显示（若支持）；
-3. 导出原始 seed；
-4. Agent 解析真实格式并自动生成 4 主 + 2 辅正式 Widget；
-5. 原始 seed 只读保留，不要求人工搭六遍。
-
-如果当前 ADP Widget 没有导出能力，则按 `adp-widget-mapping.md` 进行浏览器自动化或模板复制，不伪造 `.widget` 文件。
-
-## Widget 原生验收目标
-
-1. `教师003第1周周一的课` → Schedule 卡；Action 可进入冲突比较。
-2. `校区A 2026-09-03 下午有哪些空教室` → Classroom 卡；filters 可见；Action 可换校区。
-3. `教师003第1周周一跨校区来得及吗` → self-compare 风险卡；0 伪冲突 + 1 条赶场。
-4. `帮我看看2026-09-04的安排` → Day Plan 时间轴卡。
-5. 歧义实体 → Choice 卡等待用户选择并继续原任务。
-6. 非法条件/工具失败 → Error 卡，提供恢复动作且不补造事实。
-
-以上真实 ADP 测试通过之前，不得写 `ADP_WIDGET_NATIVE_PASS`。
+因此：`WIDGET_V2_LOCAL_GATE_PASS`。
 
 ---
 
-## Widget 后续路线
+## 4. GitHub Actions 状态
 
-Widget 原生通过后立即进入：
+轻量 Widget CI 与原有 CI 均未获得 runner：
 
-1. 32 组标准 QA 导入与知识来源展示精修；
+- `steps=[]`
+- `runner_id=0`
+
+GitHub annotation 明确为账户 Billing / Spending Limit 阻塞，并非代码执行失败。
+
+状态：`GITHUB_ACTIONS_BILLING_BLOCKED`。
+
+不得将红灯解释为代码失败，也不得为此修改业务代码。
+
+---
+
+## 5. ADP 原生 Widget 路线已更新：不再强制 Seed
+
+2026-08-11 重新核对腾讯云 ADP 官方文档后，确认当前平台支持：
+
+- Widget 开发 → 新建 Widget → **代码创建**；
+- 直接编辑 `Template / Schema / Default`；
+- Template 可绑定变量；
+- Widget 节点可引用前序节点结构化输出；
+- Widget 下发支持“直接向后流转 / 等待用户操作”；
+- Action 官方支持 `sys.chat / sys.go_to_url / sys.download`；
+- 平台也支持导入 `.widget`，但比赛主版本不猜未验证的文件外层封装。
+
+因此原 `ADP_WIDGET_SEED_PENDING` 已降级为备用方案，主状态改为：
+
+`ADP_WIDGET_CODE_PILOT_READY`
+
+备用说明：
+
+`widget/adp-widget-seed-requirements.md`
+
+---
+
+## 6. 当前 Pilot：小序-课表票据
+
+已在仓库加入：
+
+- `widget/native/schedule-template.txt`
+- `widget/native/schedule-schema.json`
+- `widget/native/schedule-default.json`
+- `widget/native/native-schedule-pilot-runbook.md`
+
+目标：先用 ADP 官方“代码创建”完成 `小序-课表票据-Pilot`。
+
+Pilot 先只验证 Default Preview：
+
+- Schedule 视觉；
+- 数组列表；
+- `已核验`状态；
+- `sys.chat` Action 结构；
+- Template / Schema / Default 真实兼容性。
+
+Preview 通过后，再复制 01 为测试副本：
+
+`01-多维课表查询-WidgetPilot`
+
+只增加薄层：
+
+`结果核验与呈现 → Widget数据适配 → Widget → 原回复/结束`
+
+不改 CampusTools、日期解析、实体解析和现有事实逻辑。
+
+### Pilot 通过条件
+
+1. Default Preview 正常；
+2. 工作流真实查询可出现原生 Schedule Widget；
+3. `教师003第1周周一的课` 事实与冻结 01 一致；
+4. 至少一个 `sys.chat` Action 能继续当前对话；
+5. `比较冲突` 能进入 03 比较/澄清链路。
+
+通过后标记：
+
+`ADP_WIDGET_SCHEDULE_PILOT_PASS`
+
+六张全部真实 ADP 验收后才允许：
+
+`ADP_WIDGET_NATIVE_PASS`
+
+---
+
+## 7. Widget 后续路线
+
+Schedule Pilot 通过后：
+
+1. 基于已验证原生语法生成 Classroom；
+2. 生成 Conflict；
+3. 生成 Day Plan；
+4. 生成 Choice（等待用户操作）；
+5. 生成 Error；
+6. 接入 01–04 测试副本并做应用级真实验收；
+7. 验收通过后再切换正式 01–04 的展示末端。
+
+之后立即进入：
+
+1. 32 组标准 QA 导入 + 来源展示精修；
 2. 80 条 ADP 原生基准评测；
-3. V2.1 与候选角色指令的多提示词 A/B；
-4. 应用级匿名/提示注入/越权红队；
+3. 角色指令多提示词 A/B；
+4. 匿名 / 提示注入 / 越权红队；
 5. 多模态输入（图片只提取查询条件，动态事实仍由 CampusTools 核验）；
 6. Test Release；
 7. 5 分钟获奖型演示脚本、演示数据和最终提交资产。
 
-PR #49 保持 open、未 merge、未正式发布。
+PR #49 继续保持 open、未 merge、未正式发布。
