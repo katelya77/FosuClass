@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-12 03:03 +08:00
+更新时间：2026-08-12 03:13 +08:00
 
 当前状态：
 
@@ -11,162 +11,125 @@
 - `ADP_WIDGET_OFFICIAL_TEMPLATE_RUNTIME_PASS`
 - `B2_WIDGET_BASELINE_PASS`
 - `ADP_WIDGET_SCHEDULE_CONTRACT_SPLIT_CONFIRMED`
-- `ADP_ONE_CLICK_BUNDLE_DESIGN_PENDING`
+- `SCHEDULE_CONTRACTSYNC_PACKAGE_READY`
+- `ADP_WIDGET_SCHEDULE_RUNTIME_PENDING`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_INCLUDED_MINUTES_EXHAUSTED`
 
 PR #49：保持 open / unmerged / 未正式发布。
 
-## 冻结层
+## 冻结事实层
 
-- 01 多维课表查询：冻结。
-- 02 空教室规划 V7.2：真实多轮通过，冻结。
-- 03 课程冲突比较 V5.1：self-compare / 赶场 / 01→03 handoff 真实通过，冻结。
-- 04 今日校园计划 V1.1：核心/边界通过，冻结。
-- 标准模式路由 + 模型输入上下文改写：冻结。
-- 动态校园事实只来自 CampusTools；失败不得补造。
-- `dataVersion=competition-demo-v1`，`dataHash=sha1:fefef4bf425b`。
+除非 80 条正式评测证明回归，不再改：
+
+- 01 多维课表查询；
+- 02 空教室规划 V7.2；
+- 03 课程冲突比较 V5.1；
+- 04 今日校园计划 V1.1；
+- 标准模式 Agent 路由与模型输入上下文改写。
+
+动态校园事实只来自 CampusTools；失败不得补造。
+
+固定：`dataVersion=competition-demo-v1`，`dataHash=sha1:fefef4bf425b`。
 
 ## B2：正式 PASS
 
-B2 天气代码 Widget 已完成：
+天气代码 Widget 已完成五方一致：
 
-```text
-TemplateVars
-= DefaultKeys
-= ZodSchemaKeys
-= JSONSchemaKeys
-= WorkflowWidgetInputs
-= {city, condition, temp, high, low, advice}
-```
+`TemplateVars = DefaultKeys = ZodSchemaKeys = JSONSchemaKeys = WorkflowWidgetInputs`
 
-并且 Preview PASS + `开始 → B21 → 结束` Runtime PASS。
+六字段固定 USER_INPUT，`开始 → B21 → 结束` 真实 Runtime PASS。
 
-当前赛事空间已实机证明：本次保存路径中修改 Zod 后 outer JSON Schema 会同步，并传播到新拖入的 Workflow Widget 输入。该结论仅用于当前赛事空间，不外推 ADP 全平台。
+因此当前赛事空间本次保存路径可采用：修改 Zod → 保存 → outer JSON Schema 与新工作流节点输入同步。只作为当前空间实机合同。
 
-详细证据：`competition/adp-kit/reports/2026-08-12-b2-zod-jsonschema-mismatch.md`
+## Schedule：根因已确认
 
-## Schedule：合同分裂根因已确认
-
-本轮用户上传：
+用户上传真实：
 
 - `小序-课表票据-V2(2).widget`
 - `export-01-多维课表查询-WidgetPilot-V1.3.zip`
 
-实际解析确认当前 Schedule 是“V2 外壳 + RuntimeSafe V3 内核”的混合态。
+进一步解析确认 `.widget` 本身是 mixed-state：
 
-### `.widget` outer jsonSchema
+- outer `template` = 空字符串；
+- outer `jsonSchema` = 旧 V2 七字段 `title/timeText/queryId/dataVersion/summary/items/actions`；
+- `encodedWidget.view/defaultState/schema` = RuntimeSafe V3 21 个扁平 STRING/INT 字段；
+- V1.3 Workflow WIDGET 节点仍按旧 V2 七字段注册；
+- 上游 `Widget数据适配-Schedule` 已正确输出 V3 21 字段。
 
-仍为旧 V2 7 字段：
-
-```text
-{title, timeText, queryId, dataVersion, summary, items, actions}
-```
-
-其中包含 OBJECT / ARRAY_OBJECT。
-
-### `.widget` encodedWidget 内部
-
-实际 `view / defaultState / schema` 已经是 RuntimeSafe V3 的 21 个扁平 STRING/INT 字段：
-
-```text
-{title,timeText,statusText,courseCountText,shownCount,listStatusText,
- item0PeriodText,item0CourseName,item0LocationText,item0MetaText,
- item1PeriodText,item1CourseName,item1LocationText,item1MetaText,
- action0Label,action0Message,action1Label,action1Message,
- action2Label,action2Message,footerText}
-```
-
-三项 validity 都是 `valid`。
-
-### V1.3 Workflow Widget 节点
-
-节点虽然名为 `小序-课表票据-RuntimeSafe-V3`，WidgetID 仍为：
-
-`23fbc659efe3482fab588d754e4420a4`
-
-但 `WidgetParam` / NodeUI inputs 仍按旧 V2 outer schema 注册：
-
-```text
-{title,timeText,queryId,dataVersion,summary,items,actions}
-```
-
-并且：
-
-- `queryId` / `dataVersion` 引用为空；
-- `items` / `actions` 为 `ARRAY_OBJECT` 且 `SubParams=[]`；
-- 因此 ADP 当前预检查直接提示：`items/actions 必须有一项子参数`。
-
-### Adapter
-
-`Widget数据适配-Schedule` 已经正确输出 RuntimeSafe V3 的完整 21 个 Widget 字段。
-
-所以真正断点是：
+当前断点：
 
 ```text
 CampusTools
-→ Adapter(V3 21字段)            ✅
-→ Workflow WidgetParam(旧V2)    ❌
-→ encodedWidget(V3 21字段)      ✅
+→ Adapter(V3 21字段)             ✅
+→ Workflow WidgetParam(旧V2)     ❌
+→ encodedWidget(V3 21字段)       ✅
 ```
 
-正式状态：
+这精确解释当前 ADP 预检查：`queryId/dataVersion` 引用为空、`items/actions` ARRAY_OBJECT 无 SubParams。
 
-`ADP_WIDGET_SCHEDULE_CONTRACT_SPLIT_CONFIRMED`
+详细：`2026-08-12-schedule-widget-contract-split-root-cause.md`。
 
-详细报告：`competition/adp-kit/reports/2026-08-12-schedule-widget-contract-split-root-cause.md`
+## 方案 A 已执行：Schedule ContractSync
 
-## 禁止继续的方式
+保留现有 WidgetID：
 
-不再：
+`23fbc659efe3482fab588d754e4420a4`
 
-- 连续生成 V1.4/V1.5/V1.6；
-- 让用户手填大量 Widget 参数；
-- 继续把 map / 三元 / ARRAY_OBJECT / WIDGET_ACTION_NONE / 直接向后流转当通用根因；
-- Preview PASS 直接当 Runtime PASS；
-- 分别手工维护 outer Schema、inner Schema、Adapter、Workflow WidgetParam。
+Canonical contract 固定 RuntimeSafe V3 21 字段：
 
-## 新研发模式：一次导出 → 自动生成 → 一次导入验收
+`title,timeText,statusText,courseCountText,shownCount,listStatusText,item0PeriodText,item0CourseName,item0LocationText,item0MetaText,item1PeriodText,item1CourseName,item1LocationText,item1MetaText,action0Label,action0Message,action1Label,action1Message,action2Label,action2Message,footerText`
 
-下一阶段设计一个统一的 `ADP Contract Compiler / One-click Import Bundle`：
+其中 `shownCount=INT`，其余 STRING。
 
-```text
-用户一次导出真实 ADP .widget + workflow ZIP
-        ↓
-自动解析真实平台序列化合同
-        ↓
-canonical manifest（单一真源）
-        ↓
-生成一致的 .widget
-+ Workflow WidgetParam / NodeUI / Reference
-+ ZIP 元数据
-        ↓
-自动静态 Gate
-        ↓
-用户只导入并做一次真实 Runtime
-```
+新 Workflow：
 
-Schedule 先作为首个落地案例。成功后同一生成器扩展到 Classroom / Conflict / Day Plan / Choice / Error。
+- WorkflowID：`5bf89039-74fd-580e-b1a8-3c3cabdf483f`
+- Name：`01-多维课表查询-WidgetStable`
+- WIDGET Node：`小序-课表票据-WidgetStable`
+- WidgetID 保持不变
+- ActionType=`WIDGET_ACTION_NONE`
+- 21 个 WidgetParam 全部 `REFERENCE_OUTPUT`
+- 全部指向 `Widget数据适配-Schedule.Output.<field>`
+- 旧 `queryId/dataVersion/summary/items/actions` 已移除
+- 非 Widget 节点、Edge、NextNodeIDs 保持 V1.3 不变
 
-## 当前设计目标
+生成包：
 
-Schedule canonical contract 以 RuntimeSafe V3 的 21 字段为准：
+`01-多维课表查询-WidgetStable-可直接导入.zip`
 
-- outer JSON Schema / encodedWidget schema / Default / Template 变量一致；
-- Adapter 输出与 Widget 字段一致；
-- Workflow WidgetParam 从 canonical contract 自动生成，不再保留 `summary/items/actions`；
-- 所有 REFERENCE_OUTPUT 自动指向 `Widget数据适配-Schedule.Output.<field>`；
-- `shownCount` 全链为 INT，其余当前字段为 STRING；
-- NodeUI inputs 自动同步；
-- ActionType 继续使用已验证可行的 `WIDGET_ACTION_NONE`；
-- 结果卡继续“直接向后流转”。
+SHA256：
 
-## 比赛主线
+`4f78b5c029b87c25e0ff9b676d7230bf2e9c8d1858d421fe8cfcd90179db2f66`
 
-Widget 收口后：Schedule → sys.chat → 03 → 02/03/04 Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
+静态 Gate：19/19 PASS；ZIP CRC PASS；XLSX WorkflowID 已同步。
 
-若统一合同方案仍不能在少量实机验收内收敛，Widget 转支线，不无限阻塞比赛主线。
+详细：`2026-08-12-schedule-contractsync-package-ready.md`。
 
-## GitHub Actions
+## 防回归工程化
 
-Actions included minutes 已用 `3000 / 3000`；与 ADP Runtime 无关。Codex / Kimi 本地继续承担构建、测试、ZIP 与 Gate。
+新增：
+
+- `widget/native/schedule-runtime-safe-v3-contract.json`
+- `widget/native/audit-widget-contract.js`
+- `widget/native/sync-native-widget-wrapper.js`
+- `widget/native/test-schedule-contractsync.js`
+- `widget/native/test-widget-wrapper-sync.js`
+
+`package.json` 新增 `test:widget-contract` 与 `widget:sync-wrapper`，并把合同测试纳入 adp-kit `npm test`。
+
+以后 native `.widget` 必须检查 outer wrapper 与 encodedWidget 是否同步，禁止再产出 V2 外壳/V3 内核。
+
+## 用户现在只做两步 + 一次 Runtime
+
+1. 打开现有 Schedule Widget（WidgetID `23fbc659efe3482fab588d754e4420a4`），Zod 模式粘贴本轮生成的 `Schedule-ContractSync-Zod.ts` 内容并保存一次。不要重新导入 Widget 创建新资源。
+2. 导入 `01-多维课表查询-WidgetStable-可直接导入.zip`。
+3. 唯一验收：`教师003第1周周一的课`。
+
+若 PASS：标记 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`，立即推进 Schedule `sys.chat` → 03，不再做 Schedule 小实验。
+
+若 FAIL：只保存该次完整错误/request_id/trace_id；合同分裂已消除，不再回到 V2 Schema、ARRAY_OBJECT、map、三元、WIDGET_ACTION_NONE 等已排除路径。
+
+## 后续路线
+
+Schedule PASS → sys.chat → 03 → 02/03/04 Widget Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
