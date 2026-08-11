@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-11 23:00 +08:00
+更新时间：2026-08-12 01:09 +08:00
 
 当前状态：
 
@@ -11,8 +11,7 @@
 - `ADP_WIDGET_NATIVE_TEMPLATE_PASS`
 - `ADP_WIDGET_RUNTIME_SEED_CAPTURED`
 - `ADP_WIDGET_SCHEDULE_RUNTIME_DEBUGGING`
-- `ADP_WIDGET_RUNTIME_SAFE_V3_READY`
-- `ADP_WIDGET_SCHEDULE_V13_READY`
+- `ADP_WIDGET_RUNTIME_ARCHITECTURE_RECHECK`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_BILLING_BLOCKED`
 
@@ -27,7 +26,7 @@ PR #49：保持 open、未 merge、未正式发布。
 - 应用标准模式路由 + 模型输入上下文改写：冻结。
 - 动态事实只来自 CampusTools；失败时不得由模型补造。
 
-## 2. Widget V2 代码/视觉层
+## 2. Widget 视觉层
 
 C 方案：Schedule / Classroom / Conflict / Day Plan / Choice / Error。
 
@@ -37,7 +36,7 @@ Kimi Code 本机真实 Gate 已通过：Adapter tests、六类样例、validate-
 
 六张 V2 `.widget` 已在腾讯云 ADP 实机导入并显示独立原生 UI Preview：`ADP_WIDGET_NATIVE_TEMPLATE_PASS`。
 
-## 3. Runtime Seed
+## 3. Runtime Seed 与当前关键缺口
 
 来源：用户导出的 `export-00-节点格式种子-勿启用(3).zip`。
 
@@ -46,130 +45,78 @@ Kimi Code 本机真实 Gate 已通过：Adapter tests、六类样例、validate-
 - `NodeType=WIDGET`
 - Schedule WidgetID=`23fbc659efe3482fab588d754e4420a4`
 - Choice WidgetID=`f540588933a4459cbe78a6fe99aa022c`
-- Widget 参数结构在 `WidgetNodeData.WidgetParam`
+- Widget 参数结构位于 `WidgetNodeData.WidgetParam`
 - OBJECT / ARRAY_OBJECT / ARRAY_STRING 使用 `SubParams`
-- ARRAY_STRING 平台硬规则：至少 1 个 STRING 子参数槽位；真实 Seed：`teachers/classes → item 0 → STRING`
+- ARRAY_STRING 必须至少包含 1 个 STRING 子参数槽位
+- **Seed 中两个 Widget 节点均未完成正式运行配置，捕获到 `ActionType=WIDGET_ACTION_NONE`**
 
-## 4. Schedule Runtime 调试历史
+腾讯云官方文档明确要求 Widget 节点配置“Widget 下发方式”：直接向后流转 / 等待用户操作。我们尚未捕获“直接向后流转”的真实平台枚举值。
+
+## 4. Schedule Runtime 调试结论
 
 ### V1
 
-CampusTools / Adapter / Widget展示判断成功，`小序-课表票据-V2` Runtime 失败。
+CampusTools / Adapter / Widget展示判断成功，Widget Runtime 失败。
 
 ### V1.1
 
-将 summary/items/actions 顶层复杂引用扁平化后，ADP 在校验阶段明确报：
+为了诊断复杂结构进行扁平化时触发确定 Schema 错误：`teachers/classes ARRAY_STRING 必须有一项子参数`。
+
+### V1.2
+
+恢复 ARRAY_STRING 子槽位后，结构错误消失，但 Runtime 报：
 
 ```text
-teachers 参数为ARRAY_STRING类型，必须有一项子参数
-classes 参数为ARRAY_STRING类型，必须有一项子参数
+460101 ... convert widget view failed ...
+code:122 ... operator to search for '__jsx' in undefined
 ```
 
-### V1.2 — 已真实运行
+### V1.3 RuntimeSafe — 已真实失败
 
-已按真实 Seed 恢复 ARRAY_STRING 子参数结构；画布结构错误消失。
+用户已按要求把现有 `小序-课表票据-V2` 原地替换为 RuntimeSafe V3，并上传重新导出的 `小序-课表票据-V2(1).widget`。
 
-真实输入：`教师003第1周周一的课`
+解析该真实导出文件确认：
 
-真实结果：
+- WidgetID 仍为 `23fbc659efe3482fab588d754e4420a4`
+- Template 已真实保存为 RuntimeSafe V3
+- Schema 仅 STRING / INT
+- 零 `.map()`
+- 零 OBJECT / ARRAY_OBJECT / ARRAY_STRING
+- 仅静态 ListViewItem + 简单变量绑定 + 3 个 sys.chat Button
+- `schemaValidity=viewValidity=defaultStateValidity=valid`
 
-- CampusTools：成功；
-- `Widget数据适配-Schedule`：成功；
-- `Widget展示判断`：成功；
-- `小序-课表票据-V2`：失败；
-- 平台错误：
+V1.3 真实调试仍返回与 V1.2 完全相同的：
 
 ```text
-460101-工作流运行异常: 获取Widget内容失败:
-convert widget view failed: http request failed:
-type:framework, code:122,
-msg:client codec Unmarshal: rpc.toJsonViewResponse.Data:
-ReadMapCB: expect { or n, but found ",
-...
+460101
+convert widget view failed
+code:122
 operator to search for '__jsx' in undefined
 ```
 
-因此根因已经收敛到 **Widget Template → JSON View 转换阶段**，不再属于 CampusTools / Adapter / 路由 / ARRAY_STRING 结构。
+因此：**“复杂 JSX / 复杂 Schema 是主要根因”的假设已经被实机否证。禁止继续堆 V1.4/V1.5 Template 补丁。**
 
 故障报告：
 
-`competition/adp-kit/reports/2026-08-11-schedule-widget-runtime-v12-converter-failure.md`
+`competition/adp-kit/reports/2026-08-12-schedule-widget-runtime-v13-identical-converter-failure.md`
 
-## 5. RuntimeSafe V3 + Pilot V1.3 — 当前下一 Gate
+## 5. 当前唯一优先 Gate：验证 Widget 下发方式
 
-状态：
+下一步不改 Template、不改 Adapter、不改 CampusTools，只做一个单变量实验：
 
-- `ADP_WIDGET_RUNTIME_SAFE_V3_READY`
-- `ADP_WIDGET_SCHEDULE_V13_READY`
+1. 在现有 `01-多维课表查询-WidgetPilot-V1.3` 打开 `小序-课表票据-RuntimeSafe-V3` 节点；
+2. 找到“Widget 下发方式”；
+3. 明确选择“直接向后流转”；
+4. 保存；
+5. 重新调试 `教师003第1周周一的课`。
 
-RuntimeSafe 源码：
+若 PASS：根因锁定为自动生成节点继承了未配置 Seed 的 `WIDGET_ACTION_NONE`。
 
-- `competition/adp-kit/widget/native/schedule-runtime-safe-v3-template.txt`
-- `competition/adp-kit/widget/native/schedule-runtime-safe-v3-schema.json`
-- `competition/adp-kit/widget/native/schedule-runtime-safe-v3-default.json`
-
-V3 设计：
-
-- Template 零 `.map()`；
-- 零三元条件；
-- 零动态 children 数组；
-- Schema 仅 STRING / INT；
-- 零 OBJECT / ARRAY_OBJECT / ARRAY_STRING；
-- 2 个静态 ListViewItem；
-- 3 个静态 sys.chat Button；
-- 所有字符串拼接在 Adapter 完成，Template 只做简单变量绑定。
-
-### 高效率接入策略
-
-不再新建 V3 Widget 再捕获一次 ID。
-
-直接在 ADP Widget 开发中打开现有：
-
-`小序-课表票据-V2`
-
-原地用 RuntimeSafe V3 的 Template / Schema / Default 替换并保存。
-
-这样现有 Schedule WidgetID 保持：
-
-`23fbc659efe3482fab588d754e4420a4`
-
-随后导入已经预生成的：
-
-`01-多维课表查询-WidgetPilot-V1.3-RuntimeSafe扁平Widget版-可直接导入.zip`
-
-V1.3 WorkflowID：
-
-`a1fe44a7-9a4c-4f30-8eb9-015ded06ac67`
-
-V1.3 SHA256：
-
-`3fe3cdbadfc59b0bfd379006531ddd0fb9f7939c7e970b6c9005235bf974aca7`
-
-V1.3 WidgetParam：21 个，全部为 STRING / INT 原子引用；零 SubParams。
-
-本地 Gate：
-
-- Adapter Python 语法 PASS；
-- 教师003两课程 ViewModel 模拟 PASS；
-- `action2=检查风险` + 第1周周一语义 PASS；
-- WidgetParam 21/21 primitive PASS；
-- START 可达 PASS；
-- Reference NodeID PASS；
-- XLSX WorkflowID 一致 PASS；
-- ZIP CRC / 六文件合同 PASS。
-
-下一实机步骤：
-
-1. 原地更新 `小序-课表票据-V2` 为 RuntimeSafe V3；
-2. 保存 Widget；
-3. 导入 V1.3；
-4. 调试 `教师003第1周周一的课`；
-5. 目标：不再出现 `convert widget view failed`，Widget 节点转绿并在对话中下发原生卡片；
-6. Runtime 成功后进入应用级 `sys.chat → Agent → 03` Gate。
-
-在 V1.3 Runtime 真实成功前，不允许标记 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`。
+若仍 FAIL：导出这份已经人工配置“直接向后流转”的 V1.3 ZIP，捕获真实 ActionType 枚举；随后使用腾讯云官方最小静态 Widget（Card + Title + Text，固定输入）建立独立 Runtime 基线，以判断是自定义 Widget 转换问题，还是当前空间/平台 Widget Runtime 服务问题。
 
 ## 6. 官方 ADP 文档原则
+
+重点文档：
 
 - Widget 概述 `126973`
 - Card `126981`
@@ -177,17 +124,19 @@ V1.3 WidgetParam：21 个，全部为 STRING / INT 原子引用；零 SubParams�
 - 配置 Widget 节点 `126979`
 - Widget 节点 `126990`
 - Action `127283`
+- Button `127018`
 - 代码创建 `127031`
 - ADP-Widget SDK `129230`
 
-运行时原则：
+已确认：
 
-- 输入结构/类型必须匹配；不一致先经 Code Adapter；
-- Preview PASS 不等于 Runtime converter PASS；
-- Runtime 优先使用官方最保守稳定的静态组件树 + 简单变量绑定；
-- 结果卡直接向后流转；Choice 等待用户操作；
-- `sys.chat` 作为新用户输入继续 Agent 路由；
-- Widget 不承担事实计算。
+- Widget 节点必须配置输入变量和 Widget 下发方式；
+- 结果展示型 Widget 应选择“直接向后流转”；
+- Choice 应选择“等待用户操作”；
+- Widget 输入结构/类型必须与上游匹配，不一致先用 Code Adapter；
+- `sys.chat` payload 会作为新用户输入进入当前会话；
+- Preview PASS 不等于 Runtime PASS；
+- Widget 只负责 UI/交互，不承担校园事实计算。
 
 ## 7. 新对话接力
 
@@ -195,7 +144,7 @@ V1.3 WidgetParam：21 个，全部为 STRING / INT 原子引用；零 SubParams�
 
 `competition/adp-kit/reports/ChatGPT-project-handoff-current.md`
 
-新对话第一句：
+在 FosuClass Project 新对话首句：
 
 ```text
 @GitHub 请先读取 competition/adp-kit/reports/ChatGPT-project-handoff-current.md、competition/adp-kit/reports/current-adp-checkpoint.md、competition/adp-kit/widget/native/runtime-integration-runbook.md，然后继续校园智序-小序 ADP 研发；不要重新设计已经冻结的 01–04。
@@ -203,7 +152,7 @@ V1.3 WidgetParam：21 个，全部为 STRING / INT 原子引用；零 SubParams�
 
 ## 8. 后续路线
 
-Schedule Runtime + sys.chat → 02 Classroom Runtime → 03 Conflict Runtime → 04 Day Plan Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖型演示。
+先建立 Schedule Widget Runtime 最小可靠基线，再进入：Schedule sys.chat → 02 Classroom Runtime → 03 Conflict Runtime → 04 Day Plan Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖型演示。
 
 ## 9. GitHub Actions
 
