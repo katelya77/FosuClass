@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-11 22:50 +08:00
+更新时间：2026-08-11 23:00 +08:00
 
 当前状态：
 
@@ -12,6 +12,7 @@
 - `ADP_WIDGET_RUNTIME_SEED_CAPTURED`
 - `ADP_WIDGET_SCHEDULE_RUNTIME_DEBUGGING`
 - `ADP_WIDGET_RUNTIME_SAFE_V3_READY`
+- `ADP_WIDGET_SCHEDULE_V13_READY`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_BILLING_BLOCKED`
 
@@ -64,21 +65,11 @@ teachers 参数为ARRAY_STRING类型，必须有一项子参数
 classes 参数为ARRAY_STRING类型，必须有一项子参数
 ```
 
-### V1.2 — 已真实运行，错误进一步收敛
+### V1.2 — 已真实运行
 
-生成物：
+已按真实 Seed 恢复 ARRAY_STRING 子参数结构；画布结构错误消失。
 
-`01-多维课表查询-WidgetPilot-V1.2-ARRAY_STRING子参数修复版-可直接导入.zip`
-
-SHA256：
-
-`99e4081a5276d33caff9c70f395e809a6de7ac1754729a264d605ffbc459488f`
-
-V1.2 已按真实 Seed 恢复 ARRAY_STRING 子参数结构；画布结构校验不再报 teachers/classes 错误。
-
-真实调试输入：
-
-`教师003第1周周一的课`
+真实输入：`教师003第1周周一的课`
 
 真实结果：
 
@@ -98,21 +89,20 @@ ReadMapCB: expect { or n, but found ",
 operator to search for '__jsx' in undefined
 ```
 
-因此当前根因不再是参数槽位结构，而是 **Widget Template → JSON View 转换阶段**。
+因此根因已经收敛到 **Widget Template → JSON View 转换阶段**，不再属于 CampusTools / Adapter / 路由 / ARRAY_STRING 结构。
 
 故障报告：
 
 `competition/adp-kit/reports/2026-08-11-schedule-widget-runtime-v12-converter-failure.md`
 
-## 5. RuntimeSafe V3 — 当前下一步
+## 5. RuntimeSafe V3 + Pilot V1.3 — 当前下一 Gate
 
-状态：`ADP_WIDGET_RUNTIME_SAFE_V3_READY`
+状态：
 
-新 Widget：
+- `ADP_WIDGET_RUNTIME_SAFE_V3_READY`
+- `ADP_WIDGET_SCHEDULE_V13_READY`
 
-`小序-课表票据-RuntimeSafe-V3`
-
-源码：
+RuntimeSafe 源码：
 
 - `competition/adp-kit/widget/native/schedule-runtime-safe-v3-template.txt`
 - `competition/adp-kit/widget/native/schedule-runtime-safe-v3-schema.json`
@@ -129,18 +119,53 @@ V3 设计：
 - 3 个静态 sys.chat Button；
 - 所有字符串拼接在 Adapter 完成，Template 只做简单变量绑定。
 
-依据：腾讯云官方 `代码创建` 与 `ListView` 示例均采用静态组件树 + 简单变量绑定；`配置 Widget 节点` 要求运行时输入格式严格匹配；ADP 最终 Widget 协议由 JSON View 渲染。
+### 高效率接入策略
 
-下一 Gate：
+不再新建 V3 Widget 再捕获一次 ID。
 
-1. 用户导入 `小序-课表票据-RuntimeSafe-V3.widget`；
-2. Preview 正常；
-3. 在禁用 00 Seed 工作流中拖入 V3 Widget，无需接线；
-4. 导出 00 Seed ZIP；
-5. 捕获平台分配的真实 RuntimeSafe V3 WidgetID / WidgetParam；
-6. 自动生成 `01-多维课表查询-WidgetPilot-V1.3`；
-7. 真实调试同一句；
-8. 若成功，再进入 `sys.chat → Agent → 03` Action Gate。
+直接在 ADP Widget 开发中打开现有：
+
+`小序-课表票据-V2`
+
+原地用 RuntimeSafe V3 的 Template / Schema / Default 替换并保存。
+
+这样现有 Schedule WidgetID 保持：
+
+`23fbc659efe3482fab588d754e4420a4`
+
+随后导入已经预生成的：
+
+`01-多维课表查询-WidgetPilot-V1.3-RuntimeSafe扁平Widget版-可直接导入.zip`
+
+V1.3 WorkflowID：
+
+`a1fe44a7-9a4c-4f30-8eb9-015ded06ac67`
+
+V1.3 SHA256：
+
+`3fe3cdbadfc59b0bfd379006531ddd0fb9f7939c7e970b6c9005235bf974aca7`
+
+V1.3 WidgetParam：21 个，全部为 STRING / INT 原子引用；零 SubParams。
+
+本地 Gate：
+
+- Adapter Python 语法 PASS；
+- 教师003两课程 ViewModel 模拟 PASS；
+- `action2=检查风险` + 第1周周一语义 PASS；
+- WidgetParam 21/21 primitive PASS；
+- START 可达 PASS；
+- Reference NodeID PASS；
+- XLSX WorkflowID 一致 PASS；
+- ZIP CRC / 六文件合同 PASS。
+
+下一实机步骤：
+
+1. 原地更新 `小序-课表票据-V2` 为 RuntimeSafe V3；
+2. 保存 Widget；
+3. 导入 V1.3；
+4. 调试 `教师003第1周周一的课`；
+5. 目标：不再出现 `convert widget view failed`，Widget 节点转绿并在对话中下发原生卡片；
+6. Runtime 成功后进入应用级 `sys.chat → Agent → 03` Gate。
 
 在 V1.3 Runtime 真实成功前，不允许标记 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`。
 
@@ -158,7 +183,8 @@ V3 设计：
 运行时原则：
 
 - 输入结构/类型必须匹配；不一致先经 Code Adapter；
-- Runtime 优先使用官方最保守语法子集；
+- Preview PASS 不等于 Runtime converter PASS；
+- Runtime 优先使用官方最保守稳定的静态组件树 + 简单变量绑定；
 - 结果卡直接向后流转；Choice 等待用户操作；
 - `sys.chat` 作为新用户输入继续 Agent 路由；
 - Widget 不承担事实计算。
