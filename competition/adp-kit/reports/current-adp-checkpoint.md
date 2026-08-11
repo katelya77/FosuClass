@@ -1,6 +1,8 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-11 02:25 +08:00
+更新时间：2026-08-11 13:35 +08:00
+
+状态：`WIDGET_V2_LOCAL_GATE_PASS`（本机），`ADP_WIDGET_SEED_PENDING`（原生）
 
 ## 基础能力已全部冻结
 
@@ -147,6 +149,24 @@ npm test --prefix competition/adp-kit
 4. 更新本检查点为 `WIDGET_V2_LOCAL_GATE_PASS`。
 
 不得为了通过生成物检查手工编辑 sample-results 或 manifest。
+
+## 本机验证结果：WIDGET_V2_LOCAL_GATE_PASS
+
+2026-08-11 在 Windows 本机（Node 24）于 head `98fb1d4c` 执行，全部真实 PASS：
+
+1. `test-widget-adapter.js`：PASS（6 card types + verified/action safety gates）；
+2. `generate-samples.js`：六类样例全部 `campus-widget/v2`，四张动态主卡 `success=true + dataVersion=competition-demo-v1 + evidence.verified=true`，Action ≤3 且仅 `sys.chat`/`sys.go_to_url`/`sys.download`，密钥扫描无命中；
+3. `validate-kit.js`：PASS（7 docs, 32 QA, 80 evals, 4 workflows, 6 tools, 6 widget v2 card types）；
+4. H5 视觉验收（Playwright 截图 390×844 / 430×932 / 768×1024 × 六卡）：无横向溢出；schedule 节次可扫读、按钮不截断；classroom filters/容量票据/空结果恢复正常；conflict 红色时间冲突分区、标题为 `2025级A班 vs 2025级B班`（无 self-compare 伪标题）；day_plan 课程/空档/自习时间轴层级清楚；choice 无内部实体 ID；error 为任务恢复式而非工程错误页；行入场动画属预期动效；
+5. `sync-assets-manifest.js`：78 files 一致；
+6. `npm test --prefix competition/adp-kit`：真实 PASS（含 Golden 33/33、adapter 合同、validate-kit、submission package 扫描 findings=0、credentialCandidates=0）；
+7. `git diff --check`：干净。
+
+已提交 `c2f9b27d`（test(competition): verify widget v2 productization）并 push 到 `feat/campusflow-adp-integration`。
+
+提交内容仅限确定性生成物：`widget/sample-results.json/js`、`reports/generated-assets-manifest.json`、`competition/submission-package/` 重新构建输出。未发现需要修改的 Widget 真实缺陷。
+
+注意：以上仅证明 H5 fallback 与 Adapter 合同本机通过；ADP 原生 Widget 仍未验收，保持 `ADP_WIDGET_SEED_PENDING`，不得写成 `ADP_WIDGET_NATIVE_PASS`。
 
 ## ADP 原生 Widget 状态
 
