@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — ChatGPT Project 新对话接力主文件
 
-更新时间：2026-08-12 01:09 +08:00
+更新时间：2026-08-12 02:15 +08:00
 
 > 这是 FosuClass Project 内新对话继续研发的单一接力入口。新对话先读本文件，再读 `current-adp-checkpoint.md` 与 `competition/adp-kit/widget/native/runtime-integration-runbook.md`。不要仅依赖聊天历史。
 
@@ -42,118 +42,103 @@
 
 Kimi Code 本机 Widget V2 Gate 已通过：Adapter tests、6 类样例、validate-kit、Playwright 3 viewport、完整 `npm test --prefix competition/adp-kit`、Golden 33/33、安全扫描均 PASS。
 
-## Runtime Seed
-
-来源：用户导出的 `export-00-节点格式种子-勿启用(3).zip`。
-
-已确认：
-
-- `NodeType=WIDGET`
-- Schedule WidgetID=`23fbc659efe3482fab588d754e4420a4`
-- Choice WidgetID=`f540588933a4459cbe78a6fe99aa022c`
-- Widget 参数在 `WidgetNodeData.WidgetParam`
-- OBJECT / ARRAY_OBJECT / ARRAY_STRING 使用 `SubParams`
-- ARRAY_STRING 必须至少一个 STRING 子参数槽位
-- **Seed 中 Widget 节点未完成正式运行配置，捕获值为 `ActionType=WIDGET_ACTION_NONE`**
-
-这是当前最重要的未验证架构点。
-
 ## Schedule Runtime 调试时间线
 
-### V1
+### V1 / V1.1 / V1.2 / V1.3
 
-`教师003第1周周一的课`：CampusTools / Adapter / Widget展示判断成功，Widget Runtime 失败。
+- V1：CampusTools / Adapter / Widget展示判断成功，Widget Runtime 失败。
+- V1.1：发现 ARRAY_STRING 子参数结构错误。
+- V1.2：修复后进入 Runtime，但报 `460101 / convert widget view failed / code 122 / __jsx in undefined`。
+- V1.3 RuntimeSafe：Schema 仅 STRING/INT、零 map/复杂对象，真实 Widget 导出 validity 全部 valid；Runtime 仍同样失败。
+- 用户确认 Schedule Widget 节点从一开始就是“直接向后流转”。
 
-### V1.1
+因此：复杂 JSX、复杂 Schema、ARRAY_STRING、下发方式都不能再作为主根因继续盲改。
 
-扁平化复杂对象时误清空 teachers/classes 子槽位，ADP 明确报：
+## 2026-08-12 关键突破：腾讯官方模板 Runtime PASS
 
-```text
-teachers 参数为ARRAY_STRING类型，必须有一项子参数
-classes 参数为ARRAY_STRING类型，必须有一项子参数
-```
+用户新建腾讯云官方模板 `基础表单澄清-DtR1y`，最小工作流：
 
-### V1.2
+`开始 → 基础表单澄清-DtR1y → 结束`
 
-按真实 Seed 恢复 ARRAY_STRING 子参数后，结构错误消失，但 Runtime 报：
+真实调试成功，表单 Widget 正常出现在对话中。
 
-```text
-460101-工作流运行异常: 获取Widget内容失败:
-convert widget view failed: http request failed:
-type:framework, code:122,
-msg:client codec Unmarshal: rpc.toJsonViewResponse.Data:
-ReadMapCB: expect { or n, but found ",
-...
-operator to search for '__jsx' in undefined
-```
+用户上传：
 
-### V1.3 RuntimeSafe — 已真实失败
+- `export-00-节点格式种子-勿启用(4).zip`
+- `基础表单澄清-DtR1y.widget`
 
-为了排除复杂 JSX / Schema，V3 改为：
+解析确认成功节点：
 
-- 零 `.map()`；
-- 零三元；
-- 零动态 children；
-- Schema 仅 STRING / INT；
-- 零 OBJECT / ARRAY_OBJECT / ARRAY_STRING；
-- 静态 ListViewItem；
-- 简单变量绑定；
-- 3 个静态 sys.chat Button。
+- `NodeType=WIDGET`
+- WidgetID=`5a3ac523bf7e46df8a5017fe243be40e`
+- `ActionType=WIDGET_ACTION_NONE`
+- title / fields 均是 `USER_INPUT`
+- fields 是 `ARRAY_OBJECT`
 
-用户按要求原地修改并保存了现有 `小序-课表票据-V2`，又上传重新导出的 `小序-课表票据-V2(1).widget`。
+官方模板 Template 本身还真实使用：
 
-实际解析确认：
+- `fields.map(...)`
+- 三元表达式
+- Form / Input / Textarea
+- `sys.clarify`
 
-- WidgetID 仍为 `23fbc659efe3482fab588d754e4420a4`；
-- Template 确实是 RuntimeSafe V3；
-- Schema 确实只有 STRING / INT；
-- `schemaValidity=viewValidity=defaultStateValidity=valid`。
+却 Runtime PASS。
 
-随后 V1.3 调试仍返回与 V1.2 完全相同的 `convert widget view failed / __jsx in undefined`。
+因此确认：
 
-因此 **“复杂 JSX / 复杂 Schema 是根因”假设已经被否证**。禁止继续用 V1.4/V1.5 方式盲改 Template。
+1. 当前赛事空间 Widget Runtime 服务是健康的；
+2. `WIDGET_ACTION_NONE` 不是故障；
+3. `.map()` / 三元 / ARRAY_OBJECT 也不是通用故障；
+4. 现阶段最重要的差异只剩：**动态 REFERENCE_OUTPUT / 自动构建 Workflow WidgetParam 序列化** 与 **自定义/代码创建 Widget 本身**。
 
 报告：
 
-`competition/adp-kit/reports/2026-08-12-schedule-widget-runtime-v13-identical-converter-failure.md`
+`competition/adp-kit/reports/2026-08-12-widget-official-template-runtime-pass.md`
 
-## 当前唯一优先 Gate：Widget 下发方式 / ActionType
+## 当前最高优先：2×2 差分实验
 
-腾讯云官方文档明确要求 Widget 节点配置：
+已知 A：官方模板 + 固定 USER_INPUT = PASS。
 
-- 直接向后流转；
-- 等待用户操作。
+已知 B：小序自定义 Schedule + Code Adapter 引用 = FAIL。
 
-而自动生成的所有 Schedule Pilot 一直继承未配置 Seed 的：
+下一步只做两项：
 
-`WIDGET_ACTION_NONE`
+### B1 官方模板 + 单个引用
 
-下一步只做一个单变量实验：
+`开始 → Code 输出 title STRING → 基础表单澄清 Widget → 结束`
 
-1. 在现有 `01-多维课表查询-WidgetPilot-V1.3` 打开 `小序-课表票据-RuntimeSafe-V3` 节点；
-2. 找到“Widget 下发方式”；
-3. 明确选择“直接向后流转”；
-4. 保存；
-5. 其他任何内容不改；
-6. 重跑 `教师003第1周周一的课`。
+只有 title 改成 `REFERENCE_OUTPUT`，fields 继续固定。
 
-若 PASS：根因锁定为 `WIDGET_ACTION_NONE / 下发方式未配置`。
+### B2 官方代码创建天气 + 固定输入
 
-若仍 FAIL：导出这份已经人工配置“直接向后流转”的 V1.3 ZIP，捕获真实 ActionType 枚举；随后用腾讯云官方最小静态 Widget（Card + Title + Text、固定输入）建立独立 Runtime 基线，区分自定义 Widget 转换问题与平台/空间 Runtime 服务问题。
+严格按腾讯云官方文档 `127031` 的天气 Widget 示例代码创建，不自定义，不加按钮，所有字段固定手工输入，直接向后流转。
 
-## 官方文档原则
+结果矩阵：
 
-重点：Widget 概述 `126973`、Card `126981`、ListView `126995`、配置 Widget 节点 `126979`、Widget 节点 `126990`、Action `127283`、Button `127018`、代码创建 `127031`、ADP-Widget SDK `129230`。
+- B1 PASS + B2 PASS：平台、引用、代码创建都健康，问题锁定小序 Schedule 特定参数/Template；以官方天气基线渐进演化成 Schedule。
+- B1 FAIL：优先调查 Widget `REFERENCE_OUTPUT` / 自动 ZIP 序列化，停止改 UI。
+- B1 PASS + B2 FAIL：代码创建路径异常，生产路线优先“官方模板复制后改造”，并准备腾讯云工单。
+- 都 FAIL：再用纯手工 UI 引用做最终对照，排除自动 ZIP 构建器。
 
-已确认：
+## 官方文档要点
 
-- Widget 节点必须配置输入变量和 Widget 下发方式；
-- 结果展示卡使用“直接向后流转”；
-- Choice 使用“等待用户操作”；
-- 输入结构/类型不一致时先经 Code Adapter；
-- `sys.chat` payload 作为新用户输入进入当前会话；
-- Preview PASS 不等于 Runtime PASS；
-- Widget 只负责 UI/交互，不承担校园事实计算。
+重点：
+
+- Widget 总览 `126973`
+- 从模板创建 `127030`
+- 代码创建 `127031`
+- 导入 Widget `127033`
+- 配置 Widget 节点 `126979`
+- Widget 节点 `126990`
+- Card `126981`
+- ListView `126995`
+- Button `127018`
+- Action `127283`
+- ADP-Widget SDK `129230`
+- Agent 输出 Widget `127035`
+- 工具调用直接输出 Widget `127036`
+
+官方明确：模板复制、代码创建、自然语言生成、导入 `.widget` 都是正式支持的创建路径；Widget 工作流输入必须与 Schema 匹配，必要时先经 Code 转换；结果展示使用直接向后流转。
 
 ## 用户工具与研发方式
 
@@ -166,6 +151,12 @@ operator to search for '__jsx' in undefined
 - ChatGPT 负责架构、根因分析、实现提示词、验收合同和版本收敛；
 - 所有真实状态、失败根因必须写回 GitHub。
 
+## GitHub Actions
+
+Actions included minutes 已用 `3000 / 3000`，与 ADP Widget Runtime 无关。
+
+当前本地 Codex / Kimi 可继续完成测试和构建；PR #49 保持 open / unmerged。
+
 ## 永久 ADP ZIP 规则
 
 - `NextNodeIDs` 与顶层 `Edge` 同步；
@@ -175,7 +166,7 @@ operator to search for '__jsx' in undefined
 - `parameters.xlsx` 顶层 `ParameterParentId` 为空；
 - 每版执行 CRC / 可达性 / 引用 / XLSX-ID 校验；
 - WIDGET 的复杂类型 `SubParams` 必须符合真实平台合同；
-- 未捕获真实平台枚举前，不允许猜 ActionType。
+- 未有实机证据前，不把 Preview PASS 当 Runtime PASS。
 
 ## Runtime 通过后的路线
 
