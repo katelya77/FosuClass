@@ -1,0 +1,68 @@
+{
+  "capturedAt": "2026-08-11T21:44:00+08:00",
+  "sourceExport": "export-00-节点格式种子-勿启用(3).zip",
+  "platform": "腾讯云智能体开发平台 ADP",
+  "protoVersion": "V2_6-compatible export",
+  "nodeType": "WIDGET",
+  "schedule": {
+    "nodeName": "小序-课表票据-V21",
+    "widgetId": "23fbc659efe3482fab588d754e4420a4",
+    "actionType": "WIDGET_ACTION_NONE",
+    "params": [
+      "title",
+      "timeText",
+      "queryId",
+      "dataVersion",
+      "summary",
+      "items",
+      "actions"
+    ],
+    "nodeUiInputs": [
+      "title",
+      "timeText",
+      "queryId",
+      "dataVersion",
+      "summary",
+      "summary.totalCount",
+      "summary.shownCount",
+      "summary.hiddenCount",
+      "summary.entityType",
+      "summary.entityName",
+      "items",
+      "actions"
+    ],
+    "nodeUiOutputs": [
+      "Output",
+      "Output.Content"
+    ]
+  },
+  "choice": {
+    "nodeName": "小序-候选确认-V21",
+    "widgetId": "f540588933a4459cbe78a6fe99aa022c",
+    "actionType": "WIDGET_ACTION_NONE",
+    "params": [
+      "title",
+      "subtitle",
+      "queryId",
+      "dataVersion",
+      "items",
+      "actions"
+    ],
+    "nodeUiOutputs": [
+      "Output",
+      "Output.Content"
+    ]
+  },
+  "observations": [
+    "Widget 节点的业务入参保存在 WidgetNodeData.WidgetParam，而不是 Nodes[].Inputs。",
+    "顶层 WidgetParam 支持 STRING / OBJECT / ARRAY_OBJECT；OBJECT/ARRAY_OBJECT 的字段结构位于 SubParams。",
+    "真实 Seed 中两个未接线 Widget 的 ActionType 均为 WIDGET_ACTION_NONE。",
+    "NodeUI.data.content.inputs 记录 Widget 入参展示路径；NodeUI.data.content.outputs 为 Output / Output.Content。",
+    "当前 Seed 未捕获等待用户操作的非 NONE ActionType；Choice Runtime Gate 前仍需实机确认等待模式。"
+  ],
+  "security": {
+    "widgetIdsAreSecrets": false,
+    "doNotExposeInWidgetActions": true,
+    "doNotExposeNodeIdsOrVarBizIdsToUsers": true
+  }
+}
