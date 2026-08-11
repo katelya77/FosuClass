@@ -1,0 +1,27 @@
+{
+  "schema": "campus-adp-native-widget-import-bundle/v1",
+  "generatedAt": "2026-08-11T14:10:00+08:00",
+  "formatSource": {
+    "name": "小序-课表票据-Pilot.widget",
+    "source": "user-exported-from-tencent-adp",
+    "sha256": "addc40092b8378a5a86025debe3d1226245d88a942f22858e2eee3adca383348",
+    "wrapperKeys": ["version", "name", "template", "jsonSchema", "outputJsonPreview", "encodedWidget"],
+    "encodedWidgetKeys": ["name", "id", "view", "defaultState", "states", "schema", "schemaValidity", "viewValidity", "defaultStateValidity"]
+  },
+  "widgets": [
+    {"kind":"schedule","name":"小序-课表票据","file":"小序-课表票据.widget","sha256":"7519d8230bbbde7df324fa7f61dae385869078e389cd779fed5071332cf43631","bytes":13750},
+    {"kind":"classroom","name":"小序-空教室票据","file":"小序-空教室票据.widget","sha256":"730c7e4a0df87960183beb5a789627f9e5b64ffeb55a17111275bb0c5f5e766d","bytes":14249},
+    {"kind":"conflict","name":"小序-冲突赶场票据","file":"小序-冲突赶场票据.widget","sha256":"0221f3e249c5f0d1adce7fa1cf9a2b951d0deedc572f769b7803b79a0bdb3553","bytes":21699},
+    {"kind":"day_plan","name":"小序-今日校园计划","file":"小序-今日校园计划.widget","sha256":"ea4a31075f8e40b0cf7397211a43f2e718e55934167ab757f1c07c7c5ca2da59","bytes":14870},
+    {"kind":"choice","name":"小序-候选确认","file":"小序-候选确认.widget","sha256":"28f7103792eb45519adbe6ba853374424106e7be9279837cda829b5875ddf92e","bytes":10199},
+    {"kind":"error","name":"小序-任务恢复","file":"小序-任务恢复.widget","sha256":"be037460a3fb9e8ab00bf44d40bcdcd92417257925402c17e116c69f0955f360","bytes":6689}
+  ],
+  "validation": {
+    "jsonSchema": "6/6 valid",
+    "defaultAgainstSchema": "6/6 pass",
+    "encodedWidgetBase64RoundTrip": "6/6 pass",
+    "sourceFormat": "derived from real ADP exported .widget"
+  },
+  "bundleSha256": "08c3efec681501f93d5a01a100d01b6abd330de73b0c0d0f1d193f1e1e2f5fe7",
+  "nextGate": "Import each .widget into Tencent ADP Widget 开发 and verify preview before connecting workflows"
+}
