@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "timeText": {"type": "string"},
+    "statusText": {"type": "string"},
+    "courseCountText": {"type": "string"},
+    "shownCount": {"type": "integer"},
+    "listStatusText": {"type": "string"},
+    "item0PeriodText": {"type": "string"},
+    "item0CourseName": {"type": "string"},
+    "item0LocationText": {"type": "string"},
+    "item0MetaText": {"type": "string"},
+    "item1PeriodText": {"type": "string"},
+    "item1CourseName": {"type": "string"},
+    "item1LocationText": {"type": "string"},
+    "item1MetaText": {"type": "string"},
+    "action0Label": {"type": "string"},
+    "action0Message": {"type": "string"},
+    "action1Label": {"type": "string"},
+    "action1Message": {"type": "string"},
+    "action2Label": {"type": "string"},
+    "action2Message": {"type": "string"},
+    "footerText": {"type": "string"}
+  },
+  "required": [
+    "title","timeText","statusText","courseCountText","shownCount","listStatusText",
+    "item0PeriodText","item0CourseName","item0LocationText","item0MetaText",
+    "item1PeriodText","item1CourseName","item1LocationText","item1MetaText",
+    "action0Label","action0Message","action1Label","action1Message",
+    "action2Label","action2Message","footerText"
+  ],
+  "additionalProperties": false
+}
