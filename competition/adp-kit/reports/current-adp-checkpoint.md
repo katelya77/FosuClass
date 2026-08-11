@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-11 21:40 +08:00
+更新时间：2026-08-11 21:44 +08:00
 
 当前状态：
 
@@ -9,7 +9,8 @@
 - `WIDGET_V2_LOCAL_GATE_PASS`
 - `ADP_WIDGET_REAL_EXPORT_FORMAT_CAPTURED`
 - `ADP_WIDGET_NATIVE_TEMPLATE_PASS`
-- `ADP_WIDGET_RUNTIME_SEED_PENDING`
+- `ADP_WIDGET_RUNTIME_SEED_CAPTURED`
+- `ADP_WIDGET_SCHEDULE_PILOT_READY`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_BILLING_BLOCKED`
 
@@ -151,98 +152,140 @@ Kimi Code 已在 Windows 本机真实验证：
 
 ---
 
-## 6. 下一 Gate：捕获真实“工作流 Widget 节点”格式
+## 6. 工作流 Widget Runtime Seed：已捕获
 
-当前：`ADP_WIDGET_RUNTIME_SEED_PENDING`
+状态：`ADP_WIDGET_RUNTIME_SEED_CAPTURED`
 
-原因：已经知道 `.widget` 文件格式，但还没有捕获腾讯云 ADP V2_6 工作流画布中“Widget 节点”的真实序列化字段。
+来源：
 
-为了继续保持“用户只手工做一次、后续 Agent 批量自动生成”的研发方式，下一步只需要一次 seed：
+`export-00-节点格式种子-勿启用(3).zip`
 
-`00-Widget节点格式种子-勿启用`
+用户在禁用的 00 Seed 工作流中放置：
 
-至少放两个 Widget 节点：
+- `小序-课表票据-V2`
+- `小序-候选确认-V2`
 
-1. `小序-课表票据-V2`，下发方式=`直接向后流转`；
-2. `小序-候选确认-V2`，下发方式=`等待用户操作`。
+未接正式业务后直接导出。
 
-保存后导出工作流 ZIP，不需要接正式业务。
+真实字段确认：
 
-Agent 拿到真实 seed 后解析：
+- `NodeType = WIDGET`
+- Schedule WidgetID = `23fbc659efe3482fab588d754e4420a4`
+- Choice WidgetID = `f540588933a4459cbe78a6fe99aa022c`
+- Seed 中两个未接线 Widget 的 `ActionType = WIDGET_ACTION_NONE`
+- Widget 入参保存在 `WidgetNodeData.WidgetParam`
+- OBJECT / ARRAY_OBJECT 结构使用 `SubParams`
+- NodeUI 输出展示 `Output / Output.Content`
 
-- Widget `NodeType` / NodeUI；
-- Widget ID / 引用字段；
-- 输入映射格式；
-- 直接流转 / 等待用户操作字段；
-- 输出结构；
-- Edge / NextNodeIDs。
+抽象合同：
 
-随后自动生成：
+`competition/adp-kit/widget/native/widget-node-seed-contract.json`
 
-- 01 Schedule WidgetPilot；
-- 02 Classroom WidgetPilot；
-- 03 Conflict WidgetPilot；
-- 04 DayPlan WidgetPilot；
-- Choice/Error 分支增强包。
+仍未捕获：Choice “等待用户操作”对应的非 NONE ActionType。该项只影响 Choice Runtime Gate，不阻塞 Schedule 结果卡 Pilot。
 
 ---
 
-## 7. Runtime Pilot 验收顺序
+## 7. 01 Schedule WidgetPilot：已生成，等待 ADP Runtime 实测
 
-### B1 Schedule
+状态：`ADP_WIDGET_SCHEDULE_PILOT_READY`
 
-复制正式 01 为测试副本：
+Pilot：
 
 `01-多维课表查询-WidgetPilot`
 
-成功分支：
+WorkflowID：
 
-`query_schedule verified envelope → Widget Adapter → 小序-课表票据-V2 → End`
+`578e7df1-6290-4218-82e9-cb16b165625a`
 
-输入：
+导入包：
+
+`01-多维课表查询-WidgetPilot-V1-可直接导入.zip`
+
+SHA256：
+
+`7e65f229eb73f6855432abae355d650382af9b2e5436d6c7ff45d4079bfa1238`
+
+链路：
+
+```text
+课表查询
+→ 结果核验与呈现
+→ Widget数据适配-Schedule
+→ Widget展示判断
+  ├─ route=widget → 小序-课表票据-V2 → 结束
+  └─ else → 查询结果回复 → 结束
+```
+
+Adapter Gate：只有 `success=true + competition-demo-v1 + evidence.verified=true + items非空` 才下发 Widget；其他结果保持冻结版本旧文本兜底。
+
+Adapter 源码：
+
+`competition/adp-kit/widget/native/schedule-runtime-adapter.py`
+
+生成时已静态验证：
+
+- Adapter Python 语法：PASS；
+- 13/13 节点 START 可达：PASS；
+- `NextNodeIDs + Edge`：PASS；
+- Reference NodeID：PASS；
+- 教师003第1周周一模拟：2 课 + 安全 `sys.chat`：PASS；
+- `verified=false` 强制 fallback：PASS；
+- XLSX WorkflowId 一致：PASS；
+- ZIP CRC / 六文件合同：PASS。
+
+下一实机输入：
 
 `教师003第1周周一的课`
 
-必须显示原生 Schedule 卡且不重复整段 Markdown。
+必须出现原生 Schedule Widget，且不重复整段成功 Markdown。
 
-点击 `比较冲突`：
+教师场景第三个按钮调整为更强演示路径：
 
-- `sys.chat` 必须把 Action 作为新用户输入写入同一对话；
-- Agent 必须继续路由到 03；
-- 上下文不得丢失。
+`检查风险`
 
-通过后标记：`ADP_WIDGET_SCHEDULE_RUNTIME_PASS`。
+Action：
 
-### B2–B4
+`检查教师003第1周周一是否存在时间冲突或跨校区赶场`
 
-按顺序扩展：
+应用级点击后应进入 03 self-compare。
 
-1. 02 Classroom；
-2. 03 Conflict；
-3. 04 Day Plan；
-4. Choice 等待确认；
-5. Error 恢复动作。
+只有 Runtime + Action 真实通过后标记：
 
-六卡动态数据 + Action 全部真实 ADP 通过后才标记：
+`ADP_WIDGET_SCHEDULE_RUNTIME_PASS`
+
+---
+
+## 8. 后续 Widget Runtime 扩展
+
+Schedule Runtime 通过后，按顺序：
+
+1. 捕获/获得 Classroom / Conflict / Day Plan 的真实 WidgetID；
+2. 自动生成 02 Classroom WidgetPilot；
+3. 自动生成 03 Conflict WidgetPilot；
+4. 自动生成 04 Day Plan WidgetPilot；
+5. Choice 获取“等待用户操作”真实 ActionType 后接歧义分支；
+6. Error 接工具失败 / 非法条件 / 学期范围外恢复分支。
+
+六卡动态数据 + Action 全部真实 ADP 通过后才允许：
 
 `ADP_WIDGET_NATIVE_PASS`
 
 ---
 
-## 8. ADP 工作流导入包永久规则
+## 9. ADP 工作流导入包永久规则
 
 1. `Nodes[].NextNodeIDs` 与顶层 `Edge` 必须同时更新；
 2. `REFERENCE_OUTPUT.Reference.NodeID` 必须存在；
 3. 被引用节点必须位于消费节点真实上游路径；
 4. START 到所有业务节点必须可达；
-5. 能只改 workflow JSON 就不改已经通过 ADP 导入的 XLSX；
+5. 能只改 workflow JSON 就不改已经通过 ADP 导入的 XLSX；如果必须创建独立 WorkflowID，则只最小修改 `workflows/example_queries/parameters.xlsx` 的 WorkflowId/元数据；
 6. 参数提取输出、Tool 输出 Schema、NodeUI output 必须同时注册；
 7. 顶层 `parameters.xlsx` 的 `ParameterParentId` 保持空值；
 8. 每次生成 ZIP 执行 CRC、节点可达性、引用上游性、XLSX/ID 不变量校验。
 
 ---
 
-## 9. GitHub Actions
+## 10. GitHub Actions
 
 仍为账户 Billing / Spending Limit 阻塞，runner 未启动，并非代码测试失败。
 
@@ -250,7 +293,7 @@ Agent 拿到真实 seed 后解析：
 
 ---
 
-## 10. Widget Runtime 之后
+## 11. Widget Runtime 之后
 
 1. 32 组标准 QA 导入 + 来源展示精修；
 2. 80 条 ADP 原生基准评测；
