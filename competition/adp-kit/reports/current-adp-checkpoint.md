@@ -1,6 +1,6 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-12 03:13 +08:00
+更新时间：2026-08-12 03:33 +08:00
 
 当前状态：
 
@@ -12,7 +12,9 @@
 - `B2_WIDGET_BASELINE_PASS`
 - `ADP_WIDGET_SCHEDULE_CONTRACT_SPLIT_CONFIRMED`
 - `SCHEDULE_CONTRACTSYNC_PACKAGE_READY`
-- `ADP_WIDGET_SCHEDULE_RUNTIME_PENDING`
+- `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`
+- `ADP_WIDGET_SCHEDULE_SYS_CHAT_TRIGGER_PASS`
+- `ADP_WIDGET_ACTION_CONTRACT_PENDING`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_INCLUDED_MINUTES_EXHAUSTED`
 
@@ -40,96 +42,106 @@ PR #49：保持 open / unmerged / 未正式发布。
 
 六字段固定 USER_INPUT，`开始 → B21 → 结束` 真实 Runtime PASS。
 
-因此当前赛事空间本次保存路径可采用：修改 Zod → 保存 → outer JSON Schema 与新工作流节点输入同步。只作为当前空间实机合同。
+## Schedule ContractSplit：已修复
 
-## Schedule：根因已确认
+历史真实导出确认：旧 Schedule `.widget` outer wrapper / Workflow WidgetParam 仍是 V2 七字段，而 encodedWidget / Adapter 已是 RuntimeSafe V3 21 字段，导致预检查和 460101 调试混乱。
 
-用户上传真实：
-
-- `小序-课表票据-V2(2).widget`
-- `export-01-多维课表查询-WidgetPilot-V1.3.zip`
-
-进一步解析确认 `.widget` 本身是 mixed-state：
-
-- outer `template` = 空字符串；
-- outer `jsonSchema` = 旧 V2 七字段 `title/timeText/queryId/dataVersion/summary/items/actions`；
-- `encodedWidget.view/defaultState/schema` = RuntimeSafe V3 21 个扁平 STRING/INT 字段；
-- V1.3 Workflow WIDGET 节点仍按旧 V2 七字段注册；
-- 上游 `Widget数据适配-Schedule` 已正确输出 V3 21 字段。
-
-当前断点：
-
-```text
-CampusTools
-→ Adapter(V3 21字段)             ✅
-→ Workflow WidgetParam(旧V2)     ❌
-→ encodedWidget(V3 21字段)       ✅
-```
-
-这精确解释当前 ADP 预检查：`queryId/dataVersion` 引用为空、`items/actions` ARRAY_OBJECT 无 SubParams。
-
-详细：`2026-08-12-schedule-widget-contract-split-root-cause.md`。
-
-## 方案 A 已执行：Schedule ContractSync
-
-保留现有 WidgetID：
+方案 A 保留 WidgetID：
 
 `23fbc659efe3482fab588d754e4420a4`
 
-Canonical contract 固定 RuntimeSafe V3 21 字段：
+Canonical RuntimeSafe V3 contract 固定 21 字段，`shownCount=INT`，其余 STRING。
 
-`title,timeText,statusText,courseCountText,shownCount,listStatusText,item0PeriodText,item0CourseName,item0LocationText,item0MetaText,item1PeriodText,item1CourseName,item1LocationText,item1MetaText,action0Label,action0Message,action1Label,action1Message,action2Label,action2Message,footerText`
-
-其中 `shownCount=INT`，其余 STRING。
-
-新 Workflow：
-
-- WorkflowID：`5bf89039-74fd-580e-b1a8-3c3cabdf483f`
-- Name：`01-多维课表查询-WidgetStable`
-- WIDGET Node：`小序-课表票据-WidgetStable`
-- WidgetID 保持不变
-- ActionType=`WIDGET_ACTION_NONE`
-- 21 个 WidgetParam 全部 `REFERENCE_OUTPUT`
-- 全部指向 `Widget数据适配-Schedule.Output.<field>`
-- 旧 `queryId/dataVersion/summary/items/actions` 已移除
-- 非 Widget 节点、Edge、NextNodeIDs 保持 V1.3 不变
-
-生成包：
+生成并导入：
 
 `01-多维课表查询-WidgetStable-可直接导入.zip`
 
-SHA256：
+WorkflowID：`5bf89039-74fd-580e-b1a8-3c3cabdf483f`
 
-`4f78b5c029b87c25e0ff9b676d7230bf2e9c8d1858d421fe8cfcd90179db2f66`
+静态 Gate 19/19 PASS；CRC PASS；XLSX WorkflowID 同步 PASS。
 
-静态 Gate：19/19 PASS；ZIP CRC PASS；XLSX WorkflowID 已同步。
+## 2026-08-12 03:30+ 实机：Schedule Runtime 正式 PASS
 
-详细：`2026-08-12-schedule-contractsync-package-ready.md`。
+用户按方案 A：
 
-## 防回归工程化
+1. 在现有 Schedule Widget 保存 21 字段 Zod；
+2. 导入 WidgetStable ZIP；
+3. 输入 `教师003第1周周一的课`。
 
-新增：
+真实截图确认：
 
-- `widget/native/schedule-runtime-safe-v3-contract.json`
-- `widget/native/audit-widget-contract.js`
-- `widget/native/sync-native-widget-wrapper.js`
-- `widget/native/test-schedule-contractsync.js`
-- `widget/native/test-widget-wrapper-sync.js`
+- `Widget数据适配-Schedule` 成功；
+- `Widget展示判断` 成功；
+- `小序-课表票据-WidgetStable` 成功；
+- 原生卡片动态显示教师003、第1周周一、2 条课程、第5-6节/第7-8节、校区A/校区B；
+- Widget 后继续到结束节点成功；
+- 不再出现 `460101 / convert widget view failed / __jsx in undefined`。
 
-`package.json` 新增 `test:widget-contract` 与 `widget:sync-wrapper`，并把合同测试纳入 adp-kit `npm test`。
+正式标记：`ADP_WIDGET_SCHEDULE_RUNTIME_PASS`。
 
-以后 native `.widget` 必须检查 outer wrapper 与 encodedWidget 是否同步，禁止再产出 V2 外壳/V3 内核。
+新上传 `小序-课表票据-V2(3).widget` 独立解析：
 
-## 用户现在只做两步 + 一次 Runtime
+- SHA256 `9d5635a773ab056c3699b88f1379b67bd886280b06a25c0c2ee736230f2a67c3`
+- WidgetID 保持不变；
+- outer jsonSchema = RuntimeSafe V3 21 字段；
+- encodedWidget Zod = 同 21 字段；
+- Default = 同 21 字段；
+- 三按钮均为 `sys.chat`。
 
-1. 打开现有 Schedule Widget（WidgetID `23fbc659efe3482fab588d754e4420a4`），Zod 模式粘贴本轮生成的 `Schedule-ContractSync-Zod.ts` 内容并保存一次。不要重新导入 Widget 创建新资源。
-2. 导入 `01-多维课表查询-WidgetStable-可直接导入.zip`。
-3. 唯一验收：`教师003第1周周一的课`。
+outer `template` 仍为空字符串，但本轮 Runtime 实机成功，当前空间该状态不阻止 encodedWidget.view 正常渲染。
 
-若 PASS：标记 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`，立即推进 Schedule `sys.chat` → 03，不再做 Schedule 小实验。
+## sys.chat：触发链已 PASS，Action payload 合同待收口
 
-若 FAIL：只保存该次完整错误/request_id/trace_id；合同分裂已消除，不再回到 V2 Schema、ARRAY_OBJECT、map、三元、WIDGET_ACTION_NONE 等已排除路径。
+用户点击 Schedule Widget 交互后，ADP 显示“已进行操作”并进入新的智能体轮次，因此可标记：
+
+`ADP_WIDGET_SCHEDULE_SYS_CHAT_TRIGGER_PASS`
+
+随后新的 01 查询返回：
+
+- `INVALID_PARAM`
+- `weekday 需为 1-7`
+- 日期解析：`不支持的 dateText；请使用受控相对日期或 YYYY-MM-DD`
+
+这不是 Widget Runtime 失败，而是 Action 文本进入 Agent 后，不满足 01 参数提取器 / CampusTools 的确定性日期合同。
+
+当前 RuntimeSafe V3 Action 示例：
+
+- `查看整周` → `查看教师003第1周整周课表`
+- `换一天` → `换一天看看教师003的课表`
+- `检查风险` → `检查教师003第1周周一是否存在时间冲突或跨校区赶场`
+
+CampusTools 受控 `dateText` 只接受：今天/明天/后天、本周X/这周X/下周X、第N周周X、YYYY-MM-DD。`换一天` 不能作为机器执行日期。
+
+详细：`2026-08-12-schedule-runtime-pass-action-contract.md`。
+
+## 当前最高优先 Gate：Action Contract V1
+
+不要再改 Schedule Widget Schema / Template / Runtime。
+
+目标：UI label 自然，`sys.chat payload.query` 使用 canonical utterance。
+
+教师场景建议：
+
+- 查看整周：`查询教师003第1周的课表`
+- 下一天：当前第1周周一 → `查询教师003第1周周二的课`
+- 检查风险：`检查教师003第1周周一是否存在时间冲突或跨校区赶场`
+
+原则：
+
+1. `换一天/当前范围/再看看` 等模糊词不直接作为执行 payload；
+2. Adapter 只根据 verified query/entity 确定性生成 Action；
+3. UI label 与执行 payload 分离；
+4. 先由 Codex/Kimi 做批量 Action Contract tests，再一次导入做端到端验收；
+5. 不改 CampusTools 冻结事实逻辑。
+
+## 研发效率模式
+
+用户明确要求停止碎片化试验。后续固定：
+
+`用户批量导出 ADP 真实资源 → 本地 Contract Compiler 审计/生成 → 自动 Gate → 用户一次导入 → 少量端到端 Runtime`
+
+下一工程目标：把 6 个 Widget 的 Schema / Adapter / WidgetParam / Action payload / NodeUI / ZIP 统一由单一合同源生成。
 
 ## 后续路线
 
-Schedule PASS → sys.chat → 03 → 02/03/04 Widget Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
+Action Contract V1（Schedule 01/03 回流） → 批量收口 02/03/04 + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
