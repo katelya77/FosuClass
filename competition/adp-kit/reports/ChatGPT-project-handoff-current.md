@@ -1,13 +1,13 @@
 # 校园智序 · 小序 — ChatGPT Project 新对话接力主文件
 
-更新时间：2026-08-12 03:13 +08:00
+更新时间：2026-08-12 03:33 +08:00
 
-> 新对话优先读取本文件、`current-adp-checkpoint.md`、`2026-08-12-b2-zod-jsonschema-mismatch.md`、`2026-08-12-schedule-widget-contract-split-root-cause.md`、`2026-08-12-schedule-contractsync-package-ready.md` 与 `competition/adp-kit/widget/native/runtime-integration-runbook.md`。不要重新设计已冻结 01–04，不要重复 B2，也不要再做 Schedule V1.4/V1.5 猜测式实验。
+> 新对话优先读取本文件、`current-adp-checkpoint.md`、`2026-08-12-b2-zod-jsonschema-mismatch.md`、`2026-08-12-schedule-widget-contract-split-root-cause.md`、`2026-08-12-schedule-runtime-pass-action-contract.md` 与 `competition/adp-kit/widget/native/runtime-integration-runbook.md`。不要重新设计冻结 01–04，不要重复 B2，不要再调 Schedule Schema/Template。
 
 ## 新对话第一句
 
 ```text
-@GitHub 请恢复校园智序·小序上下文。B2 已 Runtime PASS；Schedule 已确认 outer wrapper/encodedWidget/Workflow WidgetParam 合同分裂，并已生成 ContractSync WidgetStable 导入包。当前只等待用户对现有 Schedule Widget 保存一次 21字段 Zod，然后导入 WidgetStable ZIP 并做一次“教师003第1周周一的课”真实 Runtime。PASS 后立刻推进 sys.chat→03，不再继续 Schedule 小实验。
+@GitHub 请恢复校园智序·小序上下文。B2 已 PASS；Schedule ContractSplit 已修复，`01-多维课表查询-WidgetStable` 已真实动态 Runtime PASS，原生 Schedule 卡成功展示。Schedule 的 sys.chat 点击也已真实进入新一轮智能体；当前唯一 Gate 是 Action Contract V1：把模糊按钮 payload 改成冻结 01/03 能稳定解析的 canonical utterance，然后批量推进 02/03/04 + Choice/Error。不要再做 Widget Runtime 小实验。
 ```
 
 ## 项目目标
@@ -42,124 +42,124 @@
 
 统一视觉：校园任务单 / 时间票据；暖纸张、墨绿可信；红=冲突/错误，橙=赶场。
 
-## B2 基线：正式 PASS
+## B2：正式 PASS
 
-B2 天气代码 Widget 已完成：
+官方天气代码 Widget 已完成五方一致 + 真实 Runtime PASS。当前赛事空间已实机证明：修改 Zod 保存后，outer JSON Schema 与新工作流输入可同步。只作为当前空间合同。
 
-`TemplateVars = DefaultKeys = ZodSchemaKeys = outer JSONSchemaKeys = WorkflowWidgetInputs`
+## Schedule ContractSplit：已确认并修复
 
-六字段 USER_INPUT，`开始 → B21 → 结束` 真实 Runtime PASS。
+历史真实导出：
 
-当前赛事空间已实机证明本次路径：修改 Zod 保存后，outer JSON Schema 与新工作流节点输入可同步。只作为当前空间合同。
+- old outer wrapper / Workflow WidgetParam = V2 七字段；
+- encodedWidget / Adapter = RuntimeSafe V3 21 字段；
+- 因此形成合同分裂。
 
-## Schedule 已确认根因
+方案 A 保留 WidgetID：
 
-用户真实上传：
+`23fbc659efe3482fab588d754e4420a4`
 
-- `小序-课表票据-V2(2).widget`
-- `export-01-多维课表查询-WidgetPilot-V1.3.zip`
+Canonical Schedule contract = RuntimeSafe V3 21 字段，`shownCount=INT`，其余 STRING。
 
-真实解析：
+生成并导入：
 
-### `.widget` outer wrapper
+`01-多维课表查询-WidgetStable-可直接导入.zip`
 
-- `template` = 空字符串；
-- `jsonSchema` = 旧 V2 七字段：`title,timeText,queryId,dataVersion,summary,items,actions`。
+WorkflowID：`5bf89039-74fd-580e-b1a8-3c3cabdf483f`
 
-### `.widget` encodedWidget
+## 2026-08-12 03:30+：Schedule Runtime 正式 PASS
 
-`view/defaultState/schema` 已全部为 RuntimeSafe V3 21 个扁平字段，三项 validity 均 valid。
+用户保存现有 Schedule Widget 的 21 字段 Zod 后，导入 WidgetStable ZIP，输入：
 
-### V1.3 Workflow WIDGET
+`教师003第1周周一的课`
 
-节点仍按旧 outer V2 七字段注册：
+真实 ADP 截图确认：
 
-- `queryId/dataVersion` 引用为空；
-- `items/actions` = ARRAY_OBJECT 且 `SubParams=[]`；
-- 当前 ADP 因此预检查直接报错。
+- Adapter 成功；
+- Widget 展示判断成功；
+- WidgetStable 节点成功；
+- 原生卡片动态展示教师003、第1周周一、2 条课程、第5-6节/第7-8节、校区A/校区B；
+- 结束节点成功；
+- 历史 `460101 / convert widget view failed / __jsx in undefined` 消失。
 
-### Adapter
+正式状态：
 
-`Widget数据适配-Schedule` 已正确输出完整 V3 21 字段。
+`ADP_WIDGET_SCHEDULE_RUNTIME_PASS`
 
-所以断点：
+新上传 `小序-课表票据-V2(3).widget`：
 
-```text
-CampusTools
-→ Adapter(V3 21字段)             ✅
-→ Workflow WidgetParam(旧V2)     ❌
-→ encodedWidget(V3 21字段)       ✅
-```
+- SHA256 `9d5635a773ab056c3699b88f1379b67bd886280b06a25c0c2ee736230f2a67c3`
+- WidgetID 保持不变；
+- outer jsonSchema / inner Zod / Default 都是 21 字段；
+- 3 个按钮均为 `sys.chat`；
+- outer template 仍为空，但当前赛事空间 Runtime 已证明 encodedWidget.view 可正常工作。
 
-正式状态：`ADP_WIDGET_SCHEDULE_CONTRACT_SPLIT_CONFIRMED`。
+## sys.chat：触发已 PASS
 
-## 方案 A：已经执行并生成包
+用户点击 Schedule 卡片交互后，ADP 显示“已进行操作”并进入新的智能体轮次，因此：
 
-用户已明确批准“按方案 A 执行”：保留现有 WidgetID `23fbc659efe3482fab588d754e4420a4`。
+`ADP_WIDGET_SCHEDULE_SYS_CHAT_TRIGGER_PASS`
 
-Canonical Schedule contract = RuntimeSafe V3 21 字段：
+随后新一轮 01 返回：
 
-`title,timeText,statusText,courseCountText,shownCount,listStatusText,item0PeriodText,item0CourseName,item0LocationText,item0MetaText,item1PeriodText,item1CourseName,item1LocationText,item1MetaText,action0Label,action0Message,action1Label,action1Message,action2Label,action2Message,footerText`
+- `INVALID_PARAM`
+- `weekday 需为 1-7`
+- `不支持的 dateText`
 
-- `shownCount=INT`
-- 其余 STRING
+这不是 Widget Runtime 问题，而是 Action payload 与冻结 01 参数合同不一致。
 
-新 Workflow：
+当前 RuntimeSafe V3 示例：
 
-- ID `5bf89039-74fd-580e-b1a8-3c3cabdf483f`
-- Name `01-多维课表查询-WidgetStable`
-- WidgetID 保持 `23fbc659efe3482fab588d754e4420a4`
-- 21 个 WidgetParam 全部 REFERENCE_OUTPUT → `Widget数据适配-Schedule.Output.<field>`
-- 旧 `queryId/dataVersion/summary/items/actions` 全部移除
-- 非 Widget 节点/Edge/NextNodeIDs 与 V1.3 保持不变
+- 查看整周：`查看教师003第1周整周课表`
+- 换一天：`换一天看看教师003的课表`
+- 检查风险：`检查教师003第1周周一是否存在时间冲突或跨校区赶场`
 
-用户文件：
+CampusTools 的受控 `dateText` 只接受：今天/明天/后天、本周X/这周X/下周X、第N周周X、YYYY-MM-DD。
 
-- `01-多维课表查询-WidgetStable-可直接导入.zip`
-- `Schedule-ContractSync-Zod.ts`
-- `Schedule-ContractSync-JSONSchema.json`
-- `Schedule-ContractSync-audit.json`
+`换一天` 不应作为机器执行 payload。
 
-ZIP SHA256：
+## 当前唯一 Gate：Action Contract V1
 
-`4f78b5c029b87c25e0ff9b676d7230bf2e9c8d1858d421fe8cfcd90179db2f66`
+目标：**UI label 自然，机器 payload canonical。**
 
-静态 Gate：19/19 PASS；CRC PASS；XLSX WorkflowID 同步 PASS。
+教师场景建议：
 
-正式状态：`SCHEDULE_CONTRACTSYNC_PACKAGE_READY`，尚未标记 Runtime PASS。
+- 查看整周 → `查询教师003第1周的课表`
+- 下一天：若当前第1周周一 → `查询教师003第1周周二的课`
+- 检查风险 → `检查教师003第1周周一是否存在时间冲突或跨校区赶场`
 
-## 仓库防回归工具
+原则：
 
-新增：
+1. Adapter 根据 verified query/entity 确定性构造动作；
+2. `换一天/当前范围/再看看` 等模糊词不能直接作为执行 payload；
+3. UI label 与 payload 分离；
+4. Codex/Kimi 先跑 Action Contract tests；
+5. 用户只做一次批量导入和少量端到端验收；
+6. 不改 CampusTools 事实逻辑。
 
-- `competition/adp-kit/widget/native/schedule-runtime-safe-v3-contract.json`
-- `competition/adp-kit/widget/native/audit-widget-contract.js`
-- `competition/adp-kit/widget/native/sync-native-widget-wrapper.js`
-- `competition/adp-kit/widget/native/test-schedule-contractsync.js`
-- `competition/adp-kit/widget/native/test-widget-wrapper-sync.js`
+详细：`competition/adp-kit/reports/2026-08-12-schedule-runtime-pass-action-contract.md`。
 
-`competition/adp-kit/package.json` 新增 `test:widget-contract` 与 `widget:sync-wrapper`，合同测试已纳入 `npm test`。
+## 后续工程化目标：ADP Contract Compiler
 
-以后不能只改 encodedWidget；必须检查 outer template/jsonSchema 与 inner view/schema 同步。
+用户明确要求停止碎片化试验。后续固定：
 
-## 用户当前唯一操作
+`用户批量导出 ADP 真实资源 → 本地 Contract Compiler 审计/生成 → 自动 Gate → 用户一次导入 → 少量端到端 Runtime`
 
-1. 打开**现有** Schedule Widget（WidgetID `23fbc659efe3482fab588d754e4420a4`）。
-2. 在 Zod 模式粘贴 `Schedule-ContractSync-Zod.ts` 内容并保存一次。不要通过“导入 Widget”创建新 Widget，否则 WidgetID 会进入新的资源创建流程，偏离方案 A。
-3. 导入 `01-多维课表查询-WidgetStable-可直接导入.zip`。
-4. 只测试：`教师003第1周周一的课`。
+下一步应把 6 个 Widget 的以下内容统一由单一合同源生成：
 
-若 PASS：写回 `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`，立刻推进 Schedule `sys.chat` → 03。
+- Schema
+- Adapter view model
+- WidgetParam
+- Action payload
+- NodeUI inputs
+- Workflow ZIP
 
-若 FAIL：只收集这一次错误/request_id/trace_id；合同分裂已消除，不再回到 map/三元/ARRAY_OBJECT/WIDGET_ACTION_NONE/直接向后流转等已排除方向。
+避免本地文件、encodedWidget、outer wrapper、Workflow 节点再次漂移。
 
-## 研发方式
+## 研发分工
 
-用户明确要求停止“这测试一下、那测试一下”。后续模式固定：
-
-`用户一次批量导出 → ChatGPT/Codex 批量解析/生成 → 静态 Gate → 用户一次导入/Runtime`
-
-能自动生成 ZIP 就不让用户手填参数。
+- ChatGPT：架构、Gate、根因、提示词、验收与版本收敛；
+- Codex / Kimi Code：批量代码、测试、ZIP compiler、Widget/Workflow 审计、Playwright、Git Gate；
+- 用户：只做 ADP 必须的人工作业——批量导入/导出、真实 Runtime、截图。
 
 ## GitHub
 
@@ -171,4 +171,4 @@ PR #49：保持 open / unmerged；正式评测收口前不发布正式应用。
 
 ## 后续比赛路线
 
-Schedule PASS → sys.chat → 03 → 02/03/04 Widget Runtime → Choice/Error → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
+Action Contract V1（Schedule 01/03 回流） → 批量 02/03/04 Widget + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖演示。
