@@ -1,0 +1,30 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v1",
+  "kind": "schedule",
+  "widgetId": "23fbc659efe3482fab588d754e4420a4",
+  "adapterNodeName": "Widget数据适配-Schedule",
+  "actionType": "WIDGET_ACTION_NONE",
+  "fields": [
+    {"name":"title","adpType":"STRING","jsonType":"string"},
+    {"name":"timeText","adpType":"STRING","jsonType":"string"},
+    {"name":"statusText","adpType":"STRING","jsonType":"string"},
+    {"name":"courseCountText","adpType":"STRING","jsonType":"string"},
+    {"name":"shownCount","adpType":"INT","jsonType":"integer"},
+    {"name":"listStatusText","adpType":"STRING","jsonType":"string"},
+    {"name":"item0PeriodText","adpType":"STRING","jsonType":"string"},
+    {"name":"item0CourseName","adpType":"STRING","jsonType":"string"},
+    {"name":"item0LocationText","adpType":"STRING","jsonType":"string"},
+    {"name":"item0MetaText","adpType":"STRING","jsonType":"string"},
+    {"name":"item1PeriodText","adpType":"STRING","jsonType":"string"},
+    {"name":"item1CourseName","adpType":"STRING","jsonType":"string"},
+    {"name":"item1LocationText","adpType":"STRING","jsonType":"string"},
+    {"name":"item1MetaText","adpType":"STRING","jsonType":"string"},
+    {"name":"action0Label","adpType":"STRING","jsonType":"string"},
+    {"name":"action0Message","adpType":"STRING","jsonType":"string"},
+    {"name":"action1Label","adpType":"STRING","jsonType":"string"},
+    {"name":"action1Message","adpType":"STRING","jsonType":"string"},
+    {"name":"action2Label","adpType":"STRING","jsonType":"string"},
+    {"name":"action2Message","adpType":"STRING","jsonType":"string"},
+    {"name":"footerText","adpType":"STRING","jsonType":"string"}
+  ]
+}
