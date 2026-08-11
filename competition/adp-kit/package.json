@@ -9,6 +9,8 @@
     "build:submission": "node build-submission-package.js",
     "validate:submission": "node validate-submission-package.js",
     "validate": "node validate-kit.js",
-    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && node evaluation/sync-evaluation-dataset.js --check && node workflows/generate-workflows.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && npm run eval:golden && node widget/test-widget-adapter.js && node widget/generate-samples.js && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && npm run build:submission && npm run validate:submission && node sync-assets-manifest.js --check"
+    "test:widget-contract": "node widget/native/test-schedule-contractsync.js && node widget/native/test-widget-wrapper-sync.js",
+    "widget:sync-wrapper": "node widget/native/sync-native-widget-wrapper.js",
+    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && node evaluation/sync-evaluation-dataset.js --check && node workflows/generate-workflows.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && npm run eval:golden && node widget/test-widget-adapter.js && node widget/generate-samples.js && npm run test:widget-contract && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && npm run build:submission && npm run validate:submission && node sync-assets-manifest.js --check"
   }
 }
