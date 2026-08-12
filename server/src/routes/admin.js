@@ -4534,7 +4534,17 @@ function validateStagingData(data) {
 }
 
 function buildStagingSafety(data, activeSnapshot) {
-  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
+  const publishMode = stagingSafetyService.resolveStagingPublishMode(data, activeSnapshot);
+  return Object.assign(
+    stagingSafetyService.buildStagingSafety(data, activeSnapshot, {
+      currentTerm: publishMode.activeTerm,
+      crossTermReadyCandidate: publishMode.crossTermReadyCandidate,
+    }),
+    {
+      readyOnly: publishMode.readyOnly,
+      publishMode: publishMode.publishMode,
+    }
+  );
 }
 
 /**
@@ -5511,6 +5521,8 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
           } : null,
           safety: {
             allowPublish: summary.stagingState !== "publish-blocked",
+            readyOnly: summary.readyOnly === true || summary.publishMode === "ready-only",
+            publishMode: summary.publishMode || "activate-current",
             blockers: summary.blockers || [],
             warnings: summary.warnings || [],
             blockerDetails: summary.blockerDetails || summary.contractComparison && summary.contractComparison.blockers || [],

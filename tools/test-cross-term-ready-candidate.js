@@ -55,4 +55,31 @@ assert.strictEqual(ready.crossTermReadyCandidate, true);
 assert.strictEqual(ready.requiresForceConfirm, false);
 assert(ready.warnings.some((value) => value.includes("activation remains disabled")));
 
+const publishMode = stagingSafetyService.resolveStagingPublishMode(candidate, active, {
+  registryTerm: { term: candidate.term, status: "planned" },
+  activeRegistryTerm: { term: active.term, status: "current" },
+});
+assert.deepStrictEqual(publishMode, {
+  activeTerm: active.term,
+  stagingTerm: candidate.term,
+  registryStatus: "planned",
+  crossTermReadyCandidate: true,
+  readyOnly: true,
+  publishMode: "ready-only",
+});
+
+const unavailableMode = stagingSafetyService.resolveStagingPublishMode(candidate, active, {
+  registryTerm: null,
+  activeRegistryTerm: { term: active.term, status: "current" },
+});
+assert.strictEqual(unavailableMode.crossTermReadyCandidate, false);
+assert.strictEqual(unavailableMode.readyOnly, false);
+
+const currentMode = stagingSafetyService.resolveStagingPublishMode(active, active, {
+  registryTerm: { term: active.term, status: "current" },
+  activeRegistryTerm: { term: active.term, status: "current" },
+});
+assert.strictEqual(currentMode.publishMode, "activate-current");
+assert.strictEqual(currentMode.readyOnly, false);
+
 console.log("test-cross-term-ready-candidate passed");

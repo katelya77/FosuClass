@@ -8165,6 +8165,7 @@ const adminConsoleHtml = `<!doctype html>
         },
         stagingUploadExpandedGroups: {},
         stagingUploadSelected: {},
+        stagingPublishReadyOnly: false,
         apiInflight: {},
         apiAbortControllers: {},
         lastCloudflareToastAt: 0,
@@ -11197,9 +11198,10 @@ const adminConsoleHtml = `<!doctype html>
             var publishBtn = document.createElement("button");
             publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
-            publishBtn.textContent = "发布";
+            var readyOnly = Boolean(summary.readyOnly || summary.publishMode === "ready-only");
+            publishBtn.textContent = readyOnly ? "生成待激活版本" : "发布";
             publishBtn.addEventListener("click", function() {
-              publishStaging(publishBtn);
+              publishStaging(publishBtn, readyOnly);
             });
             actions.appendChild(publishBtn);
           }
@@ -11477,8 +11479,9 @@ const adminConsoleHtml = `<!doctype html>
             var publishBtn = document.createElement("button");
             publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
-            publishBtn.textContent = "发布";
-            publishBtn.addEventListener("click", function() { publishStaging(publishBtn); });
+            var readyOnly = Boolean(upload.summary && (upload.summary.readyOnly || upload.summary.publishMode === "ready-only"));
+            publishBtn.textContent = readyOnly ? "生成待激活版本" : "发布";
+            publishBtn.addEventListener("click", function() { publishStaging(publishBtn, readyOnly); });
             actions.appendChild(publishBtn);
           }
           tbody.appendChild(tr);
@@ -12884,11 +12887,14 @@ const adminConsoleHtml = `<!doctype html>
                 $("stagingValForceRefresh").textContent = meta.forceRefresh ? "是" : "否";
               }
               var safety = d.safety || {};
+              state.stagingPublishReadyOnly = Boolean(safety.readyOnly || safety.publishMode === "ready-only");
               if ($("stagingValAllowPublish")) {
                 $("stagingValAllowPublish").textContent = safety.allowPublish === false ? "否" : "是";
               }
               if ($("stagingPublishGate")) {
-                $("stagingPublishGate").textContent = safety.allowPublish === false ? "后端已拦截" : (safety.requiresForceConfirm ? "需二次确认" : "可发布");
+                $("stagingPublishGate").textContent = safety.allowPublish === false
+                  ? "后端已拦截"
+                  : (state.stagingPublishReadyOnly ? "可生成待激活版本" : (safety.requiresForceConfirm ? "需二次确认" : "可发布"));
               }
               
               // 3. 填充差异 Diff 趋势
@@ -12943,6 +12949,7 @@ const adminConsoleHtml = `<!doctype html>
               var publishBtn = $("stagingPublishBtn");
               if (publishBtn) {
                 publishBtn.disabled = false;
+                publishBtn.textContent = state.stagingPublishReadyOnly ? "生成待激活版本" : "发布为正式版本";
               }
               
               var warnings = [];
@@ -13025,17 +13032,18 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function publishStaging(sourceButton) {
+      function publishStaging(sourceButton, readyOnlyOverride) {
         var forceConfirm = $("stagingForceConfirm");
         var force = forceConfirm ? forceConfirm.checked : false;
+        var readyOnly = readyOnlyOverride === true || (!sourceButton && state.stagingPublishReadyOnly === true);
         
-        setStatus("正在正式发布课表快照版本...");
+        setStatus(readyOnly ? "正在生成待激活课表版本..." : "正在正式发布课表快照版本...");
         var publishBtn = sourceButton || $("stagingPublishBtn");
-        var restoreButton = setButtonLoading(publishBtn, "发布中...");
+        var restoreButton = setButtonLoading(publishBtn, readyOnly ? "生成中..." : "发布中...");
         
         api("/api/admin/sync/staging/publish/start", {
           method: "POST",
-          body: JSON.stringify({ force: force })
+          body: JSON.stringify({ force: force, readyOnly: readyOnly })
         })
           .then(function(res) {
             var publishJob = res.job || {};
@@ -13045,9 +13053,9 @@ const adminConsoleHtml = `<!doctype html>
                 restoreButton();
                 if (!doneJob || doneJob.status !== "success") return;
                 var result = doneJob.result || {};
-                showToast("Publish complete. Live release data updated.", "success");
+                showToast(result.readyOnly ? "待激活 Release 已生成，线上学期未切换。" : "Publish complete. Live release data updated.", "success");
                 var verifyCmdFromJob = "npm run verify:release-live -- --server=" + location.origin + (result.term || result.semester ? " --term=" + (result.term || result.semester) : "");
-                setStatus("Published. Static pack quick health=" + ((result.quickHealth && result.quickHealth.healthy) ? "OK" : "check required") + ". Verify command: " + verifyCmdFromJob);
+                setStatus((result.readyOnly ? "Ready-only Release prepared. " : "Published. ") + "Static pack quick health=" + ((result.quickHealth && result.quickHealth.healthy) ? "OK" : "check required") + ". Verify command: " + verifyCmdFromJob);
                 if (typeof copyText === "function") {
                   copyText(verifyCmdFromJob);
                 }

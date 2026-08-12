@@ -199,6 +199,53 @@ async function run() {
     assert(status.data.data.staticManifestUrl.includes(`/static/releases/${version}/manifest.json`));
     assert(status.data.data.staticClassIndexUrl.includes(`/static/releases/${version}/index/class/all.json`));
     assert(status.data.data.staticEmptyRoomIndexUrl.includes(`/static/releases/${version}/empty-room/index.json`));
+
+    const nextTerm = "2026-2027-1";
+    const nextVersion = "ready-only-2026-08-13";
+    const nextSnapshot = snapshot(nextVersion);
+    nextSnapshot.term = nextTerm;
+    nextSnapshot.semester = nextTerm;
+    nextSnapshot.termStartDate = "2026-09-07";
+    nextSnapshot.totalWeeks = 20;
+    nextSnapshot.termConfig = {
+      term: nextTerm,
+      semesterText: "2026-2027 学年第一学期",
+      termStartDate: "2026-09-07",
+      weekStart: "monday",
+      totalWeeks: 20,
+    };
+    nextSnapshot.classSchedules[0].className = "26级待发布测试班";
+    termRegistryService.createPlannedTerm({
+      term: nextTerm,
+      semesterText: "2026-2027 学年第一学期",
+      termStartDate: "2026-09-07",
+      weekStart: "monday",
+      totalWeeks: 20,
+      status: "planned",
+      releaseVersion: "",
+      dataAvailable: false,
+      source: "test-fixture",
+    });
+    fs.writeFileSync(path.join(storageDir, "staging-latest.json"), JSON.stringify(nextSnapshot, null, 2), "utf-8");
+
+    const readyStart = await requestJson(baseUrl, "/api/admin/sync/staging/publish/start", {
+      method: "POST",
+      body: JSON.stringify({ force: false }),
+    });
+    assert.strictEqual(readyStart.status, 202, JSON.stringify(readyStart.data));
+    const readyJob = await waitJob(baseUrl, readyStart.data.job.id);
+    assert.strictEqual(readyJob.status, "success", JSON.stringify(readyJob, null, 2));
+    assert.strictEqual(readyJob.result.readyOnly, true, "cross-term planned snapshots must auto-select ready-only publish");
+    assert.strictEqual(readyJob.result.releaseVersion, nextVersion);
+    assert(fs.existsSync(path.join(openrestyDir, nextVersion, "manifest.json")), "ready-only manifest should be synced");
+    assert.strictEqual(releaseService.getActiveReleaseInfo().releaseVersion, version, "ready-only publish must preserve the active pointer");
+    const publicRuntimePointer = JSON.parse(fs.readFileSync(path.join(openrestyRuntimeDir, "active.json"), "utf-8"));
+    assert.strictEqual(publicRuntimePointer.releaseVersion, version, "ready-only static sync must preserve the public runtime pointer");
+    assert.strictEqual(termRegistryService.getActiveTerm().term, "2025-2026-2", "ready-only publish must preserve the active term");
+    const readyTerm = termRegistryService.getTerm(nextTerm);
+    assert.strictEqual(readyTerm.status, "ready");
+    assert.strictEqual(readyTerm.releaseVersion, nextVersion);
+    assert.strictEqual(readyTerm.dataAvailable, true);
   } finally {
     adminServer.close();
     staticServer.close();

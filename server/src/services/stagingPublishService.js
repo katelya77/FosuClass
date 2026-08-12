@@ -290,7 +290,6 @@ function finalizeReleaseActivation(options = {}) {
 
 async function runStagingPublish(input = {}, job) {
   const forcePublish = input.force === true;
-  const readyOnly = input.readyOnly === true;
   const releaseNote = input.releaseNote || "";
   const auditReq = {
     ip: input.ip || "",
@@ -328,13 +327,13 @@ async function runStagingPublish(input = {}, job) {
 
   if (job) job.progress(20, "normalizing data");
   const stagingTerm = stagingData.term || stagingData.semester || "";
-  const registryTerm = termRegistryService.getTerm(stagingTerm);
-  const crossTermReadyCandidate = Boolean(
-    readyOnly && registryTerm &&
-    ["planned", "ready"].includes(registryTerm.status) &&
-    stagingTerm !== (activeSnapshot && (activeSnapshot.term || activeSnapshot.semester) || "")
-  );
+  const publishMode = stagingSafetyService.resolveStagingPublishMode(stagingData, activeSnapshot, {
+    readyOnly: input.readyOnly === true,
+  });
+  const readyOnly = publishMode.readyOnly;
+  const crossTermReadyCandidate = publishMode.crossTermReadyCandidate;
   const safety = buildStagingSafety(stagingData, activeSnapshot, {
+    currentTerm: publishMode.activeTerm,
     crossTermReadyCandidate,
   });
   if (!safety.allowPublish) {
@@ -355,7 +354,7 @@ async function runStagingPublish(input = {}, job) {
     });
   }
 
-  if (activeSnapshot) {
+  if (activeSnapshot && !crossTermReadyCandidate) {
     const activeClassNames = (activeSnapshot.classSchedules || []).map((item) => item.className).filter(Boolean);
     const activeClassNamesSet = new Set(activeClassNames);
     const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map((item) => item.className).filter(Boolean));
