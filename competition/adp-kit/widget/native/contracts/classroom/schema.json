@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "timeText": {
+      "type": "string"
+    },
+    "queryId": {
+      "type": "string"
+    },
+    "dataVersion": {
+      "type": "string",
+      "const": "competition-demo-v1"
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "id",
+          "label",
+          "value"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "totalCount": {
+          "type": "integer"
+        },
+        "shownCount": {
+          "type": "integer"
+        },
+        "hiddenCount": {
+          "type": "integer"
+        },
+        "empty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "totalCount",
+        "shownCount",
+        "hiddenCount",
+        "empty"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "roomName": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "building": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "integer"
+          },
+          "roomType": {
+            "type": "string"
+          },
+          "periodText": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "roomName",
+          "campusName",
+          "building",
+          "capacity",
+          "roomType",
+          "periodText",
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sys.chat",
+              "sys.go_to_url",
+              "sys.download"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "title",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "filters",
+    "summary",
+    "items",
+    "actions"
+  ],
+  "additionalProperties": false
+}

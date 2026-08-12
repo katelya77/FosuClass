@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-12T12:38:17.778Z",
+  "generatedAt": "2026-08-12T15:29:25.986Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -135,8 +135,8 @@
     },
     {
       "path": "knowledge/04-数据版本核验和防幻觉机制.md",
-      "bytes": 3994,
-      "sha256": "01eadf552caefaffe60956db42d8c8b64fa7793a71d0a5480fa2241f6aacc988"
+      "bytes": 4031,
+      "sha256": "528bd50a120580a576fdfcbd8cbc565efa59cee8909de897f4620ddee75dc862"
     },
     {
       "path": "knowledge/05-匿名评审隐私与安全规范.md",
@@ -234,14 +234,19 @@
       "sha256": "a0c41cb78d5807f7f584fc235f7a7ae86982496d03fd31aa4b248bda1a246ca7"
     },
     {
+      "path": "mock-data/data-hash.js",
+      "bytes": 564,
+      "sha256": "14bf3243906b53b9d4fc1977355bc6783b662469d9a19186780005e6ae5cfb4a"
+    },
+    {
       "path": "mock-data/generate-competition-demo-v1.js",
-      "bytes": 19599,
-      "sha256": "3d4b2eed0e6d7d55f8630263659850521bb962229a4e70243de93e23b36e7d75"
+      "bytes": 19341,
+      "sha256": "a225b5875339cb892becea6403a1d0d0b176893c24a35acb4441294cd54c2bb6"
     },
     {
       "path": "mock-data/validate-competition-demo-v1.js",
-      "bytes": 9114,
-      "sha256": "dc3d983acb74b6798de5c7319c8ef6db31dc46546e215ce79bac9e21feeac562"
+      "bytes": 9305,
+      "sha256": "9d8c73ac94b9238f8c057bd4338386f8518cfc889fc166cda72e8384934a3c14"
     },
     {
       "path": "openapi/campus-tools.openapi.json",
@@ -309,6 +314,36 @@
       "sha256": "99ecc4a38bf182ca14828cf4c3e5ea99ae212016477647beeb4ecbeb3d03cee0"
     },
     {
+      "path": "widget/native/__pycache__/campus_widget_compiler.cpython-313.pyc",
+      "bytes": 22656,
+      "sha256": "e73881f15686a1706be97c641598de1b50a1c1f52af8e88fe656ec1e162f5b04"
+    },
+    {
+      "path": "widget/native/__pycache__/classroom-widget-adapter.cpython-313.pyc",
+      "bytes": 4910,
+      "sha256": "d66ef2d774353532b986cb65c5448ae9603ad8987ca26d3f4a5db37ca3a17eb8"
+    },
+    {
+      "path": "widget/native/__pycache__/compile_adp_bundle.cpython-313.pyc",
+      "bytes": 39631,
+      "sha256": "d0561d06a28cab068a93aebe2dd61d7145a9e3050bf774c6df1395590b837b34"
+    },
+    {
+      "path": "widget/native/__pycache__/dayplan-widget-adapter.cpython-313.pyc",
+      "bytes": 4988,
+      "sha256": "83227bba99b0024ee44394fa863e15db28f53f375d1c5b95fc27fcff0da465c4"
+    },
+    {
+      "path": "widget/native/__pycache__/recovery-widget-adapter.cpython-313.pyc",
+      "bytes": 4084,
+      "sha256": "b741284cfa44521a6295321c6af54c2cd0479e9e1df59e0c7af5925d8cd763de"
+    },
+    {
+      "path": "widget/native/__pycache__/schedule-runtime-safe-v3-adapter.cpython-313.pyc",
+      "bytes": 13138,
+      "sha256": "e93e2f0b8318b558d23e6edaa19e2b10370ead4f63b97d178cf4eb2f78271848"
+    },
+    {
       "path": "widget/native/action-contract.json",
       "bytes": 7164,
       "sha256": "11ca8d4d515a54844c293f3c8e18bec682b63622c34b6a3658cbb511611e2d00"
@@ -329,9 +364,19 @@
       "sha256": "e269fb91f63275f2b540b469ca1f3fbff4677bd95aa77dcaaa1560d6fdb301ca"
     },
     {
+      "path": "widget/native/campus_widget_compiler.py",
+      "bytes": 18311,
+      "sha256": "0a94865ae61a8998455c27256005a8b1d3f1ec047806380f8c29205c6824748a"
+    },
+    {
+      "path": "widget/native/classroom-widget-adapter.py",
+      "bytes": 3024,
+      "sha256": "b27c53037a68df6df4dc1b45cdd3d7be997fdc5a24b5f2a3ff997fe0405b40a5"
+    },
+    {
       "path": "widget/native/compile_adp_bundle.py",
-      "bytes": 28806,
-      "sha256": "aec779f5c9ffefc6216a08106312b8f03d423d0f91d8f7dbceef3f9614d1b96b"
+      "bytes": 32295,
+      "sha256": "cf2927f04b6e5ec059582e2ded087b3bdf2405dd6252852cdd46294cb5bc162a"
     },
     {
       "path": "widget/native/conflict-widget-adapter.py",
@@ -342,6 +387,171 @@
       "path": "widget/native/conflict-widget-contract.json",
       "bytes": 1094,
       "sha256": "58394ddf36da16a3e59494938455d28d213e0a44a9bcaca261bac4f82467ca3e"
+    },
+    {
+      "path": "widget/native/contracts/choice/contract.json",
+      "bytes": 493,
+      "sha256": "f0344c64c7bbd8e5ed5b42477d20b5bb549c7c523732bc7ecad3cf69d52010d4"
+    },
+    {
+      "path": "widget/native/contracts/choice/default.json",
+      "bytes": 1306,
+      "sha256": "b42f8f116fd12dce15b8fbb1cf31629fc91e867d84c310394c2eac0a3f155c11"
+    },
+    {
+      "path": "widget/native/contracts/choice/schema.json",
+      "bytes": 2294,
+      "sha256": "7fb92ecab1bd9288e3bc16b824acde4e4de996fedba1184760626fbccbf247df"
+    },
+    {
+      "path": "widget/native/contracts/choice/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/choice/view.txt",
+      "bytes": 1803,
+      "sha256": "60ddd7de37dfae127ec65d62d6321e600f4b57ff0dd7ac90c5a4b2c8a0c89995"
+    },
+    {
+      "path": "widget/native/contracts/classroom/contract.json",
+      "bytes": 529,
+      "sha256": "a0d8c2da3192d193aee8e8f244523240315280b3163f80088ca04a528ab899a9"
+    },
+    {
+      "path": "widget/native/contracts/classroom/default.json",
+      "bytes": 2191,
+      "sha256": "2a9deeb36516d230ef24539fa4e1be8db74313d4196ab5bff89b5b736f80b3fd"
+    },
+    {
+      "path": "widget/native/contracts/classroom/schema.json",
+      "bytes": 2851,
+      "sha256": "ba0fe1cf0017fc643f8d96fab6f721d2dd5322d0e306c4491c3a474a55354f26"
+    },
+    {
+      "path": "widget/native/contracts/classroom/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/classroom/view.txt",
+      "bytes": 3232,
+      "sha256": "a41421437e3c5622193f85cd444c0505138c4cb5aff206174f7f29a270b3d447"
+    },
+    {
+      "path": "widget/native/contracts/conflict/contract.json",
+      "bytes": 539,
+      "sha256": "aba5cbde4a8f0b86c4f49cd2b69e3eb384887dfd7bbebbf933b0d697891ffe49"
+    },
+    {
+      "path": "widget/native/contracts/conflict/default.json",
+      "bytes": 1190,
+      "sha256": "984ac6894d3c1f40a333241d7ed428c930ff0dcfac5da51e7f20a52eb6ab6284"
+    },
+    {
+      "path": "widget/native/contracts/conflict/schema.json",
+      "bytes": 5584,
+      "sha256": "f132d12bb05b25c29cd21e1243235a7e445bd22dcf11d9c34ff9251341333858"
+    },
+    {
+      "path": "widget/native/contracts/conflict/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/conflict/view.txt",
+      "bytes": 4049,
+      "sha256": "90954498095505ba448147431b24740e4020105ce5668bef942e48041b3a4886"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/contract.json",
+      "bytes": 534,
+      "sha256": "daaf2e43bd900ea254741c6db7606d8a8a0e68ca8406c4ca37d5b3c8adc9bce3"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/default.json",
+      "bytes": 1893,
+      "sha256": "2cd6ccf7fcd425a67c556272918eb1c0c749a939403bb766cecca0de2eed59f4"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/schema.json",
+      "bytes": 3157,
+      "sha256": "e3335aa8f38ed9ce2bbf72f273465b20d7924b140cc780048015f2ef940693a5"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/view.txt",
+      "bytes": 3512,
+      "sha256": "a8aabe247a4897b40e1f58d73911415e831b663a668f5e4b4d22c5e59af2939f"
+    },
+    {
+      "path": "widget/native/contracts/error/contract.json",
+      "bytes": 492,
+      "sha256": "c3a2523eecf6f0d8af3dafa9a07175d743ddd110d8b8c5609d1c7d3231b605f8"
+    },
+    {
+      "path": "widget/native/contracts/error/default.json",
+      "bytes": 616,
+      "sha256": "060c220b659a12a6427ff6621f8ad26400e3a487f98ead5549c412335bb1ebf7"
+    },
+    {
+      "path": "widget/native/contracts/error/schema.json",
+      "bytes": 1418,
+      "sha256": "8966fe1ecb448e4170b2e664e2dbb8f4e0cd1ca46c4581201a5063a174541867"
+    },
+    {
+      "path": "widget/native/contracts/error/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/error/view.txt",
+      "bytes": 1275,
+      "sha256": "b22ef6ee3d38766a367ed078dda17fa99d72889d5e74a8cf2385e7c80f827a57"
+    },
+    {
+      "path": "widget/native/contracts/schedule/contract.json",
+      "bytes": 865,
+      "sha256": "d94f17e3de1c17f8d59d0a2d8917a183c71ae799cdc1589c602afff77f9a0c73"
+    },
+    {
+      "path": "widget/native/contracts/schedule/default.json",
+      "bytes": 992,
+      "sha256": "a431ec4a71fba69c01d55b1c4767b52e3ceb60663fe653e5fa2030da22d78570"
+    },
+    {
+      "path": "widget/native/contracts/schedule/schema.json",
+      "bytes": 1779,
+      "sha256": "bfa71f603141c1f03eea06d80ee8ae2400113a258c9fa3cfdb57df795ae70db0"
+    },
+    {
+      "path": "widget/native/contracts/schedule/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/schedule/view.txt",
+      "bytes": 2316,
+      "sha256": "b2041e5930883d1fe936071da035dbcdda0685760fc49983afa07cd625bc6f21"
+    },
+    {
+      "path": "widget/native/contracts/schedule/zod.txt",
+      "bytes": 763,
+      "sha256": "352b1a553997c2ba40d7375ff0a2c440e7079969d6e9d1d8e797b950036c7967"
+    },
+    {
+      "path": "widget/native/dayplan-widget-adapter.py",
+      "bytes": 3132,
+      "sha256": "4b9ac31a9ccd3ef9d1251bd642ff51d152b421341b3100311d76d0771b6778fa"
+    },
+    {
+      "path": "widget/native/extract-real-widget-contracts.py",
+      "bytes": 4089,
+      "sha256": "552b78e9fc85ee78c1dc190842d71c19d980a666ca4ecd08589ac29a976bcf20"
     },
     {
       "path": "widget/native/gate-schedule-actions-v1-workflow.py",
@@ -375,8 +585,13 @@
     },
     {
       "path": "widget/native/real-adp-export-catalog.json",
-      "bytes": 2040,
-      "sha256": "e1f61e015753fc26a68489f530f6cadcbdf8a02e576fec14e7c17533e01881b8"
+      "bytes": 2591,
+      "sha256": "75aadad6e23521f0c312151d6b16917058f3ed3737f64c5bff5e4f19e79163be"
+    },
+    {
+      "path": "widget/native/recovery-widget-adapter.py",
+      "bytes": 2757,
+      "sha256": "d0cdc339891cc2b72462f5950242da1b98b90db4a2230c8c521acf26be3ff655"
     },
     {
       "path": "widget/native/runtime-integration-runbook.md",
@@ -504,9 +719,19 @@
       "sha256": "e406c76de1fb9c4863debf364a6c038d10d61e314810e1528fe1f2620136505e"
     },
     {
+      "path": "widget/native/test-campus-widget-compiler.py",
+      "bytes": 1050,
+      "sha256": "6063eff6fb430b7a91f6d02691cdfb14ce67fcdc6c992ea9f8ebce1a9ec99d9c"
+    },
+    {
       "path": "widget/native/test-conflict-widget-adapter.py",
       "bytes": 1887,
       "sha256": "75e7f1dac8f09d6267c7239f0f896c7d134afe5557622df21c6d85fa9d01cfb7"
+    },
+    {
+      "path": "widget/native/test-native-adapters.py",
+      "bytes": 1919,
+      "sha256": "8355e62e600f1e4d951cb5fe3685c44993ea4ed2c2249facd59cda9662e04b7b"
     },
     {
       "path": "widget/native/test-native-import-preview-contract.js",
@@ -515,8 +740,8 @@
     },
     {
       "path": "widget/native/test-real-adp-export-catalog.py",
-      "bytes": 1512,
-      "sha256": "3c00b5c439d58869990dfdceabf9cf8224e868460352c0b40bc3803f9f39a591"
+      "bytes": 1548,
+      "sha256": "7999ec94b5de6cf7a7f7026dd7c4dcec86e3c9a5382c01b33f7b75712c6c1f1e"
     },
     {
       "path": "widget/native/test-schedule-contractsync.js",
@@ -549,9 +774,19 @@
       "sha256": "1c9c8f6d83bda2d6fc6323a05dcbce26c7dddf1ca6b0805d267513184f2f8e13"
     },
     {
+      "path": "widget/native/validate-campus-widget-artifact.py",
+      "bytes": 8053,
+      "sha256": "78411225a914a4b37bd20e3d666eca0748bc5034c3c05e739499e02282ad15af"
+    },
+    {
       "path": "widget/native/widget-node-seed-contract.json",
       "bytes": 1973,
       "sha256": "f982f8322c6e6877bc96d6e60eee452925fd8a246fab2712cce1a625a7426d92"
+    },
+    {
+      "path": "widget/native/widget-registry.json",
+      "bytes": 2057,
+      "sha256": "f1d912e31b3f4de6e678854ac5c1300b3da7e47f4a4048207e1536ec461aba98"
     },
     {
       "path": "widget/README.md",

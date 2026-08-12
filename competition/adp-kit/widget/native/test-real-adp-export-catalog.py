@@ -38,4 +38,5 @@ for name, record in CATALOG["workflows"].items():
         workflow = json.loads(reader.read(names[0]))
     assert workflow["WorkflowID"] == record["workflowId"], f"{name} WorkflowID drift"
 
-print("Real ADP export catalog: PASS (5 Widgets + 3 Workflows recorded; no fabricated IDs)")
+assert len(CATALOG["widgets"]) == 6
+print("Real ADP export catalog: PASS (6 Widgets + 3 Workflows recorded; no fabricated IDs)")

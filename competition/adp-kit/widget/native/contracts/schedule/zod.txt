@@ -1,0 +1,29 @@
+import { z } from 'zod';
+
+const widgetSchema = z
+  .object({
+    title: z.string(),
+    timeText: z.string(),
+    statusText: z.string(),
+    courseCountText: z.string(),
+    shownCount: z.number().int(),
+    listStatusText: z.string(),
+    item0PeriodText: z.string(),
+    item0CourseName: z.string(),
+    item0LocationText: z.string(),
+    item0MetaText: z.string(),
+    item1PeriodText: z.string(),
+    item1CourseName: z.string(),
+    item1LocationText: z.string(),
+    item1MetaText: z.string(),
+    action0Label: z.string(),
+    action0Message: z.string(),
+    action1Label: z.string(),
+    action1Message: z.string(),
+    action2Label: z.string(),
+    action2Message: z.string(),
+    footerText: z.string(),
+  })
+  .strict();
+
+export default widgetSchema;

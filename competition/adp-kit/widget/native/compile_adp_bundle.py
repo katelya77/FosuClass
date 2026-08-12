@@ -23,6 +23,8 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from campus_widget_compiler import SPECS, compile_workflow, source_path, workbook_records
+
 
 NATIVE_DIR = Path(__file__).resolve().parent
 KIT_DIR = NATIVE_DIR.parent.parent
@@ -131,6 +133,7 @@ def set_edges(workflow, edges):
 
 def edge_between(source, target, source_handle=None):
     source_handle = source_handle or f"{source}-source"
+    examples = [example for example in examples if "冲突" not in example and "赶场" not in example]
     return {
         "source": source,
         "target": target,
@@ -583,9 +586,9 @@ def needs_adp_export_text():
         lines.extend(f"- `{name}`" for name in pending)
     else:
         lines.extend([
-            "本轮请求的 Classroom / Conflict / DayPlan / Choice / Error Widget 与 02/03/04 Workflow 真实导出已全部收到。",
+            "Schedule / Classroom / Conflict / DayPlan / Choice / Error Widget 与 02 / 03 / 04 Workflow 真实导出已全部接收并校验。",
             "",
-            "无需继续导出；后续只做本地 Contract Compiler 集成与腾讯 ADP 草稿 Runtime 验证。",
+            "状态：NONE。无需继续导出；后续仅需腾讯 ADP 草稿 Runtime E2E。",
         ])
     return "\n".join(lines) + "\n"
 
@@ -602,13 +605,10 @@ def import_readme(artifact_names):
 
 ## 腾讯 ADP 操作
 
-1. 导入 `01-Schedule-Final.zip`。
-2. 在草稿环境启用 `01-多维课表查询-Final`。
-3. 关闭旧的 01 Schedule Workflow，避免 `sys.chat` 再次路由到旧合同。
-4. 依次测试：`教师003第1周周一的课`、点击“查看整周”、点击“选择日期”、点击“检查风险”。
-5. 仅在四条链全部真实通过后记录 Runtime E2E PASS；不要手改 Workflow 参数。
-
-真实 02/03/04 与五个 Widget 导出已登记；当前 Bundle 只集成通过 R2 Gate 的 01，后续 compiler 批次不会伪造 WidgetID。
+1. 依次导入 01 / 02 / 03 / 04 Final ZIP。
+2. 应用仅启用 01 Final、02 Final、03 Final、04 Final；旧 01 与 00 Seed 不参与路由。
+3. 按 `ADP-App-Expected-Config.json` 核对 Workflow examples 与 6 个真实 WidgetID。
+4. 在 ADP 草稿环境完成 Runtime E2E 后再发布；不要手改 Workflow 节点。
 """
 
 
@@ -637,6 +637,22 @@ def run_validator(artifact, report):
     return read_json(report)
 
 
+def run_campus_validator(key, artifact, report):
+    child_env = dict(os.environ)
+    child_env["PYTHONUTF8"] = "1"
+    result = subprocess.run([
+        sys.executable, str(NATIVE_DIR / "validate-campus-widget-artifact.py"),
+        "--key", key, "--artifact", str(artifact), "--report", str(report),
+    ], cwd=REPO_DIR, text=True, encoding="utf-8", errors="replace", capture_output=True, env=child_env)
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr, file=sys.stderr)
+        raise SystemExit(result.returncode)
+    validation = read_json(report)
+    print(f"{artifact.name}: {validation['status']} ({validation['checksPassed']} semantic checks)")
+    return validation
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", help="exact real ADP V1.1 export ZIP")
@@ -656,18 +672,66 @@ def main():
     )
     schedule_path = output_dir / contract["generated"]["fileName"]
     write_workflow_zip(schedule_path, workflow, workbook_payloads(workflow, contract))
-    report_path = output_dir / "validation-report.json"
+    report_path = output_dir / "validation-report-01.json"
     validation = run_validator(schedule_path, report_path)
+
+    downloads = Path.home() / "Downloads"
+    campus_artifacts = []
+    for key, spec in SPECS.items():
+        source = source_path(key, downloads)
+        source_workflow = workflow_from_zip(source)
+        assert source_workflow["WorkflowID"] == read_json(REAL_EXPORT_CATALOG_PATH)["workflows"][key]["workflowId"]
+        compiled = compile_workflow(key, source_workflow)
+        target = output_dir / spec["file"]
+        write_workflow_zip(target, compiled, workbook_records(
+            source, compiled, spec["examples"], deterministic_xlsx,
+        ))
+        campus_report = output_dir / f"validation-report-{key}.json"
+        campus_validation = run_campus_validator(key, target, campus_report)
+        campus_artifacts.append({
+            "file": target.name, "workflowId": compiled["WorkflowID"],
+            "workflowName": compiled["WorkflowName"], "sha256": sha256_file(target),
+            "validation": campus_validation["status"],
+        })
+
+    dataset = read_json(KIT_DIR / "mock-data" / "competition-demo-v1.json")
+    registry = read_json(NATIVE_DIR / "widget-registry.json")
+    expected_config = {
+        "schema": "fosuclass-adp-app-expected-config/v1",
+        "appName": "校园智序 · 小序",
+        "dataVersion": dataset["meta"]["dataVersion"],
+        "dataHash": dataset["dataHash"],
+        "knowledgeBase": {"id": "2084871572396491520", "role": "stable rules only"},
+        "activeWorkflows": [
+            {"slot": "01", "workflowId": workflow["WorkflowID"], "name": workflow["WorkflowName"]},
+            *[{"slot": key, "workflowId": item["workflowId"], "name": item["workflowName"]}
+              for key, item in zip(SPECS, campus_artifacts)],
+        ],
+        "excludedFromRouting": ["01-多维课表查询 (legacy)", "00-节点格式种子-勿启用"],
+        "routerExamples": {
+            "01": ["教师003第1周周一的课", "查询教师003第1周的课表", "A1-101第2周周三的占用"],
+            "02": SPECS["02"]["examples"], "03": SPECS["03"]["examples"], "04": SPECS["04"]["examples"],
+        },
+        "routingContract": {
+            "intentPriority": True, "schedule_risk_check": "03", "schedule_day": "01",
+            "schedule_week": "01", "schedule_choose_day": "Choice",
+        },
+        "widgets": registry["widgets"],
+    }
+    expected_path = output_dir / "ADP-App-Expected-Config.json"
+    expected_path.write_text(json.dumps(expected_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     needs_path = output_dir / "NEEDS_ADP_EXPORT.md"
     needs_path.write_text(needs_adp_export_text(), encoding="utf-8", newline="\n")
     readme_path = output_dir / "ADP-IMPORT-README.md"
-    readme_path.write_text(import_readme([schedule_path.name]), encoding="utf-8", newline="\n")
+    artifact_names = [schedule_path.name, *[item["file"] for item in campus_artifacts]]
+    readme_path.write_text(import_readme(artifact_names), encoding="utf-8", newline="\n")
     manifest = {
         "schema": "fosuclass-adp-import-bundle/v1",
         "compilerVersion": contract["compiler"]["version"],
         "generatedAt": "2026-08-12T00:00:00Z",
         "dataVersion": transport["dataVersion"],
+        "dataHash": dataset["dataHash"],
         "sourceSeed": {
             "mode": seed_mode,
             "sha256": sha256_file(seed),
@@ -679,12 +743,14 @@ def main():
             "workflowName": workflow["WorkflowName"],
             "sha256": sha256_file(schedule_path),
             "validation": validation["status"],
-        }],
-        "deferred": ["02-Classroom-Final.zip", "03-Conflict-Final.zip", "04-DayPlan-Final.zip"],
+        }, *campus_artifacts],
+        "deferred": ["Schedule Rich V4 awaits a real exported rich Schedule Widget; RuntimeSafe V3 remains active"],
     }
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-    sum_names = [schedule_path.name, "manifest.json", "ADP-IMPORT-README.md", "NEEDS_ADP_EXPORT.md", "validation-report.json"]
+    sum_names = [*artifact_names, "manifest.json", "ADP-IMPORT-README.md", "NEEDS_ADP_EXPORT.md",
+                 "validation-report-01.json", "validation-report-02.json", "validation-report-03.json",
+                 "validation-report-04.json", "ADP-App-Expected-Config.json"]
     sums_path = output_dir / "SHA256SUMS.txt"
     sums_path.write_text("".join(
         f"{sha256_file(output_dir / name)}  {name}\n" for name in sorted(sum_names)

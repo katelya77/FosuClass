@@ -1,0 +1,18 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "error",
+  "widgetId": "3161078fd4d54a27bae65f38cd44c537",
+  "widgetName": "小序-任务恢复-V2",
+  "sourceFile": "小序-任务恢复-V2.widget",
+  "sourceSha256": "e89466506a0db0f3855b8f953396a8c5905ec2dc3c1e46935c04ec9b32a918aa",
+  "schemaLanguage": "json-schema",
+  "required": [
+    "title",
+    "subtitle",
+    "queryId",
+    "dataVersion",
+    "error",
+    "actions"
+  ],
+  "integration": "RECOVERY_COMPILER_INTEGRATED"
+}

@@ -1,0 +1,101 @@
+{
+  "title": "校区B · 空教室",
+  "timeText": "2026-09-03 · 第3-4节",
+  "queryId": "q-native-classroom",
+  "dataVersion": "competition-demo-v1",
+  "filters": [
+    {
+      "id": "campus",
+      "label": "校区B",
+      "value": "校区B"
+    },
+    {
+      "id": "date",
+      "label": "2026-09-03",
+      "value": "2026-09-03"
+    },
+    {
+      "id": "period",
+      "label": "第3-4节",
+      "value": "第3-4节"
+    },
+    {
+      "id": "capacity",
+      "label": "容量≥60",
+      "value": 60
+    }
+  ],
+  "summary": {
+    "totalCount": 6,
+    "shownCount": 5,
+    "hiddenCount": 1,
+    "empty": false
+  },
+  "items": [
+    {
+      "roomName": "B1-101",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "capacity": 70,
+      "roomType": "多媒体",
+      "periodText": "第3-4节",
+      "date": "2026-09-03"
+    },
+    {
+      "roomName": "B1-104",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "capacity": 70,
+      "roomType": "普通",
+      "periodText": "第3-4节",
+      "date": "2026-09-03"
+    },
+    {
+      "roomName": "B1-103",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "capacity": 80,
+      "roomType": "普通",
+      "periodText": "第3-4节",
+      "date": "2026-09-03"
+    },
+    {
+      "roomName": "B1-106",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "capacity": 80,
+      "roomType": "多媒体",
+      "periodText": "第3-4节",
+      "date": "2026-09-03"
+    },
+    {
+      "roomName": "B1-201",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "capacity": 90,
+      "roomType": "多媒体",
+      "periodText": "第3-4节",
+      "date": "2026-09-03"
+    }
+  ],
+  "actions": [
+    {
+      "id": "classroom-change-campus",
+      "type": "sys.chat",
+      "label": "换校区",
+      "message": "那校区A呢"
+    },
+    {
+      "id": "classroom-change-time",
+      "type": "sys.chat",
+      "label": "改时段",
+      "message": "我想改一下查询时段"
+    },
+    {
+      "id": "classroom-relax-capacity",
+      "type": "sys.chat",
+      "label": "放宽容量",
+      "message": "放宽一下容量条件"
+    }
+  ]
+}

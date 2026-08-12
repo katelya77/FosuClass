@@ -1,0 +1,83 @@
+<Card size="md" background="#F6F2E8" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / SCHEDULE" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2}>
+      <Badge label={courseCountText} color="info" variant="soft" size="sm" />
+      <Badge label="时间票据" color="secondary" variant="outline" size="sm" />
+    </Row>
+
+    <ListView limit={shownCount} status={listStatusText}>
+      <ListViewItem gap="12px" align="start">
+        <Badge
+          label={item0PeriodText}
+          color="info"
+          variant="outline"
+          size="sm"
+        />
+        <Col gap={1} flex={1}>
+          <Text value={item0CourseName} size="md" weight="semibold" />
+          <Caption value={item0LocationText} color="secondary" />
+          <Caption value={item0MetaText} color="secondary" />
+        </Col>
+      </ListViewItem>
+
+      <ListViewItem gap="12px" align="start">
+        <Badge
+          label={item1PeriodText}
+          color="info"
+          variant="outline"
+          size="sm"
+        />
+        <Col gap={1} flex={1}>
+          <Text value={item1CourseName} size="md" weight="semibold" />
+          <Caption value={item1LocationText} color="secondary" />
+          <Caption value={item1MetaText} color="secondary" />
+        </Col>
+      </ListViewItem>
+    </ListView>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Button
+        label={action0Label}
+        size="sm"
+        variant="solid"
+        onClickAction={{
+          type: 'sys.chat',
+          payload: { query: action0Message },
+        }}
+      />
+      <Button
+        label={action1Label}
+        size="sm"
+        variant="outline"
+        onClickAction={{
+          type: 'sys.chat',
+          payload: { query: action1Message },
+        }}
+      />
+      <Button
+        label={action2Label}
+        size="sm"
+        variant="outline"
+        onClickAction={{
+          type: 'sys.chat',
+          payload: { query: action2Message },
+        }}
+      />
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

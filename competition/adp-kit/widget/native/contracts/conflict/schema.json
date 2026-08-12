@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "timeText": {
+      "type": "string"
+    },
+    "queryId": {
+      "type": "string"
+    },
+    "dataVersion": {
+      "type": "string",
+      "const": "competition-demo-v1"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "conflictCount": {
+          "type": "integer"
+        },
+        "hasConflict": {
+          "type": "boolean"
+        },
+        "firstBusySlots": {
+          "type": "integer"
+        },
+        "secondBusySlots": {
+          "type": "integer"
+        },
+        "selfCompare": {
+          "type": "boolean"
+        },
+        "rushWarningCount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conflictCount",
+        "hasConflict",
+        "firstBusySlots",
+        "secondBusySlots",
+        "selfCompare",
+        "rushWarningCount"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "periodStart": {
+            "type": "integer"
+          },
+          "periodEnd": {
+            "type": "integer"
+          },
+          "periodText": {
+            "type": "string"
+          },
+          "first": {
+            "type": "object",
+            "properties": {
+              "courseName": {
+                "type": "string"
+              },
+              "periodText": {
+                "type": "string"
+              },
+              "campusName": {
+                "type": "string"
+              },
+              "roomName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "courseName",
+              "periodText",
+              "campusName",
+              "roomName"
+            ],
+            "additionalProperties": false
+          },
+          "second": {
+            "type": "object",
+            "properties": {
+              "courseName": {
+                "type": "string"
+              },
+              "periodText": {
+                "type": "string"
+              },
+              "campusName": {
+                "type": "string"
+              },
+              "roomName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "courseName",
+              "periodText",
+              "campusName",
+              "roomName"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "date",
+          "weekdayName",
+          "periodStart",
+          "periodEnd",
+          "periodText",
+          "first",
+          "second"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "rushWarnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "courseName": {
+                "type": "string"
+              },
+              "periodText": {
+                "type": "string"
+              },
+              "campusName": {
+                "type": "string"
+              },
+              "roomName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "courseName",
+              "periodText",
+              "campusName",
+              "roomName"
+            ],
+            "additionalProperties": false
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "courseName": {
+                "type": "string"
+              },
+              "periodText": {
+                "type": "string"
+              },
+              "campusName": {
+                "type": "string"
+              },
+              "roomName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "courseName",
+              "periodText",
+              "campusName",
+              "roomName"
+            ],
+            "additionalProperties": false
+          },
+          "gapMinutes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity",
+          "weekdayName",
+          "from",
+          "to",
+          "gapMinutes"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sys.chat",
+              "sys.go_to_url",
+              "sys.download"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "title",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "summary",
+    "items",
+    "rushWarnings",
+    "actions"
+  ],
+  "additionalProperties": false
+}

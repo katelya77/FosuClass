@@ -3,7 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const { safeLog } = require("../utils/safeLogger");
-const { compareTerms, releaseIsHealthy, sortVisibleTerms } = require("../../../shared/termVisibility");
+const { compareTerms, releaseIsHealthy, sortVisibleTerms } = require("../shared/termVisibility");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const REGISTRY_PATH = path.join(STORAGE_DIR, "term-registry.json");

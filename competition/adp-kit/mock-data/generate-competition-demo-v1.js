@@ -24,7 +24,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
+const { computeDataHash } = require("./data-hash");
 
 const DATA_VERSION = "competition-demo-v1";
 const SEMESTER_START_DATE = "2026-08-31";
@@ -325,13 +325,7 @@ function main() {
   dataset.nameIndex = buildIndexes(dataset);
 
   // 数据指纹：覆盖学期、节次与核心事实。修改时间规则或课程事实都会改变哈希。
-  const hash = crypto.createHash("sha1");
-  hash.update(JSON.stringify({
-    semester: META.semester, periods: META.periods,
-    campuses: CAMPUSES, colleges: COLLEGES, classes: CLASSES,
-    teachers: TEACHERS, courses: COURSES, rooms: ROOMS, lessons,
-  }));
-  dataset.dataHash = `sha1:${hash.digest("hex").slice(0, 12)}`;
+  dataset.dataHash = computeDataHash(dataset);
 
   const outPath = path.join(__dirname, "competition-demo-v1.json");
   fs.writeFileSync(outPath, `${JSON.stringify(dataset, null, 2)}\n`, "utf8");

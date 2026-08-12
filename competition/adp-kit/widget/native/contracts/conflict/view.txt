@@ -1,0 +1,123 @@
+<Card
+  size="md"
+  background="#F6F2E8"
+  status={{ text: `已核验 · ${dataVersion}` }}
+>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / RISK CHECK" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Badge
+        label={`时间冲突 ${summary.conflictCount} 处`}
+        color={summary.conflictCount > 0 ? 'danger' : 'success'}
+        variant="soft"
+        size="sm"
+      />
+      <Badge
+        label={`赶场提醒 ${summary.rushWarningCount} 条`}
+        color={summary.rushWarningCount > 0 ? 'warning' : 'success'}
+        variant="soft"
+        size="sm"
+      />
+    </Row>
+
+    {items.length > 0 ? (
+      <Col gap={2}>
+        <Caption value="时间冲突" color="#A54232" />
+        <ListView limit={5} status={`共 ${summary.conflictCount} 处`}>
+          {items.map((item, index) => (
+            <ListViewItem key={`conflict-${index}`} gap="12px" align="start">
+              <Badge
+                label={item.periodText || '冲突'}
+                color="danger"
+                variant="soft"
+                size="sm"
+              />
+              <Col gap={1} flex={1}>
+                <Text
+                  value={`${item.first.courseName || '第一方'} ↔ ${item.second.courseName || '第二方'}`}
+                  weight="semibold"
+                />
+                <Caption
+                  value={`${item.date || ''} ${item.weekdayName || ''} · ${item.periodText || ''}`}
+                  color="secondary"
+                />
+                <Caption
+                  value={`${item.first.campusName || ''} ${item.first.roomName || ''} / ${item.second.campusName || ''} ${item.second.roomName || ''}`}
+                  color="secondary"
+                />
+              </Col>
+            </ListViewItem>
+          ))}
+        </ListView>
+      </Col>
+    ) : null}
+
+    {rushWarnings.length > 0 ? (
+      <Col gap={2}>
+        <Caption value="跨校区赶场" color="#8A5A00" />
+        <ListView limit={5} status={`共 ${summary.rushWarningCount} 条`}>
+          {rushWarnings.map((warning, index) => (
+            <ListViewItem key={`rush-${index}`} gap="12px" align="start">
+              <Badge label="赶场" color="warning" variant="soft" size="sm" />
+              <Col gap={1} flex={1}>
+                <Text
+                  value={`${warning.from.courseName || '前一课程'} → ${warning.to.courseName || '后一课程'}`}
+                  weight="semibold"
+                />
+                <Caption
+                  value={`${warning.from.periodText || ''} ${warning.from.campusName || ''} · ${warning.from.roomName || ''}`}
+                  color="secondary"
+                />
+                <Caption
+                  value={`${warning.to.periodText || ''} ${warning.to.campusName || ''} · ${warning.to.roomName || ''} · 间隔约 ${warning.gapMinutes || 0} 分钟`}
+                  color="secondary"
+                />
+              </Col>
+            </ListViewItem>
+          ))}
+        </ListView>
+      </Col>
+    ) : null}
+
+    {items.length === 0 && rushWarnings.length === 0 ? (
+      <Card size="sm" background="#EDF6EF">
+        <Text
+          value="当前范围内没有发现时间冲突或跨校区赶场风险。"
+          weight="semibold"
+        />
+      </Card>
+    ) : null}
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant="outline"
+          onClickAction={{
+            type: 'sys.chat',
+            payload: { query: action.message },
+          }}
+        />
+      ))}
+    </Row>
+
+    <Caption
+      value={`数据版本 ${dataVersion} · 查询编号 ${queryId}`}
+      color="secondary"
+    />
+  </Col>
+</Card>

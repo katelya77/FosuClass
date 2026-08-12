@@ -1,0 +1,18 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "choice",
+  "widgetId": "f540588933a4459cbe78a6fe99aa022c",
+  "widgetName": "小序-候选确认-V2",
+  "sourceFile": "小序-候选确认-V2.widget",
+  "sourceSha256": "9583f7b0133af005b2564b5176c91ef56bd19a3d4543edbb46ef61bb71b8d072",
+  "schemaLanguage": "json-schema",
+  "required": [
+    "title",
+    "subtitle",
+    "queryId",
+    "dataVersion",
+    "items",
+    "actions"
+  ],
+  "integration": "RECOVERY_COMPILER_INTEGRATED"
+}

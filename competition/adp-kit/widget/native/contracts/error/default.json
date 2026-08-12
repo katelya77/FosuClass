@@ -1,0 +1,24 @@
+{
+  "title": "这次没有查成功",
+  "subtitle": "动态事实尚未通过工具核验",
+  "queryId": "q-native-error",
+  "dataVersion": "competition-demo-v1",
+  "error": {
+    "code": "TIMEOUT",
+    "message": "校园工具暂时没有返回结果，可以重新查询或修改条件。"
+  },
+  "actions": [
+    {
+      "id": "error-retry",
+      "type": "sys.chat",
+      "label": "重新查询",
+      "message": "重新执行刚才的校园查询"
+    },
+    {
+      "id": "error-edit",
+      "type": "sys.chat",
+      "label": "修改条件",
+      "message": "我想修改刚才的查询条件"
+    }
+  ]
+}

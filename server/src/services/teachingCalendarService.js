@@ -22,7 +22,7 @@ const TYPE_TEXT = Object.freeze({
   pending: "教学安排待维护",
 });
 const ALLOWED_TYPES = new Set(Object.keys(TYPE_TEXT));
-const { normalizeSpecialDate } = require("../../../shared/teachingEventResolver");
+const { normalizeSpecialDate } = require("../shared/teachingEventResolver");
 
 const cache = new SmallJsonCache({ maxEntries: 80 });
 

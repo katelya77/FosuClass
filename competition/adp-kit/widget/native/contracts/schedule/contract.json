@@ -1,0 +1,33 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "schedule",
+  "widgetId": "23fbc659efe3482fab588d754e4420a4",
+  "widgetName": "小序-课表票据-V2",
+  "sourceFile": "小序-课表票据-V2.widget",
+  "sourceSha256": "9d5635a773ab056c3699b88f1379b67bd886280b06a25c0c2ee736230f2a67c3",
+  "schemaLanguage": "zod+exported-json-schema",
+  "required": [
+    "title",
+    "timeText",
+    "statusText",
+    "courseCountText",
+    "shownCount",
+    "listStatusText",
+    "item0PeriodText",
+    "item0CourseName",
+    "item0LocationText",
+    "item0MetaText",
+    "item1PeriodText",
+    "item1CourseName",
+    "item1LocationText",
+    "item1MetaText",
+    "action0Label",
+    "action0Message",
+    "action1Label",
+    "action1Message",
+    "action2Label",
+    "action2Message",
+    "footerText"
+  ],
+  "integration": "RUNTIME_SAFE_V3_ACTIVE_RICH_V4_PENDING"
+}

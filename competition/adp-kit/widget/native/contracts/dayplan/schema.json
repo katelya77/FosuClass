@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "timeText": {
+      "type": "string"
+    },
+    "queryId": {
+      "type": "string"
+    },
+    "dataVersion": {
+      "type": "string",
+      "const": "competition-demo-v1"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "lessonCount": {
+          "type": "integer"
+        },
+        "gapCount": {
+          "type": "integer"
+        },
+        "studySuggestionCount": {
+          "type": "integer"
+        },
+        "hasCrossCampus": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "lessonCount",
+        "gapCount",
+        "studySuggestionCount",
+        "hasCrossCampus"
+      ],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "lesson",
+              "gap",
+              "study",
+              "risk"
+            ]
+          },
+          "lessonId": {
+            "type": "string"
+          },
+          "courseName": {
+            "type": "string"
+          },
+          "periodText": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": "string"
+          },
+          "teachers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggestion": {
+            "type": "string"
+          },
+          "studyRooms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "lessonId",
+          "courseName",
+          "periodText",
+          "startTime",
+          "endTime",
+          "campusName",
+          "roomName",
+          "teachers",
+          "suggestion",
+          "studyRooms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sys.chat",
+              "sys.go_to_url",
+              "sys.download"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "title",
+    "subtitle",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "summary",
+    "items",
+    "actions"
+  ],
+  "additionalProperties": false
+}

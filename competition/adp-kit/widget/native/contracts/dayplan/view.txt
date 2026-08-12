@@ -1,0 +1,120 @@
+<Card
+  size="md"
+  background="#F6F2E8"
+  status={{ text: `已核验 · ${dataVersion}` }}
+>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / DAY PLAN" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={subtitle} color="secondary" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Badge
+        label={`${summary.lessonCount} 节课程`}
+        color="info"
+        variant="soft"
+        size="sm"
+      />
+      <Badge
+        label={`${summary.gapCount} 个空档`}
+        color="success"
+        variant="soft"
+        size="sm"
+      />
+      {summary.hasCrossCampus ? (
+        <Badge label="存在跨校区" color="warning" variant="soft" size="sm" />
+      ) : (
+        <Badge label="动线稳定" color="success" variant="soft" size="sm" />
+      )}
+    </Row>
+
+    <ListView limit={8} status="今日时间轴">
+      {items.map((item, index) => (
+        <ListViewItem
+          key={`${item.lessonId || item.type}-${index}`}
+          gap="12px"
+          align="start"
+        >
+          <Badge
+            label={
+              item.type === 'lesson' ? item.periodText || '课程' : '空档'
+            }
+            color={item.type === 'lesson' ? 'info' : 'success'}
+            variant="outline"
+            size="sm"
+          />
+          <Col gap={1} flex={1}>
+            {item.type === 'lesson' ? (
+              <Col gap={1}>
+                <Text value={item.courseName || '课程'} weight="semibold" />
+                <Caption
+                  value={[
+                    item.startTime && item.endTime
+                      ? `${item.startTime}-${item.endTime}`
+                      : '',
+                    item.campusName,
+                    item.roomName,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  color="secondary"
+                />
+                <Caption
+                  value={(item.teachers || []).join('、')}
+                  color="secondary"
+                />
+              </Col>
+            ) : (
+              <Col gap={1}>
+                <Text
+                  value={item.suggestion || '空闲时段'}
+                  weight="semibold"
+                />
+                <Caption
+                  value={`${item.startTime || ''}-${item.endTime || ''} · ${item.periodText || ''}`}
+                  color="secondary"
+                />
+                {(item.studyRooms || []).length > 0 ? (
+                  <Caption
+                    value={`推荐：${(item.studyRooms || []).join('、')}`}
+                    color="#173F35"
+                  />
+                ) : null}
+              </Col>
+            )}
+          </Col>
+        </ListViewItem>
+      ))}
+    </ListView>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={action.id === 'day-plan-classroom' ? 'solid' : 'outline'}
+          onClickAction={{
+            type: 'sys.chat',
+            payload: { query: action.message },
+          }}
+        />
+      ))}
+    </Row>
+
+    <Caption
+      value={`数据版本 ${dataVersion} · 查询编号 ${queryId}`}
+      color="secondary"
+    />
+  </Col>
+</Card>

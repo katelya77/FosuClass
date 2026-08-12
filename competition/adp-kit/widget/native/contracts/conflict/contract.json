@@ -1,0 +1,20 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "conflict",
+  "widgetId": "8d576e5af9b04fdd99804e7fcbff3644",
+  "widgetName": "小序-冲突赶场票据-V2",
+  "sourceFile": "小序-冲突赶场票据-V2.widget",
+  "sourceSha256": "04b3a057fb062877361f9f721e0031b4b4b91ae7ca5e751dd51ea220d89f4b9d",
+  "schemaLanguage": "json-schema",
+  "required": [
+    "title",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "summary",
+    "items",
+    "rushWarnings",
+    "actions"
+  ],
+  "integration": "FINAL_COMPILER_INTEGRATED"
+}

@@ -17,6 +17,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { computeDataHash } = require("./data-hash");
 
 const DATA_PATH = path.join(__dirname, "competition-demo-v1.json");
 const DAY_MS = 86400000;
@@ -79,6 +80,7 @@ function main() {
     `${data.meta.semester.endDate} != ${expectedEndDate(data.meta.semester.startDate, data.meta.semester.totalWeeks)}`,
   );
   check("dataHash 存在", /^sha1:[0-9a-f]{12}$/.test(data.dataHash || ""));
+  check("dataHash 与 canonical dataset 一致", data.dataHash === computeDataHash(data), `${data.dataHash} != ${computeDataHash(data)}`);
 
   console.log("== 2. 引用完整 ==");
   const courseIds = new Set(data.courses.map((x) => x.id));

@@ -1,0 +1,67 @@
+<Card size="md" background="#F6F2E8" status="需要你的确认">
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / CONFIRM" color="#8A5A00" />
+        <Title value={title} size="md" />
+        <Caption value={subtitle} color="secondary" />
+      </Col>
+      <Badge label="待确认" color="warning" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <ListView limit={5} status="请选择一个候选">
+      {items.map((item, index) => (
+        <ListViewItem key={item.key || index} gap="12px" align="center">
+          <Badge
+            label={`${index + 1}`}
+            color="warning"
+            variant="outline"
+            size="sm"
+          />
+          <Col gap={1} flex={1}>
+            <Text value={item.name} weight="semibold" />
+            <Caption
+              value={[item.type, item.description]
+                .filter(Boolean)
+                .join(' · ')}
+              color="secondary"
+            />
+          </Col>
+          <Button
+            label="选择"
+            size="sm"
+            variant="outline"
+            onClickAction={{
+              type: 'sys.chat',
+              payload: { query: item.action.message },
+            }}
+          />
+        </ListViewItem>
+      ))}
+    </ListView>
+
+    <Divider />
+
+    <Row gap={2}>
+      {actions.map((action) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant="outline"
+          onClickAction={{
+            type: 'sys.chat',
+            payload: { query: action.message },
+          }}
+        />
+      ))}
+    </Row>
+
+    <Caption
+      value="选择后会继续刚才的任务，不需要重新输入查询条件。"
+      color="secondary"
+    />
+  </Col>
+</Card>
