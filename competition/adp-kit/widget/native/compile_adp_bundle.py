@@ -31,6 +31,8 @@ OUTPUT_DIR = REPO_DIR / "output" / "competition-adp" / "final"
 ACTION_PATH = NATIVE_DIR / "action-contract.json"
 TRANSPORT_PATH = NATIVE_DIR / "adp-transport-contract.json"
 WIDGET_PATH = NATIVE_DIR / "schedule-runtime-safe-v3-contract.json"
+VERIFIER_PATH = NATIVE_DIR / "schedule-result-verifier-v2.py"
+REAL_EXPORT_CATALOG_PATH = NATIVE_DIR / "real-adp-export-catalog.json"
 FIXED_ZIP_TIME = (2026, 8, 12, 0, 0, 0)
 ROOT_FILES = [
     "workflows.xlsx",
@@ -87,9 +89,9 @@ def locate_seed(contract, explicit=None):
             and workflow.get("WorkflowName") == contract["generated"]["workflowName"]
             and {"课表查询-WEEK", "课表查询-DAY", "课表查询-DATE"} <= node_names
         ):
-            return final_candidate.resolve(), "canonical-final-bootstrap"
+            return final_candidate.resolve(), "canonical-final-recompile"
     raise SystemExit(
-        "真实 ADP V1.1 platform seed 与 canonical Final bootstrap 均不可用；"
+        "真实 ADP V1.1 platform seed 与 canonical Final recompile seed 均不可用；"
         "候选仅报告路径与哈希："
         + json.dumps(mismatches, ensure_ascii=False)
     )
@@ -241,8 +243,9 @@ def logic_group_handles(node):
     return [item["id"] for item in content]
 
 
-def clone_branch(nodes, old_ids, new_ids, suffix, y_delta):
+def clone_branch(nodes, old_ids, new_ids, suffix, y_delta, extra_replacements=None):
     replacements = dict(zip(old_ids, new_ids))
+    replacements.update(extra_replacements or {})
     clones = []
     for old_id in old_ids:
         source = next(node for node in nodes if node["NodeID"] == old_id)
@@ -252,6 +255,67 @@ def clone_branch(nodes, old_ids, new_ids, suffix, y_delta):
         move_node(clone, y_delta=y_delta)
         clones.append(clone)
     return clones
+
+
+def reference_input(name, node_id, json_path="Output.Body"):
+    return {
+        "Name": name,
+        "Type": "OBJECT" if name.endswith("_body") else "STRING",
+        "Input": {
+            "InputType": "REFERENCE_OUTPUT",
+            "Reference": {"NodeID": node_id, "JsonPath": json_path},
+        },
+        "Desc": "",
+        "IsRequired": False,
+        "SubInputs": [],
+        "DefaultValue": "",
+        "DefaultFileName": "",
+    }
+
+
+def literal_input(name, value):
+    return {
+        "Name": name,
+        "Type": "STRING",
+        "Input": {
+            "InputType": "USER_INPUT",
+            "UserInputValue": {"Values": [value], "FileNames": []},
+        },
+        "Desc": "WEEK/DAY/DATE response scope, fixed by compiler",
+        "IsRequired": True,
+        "SubInputs": [],
+        "DefaultValue": value,
+        "DefaultFileName": "",
+    }
+
+
+def set_code_inputs(node, inputs):
+    node["Inputs"] = inputs
+    ui = node_ui(node)
+    ui["data"]["content"]["inputs"] = [item["Name"] for item in inputs]
+    write_node_ui(node, ui)
+
+
+def configure_response_branch(
+    verify, adapter, scope, tool_id, academic_id, extractor_id,
+    verifier_source, adapter_source,
+):
+    verify["CodeExecutorNodeData"]["Code"] = verifier_source
+    verify["NodeDesc"] = f"{scope} response verifier: scope-aware canonical presentation."
+    set_code_inputs(verify, [
+        literal_input("transport_scope", scope),
+        reference_input("academic_body", academic_id),
+        reference_input("tool_body", tool_id),
+        reference_input("entity_type", extractor_id, "Output.entity_type"),
+        reference_input("entity_name", extractor_id, "Output.entity_name"),
+    ])
+    adapter["CodeExecutorNodeData"]["Code"] = adapter_source
+    adapter["NodeDesc"] = f"{scope} response adapter: scope-aware sentinel canonicalization."
+    set_code_inputs(adapter, [
+        literal_input("transport_scope", scope),
+        reference_input("academic_body", academic_id),
+        reference_input("tool_body", tool_id),
+    ])
 
 
 def compile_schedule(seed_path, contract, transport, widget_contract):
@@ -289,6 +353,10 @@ def compile_schedule(seed_path, contract, transport, widget_contract):
         original_verify["NodeID"], original_adapter["NodeID"], original_display["NodeID"],
         original_widget["NodeID"], original_answer["NodeID"],
     ]
+    extractor = by_name["参数提取"]
+    academic_tool = by_name["日期解析"]
+    verifier_source = VERIFIER_PATH.read_text(encoding="utf-8")
+    adapter_source = (NATIVE_DIR / contract["canonicalAdapter"]).read_text(encoding="utf-8")
 
     normalizer["NextNodeIDs"] = [contract["compiler"]["scopeRouterNodeId"]]
     original_tool["NodeName"] = "课表查询-DAY"
@@ -307,8 +375,14 @@ def compile_schedule(seed_path, contract, transport, widget_contract):
     branch_nodes = contract["compiler"]["branchNodeIds"]
     week_chain_ids = [branch_nodes["WEEK"][key] for key in ["verify", "adapter", "display", "widget", "answer"]]
     date_chain_ids = [branch_nodes["DATE"][key] for key in ["verify", "adapter", "display", "widget", "answer"]]
-    week_chain = clone_branch(nodes, old_chain_ids, week_chain_ids, "WEEK", -360)
-    date_chain = clone_branch(nodes, old_chain_ids, date_chain_ids, "DATE", 360)
+    week_chain = clone_branch(
+        nodes, old_chain_ids, week_chain_ids, "WEEK", -360,
+        {original_tool["NodeID"]: branch_nodes["WEEK"]["tool"]},
+    )
+    date_chain = clone_branch(
+        nodes, old_chain_ids, date_chain_ids, "DATE", 360,
+        {original_tool["NodeID"]: branch_nodes["DATE"]["tool"]},
+    )
 
     week_tool = deep_replace(copy.deepcopy(original_tool), {
         original_tool["NodeID"]: branch_nodes["WEEK"]["tool"],
@@ -345,6 +419,17 @@ def compile_schedule(seed_path, contract, transport, widget_contract):
     router, group_ids = make_scope_router(original_display, contract, normalizer["NodeID"], targets)
     nodes.extend([router, week_tool, date_tool, *week_chain, *date_chain])
 
+    response_nodes = {
+        "WEEK": (week_tool, week_chain[0], week_chain[1]),
+        "DAY": (original_tool, original_verify, original_adapter),
+        "DATE": (date_tool, date_chain[0], date_chain[1]),
+    }
+    for scope, (tool, verify, adapter) in response_nodes.items():
+        configure_response_branch(
+            verify, adapter, scope, tool["NodeID"], academic_tool["NodeID"],
+            extractor["NodeID"], verifier_source, adapter_source,
+        )
+
     edges = edge_list(workflow)
     edges = [edge for edge in edges if not (
         edge.get("source") == normalizer["NodeID"] and edge.get("target") == original_tool["NodeID"]
@@ -369,6 +454,34 @@ def compile_schedule(seed_path, contract, transport, widget_contract):
             edge_between(answer, end_node["NodeID"]),
         ])
     set_edges(workflow, edges)
+    return workflow
+
+
+def recompile_schedule_final(seed_path, contract):
+    """Re-inject canonical branch response code into an existing Final canvas."""
+    workflow = workflow_from_zip(seed_path)
+    if (
+        workflow.get("WorkflowID") != contract["generated"]["workflowId"]
+        or workflow.get("WorkflowName") != contract["generated"]["workflowName"]
+    ):
+        raise AssertionError("canonical Final recompile seed identity mismatch")
+    nodes = {node.get("NodeName"): node for node in workflow.get("Nodes", [])}
+    extractor = nodes["参数提取"]
+    academic_tool = nodes["日期解析"]
+    verifier_source = VERIFIER_PATH.read_text(encoding="utf-8")
+    adapter_source = (NATIVE_DIR / contract["canonicalAdapter"]).read_text(encoding="utf-8")
+    for scope in ["WEEK", "DAY", "DATE"]:
+        tool = nodes[f"课表查询-{scope}"]
+        verify = nodes[f"结果核验与呈现-{scope}"]
+        adapter = nodes[f"Widget数据适配-Schedule-{scope}"]
+        configure_response_branch(
+            verify, adapter, scope, tool["NodeID"], academic_tool["NodeID"],
+            extractor["NodeID"], verifier_source, adapter_source,
+        )
+    workflow["WorkflowDesc"] = (
+        "ADP Interaction Convergence R2：保留 WEEK/DAY/DATE request transport split；"
+        "Verify/Adapter 按分支规范化 Tool Output sentinel，并使用 Action Protocol V2。"
+    )
     return workflow
 
 
@@ -462,19 +575,19 @@ def write_workflow_zip(path, workflow, workbooks):
 
 
 def needs_adp_export_text():
-    return """# NEEDS_ADP_EXPORT
-
-请下一次从腾讯 ADP 一次性导出以下真实文件：
-
-- `Classroom.widget`
-- `Conflict.widget`
-- `DayPlan.widget`
-- `Choice.widget`
-- `Error.widget`
-- `02-空教室规划-V7.2.zip`
-- `03-课程冲突比较-V5.1.zip`
-- `04-今日校园计划-V1.1.zip`
-"""
+    catalog = read_json(REAL_EXPORT_CATALOG_PATH)
+    pending = catalog.get("pending", [])
+    lines = ["# NEEDS_ADP_EXPORT", ""]
+    if pending:
+        lines.extend(["仍需从腾讯 ADP 导出：", ""])
+        lines.extend(f"- `{name}`" for name in pending)
+    else:
+        lines.extend([
+            "本轮请求的 Classroom / Conflict / DayPlan / Choice / Error Widget 与 02/03/04 Workflow 真实导出已全部收到。",
+            "",
+            "无需继续导出；后续只做本地 Contract Compiler 集成与腾讯 ADP 草稿 Runtime 验证。",
+        ])
+    return "\n".join(lines) + "\n"
 
 
 def import_readme(artifact_names):
@@ -492,10 +605,10 @@ def import_readme(artifact_names):
 1. 导入 `01-Schedule-Final.zip`。
 2. 在草稿环境启用 `01-多维课表查询-Final`。
 3. 关闭旧的 01 Schedule Workflow，避免 `sys.chat` 再次路由到旧合同。
-4. 依次测试：`教师003第1周周一的课`、点击“查看整周”、点击“看周二”、点击“检查风险”。
+4. 依次测试：`教师003第1周周一的课`、点击“查看整周”、点击“选择日期”、点击“检查风险”。
 5. 仅在四条链全部真实通过后记录 Runtime E2E PASS；不要手改 Workflow 参数。
 
-`02/03/04` 需要 `NEEDS_ADP_EXPORT.md` 中的真实腾讯导出后才能安全生成；编译器不会伪造 WidgetID。
+真实 02/03/04 与五个 Widget 导出已登记；当前 Bundle 只集成通过 R2 Gate 的 01，后续 compiler 批次不会伪造 WidgetID。
 """
 
 
@@ -537,8 +650,8 @@ def main():
     seed, seed_mode = locate_seed(contract, args.seed)
     seed_workflow = workflow_from_zip(seed)
     workflow = (
-        seed_workflow
-        if seed_mode == "canonical-final-bootstrap"
+        recompile_schedule_final(seed, contract)
+        if seed_mode == "canonical-final-recompile"
         else compile_schedule(seed, contract, transport, widget)
     )
     schedule_path = output_dir / contract["generated"]["fileName"]

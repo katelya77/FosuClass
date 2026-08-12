@@ -15,7 +15,10 @@ const harness = [
   "import json, runpy, sys",
   "main = runpy.run_path(sys.argv[1])['main']",
   "cases = json.load(sys.stdin)",
-  "print(json.dumps([main({'tool_body': body}) for body in cases], ensure_ascii=False))",
+  "def scope(body):",
+  "    query = body.get('query')",
+  "    return 'WEEK' if isinstance(query, dict) and query.get('weekday') in (None, '') else 'DAY'",
+  "print(json.dumps([main({'transport_scope': scope(body), 'tool_body': body}) for body in cases], ensure_ascii=False))",
 ].join("\n");
 
 function verifiedBody(entity, query) {
@@ -81,12 +84,14 @@ function mutate(body, mutation) {
 }
 
 const caseBodies = contract.cases.map((testCase) => verifiedBody(testCase.entity, testCase.query));
-const outputs = invoke(caseBodies);
+const legacyCases = contract.cases.filter((testCase) => testCase.expected);
+const outputs = invoke(legacyCases.map((testCase) => verifiedBody(testCase.entity, testCase.query)));
 const canonical01 = contract.canonical01Patterns.map((pattern) => new RegExp(pattern));
 const canonical03 = new RegExp(contract.canonical03TeacherRiskPattern);
+const canonicalChoose = new RegExp(contract.canonicalChooseDayPattern);
 
 outputs.forEach((output, index) => {
-  const testCase = contract.cases[index];
+  const testCase = legacyCases[index];
   assert.strictEqual(output.route, "widget", `${testCase.name}: expected widget route`);
   assert.deepStrictEqual(actionsOf(output), testCase.expected, `${testCase.name}: action drift`);
   for (const action of actionsOf(output)) {
@@ -97,7 +102,10 @@ outputs.forEach((output, index) => {
     const enters01 = canonical01.some((pattern) => pattern.test(action.message));
     const riskMatch = action.message.match(canonical03);
     const enters03 = Boolean(riskMatch);
-    assert(enters01 || enters03, `${testCase.name}: payload is not canonical: ${action.message}`);
+    const entersChoice = canonicalChoose.test(action.message);
+    const entersWeeklyRisk = /^检查(.+)第([1-9]|1[0-9]|20)周是否存在时间冲突或跨校区赶场$/.test(action.message);
+    assert(enters01 || enters03 || entersChoice || entersWeeklyRisk,
+      `${testCase.name}: payload is not canonical: ${action.message}`);
     if (enters03) {
       assert.strictEqual(testCase.entity.type, "teacher", `${testCase.name}: only teacher self-risk may enter 03`);
       assert(testCase.query.week != null && testCase.query.weekday != null,
@@ -136,11 +144,11 @@ const factMutationOutputs = invoke(factMutationBodies);
 assert.deepStrictEqual(actionsOf(factMutationOutputs[0]), actionsOf(factMutationOutputs[1]),
   "actions must not infer entity/time facts from lesson items");
 
-assert(adapterSource.includes("def build_actions("), "canonical adapter must own the deterministic builder");
+assert(adapterSource.includes("def build_action_protocol("), "canonical adapter must own the deterministic builder");
 assert(!adapterSource.includes("当前对象"), "adapter must not invent a fallback entity");
 assert(!adapterSource.includes("当前查询范围"), "adapter must not emit a fuzzy scope");
 const compatibilitySource = fs.readFileSync(path.join(root, "schedule-runtime-adapter.py"), "utf8");
 assert(!compatibilitySource.includes("def main("), "legacy path must not maintain a second adapter implementation");
 assert(compatibilitySource.includes(contract.canonicalAdapter), "legacy path must delegate to the canonical adapter");
 
-console.log(`Action Contract V1 tests: PASS (${contract.cases.length} cases + ${contract.guards.length} guards)`);
+console.log(`Action Contract V1 tests: PASS (${legacyCases.length} legacy cases + ${contract.guards.length} guards)`);

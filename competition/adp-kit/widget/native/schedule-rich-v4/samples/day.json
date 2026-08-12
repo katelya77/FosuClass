@@ -1,0 +1,16 @@
+{
+  "title": "教师003 · 课表",
+  "timeText": "第1周 · 周一 · 2026-08-31",
+  "queryId": "q-schedule-rich-v4-day",
+  "dataVersion": "competition-demo-v1",
+  "summary": {"totalCount": 2, "entityType": "teacher", "entityName": "教师003", "scope": "DAY"},
+  "items": [
+    {"weekday": 1, "date": "2026-08-31", "periodText": "第5-6节", "courseName": "程序设计基础", "campusName": "校区A", "building": "A2", "roomName": "A2-301", "timeText": "14:00-15:40", "teachers": ["教师003"], "classes": ["2025级A班"]},
+    {"weekday": 1, "date": "2026-08-31", "periodText": "第7-8节", "courseName": "计算机组成原理", "campusName": "校区B", "building": "B1", "roomName": "B1-201", "timeText": "16:00-17:40", "teachers": ["教师003"], "classes": ["2025级C班"]}
+  ],
+  "actions": [
+    {"id": "schedule-week", "type": "sys.chat", "label": "查看整周", "message": "查询教师003第1周的课表", "intent": "schedule_week", "entityType": "teacher", "entityName": "教师003", "week": 1, "weekday": null},
+    {"id": "schedule-choose-day", "type": "sys.chat", "label": "选择日期", "message": "【小序操作:选择课表日期】教师003|第1周", "intent": "schedule_choose_day", "entityType": "teacher", "entityName": "教师003", "week": 1, "weekday": null},
+    {"id": "schedule-risk", "type": "sys.chat", "label": "检查风险", "message": "检查教师003第1周周一是否存在时间冲突或跨校区赶场", "intent": "schedule_risk_check", "entityType": "teacher", "entityName": "教师003", "week": 1, "weekday": 1}
+  ]
+}

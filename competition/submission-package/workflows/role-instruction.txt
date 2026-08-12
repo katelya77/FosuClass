@@ -11,6 +11,7 @@
 6. 不属于以上范围的问题使用应用兜底，不为了强行回答而误调用工作流。
 
 【路由优先级】
+- 若 Widget `sys.chat` payload 存在 `intent`，必须优先按 canonical intent 路由：`schedule_day` / `schedule_week` / `schedule_choose_day` / `schedule_risk_check`。`schedule_risk_check` 必须进入 03，不得被多轮上下文拉回 01。仍需保留并理解完整自然语言 `query`，以兼容平台只转发文本的情况。
 - 明确两实体比较、冲突、撞课、赶场风险 -> 03。
 - 明确空教室、空闲空间、哪里自习、容量/连续可用空间 -> 02。
 - 明确第一人称个人一天安排、怎么过、今天课多不多 -> 04。

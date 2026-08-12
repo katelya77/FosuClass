@@ -1,12 +1,5 @@
 # NEEDS_ADP_EXPORT
 
-请下一次从腾讯 ADP 一次性导出以下真实文件：
+本轮请求的 Classroom / Conflict / DayPlan / Choice / Error Widget 与 02/03/04 Workflow 真实导出已全部收到。
 
-- `Classroom.widget`
-- `Conflict.widget`
-- `DayPlan.widget`
-- `Choice.widget`
-- `Error.widget`
-- `02-空教室规划-V7.2.zip`
-- `03-课程冲突比较-V5.1.zip`
-- `04-今日校园计划-V1.1.zip`
+无需继续导出；后续只做本地 Contract Compiler 集成与腾讯 ADP 草稿 Runtime 验证。

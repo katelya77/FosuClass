@@ -4,7 +4,7 @@
   "dataVersion": "competition-demo-v1",
   "totalWeeks": 20,
   "canonicalAdapter": "schedule-runtime-safe-v3-adapter.py",
-  "canonicalAdapterSha256": "d6382bc112ddc067fb319addf04d673132d76937929a6485e222adb366b81a5a",
+  "canonicalAdapterSha256": "0e41e9b9ae088222626b3fb14f48de532a2a7a260a6c3e08e791e4ff2d884397",
   "parameterExtractorPrompt": "schedule-parameter-extractor-v1.1.txt",
   "dateInputGuard": "schedule-date-input-guard.py",
   "queryNormalizer": "schedule-query-normalizer-v1.1.py",
@@ -26,7 +26,7 @@
     "glob": "*WidgetStable*V1.1*.zip"
   },
   "compiler": {
-    "version": "1.0.0",
+    "version": "2.0.0-r2",
     "sourceDate": "2026-08-12T00:00:00Z",
     "scopeRouterNodeId": "ce2ca0f8-03b8-5311-8e19-ed2581c25a7f",
     "branchNodeIds": {
@@ -64,6 +64,7 @@
     "^查询(.+)第([1-9]|1[0-9]|20)周周[一二三四五六日]的课$"
   ],
   "canonical03TeacherRiskPattern": "^检查(.+)第([1-9]|1[0-9]|20)周周([一二三四五六日])是否存在时间冲突或跨校区赶场$",
+  "canonicalChooseDayPattern": "^【小序操作:选择课表日期】(.+)\\|第([1-9]|1[0-9]|20)周$",
   "cases": [
     {
       "name": "teacher day regression",
@@ -71,7 +72,7 @@
       "query": {"week": 1, "weekday": 1, "date": null},
       "expected": [
         {"label": "查看整周", "message": "查询教师003第1周的课表"},
-        {"label": "看周二", "message": "查询教师003第1周周二的课"},
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】教师003|第1周"},
         {"label": "检查风险", "message": "检查教师003第1周周一是否存在时间冲突或跨校区赶场"}
       ]
     },
@@ -80,9 +81,9 @@
       "entity": {"type": "teacher", "name": "教师003"},
       "query": {"week": 1, "weekday": null, "date": null},
       "expected": [
-        {"label": "看周一", "message": "查询教师003第1周周一的课"},
-        {"label": "看周三", "message": "查询教师003第1周周三的课"},
-        {"label": "看周五", "message": "查询教师003第1周周五的课"}
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】教师003|第1周"},
+        {"label": "本周风险", "message": "检查教师003第1周是否存在时间冲突或跨校区赶场"},
+        {"label": "返回最近一天", "message": "查询教师003第1周周一的课"}
       ]
     },
     {
@@ -91,7 +92,7 @@
       "query": {"week": 1, "weekday": 7, "date": null},
       "expected": [
         {"label": "查看整周", "message": "查询教师003第1周的课表"},
-        {"label": "看下周一", "message": "查询教师003第2周周一的课"},
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】教师003|第1周"},
         {"label": "检查风险", "message": "检查教师003第1周周日是否存在时间冲突或跨校区赶场"}
       ]
     },
@@ -101,7 +102,7 @@
       "query": {"week": 20, "weekday": 7, "date": null},
       "expected": [
         {"label": "查看整周", "message": "查询教师003第20周的课表"},
-        {"label": "看周六", "message": "查询教师003第20周周六的课"},
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】教师003|第20周"},
         {"label": "检查风险", "message": "检查教师003第20周周日是否存在时间冲突或跨校区赶场"}
       ]
     },
@@ -111,8 +112,8 @@
       "query": {"week": 2, "weekday": 3, "date": null},
       "expected": [
         {"label": "查看整周", "message": "查询A1-101第2周的课表"},
-        {"label": "看周四", "message": "查询A1-101第2周周四的课"},
-        {"label": "看周一", "message": "查询A1-101第2周周一的课"}
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】A1-101|第2周"},
+        {"label": "返回最近一天", "message": "查询A1-101第2周周三的课"}
       ]
     },
     {
@@ -121,8 +122,8 @@
       "query": {"week": 3, "weekday": 5, "date": null},
       "expected": [
         {"label": "查看整周", "message": "查询2025级A班第3周的课表"},
-        {"label": "看周六", "message": "查询2025级A班第3周周六的课"},
-        {"label": "看周一", "message": "查询2025级A班第3周周一的课"}
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】2025级A班|第3周"},
+        {"label": "返回最近一天", "message": "查询2025级A班第3周周五的课"}
       ]
     },
     {
@@ -130,9 +131,9 @@
       "entity": {"type": "course", "name": "高等数学A"},
       "query": {"week": 4, "weekday": null, "date": null},
       "expected": [
-        {"label": "看周一", "message": "查询高等数学A第4周周一的课"},
-        {"label": "看周三", "message": "查询高等数学A第4周周三的课"},
-        {"label": "看周五", "message": "查询高等数学A第4周周五的课"}
+        {"label": "选择日期", "message": "【小序操作:选择课表日期】高等数学A|第4周"},
+        {"label": "返回最近一天", "message": "查询高等数学A第4周周一的课"},
+        {"label": "查看整周", "message": "查询高等数学A第4周的课表"}
       ]
     }
   ],

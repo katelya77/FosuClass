@@ -71,6 +71,19 @@ def output_paths(node):
     return paths
 
 
+def input_reference(node, input_name):
+    item = next(
+        (value for value in node.get("Inputs", []) or [] if value.get("Name") == input_name),
+        None,
+    )
+    if not item:
+        return None
+    value = item.get("Input", {})
+    if value.get("InputType") != "REFERENCE_OUTPUT":
+        return None
+    return value.get("Reference", {})
+
+
 def workbook_rows(data):
     workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
     sheet = workbook.active
@@ -212,6 +225,26 @@ def run_gate(path):
         week_serialized = json.dumps(week_body, ensure_ascii=False)
         check("WEEK has no weekday token", "weekday" not in week_serialized.lower())
         check("WEEK has no date key", not any(item.get("ParamName") == "date" for item in week_body))
+
+        # A globally valid reference can still be semantically wrong. Each cloned
+        # Verify/Adapter branch must consume its own Tool output, never DAY's.
+        node_by_name = {node.get("NodeName"): node for node in nodes}
+        for route, tool_name in route_names.items():
+            tool = node_by_name.get(tool_name)
+            for consumer_name in [f"结果核验与呈现-{route}", f"Widget数据适配-Schedule-{route}"]:
+                consumer = node_by_name.get(consumer_name)
+                reference = input_reference(consumer or {}, "tool_body")
+                check(
+                    f"{route} {consumer_name} branch-local tool_body",
+                    bool(tool and consumer and reference)
+                    and reference.get("NodeID") == tool.get("NodeID")
+                    and reference.get("JsonPath") == "Output.Body",
+                    {
+                        "consumer": consumer_name,
+                        "expectedToolNodeId": tool.get("NodeID") if tool else None,
+                        "actualReference": reference,
+                    },
+                )
 
         widget_fields = [item["name"] for item in WIDGET["fields"]]
         widget_types = {item["name"]: item["adpType"] for item in WIDGET["fields"]}

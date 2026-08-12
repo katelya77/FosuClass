@@ -1,0 +1,27 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v4",
+  "kind": "schedule-rich",
+  "status": "PREPARED_PENDING_REAL_ADP_WIDGET_EXPORT_INTEGRATION",
+  "widgetId": null,
+  "fields": [
+    {"name": "title", "type": "string"},
+    {"name": "timeText", "type": "string"},
+    {"name": "queryId", "type": "string"},
+    {"name": "dataVersion", "type": "string"},
+    {"name": "summary", "type": "object"},
+    {"name": "items", "type": "array<object>"},
+    {"name": "actions", "type": "array<object>"}
+  ],
+  "itemFields": [
+    "weekday",
+    "date",
+    "periodText",
+    "courseName",
+    "campusName",
+    "building",
+    "roomName",
+    "timeText",
+    "teachers",
+    "classes"
+  ]
+}

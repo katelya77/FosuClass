@@ -1,11 +1,11 @@
 {
   "schema": "fosuclass-adp-import-bundle/v1",
-  "compilerVersion": "1.0.0",
+  "compilerVersion": "2.0.0-r2",
   "generatedAt": "2026-08-12T00:00:00Z",
   "dataVersion": "competition-demo-v1",
   "sourceSeed": {
-    "mode": "canonical-final-bootstrap",
-    "sha256": "9588fedc2663938ebe5553d825784972498af74a0f9cc7c668c731141984bc0f",
+    "mode": "canonical-final-recompile",
+    "sha256": "7b4e94d162b20e108c8f05feb95e96b3f95b84f50b7ea2fa3c9e7e2c7ebccb4c",
     "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f"
   },
   "artifacts": [
@@ -13,7 +13,7 @@
       "file": "01-Schedule-Final.zip",
       "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f",
       "workflowName": "01-多维课表查询-Final",
-      "sha256": "9588fedc2663938ebe5553d825784972498af74a0f9cc7c668c731141984bc0f",
+      "sha256": "7b4e94d162b20e108c8f05feb95e96b3f95b84f50b7ea2fa3c9e7e2c7ebccb4c",
       "validation": "PASS"
     }
   ],
