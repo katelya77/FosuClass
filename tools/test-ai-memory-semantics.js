@@ -112,6 +112,71 @@ function makeController(spies) {
   });
 }
 
+check("load: empty server slots do not erase sanitized current request slots", () => {
+  const controller = new MemoryController({
+    conversationMemory: {
+      loadForChat(input) {
+        return {
+          principal: { principalKey: "t", authenticated: true },
+          state: { workingMemory: wm.emptyWorkingMemory(), contextSlots: { className: "", week: null } },
+          memory: { mode: "session_state" },
+          context: input.context,
+        };
+      },
+    },
+    userMemory: {
+      load() { return { items: [], values: {}, revision: 0, policy: {} }; },
+      retrieve() { return { items: [], episodes: [], revision: 0 }; },
+    },
+  });
+  const loaded = controller.load({
+    message: "查课表",
+    context: { conversationSlots: { className: "25动医6班", week: 8 } },
+  });
+  assert.strictEqual(loaded.conversationState.workingMemory.className, "25动医6班");
+  assert.strictEqual(loaded.conversationState.workingMemory.teachingWeek, 8);
+});
+
+check("commit: current turn working memory wins over empty persisted state", () => {
+  const spies = { persisted: [], userCommits: [] };
+  const controller = makeController(spies);
+  const current = wm.updateWorkingMemory(wm.emptyWorkingMemory(), {
+    contextSlots: { className: "25动医6班", week: 8 },
+  });
+  const result = controller.commit({
+    principal: { principalKey: "t", authenticated: true },
+    state: { workingMemory: wm.emptyWorkingMemory(), contextSlots: {}, recentTurns: [], conversationSummary: "" },
+    workingMemory: current,
+    memoryMode: "session_state",
+    message: "那周三呢",
+    contextSlots: { weekday: 3 },
+    runId: "r-current-working",
+    status: "completed",
+  });
+  assert.strictEqual(result.workingMemory.className, "25动医6班");
+  assert.strictEqual(result.workingMemory.teachingWeek, 8);
+  assert.strictEqual(result.workingMemory.weekday, 3);
+});
+
+check("commit: failed turn preserves current working view without persisting", () => {
+  const spies = { persisted: [], userCommits: [] };
+  const controller = makeController(spies);
+  const current = wm.updateWorkingMemory(wm.emptyWorkingMemory(), {
+    contextSlots: { className: "25动医6班" },
+  });
+  const result = controller.commit({
+    principal: { principalKey: "t", authenticated: true },
+    state: { workingMemory: wm.emptyWorkingMemory(), contextSlots: {} },
+    workingMemory: current,
+    memoryMode: "session_state",
+    failed: true,
+    status: "failed",
+  });
+  assert.strictEqual(result.skipped, true);
+  assert.strictEqual(result.workingMemory.className, "25动医6班");
+  assert.strictEqual(spies.persisted.length, 0);
+});
+
 check("commit: namedRelation 落地 workingMemory.namedRelations 且 durable=false", () => {
   const spies = { persisted: [], userCommits: [] };
   const controller = makeController(spies);

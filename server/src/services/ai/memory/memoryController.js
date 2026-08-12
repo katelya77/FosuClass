@@ -28,6 +28,21 @@ function chain(value, onFulfilled, onRejected) {
   return value.then(onFulfilled, onRejected);
 }
 
+function hasMeaningfulSlotValue(value) {
+  if (value === undefined || value === null || value === "") return false;
+  if (value === 0 || value === "0") return false;
+  if (typeof value === "object" && !Array.isArray(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
+function mergeSeedSlots(clientSlots, serverSlots) {
+  const merged = Object.assign({}, clientSlots && typeof clientSlots === "object" ? clientSlots : {});
+  Object.entries(serverSlots && typeof serverSlots === "object" ? serverSlots : {}).forEach(([key, value]) => {
+    if (hasMeaningfulSlotValue(value)) merged[key] = value;
+  });
+  return merged;
+}
+
 // 允许通过 ActionReceipt 提交记忆变更的命令白名单（与 routes/ai.js action-receipts 端点一致）：
 // setCurrentSchedule + manifest 已定义的提醒类命令 createCourseReminder/deleteReminder。
 // 白名单扩大不等于校验放松：pendingAction 的 command/runId/expiresAt/target 绑定对全部命令同样生效。
@@ -60,7 +75,14 @@ class MemoryController {
     );
 
     // Soft-fill working memory from persisted slots when empty.
-    const slots = state && state.contextSlots || context.conversationSlots || {};
+    // A newly upserted server conversation carries a canonical but empty
+    // contextSlots object. Do not let those empty sentinels erase confirmed,
+    // already-sanitized slots from the current client request. Persisted
+    // non-empty server values still win for follow-up inheritance.
+    const slots = mergeSeedSlots(
+      context.conversationSlots || context.contextSlots || {},
+      state && state.contextSlots || {}
+    );
     const allowCurrentTurnSemantics = input.executionPolicy !== "strict_model_first";
     const seeded = updateWorkingMemory(workingMemory, {
       // In strict_model_first the Provider owns the first semantic Decision.
@@ -285,7 +307,14 @@ class MemoryController {
         },
         skipped: true,
         skipReason: "failed",
-        workingMemory: normalizeWorkingMemory(prevState && prevState.workingMemory || emptyWorkingMemory()),
+        // Fail closed for persistence, but keep the already-sanitized current
+        // Turn view in the response so a transient tool/data failure does not
+        // erase confirmed entity context from the conversation UI.
+        workingMemory: normalizeWorkingMemory(
+          input.workingMemory
+          || prevState && prevState.workingMemory
+          || emptyWorkingMemory()
+        ),
         conversationSummary: (prevState && prevState.conversationSummary) || "",
         recentTurns: (prevState && prevState.recentTurns) || [],
         candidates: [],
@@ -295,8 +324,8 @@ class MemoryController {
     }
 
     const prevWorking = normalizeWorkingMemory(
-      prevState && prevState.workingMemory
-      || input.workingMemory
+      input.workingMemory
+      || prevState && prevState.workingMemory
       || emptyWorkingMemory()
     );
 

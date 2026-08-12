@@ -164,14 +164,28 @@ function sanitizePendingClarification(value) {
 
 function sanitizeContextSlots(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const finiteNumber = (candidate) => Number.isFinite(Number(candidate)) ? Number(candidate) : 0;
   return {
     lastIntent: sanitizeString(source.lastIntent || "", 80),
     lastTargetType: sanitizeString(source.lastTargetType || "", 30),
     lastTargetName: sanitizeString(source.lastTargetName || "", 80),
-    lastWeek: Number.isFinite(Number(source.lastWeek)) ? Number(source.lastWeek) : 0,
-    lastWeekday: Number.isFinite(Number(source.lastWeekday)) ? Number(source.lastWeekday) : 0,
+    lastWeek: finiteNumber(source.lastWeek),
+    lastWeekday: finiteNumber(source.lastWeekday),
     lastQueryResult: typeof source.lastQueryResult === "string" ? sanitizeString(source.lastQueryResult, 120) : "",
     lastSource: sanitizeString(source.lastSource || "", 60),
+    term: sanitizeString(source.term || "", 40),
+    releaseVersion: sanitizeString(source.releaseVersion || "", 80),
+    campus: sanitizeString(source.campus || "", 40),
+    classroom: sanitizeString(source.classroom || "", 40),
+    courseName: sanitizeString(source.courseName || "", 80),
+    teacherName: sanitizeString(source.teacherName || "", 80),
+    className: sanitizeString(source.className || "", 80),
+    type: sanitizeString(source.type || "", 30),
+    q: sanitizeString(source.q || "", 120),
+    week: finiteNumber(source.week),
+    weekday: finiteNumber(source.weekday),
+    sectionStart: finiteNumber(source.sectionStart),
+    sectionEnd: finiteNumber(source.sectionEnd),
   };
 }
 
@@ -218,6 +232,11 @@ function sanitizeAgentContext(context) {
   const memoryMode = ["local_only", "session_state", "cloud_sync"].includes(source.memoryMode)
     ? source.memoryMode
     : "local_only";
+  const contextSlots = sanitizeContextSlots(
+    source.contextSlots
+    || source.conversationSlots
+    || source.conversation && source.conversation.contextSlots
+  );
   return {
     conversationId: sanitizeString(source.conversationId || source.conversation && source.conversation.conversationId || "", 80),
     protocolVersion: sanitizeString(source.protocolVersion || "", 24),
@@ -257,7 +276,11 @@ function sanitizeAgentContext(context) {
     scheduleChangeBaseline: sanitizeScheduleSummary(source.scheduleChangeBaseline || source.previousScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
     pendingClarification: sanitizePendingClarification(source.pendingClarification),
-    contextSlots: sanitizeContextSlots(source.contextSlots || source.conversation && source.conversation.contextSlots),
+    contextSlots,
+    // Internal planners historically read conversationSlots. Keep one
+    // sanitized canonical object under both names until those consumers are
+    // migrated; never forward the raw client object.
+    conversationSlots: contextSlots,
     userPreferences: sanitizeUserPreferences(source.userPreferences),
   };
 }

@@ -22,6 +22,11 @@ const context = safetyGuard.sanitizeAgentContext({
   term: "2025-2026-2",
   releaseVersion: "release-1",
   password: "abc123",
+  contextSlots: {
+    className: "25动医6班",
+    week: 8,
+    q: "token=secret-token-value",
+  },
   currentScheduleSummary: {
     enabled: true,
     targetType: "class",
@@ -45,6 +50,10 @@ assert(!contextText.includes("2024012345"), "sanitized context must remove stude
 assert(!contextText.includes("fileContent"), "sanitized context must not include raw file content");
 assert(contextText.includes("数据结构"), "sanitized context should preserve course name");
 assert(contextText.includes("C7-305"), "sanitized context should preserve classroom");
+assert.strictEqual(context.contextSlots.className, "25动医6班", "canonical class slot should survive sanitization");
+assert.strictEqual(context.contextSlots.week, 8, "canonical numeric slot should survive sanitization");
+assert.deepStrictEqual(context.conversationSlots, context.contextSlots, "internal slot alias must use the sanitized canonical object");
+assert(!context.contextSlots.q.includes("secret-token-value"), "slot query must redact credential values");
 
 process.env.AI_ALLOW_PERSONAL_CONTEXT = "false";
 const personalContext = safetyGuard.sanitizeAgentContext({
