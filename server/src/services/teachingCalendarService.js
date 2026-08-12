@@ -22,6 +22,7 @@ const TYPE_TEXT = Object.freeze({
   pending: "教学安排待维护",
 });
 const ALLOWED_TYPES = new Set(Object.keys(TYPE_TEXT));
+const { normalizeSpecialDate } = require("../../../shared/teachingEventResolver");
 
 const cache = new SmallJsonCache({ maxEntries: 80 });
 
@@ -123,19 +124,26 @@ function normalizeCalendar(raw, termRecord) {
     if (normalized) byWeek.set(normalized.weekNo, Object.assign({}, byWeek.get(normalized.weekNo), normalized));
   });
   const weeks = Array.from(byWeek.values()).sort((left, right) => left.weekNo - right.weekNo);
+  const specialDates = (Array.isArray(source.specialDates) ? source.specialDates : [])
+    .map(normalizeSpecialDate)
+    .filter(Boolean)
+    .sort((left, right) => left.date.localeCompare(right.date));
   return {
     success: true,
-    schemaVersion: 1,
+    schemaVersion: 2,
     term,
     semesterText: termConfig.semesterText,
     termStartDate: termConfig.termStartDate,
     totalWeeks: termConfig.totalWeeks,
     weekStart: termConfig.weekStart,
     source: source.source || "admin-maintained",
+    sourceStatus: source.sourceStatus || "",
     updatedAt: source.updatedAt || nowIso(),
     defaultWeekTitle,
     termConfig,
     weeks,
+    specialDates,
+    cohortMilestones: Array.isArray(source.cohortMilestones) ? source.cohortMilestones.slice() : [],
     count: weeks.length,
   };
 }

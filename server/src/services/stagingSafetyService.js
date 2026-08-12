@@ -199,7 +199,8 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
       activeSnapshot
     )
     : (options.activeResourceCounts || null);
-  const contractComparison = activeResourceCounts
+  const crossTermReadyCandidate = options.crossTermReadyCandidate === true;
+  const contractComparison = activeResourceCounts && !crossTermReadyCandidate
     ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
     : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
   const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
@@ -268,7 +269,9 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
     blockers.push("partial staging snapshots cannot be published by default");
   }
   if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
-    warnings.push(`Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
+    warnings.push(crossTermReadyCandidate
+      ? `Ready-only candidate ${stagingTerm} differs from active term ${currentTerm}; activation remains disabled.`
+      : `Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
   }
   if (releaseVersionExists) {
     warnings.push(`releaseVersion ${releaseVersion} already exists`);
@@ -306,6 +309,7 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
     currentTerm,
     stagingTerm,
     releaseVersionExists,
+    crossTermReadyCandidate,
   };
 }
 

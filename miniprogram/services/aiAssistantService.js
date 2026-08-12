@@ -503,7 +503,9 @@ function buildClientContext(extra = {}) {
     termPhase: todayTeachingInfo.termPhase || "unknown",
     isInTerm: todayTeachingInfo.isInTerm !== false,
     currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo,
-    todayWeekday: todayTeachingInfo.weekday || getTodayWeekday(now),
+    todayWeekday: todayTeachingInfo.isTeachingDay === false
+      ? 0
+      : (todayTeachingInfo.weekday || getTodayWeekday(now)),
     todayDate: todayTeachingInfo.date,
     todayTeachingInfo: {
       weekNo: todayTeachingInfo.weekNo,
@@ -511,6 +513,10 @@ function buildClientContext(extra = {}) {
       termPhase: todayTeachingInfo.termPhase || "unknown",
       isInTerm: todayTeachingInfo.isInTerm !== false,
       weekday: todayTeachingInfo.weekday,
+      physicalWeekday: todayTeachingInfo.physicalWeekday,
+      isTeachingDay: todayTeachingInfo.isTeachingDay,
+      teachingEventType: todayTeachingInfo.teachingEventType,
+      scheduleSourceDate: todayTeachingInfo.scheduleSourceDate,
       date: todayTeachingInfo.date,
       termStartDate: termConfig.termStartDate || "",
     },

@@ -280,7 +280,7 @@ function buildSyncPlan(action, params = {}, env = process.env) {
     activate,
     verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
     allowPartial: boolParam(params, "allow-partial", false),
-    allowDerived: boolParam(params, "allow-derived", false),
+    allowDerived: boolParam(params, "allow-derived", isNewTerm),
     forceRefresh: schedulePolicy === "network-only" && !isUploadOnly && progressPolicy === "ignore",
     ignoreProgress: progressPolicy === "ignore",
     ignoreNoScheduleCache: negativeCachePolicy === "ignore",
@@ -330,6 +330,7 @@ function applyPlanToParams(plan, params = {}) {
   next.resourceSource = plan.profile === "daily-classes" || plan.allowDerived ? "derived" : "direct";
   next.allowDerived = plan.allowDerived;
   next.allowPartial = plan.allowPartial;
+  next.syncProfile = plan.profile;
   next["term-start-date"] = next["term-start-date"] || plan.termConfig.termStartDate;
   next["total-weeks"] = next["total-weeks"] || (plan.termConfig.totalWeeks || "");
   next["week-start"] = next["week-start"] || plan.termConfig.weekStart;

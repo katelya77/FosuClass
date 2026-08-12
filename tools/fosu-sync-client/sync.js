@@ -28,6 +28,7 @@ const {
   printablePlan,
 } = require("../../shared/syncPlan");
 const syncCacheStore = require("../../shared/syncCacheStore");
+const { isFreshNetworkSidecar } = require("../../shared/syncProvenance");
 
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
@@ -439,6 +440,10 @@ async function resolveTermConfig(activeSemester, cliParams = {}) {
     totalWeeks: explicitTotalWeeks,
     weekStart: explicitWeekStart || "monday",
   }, "cli");
+
+  if (cliConfig && explicit && String(cliParams.syncProfile || cliParams.profile || "") === "new-term") {
+    return cliConfig;
+  }
 
   const registryConfigs = [];
   const bundledRegistryConfig = getBundledTermRegistryConfig(activeSemester);
@@ -1055,7 +1060,10 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
 function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, options = {}) {
   const version = generateSnapshotVersion();
   const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  const noScheduleCachePath = path.join(__dirname, ".debug", "no-schedule-majors.json");
+  const activePlan = getActiveSyncPlan();
+  const noScheduleCachePath = activePlan && activePlan.term
+    ? syncCacheStore.negativePath(__dirname, activePlan.term, "class-schedule", activePlan.runId)
+    : path.join(__dirname, ".debug", "no-schedule-majors.json");
   const noScheduleMajors = readJsonArray(noScheduleCachePath);
   const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
   const updatedSchedules = (allClassSchedules || []).map((item) => {
@@ -1071,7 +1079,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   });
 
   // 读取本地已有的 resources 缓存用于合并
-  const syncPlan = getActiveSyncPlan();
+  const syncPlan = activePlan;
   const allowOldResourceFallback = Boolean(syncPlan && syncPlan.mergeOldData);
   let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
   const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
@@ -1131,6 +1139,26 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     throw new Error("TERM_CONFIG_NOT_RESOLVED");
   }
   const termStartDate = termConfig.termStartDate;
+  let teachingCalendar = null;
+  try {
+    const termSource = require("../../shared/termConfig").loadTermConfig(activeSemester);
+    if (termSource.teachingCalendar) {
+      teachingCalendar = Object.assign({}, termSource.teachingCalendar, {
+        term: activeSemester,
+        semesterText: termSource.semesterText,
+        termStartDate: termSource.termStartDate,
+        totalWeeks: termSource.totalWeeks,
+        weekStart: termSource.weekStart,
+        termConfig: {
+          term: activeSemester,
+          semesterText: termSource.semesterText,
+          termStartDate: termSource.termStartDate,
+          totalWeeks: termSource.totalWeeks,
+          weekStart: termSource.weekStart,
+        },
+      });
+    }
+  } catch (error) {}
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
   const scopeSources = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {});
@@ -1182,6 +1210,19 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     gradeCount: (catalog.grades || []).length,
     noScheduleMajorCount,
   };
+  const cohortAvailability = require("../../shared/cohortAvailability").assessCohortAvailability({
+    term: semester,
+    catalog: Object.assign({}, catalog, {
+      adminClasses: updatedSchedules.map((item) => ({
+        id: item.classId,
+        classId: item.classId,
+        name: item.className,
+        className: item.className,
+        grade: item.grade,
+      })),
+    }),
+    classSchedules: updatedSchedules,
+  });
 
   // 拼接 scopeSummary 文本
   const summaryParts = [];
@@ -1202,6 +1243,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       releaseVersion: cliParams.version || version,
     }),
     termStartDate,
+    teachingCalendar,
     generatedAt: new Date().toISOString(),
     version,
     semester: activeSemester,
@@ -1225,6 +1267,8 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       usedProgressCache: Boolean(crawlStats.usedProgressCache),
       usedNoScheduleCache: Boolean(crawlStats.usedNoScheduleCache),
       usedClassScheduleCache: Boolean(crawlStats.usedClassScheduleCache || cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      resumedFromRunProgress: Boolean(crawlStats.resumedFromRunProgress),
+      progressCacheRunId: crawlStats.progressCacheRunId || "",
       actualNetworkRequestCount: Number(crawlStats.actualNetworkRequestCount || 0),
       skippedByProgressCount: Number(crawlStats.skippedByProgressCount || 0),
       skippedByNoScheduleCount: Number(crawlStats.skippedByNoScheduleCount || 0),
@@ -1248,6 +1292,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       },
       stageTimings: global.SYNC_STAGE_TIMINGS || {},
       warnings: metaWarnings,
+      cohortAvailability: {
+        releasedGrades: cohortAvailability.releasedGrades,
+        pendingGrades: cohortAvailability.pendingGrades,
+        byGrade: cohortAvailability.byGrade,
+      },
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
     },
@@ -1277,7 +1326,12 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       teacherScheduleCount,
       classroomScheduleCount,
       courseScheduleCount,
-    }, coverageQuality)
+    }, coverageQuality),
+    cohortAvailability: {
+      releasedGrades: cohortAvailability.releasedGrades,
+      pendingGrades: cohortAvailability.pendingGrades,
+      byGrade: cohortAvailability.byGrade,
+    },
   };
 }
 
@@ -1733,9 +1787,13 @@ function readClassSchedulesFromFile() {
   if (preferredTerm) {
     candidates.push(syncCacheStore.scheduleLatestPath(__dirname, preferredTerm, "classSchedules"));
   }
-  candidates.push(path.join(debugDir, "class-schedules-latest.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
+  const activePlan = getActiveSyncPlan();
+  const allowLegacyFallback = !activePlan || activePlan.mergeOldData || activePlan.profile === "upload-staging";
+  if (allowLegacyFallback) {
+    candidates.push(path.join(debugDir, "class-schedules-latest.json"));
+    candidates.push(path.join(debugDir, "last-class-schedules.json"));
+    candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
+  }
 
   for (const filePath of candidates) {
     if (fs.existsSync(filePath)) {
@@ -2008,16 +2066,15 @@ async function handleLocalStagingUpload(params) {
       term: sidecar.term || params.term || "",
       generatedAt: sidecar.generatedAt || sidecar.updatedAt || "",
       canonicalHash: sidecar.canonicalHash || "",
-      itemCount: sidecar.counts && sidecar.counts.classScheduleCount || sidecar.itemCount || 0,
+      itemCount: sidecar.counts && (sidecar.counts.classSchedules || sidecar.counts.classScheduleCount) || sidecar.itemCount || 0,
       crawlMode: sidecar.crawlMode || "",
       actualNetworkRequestCount: sidecar.actualNetworkRequestCount || 0,
       usedClassScheduleCache: Boolean(sidecar.usedClassScheduleCache),
     }, null, 2));
-    const freshNetwork = sidecar.crawlMode === "full-fresh" &&
-      !sidecar.usedClassScheduleCache &&
-      !sidecar.usedProgressCache &&
-      !sidecar.usedNoScheduleCache &&
-      Number(sidecar.actualNetworkRequestCount || 0) > 0;
+    const freshNetwork = isFreshNetworkSidecar(sidecar, {
+      currentRunId: (getActiveSyncPlan() || {}).runId,
+      snapshotMeta: params._snapshot && params._snapshot.meta || {},
+    });
     if (!freshNetwork && !(params["allow-cache-source"] || params.allowCacheSource)) {
       throw new Error("UPLOAD_STAGING_REQUIRES_FRESH_NETWORK_META: pass --allow-cache-source only when intentionally uploading cache/imported data.");
     }
@@ -2295,7 +2352,17 @@ async function handlePlannedSync(page, params) {
   if (["daily", "new-term", "crawl-daily"].includes(plan.profile)) {
     process.env.SYNC_CLASS_SCOPE = process.env.SYNC_CLASS_SCOPE || "all";
   }
-  const snapshot = await handleLocalCampusStaging(page, params);
+  const stagingPath = resolveOutputFilePath(params.output);
+  const stagingMetaPath = getSidecarMetaPath(stagingPath);
+  let snapshot = null;
+  if (params.resume && fs.existsSync(stagingPath) && fs.existsSync(stagingMetaPath)) {
+    const existingMeta = JSON.parse(fs.readFileSync(stagingMetaPath, "utf-8"));
+    if (existingMeta.freshRunId === plan.runId && existingMeta.partial !== true) {
+      snapshot = JSON.parse(fs.readFileSync(stagingPath, "utf-8"));
+      console.log(`[resume] Reusing completed staging from current run: ${plan.runId}`);
+    }
+  }
+  if (!snapshot) snapshot = await handleLocalCampusStaging(page, params);
   if (!plan.upload) {
     syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "crawl-report"), {
       success: true,
@@ -2309,7 +2376,10 @@ async function handlePlannedSync(page, params) {
     });
     return snapshot;
   }
-  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, { file: params.output }));
+  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, {
+    file: params.output,
+    _snapshot: snapshot,
+  }));
   const publishResult = await publishCurrentStaging(plan, snapshot);
   const report = {
     success: true,
@@ -4611,10 +4681,13 @@ async function syncClassSchedules(page, catalog, majors) {
     }
     if (cache.items && cache.items.length > 0) {
       cachedClassSchedules = cache.items;
-      crawlStats.usedClassScheduleCache = true;
+      const isCurrentRunProgress = cache.filePath === PROGRESS_CLASS_SCHEDULES_PATH;
+      crawlStats.usedClassScheduleCache = !isCurrentRunProgress;
+      crawlStats.resumedFromRunProgress = isCurrentRunProgress;
+      crawlStats.progressCacheRunId = isCurrentRunProgress ? runId : "";
       global.SYNC_CRAWL_STATS = crawlStats;
       global.CLASS_SCHEDULE_CACHE_USAGE = {
-        usedClassScheduleCache: true,
+        usedClassScheduleCache: !isCurrentRunProgress,
         cacheSource: cache.filePath,
         cacheWarning: `本轮有 ${completedProgressCount} 个专业被 progress 跳过，已从历史 classSchedules 缓存恢复 ${cachedClassSchedules.length} 条课表。`,
       };

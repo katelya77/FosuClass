@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "term": "2026-2027-1",
+  "semesterText": "2026-2027学年第一学期",
+  "termStartDate": "2026-09-07",
+  "totalWeeks": 20,
+  "weekStart": "monday",
+  "preferred": true,
+  "teachingCalendar": {
+    "schemaVersion": 2,
+    "termStartDate": "2026-09-07",
+    "source": "official-platform-screenshot-partial",
+    "sourceStatus": "CALENDAR_SOURCE_INCOMPLETE",
+    "updatedAt": "2026-08-12T00:00:00+08:00",
+    "specialDates": [
+      {
+        "date": "2026-09-20",
+        "type": "makeup",
+        "scheduleSourceDate": "2026-10-06",
+        "note": "补10月6日（周二）的课"
+      },
+      {
+        "date": "2026-09-25",
+        "type": "holiday",
+        "note": "中秋节放假"
+      },
+      {
+        "date": "2026-09-26",
+        "type": "holiday",
+        "note": "中秋节放假"
+      },
+      {
+        "date": "2026-09-27",
+        "type": "holiday",
+        "note": "中秋节放假"
+      },
+      {
+        "date": "2026-10-01",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-02",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-03",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-04",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-05",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-06",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-07",
+        "type": "holiday",
+        "note": "国庆节放假"
+      },
+      {
+        "date": "2026-10-10",
+        "type": "makeup",
+        "scheduleSourceDate": "2026-10-07",
+        "note": "补10月7日（周三）的课"
+      }
+    ],
+    "cohortMilestones": [
+      {
+        "audience": "returning-students",
+        "date": "2026-09-06",
+        "type": "registration"
+      },
+      {
+        "audience": "returning-students",
+        "date": "2026-09-07",
+        "type": "classes-start"
+      },
+      {
+        "audience": "new-students",
+        "date": "2026-09-13",
+        "type": "registration"
+      },
+      {
+        "audience": "new-students",
+        "startDate": "2026-09-14",
+        "endDate": "2026-09-30",
+        "type": "military-training"
+      },
+      {
+        "audience": "new-students",
+        "date": "2026-10-09",
+        "type": "classes-start"
+      }
+    ]
+  }
+}

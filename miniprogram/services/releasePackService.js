@@ -10,7 +10,7 @@ const schoolSearchContract = require("../shared/schoolSearchContract.generated")
 
 const DEFAULT_TERM = "";
 const CACHE_PREFIX = "fosu:v8";
-const LEGACY_CACHE_PREFIX = "fosu:v7";
+const LEGACY_CACHE_PREFIXES = ["fosu:v7", "fosu:v6", "fosu:v5"];
 /** Client cache epoch; bump when full-index cache semantics change (poison fix). */
 const TEACHER_INDEX_SCHEMA_VERSION = teacherSearchContract.CONTRACT.indexSchemaVersion;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
@@ -63,8 +63,8 @@ function getLastGoodCacheKey(term) {
   return `${CACHE_PREFIX}:last-good:${cachePart(term || DEFAULT_TERM)}`;
 }
 
-function getLegacyLastGoodCacheKey(term) {
-  return `${LEGACY_CACHE_PREFIX}:last-good:${cachePart(term || DEFAULT_TERM)}`;
+function getLegacyLastGoodCacheKeys(term) {
+  return LEGACY_CACHE_PREFIXES.map((prefix) => `${prefix}:last-good:${cachePart(term || DEFAULT_TERM)}`);
 }
 
 function getLocalActiveReleaseKey(term) {
@@ -72,7 +72,7 @@ function getLocalActiveReleaseKey(term) {
 }
 
 function getLegacyLocalActiveReleaseKey() {
-  return `${LEGACY_CACHE_PREFIX}:active-release`;
+  return `${LEGACY_CACHE_PREFIXES[0]}:active-release`;
 }
 
 function readStorage(key) {
@@ -704,7 +704,7 @@ function getLastKnownGood(term) {
   if (!requestedTerm) return null;
   let cached = readStorage(getLastGoodCacheKey(requestedTerm));
   if (!cached) {
-    const legacy = readStorage(getLegacyLastGoodCacheKey(requestedTerm));
+    const legacy = getLegacyLastGoodCacheKeys(requestedTerm).map(readStorage).find(Boolean);
     const legacyManifest = normalizeManifest(legacy && (legacy.manifest || legacy));
     if (legacyManifest && legacyManifest.term === requestedTerm) {
       cached = Object.assign({}, legacy, { manifest: legacyManifest });

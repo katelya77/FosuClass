@@ -5,6 +5,7 @@ const TOTAL_WEEKS = 19;
 const WEEK_START = "monday";
 const WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const { isCourseActiveInWeek } = require("./courseWeekRules");
+const { resolveTeachingEvent } = require("../../shared/teachingEventResolver");
 
 const FALLBACK_TERM_CONFIG = {
   term: DEFAULT_SEMESTER_ID,
@@ -31,6 +32,7 @@ function normalizeTermConfig(config) {
     updatedAt: source.updatedAt || "",
     source: source.source || FALLBACK_TERM_CONFIG.source,
     releaseVersion: source.releaseVersion || source.version || "",
+    specialDates: Array.isArray(source.specialDates) ? source.specialDates.slice() : [],
   });
 }
 
@@ -338,19 +340,36 @@ function getTodayTeachingInfo(date, calendarWeeks, termConfig) {
     };
   }
   const weekInfo = getTeachingWeekByDate(target, calendarWeeks, config);
-  return Object.assign({}, weekInfo, {
+  const physicalDate = formatDate(target);
+  const teachingEvent = resolveTeachingEvent(physicalDate, {
+    termStartDate: config.termStartDate,
+    specialDates: config.specialDates || [],
+  }, config);
+  const sourceWeekInfo = teachingEvent.scheduleSourceDate && teachingEvent.scheduleSourceDate !== physicalDate
+    ? getTeachingWeekByDate(teachingEvent.scheduleSourceDate, calendarWeeks, config)
+    : weekInfo;
+  const effectiveWeekday = teachingEvent.isTeachingDay ? teachingEvent.scheduleWeekday : 0;
+  const result = Object.assign({}, weekInfo, {
     date: formatDate(target),
     dateLabel: formatDateLabel(target),
     fullDateLabel: formatFullDateLabel(target),
-    weekday: getTodayWeekday(target),
-    weekdayLabel: getWeekdayLabel(target),
+    weekday: effectiveWeekday,
+    physicalWeekday: getTodayWeekday(target),
+    weekdayLabel: effectiveWeekday ? getWeekdayLabel(effectiveWeekday) : getWeekdayLabel(target),
     rangeText: weekInfo.startDate && weekInfo.endDate ? formatWeekRange(weekInfo.startDate, weekInfo.endDate) : "",
     weekLabel: `第${weekInfo.weekNo}周`,
     term: config.term,
     semesterText: config.semesterText,
     termStartDate: config.termStartDate,
     totalWeeks: config.totalWeeks,
+    weekNo: sourceWeekInfo.weekNo,
+    isTeachingDay: teachingEvent.isTeachingDay,
+    teachingEventType: teachingEvent.type,
+    scheduleSourceDate: teachingEvent.scheduleSourceDate,
+    teachingEventNote: teachingEvent.note,
   });
+  result.weekLabel = `第${sourceWeekInfo.weekNo}周`;
+  return result;
 }
 
 function getTermCalendarWeeks(termConfig) {

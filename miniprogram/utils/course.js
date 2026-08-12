@@ -252,11 +252,16 @@ function buildScheduleColumns(courses, weekdays, week, options) {
   const sectionHeight = (options && options.sectionHeight) || 96;
   const hideInactiveCourses = Boolean(options && options.hideInactiveCourses);
   const normalizedCourses = (courses || []).map(normalizeCourse);
-  const resolved = getResolvedTeachingEvents(normalizedCourses, week, options);
-  const events = resolved.events || normalizedCourses;
   return weekdays.map((day) => {
-    const rawDayCourses = events.filter((course) => Number(course.weekday) === Number(day.weekday));
-    const visibleCourses = buildVisibleScheduleCourses(rawDayCourses, week, sectionHeight, hideInactiveCourses);
+    if (day.isTeachingDay === false) {
+      return Object.assign({}, day, { courses: [], activeCourseCount: 0, visibleCourseCount: 0 });
+    }
+    const effectiveWeek = Number(day.scheduleWeek || week);
+    const effectiveWeekday = Number(day.scheduleWeekday || day.weekday);
+    const resolved = getResolvedTeachingEvents(normalizedCourses, effectiveWeek, options);
+    const events = resolved.events || normalizedCourses;
+    const rawDayCourses = events.filter((course) => Number(course.weekday) === effectiveWeekday);
+    const visibleCourses = buildVisibleScheduleCourses(rawDayCourses, effectiveWeek, sectionHeight, hideInactiveCourses);
     const dayCourses = assignOverlapLanes(visibleCourses).map((course) => Object.assign({}, course, {
       cardStyle: buildCardStyle(course),
     }));

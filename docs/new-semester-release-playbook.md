@@ -28,7 +28,7 @@
 在校园网或 VPN 本机运行：
 
 ```powershell
-npm run sync:new-term -- --term=2026-2027-1 --term-start-date=2026-09-07 --total-weeks=20 --week-start=monday
+npm run sync:current-term
 ```
 
 该命令会采集目录、专业、班级、班级课表和资源维度课表，生成 Staging 并上传。默认不激活新学期。
@@ -52,7 +52,7 @@ npm run sync:new-term -- --term=2026-2027-1 --term-start-date=2026-09-07 --total
 readiness 通过后才可激活：
 
 ```powershell
-npm run sync:new-term -- --term=2026-2027-1 --term-start-date=2026-09-07 --total-weeks=20 --week-start=monday --activate
+npm run sync:current-term -- --activate
 ```
 
 激活前后台必须展示旧 current term、新 term、releaseVersion、教学周历数量、来源口径、partial 状态、OpenResty 状态和回滚候选。激活失败时恢复旧 active pointer。

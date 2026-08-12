@@ -1,4 +1,5 @@
 const request = require("../utils/request");
+const { resolveSelectedTerm, sanitizeClientTerms } = require("../../shared/termVisibility");
 
 const APP_CONFIG_CACHE_KEY = "FOSU_APP_CONFIG_CACHE";
 const NOTICE_DISMISSED_KEY = "FOSU_NOTICE_DISMISSED";
@@ -25,8 +26,18 @@ function normalizeConfig(payload) {
   if (!config.dataVersion || typeof config.dataVersion !== "object") config.dataVersion = {};
   if (config.termConfig && typeof config.termConfig !== "object") config.termConfig = null;
   if (!Array.isArray(config.availableTerms)) config.availableTerms = [];
-  if (!config.currentSemester && config.termConfig && config.termConfig.term) config.currentSemester = config.termConfig.term;
-  if (!config.currentSemester && config.availableTerms[0] && config.availableTerms[0].term) config.currentSemester = config.availableTerms[0].term;
+  const authoritativeTerms = config.availableTerms.filter((item) => item && item.term &&
+    ["current", "ready", "archived"].includes(item.status) && item.dataAvailable === true && item.releaseVersion);
+  config.availableTerms = sanitizeClientTerms(config.availableTerms, authoritativeTerms);
+  const currentRecord = config.availableTerms.find((item) => item.status === "current");
+  const activeTerm = config.termConfig && config.termConfig.term || currentRecord && currentRecord.term || "";
+  if (config.availableTerms.length > 0) {
+    const selection = resolveSelectedTerm(config.currentSemester, config.availableTerms, activeTerm);
+    config.currentSemester = selection.term;
+    if (selection.changed) config.termFallbackReason = selection.reason;
+  } else if (!config.currentSemester && config.termConfig && config.termConfig.term) {
+    config.currentSemester = config.termConfig.term;
+  }
   if (!Array.isArray(config.notices)) config.notices = [];
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];

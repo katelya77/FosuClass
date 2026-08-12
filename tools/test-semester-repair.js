@@ -7,7 +7,9 @@ const zlib = require("zlib");
 const tempRoot = path.join(os.tmpdir(), `fosu-semester-repair-${process.pid}-${Date.now()}`);
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
 process.env.FOSU_DATA_DIR = path.join(tempRoot, "data");
-process.env.NODE_ENV = "test";
+process.env.NODE_ENV = "development";
+process.env.ADMIN_API_TOKEN = "test-admin-token";
+process.env.ADMIN_PASSWORD = "test-admin-password";
 process.env.STATIC_RELEASE_SYNC_ENABLED = "false";
 process.env.OPENRESTY_STATIC_RUNTIME_DIR = path.join(tempRoot, "openresty-runtime");
 
@@ -358,9 +360,6 @@ async function waitJob(baseUrl, id) {
 }
 
 async function testAdminJob() {
-  process.env.NODE_ENV = "development";
-  process.env.ADMIN_API_TOKEN = "test-admin-token";
-  process.env.ADMIN_PASSWORD = "test-admin-password";
   process.env.FOSU_RELEASE_WORKER_ENABLED = "false";
   installLegacyState();
   const app = express();

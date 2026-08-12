@@ -143,7 +143,7 @@ $env:SYNC_GRADES="2026,2025,2024,2023,2022"
 $env:SYNC_MAX_CONCURRENCY="1"
 $env:SYNC_REQUEST_DELAY_MS="900"
 
-npm run sync:local-campus -- --term=2026-2027-1 --start=2026-09-01 --output=./staging/2026-2027-1-full.json --force-refresh
+npm run sync:current-term
 npm run test:course-normalizer
 
 $env:ADMIN_API_TOKEN="YOUR_ADMIN_API_TOKEN"

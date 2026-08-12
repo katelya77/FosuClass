@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const { safeLog } = require("../utils/safeLogger");
+const { compareTerms, releaseIsHealthy, sortVisibleTerms } = require("../../../shared/termVisibility");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const REGISTRY_PATH = path.join(STORAGE_DIR, "term-registry.json");
@@ -406,11 +407,11 @@ function listTerms(options = {}) {
   const registry = readRegistry();
   const terms = registry && Array.isArray(registry.terms) ? registry.terms.slice() : [];
   const visible = options.includeDisabled ? terms : terms.filter((item) => item.status !== "disabled");
+  const activeTerm = registry && registry.activeTerm || "";
   return visible.sort((left, right) => {
-    const statusOrder = { current: 0, ready: 1, archived: 2, planned: 3, disabled: 4 };
-    const orderDiff = (statusOrder[left.status] || 9) - (statusOrder[right.status] || 9);
-    if (orderDiff !== 0) return orderDiff;
-    return String(right.term).localeCompare(String(left.term));
+    if (left.term === activeTerm && right.term !== activeTerm) return -1;
+    if (right.term === activeTerm && left.term !== activeTerm) return 1;
+    return compareTerms(left, right);
   });
 }
 
@@ -755,8 +756,13 @@ function copyLegacyTermData(term, options = {}) {
 }
 
 function getPublicTerms() {
-  return listTerms()
-    .filter((item) => item.status !== "disabled")
+  const registry = readRegistry();
+  const activeTerm = registry && registry.activeTerm || "";
+  const visible = listTerms()
+    .filter((item) => ["current", "ready", "archived"].includes(item.status))
+    .filter((item) => item.dataAvailable && item.releaseVersion)
+    .filter((item) => releaseIsHealthy(getReleaseManifest(item.releaseVersion), item.term));
+  return sortVisibleTerms(visible, activeTerm)
     .map((item) => ({
       term: item.term,
       semesterText: item.semesterText,

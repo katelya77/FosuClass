@@ -11,6 +11,7 @@ const {
   TOTAL_WEEKS,
   addLocalDays,
   clampWeek,
+  formatDate,
   formatDateLabel,
   formatWeekRange,
   getCurrentTeachingWeek,
@@ -256,9 +257,16 @@ Page({
     const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     const weekdays = baseWeekdays.map((day, index) => {
       const date = addLocalDays(weekInfo.startDate, index);
+      const dateInfo = getTodayTeachingInfo(date, calendarWeeks, termConfig);
       return Object.assign({}, day, {
+        date: formatDate(date),
         dateLabel: formatDateLabel(date),
-        isToday: currentWeek === todayInfo.weekNo && day.weekday === todayInfo.weekday,
+        isToday: currentWeek === todayInfo.rawWeekNo && day.weekday === todayInfo.physicalWeekday,
+        isTeachingDay: dateInfo.isTeachingDay,
+        scheduleWeek: dateInfo.weekNo,
+        scheduleWeekday: dateInfo.weekday,
+        teachingEventType: dateInfo.teachingEventType,
+        teachingEventNote: dateInfo.teachingEventNote,
       });
     });
     

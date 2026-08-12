@@ -148,8 +148,8 @@ function validateStagingData(data) {
   return stagingSafetyService.validateStagingData(data);
 }
 
-function buildStagingSafety(data, activeSnapshot) {
-  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
+function buildStagingSafety(data, activeSnapshot, options) {
+  return stagingSafetyService.buildStagingSafety(data, activeSnapshot, options);
 }
 
 function throwPublishError(code, message, extra) {
@@ -327,7 +327,16 @@ async function runStagingPublish(input = {}, job) {
   }
 
   if (job) job.progress(20, "normalizing data");
-  const safety = buildStagingSafety(stagingData, activeSnapshot);
+  const stagingTerm = stagingData.term || stagingData.semester || "";
+  const registryTerm = termRegistryService.getTerm(stagingTerm);
+  const crossTermReadyCandidate = Boolean(
+    readyOnly && registryTerm &&
+    ["planned", "ready"].includes(registryTerm.status) &&
+    stagingTerm !== (activeSnapshot && (activeSnapshot.term || activeSnapshot.semester) || "")
+  );
+  const safety = buildStagingSafety(stagingData, activeSnapshot, {
+    crossTermReadyCandidate,
+  });
   if (!safety.allowPublish) {
     throwPublishError("STAGING_SAFETY_BLOCKED", "暂存数据未通过发布安全检查。", {
       blockers: safety.blockers,
@@ -370,7 +379,6 @@ async function runStagingPublish(input = {}, job) {
   }
 
   const activeTerm = termRegistryService.getActiveTerm();
-  const stagingTerm = stagingData.term || stagingData.semester || "";
   const shouldActivate = Boolean(!readyOnly && activeTerm && activeTerm.term === stagingTerm);
   const publishResult = shouldActivate
     ? await writeReleasePackAndActivate(stagingData, job)

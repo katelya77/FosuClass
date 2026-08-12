@@ -157,7 +157,7 @@ function getTodayCoursesData() {
   });
   const sourceCourses = dedupeCourses(baseCourses.concat(customCourses));
 
-  const todayRawCourses = sourceCourses.filter((course) => {
+  const todayRawCourses = todayInfo.isTeachingDay === false ? [] : sourceCourses.filter((course) => {
     const inWeek = isCourseActiveInCurrentWeek(course, currentWeek);
     const isToday = Number(course.weekday) === Number(weekday);
     const matchesSemester = !course.semester || course.semester === semester;

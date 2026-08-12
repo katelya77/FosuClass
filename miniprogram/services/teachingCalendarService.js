@@ -6,7 +6,7 @@ const { BUILTIN_TERM_CONFIG, getBuiltinTeachingCalendar } = require("../data/bui
 
 const CACHE_PREFIX = "fosu:v6:teaching-calendar";
 const LAST_GOOD_PREFIX = `${CACHE_PREFIX}:last-good`;
-const TERM_CALENDAR_CACHE_SCHEMA = 3;
+const TERM_CALENDAR_CACHE_SCHEMA = 4;
 const FAST_CALENDAR_TIMEOUT_MS = 2500;
 const FAST_POINTER_TIMEOUT_MS = 2000;
 const TYPE_TEXT = {
@@ -240,6 +240,7 @@ function normalizeCalendar(payload, fallback = {}) {
   termConfig.termStartDate = termConfig.termStartDate || fallbackTermConfig.termStartDate || "";
   termConfig.totalWeeks = Number(termConfig.totalWeeks || fallbackTermConfig.totalWeeks || BUILTIN_TERM_CONFIG.totalWeeks) || BUILTIN_TERM_CONFIG.totalWeeks;
   termConfig.weekStart = termConfig.weekStart || fallbackTermConfig.weekStart || "monday";
+  termConfig.specialDates = Array.isArray(source.specialDates) ? source.specialDates.slice() : [];
   const generatedWeeks = getTermCalendarWeeks(termConfig);
   const generatedByWeek = {};
   generatedWeeks.forEach((week) => {
@@ -263,9 +264,12 @@ function normalizeCalendar(payload, fallback = {}) {
     calendarRevision: source.calendarRevision || fallback.calendarRevision || "",
     semesterText: source.semesterText || fallback.semesterText || "",
     source: source.source || fallback.source || "calendar",
+    sourceStatus: source.sourceStatus || fallback.sourceStatus || "",
     updatedAt: source.updatedAt || "",
     defaultWeekTitle,
     termConfig,
+    specialDates: termConfig.specialDates,
+    cohortMilestones: Array.isArray(source.cohortMilestones) ? source.cohortMilestones.slice() : [],
     weeks: Object.keys(generatedByWeek)
       .map((key) => generatedByWeek[key])
       .sort((left, right) => Number(left.weekNo) - Number(right.weekNo)),
