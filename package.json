@@ -20,6 +20,8 @@
     "test:public-ready-scanner": "python tools/public-ready-scan.py --self-test",
     "test:ci-deploy-separation": "node tools/test-ci-deploy-separation.js",
     "public-ready": "python tools/public-ready-scan.py",
+    "security:public": "python tools/public-ready-scan.py",
+    "security:public:head": "python tools/public-ready-scan.py --head-only --no-ignored",
     "adp:compile": "npm --prefix competition/adp-kit run adp:compile",
     "test:current-schedule": "node tools/test-current-schedule-refresh.js",
     "test:today-page": "node tools/test-today-page-release-note-hidden.js",

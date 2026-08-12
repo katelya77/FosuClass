@@ -19,9 +19,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 REPORT_PATH = ROOT / "output" / "public-ready" / "report.json"
+ALLOWLIST_PATH = ROOT / "security" / "public-allowlist.yml"
 MAX_BLOB = 12 * 1024 * 1024
 MAX_FINDINGS = 5000
-SKIP_PARTS = {".git", "node_modules", ".venv", "venv", "coverage"}
+SKIP_PARTS = {".git", ".agents", ".tmp", "node_modules", ".venv", "venv", "coverage"}
 PLACEHOLDER_MARKERS = {
     "placeholder", "example", "redacted", "dummy", "mock", "your_", "your-",
     "change_me", "changeme", "not_a_credential", "not-a-credential", "xxxxx",
@@ -135,11 +136,74 @@ def large_unscanned_kind(path):
     return None
 
 
+def repository_artifact_kind(path):
+    normalized = normalize_path(path).lower()
+    if normalized == "docs/captures/.gitkeep":
+        return None
+    if normalized.startswith("docs/captures/") and normalized.endswith((".json", ".har", ".md")):
+        return "CAPTURE_ARTIFACT"
+    if normalized.startswith("server/data/backups/"):
+        return "BACKUP_ARTIFACT"
+    if normalized.startswith("server/storage/snapshots/"):
+        return "PRODUCTION_SNAPSHOT"
+    return None
+
+
+def normalize_path(path):
+    normalized = str(path or "").replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def load_allowlist():
+    if not ALLOWLIST_PATH.is_file():
+        return []
+    try:
+        payload = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"invalid public allowlist: {error}") from error
+    fixtures = payload.get("fixtures", [])
+    if not isinstance(fixtures, list):
+        raise RuntimeError("invalid public allowlist: fixtures must be an array")
+    entries = []
+    for item in fixtures:
+        path = normalize_path(item.get("path")) if isinstance(item, dict) else ""
+        secret_types = item.get("secretTypes", []) if isinstance(item, dict) else []
+        reason = str(item.get("reason", "")).strip() if isinstance(item, dict) else ""
+        if not path or not secret_types or not reason:
+            raise RuntimeError("invalid public allowlist: every fixture needs path, secretTypes and reason")
+        entries.append({"path": path, "secretTypes": set(secret_types), "reason": reason})
+    return entries
+
+
+def is_allowlisted(target, path, kind):
+    normalized = normalize_path(path).split("!", 1)[0]
+    return any(item["path"] == normalized and kind in item["secretTypes"]
+               for item in target.get("allowlist", []))
+
+
+def likely_credential(kind):
+    upper = str(kind).upper()
+    if any(marker in upper for marker in ("SNAPSHOT", "BACKUP", "CAPTURE", "ARCHIVE", "STORAGE_EXPORT")):
+        return False
+    return any(marker in upper for marker in (
+        "KEY", "TOKEN", "SECRET", "CREDENTIAL", "JWT", "ENV_FILE", "COOKIE", "PASSWORD",
+    ))
+
+
 def add_finding(target, *, path, commit, kind, fp, exposure, blocker=True):
+    path = normalize_path(path)
+    if is_allowlisted(target, path, kind):
+        target["allowlistedCount"] = target.get("allowlistedCount", 0) + 1
+        return
     key = (path, commit, kind, fp, exposure)
     if key in target["seen"] or len(target["items"]) >= MAX_FINDINGS:
         return
     target["seen"].add(key)
+    tracked = path.split("!", 1)[0] in target.get("tracked", set())
+    history_reachable = "HISTORY" in exposure
+    suspected = likely_credential(kind)
     target["items"].append({
         "path": path,
         "commit": commit,
@@ -147,10 +211,20 @@ def add_finding(target, *, path, commit, kind, fp, exposure, blocker=True):
         "fingerprint": fp,
         "exposure": exposure,
         "blocker": blocker,
+        "tracked": tracked or history_reachable,
+        "historyReachable": history_reachable,
+        "suspectedRealCredential": suspected,
+        "rotationRequired": bool(blocker and suspected and (tracked or history_reachable)),
     })
 
 
 def scan_payload(target, data, path, commit, exposure, blocker=True):
+    artifact_kind = repository_artifact_kind(path)
+    if artifact_kind and exposure == "GIT_HISTORY":
+        add_finding(
+            target, path=path, commit=commit, kind=f"HISTORY_{artifact_kind}",
+            fp=fingerprint(path.encode()), exposure=exposure, blocker=blocker,
+        )
     path_kind = sensitive_path_kind(path)
     if path_kind:
         add_finding(target, path=path, commit=commit, kind=path_kind,
@@ -159,7 +233,7 @@ def scan_payload(target, data, path, commit, exposure, blocker=True):
         large_kind = large_unscanned_kind(path)
         if large_kind:
             add_finding(target, path=path, commit=commit, kind=large_kind,
-                        fp=fingerprint(path.encode()), exposure=exposure, blocker=True)
+                        fp=fingerprint(path.encode()), exposure=exposure, blocker=blocker)
         return
     if b"\0" not in data[:8192]:
         for kind, fp in text_findings(data):
@@ -172,10 +246,13 @@ def scan_payload(target, data, path, commit, exposure, blocker=True):
 
 
 def worktree_files(include_ignored):
-    commands = [(["ls-files", "-co", "--exclude-standard", "-z"], "WORKTREE", True)]
+    commands = [
+        (["ls-files", "-c", "-z"], "WORKTREE_TRACKED", True),
+        (["ls-files", "-o", "--exclude-standard", "-z"], "WORKTREE_UNTRACKED", True),
+    ]
     if include_ignored:
         commands.append((["ls-files", "--others", "-i", "--exclude-standard", "-z"],
-                         "WORKTREE_IGNORED", True))
+                         "WORKTREE_IGNORED", False))
     seen = set()
     for command, exposure, blocker in commands:
         output = run_git(command).stdout
@@ -288,7 +365,12 @@ def find_gitleaks():
     return None
 
 
-def run_gitleaks(target):
+def find_trufflehog():
+    candidate = shutil.which("trufflehog")
+    return str(Path(candidate).resolve()) if candidate and Path(candidate).is_file() else None
+
+
+def run_gitleaks(target, include_history=True):
     executable = find_gitleaks()
     if not executable:
         return {"status": "UNAVAILABLE", "historyFindings": 0, "worktreeFindings": 0}
@@ -298,10 +380,10 @@ def run_gitleaks(target):
     ]
     counts = {}
     with tempfile.TemporaryDirectory() as temp:
-        for scope, command in [
-            ("history", ["git", ".", "--log-opts=--all"]),
-            ("worktree", ["dir", "."]),
-        ]:
+        commands = [("worktree", ["dir", "."])]
+        if include_history:
+            commands.insert(0, ("history", ["git", ".", "--log-opts=--all"]))
+        for scope, command in commands:
             report = Path(temp) / f"{scope}.json"
             result = subprocess.run(
                 [executable, *command, *common, f"--report-path={report}"],
@@ -324,13 +406,18 @@ def run_gitleaks(target):
                     finding.get("File", ""), finding.get("RuleID", "unknown"),
                     str(finding.get("StartLine", "")),
                 ])
+                path = normalize_path(finding.get("File") or "<unknown>")
+                base_path = path.split("!", 1)[0]
+                tracked = base_path in target.get("tracked", set())
+                ignored = base_path in target.get("ignored", set())
+                blocker = scope == "history" or tracked or not ignored
                 add_finding(
                     target,
-                    path=finding.get("File") or "<unknown>",
+                    path=path,
                     commit=finding.get("Commit") or ("WORKTREE" if scope == "worktree" else "REACHABLE_HISTORY"),
                     kind=f"GITLEAKS_{finding.get('RuleID', 'unknown').upper()}",
                     fp=fingerprint(stable.encode("utf-8", "replace")),
-                    exposure=f"GITLEAKS_{scope.upper()}", blocker=True,
+                    exposure=f"GITLEAKS_{scope.upper()}", blocker=blocker,
                 )
     version = subprocess.run(
         [executable, "version"], cwd=ROOT, capture_output=True, text=True,
@@ -344,6 +431,64 @@ def run_gitleaks(target):
     }
 
 
+def run_trufflehog(target, include_history=True):
+    executable = find_trufflehog()
+    if not executable:
+        return {"status": "UNAVAILABLE", "historyFindings": 0, "worktreeFindings": 0}
+    commands = [("worktree", ["filesystem", str(ROOT), "--json", "--no-update"])]
+    if include_history:
+        commands.insert(0, ("history", ["git", ROOT.as_uri(), "--json", "--no-update"]))
+    counts = {}
+    for scope, command in commands:
+        result = subprocess.run(
+            [executable, *command], cwd=ROOT, capture_output=True,
+            timeout=300,
+        )
+        if result.returncode not in (0, 183):
+            add_finding(
+                target, path="<trufflehog>", commit="SCAN_ERROR",
+                kind=f"TRUFFLEHOG_{scope.upper()}_ERROR",
+                fp=fingerprint(f"{scope}:{result.returncode}".encode()),
+                exposure="SCANNER", blocker=True,
+            )
+            counts[scope] = "ERROR"
+            continue
+        count = 0
+        for raw_line in result.stdout.splitlines():
+            try:
+                finding = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            source_data = ((finding.get("SourceMetadata") or {}).get("Data") or {})
+            location = source_data.get("Git") or source_data.get("Filesystem") or {}
+            path = normalize_path(location.get("file") or location.get("path") or "<unknown>")
+            commit = location.get("commit") or ("WORKTREE" if scope == "worktree" else "REACHABLE_HISTORY")
+            raw_value = finding.get("RawV2") or finding.get("Raw") or ""
+            stable = raw_value.encode("utf-8", "replace") if isinstance(raw_value, str) else bytes(raw_value)
+            detector = re.sub(r"[^A-Za-z0-9_-]", "_", str(finding.get("DetectorName") or "unknown"))
+            base_path = path.split("!", 1)[0]
+            tracked = base_path in target.get("tracked", set())
+            ignored = base_path in target.get("ignored", set())
+            blocker = scope == "history" or tracked or not ignored
+            add_finding(
+                target, path=path, commit=commit,
+                kind=f"TRUFFLEHOG_{detector.upper()}",
+                fp=fingerprint(stable or f"{path}:{detector}".encode()),
+                exposure=f"TRUFFLEHOG_{scope.upper()}", blocker=blocker,
+            )
+            count += 1
+        counts[scope] = count
+    version = subprocess.run(
+        [executable, "--version"], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=20,
+    ).stdout.strip()
+    return {
+        "status": "RUN", "version": version,
+        "historyFindings": counts.get("history", 0),
+        "worktreeFindings": counts.get("worktree", 0),
+    }
+
+
 def self_test():
     real = b'API_KEY="sk-' + b"aB3_" * 8 + b'"'
     placeholder = b'API_KEY="YOUR_API_KEY_PLACEHOLDER"'
@@ -352,34 +497,105 @@ def self_test():
     print("public-ready scanner self-test: PASS")
 
 
+def tracked_artifact_guards(target):
+    for path in sorted(target.get("tracked", set())):
+        artifact_kind = repository_artifact_kind(path)
+        if artifact_kind:
+            add_finding(
+                target, path=path, commit="HEAD", kind=f"TRACKED_{artifact_kind}",
+                fp=fingerprint(path.encode()), exposure="TRACKED_FILE_GUARD", blocker=True,
+            )
+
+    required_docker_ignores = {
+        "**/.env", "server/storage", "server/data/backups", "*.key", "*.pem", "*.har",
+    }
+    dockerignore = ROOT / ".dockerignore"
+    configured = {
+        line.strip() for line in dockerignore.read_text(encoding="utf-8").splitlines()
+        if dockerignore.is_file() and line.strip() and not line.lstrip().startswith("#")
+    }
+    for missing in sorted(required_docker_ignores - configured):
+        add_finding(
+            target, path=".dockerignore", commit="HEAD", kind="DOCKER_CONTEXT_GUARD_MISSING",
+            fp=fingerprint(missing.encode()), exposure="PACKAGE_CONTEXT_GUARD", blocker=True,
+        )
+
+    secret_name = re.compile(r"(?i)(?:TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE_KEY|SSH_KEY|API_KEY)$")
+    workflow_ref = re.compile(r"\$\{\{\s*(secrets|vars)\.([A-Za-z0-9_]+)")
+    assignment = re.compile(r"(?i)^\s*([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE_KEY|SSH_KEY|API_KEY))\s*:\s*(.+?)\s*$")
+    for workflow in sorted((ROOT / ".github" / "workflows").glob("*.y*ml")):
+        for line_number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+            for namespace, name in workflow_ref.findall(line):
+                if namespace == "vars" and secret_name.search(name):
+                    add_finding(
+                        target, path=workflow.relative_to(ROOT).as_posix(), commit="HEAD",
+                        kind="WORKFLOW_SECRET_USES_VARIABLE",
+                        fp=fingerprint(f"{name}:{line_number}".encode()),
+                        exposure="WORKFLOW_SECRET_GUARD", blocker=True,
+                    )
+            match = assignment.match(line)
+            if not match:
+                continue
+            value = match.group(2).strip().strip("'\"")
+            if value and "${{" not in value and not looks_placeholder(value.encode()):
+                add_finding(
+                    target, path=workflow.relative_to(ROOT).as_posix(), commit="HEAD",
+                    kind="WORKFLOW_HARDCODED_SECRET",
+                    fp=fingerprint(f"{match.group(1)}:{line_number}".encode()),
+                    exposure="WORKFLOW_SECRET_GUARD", blocker=True,
+                )
+
+
+def build_path_sets():
+    tracked = {
+        normalize_path(raw.decode("utf-8", "surrogateescape"))
+        for raw in run_git(["ls-files", "-c", "-z"]).stdout.split(b"\0") if raw
+    }
+    ignored = {
+        normalize_path(raw.decode("utf-8", "surrogateescape"))
+        for raw in run_git(["ls-files", "--others", "-i", "--exclude-standard", "-z"]).stdout.split(b"\0") if raw
+    }
+    return tracked, ignored
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--no-ignored", action="store_true")
+    parser.add_argument("--head-only", action="store_true")
     parser.add_argument("--report", default=str(REPORT_PATH))
     args = parser.parse_args()
     if args.self_test:
         self_test()
         return
-    target = {"items": [], "seen": set()}
+    tracked, ignored = build_path_sets()
+    target = {
+        "items": [], "seen": set(), "tracked": tracked, "ignored": ignored,
+        "allowlist": load_allowlist(), "allowlistedCount": 0,
+    }
     for path, data, exposure, blocker in worktree_files(not args.no_ignored):
         scan_payload(target, data, path, exposure, exposure, blocker)
-    scan_history(target)
-    gitleaks_status = run_gitleaks(target)
+    tracked_artifact_guards(target)
+    if not args.head_only:
+        scan_history(target)
+    gitleaks_status = run_gitleaks(target, include_history=not args.head_only)
+    trufflehog_status = run_trufflehog(target, include_history=not args.head_only)
     items = sorted(target["items"], key=lambda item: (
         not item["blocker"], item["exposure"], item["path"], item["secretType"], item["commit"]
     ))
     blockers = [item for item in items if item["blocker"]]
     report = {
-        "schema": "fosuclass-public-ready-report/v1",
+        "schema": "fosuclass-public-ready-report/v2",
         "status": "FAIL" if blockers else "PASS",
+        "mode": "HEAD_ONLY" if args.head_only else "FULL_REACHABLE_HISTORY",
         "scanner": "builtin-history-secret-scan",
-        "externalScanners": {"gitleaks": gitleaks_status, "trufflehog": "UNAVAILABLE"},
+        "externalScanners": {"gitleaks": gitleaks_status, "trufflehog": trufflehog_status},
         "scope": ["working tree tracked/untracked", "working tree ignored (non-public warning)",
                   "all reachable Git history", "branches", "tags", "ZIP contents <= 12 MiB",
                   "large sensitive artifacts fail closed"],
         "blockerCount": len(blockers),
         "warningCount": len(items) - len(blockers),
+        "allowlistedFixtureFindingCount": target["allowlistedCount"],
         "findings": items,
     }
     report_path = Path(args.report).resolve()

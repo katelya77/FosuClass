@@ -1,0 +1,110 @@
+{
+  "schema": "fosuclass-public-security-allowlist/v1",
+  "fixtures": [
+    {
+      "path": "packages/rag-runtime/src/localEncoder.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Deterministic tokenizer identifier; not an authentication credential."
+    },
+    {
+      "path": "tools/test-agent-config-plane-browser.js",
+      "secretTypes": ["BEARER_TOKEN"],
+      "reason": "Synthetic bearer fixture used only by a local authorization test."
+    },
+    {
+      "path": "tools/test-agent-memory-provider-boundary.js",
+      "secretTypes": ["BEARER_TOKEN", "GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider and bearer values used by an isolated boundary test."
+    },
+    {
+      "path": "tools/test-agent-platform-admin.js",
+      "secretTypes": ["BEARER_TOKEN"],
+      "reason": "Synthetic administrator bearer fixture; no external account is referenced."
+    },
+    {
+      "path": "tools/test-coze-tool-gateway.js",
+      "secretTypes": ["BEARER_TOKEN"],
+      "reason": "Synthetic bearer fixture for deterministic gateway request assertions."
+    },
+    {
+      "path": "tools/test-agent-context-memory-flow.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-durable-execution.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-p5a-consumer-wiring.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-p5a-memory-doc-store.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-personal-memory.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-rag-encoder-single-source.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-agent-rag-publication.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-ai-provider-environment-profiles.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-ai-provider-runtime-config-store.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-assistant-kb-service.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-cloudbase-release-tools.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-course-reminder-api.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-course-reminder-delivery-fallback.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-domain-adapter-conformance.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-kb-control-plane-v2.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-provider-control-plane.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Synthetic provider key scoped to an in-process test double."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+name: Public Security Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full reachable history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tracked, workflow, snapshot and history guards
+        run: python tools/public-ready-scan.py --no-ignored --report output/security/ci-public-security.json
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
