@@ -19,6 +19,35 @@ function stableSample(envelope, queryId) {
   });
 }
 
+function compareCodePoints(left, right) {
+  const a = String(left || "");
+  const b = String(right || "");
+  return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+function stableDayPlanSample(envelope) {
+  const output = JSON.parse(JSON.stringify(envelope));
+  output.items = (output.items || []).map((item) => {
+    if (item.type !== "gap") return item;
+    const effectiveEnd = Math.min(item.periodEnd, item.periodStart + 1);
+    const rooms = callTool("find_available_classrooms", {
+      campus: "校区A",
+      date: "2026-09-04",
+      periodStart: item.periodStart,
+      periodEnd: effectiveEnd,
+    });
+    const stableRooms = rooms.success
+      ? rooms.items.slice().sort((a, b) => (
+        compareCodePoints(a.building, b.building)
+        || a.capacity - b.capacity
+        || compareCodePoints(a.roomId, b.roomId)
+      )).slice(0, 2).map((room) => `${room.roomName}（${room.capacity}人）`)
+      : [];
+    return Object.assign({}, item, { studyRooms: stableRooms });
+  });
+  return output;
+}
+
 const scheduleEnvelope = stableSample(
   callTool("query_schedule", { entityType: "teacher", entityName: "教师001", week: 1, weekday: 3 }),
   "q-sample-schedule",
@@ -31,10 +60,10 @@ const conflictEnvelope = stableSample(
   callTool("compare_schedules", { firstType: "class", firstName: "2025级A班", secondType: "class", secondName: "2025级B班", week: 1, weekday: 5, periodStart: 5, periodEnd: 8 }),
   "q-sample-conflict",
 );
-const dayPlanEnvelope = stableSample(
+const dayPlanEnvelope = stableDayPlanSample(stableSample(
   callTool("generate_day_plan", { visitorId: "visitor-demo-001", date: "2026-09-04", preferredCampus: "校区A", preferredStudyDuration: 2 }),
   "q-sample-day-plan",
-);
+));
 
 const choiceEnvelope = {
   success: false,

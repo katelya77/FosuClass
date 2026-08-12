@@ -71,8 +71,22 @@ async function scenario1() {
   const serverSession = sessionFor(principal);
   const conversationId = `conv-s1-${Date.now()}`;
   const turns = [];
-  for (const message of ["查 25 动医 6 班课表", "那周三呢", "下午呢", "换成第17周"]) {
-    const r = await chat(message, { conversationId, serverSession, memoryMode: "session_state", tag: "s1" });
+  const messages = ["查 25 动医 6 班课表", "那周三呢", "下午呢", "换成第17周"];
+  for (const [index, message] of messages.entries()) {
+    // This scenario verifies multi-turn inheritance, not live school-index
+    // availability. Seed the already-confirmed entity on the first turn so a
+    // clean CI runner and a developer machine with local release data exercise
+    // the same deterministic memory contract.
+    const context = index === 0
+      ? { conversationSlots: { className: "25动医6班" } }
+      : {};
+    const r = await chat(message, {
+      conversationId,
+      serverSession,
+      memoryMode: "session_state",
+      tag: "s1",
+      context,
+    });
     turns.push({
       message,
       intent: r.intent && r.intent.name,

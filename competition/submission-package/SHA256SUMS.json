@@ -193,13 +193,13 @@
     },
     {
       "path": "widget/sample-results.js",
-      "bytes": 11540,
-      "sha256": "c2ab83c6d21e6d4086a334cf69dc47a76b9750f3ad6fe1ef64ed073b4ac2e7a3"
+      "bytes": 11549,
+      "sha256": "ae7d6053df4606bdead5e0f13ffb0cb4c7969146fd48339ece73d09a464da1f0"
     },
     {
       "path": "widget/sample-results.json",
-      "bytes": 11512,
-      "sha256": "97484c22e9f4d1c6fb00dff1457f74b6d11bcc07441fce620059dce045d67762"
+      "bytes": 11521,
+      "sha256": "72481bc8d29426ce3e6035b82f729dbc87d4e2eba66c4e7b70bd1040ae4bbe4e"
     },
     {
       "path": "widget/styles.css",
