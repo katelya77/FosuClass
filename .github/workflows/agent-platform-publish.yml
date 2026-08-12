@@ -6,15 +6,6 @@ name: Publish agent platform image (GHCR, multi-arch)
 # 纪律：禁 floating latest；生产部署依据 = sha-<sha> tag / digest；smoke 不过不 push。
 
 on:
-  push:
-    branches: [codex/xiaofu-agent-product-platform, main]
-    paths:
-      - "server/**"
-      - "deploy/standalone/**"
-      - "apps/**"
-      - "packages/**"
-      - "tools/standalone-compose-smoke.js"
-      - ".github/workflows/agent-platform-publish.yml"
   workflow_dispatch:
 
 permissions:

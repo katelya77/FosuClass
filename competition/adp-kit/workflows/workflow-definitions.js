@@ -1,7 +1,14 @@
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
+
 const COMMON_FAILURE = "任何工具失败、版本不一致或 verified=false 都进入失败回复；生成模型不得补造课程、教室、冲突或计划事实。";
 const COMMON_CONTEXT = "只继承最近一次已确认且仍属于同一任务的字段；用户明确新值时覆盖，切换任务时清空无关字段。";
+const SCHEDULE_EXTRACT_PROMPT = fs.readFileSync(
+  path.join(__dirname, "..", "widget", "native", "schedule-parameter-extractor-v1.1.txt"),
+  "utf8",
+).trim();
 
 function node(id, type, label, extra = {}) {
   return Object.assign({ id, type, label }, extra);
@@ -32,10 +39,8 @@ const workflows = [
       { name: "period_scope", type: "object", required: false, note: "{start,end}；上午1-4、下午5-8、晚上9-10" },
     ],
     required: ["entity_type", "entity_name"],
-    timePolicy: "时间不是必填项；date_text/week/weekday 均缺失时调用 get_academic_context({})，再把 resolvedDate 作为今天传给 query_schedule。",
-    extractPrompt: `只从用户消息和已确认上下文提取 JSON：
-{"entity_type":"class|teacher|room|course|","entity_name":"","date_text":"","week":null,"weekday":null,"period_scope":null,"inherited":false}
-教师1→教师001，A班→2025级A班；“那周五下午呢”只更新时间并继承已确认对象。不确定字段留空，不生成课程事实。`,
+    timePolicy: "时间不是必填项；合法显式 week 清空重复 date_text 后由 query_schedule 校验；没有合法显式 week 时，date_text 继续交给 get_academic_context 确定性解析。",
+    extractPrompt: SCHEDULE_EXTRACT_PROMPT,
     tool: "query_schedule",
     toolMapping: {
       entity_type: "entityType",

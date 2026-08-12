@@ -150,9 +150,15 @@ Adapter Gate：
 
 四项全部满足才允许展示 Widget；否则沿用旧文本兜底。
 
-Adapter 源码：
+历史兼容入口：
 
 `competition/adp-kit/widget/native/schedule-runtime-adapter.py`
+
+当前唯一 canonical Adapter 源码：
+
+`competition/adp-kit/widget/native/schedule-runtime-safe-v3-adapter.py`
+
+Workflow ZIP generator 必须从 canonical 文件注入 CodeExecutor，禁止再手工维护另一份 Adapter 实现。
 
 ### Pilot 实机验收
 

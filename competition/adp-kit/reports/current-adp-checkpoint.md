@@ -1,9 +1,16 @@
 # 校园智序 · 小序 — 当前 ADP 研发检查点
 
-更新时间：2026-08-12 03:33 +08:00
+更新时间：2026-08-12 19:15 +08:00
 
 当前状态：
 
+- `ADP_LOCAL_FINAL_CONVERGENCE_PASS`
+- `ADP_FINAL_BUNDLE_COMPILED`
+- `ADP_01_SCHEDULE_FINAL_GENERATED`
+- `ADP_WEEK_TRANSPORT_OMITS_WEEKDAY_AND_DATE`
+- `ADP_FINAL_ARTIFACT_GATE_65_65_PASS`
+- `ADP_FINAL_RUNTIME_E2E_PENDING`
+- `PUBLIC_READY_FAIL`
 - `CORE_WORKFLOWS_FROZEN`
 - `APP_ROUTING_CONTEXT_FROZEN`
 - `WIDGET_V2_LOCAL_GATE_PASS`
@@ -14,7 +21,8 @@
 - `SCHEDULE_CONTRACTSYNC_PACKAGE_READY`
 - `ADP_WIDGET_SCHEDULE_RUNTIME_PASS`
 - `ADP_WIDGET_SCHEDULE_SYS_CHAT_TRIGGER_PASS`
-- `ADP_WIDGET_ACTION_CONTRACT_PENDING`
+- `ADP_WIDGET_ACTION_CONTRACT_LOCAL_PASS`
+- `ADP_WIDGET_SCHEDULE_ACTION_E2E_PENDING`
 - `ADP_WIDGET_NATIVE_RUNTIME_PENDING`
 - `GITHUB_ACTIONS_INCLUDED_MINUTES_EXHAUSTED`
 
@@ -114,25 +122,65 @@ CampusTools 受控 `dateText` 只接受：今天/明天/后天、本周X/这周X
 
 详细：`2026-08-12-schedule-runtime-pass-action-contract.md`。
 
-## 当前最高优先 Gate：Action Contract V1
+## Action Contract V1：本地 PASS
 
 不要再改 Schedule Widget Schema / Template / Runtime。
 
 目标：UI label 自然，`sys.chat payload.query` 使用 canonical utterance。
 
-教师场景建议：
+教师场景已固定：
 
 - 查看整周：`查询教师003第1周的课表`
 - 下一天：当前第1周周一 → `查询教师003第1周周二的课`
 - 检查风险：`检查教师003第1周周一是否存在时间冲突或跨校区赶场`
 
-原则：
+实现：
 
-1. `换一天/当前范围/再看看` 等模糊词不直接作为执行 payload；
-2. Adapter 只根据 verified query/entity 确定性生成 Action；
-3. UI label 与执行 payload 分离；
-4. 先由 Codex/Kimi 做批量 Action Contract tests，再一次导入做端到端验收；
-5. 不改 CampusTools 冻结事实逻辑。
+1. `schedule-runtime-safe-v3-adapter.py` 成为 21 字段 Adapter 唯一源码；
+2. Workflow ZIP generator 从该文件注入 CodeExecutor，旧路径只保留兼容入口；
+3. Adapter 仅根据 verified CampusTools `resolvedEntity/query` 生成动作；
+4. `换一天/当前范围/再看看` 等模糊词不进入 payload；
+5. room/class/course 只生成冻结 01 支持的明确周/星期查询，不创建缺参 02/03；
+6. 第 20 周周日固定回退第 20 周周六，不越学期。
+
+新制品：
+
+`output/competition-adp/01-多维课表查询-WidgetStable-ActionsV1-可直接导入.zip`
+
+- WorkflowID：`f3961270-90a0-46d3-b86f-75a88a0c2ba8`
+- SHA256：`ce5448911f20b562516cf0e03959078b51e43f83dafd0da623bc734caa90fb24`
+- Artifact Gate：29/29 PASS
+- Action Contract tests：teacher day/week、rollover、semester end、room/class/course 与 invalid guards PASS
+
+正式标记：`ADP_WIDGET_ACTION_CONTRACT_LOCAL_PASS`。
+
+尚未在腾讯 ADP 导入/点击验收，严格不得标记 `ADP_WIDGET_SCHEDULE_ACTION_E2E_PASS`。
+
+详细：`2026-08-12-schedule-action-contract-v1-local-pass.md`。
+
+## Schedule Actions V1.1：Week Scope Contract 本地 PASS
+
+真实 ADP 已证明 DAY payload `查询教师003第1周周二的课` 可重新进入旧 01，并返回 `2026-09-01 verified EMPTY_RESULT`；整周 payload `查询教师003第1周的课表` 则暴露旧 01 的两个边界问题：optional `weekday=0` 未清空，以及显式“第N周”被重复写入 `date_text`。
+
+V1.1 只修改 01 的参数提取 Prompt、日期输入守卫、查询参数归一化及其生成/测试：
+
+- `week` 只接受 1–20，`weekday` 只接受 1–7；
+- `week=1, weekday=0, time_scope=week` → `query_week=1, query_weekday=None`；
+- 合法显式 week 时 `safe_date_text=""`；无合法 week 时保留明天/本周三/下周五及真正非法自然语言，继续由 CampusTools 结构化处理；
+- Action Builder V1、WidgetID、Schedule 21 字段、Template/Schema/WidgetParam、CampusTools、结果核验、02/03/04 均未改变。
+
+新制品：
+
+`output/competition-adp/01-多维课表查询-WidgetStable-ActionsV1.1-可直接导入.zip`
+
+- WorkflowID：`9272b9cb-c805-4fed-a300-1984a881a231`
+- SHA256：`36c5f92c3d544d0fa97cd0609cf4a44d71e5edb99833d2e59dc95861fbf65ff6`
+- Artifact Gate：35/35 PASS
+- Week Scope regressions：7/7 PASS
+
+当前 ADP 管理页 ActionsV1 未启用、原始 01 已启用，因此 `sys.chat` 落到旧 01 是预期平台行为。导入 V1.1 并完成真实整周 E2E 前，仍不得标记 `ADP_WIDGET_SCHEDULE_ACTION_E2E_PASS`。
+
+详细：`2026-08-12-schedule-actions-v1.1-week-scope-local-pass.md`。
 
 ## 研发效率模式
 
@@ -144,4 +192,4 @@ CampusTools 受控 `dateText` 只接受：今天/明天/后天、本周X/这周X
 
 ## 后续路线
 
-Action Contract V1（Schedule 01/03 回流） → 批量收口 02/03/04 + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。
+Schedule Action E2E → 批量收口 02/03/04 + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟演示。

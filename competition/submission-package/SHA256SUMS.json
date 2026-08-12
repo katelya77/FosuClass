@@ -223,8 +223,8 @@
     },
     {
       "path": "workflows/01-多维课表查询.md",
-      "bytes": 3575,
-      "sha256": "3de9d6022147620fc10dd2b77e129d8abc52dc1f37e72fcedbcc088c07e0c5f1"
+      "bytes": 5037,
+      "sha256": "ca0a10083a0b1cdfd59974f40d0a3c2554959dfe04ec7ced69dacc662f5188df"
     },
     {
       "path": "workflows/02-空教室规划.md",
@@ -253,8 +253,8 @@
     },
     {
       "path": "workflows/workflow-specs.json",
-      "bytes": 28459,
-      "sha256": "70362e78239502287b0be2c1496ad7827197c5d812a91f412f5c51d0d2aa049c"
+      "bytes": 29923,
+      "sha256": "540cf566772358432c3a88bc2f3982ff641f8d880f717d2003ed56695cb36b08"
     }
   ]
 }

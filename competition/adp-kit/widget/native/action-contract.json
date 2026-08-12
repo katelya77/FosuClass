@@ -1,0 +1,154 @@
+{
+  "schema": "fosuclass-adp-action-contract/v1",
+  "kind": "schedule",
+  "dataVersion": "competition-demo-v1",
+  "totalWeeks": 20,
+  "canonicalAdapter": "schedule-runtime-safe-v3-adapter.py",
+  "canonicalAdapterSha256": "d6382bc112ddc067fb319addf04d673132d76937929a6485e222adb366b81a5a",
+  "parameterExtractorPrompt": "schedule-parameter-extractor-v1.1.txt",
+  "dateInputGuard": "schedule-date-input-guard.py",
+  "queryNormalizer": "schedule-query-normalizer-v1.1.py",
+  "transportContract": "adp-transport-contract.json",
+  "baseline": {
+    "workflowId": "5bf89039-74fd-580e-b1a8-3c3cabdf483f",
+    "workflowName": "01-多维课表查询-WidgetStable",
+    "sha256": "4f78b5c029b87c25e0ff9b676d7230bf2e9c8d1858d421fe8cfcd90179db2f66"
+  },
+  "generated": {
+    "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f",
+    "workflowName": "01-多维课表查询-Final",
+    "fileName": "01-Schedule-Final.zip"
+  },
+  "compilerBaseline": {
+    "workflowId": "9272b9cb-c805-4fed-a300-1984a881a231",
+    "workflowName": "01-多维课表查询-WidgetStable-ActionsV1.1",
+    "sha256": "89f9bc99d79e83e37348fae57c1711a322c5c149252c1eba4fa30e91227fec9d",
+    "glob": "*WidgetStable*V1.1*.zip"
+  },
+  "compiler": {
+    "version": "1.0.0",
+    "sourceDate": "2026-08-12T00:00:00Z",
+    "scopeRouterNodeId": "ce2ca0f8-03b8-5311-8e19-ed2581c25a7f",
+    "branchNodeIds": {
+      "WEEK": {
+        "tool": "57ef64e4-8e0d-5225-a213-31b7ef3c9679",
+        "verify": "b7c679b5-e910-5971-8eed-9585a003b6c6",
+        "adapter": "58292e22-d958-503e-bad8-a8cf8fb55d19",
+        "display": "23c313b2-0462-5625-9a19-b2caaa9a5713",
+        "widget": "16dce0d3-0db6-5b6f-b28d-36cf110e7eaa",
+        "answer": "b4950257-487d-56b8-9300-57015854007a"
+      },
+      "DATE": {
+        "tool": "771b98f3-2cb2-5344-a4c0-c1bd93b7c482",
+        "verify": "510f0a54-76e1-5843-8c8d-54c5a079fd84",
+        "adapter": "47638eaa-4306-5544-bc8a-2049a295de22",
+        "display": "3ba01b1c-a49c-56f4-bd96-a9931f8566b2",
+        "widget": "acea6632-6407-585b-8174-bd32f422168b",
+        "answer": "2e19e63b-a1a9-52d9-a63e-8030fee30a78"
+      }
+    }
+  },
+  "dateGuardNodeId": "190ffe6d-4056-4561-82a8-df45b84d0034",
+  "widgetId": "23fbc659efe3482fab588d754e4420a4",
+  "actionType": "WIDGET_ACTION_NONE",
+  "supportedEntityTypes": ["teacher", "room", "class", "course"],
+  "forbiddenPayloadFragments": [
+    "换一天",
+    "再看看",
+    "当前范围",
+    "当前查询范围",
+    "换个时间"
+  ],
+  "canonical01Patterns": [
+    "^查询(.+)第([1-9]|1[0-9]|20)周的课表$",
+    "^查询(.+)第([1-9]|1[0-9]|20)周周[一二三四五六日]的课$"
+  ],
+  "canonical03TeacherRiskPattern": "^检查(.+)第([1-9]|1[0-9]|20)周周([一二三四五六日])是否存在时间冲突或跨校区赶场$",
+  "cases": [
+    {
+      "name": "teacher day regression",
+      "entity": {"type": "teacher", "name": "教师003"},
+      "query": {"week": 1, "weekday": 1, "date": null},
+      "expected": [
+        {"label": "查看整周", "message": "查询教师003第1周的课表"},
+        {"label": "看周二", "message": "查询教师003第1周周二的课"},
+        {"label": "检查风险", "message": "检查教师003第1周周一是否存在时间冲突或跨校区赶场"}
+      ]
+    },
+    {
+      "name": "teacher week scope",
+      "entity": {"type": "teacher", "name": "教师003"},
+      "query": {"week": 1, "weekday": null, "date": null},
+      "expected": [
+        {"label": "看周一", "message": "查询教师003第1周周一的课"},
+        {"label": "看周三", "message": "查询教师003第1周周三的课"},
+        {"label": "看周五", "message": "查询教师003第1周周五的课"}
+      ]
+    },
+    {
+      "name": "weekday rollover",
+      "entity": {"type": "teacher", "name": "教师003"},
+      "query": {"week": 1, "weekday": 7, "date": null},
+      "expected": [
+        {"label": "查看整周", "message": "查询教师003第1周的课表"},
+        {"label": "看下周一", "message": "查询教师003第2周周一的课"},
+        {"label": "检查风险", "message": "检查教师003第1周周日是否存在时间冲突或跨校区赶场"}
+      ]
+    },
+    {
+      "name": "semester end Sunday",
+      "entity": {"type": "teacher", "name": "教师003"},
+      "query": {"week": 20, "weekday": 7, "date": null},
+      "expected": [
+        {"label": "查看整周", "message": "查询教师003第20周的课表"},
+        {"label": "看周六", "message": "查询教师003第20周周六的课"},
+        {"label": "检查风险", "message": "检查教师003第20周周日是否存在时间冲突或跨校区赶场"}
+      ]
+    },
+    {
+      "name": "room day stays in 01",
+      "entity": {"type": "room", "name": "A1-101"},
+      "query": {"week": 2, "weekday": 3, "date": null},
+      "expected": [
+        {"label": "查看整周", "message": "查询A1-101第2周的课表"},
+        {"label": "看周四", "message": "查询A1-101第2周周四的课"},
+        {"label": "看周一", "message": "查询A1-101第2周周一的课"}
+      ]
+    },
+    {
+      "name": "class day stays in 01",
+      "entity": {"type": "class", "name": "2025级A班"},
+      "query": {"week": 3, "weekday": 5, "date": null},
+      "expected": [
+        {"label": "查看整周", "message": "查询2025级A班第3周的课表"},
+        {"label": "看周六", "message": "查询2025级A班第3周周六的课"},
+        {"label": "看周一", "message": "查询2025级A班第3周周一的课"}
+      ]
+    },
+    {
+      "name": "course week stays in 01",
+      "entity": {"type": "course", "name": "高等数学A"},
+      "query": {"week": 4, "weekday": null, "date": null},
+      "expected": [
+        {"label": "看周一", "message": "查询高等数学A第4周周一的课"},
+        {"label": "看周三", "message": "查询高等数学A第4周周三的课"},
+        {"label": "看周五", "message": "查询高等数学A第4周周五的课"}
+      ]
+    }
+  ],
+  "guards": [
+    {"name": "tool failure", "mutation": "tool_failure"},
+    {"name": "unverified evidence", "mutation": "unverified"},
+    {"name": "invalid evidence shape", "mutation": "invalid_evidence_shape"},
+    {"name": "empty result", "mutation": "empty_items"},
+    {"name": "missing entity", "mutation": "missing_entity"},
+    {"name": "invalid entity shape", "mutation": "invalid_entity_shape"},
+    {"name": "unsupported entity", "mutation": "unsupported_entity"},
+    {"name": "missing query", "mutation": "missing_query"},
+    {"name": "invalid query shape", "mutation": "invalid_query_shape"},
+    {"name": "missing week", "mutation": "missing_week"},
+    {"name": "week below semester", "mutation": "week_zero"},
+    {"name": "week beyond semester", "mutation": "week_overflow"},
+    {"name": "invalid weekday", "mutation": "weekday_overflow"}
+  ]
+}

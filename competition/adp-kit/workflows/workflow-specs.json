@@ -63,8 +63,8 @@
         "entity_type",
         "entity_name"
       ],
-      "timePolicy": "时间不是必填项；date_text/week/weekday 均缺失时调用 get_academic_context({})，再把 resolvedDate 作为今天传给 query_schedule。",
-      "extractPrompt": "只从用户消息和已确认上下文提取 JSON：\n{\"entity_type\":\"class|teacher|room|course|\",\"entity_name\":\"\",\"date_text\":\"\",\"week\":null,\"weekday\":null,\"period_scope\":null,\"inherited\":false}\n教师1→教师001，A班→2025级A班；“那周五下午呢”只更新时间并继承已确认对象。不确定字段留空，不生成课程事实。",
+      "timePolicy": "时间不是必填项；合法显式 week 清空重复 date_text 后由 query_schedule 校验；没有合法显式 week 时，date_text 继续交给 get_academic_context 确定性解析。",
+      "extractPrompt": "你是“校园智序 · 小序”的多维课表查询参数提取器。只提取参数，不回答课程事实。\n\n只根据当前用户消息与最近一次已确认且仍属于同一课表查询任务的上下文提取：\n- entity_type: class|teacher|room|course\n- entity_name: 对象名称\n- date_text: 受控自然语言日期\n- week: 1-20\n- weekday: 1-7\n- period_start / period_end: 1-10\n- time_scope: day|week\n\n严格规则：\n1. 教师1→教师001；教师12→教师012。\n2. A班→2025级A班；a1-101→A1-101。\n3. 上午=1-4，下午=5-8，晚上=9-10。\n4. 没有合法显式 week 时，“本周三/这周三/下周五/明天/后天”等受控自然语言日期写入 date_text，继续交给确定性日期工具解析。\n5. 用户明确给出“第N周”“第N周课表”“第N周有哪些课”时，必须输出 week=N、time_scope=week、weekday=null、date_text=null；禁止 date_text=\"第N周\"。\n6. 用户明确给出“第N周周X”时，必须输出 week=N、weekday=1-7、time_scope=day、date_text=null；显式 week/weekday 已足够时禁止在 date_text 重复表示同一时间条件。\n7. 合同示例“查询教师003第1周的课表”必须得到 entity_type=teacher、entity_name=教师003、week=1、weekday=null、date_text=null、time_scope=week。\n8. 合同示例“查询教师003第1周周二的课”必须得到 entity_type=teacher、entity_name=教师003、week=1、weekday=2、date_text=null、time_scope=day。\n9. “那周五下午呢”只更新时间并继承最近一次已确认对象；用户明确新对象时覆盖。\n10. 不确定的字段留空或 null；绝不虚构课程、教师、教室、校区、周次或节次事实。\n11. entity_type 或 entity_name 缺失时不要猜测，留空供下游追问。",
       "tool": "query_schedule",
       "toolMapping": {
         "entity_type": "entityType",

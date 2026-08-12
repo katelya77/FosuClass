@@ -1,13 +1,21 @@
 # 校园智序 · 小序 — ChatGPT Project 新对话接力主文件
 
-更新时间：2026-08-12 03:33 +08:00
+更新时间：2026-08-12 19:15 +08:00
+
+## 2026-08-12 Final Convergence 本地收敛（最新）
+
+`ADP_LOCAL_CONVERGENCE = PASS`，`ADP_RUNTIME_E2E = PENDING`，`PUBLIC_READY = FAIL`。
+
+01 已不再使用万能 Tool Node：参数归一化后由 Scope Router 进入独立 `WEEK / DAY / DATE` Tool Node。WEEK 最终 ZIP 的 Tool Body 中真正不存在 `weekday` 与 `date`，因此结构上消除了 optional INT sentinel `0` 风险；CampusTools 事实层未改。统一编译入口为根目录 `npm run adp:compile`；`01-Schedule-Final.zip` 已生成，最终 ZIP Gate 65/65，连续两次编译 SHA-256 一致。编译器优先使用真实 V1.1 platform seed；远端恢复时可对 canonical Final bootstrap 做 WorkflowID、WorkflowName 与三路节点校验后重编译。
+
+下一步只做草稿环境导入与四条 Runtime E2E；不要手改 Workflow 参数。02/03/04 原生 Widget 资源缺失项集中在 Bundle 内 `NEEDS_ADP_EXPORT.md`。PUBLIC_READY 因本机敏感文件与 reachable history 待审计命中失败，今晚不得改 public。
 
 > 新对话优先读取本文件、`current-adp-checkpoint.md`、`2026-08-12-b2-zod-jsonschema-mismatch.md`、`2026-08-12-schedule-widget-contract-split-root-cause.md`、`2026-08-12-schedule-runtime-pass-action-contract.md` 与 `competition/adp-kit/widget/native/runtime-integration-runbook.md`。不要重新设计冻结 01–04，不要重复 B2，不要再调 Schedule Schema/Template。
 
 ## 新对话第一句
 
 ```text
-@GitHub 请恢复校园智序·小序上下文。B2 已 PASS；Schedule ContractSplit 已修复，`01-多维课表查询-WidgetStable` 已真实动态 Runtime PASS，原生 Schedule 卡成功展示。Schedule 的 sys.chat 点击也已真实进入新一轮智能体；当前唯一 Gate 是 Action Contract V1：把模糊按钮 payload 改成冻结 01/03 能稳定解析的 canonical utterance，然后批量推进 02/03/04 + Choice/Error。不要再做 Widget Runtime 小实验。
+@GitHub 请恢复校园智序·小序上下文。ADP_LOCAL_CONVERGENCE=PASS，ADP_RUNTIME_E2E=PENDING，PUBLIC_READY=FAIL。01-Schedule-Final 已由 compiler 生成；WEEK Tool Body 真正省略 weekday/date，最终 ZIP Gate 65/65。当前只需导入 Final 做 DAY/WEEK/Action/03 handoff 真实 E2E；不要改 Schedule Widget、21 字段、CampusTools 或 02/03/04。
 ```
 
 ## 项目目标
@@ -117,26 +125,64 @@ CampusTools 的受控 `dateText` 只接受：今天/明天/后天、本周X/这�
 
 `换一天` 不应作为机器执行 payload。
 
-## 当前唯一 Gate：Action Contract V1
+## Action Contract V1：本地完成
 
 目标：**UI label 自然，机器 payload canonical。**
 
-教师场景建议：
+教师场景固定：
 
 - 查看整周 → `查询教师003第1周的课表`
 - 下一天：若当前第1周周一 → `查询教师003第1周周二的课`
 - 检查风险 → `检查教师003第1周周一是否存在时间冲突或跨校区赶场`
 
-原则：
+实现状态：
 
-1. Adapter 根据 verified query/entity 确定性构造动作；
-2. `换一天/当前范围/再看看` 等模糊词不能直接作为执行 payload；
-3. UI label 与 payload 分离；
-4. Codex/Kimi 先跑 Action Contract tests；
-5. 用户只做一次批量导入和少量端到端验收；
-6. 不改 CampusTools 事实逻辑。
+1. `schedule-runtime-safe-v3-adapter.py` 是 21 字段 Adapter 唯一源码；
+2. generator 从该文件注入真实 PASS baseline 的 CodeExecutor；
+3. Adapter 根据 verified `resolvedEntity/query` 确定性构造动作；
+4. `换一天/当前范围/再看看` 等模糊词不进入 payload；
+5. room/class/course 只回流 01，教师明确日范围才生成 03 self-risk；
+6. 周日跨周与第 20 周周日回退行为已有测试固定；
+7. 不改 CampusTools、冻结 01/02/03/04、WidgetID、Template、21 字段 Schema/WidgetParam、ActionType 或 Edge。
 
-详细：`competition/adp-kit/reports/2026-08-12-schedule-runtime-pass-action-contract.md`。
+正式状态：
+
+```text
+ADP_WIDGET_SCHEDULE_RUNTIME_PASS
+ADP_WIDGET_SCHEDULE_SYS_CHAT_TRIGGER_PASS
+ADP_WIDGET_ACTION_CONTRACT_LOCAL_PASS
+```
+
+制品：
+
+`output/competition-adp/01-多维课表查询-WidgetStable-ActionsV1-可直接导入.zip`
+
+- WorkflowID：`f3961270-90a0-46d3-b86f-75a88a0c2ba8`
+- SHA256：`ce5448911f20b562516cf0e03959078b51e43f83dafd0da623bc734caa90fb24`
+- 静态 Artifact Gate：29/29 PASS
+
+当前唯一 Gate 是腾讯 ADP Schedule Action E2E。用户验收前不得标记 `ADP_WIDGET_SCHEDULE_ACTION_E2E_PASS`。
+
+详细：`competition/adp-kit/reports/2026-08-12-schedule-action-contract-v1-local-pass.md`。
+
+## Schedule Actions V1.1：Week Scope Contract Fix
+
+新增真实证据：点击“看周二”后，`查询教师003第1周周二的课` 已重新进入已启用的旧 01，并返回 `2026-09-01 verified EMPTY_RESULT`，因此 DAY Action canonical payload 已兼容。点击“查看整周”仍返回 `INVALID_PARAM / weekday 需为 1-7 / 不支持的 dateText`。
+
+根因与修复：
+
+1. ADP optional INT 空值可能成为 `0`；01 归一化现严格限制 week=1–20、weekday=1–7，整周固定清空 weekday。
+2. 显式第N周不再重复写入 date_text；新增“日期输入守卫”，合法显式 week 时输出空 `safe_date_text`，否则保留原文本进入 CampusTools。
+3. Action Builder V1 保持原 canonical 三按钮；Widget、21 字段、WidgetID、CampusTools、结果核验、02/03/04 全部冻结。
+
+制品：`output/competition-adp/01-多维课表查询-WidgetStable-ActionsV1.1-可直接导入.zip`
+
+- WorkflowID：`9272b9cb-c805-4fed-a300-1984a881a231`
+- SHA256：`36c5f92c3d544d0fa97cd0609cf4a44d71e5edb99833d2e59dc95861fbf65ff6`
+- Artifact Gate：35/35 PASS
+- 全部本地测试 PASS；详见 `competition/adp-kit/reports/2026-08-12-schedule-actions-v1.1-week-scope-local-pass.md`。
+
+当前 ADP 管理状态仍是 ActionsV1 未启用、原始 01 已启用，因此 sys.chat 规划落到旧 01 是预期行为。下一步只导入 V1.1 并验收“查看整周”；通过前不得标记 `ADP_WIDGET_SCHEDULE_ACTION_E2E_PASS`。
 
 ## 后续工程化目标：ADP Contract Compiler
 
@@ -171,4 +217,4 @@ PR #49：保持 open / unmerged；正式评测收口前不发布正式应用。
 
 ## 后续比赛路线
 
-Action Contract V1（Schedule 01/03 回流） → 批量 02/03/04 Widget + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖演示。
+Schedule Action E2E → 批量 02/03/04 Widget + Choice/Error → 六卡 Runtime PASS → 32 QA → 80 条 ADP 原生评测 → Prompt A/B → 安全红队 → 多模态 → Test Release → 5 分钟获奖演示。
