@@ -5492,21 +5492,22 @@ router.get("/sync/staging/upload/status", adminAuth.verifyAdminAccess, (req, res
  */
 router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const latestUpload = (stagingUploadService.listUploadRecords({ limit: 1 }).records || [])[0] || null;
+    const stagingInfo = releaseLifecycleService.getLatestStaging();
+    const latestUpload = stagingInfo.upload || null;
     if (latestUpload && (latestUpload.summary || latestUpload.canonicalHash)) {
       const summary = latestUpload.summary || {};
       const activeInfo = releaseService.getActiveReleaseInfoFast();
       const activeCanonicalHash = getActiveCanonicalHash();
-      const stagingCanonicalHash = latestUpload.canonicalHash || summary.canonicalHash || "";
+      const stagingCanonicalHash = stagingInfo.stagingCanonicalHash || latestUpload.canonicalHash || summary.canonicalHash || "";
       const sameAsActive = Boolean(activeCanonicalHash && stagingCanonicalHash && activeCanonicalHash === stagingCanonicalHash);
       return res.json({
         success: true,
         lightweight: true,
         data: {
-          term: latestUpload.term || summary.term || "",
-          releaseVersion: latestUpload.releaseVersion || summary.releaseVersion || "",
-          generatedAt: summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
-          meta: { stagingUploadId: latestUpload.uploadId || "" },
+          term: stagingInfo.term || latestUpload.term || summary.term || "",
+          releaseVersion: stagingInfo.releaseVersion || latestUpload.releaseVersion || summary.releaseVersion || "",
+          generatedAt: stagingInfo.generatedAt || summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
+          meta: { stagingUploadId: stagingInfo.uploadId || latestUpload.uploadId || "" },
           canonicalHash: stagingCanonicalHash,
           activeCanonicalHash,
           stagingCanonicalHash,

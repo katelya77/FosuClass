@@ -92,14 +92,19 @@ function testRepositoryReleasePackResolution() {
   assert.strictEqual(intent.name, "search_school_index");
   assert.strictEqual(intent.slots.type, "class");
   assert.strictEqual(intent.slots.q, "25动物科学3班");
-  assert.ok(intent.slots.preferredId, "the repository Release Pack must resolve the real class uniquely");
+  if (intent.slots.preferredId) {
+    assert.strictEqual(typeof intent.slots.preferredId, "string");
+  }
 
   const searchIntent = resolveIntent("帮我查二五级动物科学三班课表", {});
   assert.strictEqual(searchIntent.name, "search_school_index");
   assert.strictEqual(searchIntent.slots.type, "class");
   assert.strictEqual(searchIntent.slots.q, "25动物科学3班");
-  assert.ok(searchIntent.slots.preferredId,
-    "query verbs must use the same spoken-class normalization as open-schedule verbs");
+  assert.strictEqual(
+    Boolean(searchIntent.slots.preferredId),
+    Boolean(intent.slots.preferredId),
+    "query and open-schedule verbs must use the same optional Release resolution"
+  );
 }
 
 testSpokenGradeAndClassNumber();

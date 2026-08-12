@@ -535,11 +535,12 @@ function buildOpenScheduleIntent(goal, context = {}) {
       };
     }
     // not_found for class-looking entity: still try search with locked type, never fall to teacher
+    const normalizedEntity = classAliasResolver.normalizeClassEntity(entity) || entity;
     return {
       name: "search_school_index",
       slots: {
         type: "class",
-        q: entity,
+        q: normalizedEntity,
         lockedEntityType: "class",
         goalAction: "open_schedule",
         explicitCommand: goal.explicitCommand === true,

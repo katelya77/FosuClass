@@ -226,7 +226,42 @@ async function run() {
       dataAvailable: false,
       source: "test-fixture",
     });
+
+    const targetUploadId = "stg_target_cross_term";
+    const targetCanonicalHash = "a".repeat(64);
+    nextSnapshot.stagingUploadId = targetUploadId;
+    nextSnapshot.canonicalHash = targetCanonicalHash;
     fs.writeFileSync(path.join(storageDir, "staging-latest.json"), JSON.stringify(nextSnapshot, null, 2), "utf-8");
+    fs.writeFileSync(path.join(storageDir, "upload-record-index.json"), JSON.stringify({
+      schemaVersion: 1,
+      records: [{
+        uploadId: "stg_newer_old_term",
+        term: "2025-2026-2",
+        canonicalHash: "b".repeat(64),
+        status: "published",
+        updatedAt: "2026-08-13T01:00:00.000Z",
+        summary: { term: "2025-2026-2", canonicalHash: "b".repeat(64), counts: { classScheduleCount: 999 } },
+      }, {
+        uploadId: targetUploadId,
+        term: nextTerm,
+        releaseVersion: nextVersion,
+        canonicalHash: targetCanonicalHash,
+        status: "pending-review",
+        updatedAt: "2026-08-12T23:00:00.000Z",
+        summary: { term: nextTerm, releaseVersion: nextVersion, canonicalHash: targetCanonicalHash, counts: { classScheduleCount: 1 } },
+      }],
+    }, null, 2), "utf-8");
+
+    const currentStaging = await requestJson(baseUrl, "/api/admin/sync/staging/current");
+    assert.strictEqual(currentStaging.status, 200);
+    assert.strictEqual(currentStaging.data.data.term, nextTerm, "current staging must follow staging-latest, not the newest updated upload record");
+    assert.strictEqual(currentStaging.data.data.meta.stagingUploadId, targetUploadId);
+    assert.strictEqual(currentStaging.data.data.canonicalHash, targetCanonicalHash);
+
+    delete nextSnapshot.stagingUploadId;
+    delete nextSnapshot.canonicalHash;
+    fs.writeFileSync(path.join(storageDir, "staging-latest.json"), JSON.stringify(nextSnapshot, null, 2), "utf-8");
+    fs.rmSync(path.join(storageDir, "upload-record-index.json"), { force: true });
 
     const readyStart = await requestJson(baseUrl, "/api/admin/sync/staging/publish/start", {
       method: "POST",
