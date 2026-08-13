@@ -161,6 +161,9 @@ async function run() {
   assert.strictEqual(env.FOSU_BASE_URL, "https://process-wins.example");
   assert.strictEqual(env.FOSU_API_BASE, "https://api-from-client-env.example");
   assert.strictEqual(env.PREFERRED_SEMESTER, "2025-2026-2");
+  const clearedEnv = { PREFERRED_SEMESTER: "", SYNC_GRADES: "" };
+  loadSyncClientEnv({ env: clearedEnv, envPath });
+  assert.strictEqual(clearedEnv.PREFERRED_SEMESTER, "", "explicit empty runtime override must block stale .env term reload");
   fs.rmSync(tempRoot, { recursive: true, force: true });
 
   let session = await verifySession({

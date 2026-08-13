@@ -659,6 +659,8 @@
     "test:semester-readiness-explain": "node tools/test-semester-readiness-explain.js",
     "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js",
     "test:active-term-cutover-coherence": "node tools/test-active-term-cutover-coherence.js",
+    "test:active-term-settings-reconciliation": "node tools/test-active-term-settings-reconciliation.js",
+    "test:long-major-code-search": "node tools/test-long-major-code-search.js",
     "test:term-data-error-ux": "node tools/test-term-data-error-ux.js",
     "test:conversation-memory": "node tools/test-conversation-memory.js",
     "test:kb-control-plane": "node tools/test-kb-control-plane-v2.js && node tools/test-knowledge-control-plane.js",

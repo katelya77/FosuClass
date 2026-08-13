@@ -5,7 +5,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { buildSyncPlan, printablePlan } = require("../../shared/syncPlan");
 const { DEFAULT_CURRENT_TERM, loadTermConfig } = require("../../shared/termConfig");
-const { prepareDirectNetworkEnvironment } = require("./syncEnv");
+const { loadSyncClientEnv, prepareDirectNetworkEnvironment } = require("./syncEnv");
 
 function parseArgs(argv) {
   const params = {};
@@ -54,6 +54,9 @@ function writeState(root, term, state) {
 function buildCurrentTermInvocation(argv, options = {}) {
   const root = path.resolve(options.root || path.join(__dirname, "../.."));
   const env = options.env || process.env;
+  if (!Object.prototype.hasOwnProperty.call(options, "env")) {
+    loadSyncClientEnv({ env });
+  }
   const params = parseArgs(argv);
   const term = String(params.term || env.FOSU_CURRENT_TERM || DEFAULT_CURRENT_TERM);
   const config = loadTermConfig(term, { root });
@@ -69,6 +72,12 @@ function buildCurrentTermInvocation(argv, options = {}) {
   // generic "resume" profile has no implicit scopes and is therefore not an
   // acceptable source of truth for this one-click pipeline.
   const action = "new-term";
+  const planEnv = Object.assign({}, env, {
+    // Current-term catalog discovery is authoritative. An old local grade list
+    // must not permanently hide a newly released cohort such as grade 2026.
+    SYNC_GRADES: "",
+    SYNC_CLASS_GRADES: "",
+  });
   const plan = buildSyncPlan(action, {
     term,
     "term-start-date": config.termStartDate,
@@ -83,7 +92,8 @@ function buildCurrentTermInvocation(argv, options = {}) {
     activate: bool(params.activate),
     "no-upload": bool(params["no-upload"]),
     "no-publish": bool(params["no-publish"]),
-  }, env);
+    grades: params.grades || params.grade || "",
+  }, planEnv);
   const args = [action,
     `--term=${term}`,
     `--term-start-date=${config.termStartDate}`,
@@ -97,11 +107,15 @@ function buildCurrentTermInvocation(argv, options = {}) {
     "--allow-derived",
   ];
   if (plan.activate) args.push("--activate");
+  if (plan.filters.grades.length) args.push(`--grades=${plan.filters.grades.join(",")}`);
   if (resume) args.push("--resume");
   if (!plan.upload) args.push("--no-upload");
   if (!plan.buildRelease) args.push("--no-publish");
   const runtimeEnv = Object.assign({}, env, {
+    PREFERRED_SEMESTER: term,
     SYNC_LOCAL_STAGING_ONLY: env.ADMIN_API_TOKEN ? String(env.SYNC_LOCAL_STAGING_ONLY || "false") : "true",
+    SYNC_GRADES: plan.filters.grades.join(","),
+    SYNC_CLASS_GRADES: plan.filters.grades.join(","),
   });
   const networkIsolation = prepareDirectNetworkEnvironment(runtimeEnv);
   return { args, config, plan, root, resume, runtimeEnv, networkIsolation };

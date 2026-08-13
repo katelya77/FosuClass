@@ -83,13 +83,13 @@ function loadSyncClientEnv(options = {}) {
     );
 
   Object.keys(parsed).forEach((key) => {
-    if (env[key] === undefined || env[key] === "") {
+    if (env[key] === undefined) {
       env[key] = parsed[key];
     }
   });
 
   SYNC_ENV_FIELDS.forEach((key) => {
-    if (env[key] === undefined || env[key] === "") {
+    if (env[key] === undefined || (env[key] === "" && SYNC_DEFAULTS[key] !== "")) {
       env[key] = SYNC_DEFAULTS[key];
     }
   });

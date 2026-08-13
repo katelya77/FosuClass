@@ -362,7 +362,7 @@ function printablePlan(plan) {
 }
 
 function renderPowerShellCommand(task, options = {}) {
-  const term = options.term || "2025-2026-2";
+  const term = options.term || "CURRENT_TERM";
   const start = options.termStartDate || options.start || "YYYY-MM-DD";
   const weekCount = Number(options.totalWeeks);
   const weeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "TOTAL_WEEKS";
@@ -413,7 +413,7 @@ function requestScaleDisplay(code) {
 }
 
 function getRecommendedOperations(options = {}) {
-  const term = options.term || "2025-2026-2";
+  const term = options.term || "CURRENT_TERM";
   const termStartDate = options.termStartDate || "YYYY-MM-DD";
   const weekCount = Number(options.totalWeeks);
   const totalWeeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "";

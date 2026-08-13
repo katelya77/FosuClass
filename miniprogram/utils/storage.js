@@ -45,6 +45,68 @@ function saveSettings(patch) {
   return next;
 }
 
+/**
+ * Reconcile user-visible term state with the authoritative runtime pointer.
+ * The selected schedule identity is intentionally preserved so
+ * currentScheduleService can rebind it against the new release by id/name.
+ */
+function reconcileSettingsWithActiveTerm(activeTerm, context = {}) {
+  const term = String(activeTerm || "").trim();
+  const current = getSettings();
+  const previousTerm = String(current.semesterId || current.semester || "").trim();
+  if (!term) {
+    return { changed: false, previousTerm, term: term || previousTerm, settings: current };
+  }
+
+  try {
+    const bootstrap = wx.getStorageSync(BOOTSTRAP_CACHE_KEY) || {};
+    const bootstrapData = bootstrap.data || bootstrap;
+    const bootstrapTerm = String(
+      bootstrapData.term || bootstrapData.semester || bootstrapData.currentSemester || ""
+    ).trim();
+    if (bootstrapTerm && bootstrapTerm !== term) {
+      wx.removeStorageSync(BOOTSTRAP_CACHE_KEY);
+    }
+    const activeSnapshot = wx.getStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY) || {};
+    const snapshotTerm = String(activeSnapshot.term || activeSnapshot.semester || "").trim();
+    if (snapshotTerm && snapshotTerm !== term) {
+      wx.removeStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY);
+    }
+    const legacyFilter = wx.getStorageSync(SCHOOL_FILTER_CACHE_KEY) || {};
+    const filterTerm = String(legacyFilter.term || legacyFilter.semester || legacyFilter.semesterValue || "").trim();
+    if (filterTerm && filterTerm !== term) {
+      wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+    }
+  } catch (error) {
+    // Storage quota/race must not block pointer activation.
+  }
+
+  if (previousTerm === term) {
+    return { changed: false, previousTerm, term, settings: current };
+  }
+
+  const next = saveSettings({
+    semester: term,
+    semesterId: term,
+  });
+
+  try {
+    // This legacy key is not term/release scoped. A previous-term selection must
+    // never be replayed into the newly activated catalog.
+    wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+  } catch (error) {
+    // Storage quota/race must not block pointer activation.
+  }
+
+  return {
+    changed: true,
+    previousTerm,
+    term,
+    releaseVersion: String(context.releaseVersion || ""),
+    settings: next,
+  };
+}
+
 function resetSettings() {
   wx.setStorageSync(STORAGE_KEY, defaultSettings);
   return Object.assign({}, defaultSettings);
@@ -540,6 +602,7 @@ module.exports = {
   clearDataCaches,
   clearLocalSelection,
   getSettings,
+  reconcileSettingsWithActiveTerm,
   resetSettings,
   saveSettings,
   getCurrentScheduleTarget,

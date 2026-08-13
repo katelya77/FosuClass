@@ -4,7 +4,7 @@ const releasePackService = require("./releasePackService");
 const securitySessionService = require("./securitySessionService");
 const termConfigService = require("./termConfigService");
 const request = require("../utils/request");
-const { BOOTSTRAP_CACHE_KEY } = require("../utils/storage");
+const { BOOTSTRAP_CACHE_KEY, reconcileSettingsWithActiveTerm } = require("../utils/storage");
 
 const STARTED_AT = Date.now();
 const PERIODIC_DELAY_MS = 10000;
@@ -41,10 +41,16 @@ function singleflight(key, factory, options = {}) {
 
 function applyPointerToApp(pointer) {
   if (!pointer) return null;
+  const activeTerm = pointer.activeTerm || pointer.term || pointer.termConfig && pointer.termConfig.term || "";
+  if (activeTerm) {
+    reconcileSettingsWithActiveTerm(activeTerm, {
+      releaseVersion: pointer.releaseVersion || "",
+    });
+  }
   const app = getApp && getApp();
   if (app && app.globalData) {
     const pointerRelease = {
-      term: pointer.activeTerm || pointer.term,
+      term: activeTerm,
       releaseVersion: pointer.releaseVersion,
       cacheEpoch: pointer.cacheEpoch,
       forceRefreshToken: pointer.forceRefreshToken,

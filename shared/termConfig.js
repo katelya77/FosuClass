@@ -3,8 +3,32 @@
 const fs = require("fs");
 const path = require("path");
 
-const DEFAULT_CURRENT_TERM = "2026-2027-1";
 const TERM_RE = /^(\d{4})-(\d{4})-([12])$/;
+
+function termConfigDirectory(options = {}) {
+  const root = path.resolve(options.root || path.join(__dirname, ".."));
+  return path.join(root, "config", "terms");
+}
+
+function resolvePreferredTerm(options = {}) {
+  const directory = termConfigDirectory(options);
+  const preferred = fs.readdirSync(directory)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => {
+      const source = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
+      return source && source.preferred === true ? String(source.term || "").trim() : "";
+    })
+    .filter(Boolean);
+  if (preferred.length !== 1) {
+    const error = new Error(`PREFERRED_TERM_CONFIG_${preferred.length ? "AMBIGUOUS" : "MISSING"}`);
+    error.code = preferred.length ? "PREFERRED_TERM_CONFIG_AMBIGUOUS" : "PREFERRED_TERM_CONFIG_MISSING";
+    error.terms = preferred;
+    throw error;
+  }
+  return assertTerm(preferred[0]);
+}
+
+const DEFAULT_CURRENT_TERM = resolvePreferredTerm();
 
 function assertTerm(term) {
   const value = String(term || "").trim();
@@ -17,10 +41,9 @@ function assertTerm(term) {
   return value;
 }
 
-function loadTermConfig(term = DEFAULT_CURRENT_TERM, options = {}) {
-  const id = assertTerm(term);
-  const root = path.resolve(options.root || path.join(__dirname, ".."));
-  const filePath = path.join(root, "config", "terms", `${id}.json`);
+function loadTermConfig(term, options = {}) {
+  const id = assertTerm(term || resolvePreferredTerm(options));
+  const filePath = path.join(termConfigDirectory(options), `${id}.json`);
   if (!fs.existsSync(filePath)) {
     const error = new Error(`TERM_CONFIG_NOT_FOUND:${id}`);
     error.code = "TERM_CONFIG_NOT_FOUND";
@@ -42,4 +65,5 @@ module.exports = {
   DEFAULT_CURRENT_TERM,
   assertTerm,
   loadTermConfig,
+  resolvePreferredTerm,
 };

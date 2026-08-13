@@ -27,11 +27,17 @@ const proxiedInvocation = buildCurrentTermInvocation([], {
   env: {
     HTTP_PROXY: "http://127.0.0.1:10808",
     HTTPS_PROXY: "http://127.0.0.1:10808",
+    SYNC_GRADES: "2021,2022,2023,2024,2025",
+    SYNC_CLASS_GRADES: "2025",
   },
 });
 assert.strictEqual(proxiedInvocation.runtimeEnv.HTTP_PROXY, undefined);
 assert.strictEqual(proxiedInvocation.runtimeEnv.HTTPS_PROXY, undefined);
 assert.deepStrictEqual(proxiedInvocation.networkIsolation.removedProxyNames.sort(), ["HTTPS_PROXY", "HTTP_PROXY"].sort());
+assert.deepStrictEqual(proxiedInvocation.plan.filters.grades, [], "stale local grade filters must not hide newly released cohorts");
+assert.strictEqual(proxiedInvocation.runtimeEnv.SYNC_GRADES, "");
+assert.strictEqual(proxiedInvocation.runtimeEnv.SYNC_CLASS_GRADES, "");
+assert.strictEqual(proxiedInvocation.runtimeEnv.PREFERRED_SEMESTER, "2026-2027-1", "child crawler must not reload an archived preferred semester");
 assert.strictEqual(buildPostActivateMirrorInvocation(invocation), null, "staging-only run must not mutate CloudBase");
 const activating = buildCurrentTermInvocation(["--activate"], { root, env: {} });
 assert.strictEqual(activating.plan.activate, true);

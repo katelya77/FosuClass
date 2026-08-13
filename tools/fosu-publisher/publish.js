@@ -1689,6 +1689,7 @@ async function runMainPipeline(run, args) {
     const effectiveMode = run.mode === "resume" ? run.originalMode : run.mode;
     const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term, termInfo.termConfig);
     await run.stage("crawling", async () => {
+      const explicitGrades = String(args.grades || args.grade || "").trim();
       runNodeScript(crawlPlan.script, crawlPlan.args, {
         code: "LOCAL_CRAWL_FAILED",
         env: {
@@ -1696,6 +1697,10 @@ async function runMainPipeline(run, args) {
           SYNC_CLASS_SCOPE: "all",
           SYNC_RESOURCE_SOURCE: "derived",
           FOSU_SKIP_CAMPUS_NETWORK_CHECK: "1",
+          // Do not inherit a previous semester's local grade filter. The live
+          // catalog discovers all available cohorts unless --grades is explicit.
+          SYNC_GRADES: explicitGrades,
+          SYNC_CLASS_GRADES: explicitGrades,
         },
       });
       if (process.env.FOSU_PUBLISHER_MOCK !== "1" && !fs.existsSync(crawlPlan.output)) {

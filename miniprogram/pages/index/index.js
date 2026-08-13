@@ -90,7 +90,7 @@ Page({
     appName: BRAND.appName,
     className: "未选择课表",
     scheduleSubtitle: "",
-    semester: "2025-2026学年第二学期",
+    semester: "",
     dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
     syncActionText: "同步课表",
@@ -327,7 +327,7 @@ Page({
     this.setData({
       className: displayClassName,
       scheduleSubtitle,
-      semester: settings.semester,
+      semester: calendar.semesterText || termConfig.semesterText || termConfig.term || "",
       dataSourceText: sourceText,
       lastSyncText,
       syncActionText,

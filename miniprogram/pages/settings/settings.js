@@ -7,6 +7,7 @@ const {
   clearDataCaches,
   clearLocalSelection,
   getSettings,
+  reconcileSettingsWithActiveTerm,
   saveSettings,
 } = require("../../utils/storage");
 const teachingCalendarService = require("../../services/teachingCalendarService");
@@ -31,8 +32,10 @@ const FEEDBACK_TYPES = ["课表错误", "数据过期", "页面问题", "功能�
 function getSelectedTerm(settings) {
   const calendar = teachingCalendarService.getImmediateActiveCalendar();
   const runtime = calendar.termConfig || {};
-  const source = settings || {};
-  return source.semesterId || source.semester || runtime.term;
+  const app = typeof getApp === "function" ? getApp() : null;
+  const globalData = app && app.globalData || {};
+  const pointer = globalData.runtimePointer || globalData.activeReleasePointer || globalData.activeRelease || {};
+  return runtime.term || pointer.activeTerm || pointer.term || "";
 }
 
 function buildWeekOptions(totalWeeks) {
@@ -280,9 +283,13 @@ Page({
   },
 
   loadSettings() {
-    const settings = getSettings();
     const calendar = teachingCalendarService.getImmediateActiveCalendar();
     const termConfig = calendar.termConfig || {};
+    const selectedTerm = getSelectedTerm(getSettings());
+    if (selectedTerm) {
+      reconcileSettingsWithActiveTerm(selectedTerm, { releaseVersion: calendar.releaseVersion || "" });
+    }
+    const settings = getSettings();
     const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], termConfig);
     const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, termConfig) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
@@ -292,8 +299,8 @@ Page({
     this.setData({
       settings: Object.assign({}, settings, {
         currentWeek: effectiveWeek,
-        semester: settings.semester || settings.semesterId || termConfig.term || "",
-        semesterId: settings.semesterId || termConfig.term || "",
+        semester: selectedTerm || termConfig.term || "",
+        semesterId: selectedTerm || termConfig.term || "",
       }),
       teachingInfo,
       termStartDate: formatFullDateLabel(termConfig.termStartDate) || "日期待同步",
@@ -309,6 +316,11 @@ Page({
     teachingCalendarService.loadActiveTeachingCalendar()
       .then((latest) => {
         const latestConfig = latest.termConfig || {};
+        if (latestConfig.term) {
+          reconcileSettingsWithActiveTerm(latestConfig.term, {
+            releaseVersion: latest.releaseVersion || "",
+          });
+        }
         if (
           latest.releaseVersion !== calendar.releaseVersion ||
           latestConfig.termStartDate !== termConfig.termStartDate ||
@@ -319,8 +331,8 @@ Page({
           this.setData({
             settings: Object.assign({}, this.data.settings, {
               currentWeek: nextWeek,
-              semester: this.data.settings.semester || latestConfig.term || "",
-              semesterId: this.data.settings.semesterId || latestConfig.term || "",
+              semester: latestConfig.term || this.data.settings.semester || "",
+              semesterId: latestConfig.term || this.data.settings.semesterId || "",
             }),
             teachingInfo: latestInfo,
             termStartDate: formatFullDateLabel(latestConfig.termStartDate) || "日期待同步",

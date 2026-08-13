@@ -140,6 +140,49 @@ async function testStableDetailIdAndExactNameMigration() {
   assert.strictEqual(storage.getCurrentScheduleTarget().detailId, "migrated-id");
 }
 
+async function testCrossTermMigrationFallsBackToExactName() {
+  reset();
+  const nextActive = { term: "2026-2027-1", releaseVersion: "release-new" };
+  storage.setCurrentScheduleTarget(makeTarget());
+  releasePackService.loadDetail = async (type, id, params) => {
+    assert.strictEqual(params.term, nextActive.term);
+    if (id === "class-1") {
+      const error = new Error("DETAIL_NOT_FOUND");
+      error.code = "DETAIL_NOT_FOUND";
+      throw error;
+    }
+    return makeDetail(id, {
+      term: nextActive.term,
+      releaseVersion: nextActive.releaseVersion,
+      schedule: Object.assign({}, makeDetail(id).schedule, {
+        id,
+        detailId: id,
+        classId: id,
+      }),
+    });
+  };
+  releasePackService.loadIndex = async (type, params) => {
+    assert.strictEqual(params.term, nextActive.term);
+    return {
+      items: [{
+        id: "class-new-term",
+        detailId: "class-new-term",
+        className: makeTarget().name,
+        name: makeTarget().name,
+      }],
+    };
+  };
+  const result = await currentScheduleService.ensureCurrentScheduleFresh({
+    activeSnapshot: nextActive,
+    force: true,
+  });
+  const saved = storage.getCurrentScheduleTarget();
+  assert.strictEqual(result.status, "UPDATED");
+  assert.strictEqual(saved.term, nextActive.term);
+  assert.strictEqual(saved.releaseVersion, nextActive.releaseVersion);
+  assert.strictEqual(saved.detailId, "class-new-term");
+}
+
 async function testAmbiguousNameDoesNotBind() {
   reset();
   storage.setCurrentScheduleTarget(makeTarget({ id: "", detailId: "", classId: "" }));
@@ -223,6 +266,7 @@ async function run() {
   await testSameReleaseDoesNotFetchOrNotify();
   await testDetailFailureKeepsLastKnownGood();
   await testStableDetailIdAndExactNameMigration();
+  await testCrossTermMigrationFallsBackToExactName();
   await testAmbiguousNameDoesNotBind();
   await testPersonalXlsAndCustomCoursesProtected();
   testSetCurrentScheduleTargetTermAndLegacyMigration();
