@@ -4,7 +4,7 @@
   "dataVersion": "competition-demo-v1",
   "totalWeeks": 20,
   "canonicalAdapter": "schedule-runtime-safe-v3-adapter.py",
-  "canonicalAdapterSha256": "0e41e9b9ae088222626b3fb14f48de532a2a7a260a6c3e08e791e4ff2d884397",
+  "canonicalAdapterSha256": "52e6dc92cf51fd9dea1386d7010dfe9023f3774cff88367cabc1bbaa15f473bc",
   "parameterExtractorPrompt": "schedule-parameter-extractor-v1.1.txt",
   "dateInputGuard": "schedule-date-input-guard.py",
   "queryNormalizer": "schedule-query-normalizer-v1.1.py",

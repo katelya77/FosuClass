@@ -92,6 +92,29 @@ def locate_seed(contract, explicit=None):
             and {"课表查询-WEEK", "课表查询-DAY", "课表查询-DATE"} <= node_names
         ):
             return final_candidate.resolve(), "canonical-final-recompile"
+    # Bootstrapping remains possible after a fresh output cleanup because the
+    # previously compiled Final is also tracked in Git. Read it from HEAD into
+    # an isolated temp file; never silently reuse the old output artifact.
+    try:
+        relative = final_candidate.relative_to(REPO_DIR).as_posix()
+        tracked = subprocess.run(
+            ["git", "show", f"HEAD:{relative}"], cwd=REPO_DIR,
+            capture_output=True, check=True,
+        ).stdout
+        with tempfile.NamedTemporaryFile(prefix="fosuclass-adp-seed-", suffix=".zip", delete=False) as handle:
+            handle.write(tracked)
+            tracked_seed = Path(handle.name)
+        workflow = workflow_from_zip(tracked_seed)
+        node_names = {node.get("NodeName") for node in workflow.get("Nodes", [])}
+        if (
+            workflow.get("WorkflowID") == contract["generated"]["workflowId"]
+            and workflow.get("WorkflowName") == contract["generated"]["workflowName"]
+            and {"课表查询-WEEK", "课表查询-DAY", "课表查询-DATE"} <= node_names
+        ):
+            return tracked_seed.resolve(), "git-head-final-recompile"
+        tracked_seed.unlink(missing_ok=True)
+    except (subprocess.CalledProcessError, AssertionError, KeyError, ValueError, zipfile.BadZipFile):
+        pass
     raise SystemExit(
         "真实 ADP V1.1 platform seed 与 canonical Final recompile seed 均不可用；"
         "候选仅报告路径与哈希："
@@ -133,7 +156,6 @@ def set_edges(workflow, edges):
 
 def edge_between(source, target, source_handle=None):
     source_handle = source_handle or f"{source}-source"
-    examples = [example for example in examples if "冲突" not in example and "赶场" not in example]
     return {
         "source": source,
         "target": target,
@@ -529,7 +551,6 @@ def workbook_payloads(workflow, contract):
         "教师003第1周周一的课",
         "查询教师003第1周的课表",
         "查询教师003第1周周二的课",
-        "检查教师003第1周周一是否存在时间冲突或跨校区赶场",
         "A1-101第2周周三的课表",
         "2025级A班第3周周五的课",
         "高等数学A第4周的课表",
@@ -667,13 +688,16 @@ def main():
     seed_workflow = workflow_from_zip(seed)
     workflow = (
         recompile_schedule_final(seed, contract)
-        if seed_mode == "canonical-final-recompile"
+        if seed_mode in {"canonical-final-recompile", "git-head-final-recompile"}
         else compile_schedule(seed, contract, transport, widget)
     )
     schedule_path = output_dir / contract["generated"]["fileName"]
     write_workflow_zip(schedule_path, workflow, workbook_payloads(workflow, contract))
     report_path = output_dir / "validation-report-01.json"
     validation = run_validator(schedule_path, report_path)
+    # Keep the historical generic report name as a deterministic compatibility
+    # alias for downstream artifact consumers.
+    shutil.copyfile(report_path, output_dir / "validation-report.json")
 
     downloads = Path.home() / "Downloads"
     campus_artifacts = []
@@ -749,7 +773,7 @@ def main():
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     sum_names = [*artifact_names, "manifest.json", "ADP-IMPORT-README.md", "NEEDS_ADP_EXPORT.md",
-                 "validation-report-01.json", "validation-report-02.json", "validation-report-03.json",
+                 "validation-report.json", "validation-report-01.json", "validation-report-02.json", "validation-report-03.json",
                  "validation-report-04.json", "ADP-App-Expected-Config.json"]
     sums_path = output_dir / "SHA256SUMS.txt"
     sums_path.write_text("".join(
@@ -760,6 +784,8 @@ def main():
     write_bundle_zip(bundle_path, output_dir, bundle_names)
     print(f"ADP compiler: PASS\nFinal directory: {output_dir}")
     print(f"Bundle: {bundle_path}\nSHA256: {sha256_file(bundle_path)}")
+    if seed_mode == "git-head-final-recompile":
+        seed.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -13,8 +13,9 @@
     "test:action-contract": "node widget/native/test-action-contract.js",
     "test:action-protocol-v2": "python widget/native/test-action-protocol-v2.py",
     "test:schedule-scoped-adapter": "python widget/native/test-schedule-scoped-adapter.py",
-    "test:schedule-rich-v4": "node widget/native/test-schedule-rich-v4-contract.js",
+    "test:schedule-rich-v4": "node widget/native/test-schedule-rich-v4-contract.js && python widget/native/test-schedule-rich-v4-adapter.py",
     "test:real-adp-export-catalog": "python widget/native/test-real-adp-export-catalog.py",
+    "test:runtime-e2e-cases": "node widget/native/test-runtime-e2e-cases.js",
     "test:widget-export-contracts": "python widget/native/extract-real-widget-contracts.py --check",
     "test:campus-widget-compiler": "python widget/native/test-campus-widget-compiler.py",
     "test:native-adapters": "python widget/native/test-native-adapters.py",
@@ -24,9 +25,11 @@
     "test:adp-transport-contract": "python widget/native/test-adp-transport-contract.py",
     "test:adp-artifact-gate": "python widget/native/validate-adp-artifact.py --artifact ../../output/competition-adp/final/01-Schedule-Final.zip",
     "adp:compile": "python widget/native/compile_adp_bundle.py",
+    "build:runtime-closure": "python widget/native/build_runtime_closure_pack.py",
+    "test:runtime-closure-pack": "python widget/native/test-runtime-closure-pack.py",
     "build:schedule-actions-v1": "python widget/native/generate-schedule-actions-v1-workflow.py",
     "build:schedule-actions-v1.1": "python widget/native/generate-schedule-actions-v1-workflow.py",
     "widget:sync-wrapper": "node widget/native/sync-native-widget-wrapper.js",
-    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && node evaluation/sync-evaluation-dataset.js --check && node workflows/generate-workflows.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && npm run eval:golden && node widget/test-widget-adapter.js && node widget/generate-samples.js && npm run test:widget-contract && npm run test:action-contract && npm run test:action-protocol-v2 && npm run test:schedule-scoped-adapter && npm run test:schedule-rich-v4 && npm run test:real-adp-export-catalog && npm run test:widget-export-contracts && npm run test:native-adapters && npm run test:conflict-widget-adapter && npm run test:schedule-week-scope && npm run adp:compile && npm run test:campus-widget-compiler && npm run test:adp-transport-contract && npm run test:adp-artifact-gate && npm run test:branch-local-reference-regression && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && npm run build:submission && npm run validate:submission && node sync-assets-manifest.js --check"
+    "test": "node mock-data/validate-competition-demo-v1.js && node qa/sync-standard-qa.js --check && node evaluation/sync-evaluation-dataset.js --check && node workflows/generate-workflows.js --check && npm --prefix mcp/campus-tools-mcp run check && npm --prefix mcp/campus-tools-mcp test && npm --prefix mcp/campus-tools-mcp run check:openapi && npm run eval:golden && node widget/test-widget-adapter.js && node widget/generate-samples.js && npm run test:widget-contract && npm run test:action-contract && npm run test:action-protocol-v2 && npm run test:schedule-scoped-adapter && npm run test:schedule-rich-v4 && npm run test:real-adp-export-catalog && npm run test:runtime-e2e-cases && npm run test:widget-export-contracts && npm run test:native-adapters && npm run test:conflict-widget-adapter && npm run test:schedule-week-scope && npm run adp:compile && npm run test:campus-widget-compiler && npm run test:adp-transport-contract && npm run test:adp-artifact-gate && npm run test:branch-local-reference-regression && npm run build:runtime-closure && npm run test:runtime-closure-pack && node cloudfunctions/sync-campusflow-function.js --check && node cloudfunctions/test-http-function.js && node validate-kit.js && npm run build:submission && npm run validate:submission && node sync-assets-manifest.js --check"
   }
 }

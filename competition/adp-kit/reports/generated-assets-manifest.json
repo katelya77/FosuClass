@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-12T16:29:53.794Z",
+  "generatedAt": "2026-08-13T18:09:19.908Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -340,18 +340,18 @@
     },
     {
       "path": "widget/native/__pycache__/schedule-runtime-safe-v3-adapter.cpython-313.pyc",
-      "bytes": 13138,
-      "sha256": "e93e2f0b8318b558d23e6edaa19e2b10370ead4f63b97d178cf4eb2f78271848"
+      "bytes": 13615,
+      "sha256": "059c7adc9fe55b5ecf82cad4dc94cc4d3114eefd39cc720639bb7c1c8d31f221"
     },
     {
       "path": "widget/native/action-contract.json",
       "bytes": 7164,
-      "sha256": "11ca8d4d515a54844c293f3c8e18bec682b63622c34b6a3658cbb511611e2d00"
+      "sha256": "86e2b0c9437f70d23a4d019e438c73f9d7d9551350f6adb2c25063b4109f1ace"
     },
     {
       "path": "widget/native/action-protocol-v2.json",
-      "bytes": 683,
-      "sha256": "d7c3c15e33cdafe138fca520d199dded6d5a6165673935675f4559efac0ebde4"
+      "bytes": 790,
+      "sha256": "94d7054bae1c8ac46938964d5021d1cb3e6847ed7348d5a6debaa6fce60d7b1a"
     },
     {
       "path": "widget/native/adp-transport-contract.json",
@@ -362,6 +362,11 @@
       "path": "widget/native/audit-widget-contract.js",
       "bytes": 3492,
       "sha256": "e269fb91f63275f2b540b469ca1f3fbff4677bd95aa77dcaaa1560d6fdb301ca"
+    },
+    {
+      "path": "widget/native/build_runtime_closure_pack.py",
+      "bytes": 7228,
+      "sha256": "197f8fc111c6d91daedd611b71bfc5fd45b940ad998616848efd3dbdfcbec6bf"
     },
     {
       "path": "widget/native/campus_widget_compiler.py",
@@ -375,8 +380,8 @@
     },
     {
       "path": "widget/native/compile_adp_bundle.py",
-      "bytes": 32295,
-      "sha256": "cf2927f04b6e5ec059582e2ded087b3bdf2405dd6252852cdd46294cb5bc162a"
+      "bytes": 33750,
+      "sha256": "a14a6680a979f38b1ea8c8fbc1eb86fc1c7df10d0d528c2c42ad7fe4efe0bbbb"
     },
     {
       "path": "widget/native/conflict-widget-adapter.py",
@@ -594,9 +599,14 @@
       "sha256": "d0cdc339891cc2b72462f5950242da1b98b90db4a2230c8c521acf26be3ff655"
     },
     {
+      "path": "widget/native/runtime-e2e-cases.json",
+      "bytes": 6047,
+      "sha256": "0fb149a1ef9f6f73749b09db49eece917dd1ea6cdf0531c11a9e975af6ca7fe0"
+    },
+    {
       "path": "widget/native/runtime-integration-runbook.md",
-      "bytes": 6664,
-      "sha256": "1489ae1e194cbf256dca6a2325a447294eb8f4c7793cd391dafbaa00bc018f6f"
+      "bytes": 7837,
+      "sha256": "57ed1f4f1aaff609a6df17a01577b240fe684d122730cf094c2c9e8d956c7924"
     },
     {
       "path": "widget/native/schedule-date-input-guard.py",
@@ -624,34 +634,39 @@
       "sha256": "d85acf74ad6dcf5ac68dfbdee9e4850e343ac76a49d247837d0be1c4a46176ef"
     },
     {
+      "path": "widget/native/schedule-rich-v4/adapter.py",
+      "bytes": 6472,
+      "sha256": "e5172cae97021ed69c4e64d3c7d5d395ee54fb95b6b68e5f9f041a69b55a485e"
+    },
+    {
       "path": "widget/native/schedule-rich-v4/contract.json",
-      "bytes": 681,
-      "sha256": "44d510971027ddce597d4b607332e7110eaf208e7948a74deaa6b2bd0de5b0d3"
+      "bytes": 992,
+      "sha256": "bcaa070f63577017495753062c4716b64419ba9e13c36c02483756f11c166417"
     },
     {
       "path": "widget/native/schedule-rich-v4/default.json",
-      "bytes": 2318,
-      "sha256": "13ac727cc921b2aa472aa91ebff464235113b4131cc4b7c8d24d5c290e08a34e"
+      "bytes": 2358,
+      "sha256": "d78c5387486a16a8c3fe0bcb2eb4ccfb7ccf7f2c66fc8ba346c5466c7c7c4c0d"
     },
     {
       "path": "widget/native/schedule-rich-v4/samples/day.json",
-      "bytes": 1566,
-      "sha256": "2eab629a3e94ebe4892c4bb091d810ff263415ea87e6bbdec10d8d2ff31b2186"
+      "bytes": 1626,
+      "sha256": "de2370aa06d2ac4b0a08fc32252562be4ba41abd70adf0015e2c598d29542a1f"
     },
     {
       "path": "widget/native/schedule-rich-v4/schema.json",
-      "bytes": 2389,
-      "sha256": "86ce3f00dda559ddaf7ce71aebac6d3c037b787efd1c55d3db6086da23f3cbec"
+      "bytes": 2431,
+      "sha256": "0a6fbf8b255ffc5d6fd184382caa39ff025997e137750e552991261845fec77b"
     },
     {
       "path": "widget/native/schedule-rich-v4/template.txt",
-      "bytes": 1565,
-      "sha256": "c8056b8bbcb08b42097e5bcc2438ab52c55fb0933cfb8dcf5db7f9b01dd8c80a"
+      "bytes": 1594,
+      "sha256": "de94d8b6edda3f992316594d77d2ffe60a42be3954d2f95c57e4e265902d25b1"
     },
     {
       "path": "widget/native/schedule-rich-v4/zod.txt",
-      "bytes": 1041,
-      "sha256": "2406e0db8f65c9c56d0726f03af18b1bf602682d6f15f9d3db04f6da934100e8"
+      "bytes": 1148,
+      "sha256": "3526bed6cb8c7dc2b804d6502589d10b4c0291d75a93bf761a4804dfe1b58dce"
     },
     {
       "path": "widget/native/schedule-runtime-adapter.py",
@@ -660,8 +675,8 @@
     },
     {
       "path": "widget/native/schedule-runtime-safe-v3-adapter.py",
-      "bytes": 9628,
-      "sha256": "0e41e9b9ae088222626b3fb14f48de532a2a7a260a6c3e08e791e4ff2d884397"
+      "bytes": 9975,
+      "sha256": "52e6dc92cf51fd9dea1386d7010dfe9023f3774cff88367cabc1bbaa15f473bc"
     },
     {
       "path": "widget/native/schedule-runtime-safe-v3-contract.json",
@@ -705,8 +720,8 @@
     },
     {
       "path": "widget/native/test-action-protocol-v2.py",
-      "bytes": 1628,
-      "sha256": "fc3d2046e09b7c37436f1a5da796aaeb1c7fdeb932453a1d1afc1e90c1ba8baa"
+      "bytes": 1941,
+      "sha256": "6e9c64ab802761e4a6f17a0686c34bde71c0e1a7644e46acea57041b2fdbbf80"
     },
     {
       "path": "widget/native/test-adp-transport-contract.py",
@@ -720,8 +735,8 @@
     },
     {
       "path": "widget/native/test-campus-widget-compiler.py",
-      "bytes": 1050,
-      "sha256": "6063eff6fb430b7a91f6d02691cdfb14ce67fcdc6c992ea9f8ebce1a9ec99d9c"
+      "bytes": 1482,
+      "sha256": "7e42a91ac9675067ec2182b4f70353bba893bd09cae1e8e64a88bdb16f216aef"
     },
     {
       "path": "widget/native/test-conflict-widget-adapter.py",
@@ -744,14 +759,29 @@
       "sha256": "7999ec94b5de6cf7a7f7026dd7c4dcec86e3c9a5382c01b33f7b75712c6c1f1e"
     },
     {
+      "path": "widget/native/test-runtime-closure-pack.py",
+      "bytes": 2139,
+      "sha256": "4ea164c150b180e1df1323a6809c2f84c9964c10359995e0ea1b8cebd926072b"
+    },
+    {
+      "path": "widget/native/test-runtime-e2e-cases.js",
+      "bytes": 2649,
+      "sha256": "e43e63bb557a5e58b2e41ea7d61de5222f80d3f9acc4d0c4e0fc10caa60cadac"
+    },
+    {
       "path": "widget/native/test-schedule-contractsync.js",
       "bytes": 2615,
       "sha256": "47fc14e9f1b34cd75f0fb5b1bf73047044e79e67cc5c27d5d6b02da644686f62"
     },
     {
+      "path": "widget/native/test-schedule-rich-v4-adapter.py",
+      "bytes": 3347,
+      "sha256": "e2e8468a60fd1cb5b002f0679409d2b738d4a8ecd2828f02b1c7a3c37d0e9c5c"
+    },
+    {
       "path": "widget/native/test-schedule-rich-v4-contract.js",
-      "bytes": 1758,
-      "sha256": "98bb3adebdc2b4e22dc2d9729407a73387e7a63cc2f16709a88a1d8adb3da1ba"
+      "bytes": 2581,
+      "sha256": "eb63f08856ae2f93ce1dbb14b4817cace8b542a2551d3953c604b77ab3cbb48a"
     },
     {
       "path": "widget/native/test-schedule-scoped-adapter.py",

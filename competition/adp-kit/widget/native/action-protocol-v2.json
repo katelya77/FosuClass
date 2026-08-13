@@ -9,6 +9,9 @@
     "week",
     "weekday"
   ],
+  "optionalPayloadFields": [
+    "date"
+  ],
   "intents": {
     "schedule_day": "01-多维课表查询 DAY",
     "schedule_week": "01-多维课表查询 WEEK",
@@ -18,5 +21,5 @@
   "machineText": {
     "schedule_choose_day": "【小序操作:选择课表日期】{entityName}|第{week}周"
   },
-  "fallbackRule": "query 必须独立携带完整对象与时间，平台仅转发文本时仍可确定路由。"
+  "fallbackRule": "query 必须独立携带完整对象与时间，平台仅转发文本时仍可确定路由；DAY/DATE 已有 date 时结构化 payload 必须保留 date。"
 }

@@ -6,7 +6,7 @@
   "dataHash": "sha1:fefef4bf425b",
   "sourceSeed": {
     "mode": "canonical-final-recompile",
-    "sha256": "7b4e94d162b20e108c8f05feb95e96b3f95b84f50b7ea2fa3c9e7e2c7ebccb4c",
+    "sha256": "b5b233d93dc065b01c9708b397a309880c5b9d6fc10b51a6660756054a6cdec5",
     "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f"
   },
   "artifacts": [
@@ -14,7 +14,7 @@
       "file": "01-Schedule-Final.zip",
       "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f",
       "workflowName": "01-多维课表查询-Final",
-      "sha256": "7b4e94d162b20e108c8f05feb95e96b3f95b84f50b7ea2fa3c9e7e2c7ebccb4c",
+      "sha256": "b5b233d93dc065b01c9708b397a309880c5b9d6fc10b51a6660756054a6cdec5",
       "validation": "PASS"
     },
     {

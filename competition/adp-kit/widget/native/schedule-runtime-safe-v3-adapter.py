@@ -45,7 +45,10 @@ def _action(label, query, intent, entity_type, entity_name, week, weekday=None, 
     }
 
 
-def build_action_protocol(entity_type, entity_name, week, weekday, date, transport_scope, item_weekdays=None):
+def build_action_protocol(
+    entity_type, entity_name, week, weekday, date, transport_scope,
+    item_weekdays=None, item_dates=None,
+):
     """Build Action Protocol V2; current RuntimeSafe Widget projects payload.query only."""
     if entity_type not in ("teacher", "room", "class", "course") or not entity_name:
         return None
@@ -55,12 +58,12 @@ def build_action_protocol(entity_type, entity_name, week, weekday, date, transpo
     choose_query = f"【小序操作:选择课表日期】{entity_name}|第{week}周"
     choose = _action(
         "选择日期", choose_query, "schedule_choose_day",
-        entity_type, entity_name, week,
+        entity_type, entity_name, week, date=date,
     )
     week_query = f"查询{entity_name}第{week}周的课表"
     week_action = _action(
         "查看整周", week_query, "schedule_week",
-        entity_type, entity_name, week,
+        entity_type, entity_name, week, date=date,
     )
 
     candidate_days = [
@@ -68,10 +71,14 @@ def build_action_protocol(entity_type, entity_name, week, weekday, date, transpo
         if _bounded_int(value, 1, 7) is not None
     ]
     recent_weekday = candidate_days[0] if candidate_days else (weekday or 1)
+    candidate_dates = [
+        _valid_date(value) for value in (item_dates or []) if _valid_date(value)
+    ]
+    recent_date = candidate_dates[0] if candidate_dates else date
     recent_query = f"查询{entity_name}第{week}周{_weekday_name(recent_weekday)}的课"
     recent = _action(
         "返回最近一天", recent_query, "schedule_day",
-        entity_type, entity_name, week, recent_weekday,
+        entity_type, entity_name, week, recent_weekday, recent_date,
     )
 
     if transport_scope == "WEEK":
@@ -80,7 +87,7 @@ def build_action_protocol(entity_type, entity_name, week, weekday, date, transpo
             risk_query = f"检查{entity_name}第{week}周是否存在时间冲突或跨校区赶场"
             actions.append(_action(
                 "本周风险", risk_query, "schedule_risk_check",
-                entity_type, entity_name, week,
+                entity_type, entity_name, week, date=date,
             ))
         else:
             actions.append(recent)
@@ -217,8 +224,9 @@ def main(params: dict) -> dict:
                     break
 
     item_weekdays = [item.get("weekday") for item in items_all if isinstance(item, dict)]
+    item_dates = [item.get("date") for item in items_all if isinstance(item, dict)]
     actions = build_action_protocol(
-        entity_type, entity_name, q_week, q_weekday, q_date, scope, item_weekdays,
+        entity_type, entity_name, q_week, q_weekday, q_date, scope, item_weekdays, item_dates,
     )
     if not actions or len(actions) != 3:
         return empty

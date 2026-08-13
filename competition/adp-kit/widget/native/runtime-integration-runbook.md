@@ -13,6 +13,15 @@
 5. `小序-候选确认-V2`
 6. `小序-任务恢复-V2`
 
+Compiler 集成状态（不等同 Runtime PASS）：
+
+- Schedule：`RUNTIME_SAFE_V3_ACTIVE_RICH_V4_PENDING`
+- Classroom：`FINAL_COMPILER_INTEGRATED`
+- Conflict：`FINAL_COMPILER_INTEGRATED`
+- DayPlan：`FINAL_COMPILER_INTEGRATED`
+- Choice / Error：`RECOVERY_COMPILER_INTEGRATED`
+- 腾讯 ADP 六卡 Runtime E2E：`PENDING_USER_TENCENT_ADP_EXECUTION`
+
 已标记：
 
 - `ADP_WIDGET_NATIVE_TEMPLATE_PASS`
@@ -198,7 +207,7 @@ Action 文本：
 
 # Gate B2 — 4 主卡 Runtime
 
-Schedule 通过后，先一次性获取 Classroom / Conflict / Day Plan 的真实 WidgetID，然后自动生成：
+Classroom / Conflict / Day Plan 的真实 WidgetID 已登记，compiler 已自动生成：
 
 1. 02 → `小序-空教室票据-V2`
 2. 03 → `小序-冲突赶场票据-V2`
@@ -214,6 +223,8 @@ Schedule 通过后，先一次性获取 Classroom / Conflict / Day Plan 的真�
 - 04 时间轴展示课程 + gap + studyRooms；
 - Widget 化不得改变 CampusTools 返回事实。
 
+上述均为本地 compiler / artifact gate 已通过；腾讯 ADP 动态渲染与 Action 回流仍需按 `ADP-RUNTIME-E2E-CHECKLIST.md` 验收。
+
 ---
 
 # Gate B3 — 2 辅助卡 Runtime
@@ -222,15 +233,25 @@ Schedule 通过后，先一次性获取 Classroom / Conflict / Day Plan 的真�
 
 用于歧义实体。
 
-需要真实捕获并确认“等待用户操作”的 ActionType，再接到 01/03 歧义分支。
-
-候选 Action 使用 `sys.chat`，选择后继续原任务。
+真实 Choice Widget 已接入 02/03/04 recovery 分支；候选 Action 使用 `sys.chat`，选择后继续原任务。Runtime 仍待实机验收。
 
 ## Error
 
 工具失败 / 非法条件 / 学期范围外走恢复卡。
 
 默认采用结果展示/恢复动作；不得在未核验状态生成动态事实。
+
+真实 Error Widget 已接入 02/03/04 recovery 与 03 pre-tool `MISSING_PARAM` 分支；Runtime 仍待实机验收。
+
+---
+
+# Gate B4 — Schedule Rich V4 Side-by-side Pilot
+
+- RuntimeSafe V3 保持绑定真实 WidgetID `23fbc659efe3482fab588d754e4420a4`，继续作为 01 Final 可回滚基线。
+- Rich V4 使用独立 `items[]` Adapter；WEEK / DAY / DATE 不截断，Action payload 使用完整 Action Protocol V2。
+- Rich V4 `widgetId = null`，策略为 `FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY`。
+- 在获得 `小序-课表票据-Rich-V4-Pilot.widget` 的真实腾讯导出前，不生成 Pilot Workflow、不覆盖 V3、不伪造 ID。
+- 最少用户操作见 `NEEDS_USER_RICH_V4_WIDGET_EXPORT.md`。
 
 ---
 

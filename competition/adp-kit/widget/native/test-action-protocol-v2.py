@@ -29,6 +29,7 @@ for action in [*day, *week]:
     assert payload["entityType"] == "teacher"
     assert payload["entityName"] == "教师003"
     assert payload["week"] == 1
+    assert "date" in payload
     assert "教师003" in payload["query"] and "第1周" in payload["query"]
 
 assert [value["label"] for value in day] == ["查看整周", "选择日期", "检查风险"]
@@ -38,5 +39,9 @@ assert [value["payload"]["intent"] for value in day] == [
 assert [value["label"] for value in week] == ["选择日期", "本周风险", "返回最近一天"]
 assert week[0]["message"] == "【小序操作:选择课表日期】教师003|第1周"
 assert week[1]["payload"]["weekday"] is None
+assert all(value["payload"]["date"] == "2026-08-31" for value in day)
+assert all(value["payload"]["date"] == "2026-08-31" for value in week)
+assert day[2]["payload"]["intent"] == "schedule_risk_check"
+assert CONTRACT["intents"][day[2]["payload"]["intent"]] == "03-课程冲突比较"
 
 print("Action Protocol V2 tests: PASS (intent-first + standalone query fallback)")

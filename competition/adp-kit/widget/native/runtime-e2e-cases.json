@@ -1,0 +1,115 @@
+{
+  "schema": "fosuclass-adp-runtime-e2e/v1",
+  "dataVersion": "competition-demo-v1",
+  "selectionPolicy": "deterministic canonical tool probes; primary cases are pinned Golden fixtures",
+  "cases": [
+    {
+      "kind": "Schedule",
+      "fixtureId": "schedule-teacher003-week1-mon",
+      "source": "evaluation/golden-cases.js",
+      "userInput": "教师003第1周周一的课",
+      "agentRoute": "schedule_day / 01",
+      "workflow": "01-多维课表查询-Final",
+      "tool": "query_schedule",
+      "toolInput": {"entityType": "teacher", "entityName": "教师003", "week": 1, "weekday": 1},
+      "widgetKey": "Schedule",
+      "mustAppear": ["教师003", "第1周", "周一", "2026-08-31", "程序设计基础", "计算机组成原理", "第5-6节", "第7-8节", "校区A", "校区B", "已核验", "competition-demo-v1"],
+      "mustNotAppear": ["星期0", "周0", "weekday=0", "TOOL_FAILURE", "纯文本成功结果"],
+      "action": {
+        "label": "检查风险",
+        "sysChat": {"query": "检查教师003第1周周一是否存在时间冲突或跨校区赶场", "intent": "schedule_risk_check", "entityType": "teacher", "entityName": "教师003", "week": 1, "weekday": 1, "date": "2026-08-31"},
+        "nextWorkflow": "03-课程冲突比较-Final"
+      }
+    },
+    {
+      "kind": "Classroom",
+      "fixtureId": "classroom-campus-a-week1-mon-1-2",
+      "source": "evaluation/golden-cases.js",
+      "userInput": "校区A第1周周一第1-2节至少60人的空教室",
+      "agentRoute": "02",
+      "workflow": "02-空教室规划-Final",
+      "tool": "find_available_classrooms",
+      "toolInput": {"campus": "校区A", "week": 1, "weekday": 1, "periodStart": 1, "periodEnd": 2, "capacity": 60},
+      "widgetKey": "Classroom",
+      "mustAppear": ["校区A", "第1周", "周一", "第1-2节", "8", "A1-102", "competition-demo-v1"],
+      "mustNotAppear": ["课表票据", "教师003", "weekday=0", "纯文本成功结果"],
+      "action": {
+        "label": "换个校区",
+        "sysChat": {"query": "请重新选择空教室查询校区"},
+        "nextWorkflow": "02-空教室规划-Final"
+      }
+    },
+    {
+      "kind": "Conflict",
+      "fixtureId": "conflict-teacher003-self-week1-mon",
+      "source": "evaluation/golden-cases.js",
+      "userInput": "检查教师003第1周周一是否存在时间冲突或跨校区赶场",
+      "agentRoute": "schedule_risk_check / 03 self-compare",
+      "workflow": "03-课程冲突比较-Final",
+      "tool": "compare_schedules",
+      "toolInput": {"firstType": "teacher", "firstName": "教师003", "secondType": "teacher", "secondName": "教师003", "week": 1, "weekday": 1},
+      "widgetKey": "Conflict",
+      "mustAppear": ["教师003", "课程安排风险检查", "冲突 0", "赶场 1", "程序设计基础", "计算机组成原理", "20", "competition-demo-v1"],
+      "mustNotAppear": ["教师003 vs 教师003", "赶场 2", "01-多维课表查询", "纯文本成功结果"],
+      "action": {
+        "label": "查看当天课表",
+        "sysChat": {"query": "查询教师003第1周周一的课"},
+        "nextWorkflow": "01-多维课表查询-Final"
+      }
+    },
+    {
+      "kind": "DayPlan",
+      "fixtureId": "day-plan-week1-fri",
+      "source": "evaluation/golden-cases.js",
+      "userInput": "帮我看看2026-09-04的安排，优先校区A并连续自习2节",
+      "agentRoute": "04",
+      "workflow": "04-今日校园计划-Final",
+      "tool": "generate_day_plan",
+      "toolInput": {"visitorId": "visitor-demo-001", "date": "2026-09-04", "preferredCampus": "校区A", "preferredStudyDuration": 2},
+      "widgetKey": "DayPlan",
+      "mustAppear": ["2026-09-04", "演示用户001", "2", "思政通识", "大学物理B", "自习", "competition-demo-v1"],
+      "mustNotAppear": ["真实学号", "01-多维课表查询", "纯文本成功结果"],
+      "action": {
+        "label": "找空教室",
+        "sysChat": {"query": "根据今天的空档查找合适的空教室"},
+        "nextWorkflow": "02-空教室规划-Final"
+      }
+    },
+    {
+      "kind": "Choice",
+      "fixtureId": "choice-programming-course-ambiguous",
+      "source": "mock-data/competition-demo-v1.json + deterministic resolve_entity partial match",
+      "userInput": "比较程序设计与高等数学A第1周的课程冲突",
+      "agentRoute": "03 / AMBIGUOUS_ENTITY recovery",
+      "workflow": "03-课程冲突比较-Final",
+      "tool": "compare_schedules",
+      "toolInput": {"firstType": "course", "firstName": "程序设计", "secondType": "course", "secondName": "高等数学A", "week": 1},
+      "widgetKey": "Choice",
+      "mustAppear": ["程序设计基础", "程序设计基础实验", "选择", "competition-demo-v1"],
+      "mustNotAppear": ["随机候选", "已核验课程事实", "纯文本候选列表"],
+      "action": {
+        "label": "选择程序设计基础",
+        "sysChat": {"query": "使用course“程序设计基础”继续刚才的校园任务"},
+        "nextWorkflow": "03-课程冲突比较-Final"
+      }
+    },
+    {
+      "kind": "Error",
+      "fixtureId": "error-conflict-missing-second-object",
+      "source": "03 compiler pre-tool MISSING_PARAM contract",
+      "userInput": "比较教师003第1周周一的课程冲突",
+      "agentRoute": "03 / MISSING_PARAM recovery",
+      "workflow": "03-课程冲突比较-Final",
+      "tool": "compare_schedules (must not execute before required second object exists)",
+      "toolInput": {"firstType": "teacher", "firstName": "教师003", "week": 1, "weekday": 1},
+      "widgetKey": "Error",
+      "mustAppear": ["需要补充比较对象", "MISSING_PARAM", "补充比较对象", "competition-demo-v1"],
+      "mustNotAppear": ["已核验冲突事实", "伪造第二对象", "01-多维课表查询", "纯文本系统错误"],
+      "action": {
+        "label": "补充比较对象",
+        "sysChat": {"query": "请补充另一个需要比较的班级、教师或教室"},
+        "nextWorkflow": "03-课程冲突比较-Final"
+      }
+    }
+  ]
+}
