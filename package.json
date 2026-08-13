@@ -17,6 +17,7 @@
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js && node tools/test-semester-repair.js",
     "test:current-term-one-click": "node tools/test-current-term-one-click.js",
     "test:sync-snapshot-term-coherence": "node tools/test-sync-snapshot-term-coherence.js",
+    "test:staging-fingerprint": "node tools/test-staging-fingerprint.js",
     "test:publisher-term-selection": "node tools/test-publisher-term-selection.js",
     "test:current-term-resume-provenance": "node tools/test-current-term-resume-provenance.js",
     "test:cross-term-ready-candidate": "node tools/test-cross-term-ready-candidate.js",

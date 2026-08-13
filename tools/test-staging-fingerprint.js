@@ -24,6 +24,20 @@ function snapshot(patch = {}) {
     term: "2025-2026-2",
     semester: "2025-2026-2",
     termStartDate: "2026-03-09",
+    termConfig: { term: "2025-2026-2", semesterText: "2025-2026学年第二学期", termStartDate: "2026-03-09", totalWeeks: 19, weekStart: "monday" },
+    teachingCalendar: {
+      schemaVersion: 2,
+      term: "2025-2026-2",
+      termStartDate: "2026-03-09",
+      totalWeeks: 19,
+      weekStart: "monday",
+      source: "official-test",
+      sourceStatus: "CALENDAR_SOURCE_COMPLETE",
+      sourceHash: "calendar-a",
+      weeks: [{ weekNo: 1, startDate: "2026-03-09", endDate: "2026-03-15", type: "teaching" }],
+      specialDates: [],
+      cohortMilestones: [],
+    },
     generatedAt: "2026-06-04T00:00:00.000Z",
     updatedAt: "2026-06-04T00:00:00.000Z",
     catalog: { colleges: [{ code: "04", name: "测试学院" }], grades: ["2025"] },
@@ -56,6 +70,17 @@ function run() {
     meta: { generatedCommand: "new command", includeScopes: ["classSchedules"], grades: "2025" },
   }));
   assert.strictEqual(first.canonicalHash, second.canonicalHash, "volatile metadata must not change canonical hash");
+
+  const changedTermConfig = snapshot({
+    termConfig: Object.assign({}, snapshot().termConfig, { totalWeeks: 20 }),
+  });
+  assert.notStrictEqual(first.canonicalHash, calculateFingerprint(changedTermConfig).canonicalHash, "term config changes must rebuild the release");
+  const changedCalendar = snapshot({
+    teachingCalendar: Object.assign({}, snapshot().teachingCalendar, {
+      specialDates: [{ date: "2026-04-05", type: "holiday", note: "test holiday" }],
+    }),
+  });
+  assert.notStrictEqual(first.canonicalHash, calculateFingerprint(changedCalendar).canonicalHash, "teaching calendar changes must rebuild the release");
 
   const reordered = snapshot({
     catalog: { colleges: [{ code: "05", name: "B" }, { code: "04", name: "A" }], grades: ["2025"] },
