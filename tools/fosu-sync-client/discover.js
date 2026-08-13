@@ -11,6 +11,7 @@ const diagnose = require("./diagnose");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 
 loadSyncClientEnv();
@@ -50,12 +51,12 @@ async function gotoPage(page, relativePath, options = { waitUntil: "networkidle"
  * 初始化 Playwright 浏览器
  */
 async function initBrowser() {
-  const launchArgs = [
+  const launchArgs = withDirectBrowserArgs([
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security",
     "--allow-running-insecure-content"
-  ];
+  ]);
 
   let browser;
   const channels = ["msedge", "chrome", null];

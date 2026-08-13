@@ -2865,14 +2865,37 @@ Page({
     const cached = this.readCachedActiveSnapshot();
     if (cached && !forceNetwork) {
       const platformSnapshot = platformDataService.getCachedPlatformSnapshot();
-      const platformLooksNewer = platformSnapshot && platformSnapshot.releaseVersion &&
-        this.getSnapshotReleaseKey(platformSnapshot) !== this.getSnapshotReleaseKey(cached);
+      const pointerSnapshot = releasePackService.getCachedRuntimePointer && releasePackService.getCachedRuntimePointer({});
+      const candidates = [platformSnapshot, pointerSnapshot]
+        .filter((item) => item && item.releaseVersion)
+        .map((item) => ({
+          term: item.activeTerm || item.term,
+          releaseVersion: item.releaseVersion,
+          scheduleUpdatedAt: item.scheduleUpdatedAt || item.updatedAt || "",
+          catalogUpdatedAt: item.catalogUpdatedAt || item.updatedAt || "",
+          cacheEpoch: item.cacheEpoch || 0,
+          forceRefreshToken: item.forceRefreshToken || "",
+          counts: item.counts || {},
+          termConfig: item.termConfig || null,
+        }))
+        .sort((left, right) => {
+          const leftTime = Math.max(Number(left.cacheEpoch || 0) || 0, Date.parse(left.scheduleUpdatedAt || left.catalogUpdatedAt || "") || 0);
+          const rightTime = Math.max(Number(right.cacheEpoch || 0) || 0, Date.parse(right.scheduleUpdatedAt || right.catalogUpdatedAt || "") || 0);
+          return rightTime - leftTime;
+        });
+      const newestCachedControlPlane = candidates[0] || null;
+      const platformLooksNewer = newestCachedControlPlane && newestCachedControlPlane.releaseVersion &&
+        this.getSnapshotReleaseKey(newestCachedControlPlane) !== this.getSnapshotReleaseKey(cached) &&
+        Math.max(Number(newestCachedControlPlane.cacheEpoch || 0) || 0, Date.parse(newestCachedControlPlane.scheduleUpdatedAt || "") || 0) >=
+          Math.max(Number(cached.cacheEpoch || 0) || 0, Date.parse(cached.scheduleUpdatedAt || cached.catalogUpdatedAt || "") || 0);
       if (platformLooksNewer) {
-        this.writeCachedActiveSnapshot(platformSnapshot);
+        this.writeCachedActiveSnapshot(newestCachedControlPlane);
         return {
-          activeSnapshot: platformSnapshot,
+          activeSnapshot: newestCachedControlPlane,
           appConfig: appConfigService.getGlobalConfig(),
-          source: "platform-data-cache",
+          source: pointerSnapshot && this.getSnapshotReleaseKey(pointerSnapshot) === this.getSnapshotReleaseKey(newestCachedControlPlane)
+            ? "runtime-pointer-cache"
+            : "platform-data-cache",
           fromStorage: true,
         };
       }

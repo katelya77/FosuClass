@@ -334,10 +334,13 @@ function getLocalFallbackCalendar(term, reason) {
 function getImmediateActiveCalendar(options = {}) {
   cleanLegacyCalendarCaches();
   const optionTerm = options.term || "";
-  const local = releasePackService.getLocalActiveRelease(optionTerm || BUILTIN_TERM_CONFIG.term) ||
-    (!optionTerm ? releasePackService.getLocalActiveRelease(BUILTIN_TERM_CONFIG.term) : null);
-  const term = optionTerm || local && local.term || BUILTIN_TERM_CONFIG.term;
-  const releaseVersion = options.releaseVersion || local && local.releaseVersion || "";
+  const runtimePointer = !optionTerm && releasePackService.getCachedRuntimePointer
+    ? releasePackService.getCachedRuntimePointer({})
+    : null;
+  const pointerTerm = runtimePointer && (runtimePointer.activeTerm || runtimePointer.term) || "";
+  const local = releasePackService.getLocalActiveRelease(optionTerm || pointerTerm || BUILTIN_TERM_CONFIG.term);
+  const term = optionTerm || pointerTerm || local && local.term || BUILTIN_TERM_CONFIG.term;
+  const releaseVersion = options.releaseVersion || runtimePointer && runtimePointer.releaseVersion || local && local.releaseVersion || "";
   const cached = readCache(term, releaseVersion);
   if (cached && isUsableCalendar(cached.calendar)) {
     return Object.assign({}, cached.calendar, {
@@ -353,6 +356,27 @@ function getImmediateActiveCalendar(options = {}) {
       fallbackReason: "last-good-calendar",
       source: lastGood.source || "last-good-calendar",
     });
+  }
+  if (runtimePointer && runtimePointer.termConfig && term === pointerTerm) {
+    const generated = normalizeCalendar({
+      term,
+      releaseVersion,
+      semesterText: runtimePointer.termConfig.semesterText || "",
+      weeks: [],
+      source: "runtime-pointer-date-range",
+    }, {
+      term,
+      releaseVersion,
+      semesterText: runtimePointer.termConfig.semesterText || "",
+      termConfig: runtimePointer.termConfig,
+      planned: true,
+    });
+    if (isUsableCalendar(generated)) {
+      return Object.assign({}, generated, {
+        fallback: true,
+        fallbackReason: "runtime-pointer-calendar-pending",
+      });
+    }
   }
   if ((term || BUILTIN_TERM_CONFIG.term) === BUILTIN_TERM_CONFIG.term) {
     return getBuiltinCalendar("immediate-builtin", { source: "builtin-immediate" });
@@ -440,8 +464,9 @@ function loadTeachingCalendar(options = {}) {
 }
 
 function loadActiveTeachingCalendar(options = {}) {
-  const local = releasePackService.getLocalActiveRelease(options.term || "");
-  if (local && local.manifest) {
+  const explicitTerm = options.term || "";
+  const local = releasePackService.getLocalActiveRelease(explicitTerm);
+  if (explicitTerm && local && local.manifest) {
     return loadTeachingCalendar(Object.assign({}, options, {
       term: local.term,
       releaseVersion: local.releaseVersion,
@@ -449,6 +474,7 @@ function loadActiveTeachingCalendar(options = {}) {
     }));
   }
   const fromPointer = () => releasePackService.resolveRuntimePointer({
+    term: explicitTerm,
     timeout: fastTimeout(options.pointerTimeout, FAST_POINTER_TIMEOUT_MS),
     retries: 0,
     skipSession: true,
@@ -465,7 +491,7 @@ function loadActiveTeachingCalendar(options = {}) {
       },
     })));
   const fromActiveManifest = () => releasePackService.getActiveManifest({
-    term: options.term || "",
+    term: explicitTerm,
     timeout: fastTimeout(options.manifestTimeout, FAST_CALENDAR_TIMEOUT_MS),
     retries: 0,
     skipSession: true,
@@ -477,7 +503,11 @@ function loadActiveTeachingCalendar(options = {}) {
   })));
   return fromPointer()
     .catch(() => fromActiveManifest())
-    .catch((error) => getLocalFallbackCalendar(options.term || BUILTIN_TERM_CONFIG.term, error && (error.code || error.message)));
+    .catch((error) => {
+      const cachedPointer = releasePackService.getCachedRuntimePointer && releasePackService.getCachedRuntimePointer({ term: explicitTerm });
+      const fallbackTerm = explicitTerm || cachedPointer && (cachedPointer.activeTerm || cachedPointer.term) || BUILTIN_TERM_CONFIG.term;
+      return getLocalFallbackCalendar(fallbackTerm, error && (error.code || error.message));
+    });
 }
 
 module.exports = {

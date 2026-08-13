@@ -73,6 +73,8 @@ try {
   assert(fs.existsSync(path.join(files.releaseDir, "index", "classroom.json")), "index/classroom.json should exist");
   assert(fs.existsSync(path.join(files.releaseDir, "index", "course.json")), "index/course.json should exist");
   assert(fs.existsSync(path.join(files.releaseDir, "empty-room", "index.json")), "empty-room/index.json should exist");
+  assert(fs.existsSync(path.join(files.releaseDir, "calendar.json")), "calendar.json should exist");
+  assert(fs.existsSync(path.join(files.releaseDir, "bootstrap.json")), "bootstrap.json should exist");
   const classDetailFile = fs.readdirSync(path.join(files.releaseDir, "detail", "class")).find((name) => name.endsWith(".json"));
   assert(classDetailFile, "detail/class should contain detail files");
   assert(fs.readdirSync(path.join(files.releaseDir, "detail", "teacher")).some((name) => name.endsWith(".json")), "detail/teacher should contain detail files");
@@ -85,6 +87,8 @@ try {
   assert(manifest.cacheEpoch, "manifest should include cacheEpoch");
   assert(manifest.files["index/class.json"].hash, "manifest should hash index/class.json");
   assert(manifest.files["empty-room/index.json"].size > 0, "manifest should include empty-room size");
+  assert(manifest.files["calendar.json"].hash, "manifest should hash calendar.json");
+  assert(manifest.files["bootstrap.json"].hash, "manifest should hash bootstrap.json");
   assert(Object.keys(manifest.files).some((key) => key.startsWith("detail/class/")), "manifest should include detail hashes");
   assert(status.healthy, `release pack should be healthy: ${status.missing.concat(status.hashErrors).join("; ")}`);
   assert(status.totalBytes > 0, "status should expose totalBytes");

@@ -52,7 +52,7 @@ const PROFILE_RULES = [
 ];
 
 function translateErrorMessage(payload, defaultMsg) {
-  const reasonCode = payload ? payload.reasonCode : "";
+  const reasonCode = payload ? payload.reasonCode || payload.code : "";
   const msg = (payload ? payload.message : defaultMsg) || "请求服务发生网络异常";
   const msgLower = msg.toLowerCase();
 
@@ -66,6 +66,14 @@ function translateErrorMessage(payload, defaultMsg) {
 
   if (reasonCode === "INVALID_FILTER") {
     return "请选择学院、年级和专业后再查询课表。";
+  }
+
+  if (reasonCode === "TERM_DATA_MISSING" || reasonCode === "TERM_RELEASE_MISMATCH") {
+    return "课表版本刚刚更新，请稍后重试；若仍未恢复，请重新进入小程序。";
+  }
+
+  if (reasonCode === "TERM_NOT_PUBLISHED") {
+    return "该学期课表暂未发布，请稍后再试。";
   }
 
   if (msgLower.includes("timeout") || msg.includes("超时") || msg.includes("网络较慢")) {
@@ -365,7 +373,8 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt, opt
       success: (res) => {
         const elapsedMs = Date.now() - startedAt;
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(normalizeRequestError(new Error(`HTTP status error: ${res.statusCode}`), {
+          const translated = translateErrorMessage(res.data, `HTTP status error: ${res.statusCode}`);
+          reject(normalizeRequestError(new Error(translated), {
             url: requestUrl,
             statusCode: res.statusCode,
             payload: res.data,

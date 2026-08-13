@@ -64,6 +64,18 @@ function buildRelease(version, options = {}) {
     rooms: [],
     buildings: [],
   });
+  writeJson(path.join(releaseDir, "calendar.json"), {
+    success: true,
+    term: "2025-2026-2",
+    releaseVersion: version,
+    weeks: [{ weekNo: 1, startDate: "2026-03-09", endDate: "2026-03-15" }],
+  });
+  writeJson(path.join(releaseDir, "bootstrap.json"), {
+    success: true,
+    term: "2025-2026-2",
+    version,
+    catalog: { colleges: [{ code: "01", name: "test" }] },
+  });
   if (options.secretFile) {
     writeJson(path.join(releaseDir, "debug-secret.json"), {
       token: "abcdefghi123456789",
@@ -122,6 +134,8 @@ async function run() {
   const dryRun = await utils.deployReleasePack({ publicRoot: good.root, releaseVersion: version, dryRun: true });
   assert.strictEqual(dryRun.dryRun, true);
   assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/manifest.json`));
+  assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/calendar.json`));
+  assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/bootstrap.json`));
   assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/index/class`));
   assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/detail/course`));
   assert(dryRun.planned.every((item) => item.cloudPath.startsWith(`releases/${version}/`)));

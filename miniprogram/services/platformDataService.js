@@ -69,7 +69,23 @@ function extractActiveSnapshot(data) {
     catalogUpdatedAt: active.catalogUpdatedAt || active.updatedAt || "",
     cacheEpoch: active.cacheEpoch || active.updatedAt || releaseVersion,
     counts: active.counts || {},
+    savedAt: Number(data && data.savedAt || payload.savedAt || 0) || 0,
   };
+}
+
+function comparableSnapshotTime(snapshot) {
+  if (!snapshot) return 0;
+  const cacheEpoch = Number(snapshot.cacheEpoch || 0) || 0;
+  const updatedAt = Date.parse(snapshot.scheduleUpdatedAt || snapshot.catalogUpdatedAt || "") || 0;
+  const savedAt = Number(snapshot.savedAt || 0) || 0;
+  return Math.max(cacheEpoch, updatedAt) || savedAt;
+}
+
+function selectNewestActiveSnapshot(values) {
+  return (Array.isArray(values) ? values : [])
+    .map(extractActiveSnapshot)
+    .filter(Boolean)
+    .sort((left, right) => comparableSnapshotTime(right) - comparableSnapshotTime(left))[0] || null;
 }
 
 async function loadPrefetchData(options = {}) {
@@ -134,8 +150,10 @@ async function loadPeriodicData(options = {}) {
 }
 
 function getCachedPlatformSnapshot() {
-  return extractActiveSnapshot(readCache(PLATFORM_PREFETCH_CACHE_KEY)) ||
-    extractActiveSnapshot(readCache(PLATFORM_PERIODIC_CACHE_KEY));
+  return selectNewestActiveSnapshot([
+    readCache(PLATFORM_PREFETCH_CACHE_KEY),
+    readCache(PLATFORM_PERIODIC_CACHE_KEY),
+  ]);
 }
 
 module.exports = {
@@ -147,4 +165,5 @@ module.exports = {
   loadPrefetchData,
   readBackgroundFetchData,
   readCache,
+  selectNewestActiveSnapshot,
 };

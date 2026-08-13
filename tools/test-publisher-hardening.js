@@ -13,6 +13,7 @@ const {
   PROXY_ENV_NAMES,
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./fosu-sync-client/syncEnv");
 const {
   verifySession,
@@ -128,6 +129,11 @@ async function run() {
   assert.deepStrictEqual(proxy.detectedProxyNames.sort(), ["HTTPS_PROXY", "HTTP_PROXY"].sort());
   assert.strictEqual(proxyEnv.HTTP_PROXY, undefined);
   assert.strictEqual(fakeAxios.defaults.proxy, false);
+  assert.deepStrictEqual(
+    withDirectBrowserArgs(["--ignore-certificate-errors", "--no-proxy-server"]),
+    ["--ignore-certificate-errors", "--no-proxy-server", "--proxy-bypass-list=*"],
+    "campus Playwright must bypass both environment and Windows global proxy settings"
+  );
   for (const host of DIRECT_NO_PROXY_HOSTS) {
     assert(proxyEnv.NO_PROXY.includes(host), `NO_PROXY missing ${host}`);
   }

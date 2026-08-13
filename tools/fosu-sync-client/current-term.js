@@ -5,6 +5,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { buildSyncPlan, printablePlan } = require("../../shared/syncPlan");
 const { DEFAULT_CURRENT_TERM, loadTermConfig } = require("../../shared/termConfig");
+const { prepareDirectNetworkEnvironment } = require("./syncEnv");
 
 function parseArgs(argv) {
   const params = {};
@@ -102,7 +103,20 @@ function buildCurrentTermInvocation(argv, options = {}) {
   const runtimeEnv = Object.assign({}, env, {
     SYNC_LOCAL_STAGING_ONLY: env.ADMIN_API_TOKEN ? String(env.SYNC_LOCAL_STAGING_ONLY || "false") : "true",
   });
-  return { args, config, plan, root, resume, runtimeEnv };
+  const networkIsolation = prepareDirectNetworkEnvironment(runtimeEnv);
+  return { args, config, plan, root, resume, runtimeEnv, networkIsolation };
+}
+
+function buildPostActivateMirrorInvocation(invocation) {
+  if (!invocation || !invocation.plan || invocation.plan.activate !== true) return null;
+  return {
+    command: process.execPath,
+    args: [
+      path.join(invocation.root, "tools", "fosu-publisher", "publish.js"),
+      "--mode=mirror-only",
+      `--term=${invocation.config.term}`,
+    ],
+  };
 }
 
 function main(argv = process.argv.slice(2)) {
@@ -136,9 +150,24 @@ function main(argv = process.argv.slice(2)) {
     env: invocation.runtimeEnv,
     stdio: "inherit",
   });
-  const status = Number.isInteger(result.status) ? result.status : 1;
+  let status = Number.isInteger(result.status) ? result.status : 1;
+  let mirrorStatus = "NOT_REQUIRED";
+  if (status === 0) {
+    const mirrorInvocation = buildPostActivateMirrorInvocation(invocation);
+    if (mirrorInvocation) {
+      mirrorStatus = "RUNNING";
+      const mirror = spawnSync(mirrorInvocation.command, mirrorInvocation.args, {
+        cwd: invocation.root,
+        env: invocation.runtimeEnv,
+        stdio: "inherit",
+      });
+      const mirrorExit = Number.isInteger(mirror.status) ? mirror.status : 1;
+      mirrorStatus = mirrorExit === 0 ? "DUAL_SOURCE_VERIFIED" : "FAILED";
+      if (mirrorExit !== 0) status = mirrorExit;
+    }
+  }
   let needsLogin = false;
-  if (status !== 0) {
+  if (status !== 0 && mirrorStatus !== "FAILED") {
     const verify = spawnSync(process.execPath, [path.join(__dirname, "verify-session.js")], {
       cwd: invocation.root,
       env: invocation.runtimeEnv,
@@ -148,18 +177,24 @@ function main(argv = process.argv.slice(2)) {
     needsLogin = verify.status !== 0;
   }
   writeState(invocation.root, invocation.config.term, Object.assign({}, state, {
-    status: status === 0 ? "STAGING_READY" : (needsLogin ? "USER_ACTION_REQUIRED" : "PARTIAL"),
-    userAction: needsLogin ? "npm run login" : "",
-    resumeCommand: status === 0 ? "" : "npm run sync:current-term -- --resume",
+    status: status === 0
+      ? (invocation.plan.activate ? "ACTIVE_DUAL_SOURCE_READY" : "STAGING_READY")
+      : (needsLogin ? "USER_ACTION_REQUIRED" : "PARTIAL"),
+    mirrorStatus,
+    userAction: needsLogin
+      ? "npm run login"
+      : (mirrorStatus === "FAILED" ? `npm run sync:publish:mirror -- --term=${invocation.config.term}` : ""),
+    resumeCommand: status === 0 || mirrorStatus === "FAILED" ? "" : "npm run sync:current-term -- --resume",
     updatedAt: new Date().toISOString(),
   }));
   if (status !== 0) {
     if (needsLogin) console.error("USER_ACTION_REQUIRED: npm run login");
+    else if (mirrorStatus === "FAILED") console.error(`CLOUDBASE_MIRROR_REQUIRED: npm run sync:publish:mirror -- --term=${invocation.config.term}`);
     else console.error("SYNC_PARTIAL: reusable run cache was preserved");
-    console.error("RESUME: npm run sync:current-term -- --resume");
+    if (mirrorStatus !== "FAILED") console.error("RESUME: npm run sync:current-term -- --resume");
   }
   return status;
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { buildCurrentTermInvocation, latestProgressRunId, main, parseArgs, readState, statePath };
+module.exports = { buildCurrentTermInvocation, buildPostActivateMirrorInvocation, latestProgressRunId, main, parseArgs, readState, statePath };

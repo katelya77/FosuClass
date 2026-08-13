@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 const {
   printDiagnosisSummary,
@@ -2315,12 +2316,29 @@ async function runClientProbeForRelease(result) {
     [version ? `/static/releases/${encodeURIComponent(version)}/index/classroom.json` : "", "classroom index"],
     [version ? `/static/releases/${encodeURIComponent(version)}/index/course.json` : "", "course index"],
     [version ? `/static/releases/${encodeURIComponent(version)}/calendar.json` : "", "calendar"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/bootstrap.json` : "", "bootstrap"],
     [version ? `/static/releases/${encodeURIComponent(version)}/empty-room/index.json` : "", "empty-room"],
   ].filter(([url]) => Boolean(url));
   for (const [pathname, label] of urls) {
     try {
       const response = await axios.get(`${FOSU_API_BASE}${pathname}`, { proxy: false, timeout: 15000 });
-      probe.checks.push({ label, url: pathname, ok: response.status >= 200 && response.status < 300, status: response.status });
+      const payload = response.data || {};
+      const actualVersion = payload.releaseVersion || payload.version || payload.activeReleaseVersion || "";
+      const actualTerm = payload.term || payload.activeTerm || payload.semester || payload.termConfig && payload.termConfig.term || "";
+      const versionMatches = label === "runtime pointer" || label === "manifest" || label === "calendar" || label === "bootstrap"
+        ? actualVersion === version
+        : !actualVersion || actualVersion === version;
+      const termMatches = !actualTerm || actualTerm === term;
+      probe.checks.push({
+        label,
+        url: pathname,
+        ok: response.status >= 200 && response.status < 300 && versionMatches && termMatches,
+        status: response.status,
+        term: actualTerm,
+        releaseVersion: actualVersion,
+        versionMatches,
+        termMatches,
+      });
     } catch (error) {
       probe.checks.push({ label, url: pathname, ok: false, status: error.response && error.response.status || 0, message: error.message });
     }
@@ -2331,14 +2349,31 @@ async function runClientProbeForRelease(result) {
   return probe;
 }
 
+async function activateTermRelease(term, releaseVersion) {
+  if (!term || !releaseVersion) throw new Error("TERM_ACTIVATION_TARGET_REQUIRED");
+  return postAdminJson(`/api/admin/terms/${encodeURIComponent(term)}/activate`, {
+    releaseVersion,
+  }, "activate term release");
+}
+
 async function publishCurrentStaging(plan, snapshot) {
   if (!plan.buildRelease) return null;
   if (!ADMIN_API_TOKEN) throw new Error("ADMIN_API_TOKEN_REQUIRED_FOR_PUBLISH");
-  const result = await postAdminJson("/api/admin/sync/staging/publish", {
+  let result = await postAdminJson("/api/admin/sync/staging/publish", {
     force: Boolean(plan.allowPartial || (global.CLI_PARAMS || {}).force),
     readyOnly: plan.profile === "new-term" && !plan.activate,
     releaseNote: (global.CLI_PARAMS || {}).note || snapshot.releaseNote || "",
   }, "staging publish");
+  if (plan.activate && result.readyOnly === true) {
+    const releaseVersion = result.releaseVersion || result.version || "";
+    const termActivation = await activateTermRelease(plan.term, releaseVersion);
+    result = Object.assign({}, result, {
+      readyOnly: false,
+      activeTerm: plan.term,
+      activeReleaseVersion: releaseVersion,
+      termActivation,
+    });
+  }
   if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result);
   return result;
 }
@@ -3402,13 +3437,12 @@ async function handleResourcesSync(resourceTypes, options = {}) {
  * 初始化已登录的 Playwright 上下文
  */
 async function initBrowserContext() {
-  const launchArgs = [
+  const launchArgs = withDirectBrowserArgs([
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security",
-    "--allow-running-insecure-content",
-    "--no-proxy-server"
-  ];
+    "--allow-running-insecure-content"
+  ]);
 
   let browser;
   // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium

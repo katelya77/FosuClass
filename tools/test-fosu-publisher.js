@@ -60,6 +60,18 @@ function buildRelease(rootDir, version) {
     releaseVersion: version,
     rooms: [],
   });
+  writeJson(path.join(releaseDir, "calendar.json"), {
+    success: true,
+    term: "2025-2026-2",
+    releaseVersion: version,
+    weeks: [{ weekNo: 1, startDate: "2026-03-09", endDate: "2026-03-15" }],
+  });
+  writeJson(path.join(releaseDir, "bootstrap.json"), {
+    success: true,
+    term: "2025-2026-2",
+    releaseVersion: version,
+    catalog: { colleges: [{ code: "01", name: "test" }] },
+  });
   const files = {};
   function walk(dir) {
     fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {

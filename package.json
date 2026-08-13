@@ -654,6 +654,8 @@
     "test:teaching-calendar": "node tools/test-teaching-calendar.js && node tools/test-miniprogram-calendar-date-fix.js",
     "test:semester-readiness-explain": "node tools/test-semester-readiness-explain.js",
     "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js",
+    "test:active-term-cutover-coherence": "node tools/test-active-term-cutover-coherence.js",
+    "test:term-data-error-ux": "node tools/test-term-data-error-ux.js",
     "test:conversation-memory": "node tools/test-conversation-memory.js",
     "test:kb-control-plane": "node tools/test-kb-control-plane-v2.js && node tools/test-knowledge-control-plane.js",
     "test:kb-mcp": "node tools/test-kb-mcp.js",

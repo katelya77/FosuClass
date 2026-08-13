@@ -3,7 +3,7 @@
 const assert = require("assert");
 const path = require("path");
 const { loadTermConfig } = require("../shared/termConfig");
-const { buildCurrentTermInvocation, latestProgressRunId } = require("./fosu-sync-client/current-term");
+const { buildCurrentTermInvocation, buildPostActivateMirrorInvocation, latestProgressRunId } = require("./fosu-sync-client/current-term");
 
 const root = path.resolve(__dirname, "..");
 const config = loadTermConfig("2026-2027-1", { root });
@@ -22,6 +22,23 @@ assert.strictEqual(invocation.plan.termConfig.totalWeeks, 20);
 assert(invocation.args.includes("--term=2026-2027-1"));
 assert(invocation.args.includes("--term-start-date=2026-09-07"));
 assert(!invocation.args.includes("--activate"));
+const proxiedInvocation = buildCurrentTermInvocation([], {
+  root,
+  env: {
+    HTTP_PROXY: "http://127.0.0.1:10808",
+    HTTPS_PROXY: "http://127.0.0.1:10808",
+  },
+});
+assert.strictEqual(proxiedInvocation.runtimeEnv.HTTP_PROXY, undefined);
+assert.strictEqual(proxiedInvocation.runtimeEnv.HTTPS_PROXY, undefined);
+assert.deepStrictEqual(proxiedInvocation.networkIsolation.removedProxyNames.sort(), ["HTTPS_PROXY", "HTTP_PROXY"].sort());
+assert.strictEqual(buildPostActivateMirrorInvocation(invocation), null, "staging-only run must not mutate CloudBase");
+const activating = buildCurrentTermInvocation(["--activate"], { root, env: {} });
+assert.strictEqual(activating.plan.activate, true);
+assert(activating.args.includes("--activate"));
+const mirror = buildPostActivateMirrorInvocation(activating);
+assert(mirror && mirror.args.includes("--mode=mirror-only"), "activated current-term run must mirror CloudBase");
+assert(mirror.args.includes("--term=2026-2027-1"));
 const resumable = latestProgressRunId(root, config.term);
 if (resumable) {
   const resumed = buildCurrentTermInvocation(["--resume"], { root, env: {} });
