@@ -11884,9 +11884,7 @@ const adminConsoleHtml = `<!doctype html>
         var publisherArgs = [];
         if (scriptName === "sync:publish:full") {
           publisherArgs = [
-            "--term=" + (term || "请先选择学期"),
-            "--term-start-date=" + (startDate || "请管理员填写YYYY-MM-DD"),
-            "--total-weeks=20"
+            "--term=" + (term || "请先选择学期")
           ];
         }
         var cliArgsStr = scriptName === "sync:upload-staging"

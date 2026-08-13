@@ -79,13 +79,13 @@ assert(dailyCacheOnly.warnings.some((item) => /Cache-only/.test(item)));
 const newTerm = syncPlan.buildSyncPlan("new-term", {
   term: "2026-2027-1",
   "term-start-date": "2026-09-07",
-  "total-weeks": "20",
+  "total-weeks": "19",
 }, {});
 assert.strictEqual(newTerm.catalogPolicy, "network-only");
 assert.strictEqual(newTerm.schedulePolicy, "network-only");
 assert.strictEqual(newTerm.activate, false);
 assert.strictEqual(newTerm.termConfig.termStartDate, "2026-09-07");
-assert.strictEqual(newTerm.termConfig.totalWeeks, 20);
+assert.strictEqual(newTerm.termConfig.totalWeeks, 19);
 
 const legacy = plan("quick");
 assert.strictEqual(legacy.deprecated, true);

@@ -41,6 +41,7 @@ const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
 } = require("../fosu-sync-client/syncEnv");
+const { loadTermConfig } = require("../../shared/termConfig");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const SYNC_CLIENT_DIR = path.join(PROJECT_ROOT, "tools", "fosu-sync-client");
@@ -58,6 +59,7 @@ const STAGES = [
   ["acquiring-lock", "acquiring publisher lock"],
   ["local-preflight", "running local publisher preflight"],
   ["resolving-term", "resolving term"],
+  ["reconciling-term-registry", "reconciling canonical term config"],
   ["checking-campus-network", "checking campus network"],
   ["checking-session", "checking education session"],
   ["crawling", "crawling school schedules"],
@@ -233,6 +235,17 @@ async function getJson(url, options = {}) {
 async function postJson(url, body, options = {}) {
   return withHttpRetry(options.label || "post-json", async () => {
     const response = await axios.post(url, body || {}, {
+      headers: Object.assign({ "Content-Type": "application/json" }, options.headers || {}),
+      timeout: options.timeoutMs || 60000,
+      proxy: false,
+    });
+    return response.data;
+  }, options);
+}
+
+async function patchJson(url, body, options = {}) {
+  return withHttpRetry(options.label || "patch-json", async () => {
+    const response = await axios.patch(url, body || {}, {
       headers: Object.assign({ "Content-Type": "application/json" }, options.headers || {}),
       timeout: options.timeoutMs || 60000,
       proxy: false,
@@ -806,12 +819,147 @@ function cleanupPublisherRunArtifacts(options = {}) {
   return { removed, kept, keepLatest };
 }
 
+function selectPublisherTerm({ cliTerm = "", envTerm = "", activeTerm = "", activeReleaseVersion = "", activeSource = "" } = {}) {
+  const explicit = String(cliTerm || "").trim();
+  const preferred = String(envTerm || "").trim();
+  const active = String(activeTerm || "").trim();
+  if (explicit) return { term: explicit, source: "cli", activeReleaseVersion };
+  if (!active) {
+    const error = new Error("PUBLISHER_ACTIVE_TERM_MISSING");
+    error.code = "PUBLISHER_ACTIVE_TERM_MISSING";
+    throw error;
+  }
+  if (preferred && preferred !== active) {
+    return { term: active, source: activeSource, activeReleaseVersion, ignoredEnvTerm: preferred };
+  }
+  return { term: preferred || active, source: preferred ? "environment" : activeSource, activeReleaseVersion };
+}
+
+function normalizePublisherTermConfig(config) {
+  const source = config && typeof config === "object" ? config : {};
+  const totalWeeks = Number(source.totalWeeks);
+  if (!source.term || !/^\d{4}-\d{2}-\d{2}$/.test(String(source.termStartDate || "")) ||
+      !Number.isInteger(totalWeeks) || totalWeeks < 1 || totalWeeks > 30 ||
+      !["monday", "sunday"].includes(source.weekStart)) {
+    return null;
+  }
+  return {
+    term: String(source.term),
+    semesterText: String(source.semesterText || ""),
+    termStartDate: String(source.termStartDate),
+    totalWeeks,
+    weekStart: String(source.weekStart),
+    source: String(source.source || "canonical-term-config"),
+  };
+}
+
+function loadPublisherTermConfig(term, args = {}) {
+  let bundled = null;
+  try {
+    bundled = normalizePublisherTermConfig(loadTermConfig(term, { root: PROJECT_ROOT }));
+  } catch (error) {
+    if (error.code !== "TERM_CONFIG_NOT_FOUND") throw error;
+  }
+  if (bundled) return Object.assign({}, bundled, { source: "config/terms" });
+  return normalizePublisherTermConfig({
+    term,
+    semesterText: args["semester-text"] || args.semesterText || "",
+    termStartDate: args["term-start-date"] || args.termStartDate || "",
+    totalWeeks: args["total-weeks"] || args.totalWeeks,
+    weekStart: args["week-start"] || args.weekStart || "monday",
+    source: "publisher-cli",
+  });
+}
+
+function attachPublisherTermConfig(selected, args = {}) {
+  return Object.assign({}, selected, {
+    termConfig: loadPublisherTermConfig(selected.term, args),
+  });
+}
+
+function buildTermRegistryPatch(remoteTerm, canonicalConfig) {
+  const canonical = normalizePublisherTermConfig(canonicalConfig);
+  if (!canonical) return { changed: false, patch: {}, differences: [], reason: "canonical-config-missing" };
+  const remote = remoteTerm && typeof remoteTerm === "object" ? remoteTerm : {};
+  const patch = {
+    semesterText: canonical.semesterText,
+    termStartDate: canonical.termStartDate,
+    totalWeeks: canonical.totalWeeks,
+    weekStart: canonical.weekStart,
+    source: "publisher-canonical-term-config",
+  };
+  const differences = ["semesterText", "termStartDate", "totalWeeks", "weekStart"]
+    .filter((key) => String(remote[key] == null ? "" : remote[key]) !== String(patch[key]));
+  return { changed: differences.length > 0, patch, differences, reason: differences.length ? "term-config-drift" : "already-current" };
+}
+
+async function reconcileOracleTermConfig(args, termInfo) {
+  const canonical = termInfo && termInfo.termConfig;
+  if (!canonical) {
+    return { success: true, skipped: true, reason: "canonical-config-missing" };
+  }
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") {
+    return { success: true, mocked: true, term: canonical.term, changed: false };
+  }
+  const baseUrl = String(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL).replace(/\/+$/g, "");
+  const headers = axiosHeaders();
+  const registryResponse = await getJson(`${baseUrl}/api/admin/terms`, {
+    headers,
+    timeoutMs: 30000,
+    label: "term-registry-read",
+  });
+  const terms = Array.isArray(registryResponse && registryResponse.terms) ? registryResponse.terms : [];
+  const remote = terms.find((item) => item && item.term === canonical.term);
+  if (!remote) {
+    const error = new Error(`TERM_REGISTRY_ENTRY_MISSING:${canonical.term}`);
+    error.code = "TERM_REGISTRY_ENTRY_MISSING";
+    throw error;
+  }
+  const reconciliation = buildTermRegistryPatch(remote, canonical);
+  if (!reconciliation.changed) {
+    return { success: true, term: canonical.term, changed: false, differences: [] };
+  }
+  const response = await patchJson(`${baseUrl}/api/admin/terms/${encodeURIComponent(canonical.term)}`, reconciliation.patch, {
+    headers,
+    timeoutMs: 60000,
+    label: "term-registry-reconcile",
+  });
+  const updated = response && response.term;
+  const remaining = buildTermRegistryPatch(updated, canonical);
+  if (!updated || remaining.changed) {
+    const error = new Error(`TERM_REGISTRY_RECONCILE_FAILED:${canonical.term}`);
+    error.code = "TERM_REGISTRY_RECONCILE_FAILED";
+    error.differences = remaining.differences;
+    throw error;
+  }
+  return {
+    success: true,
+    term: canonical.term,
+    changed: true,
+    differences: reconciliation.differences,
+  };
+}
+
 async function resolveTerm(args) {
-  const explicit = String(args.term || args.semester || process.env.PREFERRED_SEMESTER || "").trim();
-  if (explicit) return { term: explicit, source: "cli-or-env" };
+  const cliTerm = String(args.term || args.semester || "").trim();
+  if (cliTerm) return attachPublisherTermConfig(selectPublisherTerm({ cliTerm }), args);
+  const envTerm = String(process.env.PREFERRED_SEMESTER || "").trim();
   const source = await fetchOracleActivePointer({ oracleBaseUrl: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL });
   const active = extractActiveRelease(source);
-  return { term: active.term, source: source.source, activeReleaseVersion: active.releaseVersion };
+  const selected = selectPublisherTerm({
+    envTerm,
+    activeTerm: active.term,
+    activeReleaseVersion: active.releaseVersion,
+    activeSource: source.source,
+  });
+  if (selected.ignoredEnvTerm) {
+    // A stale PREFERRED_SEMESTER in local .env files must not silently retarget a
+    // routine publish to an old term. The live active pointer is the source of
+    // truth; pinning a different term requires an explicit --term.
+    console.warn(`[publisher] WARN PREFERRED_SEMESTER=${envTerm} 与线上当前学期 ${active.term} 不一致，已按线上当前学期继续。若需指定其他学期，请显式传入 --term=<学期>。`);
+    return attachPublisherTermConfig(selected, args);
+  }
+  return attachPublisherTermConfig(selected, args);
 }
 
 function requireSession() {
@@ -928,7 +1076,7 @@ async function runLocalPreflight(args) {
   };
 }
 
-function buildCrawlArgs(mode, args, run, term) {
+function buildCrawlArgs(mode, args, run, term, termConfig = null) {
   const output = path.join(run.runDir, "staging.json");
   const action = "crawl:daily";
   const catalogPolicy = mode === "full" ? "network-only" : "reuse-validated";
@@ -958,6 +1106,15 @@ function buildCrawlArgs(mode, args, run, term) {
     "--allow-derived",
     "--class-scope=all",
   ];
+  const canonicalConfig = normalizePublisherTermConfig(termConfig) || loadPublisherTermConfig(term, args);
+  if (canonicalConfig) {
+    base.push(
+      `--term-start-date=${canonicalConfig.termStartDate}`,
+      `--total-weeks=${canonicalConfig.totalWeeks}`,
+      `--week-start=${canonicalConfig.weekStart}`,
+      "--override-term-config"
+    );
+  }
   const grades = args.grades || args.grade;
   if (grades) base.push(`--grades=${grades}`);
   if (defaultConcurrency) base.push(`--concurrency=${defaultConcurrency}`);
@@ -966,8 +1123,6 @@ function buildCrawlArgs(mode, args, run, term) {
   if (args["college-codes"]) base.push(`--college-codes=${args["college-codes"]}`);
   if (args["major-codes"]) base.push(`--major-codes=${args["major-codes"]}`);
   if (mode === "full") {
-    if (args["term-start-date"]) base.push(`--term-start-date=${args["term-start-date"]}`);
-    if (args["total-weeks"]) base.push(`--total-weeks=${args["total-weeks"]}`);
     base.push("--force-refresh", "--clear-progress", "--recheck-no-schedule");
   }
   if (args["verify-direct-resources"]) base.push("--verify-direct-resources");
@@ -989,7 +1144,7 @@ function privacyScanText(text) {
   return findings;
 }
 
-function validateStaging(stagingPath, expectedTerm) {
+function validateStaging(stagingPath, expectedTerm, expectedTermConfig = null) {
   const raw = fs.readFileSync(stagingPath, "utf8");
   const data = JSON.parse(raw);
   const fingerprint = calculateFingerprintFromFile(stagingPath);
@@ -1017,6 +1172,15 @@ function validateStaging(stagingPath, expectedTerm) {
   const errors = [];
   if ((data.term || data.semester) !== expectedTerm) errors.push(`term mismatch: ${data.term || data.semester} != ${expectedTerm}`);
   if (!data.termConfig || !data.termConfig.termStartDate || !data.termConfig.totalWeeks) errors.push("termConfig incomplete");
+  const canonicalConfig = normalizePublisherTermConfig(expectedTermConfig);
+  const stagingConfig = normalizePublisherTermConfig(data.termConfig);
+  if (canonicalConfig && stagingConfig) {
+    ["term", "termStartDate", "totalWeeks", "weekStart"].forEach((key) => {
+      if (String(stagingConfig[key]) !== String(canonicalConfig[key])) {
+        errors.push(`termConfig mismatch: ${key}=${stagingConfig[key]} != ${canonicalConfig[key]}`);
+      }
+    });
+  }
   if (!summary.classSchedules) errors.push("classSchedules is empty");
   if (!summary.teacherSchedules || !summary.classroomSchedules || !summary.courseSchedules) errors.push("four scheduleDocuments are required");
   if (!counts.collegeCount || !counts.majorCount) errors.push("catalog entity counts are empty");
@@ -1514,6 +1678,8 @@ async function runMainPipeline(run, args) {
       });
     }
 
+    await run.stage("reconciling-term-registry", async () => reconcileOracleTermConfig(args, termInfo));
+
     await run.stage("checking-campus-network", async () => {
       return checkCampusNetworkForPublisher(run);
     });
@@ -1521,7 +1687,7 @@ async function runMainPipeline(run, args) {
     await run.stage("checking-session", async () => verifyEducationSession());
 
     const effectiveMode = run.mode === "resume" ? run.originalMode : run.mode;
-    const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term);
+    const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term, termInfo.termConfig);
     await run.stage("crawling", async () => {
       runNodeScript(crawlPlan.script, crawlPlan.args, {
         code: "LOCAL_CRAWL_FAILED",
@@ -1549,7 +1715,7 @@ async function runMainPipeline(run, args) {
     });
 
     stagingMeta = await run.stage("validating-local", async () => {
-      const meta = validateStaging(crawlPlan.output, term);
+      const meta = validateStaging(crawlPlan.output, term, termInfo.termConfig);
       writeJsonAtomic(run.stagingMetaPath, meta);
       run.save({
         stagingPath: crawlPlan.output,
@@ -1838,8 +2004,8 @@ async function main(argv = process.argv.slice(2)) {
       "Usage:",
       "  npm run sync:publish",
       "  npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume",
-      "  npm run sync:publish -- --full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20 --grade=2026",
-      "  npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20",
+      "  npm run sync:publish -- --full --term=2026-2027-1 --grade=2026",
+      "  npm run sync:publish -- --mode=full --term=2026-2027-1",
       "  npm run sync:publish -- --mode=resume --run-id=<runId>",
       "  npm run sync:publish -- --mode=mirror-only",
       "  npm run sync:export-cloudbase -- --release=<releaseVersion>",
@@ -1851,9 +2017,15 @@ async function main(argv = process.argv.slice(2)) {
     console.warn(`[deprecated] ${args.deprecated} is deprecated. Use npm run sync:publish instead.`);
   }
   if (mode === "full") {
-    const missing = ["term", "term-start-date", "total-weeks"].filter((key) => !args[key] && !(key === "term" && args.semester));
+    const fullTerm = String(args.term || args.semester || "").trim();
+    const missing = [];
+    if (!fullTerm) missing.push("term");
+    if (fullTerm && !loadPublisherTermConfig(fullTerm, args)) {
+      if (!args["term-start-date"] && !args.termStartDate) missing.push("term-start-date");
+      if (!args["total-weeks"] && !args.totalWeeks) missing.push("total-weeks");
+    }
     if (missing.length) {
-      const error = new Error(`full mode requires explicit ${missing.map((key) => `--${key}`).join(", ")}`);
+      const error = new Error(`full mode requires canonical config/terms/<term>.json or explicit ${missing.map((key) => `--${key}`).join(", ")}`);
       error.code = "PUBLISHER_FULL_TERM_CONFIG_REQUIRED";
       throw error;
     }
@@ -1941,6 +2113,7 @@ module.exports = {
   acquireLock,
   buildPerformanceSummary,
   buildCrawlArgs,
+  buildTermRegistryPatch,
   buildMockStaging,
   checkCampusNetworkForPublisher,
   exportCloudbaseManualPackage,
@@ -1953,11 +2126,14 @@ module.exports = {
   parseArgs,
   processIsAlive,
   redact,
+  reconcileOracleTermConfig,
   reconcilePublisherLock,
   removePublisherLock,
   runDualSourceSmoke,
   runLocalPreflight,
   runOracleOnlySmoke,
   sanitizeReceiptForUpload,
+  selectPublisherTerm,
+  loadPublisherTermConfig,
   validateStaging,
 };

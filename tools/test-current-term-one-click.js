@@ -8,7 +8,7 @@ const { buildCurrentTermInvocation, buildPostActivateMirrorInvocation, latestPro
 const root = path.resolve(__dirname, "..");
 const config = loadTermConfig("2026-2027-1", { root });
 assert.strictEqual(config.termStartDate, "2026-09-07");
-assert.strictEqual(config.totalWeeks, 20);
+assert.strictEqual(config.totalWeeks, 19);
 assert.strictEqual(config.weekStart, "monday");
 const invocation = buildCurrentTermInvocation([], { root, env: {} });
 assert.strictEqual(invocation.plan.term, "2026-2027-1");
@@ -18,7 +18,7 @@ assert.strictEqual(invocation.plan.schedulePolicy, "network-only");
 assert.strictEqual(invocation.plan.mergeOldData, false);
 assert.strictEqual(invocation.plan.activate, false);
 assert.strictEqual(invocation.plan.termConfig.termStartDate, "2026-09-07");
-assert.strictEqual(invocation.plan.termConfig.totalWeeks, 20);
+assert.strictEqual(invocation.plan.termConfig.totalWeeks, 19);
 assert(invocation.args.includes("--term=2026-2027-1"));
 assert(invocation.args.includes("--term-start-date=2026-09-07"));
 assert(!invocation.args.includes("--activate"));

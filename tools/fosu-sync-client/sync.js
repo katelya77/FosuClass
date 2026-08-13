@@ -510,7 +510,7 @@ async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
     throw new Error([
       `Missing termStartDate for ${activeSemester}.`,
       "Pass it explicitly before crawling, for example:",
-      `npm run sync:local-campus -- --term=${activeSemester} --term-start-date=2026-09-07 --total-weeks=20 --fresh`,
+      `npm run sync:local-campus -- --term=${activeSemester} --term-start-date=2026-09-07 --total-weeks=19 --fresh`,
     ].join("\n"));
   }
   if (!Number.isInteger(config.totalWeeks) || config.totalWeeks < 1 || config.totalWeeks > 30) {
@@ -1058,10 +1058,40 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   return normalizeReport;
 }
 
+function resolveSnapshotTerm() {
+  const activePlan = getActiveSyncPlan();
+  const planTerm = String(activePlan && activePlan.term || "").trim();
+  const configTerm = String(global.TERM_CONFIG && global.TERM_CONFIG.term || "").trim();
+  const cliTerm = String(global.CLI_PARAMS && (global.CLI_PARAMS.term || global.CLI_PARAMS.semester) || "").trim();
+  const envTerm = String(process.env.PREFERRED_SEMESTER || "").trim();
+  const term = planTerm || configTerm || cliTerm || envTerm || inferPreferredSemester();
+  const authoritativeTerms = [planTerm, configTerm, cliTerm].filter(Boolean);
+  const mismatch = authoritativeTerms.find((item) => item !== term);
+  if (mismatch) {
+    const error = new Error(`SNAPSHOT_TERM_CONTEXT_MISMATCH: resolved=${term}, plan=${planTerm || "-"}, config=${configTerm || "-"}, cli=${cliTerm || "-"}`);
+    error.code = "SNAPSHOT_TERM_CONTEXT_MISMATCH";
+    throw error;
+  }
+  return term;
+}
+
+function assertScheduleTermCoherence(allClassSchedules, activeSemester) {
+  const mismatches = (allClassSchedules || [])
+    .map((item) => String(item && item.semester || "").trim())
+    .filter((term) => term && term !== activeSemester);
+  if (!mismatches.length) return;
+  const error = new Error(`SNAPSHOT_TERM_DATA_MISMATCH: expected=${activeSemester}, actual=${Array.from(new Set(mismatches)).slice(0, 5).join(",")}`);
+  error.code = "SNAPSHOT_TERM_DATA_MISMATCH";
+  error.expectedTerm = activeSemester;
+  error.actualTerms = Array.from(new Set(mismatches));
+  throw error;
+}
+
 function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, options = {}) {
   const version = generateSnapshotVersion();
-  const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const activeSemester = resolveSnapshotTerm();
   const activePlan = getActiveSyncPlan();
+  assertScheduleTermCoherence(allClassSchedules, activeSemester);
   const noScheduleCachePath = activePlan && activePlan.term
     ? syncCacheStore.negativePath(__dirname, activePlan.term, "class-schedule", activePlan.runId)
     : path.join(__dirname, ".debug", "no-schedule-majors.json");
@@ -1069,7 +1099,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
   const updatedSchedules = (allClassSchedules || []).map((item) => {
     const classId = item.classId || md5(`${item.semester}_${item.collegeCode}_${item.grade}_${item.majorCode}_${item.className}`);
-    const withClassId = Object.assign({}, item, { classId });
+    const withClassId = Object.assign({}, item, { classId, semester: item.semester || activeSemester });
     return normalizeScheduleEntryCourses(withClassId, {
       semester: item.semester || activeSemester,
       classId,
@@ -1212,7 +1242,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     noScheduleMajorCount,
   };
   const cohortAvailability = require("../../shared/cohortAvailability").assessCohortAvailability({
-    term: semester,
+    term: activeSemester,
     catalog: Object.assign({}, catalog, {
       adminClasses: updatedSchedules.map((item) => ({
         id: item.classId,
@@ -5678,5 +5708,8 @@ if (require.main === module) {
     getResourceTypesFromIncludeScopes,
     resolveTermConfig,
     assertTermConfigBeforeCrawl,
+    resolveSnapshotTerm,
+    assertScheduleTermCoherence,
+    buildSnapshot,
   };
 }

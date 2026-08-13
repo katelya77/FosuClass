@@ -214,6 +214,10 @@ async function run() {
   assert(crawlPlan.args.includes("--progress-policy=resume"));
   assert(crawlPlan.args.includes("--grades=2026"));
   assert(crawlPlan.args.includes("--concurrency=8"));
+  assert(crawlPlan.args.includes("--term-start-date=2026-09-07"));
+  assert(crawlPlan.args.includes("--total-weeks=19"));
+  assert(crawlPlan.args.includes("--week-start=monday"));
+  assert(crawlPlan.args.includes("--override-term-config"));
 
   const syncSource = fs.readFileSync(path.join(root, "tools", "fosu-sync-client", "sync.js"), "utf8");
   assert(syncSource.includes("loadSyncClientEnv()"), "sync.js should load explicit client .env");
