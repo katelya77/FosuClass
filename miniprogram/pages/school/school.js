@@ -1612,13 +1612,15 @@ Page({
 
   // 5. 联动查询专业
   fetchMajors() {
-    const { colleges, selectedCollegeIndex, grades, selectedGradeIndex } = this.data;
+    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex } = this.data;
     if (selectedCollegeIndex < 0 || selectedGradeIndex < 0) {
       return Promise.resolve([]);
     }
 
     const collegeCode = colleges[selectedCollegeIndex].code;
     const grade = grades[selectedGradeIndex];
+    const selectedSemester = semesters[selectedSemesterIndex];
+    const term = selectedSemester && selectedSemester.value || getFallbackTerm();
     const localMajors = (this.originalCatalogData && Array.isArray(this.originalCatalogData.majors))
       ? this.originalCatalogData.majors.filter((major) => {
         return String(major.collegeCode || "") === String(collegeCode || "") &&
@@ -1634,7 +1636,7 @@ Page({
     }
 
     this.setData({ loading: true });
-    return request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false, timeout: SCHOOL_REQUEST_TIMEOUT })
+    return request.get("/api/fosu/majors", { term, collegeCode, grade }, { showLoading: false, timeout: SCHOOL_REQUEST_TIMEOUT })
       .then((data) => {
         const majors = data.majors || [];
         this.setData({

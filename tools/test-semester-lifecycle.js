@@ -227,7 +227,8 @@ async function testTermDataIsolation() {
   assert.strictEqual(catalogB.colleges[0].code, "B");
   assert.strictEqual(catalogB.term, termB);
   const majorsB = await schoolCatalogService.getMajors("B", "2026", termB);
-  assert.strictEqual(majorsB.majors[0].code, "B1");
+  assert.strictEqual(majorsB.dataSource, "release-class-index");
+  assert.deepStrictEqual(majorsB.majors, [], "release class index must not expose majors without schedule data");
 
   const planned = termRegistryService.createPlannedTerm({ term: "2027-2028-1", totalWeeks: 20 });
   assert.strictEqual(planned.status, "planned");

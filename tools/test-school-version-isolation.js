@@ -83,6 +83,31 @@ async function run() {
   assert.strictEqual(rendered.isFromCache, true);
   assert.strictEqual(rendered.data.items[0].className, "25版本隔离2班");
 
+  let majorsQuery = null;
+  global.wx.mockRequest = (options) => {
+    majorsQuery = Object.assign({}, options.data || {});
+    setTimeout(() => options.success({
+      statusCode: 200,
+      data: {
+        success: true,
+        term,
+        releaseVersion: "release-v2",
+        majors: [{ code: "0401", name: "测试专业" }],
+      },
+    }), 1);
+  };
+  page.setData({
+    colleges: [{ code: "04", name: "测试学院" }],
+    selectedCollegeIndex: 0,
+    grades: ["2025"],
+    selectedGradeIndex: 0,
+  });
+  const majors = await page.fetchMajors();
+  assert.strictEqual(majors.length, 1);
+  assert.strictEqual(majorsQuery.term, term, "major lookup must carry the selected term explicitly");
+  assert.strictEqual(majorsQuery.collegeCode, "04");
+  assert.strictEqual(majorsQuery.grade, "2025");
+
   console.log("test-school-version-isolation passed");
 }
 

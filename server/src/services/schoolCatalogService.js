@@ -138,6 +138,27 @@ function getDemoMajors() {
   ];
 }
 
+function deriveMajorsFromClassIndex(items, collegeCode, grade) {
+  const seen = new Set();
+  return (Array.isArray(items) ? items : [])
+    .filter((item) =>
+      String(item && item.collegeCode || "") === String(collegeCode || "") &&
+      String(item && item.grade || "") === String(grade || "") &&
+      Number(item && item.courseCount || 0) > 0
+    )
+    .map((item) => ({
+      code: String(item.majorCode || "").trim(),
+      name: String(item.majorName || item.major || "").trim(),
+    }))
+    .filter((item) => {
+      const key = item.code;
+      if (!item.code || !item.name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => left.code.localeCompare(right.code) || left.name.localeCompare(right.name, "zh-CN"));
+}
+
 async function checkDns(hostname) {
   try {
     await dns.lookup(hostname);
@@ -292,6 +313,32 @@ async function getMajors(collegeCode, grade, semester) {
 
   if (!record.dataAvailable && record.status === "planned") {
     return Object.assign(buildTermError(record, "TERM_NOT_PUBLISHED"), { collegeCode, grade, majors: [] });
+  }
+
+  if (record.releaseVersion) {
+    const classIndex = releaseService.readActiveIndex("class", record.releaseVersion, { term: record.term });
+    if (classIndex && classIndex.success && Array.isArray(classIndex.items) && classIndex.items.length > 0) {
+      const filtered = deriveMajorsFromClassIndex(classIndex.items, collegeCode, grade);
+      return {
+        success: true,
+        term: record.term,
+        semester: record.term,
+        releaseVersion: record.releaseVersion,
+        dataAvailable: record.dataAvailable,
+        collegeCode,
+        grade,
+        majors: filtered,
+        updatedAt: classIndex.updatedAt || record.updatedAt || new Date().toISOString(),
+        dataSource: "release-class-index",
+        syncSource: "release-pack",
+        itemCount: filtered.length,
+      };
+    }
+    return Object.assign(buildTermError(record, "TERM_DATA_MISSING"), {
+      collegeCode,
+      grade,
+      majors: [],
+    });
   }
 
   const termMajors = readTermJson(record.term, "majors", { allowLegacyFallback: true });
