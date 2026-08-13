@@ -59,6 +59,46 @@ function checkModuleStrictParse(jsFiles) {
   }
 }
 
+function checkMiniprogramModuleBoundary(jsFiles) {
+  const failures = [];
+  jsFiles.forEach((filePath) => {
+    const source = fs.readFileSync(filePath, "utf8");
+    const pattern = /\brequire\(\s*["'](\.[^"']*)["']\s*\)/g;
+    let match;
+    while ((match = pattern.exec(source))) {
+      const resolved = path.resolve(path.dirname(filePath), match[1]);
+      const relative = path.relative(MINIPROGRAM_ROOT, resolved);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        failures.push(`${path.relative(ROOT, filePath)} requires module outside miniprogramRoot: ${match[1]}`);
+      }
+    }
+  });
+  if (failures.length) {
+    console.error("Miniprogram package boundary failures:");
+    failures.forEach((failure) => console.error(failure));
+    process.exit(1);
+  }
+}
+
+function checkGeneratedRuntimeCompatibility() {
+  const entries = [
+    { name: "termVisibility", source: "shared/termVisibility.js" },
+    { name: "teachingEventResolver", source: "shared/teachingEventResolver.js" },
+  ];
+  const normalize = (value) => String(value || "").replace(/\r\n/g, "\n");
+  entries.forEach((entry) => {
+    const sourceFile = path.join(ROOT, entry.source);
+    const targetFile = path.join(MINIPROGRAM_ROOT, "shared", `${entry.name}.generated.js`);
+    const header = [
+      `// Generated from ${entry.source} by tools/generate-miniprogram-runtime-compat.js.`,
+      "// Do not edit this packaged compatibility module directly.",
+    ].join("\n");
+    const expected = `${header}\n${normalize(fs.readFileSync(sourceFile, "utf8"))}`;
+    const actual = fs.existsSync(targetFile) ? normalize(fs.readFileSync(targetFile, "utf8")) : "";
+    assert.strictEqual(actual, expected, `miniprogram packaged ${entry.name} module must match the canonical shared source`);
+  });
+}
+
 function getPropertyName(property) {
   if (!property || property.computed) return "";
   if (property.key && property.key.type === "Identifier") return property.key.name;
@@ -200,6 +240,52 @@ function checkJsonContracts() {
   });
 }
 
+const NATIVE_WXML_TAGS = new Set([
+  "ad", "ad-custom", "audio", "block", "button", "camera", "canvas",
+  "channel-live", "channel-video", "checkbox", "checkbox-group", "cover-image",
+  "cover-view", "editor", "form", "functional-page-navigator", "icon", "image",
+  "input", "keyboard-accessory", "label", "live-player", "live-pusher", "map",
+  "match-media", "movable-area", "movable-view", "navigation-bar", "navigator",
+  "official-account", "open-data", "page-container", "page-meta", "picker",
+  "picker-view", "picker-view-column", "progress", "radio", "radio-group",
+  "rich-text", "root-portal", "scroll-view", "share-element", "slider", "slot",
+  "swiper", "swiper-item", "switch", "text", "textarea", "video", "view",
+  "voip-room", "web-view",
+]);
+
+function collectWxmlTags(wxmlFile) {
+  const source = fs.readFileSync(wxmlFile, "utf8");
+  const tags = new Set();
+  const pattern = /<\/?([a-z][a-z0-9-]*)\b/g;
+  let match;
+  while ((match = pattern.exec(source))) tags.add(match[1]);
+  return tags;
+}
+
+function checkWxmlComponentDeclarations() {
+  const appJson = readJson(path.join(MINIPROGRAM_ROOT, "app.json"));
+  const globalComponents = appJson.usingComponents || {};
+  const failures = [];
+
+  walkFiles(MINIPROGRAM_ROOT, (filePath) => filePath.endsWith(".wxml")).forEach((wxmlFile) => {
+    const jsonFile = wxmlFile.replace(/\.wxml$/, ".json");
+    const localComponents = fs.existsSync(jsonFile)
+      ? (readJson(jsonFile).usingComponents || {})
+      : {};
+    collectWxmlTags(wxmlFile).forEach((tag) => {
+      if (!tag.includes("-") || NATIVE_WXML_TAGS.has(tag)) return;
+      if (globalComponents[tag] || localComponents[tag]) return;
+      failures.push(`${path.relative(ROOT, wxmlFile)} uses undeclared component <${tag}>`);
+    });
+  });
+
+  if (failures.length) {
+    console.error("WXML component declaration failures:");
+    failures.forEach((failure) => console.error(failure));
+    process.exit(1);
+  }
+}
+
 function checkProjectConfigNotFoundSources() {
   walkFiles(ROOT, (filePath) => /^project(?:\..*)?\.config\.json$/.test(path.basename(filePath))).forEach((filePath) => {
     const source = fs.readFileSync(filePath, "utf8");
@@ -219,8 +305,11 @@ function run() {
   }
 
   checkModuleStrictParse(miniprogramJsFiles);
+  checkMiniprogramModuleBoundary(miniprogramJsFiles);
+  checkGeneratedRuntimeCompatibility();
   checkWxmlHandlers();
   checkJsonContracts();
+  checkWxmlComponentDeclarations();
   checkProjectConfigNotFoundSources();
 
   console.log(`test-miniprogram-compile-preflight passed (${miniprogramJsFiles.length} JS files parsed)`);

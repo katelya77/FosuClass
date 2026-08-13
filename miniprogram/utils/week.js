@@ -5,7 +5,7 @@ const TOTAL_WEEKS = 19;
 const WEEK_START = "monday";
 const WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const { isCourseActiveInWeek } = require("./courseWeekRules");
-const { resolveTeachingEvent } = require("../../shared/teachingEventResolver");
+const { resolveTeachingEvent } = require("../shared/teachingEventResolver.generated");
 
 const FALLBACK_TERM_CONFIG = {
   term: DEFAULT_SEMESTER_ID,

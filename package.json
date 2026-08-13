@@ -57,6 +57,7 @@
     "release:formal:check": "node tools/release-check.js formal",
     "security:acceptance": "npm run test:security-full",
     "build:miniprogram-info": "node tools/generate-miniprogram-build-info.js",
+    "build:miniprogram-compat": "node tools/generate-miniprogram-runtime-compat.js",
     "security:postdeploy": "node server/scripts/security-postdeploy-check.js",
     "security:report": "node tools/security-report.js",
     "analyze:har": "node tools/analyze-third-party-har.js",
@@ -711,7 +712,7 @@
     "test:agent-task-gates": "node tools/test-ai-goal-first-parser.js && node tools/test-ai-goal-intent-regression.js && node tools/test-ai-set-current-schedule-receipt.js && node tools/test-ai-manifest-actions-behavior.js && node tools/test-ai-memory-semantics.js && node tools/test-ai-voice-handler.js && node tools/test-ai-kb-seed-verify.js && node tools/test-ai-kb-published-smoke.js && node tools/test-ai-ui-polish.js",
     "test:coze-gateway-live": "node tools/test-coze-gateway-live.js",
     "test:xiaofu-final-product-convergence": "node tools/test-xiaofu-final-product-convergence.js",
-    "upload:wechat-trial": "node tools/upload-wechat-trial.js",
+    "upload:wechat-trial": "npm run build:miniprogram-compat && node tools/test-miniprogram-compile-preflight.js && node tools/upload-wechat-trial.js",
     "test:wechat-upload-network-isolation": "node tools/test-wechat-upload-network-isolation.js",
     "test:teacher-index-cache-no-poison": "node tools/test-teacher-index-cache-no-poison.js",
     "test:teacher-college-keyword": "node tools/test-teacher-college-keyword-and-honorific.js"

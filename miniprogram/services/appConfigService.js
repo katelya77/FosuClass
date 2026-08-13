@@ -1,5 +1,5 @@
 const request = require("../utils/request");
-const { resolveSelectedTerm, sanitizeClientTerms } = require("../../shared/termVisibility");
+const { resolveSelectedTerm, sanitizeClientTerms } = require("../shared/termVisibility.generated");
 
 const APP_CONFIG_CACHE_KEY = "FOSU_APP_CONFIG_CACHE";
 const NOTICE_DISMISSED_KEY = "FOSU_NOTICE_DISMISSED";
