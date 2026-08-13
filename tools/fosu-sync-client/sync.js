@@ -2334,9 +2334,18 @@ async function ensurePlannedTermIfNeeded(plan) {
   }
 }
 
-async function runClientProbeForRelease(result) {
+function resolveClientProbeTarget(result, expectedTerm) {
   const version = result && (result.releaseVersion || result.version) || "";
-  const term = result && (result.term || result.semester) || "";
+  const term = result && (result.term || result.semester || result.activeTerm) || expectedTerm || "";
+  if (!version) throw new Error("CLIENT_PROBE_RELEASE_VERSION_REQUIRED");
+  if (!term) throw new Error("CLIENT_PROBE_TERM_REQUIRED");
+  return { term, releaseVersion: version };
+}
+
+async function runClientProbeForRelease(result, expectedTerm) {
+  const target = resolveClientProbeTarget(result, expectedTerm);
+  const version = target.releaseVersion;
+  const term = target.term;
   const probe = { term, releaseVersion: version, checkedAt: new Date().toISOString(), checks: [] };
   const urls = [
     ["/static/runtime/active.json", "runtime pointer"],
@@ -2404,7 +2413,7 @@ async function publishCurrentStaging(plan, snapshot) {
       termActivation,
     });
   }
-  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result);
+  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result, plan.term);
   return result;
 }
 
@@ -5707,6 +5716,7 @@ if (require.main === module) {
     mergeResourcesBySource,
     getResourceTypesFromIncludeScopes,
     resolveTermConfig,
+    resolveClientProbeTarget,
     assertTermConfigBeforeCrawl,
     resolveSnapshotTerm,
     assertScheduleTermCoherence,

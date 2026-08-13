@@ -4,6 +4,7 @@ const assert = require("assert");
 const path = require("path");
 const { loadTermConfig } = require("../shared/termConfig");
 const { buildCurrentTermInvocation, buildPostActivateMirrorInvocation, latestProgressRunId } = require("./fosu-sync-client/current-term");
+const { resolveClientProbeTarget } = require("./fosu-sync-client/sync");
 
 const root = path.resolve(__dirname, "..");
 const config = loadTermConfig("2026-2027-1", { root });
@@ -22,6 +23,17 @@ assert.strictEqual(invocation.plan.termConfig.totalWeeks, 19);
 assert(invocation.args.includes("--term=2026-2027-1"));
 assert(invocation.args.includes("--term-start-date=2026-09-07"));
 assert(!invocation.args.includes("--activate"));
+assert.deepStrictEqual(
+  resolveClientProbeTarget({ releaseVersion: "2026-08-13T19-53-42" }, invocation.plan.term),
+  { term: "2026-2027-1", releaseVersion: "2026-08-13T19-53-42" },
+  "no-change publish responses must inherit the locked SyncPlan term",
+);
+assert.deepStrictEqual(
+  resolveClientProbeTarget({ releaseVersion: "v2", term: "2025-2026-2" }, invocation.plan.term),
+  { term: "2025-2026-2", releaseVersion: "v2" },
+  "an explicit server term must never be overwritten by the fallback",
+);
+assert.throws(() => resolveClientProbeTarget({ releaseVersion: "v2" }, ""), /CLIENT_PROBE_TERM_REQUIRED/);
 const proxiedInvocation = buildCurrentTermInvocation([], {
   root,
   env: {
