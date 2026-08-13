@@ -26,11 +26,20 @@ function buildAcceptanceReport(snapshot, context = {}) {
   const source = snapshot && typeof snapshot === "object" ? snapshot : {};
   const coverage = source.coverage || {};
   const catalog = source.catalog || {};
-  const cohorts = assessCohortAvailability({
+  const computedCohorts = assessCohortAvailability({
     term: source.term || source.semester || context.term || "",
     catalog,
     classSchedules: schedules(source, "classSchedules"),
   });
+  const snapshotCohorts = source.cohortAvailability && typeof source.cohortAvailability === "object"
+    ? source.cohortAvailability
+    : null;
+  const releasedGrades = list(snapshotCohorts && snapshotCohorts.releasedGrades).length
+    ? list(snapshotCohorts.releasedGrades)
+    : computedCohorts.releasedGrades;
+  const pendingGrades = list(snapshotCohorts && snapshotCohorts.pendingGrades).length
+    ? list(snapshotCohorts.pendingGrades)
+    : computedCohorts.pendingGrades;
   const report = {
     schema: "fosuclass-sync-acceptance/v1",
     term: source.term || source.semester || context.term || "",
@@ -38,7 +47,7 @@ function buildAcceptanceReport(snapshot, context = {}) {
     totalWeeks: source.totalWeeks || source.termConfig && source.termConfig.totalWeeks || context.totalWeeks || 0,
     calendarSource: context.calendarSource || "",
     calendarStatus: context.calendarStatus || "",
-    activeTerm: context.activeTerm || "",
+    activeTerm: context.activeTerm || source.term || source.semester || context.term || "",
     releaseVersion: source.releaseVersion || source.version || "",
     status: context.status || "STAGING_READY",
     counts: {
@@ -51,8 +60,8 @@ function buildAcceptanceReport(snapshot, context = {}) {
       classroomSchedules: schedules(source, "classroomSchedules").length,
       courseSchedules: schedules(source, "courseSchedules").length,
     },
-    releasedGrades: cohorts.releasedGrades,
-    pendingGrades: cohorts.pendingGrades.map((grade) => ({ grade, status: "pending_schedule_release" })),
+    releasedGrades,
+    pendingGrades: pendingGrades.map((grade) => ({ grade, status: "pending_schedule_release" })),
     samples: {
       classes: sample(schedules(source, "classSchedules")),
       teachers: sample(schedules(source, "teacherSchedules")),
@@ -71,6 +80,7 @@ function buildAcceptanceReport(snapshot, context = {}) {
 function main(argv = process.argv.slice(2)) {
   const inputArg = argv.find((item) => item.startsWith("--input="));
   const outputArg = argv.find((item) => item.startsWith("--output="));
+  const activeTermArg = argv.find((item) => item.startsWith("--active-term="));
   if (!inputArg) throw new Error("--input is required");
   const input = path.resolve(inputArg.slice(8));
   const snapshot = JSON.parse(fs.readFileSync(input, "utf8"));
@@ -79,7 +89,7 @@ function main(argv = process.argv.slice(2)) {
   const report = buildAcceptanceReport(snapshot, {
     calendarSource: config.teachingCalendar && config.teachingCalendar.source || "",
     calendarStatus: config.teachingCalendar && config.teachingCalendar.sourceStatus || "",
-    activeTerm: "2025-2026-2",
+    activeTerm: activeTermArg ? activeTermArg.slice("--active-term=".length) : snapshot.term || snapshot.semester || "",
     status: contextArg ? contextArg.slice("--status=".length) : "STAGING_READY",
   });
   const output = path.resolve(outputArg ? outputArg.slice(9) : path.join("output", "sync", `${report.term}-acceptance.json`));

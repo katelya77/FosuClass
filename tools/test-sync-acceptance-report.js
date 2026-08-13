@@ -29,8 +29,21 @@ const report = buildAcceptanceReport({
   },
 }, { calendarStatus: "CALENDAR_SOURCE_INCOMPLETE" });
 assert.strictEqual(report.sampleValidationComplete, true);
+assert.strictEqual(report.activeTerm, "2026-2027-1");
 assert.deepStrictEqual(report.releasedGrades, ["2025"]);
 assert.deepStrictEqual(report.pendingGrades, [{ grade: "2026", status: "pending_schedule_release" }]);
 assert.strictEqual(report.counts.classSchedules, 10);
 assert.strictEqual(report.counts.teacherSchedules, 10);
+
+const publishedReport = buildAcceptanceReport({
+  term: "2026-2027-1",
+  cohortAvailability: {
+    releasedGrades: ["2022", "2023", "2024", "2025"],
+    pendingGrades: ["2026"],
+  },
+  catalog: { grades: ["1990", "2025", "2026"] },
+  classSchedules: documents("class"),
+});
+assert.deepStrictEqual(publishedReport.releasedGrades, ["2022", "2023", "2024", "2025"]);
+assert.deepStrictEqual(publishedReport.pendingGrades, [{ grade: "2026", status: "pending_schedule_release" }]);
 console.log("test-sync-acceptance-report passed");
