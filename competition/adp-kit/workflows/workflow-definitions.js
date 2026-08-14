@@ -258,6 +258,59 @@ A班/B班归一化为2025级A班/2025级B班。只给一个对象时第二对象
       "我是visitor-real-123，给我今天的计划",
     ],
   }),
+  finish({
+    id: "wf-campus-overview",
+    name: "05-校园教学态势-R1",
+    intent: "campus_overview",
+    trigger: "用户要查看未来几周校园整体教学运行、每日/每周负载、校区空间压力、教师负载或全局风险；不用于单对象课表、具体空教室、单教师风险或个人日计划。",
+    actualStartInputs: ["window_start", "teaching_start", "window_end"],
+    legacyStartInputs: [],
+    params: [
+      { name: "window_start", type: "string", required: false, note: "R1 固定 2026-08-25" },
+      { name: "teaching_start", type: "string", required: false, note: "R1 固定 2026-08-31" },
+      { name: "window_end", type: "string", required: false, note: "R1 固定 2026-09-27" },
+    ],
+    required: [],
+    constants: {
+      windowStart: "2026-08-25",
+      teachingStart: "2026-08-31",
+      windowEnd: "2026-09-27",
+    },
+    timePolicy: "08-25 至 08-30 是 preparation-period，课程数必须为 0；08-31 起按 W1-W4、周一至周五确定性统计。首版拒绝其他窗口，模型不得自行外推。",
+    extractPrompt: `只输出 JSON：
+{"window_start":"2026-08-25","teaching_start":"2026-08-31","window_end":"2026-09-27","focus":"overview|resource|teacher|risk"}
+所有指标必须来自 get_campus_teaching_overview；不得由模型统计课程、教室、教师或风险。`,
+    tool: "get_campus_teaching_overview",
+    toolMapping: {
+      "constant:2026-08-25": "windowStart",
+      "constant:2026-08-31": "teachingStart",
+      "constant:2026-09-27": "windowEnd",
+    },
+    branchPolicy: [
+      "success=true、dataVersion=competition-demo-v1、verified=true → CampusOverview Widget",
+      "preparationPeriod.lessonCount 必须为 0",
+      "success=false / 版本不一致 / verified=false → Error，不由模型补算",
+      "05 Widget 尚无当前赛事空间真实 ID 时保持 Pilot 未启用",
+    ],
+    nodes: [
+      node("start", "start", "开始"),
+      node("call", "tool", "校园教学态势分析", { tool: "get_campus_teaching_overview" }),
+      node("verify", "condition", "结果契约判断"),
+      node("result", "widget_or_reply", "校园教学态势卡", { cardType: "campus_overview" }),
+      node("tool_error", "widget_or_reply", "核验失败恢复", { cardType: "error" }),
+      node("end", "end", "结束"),
+    ],
+    edges: [
+      ["start", "call"], ["call", "verify"], ["verify", "result", "verified"],
+      ["verify", "tool_error", "failed_or_unverified"], ["result", "end"], ["tool_error", "end"],
+    ],
+    samples: [
+      "从8月25日开始看看未来几周校园教学运行情况", "未来四周校园教学情况怎么样",
+      "最近哪一天最忙", "哪个校区下午教室最紧张", "未来四周教师负载最高的是谁",
+      "校园教学风险总体怎么样", "四周内哪个教学周最忙", "校区A和校区B资源压力如何",
+      "未来一个月有多少次课程", "开学前准备期有课吗",
+    ],
+  }),
 ];
 
 for (const workflow of workflows) {

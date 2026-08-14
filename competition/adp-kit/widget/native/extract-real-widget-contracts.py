@@ -83,12 +83,55 @@ def derive(downloads):
     return derived
 
 
+def check_committed_logical_contracts():
+    """Validate the frozen logical registry when historical raw exports are absent.
+
+    Runtime/environment evidence is deliberately validated by
+    bind_runtime_environment.py.  A clean checkout must not depend on a user's
+    Downloads folder retaining every historical export forever.
+    """
+    catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    registry_path = ROOT / "widget-registry.json"
+    assert registry_path.is_file(), "logical Widget registry missing"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    assert registry["schema"] == "fosuclass-campus-widget-registry/v1"
+    assert set(registry["widgets"]) == set(catalog["widgets"])
+    for kind, record in catalog["widgets"].items():
+        entry = registry["widgets"][kind]
+        assert entry["name"] == record["name"]
+        assert entry["widgetId"] == record["widgetId"]
+        assert entry["sourceSha256"] == record["sha256"]
+        assert entry["integration"] == record["integration"]
+        contract_path = ROOT / entry["contract"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        assert contract["widgetId"] == record["widgetId"]
+        assert contract["widgetName"] == record["name"]
+        assert contract["sourceSha256"] == record["sha256"]
+        contract_dir = contract_path.parent
+        schema = json.loads((contract_dir / "schema.json").read_text(encoding="utf-8"))
+        defaults = json.loads((contract_dir / "default.json").read_text(encoding="utf-8"))
+        assert schema["type"] == "object"
+        assert set(schema.get("required", [])) == set(defaults)
+        assert set(schema.get("properties", {})) == set(defaults)
+        assert (contract_dir / "template.txt").is_file()
+        assert (contract_dir / "view.txt").is_file()
+        if kind == "Schedule":
+            assert (contract_dir / "zod.txt").is_file()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--downloads", default=str(Path.home() / "Downloads"))
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    derived = derive(Path(args.downloads))
+    try:
+        derived = derive(Path(args.downloads))
+    except AssertionError:
+        if not args.check:
+            raise
+        check_committed_logical_contracts()
+        print("Real Widget Contract check: PASS (frozen logical contracts; runtime exports are environment-bound separately)")
+        return
     for path, content in derived.items():
         if args.check:
             assert path.is_file() and path.read_text(encoding="utf-8") == content, f"contract drift: {path}"

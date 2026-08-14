@@ -368,6 +368,42 @@ test("generate_day_plan: 日期格式非法", () => {
 });
 
 // ---------------------------------------------------------------------------
+// get_campus_teaching_overview
+// ---------------------------------------------------------------------------
+test("get_campus_teaching_overview: 固定 Hero 窗口与四周指标", () => {
+  const env = callTool("get_campus_teaching_overview", {});
+  assertEnvelope(env);
+  assert.equal(env.success, true);
+  assert.equal(env.evidence.verified, true);
+  assert.equal(env.evidence.preparationPeriodLessonCount, 0);
+  const overview = env.items[0];
+  assert.deepEqual(overview.window.preparationPeriod, {
+    startDate: "2026-08-25",
+    endDate: "2026-08-30",
+    lessonCount: 0,
+  });
+  assert.equal(overview.summary.weekCount, 4);
+  assert.equal(overview.summary.lessonOccurrences, 126);
+  assert.deepEqual(overview.matrix.map((week) => week.days.map((day) => day.lessonCount)), [
+    [7, 6, 7, 5, 6],
+    [7, 6, 7, 5, 7],
+    [7, 6, 7, 5, 6],
+    [7, 6, 7, 5, 7],
+  ]);
+  assert.equal(overview.teacherLoadTop[0].teacherName, "教师002");
+  assert.equal(overview.risks.conflictCount, 0);
+  assert.equal(overview.risks.rushCount, 8);
+  assert.equal(env.actions.find((action) => action.intent === "schedule_risk_check").type, "sys.chat");
+});
+
+test("get_campus_teaching_overview: 非冻结窗口 fail closed", () => {
+  const env = callTool("get_campus_teaching_overview", { windowStart: "2026-08-24" });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "INVALID_PARAM");
+  assert.equal(env.evidence.verified, false);
+});
+
+// ---------------------------------------------------------------------------
 // 通用分发与数据守卫
 // ---------------------------------------------------------------------------
 test("callTool: 未知工具", () => {

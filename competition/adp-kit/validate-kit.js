@@ -19,6 +19,7 @@ const WORKFLOW_NAMES = [
   "02-空教室规划",
   "03-课程冲突比较",
   "04-今日校园计划",
+  "05-校园教学态势-R1",
 ];
 const CARD_TYPES = ["schedule", "classroom", "conflict", "day_plan", "error", "choice"];
 const DYNAMIC_CARD_TYPES = ["schedule", "classroom", "conflict", "day_plan"];
@@ -87,9 +88,9 @@ function validateEvaluation() {
 function validateWorkflows() {
   const specs = json("workflows/workflow-specs.json");
   assert.strictEqual(specs.schema, "campus-adp-workflows/v2", "工作流契约必须为 v2 简化版");
-  assert.strictEqual(specs.workflows.length, 4, "核心工作流必须恰好 4 条");
+  assert.strictEqual(specs.workflows.length, 5, "核心工作流必须恰好 5 条");
   assert.deepStrictEqual(specs.workflows.map((workflow) => workflow.name), WORKFLOW_NAMES);
-  assert.deepStrictEqual(specs.workflows.map((workflow) => workflow.nodeCount), [12, 11, 12, 9], "工作流节点数必须保持最小稳定结构");
+  assert.deepStrictEqual(specs.workflows.map((workflow) => workflow.nodeCount), [12, 11, 12, 9, 6], "工作流节点数必须保持最小稳定结构");
   specs.workflows.forEach((workflow) => {
     assert(workflow.trigger, `${workflow.name} 缺少触发描述`);
     assert(workflow.params.length > 0, `${workflow.name} 缺少参数`);
@@ -100,7 +101,7 @@ function validateWorkflows() {
     assert.strictEqual(workflow.replanLimit, 0, `${workflow.name} 不应在 ADP 蓝图内扩建重规划 Runtime`);
   });
 
-  const [schedule, classroom, conflict, dayPlan] = specs.workflows;
+  const [schedule, classroom, conflict, dayPlan, overview] = specs.workflows;
   const names = (workflow) => workflow.params.map((item) => item.name);
   assert.deepStrictEqual(schedule.required, ["entity_type", "entity_name"], "01 只强制实体类型和名称");
   assert(!names(schedule).includes("campus"), "01 不得保留未使用的 campus 业务参数");
@@ -111,6 +112,9 @@ function validateWorkflows() {
   assert(!names(dayPlan).includes("visitor_id"), "04 不得从用户业务参数获取 visitor_id");
   assert.strictEqual(dayPlan.constants.demoVisitorId, "visitor-demo-001", "04 必须注入固定匿名 visitor");
   assert(dayPlan.legacyStartInputs.some((item) => item.name === "visitor_id"), "04 必须说明已有 visitor_id 输入的兼容策略");
+  assert.strictEqual(overview.tool, "get_campus_teaching_overview", "05 必须使用确定性校园态势工具");
+  assert.strictEqual(overview.constants.windowStart, "2026-08-25", "05 Hero 窗口必须从准备期开始");
+  assert.strictEqual(overview.constants.teachingStart, "2026-08-31", "05 教学起点不得漂移");
 }
 
 function validateApplication() {
@@ -127,6 +131,17 @@ function validateApplication() {
     "environment", "data_mode", "data_version", "timezone", "default_language", "default_campus",
   ], "应用变量必须保持 6 个已核验项，不添加评测时钟等业务变量");
   assert.deepStrictEqual(app.environmentVariables, ["campus_api_base_url", "campus_api_token"], "当前 ADP 使用 Bearer token 的两个环境变量");
+  assert.deepStrictEqual(app.routing, {
+    query_schedule: "01-多维课表查询-R3",
+    find_available_classrooms: "02-空教室规划-R3",
+    compare_schedules: "03-课程冲突比较-R3",
+    generate_day_plan: "04-今日校园计划-R3",
+    get_campus_teaching_overview: "05-校园教学态势-R1",
+    stable_knowledge: "校园智序赛事知识",
+    fallback: "应用兜底",
+  }, "应用 Router 必须使用 R4 版本化工作流并显式路由 05");
+  assert(app.examples.includes("从8月25日开始看看未来几周校园教学运行情况"), "应用示例必须覆盖 05 Hero 路由");
+  assert(app.examples.includes("教师003跨校区赶不赶得上"), "应用示例必须让单教师赶场稳定路由 03");
   ["visitor_id", "session_id", "client_type", "request_trace_id"].forEach((key) => {
     assert(app.apiParameters.includes(key), `缺少 API 参数：${key}`);
   });
@@ -154,6 +169,7 @@ function validateInterfaces() {
     "find_available_classrooms",
     "compare_schedules",
     "generate_day_plan",
+    "get_campus_teaching_overview",
   ].forEach((tool) => assert(operations.includes(tool), `OpenAPI 缺少 ${tool}`));
   const academicSchema = openapi.paths["/api/get_academic_context"].post.requestBody.content["application/json"].schema;
   ["date", "dateText", "baseDate"].forEach((field) => {
@@ -207,7 +223,7 @@ function run() {
   validateInterfaces();
   validateAnonymousCompetitionAssets();
   const qaCount = json("qa/standard-qa.json").items.length;
-  console.log(`ADP kit validation passed: 7 docs, ${qaCount} QA, 80 evals, 4 workflows, 6 tools, 6 widget v2 card types`);
+  console.log(`ADP kit validation passed: 7 docs, ${qaCount} QA, 80 evals, 5 workflows, 7 tools, 6 widget v2 card types + 1 native Hero pilot`);
 }
 
 run();

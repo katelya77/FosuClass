@@ -1,5 +1,20 @@
 const assert = require("assert");
 
+// Keep this fixture inside its declared 2025-2026-2 term.  Depending on the
+// workstation wall clock makes the test fail as soon as that historical term
+// ends, even though the production before/after-term behavior is correct.
+const RealDate = Date;
+const FIXTURE_NOW = "2026-04-06T08:00:00+08:00";
+global.Date = class FixedFixtureDate extends RealDate {
+  constructor(...args) {
+    super(...(args.length ? args : [FIXTURE_NOW]));
+  }
+
+  static now() {
+    return new RealDate(FIXTURE_NOW).getTime();
+  }
+};
+
 const storage = {};
 global.wx = {
   getStorageSync(key) {

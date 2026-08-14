@@ -575,6 +575,260 @@ function generateDayPlan(params) {
 }
 
 // ---------------------------------------------------------------------------
+// Tool 7: get_campus_teaching_overview — deterministic Hero analytics
+// ---------------------------------------------------------------------------
+const HERO_WINDOW = Object.freeze({
+  windowStart: "2026-08-25",
+  teachingStart: "2026-08-31",
+  windowEnd: "2026-09-27",
+  weekStart: 1,
+  weekEnd: 4,
+});
+
+function getCampusTeachingOverview(params) {
+  const input = params || {};
+  const requestedWindow = {
+    windowStart: String(input.windowStart || HERO_WINDOW.windowStart),
+    teachingStart: String(input.teachingStart || HERO_WINDOW.teachingStart),
+    windowEnd: String(input.windowEnd || HERO_WINDOW.windowEnd),
+  };
+  if (
+    requestedWindow.windowStart !== HERO_WINDOW.windowStart
+    || requestedWindow.teachingStart !== HERO_WINDOW.teachingStart
+    || requestedWindow.windowEnd !== HERO_WINDOW.windowEnd
+  ) {
+    return fail(ERR.INVALID_PARAM, "R4 Hero 首版仅支持固定且可复现的 2026-08-25 至 2026-09-27 窗口", {
+      expected: HERO_WINDOW,
+    });
+  }
+
+  const { data, byId } = loadDataset();
+  const weeks = [1, 2, 3, 4];
+  const weekdays = [1, 2, 3, 4, 5];
+  const occurrences = [];
+  for (const lesson of data.lessons) {
+    for (const week of weeks) {
+      if (!expandWeeks(lesson).includes(week) || !weekdays.includes(lesson.weekday)) continue;
+      occurrences.push({
+        week,
+        weekday: lesson.weekday,
+        date: weekWeekdayToDate(week, lesson.weekday),
+        lesson,
+      });
+    }
+  }
+
+  const matrix = weeks.map((week) => ({
+    week,
+    startDate: weekWeekdayToDate(week, 1),
+    endDate: weekWeekdayToDate(week, 7),
+    days: weekdays.map((weekday) => ({
+      weekday,
+      weekdayName: data.meta.weekdayNames[weekday - 1],
+      date: weekWeekdayToDate(week, weekday),
+      lessonCount: occurrences.filter((item) => item.week === week && item.weekday === weekday).length,
+    })),
+  }));
+
+  const activeTeachers = new Set();
+  const activeRooms = new Set();
+  for (const item of occurrences) {
+    item.lesson.teacherIds.forEach((id) => activeTeachers.add(id));
+    activeRooms.add(item.lesson.roomId);
+  }
+
+  const campusResources = data.campuses.map((campus) => {
+    const campusRooms = data.rooms.filter((room) => room.campusId === campus.id && room.type !== "体育场地");
+    const largeRooms = campusRooms.filter((room) => Number(room.capacity) >= 60);
+    const campusOccurrences = occurrences.filter((item) => item.lesson.campusId === campus.id);
+    const occupiedUnits = new Set();
+    const occupiedLargeUnits = new Set();
+    for (const item of campusOccurrences) {
+      const room = byId.rooms[item.lesson.roomId];
+      for (let period = item.lesson.periodStart; period <= item.lesson.periodEnd; period += 1) {
+        const key = `${item.week}:${item.weekday}:${period}:${item.lesson.roomId}`;
+        occupiedUnits.add(key);
+        if (room && Number(room.capacity) >= 60) occupiedLargeUnits.add(key);
+      }
+    }
+    const slotCount = weeks.length * weekdays.length * data.meta.periods.length;
+    const totalUnits = campusRooms.length * slotCount;
+    const largeTotalUnits = largeRooms.length * slotCount;
+    const freeUnits = Math.max(totalUnits - occupiedUnits.size, 0);
+    const largeFreeUnits = Math.max(largeTotalUnits - occupiedLargeUnits.size, 0);
+    return {
+      campusId: campus.id,
+      campusName: campus.name,
+      roomCount: campusRooms.length,
+      lessonOccurrences: campusOccurrences.length,
+      occupiedRoomPeriodUnits: occupiedUnits.size,
+      freeRoomPeriodUnits: freeUnits,
+      occupancyRate: totalUnits ? Number((occupiedUnits.size / totalUnits).toFixed(4)) : 0,
+      largeRoomCount: largeRooms.length,
+      largeRoomFreeUnits: largeFreeUnits,
+      largeRoomAvailabilityRate: largeTotalUnits ? Number((largeFreeUnits / largeTotalUnits).toFixed(4)) : 0,
+    };
+  });
+
+  const teacherLoad = data.teachers.map((teacher) => {
+    const own = occurrences.filter((item) => item.lesson.teacherIds.includes(teacher.id));
+    return {
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+      lessonOccurrences: own.length,
+      periodUnits: own.reduce((sum, item) => sum + item.lesson.periodEnd - item.lesson.periodStart + 1, 0),
+    };
+  }).sort((left, right) => (
+    right.lessonOccurrences - left.lessonOccurrences
+    || right.periodUnits - left.periodUnits
+    || left.teacherName.localeCompare(right.teacherName, "zh-CN")
+  ));
+
+  const conflicts = [];
+  const conflictSeen = new Set();
+  const rushWarnings = [];
+  const continuousLoads = [];
+  const periodTimes = data.meta.periods;
+  const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+  const overlap = (left, right) => periodsOverlap(
+    left.periodStart, left.periodEnd, right.periodStart, right.periodEnd,
+  );
+
+  for (const week of weeks) {
+    for (const weekday of weekdays) {
+      const day = occurrences
+        .filter((item) => item.week === week && item.weekday === weekday)
+        .map((item) => item.lesson);
+      for (let leftIndex = 0; leftIndex < day.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < day.length; rightIndex += 1) {
+          const left = day[leftIndex];
+          const right = day[rightIndex];
+          if (!overlap(left, right)) continue;
+          const sharedTeachers = left.teacherIds.filter((id) => right.teacherIds.includes(id));
+          const sharedClasses = left.classIds.filter((id) => right.classIds.includes(id));
+          const sameRoom = left.roomId === right.roomId;
+          if (!sharedTeachers.length && !sharedClasses.length && !sameRoom) continue;
+          const key = `${week}:${weekday}:${[left.id, right.id].sort().join(":")}`;
+          if (conflictSeen.has(key)) continue;
+          conflictSeen.add(key);
+          conflicts.push({
+            week,
+            weekday,
+            date: weekWeekdayToDate(week, weekday),
+            lessonIds: [left.id, right.id].sort(),
+            sharedTeacherCount: sharedTeachers.length,
+            sharedClassCount: sharedClasses.length,
+            sameRoom,
+          });
+        }
+      }
+    }
+  }
+
+  for (const teacher of data.teachers) {
+    for (const week of weeks) {
+      for (const weekday of weekdays) {
+        const own = occurrences
+          .filter((item) => item.week === week && item.weekday === weekday && item.lesson.teacherIds.includes(teacher.id))
+          .map((item) => item.lesson)
+          .sort((left, right) => left.periodStart - right.periodStart || left.id.localeCompare(right.id));
+        for (let index = 0; index + 1 < own.length; index += 1) {
+          const current = own[index];
+          const next = own[index + 1];
+          if (next.periodStart > current.periodEnd + 1) continue;
+          const base = {
+            teacherId: teacher.id,
+            teacherName: teacher.name,
+            week,
+            weekday,
+            date: weekWeekdayToDate(week, weekday),
+            fromLessonId: current.id,
+            toLessonId: next.id,
+          };
+          continuousLoads.push(base);
+          if (current.campusId !== next.campusId) {
+            const gapMinutes = toMinutes(periodTimes[next.periodStart - 1].start)
+              - toMinutes(periodTimes[current.periodEnd - 1].end);
+            if (gapMinutes <= 20) rushWarnings.push({ ...base, gapMinutes });
+          }
+        }
+      }
+    }
+  }
+
+  const peakCandidates = [];
+  for (const week of weeks) {
+    for (const weekday of weekdays) {
+      for (let period = 1; period <= data.meta.periods.length; period += 1) {
+        const lessonCount = occurrences.filter((item) => (
+          item.week === week
+          && item.weekday === weekday
+          && item.lesson.periodStart <= period
+          && item.lesson.periodEnd >= period
+        )).length;
+        peakCandidates.push({
+          week,
+          weekday,
+          weekdayName: data.meta.weekdayNames[weekday - 1],
+          date: weekWeekdayToDate(week, weekday),
+          period,
+          lessonCount,
+        });
+      }
+    }
+  }
+  peakCandidates.sort((left, right) => (
+    right.lessonCount - left.lessonCount
+    || left.week - right.week
+    || left.weekday - right.weekday
+    || left.period - right.period
+  ));
+
+  const item = {
+    window: {
+      ...requestedWindow,
+      phase: "preparation-and-teaching",
+      preparationPeriod: { startDate: "2026-08-25", endDate: "2026-08-30", lessonCount: 0 },
+      teachingWeeks: { start: 1, end: 4, count: 4 },
+    },
+    summary: {
+      weekCount: 4,
+      lessonOccurrences: occurrences.length,
+      teacherCount: data.teachers.length,
+      activeTeacherCount: activeTeachers.size,
+      roomCount: data.rooms.length,
+      activeRoomCount: activeRooms.size,
+      campusCount: data.campuses.length,
+    },
+    matrix,
+    campusResources,
+    teacherLoadTop: teacherLoad.slice(0, 3),
+    peakSlot: peakCandidates[0],
+    risks: {
+      conflictCount: conflicts.length,
+      rushCount: rushWarnings.length,
+      continuousLoadCount: continuousLoads.length,
+      conflicts,
+      rushWarnings,
+      continuousLoads,
+    },
+  };
+  const env = ok({
+    items: [item],
+    actions: [
+      { type: "sys.chat", intent: "schedule_week", query: "查看第1周校园课表", week: 1 },
+      { type: "sys.chat", intent: "classroom_find", query: "查找第1周校园空教室", week: 1 },
+      { type: "sys.chat", intent: "schedule_risk_check", query: "检查第1周校园教学风险", week: 1 },
+    ],
+  });
+  env.query = requestedWindow;
+  env.summary = item.summary;
+  env.evidence.derivation = "competition-demo-v1 deterministic 4-week occurrence aggregation";
+  env.evidence.preparationPeriodLessonCount = 0;
+  return env;
+}
+
+// ---------------------------------------------------------------------------
 // 工具清单（MCP tools/list 与 OpenAPI 生成共用）
 // ---------------------------------------------------------------------------
 const TOOL_DEFS = [
@@ -677,6 +931,19 @@ const TOOL_DEFS = [
       required: ["visitorId", "date"],
     },
     handler: generateDayPlan,
+  },
+  {
+    name: "get_campus_teaching_overview",
+    description: "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：准备期、四周负载、空间压力、教师负载与风险；所有指标只从 competition-demo-v1 派生。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        windowStart: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "首版固定为 2026-08-25" },
+        teachingStart: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "首版固定为 2026-08-31" },
+        windowEnd: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "首版固定为 2026-09-27" },
+      },
+    },
+    handler: getCampusTeachingOverview,
   },
 ];
 

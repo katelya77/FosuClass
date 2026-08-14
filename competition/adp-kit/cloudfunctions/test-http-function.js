@@ -51,7 +51,7 @@ async function waitForHealth() {
     const health = await waitForHealth();
     assert.equal(health.status, "ok");
     assert.equal(health.dataVersion, "competition-demo-v1");
-    assert.equal(health.tools, 6);
+    assert.equal(health.tools, 7);
 
     const unauthorized = await fetch("http://127.0.0.1:9000/api/query_schedule", {
       method: "POST",

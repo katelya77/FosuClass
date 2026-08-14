@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "62a6d236b39b8f99dded40bc7c3c4498d3070ddf203d5f924dd303a19533c9c1",
+  "oracleSourceSha256": "b9ced69e959d97b546bd79ac5f7574cc46b6fd9e492328d00d90955ba781caee",
   "caseCount": 33,
   "cases": [
     {

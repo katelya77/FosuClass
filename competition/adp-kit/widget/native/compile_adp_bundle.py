@@ -702,14 +702,26 @@ def main():
     downloads = Path.home() / "Downloads"
     campus_artifacts = []
     for key, spec in SPECS.items():
-        source = source_path(key, downloads)
-        source_workflow = workflow_from_zip(source)
-        assert source_workflow["WorkflowID"] == read_json(REAL_EXPORT_CATALOG_PATH)["workflows"][key]["workflowId"]
-        compiled = compile_workflow(key, source_workflow)
         target = output_dir / spec["file"]
-        write_workflow_zip(target, compiled, workbook_records(
-            source, compiled, spec["examples"], deterministic_xlsx,
-        ))
+        try:
+            source = source_path(key, downloads)
+        except AssertionError:
+            # Historical V2 exports are evidence for the frozen logical compiler,
+            # not global environment resources that every checkout must retain.
+            # Current-environment rebuilding is handled strictly by
+            # bind_runtime_environment.py.  The frozen artifact remains usable
+            # only when it is already tracked and still passes its semantic gate.
+            if not target.is_file():
+                raise
+            compiled = workflow_from_zip(target)
+            print(f"{target.name}: reusing frozen logical artifact; historical raw export is not present")
+        else:
+            source_workflow = workflow_from_zip(source)
+            assert source_workflow["WorkflowID"] == read_json(REAL_EXPORT_CATALOG_PATH)["workflows"][key]["workflowId"]
+            compiled = compile_workflow(key, source_workflow)
+            write_workflow_zip(target, compiled, workbook_records(
+                source, compiled, spec["examples"], deterministic_xlsx,
+            ))
         campus_report = output_dir / f"validation-report-{key}.json"
         campus_validation = run_campus_validator(key, target, campus_report)
         campus_artifacts.append({

@@ -39,7 +39,7 @@
     {
       "path": "evaluation/golden-results.json",
       "bytes": 27528,
-      "sha256": "19f9339a325fde3d98f3eeaba89d656fd0d96c846e3ded8f5f6b60bf577ba916"
+      "sha256": "fa3d0eb45b411a1a7a0ac9ec6f537f00bd7e06e0657c305e9aa8e15c5abec2d6"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -93,8 +93,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 23212,
-      "sha256": "77f3848c86ce99e9b20665af686624271a4384c6b324f39b9b8dea6145d3e9da"
+      "bytes": 25849,
+      "sha256": "d95f55763fd6bf2cd43e630659a758b4074b88cd6afa7a1ed5671940ba5b9db6"
     },
     {
       "path": "package.json",
@@ -163,8 +163,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 29099,
-      "sha256": "0762c45f5641e261b3dcdf85df64417c9302fb966bfcc9b2b27e60a49c567914"
+      "bytes": 39555,
+      "sha256": "76d4f284952b661731775121bd55912d67490c40533971a8e12f3a81f4af6454"
     },
     {
       "path": "tools/campus-tools-mcp/test/security.test.js",
@@ -173,8 +173,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/test/tools.test.js",
-      "bytes": 17345,
-      "sha256": "fd5e02ec9507da6016f838dba87b35e1a40f27aab954a0cdfa87bd3ccb73510b"
+      "bytes": 18867,
+      "sha256": "49a974398130b6eb2ef11689937f7788924b855f9c8b305092a08668feb56dd4"
     },
     {
       "path": "tools/campus-tools-mcp/tsconfig.json",
@@ -243,18 +243,18 @@
     },
     {
       "path": "workflows/application-config.json",
-      "bytes": 2970,
-      "sha256": "ca903be71230fac0ce5082d145b3cb30a6dc7cf2cee3f341c7f340ef3e2b7c09"
+      "bytes": 3032,
+      "sha256": "3541307beff7326cc75c08adf213cfc806d04b4f9e4d6ecbb3de8d01a7328a0a"
     },
     {
       "path": "workflows/role-instruction.txt",
-      "bytes": 5033,
-      "sha256": "637de01303fd915ec30be75f5946cc81dc287ed3592ca5cb2b75eb51293da41e"
+      "bytes": 5518,
+      "sha256": "dd28c440f8316acb313f5b4292582f80ce209de1c74aa5760624b22e54e4a87b"
     },
     {
       "path": "workflows/workflow-specs.json",
-      "bytes": 29923,
-      "sha256": "540cf566772358432c3a88bc2f3982ff641f8d880f717d2003ed56695cb36b08"
+      "bytes": 34522,
+      "sha256": "15d45c3fbbb149f16d0db91e2f514738673bb13e13ef98f10d465b35791a49e0"
     }
   ]
 }

@@ -37,6 +37,8 @@
     "security:public": "python tools/public-ready-scan.py",
     "security:public:head": "python tools/public-ready-scan.py --head-only --no-ignored",
     "adp:compile": "npm --prefix competition/adp-kit run adp:compile",
+    "adp:bind-runtime": "python competition/adp-kit/widget/native/bind_runtime_environment.py",
+    "adp:build-r4": "python competition/adp-kit/widget/native/build_r4_closure_pack.py",
     "test:current-schedule": "node tools/test-current-schedule-refresh.js && node tools/test-schedule-view-current-target-action.js",
     "test:today-term-break-mode": "node tools/test-today-term-break-mode.js",
     "test:personal-sync-term-options": "node tools/test-personal-sync-term-options.js",

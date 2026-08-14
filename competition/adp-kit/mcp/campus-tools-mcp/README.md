@@ -10,7 +10,7 @@
 - **严禁**比赛接口失败后回退读取 production 真实数据；
 - 服务内无真实学校、学院、教师、学生身份信息。
 
-## 六个工具
+## 七个工具
 
 | 工具 | 说明 |
 | --- | --- |
@@ -20,6 +20,7 @@
 | `find_available_classrooms` | 指定日期/星期 + 连续节次范围的空闲教室（校区/楼栋/容量过滤） |
 | `compare_schedules` | 比较两实体课表冲突，附跨校区赶场提醒 |
 | `generate_day_plan` | 演示用户某日校园计划：课程、空闲时段、自习建议、跨校区提醒 |
+| `get_campus_teaching_overview` | 从匿名课表确定性聚合准备期与四周校园教学负载、空间压力、教师负载和风险指标 |
 
 ## 统一结果信封
 
@@ -70,6 +71,7 @@ POST /api/get_academic_context
 POST /api/find_available_classrooms
 POST /api/compare_schedules
 POST /api/generate_day_plan
+POST /api/get_campus_teaching_overview
 GET  /health
 ```
 
@@ -112,7 +114,7 @@ campus-tools-mcp/
 ├── src/
 │   ├── data.js        # 数据层 + competition-demo 文件名守卫
 │   ├── envelope.js    # 统一结果信封与错误结构
-│   ├── tools.js       # 6 个工具纯函数 + TOOL_DEFS + callTool 分发
+│   ├── tools.js       # 7 个工具纯函数 + TOOL_DEFS + callTool 分发
 │   ├── ratelimit.js   # 令牌桶限流
 │   ├── server.js      # HTTP：/health + /mcp + /sse + /api/*
 │   ├── contracts.ts   # TypeScript 输入/输出契约
