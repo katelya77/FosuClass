@@ -4,7 +4,7 @@
       <view class="date-text">{{dateText}}</view>
       <view class="source-pill">{{dataSourceText}}</view>
     </view>
-    <view class="today-title">{{weekdayText}} · 第{{currentWeek}}周</view>
+    <view class="today-title">{{todayTitle}}</view>
     <view class="today-subtitle">{{className}}</view>
     <view class="today-count">{{courseCountText}}</view>
     <view class="today-version" wx:if="{{dataVersionText}}">{{dataVersionText}}</view>

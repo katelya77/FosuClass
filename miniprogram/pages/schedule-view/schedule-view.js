@@ -539,7 +539,14 @@ Page({
       source: "schedule-view",
     };
 
-    setCurrentScheduleTarget(target);
+    if (!setCurrentScheduleTarget(target)) {
+      wx.showModal({
+        title: "设置失败",
+        content: "本地课表保存失败，请稍后重试。现有课表不会被清除。",
+        showCancel: false,
+      });
+      return;
+    }
 
     this.setData({
       isCurrentTarget: true,

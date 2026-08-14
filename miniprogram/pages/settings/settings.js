@@ -14,6 +14,7 @@ const teachingCalendarService = require("../../services/teachingCalendarService"
 const {
   clampWeek,
   formatFullDateLabel,
+  getTeachingPeriodText,
   getTodayTeachingInfo,
   getWeekdayLabel,
 } = require("../../utils/week");
@@ -303,6 +304,7 @@ Page({
         semesterId: selectedTerm || termConfig.term || "",
       }),
       teachingInfo,
+      teachingPeriodText: getTeachingPeriodText(teachingInfo, effectiveWeek),
       termStartDate: formatFullDateLabel(termConfig.termStartDate) || "日期待同步",
       termStartWeekdayText: startWeekdayText,
       totalTeachingWeeks: termConfig.totalWeeks ? `${termConfig.totalWeeks}周` : "日期待同步",
@@ -335,6 +337,7 @@ Page({
               semesterId: latestConfig.term || this.data.settings.semesterId || "",
             }),
             teachingInfo: latestInfo,
+            teachingPeriodText: getTeachingPeriodText(latestInfo, nextWeek),
             termStartDate: formatFullDateLabel(latestConfig.termStartDate) || "日期待同步",
             termStartWeekdayText: getWeekdayLabel(latestConfig.termStartDate) || "周一",
             totalTeachingWeeks: latestConfig.totalWeeks ? `${latestConfig.totalWeeks}周` : "日期待同步",

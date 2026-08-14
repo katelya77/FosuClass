@@ -24,6 +24,16 @@ function teachingWeek(value, termStartDate) {
   return Math.floor((date.getTime() - start.getTime()) / 604800000) + 1;
 }
 
+function resolveTermPhase(value, termStartDate, totalWeeks) {
+  if (!parseDate(value) || !parseDate(termStartDate)) return "unknown";
+  const week = teachingWeek(value, termStartDate);
+  const count = Number(totalWeeks || 0);
+  if (!Number.isFinite(count) || count <= 0) return "unknown";
+  if (week <= 0) return "before-term";
+  if (week > count) return "after-term";
+  return "in-term";
+}
+
 function normalizeSpecialDate(item) {
   const source = item && typeof item === "object" ? item : {};
   if (!parseDate(source.date) || !ALLOWED_TYPES.has(source.type)) return null;
@@ -41,14 +51,18 @@ function resolveTeachingEvent(date, calendar = {}, termConfig = {}) {
   const physicalDate = String(date || "");
   const config = Object.assign({}, termConfig, calendar.termConfig || {});
   const termStartDate = config.termStartDate || calendar.termStartDate || "";
+  const totalWeeks = Number(config.totalWeeks || calendar.totalWeeks || 0) || 0;
+  const termPhase = resolveTermPhase(physicalDate, termStartDate, totalWeeks);
   const special = (Array.isArray(calendar.specialDates) ? calendar.specialDates : [])
     .map(normalizeSpecialDate).find((item) => item && item.date === physicalDate) || null;
   const type = special ? special.type : "regular";
-  const isTeachingDay = type === "makeup" || type === "special-teaching" || type === "regular";
   const scheduleSourceDate = special && special.scheduleSourceDate || physicalDate;
+  const isExplicitTeachingDay = type === "makeup" || type === "special-teaching";
+  const isTeachingDay = isExplicitTeachingDay || (type === "regular" && termPhase === "in-term");
   return {
     date: physicalDate,
     type,
+    termPhase,
     isTeachingDay,
     scheduleSourceDate,
     scheduleWeekday: isTeachingDay ? weekday(scheduleSourceDate) : 0,
@@ -59,4 +73,4 @@ function resolveTeachingEvent(date, calendar = {}, termConfig = {}) {
   };
 }
 
-module.exports = { ALLOWED_TYPES, normalizeSpecialDate, resolveTeachingEvent, teachingWeek, weekday };
+module.exports = { ALLOWED_TYPES, normalizeSpecialDate, resolveTeachingEvent, resolveTermPhase, teachingWeek, weekday };

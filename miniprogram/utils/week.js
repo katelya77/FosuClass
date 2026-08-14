@@ -277,6 +277,18 @@ function getCurrentTeachingWeek(date, calendarWeeks, termConfig) {
   return getTeachingWeekByDate(date || new Date(), calendarWeeks, termConfig).weekNo;
 }
 
+function getTermPhaseText(termPhase) {
+  if (termPhase === "before-term") return "尚未开学";
+  if (termPhase === "after-term") return "本学期已结束";
+  if (termPhase === "unknown") return "教学周待同步";
+  return "";
+}
+
+function getTeachingPeriodText(teachingInfo, weekNo) {
+  const info = teachingInfo && typeof teachingInfo === "object" ? teachingInfo : {};
+  return getTermPhaseText(info.termPhase) || `第${Number(weekNo || info.weekNo || 1)}周`;
+}
+
 function getTodayWeekday(date) {
   const target = parseLocalDate(date || new Date());
   if (!target) return 0;
@@ -402,7 +414,9 @@ module.exports = {
   formatFullDateLabel,
   formatWeekRange,
   getCurrentTeachingWeek,
+  getTeachingPeriodText,
   getRuntimeTermConfig,
+  getTermPhaseText,
   getTermCalendarWeeks,
   getTeachingWeekByDate,
   getTodayTeachingInfo,

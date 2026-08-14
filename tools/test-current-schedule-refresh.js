@@ -261,6 +261,51 @@ function testActiveTermFallbackAndClassNameOnlyLegacyTarget() {
   assert.strictEqual(migrated.releaseVersion, "release-a");
 }
 
+function testSetCurrentScheduleRecoversFromStoragePressure() {
+  reset();
+  const disposableKey = "school:v8:2026-2027-1:release-b:index:class";
+  wx.setStorageSync(disposableKey, { items: new Array(200).fill({ id: "cached" }) });
+
+  const originalSetStorageSync = wx.setStorageSync;
+  let injectedFailure = false;
+  wx.setStorageSync = (key, value) => {
+    if (key === storage.CURRENT_SCHEDULE_TARGET_KEY && !injectedFailure) {
+      injectedFailure = true;
+      const error = new Error("setStorage:fail exceed storage limit");
+      error.errMsg = "setStorage:fail exceed storage limit";
+      throw error;
+    }
+    return originalSetStorageSync(key, value);
+  };
+
+  try {
+    const saved = storage.setCurrentScheduleTarget(makeTarget({
+      term: "2026-2027-1",
+      semester: "2026-2027-1",
+      releaseVersion: "release-b",
+    }));
+    assert.strictEqual(saved, true, "current schedule should retry after pruning disposable caches");
+    assert.strictEqual(storage.getCurrentScheduleTarget().name, makeTarget().name);
+    assert.strictEqual(mockEnv.storage.has(disposableKey), false, "disposable school cache should be evicted");
+  } finally {
+    wx.setStorageSync = originalSetStorageSync;
+  }
+}
+
+function testRecentScheduleDoesNotDuplicateCoursePayload() {
+  reset();
+  const target = makeTarget({
+    schedule: {
+      detailId: "class-1",
+      courses: makeTarget().courses,
+    },
+  });
+  const recent = storage.addRecentSchedule(target);
+  assert.strictEqual(recent.length, 1);
+  assert.strictEqual(recent[0].courses.length, 1, "recent schedule keeps one fast-path course copy");
+  assert.strictEqual(recent[0].schedule.courses, undefined, "recent metadata must not duplicate the course payload");
+}
+
 async function run() {
   await testUpdatesOldReleaseToActiveRelease();
   await testSameReleaseDoesNotFetchOrNotify();
@@ -271,6 +316,8 @@ async function run() {
   await testPersonalXlsAndCustomCoursesProtected();
   testSetCurrentScheduleTargetTermAndLegacyMigration();
   testActiveTermFallbackAndClassNameOnlyLegacyTarget();
+  testSetCurrentScheduleRecoversFromStoragePressure();
+  testRecentScheduleDoesNotDuplicateCoursePayload();
   reset();
   console.log("test-current-schedule-refresh passed");
 }

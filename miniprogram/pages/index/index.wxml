@@ -15,7 +15,7 @@
           <view class="app-title">{{appName}}</view>
         </view>
       </view>
-      <view class="week-badge">第{{currentWeek}}周</view>
+      <view class="week-badge">{{teachingPeriodText}}</view>
     </view>
 
     <view class="info-grid">
