@@ -243,8 +243,8 @@
     },
     {
       "path": "workflows/application-config.json",
-      "bytes": 3032,
-      "sha256": "3541307beff7326cc75c08adf213cfc806d04b4f9e4d6ecbb3de8d01a7328a0a"
+      "bytes": 3910,
+      "sha256": "49b8dfe2e63a9361ee4c10e4d3d9899c97adfde2344391b2ff91015d9781e7d6"
     },
     {
       "path": "workflows/role-instruction.txt",

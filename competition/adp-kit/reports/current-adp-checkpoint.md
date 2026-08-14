@@ -1,40 +1,31 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-12 23:10 +08:00
+更新时间：2026-08-14 20:00 +08:00
 
-当前阶段：`ADP Interaction Convergence R2 / Campus Widget Compiler`
+当前阶段：`CampusFlow ADP R5 / Final Application Convergence`
 
 ## 真实 ADP 状态
 
-- `DAY_WIDGET_RUNTIME_PASS`：教师003第1周周一已真实通过 DAY Tool / Verify / Adapter / Schedule Widget。
-- `WEEK_REQUEST_TRANSPORT_PASS`：WEEK request 已真实省略 `weekday/date`，工具返回完整 5 门课。
-- `WEEK_WIDGET_RENDER_PENDING`：R2 sentinel 修复已编译，仍待腾讯 ADP 草稿 Runtime 复验。
-- `DATE_WIDGET_RENDER_PENDING`：DATE scope 尚无真实 Widget Runtime 证据。
-- `RISK_WIDGET_PENDING_REAL_EXPORT` 已解除：6 个 Widget 与 02/03/04 Workflow 真实导出已齐全。
-- 不得写 `SCHEDULE_FINAL_FROZEN`；PR #49 保持 OPEN / UNMERGED。
+- 01～04 R3：腾讯当前赛事空间导入、画布与调试启动均已通过，状态为 `TENCENT_WORKFLOW_DEBUG_PASS`。
+- 05 CampusOverview：真实腾讯导出已解析并绑定 WidgetID `876474681d584d95b4a99da929dfb3b1`，状态为 `REAL_EXPORT_BOUND / READY_FOR_TENCENT_RUNTIME`。
+- 七类 Widget runtime registry：`Schedule / Classroom / Conflict / DayPlan / Choice / Error / CampusOverview`，均为非空、唯一、32 位真实环境 ID。
+- Application Hero Chain：尚未由用户在腾讯应用层完整执行，状态必须保持 `PENDING_USER_RUNTIME_E2E`。
+- PR #49 保持 `OPEN / UNMERGED`；不得正式 ADP 发布或生产部署。
 
-## Campus Widget Compiler
+## 最终应用边界
 
-- 6 个 `.widget` 已按导出文件 SHA-256、`encodedWidget.id`、名称、Schema 校验并生成 `widget-registry.json` 与 canonical contracts。
-- 02：CampusTools 输出 → Classroom Adapter → Classroom Widget；错误输出进入 Choice / Error。
-- 03：CampusTools 输出 → Conflict Adapter → Conflict Widget；`schedule_risk_check` 与风险样例只路由 03。
-- 04：CampusTools 输出 → DayPlan Adapter → DayPlan Widget；错误输出进入 Choice / Error。
-- 事实 Adapter 只投影已核验工具输出，不重算课程、冲突、空教室或赶场事实。
-- 01 保持已真实 PASS 的 RuntimeSafe V3；Schedule Rich V4 继续等待真实 Rich Widget 导出，不伪造 WidgetID。
-
-## Artifact Gate
-
-- 01：71/71 PASS，包含 WEEK/DAY/DATE request split、scope sentinel、branch-local Tool reference。
-- 02 / 03 / 04：各 24/24 PASS，包含真实 WidgetID、Schema 字段、Tool→Adapter 引用、Choice/Error route、节点可达性与 router example ownership。
-- canonical competition dataset：`competition-demo-v1 / sha1:fefef4bf425b`；04 KB 文档漂移已修正。
+- active：`01-多维课表查询-R3 / 02-空教室规划-R3 / 03-课程冲突比较-R3 / 04-今日校园计划-R3 / 05-校园教学态势-R1`。
+- excluded：历史 01～04、`01-多维课表查询-Final_9332`、`00-节点格式种子-勿启用` 与所有旧中间版本。
+- `schedule_risk_check` 只进入 03；校园总体态势与整体压力优先进入 05；具体空教室进入 02。
+- `competition-demo-v1 / sha1:fefef4bf425b` 保持不变；05 准备期 2026-08-25～08-30 必须为 0 课。
 
 ## 最新制品
 
-- `output/competition-adp/final/01-Schedule-Final.zip`
-- `output/competition-adp/final/02-Classroom-Final.zip`
-- `output/competition-adp/final/03-Conflict-Final.zip`
-- `output/competition-adp/final/04-DayPlan-Final.zip`
-- `output/competition-adp/final/ADP-App-Expected-Config.json`
-- `output/competition-adp/final/CampusFlow-ADP-Import-Bundle.zip`
+- `output/competition-adp/r5/01-多维课表查询-R3-Bound.zip`
+- `output/competition-adp/r5/02-空教室规划-R3-Bound.zip`
+- `output/competition-adp/r5/03-课程冲突比较-R3-Bound.zip`
+- `output/competition-adp/r5/04-今日校园计划-R3-Bound.zip`
+- `output/competition-adp/r5/05-校园教学态势-R1-Bound.zip`
+- `output/competition-adp/r5/CampusFlow-ADP-R5-Final-Pack.zip`
 
-`NEEDS_ADP_EXPORT = NONE`。下一 Gate 是腾讯 ADP 草稿环境的 WEEK/DATE、Schedule→03→Conflict、Choice/Error Runtime E2E；不得正式发布。
+下一 Gate：按 `ADP-R5-RUNTIME-E2E-CHECKLIST.md` 完成腾讯应用级 Router、Widget Action 与跨 Workflow Hero Chain；未完成前不得标记 Application E2E PASS。

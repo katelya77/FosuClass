@@ -45,6 +45,23 @@
     "campus_api_base_url",
     "campus_api_token"
   ],
+  "runtimeStatus": "PENDING_USER_RUNTIME_E2E",
+  "activeWorkflows": [
+    "01-多维课表查询-R3",
+    "02-空教室规划-R3",
+    "03-课程冲突比较-R3",
+    "04-今日校园计划-R3",
+    "05-校园教学态势-R1"
+  ],
+  "intentRouting": {
+    "schedule_day": "01-多维课表查询-R3",
+    "schedule_week": "01-多维课表查询-R3",
+    "schedule_choose_day": "01-多维课表查询-R3",
+    "classroom_find": "02-空教室规划-R3",
+    "schedule_risk_check": "03-课程冲突比较-R3",
+    "day_plan": "04-今日校园计划-R3",
+    "campus_overview": "05-校园教学态势-R1"
+  },
   "routing": {
     "query_schedule": "01-多维课表查询-R3",
     "find_available_classrooms": "02-空教室规划-R3",
@@ -54,6 +71,15 @@
     "stable_knowledge": "校园智序赛事知识",
     "fallback": "应用兜底"
   },
+  "excludedFromRouting": [
+    "01-多维课表查询",
+    "02-空教室规划",
+    "03-课程冲突比较",
+    "04-今日校园计划",
+    "01-多维课表查询-Final_9332",
+    "00-节点格式种子-勿启用",
+    "所有旧 RuntimeSafe / Final 中间版本"
+  ],
   "contextPolicy": {
     "sameTask": "只继承最近一次已确认且仍属于同一任务的槽位；新值覆盖旧值。",
     "taskSwitch": "切换工作流类别时清空无关槽位。",

@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-14T10:58:50.539Z",
+  "generatedAt": "2026-08-14T12:08:31.795Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -315,13 +315,18 @@
     },
     {
       "path": "widget/native/__pycache__/bind_runtime_environment.cpython-313.pyc",
-      "bytes": 33491,
-      "sha256": "b49061267a178faf1c2a487c92985175f7f16fcd3ff8a66beed0bbff886148b6"
+      "bytes": 60034,
+      "sha256": "28b1ddf7dbb295ac2137f04ff6908e3140f2849a4ada40e5f39321ce5e72633d"
     },
     {
       "path": "widget/native/__pycache__/build_r4_closure_pack.cpython-313.pyc",
       "bytes": 25884,
       "sha256": "6681291882227540b053771bbbbeb5471b871f0c17f2100354cdfe88de6ebd41"
+    },
+    {
+      "path": "widget/native/__pycache__/build_r5_final_pack.cpython-313.pyc",
+      "bytes": 21133,
+      "sha256": "6ef825ca2ea0117ae70a63800b1376960f3f0ac0d914c504906421097bebb9bf"
     },
     {
       "path": "widget/native/__pycache__/campus_widget_compiler.cpython-313.pyc",
@@ -364,6 +369,11 @@
       "sha256": "278135883618a7c2a6aab680f5d7656be46ba2d1605345e814b0a91ff0acce00"
     },
     {
+      "path": "widget/native/__pycache__/widget_semantic_view.cpython-313.pyc",
+      "bytes": 6523,
+      "sha256": "eb4f8397899610fdc137169c36f40f52c58fa6b504e179618b6789bc16f2572f"
+    },
+    {
       "path": "widget/native/action-contract.json",
       "bytes": 7164,
       "sha256": "86e2b0c9437f70d23a4d019e438c73f9d7d9551350f6adb2c25063b4109f1ace"
@@ -385,13 +395,18 @@
     },
     {
       "path": "widget/native/bind_runtime_environment.py",
-      "bytes": 23799,
-      "sha256": "2b1e7ed9cbc16e260fae77a1658b2b2e208e516ec5f47142b84ed02e8a351d19"
+      "bytes": 48484,
+      "sha256": "4b951aa1f8d17d963126de5e5bdb1e037bb0ec9d12d9fa79562612bf87e52dc4"
     },
     {
       "path": "widget/native/build_r4_closure_pack.py",
-      "bytes": 22505,
-      "sha256": "34ac102889de4f661b7ee966497fd51977dca209c953f9a88cb009c1f677cbc5"
+      "bytes": 22561,
+      "sha256": "0dd376a1cca0957d633a4236924efb9ede4f019365ef9303c1cf300719c971ce"
+    },
+    {
+      "path": "widget/native/build_r5_final_pack.py",
+      "bytes": 18967,
+      "sha256": "67121f9e6dd1cc19ade3846d8dafb69eab9dc338984af9eb64276ca42a4148d0"
     },
     {
       "path": "widget/native/build_runtime_closure_pack.py",
@@ -660,8 +675,8 @@
     },
     {
       "path": "widget/native/runtime-integration-runbook.md",
-      "bytes": 7837,
-      "sha256": "57ed1f4f1aaff609a6df17a01577b240fe684d122730cf094c2c9e8d956c7924"
+      "bytes": 8375,
+      "sha256": "1d4b69540c59431a16f9c6327ea16de445b81e291064900ddfc3ad7873042536"
     },
     {
       "path": "widget/native/schedule-date-input-guard.py",
@@ -769,14 +784,24 @@
       "sha256": "7b87f891a2d9964ab92226a999cb97c1b44117605f6ff02ed403e0adfcf395a5"
     },
     {
+      "path": "widget/native/test_application_convergence_r5.py",
+      "bytes": 10611,
+      "sha256": "c9f0929dcbbc7c15cd058f41249d29d8ceb7fbc8014933f61b61ecd4efafeccd"
+    },
+    {
       "path": "widget/native/test_campus_overview_r4.py",
       "bytes": 3914,
       "sha256": "8a86e1f320659a95b4adc23ad89e107df83cd2953dda5311b9f7b6d9404ab9b0"
     },
     {
       "path": "widget/native/test_runtime_binding_r4.py",
-      "bytes": 7464,
-      "sha256": "3deac8fb5002221bece3f0c145b5d0b9ee4427465314ba5b3082fba634e076f7"
+      "bytes": 7515,
+      "sha256": "3019c5dfa505b55211d5867bbb7dd6bd40f934a79f17c9a396dc38576c6712e0"
+    },
+    {
+      "path": "widget/native/test_widget_semantic_r5.py",
+      "bytes": 3394,
+      "sha256": "a63b083989fafd460cbec7b043d71fa8706001eb9a921ec5309fccff7c4a47fd"
     },
     {
       "path": "widget/native/test-action-contract.js",
@@ -874,6 +899,11 @@
       "sha256": "78411225a914a4b37bd20e3d666eca0748bc5034c3c05e739499e02282ad15af"
     },
     {
+      "path": "widget/native/widget_semantic_view.py",
+      "bytes": 5083,
+      "sha256": "94299be0c44dca8000ac4f509a9b4e51a9ef3421652e647ec1304aceb1ed5cd9"
+    },
+    {
       "path": "widget/native/widget-node-seed-contract.json",
       "bytes": 1973,
       "sha256": "f982f8322c6e6877bc96d6e60eee452925fd8a246fab2712cce1a625a7426d92"
@@ -950,8 +980,8 @@
     },
     {
       "path": "workflows/application-config.json",
-      "bytes": 3032,
-      "sha256": "3541307beff7326cc75c08adf213cfc806d04b4f9e4d6ecbb3de8d01a7328a0a"
+      "bytes": 3910,
+      "sha256": "49b8dfe2e63a9361ee4c10e4d3d9899c97adfde2344391b2ff91015d9781e7d6"
     },
     {
       "path": "workflows/generate-workflows.js",

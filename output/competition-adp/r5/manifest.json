@@ -1,0 +1,118 @@
+{
+  "schema": "fosuclass-adp-r5-final-pack/v1",
+  "environment": "competition-current",
+  "dataVersion": "competition-demo-v1",
+  "dataHash": "sha1:fefef4bf425b",
+  "runtimeBinding": "REAL_EXPORT_BOUND",
+  "tencentRuntimeStatus": "PENDING_USER_E2E",
+  "workflows": [
+    {
+      "slot": "01",
+      "workflowId": "eea1d35d-ec8e-51a5-aef8-9d88f19be05c",
+      "name": "01-多维课表查询-R3",
+      "status": "TENCENT_WORKFLOW_DEBUG_PASS",
+      "artifact": "01-多维课表查询-R3-Bound.zip",
+      "artifactSha256": "ab61b8640a5005b732f48d580e735e3b321718108fd689c0e20c87565701b0c9"
+    },
+    {
+      "slot": "02",
+      "workflowId": "e6c337c8-e962-5d43-ad19-511a881305d4",
+      "name": "02-空教室规划-R3",
+      "status": "TENCENT_WORKFLOW_DEBUG_PASS",
+      "artifact": "02-空教室规划-R3-Bound.zip",
+      "artifactSha256": "25ecfa4d3abc845215e84ae2e5c653416acd0af06b6c03d213ca86a03f75b2cd"
+    },
+    {
+      "slot": "03",
+      "workflowId": "e0a7e26f-e792-5b43-b57b-e71ba8730d81",
+      "name": "03-课程冲突比较-R3",
+      "status": "TENCENT_WORKFLOW_DEBUG_PASS",
+      "artifact": "03-课程冲突比较-R3-Bound.zip",
+      "artifactSha256": "9fdf24a54b63ac3c643412af3ccf23fc33d1f74a0718eed109e2dcdab2d6eb6f"
+    },
+    {
+      "slot": "04",
+      "workflowId": "cd895c2f-42f8-5981-b63d-f0a40f9fe242",
+      "name": "04-今日校园计划-R3",
+      "status": "TENCENT_WORKFLOW_DEBUG_PASS",
+      "artifact": "04-今日校园计划-R3-Bound.zip",
+      "artifactSha256": "bcc02ac2c9a74c81a9e1f5262508cccc773764ee1c12869fe847f6f7a7e640cd"
+    },
+    {
+      "slot": "05",
+      "workflowId": "ad5e2478-1d37-5cbb-94ab-0c5265f8a3a1",
+      "name": "05-校园教学态势-R1",
+      "status": "READY_FOR_TENCENT_RUNTIME",
+      "artifact": "05-校园教学态势-R1-Bound.zip",
+      "artifactSha256": "15fe568b047b17278a9a6ccd8b45ea51b82b406bf6623d21666668488997c5bf"
+    }
+  ],
+  "evaluation": {
+    "baselineCases": 80,
+    "r4HeroCases": 12,
+    "r5ApplicationCases": 15,
+    "totalCases": 107
+  },
+  "golden": {
+    "expected": 33,
+    "actual": null
+  },
+  "artifacts": [
+    {
+      "file": "01-多维课表查询-R3-Bound.zip",
+      "sha256": "ab61b8640a5005b732f48d580e735e3b321718108fd689c0e20c87565701b0c9"
+    },
+    {
+      "file": "02-空教室规划-R3-Bound.zip",
+      "sha256": "25ecfa4d3abc845215e84ae2e5c653416acd0af06b6c03d213ca86a03f75b2cd"
+    },
+    {
+      "file": "03-课程冲突比较-R3-Bound.zip",
+      "sha256": "9fdf24a54b63ac3c643412af3ccf23fc33d1f74a0718eed109e2dcdab2d6eb6f"
+    },
+    {
+      "file": "04-今日校园计划-R3-Bound.zip",
+      "sha256": "bcc02ac2c9a74c81a9e1f5262508cccc773764ee1c12869fe847f6f7a7e640cd"
+    },
+    {
+      "file": "05-校园教学态势-R1-Bound.zip",
+      "sha256": "15fe568b047b17278a9a6ccd8b45ea51b82b406bf6623d21666668488997c5bf"
+    },
+    {
+      "file": "05-Tencent-Widget-Evidence.widget",
+      "sha256": "84d7147947be08a5b34ba82bbb0537a2b23fd564a37e38ef22d4d1555195b643"
+    },
+    {
+      "file": "widget-registry.runtime.json",
+      "sha256": "c2864b3a658514911e43a07c1c814828a07777da53a57aa7f9a5ad1046666a10"
+    },
+    {
+      "file": "05-Campus-Overview-Contract.json",
+      "sha256": "1002d0c5bc912cf659ac23274a706a4705fd951e0d26747ec8177cbcfbaed4ff"
+    },
+    {
+      "file": "ADP-R5-APP-FINAL-CONFIG.json",
+      "sha256": "f394fe783350d93897908d980e9a7bab4450f709468875b17b71524d89ff9923"
+    },
+    {
+      "file": "ADP-R5-FINAL-EVALUATION.xlsx",
+      "sha256": "306d044198563d91308beae3babdedd2d517a9f45349b69e156e61cf5c9acf0f"
+    },
+    {
+      "file": "ADP-R5-APP-ACTIVATION-MATRIX.md",
+      "sha256": "1962ed8288f72c28512095433525fc4967f6ff9b358761fbda92484f890e8536"
+    },
+    {
+      "file": "ADP-R5-RUNTIME-E2E-CHECKLIST.md",
+      "sha256": "23d149ff19758c314cdeb5d12be20eddb80a74e13295b7f599e18d87ff13eb71"
+    },
+    {
+      "file": "ADP-R5-JUDGE-DEMO.md",
+      "sha256": "48f495b8bd85cb17c76dab47af53a9edfe7e9a0a0a41a6ca513152db0d36e573"
+    },
+    {
+      "file": "ROLLBACK.md",
+      "sha256": "a81c1c563ed8507a9925d99e359ff5ff61c7104b6feba3741800de8a20e62e36"
+    }
+  ]
+}

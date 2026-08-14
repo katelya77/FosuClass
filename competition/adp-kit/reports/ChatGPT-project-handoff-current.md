@@ -1,37 +1,30 @@
 # 校园智序 · 小序 — ChatGPT Project 接力
 
-更新时间：2026-08-12 23:10 +08:00
+更新时间：2026-08-14 20:00 +08:00
 
 ## 必须继承的状态
 
 ```text
-DAY_WIDGET_RUNTIME_PASS
-WEEK_REQUEST_TRANSPORT_PASS
-WEEK_WIDGET_RENDER_PENDING
-DATE_WIDGET_RENDER_PENDING
-RISK_WIDGET_COMPILER_READY_RUNTIME_PENDING
-NEEDS_ADP_EXPORT = NONE
+01_04_R3_TENCENT_WORKFLOW_DEBUG_PASS
+05_CAMPUS_OVERVIEW_REAL_EXPORT_BOUND
+05_REAL_WIDGET_ID = 876474681d584d95b4a99da929dfb3b1
+APPLICATION_HERO_CHAIN = PENDING_USER_RUNTIME_E2E
 PR_49 = OPEN / UNMERGED
 ```
 
-不得标记 `SCHEDULE_FINAL_FROZEN`。
-
 ## 已完成
 
-- WEEK/DAY/DATE request transport split 保持不变；WEEK Tool Output `weekday=0` 只在 WEEK scope canonicalize 为 omitted，DAY 继续 fail closed，DATE 使用 academic context。
-- Action Protocol V2 为 `intent-first/query-fallback`，定义 `schedule_day / schedule_week / schedule_choose_day / schedule_risk_check`；风险必须进入 03。
-- Schedule Rich V4 array contract 已准备，但当前真实 Schedule Widget 仍是 21 字段 RuntimeSafe V3，因此未替换。
-- 6 个真实 WidgetID 与 3 个真实 WorkflowID 已进入 Registry；contracts 均从真实 `.widget` 的 encoded Schema 自动提取。
-- Campus Widget Compiler 已生成 01/02/03/04 Final ZIP：02 接 Classroom，03 接 Conflict，04 接 DayPlan；AMBIGUOUS_ENTITY 接 Choice，其它缺参/非法/工具失败接 Error。
-- `ADP-App-Expected-Config.json` 规定唯一 active set 为 01 Final / 02 Final / 03 Final / 04 Final；旧 01 和 00 Seed 必须排除路由。
-- `competition-demo-v1` 未迁移生产校历；canonical hash 保持 `sha1:fefef4bf425b`，没有写入任何真实佛大生产课表。
+- 真实 05 `.widget` 的文件 Hash、encoded ID、Schema、DefaultState 与三项 validity 已 fail-closed 校验。
+- raw View Hash 仅作为腾讯原始证据；formatter-only 差异通过 semantic View Gate，组件、变量或 `sys.chat` 变化继续 RED。
+- Runtime Registry 已扩展为七类 Widget；05 Bound Workflow 使用确定性 `get_campus_teaching_overview`、结果 Guard、primitive Adapter、真实 CampusOverview / Error Widget。
+- 01～04 R3 制品保持 byte-stable；没有重新设计已通过腾讯调试的节点结构。
+- 最终应用 Router、Activation Matrix、107-case Evaluation、Judge Demo 与 R5 Final Pack 已生成。
+- `competition-demo-v1 / sha1:fefef4bf425b` 与 33 Golden facts 未修改。
 
-## 下一步真实 ADP Gate
+## 下一步真实腾讯 Gate
 
-导入 `CampusFlow-ADP-Import-Bundle.zip` 中四个 Final Workflow，在草稿应用按 Expected Config 核对 active set 与 examples，然后验证：
-
-1. WEEK / DATE Schedule Widget。
-2. Schedule“检查风险”→ 03 → 原生 Conflict Widget。
-3. AMBIGUOUS_ENTITY → Choice，INVALID_PARAM / TOOL_FAILURE → Error。
+1. 导入 `05-校园教学态势-R1-Bound.zip`。
+2. 应用只启用 01～05 最终版本并排除历史路由。
+3. 按 R5 Checklist 执行 Hero→02→03→01→04；完成前状态保持 `PENDING_USER_E2E`。
 
 不要手改 Workflow 节点，不要 merge PR #49，不要生产部署或正式 ADP 发布。

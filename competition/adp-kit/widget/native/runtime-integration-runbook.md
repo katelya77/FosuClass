@@ -1,17 +1,18 @@
 # 校园智序 · 小序 — ADP 原生 Widget 运行时接入 Runbook
 
-更新时间：2026-08-11 21:44 +08:00
+更新时间：2026-08-14 20:00 +08:00
 
 ## 当前真实状态
 
-六张 V2 Widget 已在腾讯云智能 ADP 中真实导入成功，列表缩略图与详情预览均能显示不同 UI：
+当前赛事空间已有七类真实 Widget 环境绑定。05 已由用户在腾讯保存后重新导出并通过真实 ID、Schema、DefaultState 与语义 View Gate：
 
 1. `小序-课表票据-V2`
-2. `小序-空教室票据-V2`
-3. `小序-冲突赶场票据-V2`
-4. `小序-今日校园计划-V2`
-5. `小序-候选确认-V2`
-6. `小序-任务恢复-V2`
+2. `小序-空教室票据-RuntimeSafe-V3`
+3. `小序-冲突赶场票据-RuntimeSafe-V3`
+4. `小序-今日校园计划-RuntimeSafe-V3`
+5. `小序-候选确认-RuntimeSafe-V3`
+6. `小序-任务恢复-RuntimeSafe-V3`
+7. `小序-校园教学态势-RuntimeSafe-V1` — `876474681d584d95b4a99da929dfb3b1`
 
 Compiler 集成状态（不等同 Runtime PASS）：
 
@@ -20,7 +21,10 @@ Compiler 集成状态（不等同 Runtime PASS）：
 - Conflict：`FINAL_COMPILER_INTEGRATED`
 - DayPlan：`FINAL_COMPILER_INTEGRATED`
 - Choice / Error：`RECOVERY_COMPILER_INTEGRATED`
-- 腾讯 ADP 六卡 Runtime E2E：`PENDING_USER_TENCENT_ADP_EXECUTION`
+- CampusOverview：`REAL_EXPORT_BOUND`
+- 01～04 R3：`TENCENT_WORKFLOW_DEBUG_PASS`
+- 05 R1：`READY_FOR_TENCENT_RUNTIME`
+- 腾讯 ADP 应用级 Hero Chain：`PENDING_USER_RUNTIME_E2E`
 
 已标记：
 
@@ -63,7 +67,7 @@ Compiler 集成状态（不等同 Runtime PASS）：
   ↓
 标准模式 Agent 路由
   ↓
-01 / 02 / 03 / 04 已冻结工作流
+01 / 02 / 03 / 04 已冻结工作流，或 05 校园教学态势
   ↓
 CampusTools deterministic tool
   ↓
@@ -265,8 +269,9 @@ Classroom / Conflict / Day Plan 的真实 WidgetID 已登记，compiler 已自�
 | Day Plan | 帮我看看2026-09-04的安排 | 课程 + 空档时间轴 | 连续自习2节 |
 | Choice | 模糊实体 | 候选确认 | 选择后继续 |
 | Error | 非法日期/对象/工具错误 | 恢复卡 | 修改条件/重试 |
+| CampusOverview | 从8月25日开始看看未来几周校园教学运行情况 | 准备期0课 + 4周126次 + 资源/教师/风险 + 已核验 | 查空教室→02；检查风险→03 |
 
-六卡动态数据与 Action 全部真实 ADP 通过后，才允许：
+七类 Widget 与跨 Workflow Action 全部真实 ADP 应用级通过后，才允许：
 
 `ADP_WIDGET_NATIVE_PASS`
 

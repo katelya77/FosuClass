@@ -13,6 +13,7 @@ OUTPUT = REPO / "output" / "competition-adp" / "r4"
 sys.path.insert(0, str(ROOT))
 
 from bind_runtime_environment import (  # noqa: E402
+    BASE_WORKFLOW_SLOTS,
     WORKFLOW_FILES,
     WORKFLOW_NAMES,
     assert_current_runtime_id,
@@ -99,7 +100,8 @@ def main():
 
     allowed_ids = set(EXPECTED_IDS.values())
     workflow_ids = set()
-    for key, file_name in WORKFLOW_FILES.items():
+    for key in BASE_WORKFLOW_SLOTS:
+        file_name = WORKFLOW_FILES[key]
         artifact = OUTPUT / file_name
         workflow, _ = workflow_from_zip(artifact)
         assert workflow["WorkflowName"] == WORKFLOW_NAMES[key]

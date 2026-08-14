@@ -10,6 +10,7 @@ import zipfile
 from pathlib import Path
 
 from bind_runtime_environment import (
+    BASE_WORKFLOW_SLOTS,
     DEFAULT_OUTPUT,
     FIXED_ZIP_TIME,
     WORKFLOW_FILES,
@@ -160,7 +161,8 @@ def build_hero_widget(output_dir: Path) -> tuple[Path, dict]:
 
 def workflow_metadata(output_dir: Path) -> list[dict]:
     result = []
-    for key, file_name in WORKFLOW_FILES.items():
+    for key in BASE_WORKFLOW_SLOTS:
+        file_name = WORKFLOW_FILES[key]
         path = output_dir / file_name
         if not path.is_file():
             raise AssertionError(f"bound workflow missing: {file_name}")
@@ -387,7 +389,7 @@ def main() -> None:
     }
     artifact_names = [
         "widget-registry.runtime.json",
-        *[WORKFLOW_FILES[key] for key in WORKFLOW_FILES],
+        *[WORKFLOW_FILES[key] for key in BASE_WORKFLOW_SLOTS],
         widget_path.name,
         "05-Campus-Overview-Contract.json",
         *[path.name for path in doc_paths],
