@@ -50,7 +50,7 @@ async function waitForHealth() {
   try {
     const health = await waitForHealth();
     assert.equal(health.status, "ok");
-    assert.equal(health.dataVersion, "competition-demo-v1");
+    assert.equal(health.dataVersion, "competition-demo-v2");
     assert.equal(health.tools, 7);
 
     const unauthorized = await fetch("http://127.0.0.1:9000/api/query_schedule", {
@@ -71,7 +71,7 @@ async function waitForHealth() {
     assert.equal(authorized.status, 200);
     const body = await authorized.json();
     assert.equal(body.success, true);
-    assert.equal(body.dataVersion, "competition-demo-v1");
+    assert.equal(body.dataVersion, "competition-demo-v2");
     assert.equal(body.evidence.verified, true);
     console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具）");
   } finally {

@@ -11,17 +11,19 @@ const TARGET_SOURCE_ROOT = path.join(FUNCTION_ROOT, "src");
 const TARGET_DATA_ROOT = path.join(FUNCTION_ROOT, "mock-data");
 const CHECK = process.argv.includes("--check");
 const RUNTIME_FILES = ["data.js", "envelope.js", "ratelimit.js", "server.js", "tools.js"];
-const DATA_FILE = "competition-demo-v1.json";
+// v2 是线上默认数据源；v1 保留在部署包中仅供显式 CAMPUS_DATA_PATH 回滚，
+// 运行时默认不会悄悄回退到 v1（index.js 默认指向 v2）。
+const DATA_FILES = ["competition-demo-v1.json", "competition-demo-v2.json"];
 
 const copies = [
   ...RUNTIME_FILES.map((name) => ({
     source: path.join(SOURCE_ROOT, name),
     target: path.join(TARGET_SOURCE_ROOT, name),
   })),
-  {
-    source: path.join(KIT_ROOT, "mock-data", DATA_FILE),
-    target: path.join(TARGET_DATA_ROOT, DATA_FILE),
-  },
+  ...DATA_FILES.map((name) => ({
+    source: path.join(KIT_ROOT, "mock-data", name),
+    target: path.join(TARGET_DATA_ROOT, name),
+  })),
 ];
 
 function sameBytes(left, right) {

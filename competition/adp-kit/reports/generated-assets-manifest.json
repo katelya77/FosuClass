@@ -1,17 +1,22 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-14T12:08:31.795Z",
+  "generatedAt": "2026-08-15T08:20:55.152Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
       "path": "cloudfunctions/campusflowAdpTools/index.js",
-      "bytes": 1081,
-      "sha256": "92594b815cf17dcf8cc6c412ac4fe6b747c4c7efbad34de16b6878995a36c5bc"
+      "bytes": 1629,
+      "sha256": "566da489f8d69159230e137c27aeb3dd3d579d93485cbb27074b8b00815d8a38"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v1.json",
       "bytes": 30285,
       "sha256": "5432179536f74f4b5ff561ced552e9247e94eadc861f2b98b214eb3e4cb52286"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v2.json",
+      "bytes": 32157,
+      "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/package.json",
@@ -25,8 +30,8 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/data.js",
-      "bytes": 5506,
-      "sha256": "0c9d2b42962f887ff6d7a3c3bedf80ba8554e81aa55461dcbbff1440e1ad41d2"
+      "bytes": 5780,
+      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/envelope.js",
@@ -45,23 +50,23 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
-      "bytes": 39555,
-      "sha256": "76d4f284952b661731775121bd55912d67490c40533971a8e12f3a81f4af6454"
+      "bytes": 39650,
+      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
     },
     {
       "path": "cloudfunctions/README.md",
-      "bytes": 1689,
-      "sha256": "a318cc1c065de05e5c7d789d990f3589b13f4e78f930de72992cef6760c84a35"
+      "bytes": 1946,
+      "sha256": "36cbe1ca1c3b0a3787fed91fddabb944e503b1519d453e3eee2c18941b607da0"
     },
     {
       "path": "cloudfunctions/sync-campusflow-function.js",
-      "bytes": 1660,
-      "sha256": "6ca11118a34cb632638f02c390c90aa8e65bef477d0ef59225de3f3c351fc81f"
+      "bytes": 1885,
+      "sha256": "58c5b09afb6276e39b8237afb0cabdec30392050cf4f003435a73b98f305b0b6"
     },
     {
       "path": "cloudfunctions/test-http-function.js",
       "bytes": 2710,
-      "sha256": "937e3739265d74560361d912abd8872e506c79a86645f47f21b7b64a5a266eda"
+      "sha256": "c33a25826089ded29fb5c5e7711f1c5f8c24b6307102111e326362f5e2bb8a18"
     },
     {
       "path": "evaluation/eval-dataset-v1.json",
@@ -105,8 +110,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27528,
-      "sha256": "5f6ceefa9fe73f6c5bc090ac38128f94fedbaf8e720a42cec9c0e6331114a4bf"
+      "bytes": 27627,
+      "sha256": "106758fb8a9de53b404fde82a80871996e80024a6a486e69ce5c336211aae295"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -185,8 +190,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/data.js",
-      "bytes": 5506,
-      "sha256": "0c9d2b42962f887ff6d7a3c3bedf80ba8554e81aa55461dcbbff1440e1ad41d2"
+      "bytes": 5780,
+      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
     },
     {
       "path": "mcp/campus-tools-mcp/src/envelope.js",
@@ -205,8 +210,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/tools.js",
-      "bytes": 39555,
-      "sha256": "76d4f284952b661731775121bd55912d67490c40533971a8e12f3a81f4af6454"
+      "bytes": 39650,
+      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
     },
     {
       "path": "mcp/campus-tools-mcp/test/security.test.js",
@@ -234,6 +239,11 @@
       "sha256": "a0c41cb78d5807f7f584fc235f7a7ae86982496d03fd31aa4b248bda1a246ca7"
     },
     {
+      "path": "mock-data/competition-demo-v2.json",
+      "bytes": 32157,
+      "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
+    },
+    {
       "path": "mock-data/data-hash.js",
       "bytes": 564,
       "sha256": "14bf3243906b53b9d4fc1977355bc6783b662469d9a19186780005e6ae5cfb4a"
@@ -249,9 +259,14 @@
       "sha256": "9d8c73ac94b9238f8c057bd4338386f8518cfc889fc166cda72e8384934a3c14"
     },
     {
+      "path": "mock-data/validate-competition-demo-v2.js",
+      "bytes": 11473,
+      "sha256": "b8006ffe2656550a131bbea212f0f887ac382cd4e33a0929266d2c9f42c1befd"
+    },
+    {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 26155,
-      "sha256": "d25569fc2360ae1363f5e836bd3175bed80f47d68f245db53271bf5e12acc563"
+      "bytes": 26173,
+      "sha256": "2e3012d7a79412f0c5a4ecb6765b8bcea73c7b3c1d677b7801be126aa3a5b767"
     },
     {
       "path": "openapi/generate-openapi.js",
@@ -359,6 +374,11 @@
       "sha256": "059c7adc9fe55b5ecf82cad4dc94cc4d3114eefd39cc720639bb7c1c8d31f221"
     },
     {
+      "path": "widget/native/__pycache__/test_application_convergence_r5.cpython-313.pyc",
+      "bytes": 16503,
+      "sha256": "20ca5152dcb6efa8191c34066497d486ae8d877eecf1f8821dc6e1ec42de4050"
+    },
+    {
       "path": "widget/native/__pycache__/test_campus_overview_r4.cpython-313.pyc",
       "bytes": 7159,
       "sha256": "efdb266e052cace813ad2a4284b27a5e07e25004707f1d0413a6a18917258f3d"
@@ -367,6 +387,11 @@
       "path": "widget/native/__pycache__/test_runtime_binding_r4.cpython-313.pyc",
       "bytes": 10641,
       "sha256": "278135883618a7c2a6aab680f5d7656be46ba2d1605345e814b0a91ff0acce00"
+    },
+    {
+      "path": "widget/native/__pycache__/test_widget_semantic_r5.cpython-313.pyc",
+      "bytes": 5499,
+      "sha256": "0094d94a3e98b32a77be04af14e92af0e30c867309009b2f191aff3bd5a01d2b"
     },
     {
       "path": "widget/native/__pycache__/widget_semantic_view.cpython-313.pyc",

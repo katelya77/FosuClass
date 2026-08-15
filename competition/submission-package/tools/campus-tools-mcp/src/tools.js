@@ -7,7 +7,7 @@
  * - 本地自动化测试
  *
  * 设计约定：
- * - 动态校园事实只来自 competition-demo-v1 数据集，不调用任何生成式模型；
+ * - 动态校园事实只来自 competition-demo-* 匿名数据集（默认 v1；部署环境可用 CAMPUS_DATA_PATH 覆盖），不调用任何生成式模型；
  * - 实体歧义返回 AMBIGUOUS_ENTITY + candidates，交由上游（ADP 工作流）追问确认；
  * - 空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记；
  * - 所有时间解析确定性完成：date <-> (week, weekday) 互转，不猜测。
@@ -397,11 +397,11 @@ function compareSchedules(params) {
   const conflictKeys = new Set();
   for (const a of busy1) {
     for (const b of busy2) {
-      if (selfCompare && a.lessonId === b.lessonId) continue;
+      if (selfCompare && a.id === b.id) continue;
       if (a.weekday !== b.weekday) continue;
       if (!periodsOverlap(a.periodStart, a.periodEnd, b.periodStart, b.periodEnd)) continue;
-      const leftId = String(a.lessonId || "");
-      const rightId = String(b.lessonId || "");
+      const leftId = String(a.id || "");
+      const rightId = String(b.id || "");
       const pairKey = selfCompare
         ? [leftId, rightId].sort().join("::")
         : `${leftId}::${rightId}`;
@@ -823,7 +823,8 @@ function getCampusTeachingOverview(params) {
   });
   env.query = requestedWindow;
   env.summary = item.summary;
-  env.evidence.derivation = "competition-demo-v1 deterministic 4-week occurrence aggregation";
+  const { dataVersion } = loadDataset();
+  env.evidence.derivation = `${dataVersion} deterministic 4-week occurrence aggregation`;
   env.evidence.preparationPeriodLessonCount = 0;
   return env;
 }
@@ -934,7 +935,7 @@ const TOOL_DEFS = [
   },
   {
     name: "get_campus_teaching_overview",
-    description: "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：准备期、四周负载、空间压力、教师负载与风险；所有指标只从 competition-demo-v1 派生。",
+    description: "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：准备期、四周负载、空间压力、教师负载与风险；所有指标只从当前 competition-demo 匿名数据集派生。",
     inputSchema: {
       type: "object",
       properties: {

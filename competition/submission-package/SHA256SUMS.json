@@ -38,8 +38,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27528,
-      "sha256": "fa3d0eb45b411a1a7a0ac9ec6f537f00bd7e06e0657c305e9aa8e15c5abec2d6"
+      "bytes": 27627,
+      "sha256": "9f7c00347f51a1bc57d223153ce688233a2714d903dd8b67fe36ffeb8735b9fe"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -93,8 +93,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 25849,
-      "sha256": "d95f55763fd6bf2cd43e630659a758b4074b88cd6afa7a1ed5671940ba5b9db6"
+      "bytes": 25867,
+      "sha256": "29b79f367c9352fb5066a63f9de10a743fc2af65c40f72226616a733047a52b6"
     },
     {
       "path": "package.json",
@@ -143,8 +143,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/data.js",
-      "bytes": 5506,
-      "sha256": "0c9d2b42962f887ff6d7a3c3bedf80ba8554e81aa55461dcbbff1440e1ad41d2"
+      "bytes": 5780,
+      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
     },
     {
       "path": "tools/campus-tools-mcp/src/envelope.js",
@@ -163,8 +163,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 39555,
-      "sha256": "76d4f284952b661731775121bd55912d67490c40533971a8e12f3a81f4af6454"
+      "bytes": 39650,
+      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
     },
     {
       "path": "tools/campus-tools-mcp/test/security.test.js",

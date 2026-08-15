@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "b9ced69e959d97b546bd79ac5f7574cc46b6fd9e492328d00d90955ba781caee",
+  "oracleSourceSha256": "4e371eae9d7b663622e4356c8d74cf125a36804f7dfb54fa515693cb9e28aee5",
   "caseCount": 33,
   "cases": [
     {
@@ -814,7 +814,7 @@
         "dataVersion": "competition-demo-v1",
         "dataHash": "sha1:fefef4bf425b",
         "success": true,
-        "itemCount": 1,
+        "itemCount": 2,
         "resolvedEntity": null,
         "comparedEntities": [
           {
@@ -828,17 +828,22 @@
         ],
         "lessonIds": [
           "les-025",
-          "les-028"
+          "les-026",
+          "les-028",
+          "les-029"
         ],
         "courseIds": [
           "c-02",
-          "c-06"
+          "c-06",
+          "c-07",
+          "c-12"
         ],
         "roomIds": [
           "r-b1-103",
-          "r-b1-104"
+          "r-b1-104",
+          "r-gym-b"
         ],
-        "conflictCount": 1,
+        "conflictCount": 2,
         "lessonCount": null,
         "empty": false,
         "verified": true

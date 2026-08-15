@@ -1,10 +1,14 @@
 /**
- * CampusTools 数据层：加载 competition-demo-v1 匿名演示数据并建立索引。
+ * CampusTools 数据层：加载 competition-demo-* 匿名演示数据并建立索引。
  *
  * 安全约束（比赛铁律）：
  * - 默认且仅允许读取 competition-demo-* 匿名数据集；
  * - 禁止任何“比赛接口失败后回退读取 production 真实数据”的行为；
  * - 数据文件名校验：basename 必须以 competition-demo 开头，否则拒绝加载。
+ *
+ * 默认路径指向 kit 级 v1 数据集（Golden/QA/Widget 样例等评审资产均以 v1 锚定，
+ * 并通过显式 CAMPUS_DATA_PATH 固定）；CloudBase 部署由 wrapper index.js 显式
+ * 指向部署包内的 competition-demo-v2.json，不存在静默回退。
  */
 
 const fs = require("fs");

@@ -674,7 +674,7 @@
           "CampusTools"
         ],
         "operationId": "get_campus_teaching_overview",
-        "summary": "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：准备期、四周负载、空间压力、教师负载与风险；所有指标只从 competition-demo-v1 派生。",
+        "summary": "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：准备期、四周负载、空间压力、教师负载与风险；所有指标只从当前 competition-demo 匿名数据集派生。",
         "security": [
           {
             "bearerAuth": []
