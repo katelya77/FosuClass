@@ -1,0 +1,46 @@
+{
+  "version": "R4.2",
+  "dataVersion": "competition-demo-v2",
+  "term": {
+    "startDate": "2026-08-31",
+    "endDate": "2027-01-17",
+    "totalWeeks": 20,
+    "timezone": "Asia/Shanghai"
+  },
+  "displayToCanonical": {
+    "campuses": {
+      "A校区": "校区A",
+      "B校区": "校区B",
+      "C校区": "校区C"
+    },
+    "teachers": "T01老师…T12老师 -> 教师001…教师012",
+    "classes": "G01班…G06班 -> 2025级A班…2025级F班"
+  },
+  "statePolicy": {
+    "inherit": "only the latest successful confirmed same-task state",
+    "override": "explicit values in the current user turn replace inherited values",
+    "rejectFromState": [
+      "tool failure",
+      "ambiguous entity",
+      "out-of-range value",
+      "unverified model guess"
+    ]
+  },
+  "presentationPolicy": {
+    "afterToolsOnly": true,
+    "hiddenOrdinaryUiFields": [
+      "dataVersion",
+      "queryId",
+      "hash",
+      "source fingerprint",
+      "RuntimeSafe/version labels"
+    ]
+  },
+  "activeWorkflowIds": {
+    "01": "a4053ada-7357-4166-98d1-750f0af844ae",
+    "02": "6458a8c1-55ae-4766-9b87-9ea3c8d06a45",
+    "03": "8a12a521-5a33-452f-80cb-86a8f8476553",
+    "04": "6161ee89-292d-4723-8ada-bb69f4bfe562",
+    "05": "d3c808cd-5285-4af4-9303-5d8106a2d2f7"
+  }
+}
