@@ -85,3 +85,26 @@ test("canonical 模板保持占位符 server（可移植模板），与 import �
   const iOps = Object.values(spec.paths).flatMap((p) => Object.values(p).map((m) => m.operationId)).sort();
   assert.deepStrictEqual(cOps, iOps, "canonical 与 import 的 operation 集合必须一致");
 });
+
+test("R49.1.1：import spec 每个 path 都是真实 server 可识别的 Agent Tool façade path", () => {
+  // 防止再次出现「OpenAPI 看起来正确、adapter 测试也正确，但 HTTP Runtime 不认识」的边界缺陷：
+  // import spec 的 path 必须与权威 server 层（mcp/campus-tools-mcp/src/agent-tools.js）注册的
+  // Agent Tool façade path 完全一致，且 operationId 与 path 名称一一对应。
+  const agentTools = require("../../mcp/campus-tools-mcp/src/agent-tools.js");
+  assert.strictEqual(agentTools.AGENT_TOOL_PATHS.length, 5, "server 必须恰有 5 个 Agent Tool façade");
+  const paths = Object.keys(spec.paths);
+  assert.strictEqual(paths.length, 5, "import spec 必须恰有 5 个 path");
+  for (const p of paths) {
+    assert.ok(p.startsWith("/api/"), `${p} 必须是 /api/ 前缀`);
+    const name = p.slice("/api/".length);
+    assert.ok(agentTools.isAgentToolPath(name), `${p} 必须是 server 可识别的 Agent Tool façade path`);
+    assert.ok(agentTools.AGENT_TOOL_MAP[name], `${p} 必须在 server façade 中有底层 CampusTools 映射`);
+    const op = spec.paths[p].post;
+    assert.strictEqual(op.operationId, name, `${p} 的 operationId 必须与 path 名一致`);
+  }
+  // 每个 import path 都有明确 description，帮助 ADP 模型理解何时调用。
+  for (const p of paths) {
+    const op = spec.paths[p].post;
+    assert.ok(op.description && op.description.length >= 20, `${p} 必须带明确 description`);
+  }
+});

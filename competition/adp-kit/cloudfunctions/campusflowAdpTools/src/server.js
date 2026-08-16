@@ -1,11 +1,13 @@
 /**
  * CampusTools MCP 服务端（零依赖 CommonJS）。
  *
- * 同一套确定性工具双协议暴露：
+ * 同一套确定性工具多协议暴露：
  * - MCP（Streamable HTTP）：POST /mcp  （JSON-RPC：initialize / tools/list / tools/call / ping）
  *   SSE 兼容：GET /sse + POST /messages（旧式 SSE 传输，供只支持 SSE 的平台使用）
  * - REST：POST /api/<toolName>   （如 /api/query_schedule）
- * - GET  /health  健康检查（返回数据版本与工具数）
+ * - Agent Tool Façade：POST /api/campus_* （R49.1.1，ADP 只调用这 5 个 alias，
+ *   由 agent-tools.js 确定性转换为底层 CampusTools，禁止 ADP 依赖仓库内 adapter）
+ * - GET  /health  健康检查（返回数据版本、底层工具数与 Agent Tool 数）
  *
  * 环境变量：
  *   PORT                监听端口（默认 8787）
@@ -24,6 +26,7 @@ const { TOOL_DEFS, callTool } = require("./tools");
 const { loadDataset } = require("./data");
 const { fail, ERR } = require("./envelope");
 const { takeToken } = require("./ratelimit");
+const { ADP_CONTRACT_VERSION, AGENT_TOOL_PATHS, isAgentToolPath, callAgentTool } = require("./agent-tools");
 
 const PORT = Number(process.env.PORT || 8787);
 const TOKEN = process.env.CAMPUS_API_TOKEN || "";
@@ -225,6 +228,26 @@ async function handleRestTool(req, res, toolName) {
 }
 
 // ---------------------------------------------------------------------------
+// Agent Tool Façade：POST /api/campus_*（R49.1.1）
+// ---------------------------------------------------------------------------
+async function handleAgentRestTool(req, res, toolName) {
+  const raw = await readBody(req);
+  let params = {};
+  if (raw && raw.trim()) {
+    try {
+      params = JSON.parse(raw);
+    } catch {
+      return sendJson(res, 400, {
+        success: false,
+        error: { code: "INVALID_PARAM", message: "请求体需为 JSON 对象", details: null },
+      });
+    }
+  }
+  const env = callAgentTool(toolName, params);
+  return sendJson(res, 200, env);
+}
+
+// ---------------------------------------------------------------------------
 // 主路由
 // ---------------------------------------------------------------------------
 const server = http.createServer(async (req, res) => {
@@ -253,6 +276,8 @@ const server = http.createServer(async (req, res) => {
         dataVersion,
         dataHash,
         tools: TOOL_DEFS.length,
+        agentTools: AGENT_TOOL_PATHS.length,
+        adpContractVersion: ADP_CONTRACT_VERSION,
         uptimeSec: Math.floor(process.uptime()),
       });
     }
@@ -277,7 +302,11 @@ const server = http.createServer(async (req, res) => {
       await handleSseMessage(req, res, u.searchParams.get("sessionId"));
     } else if (u.pathname.startsWith("/api/") && req.method === "POST") {
       const toolName = u.pathname.slice("/api/".length);
-      await handleRestTool(req, res, toolName);
+      if (isAgentToolPath(toolName)) {
+        await handleAgentRestTool(req, res, toolName);
+      } else {
+        await handleRestTool(req, res, toolName);
+      }
     } else {
       done();
       return sendJson(res, 404, fail(ERR.NOT_FOUND, "请求路径不存在", null));
@@ -296,7 +325,7 @@ if (require.main === module) {
   // 启动前预热数据，触发 DATA_GUARD 校验，数据非法时直接拒绝启动
   const { dataVersion, dataHash } = loadDataset();
   server.listen(PORT, () => {
-    log("info", `campus-tools-mcp 已启动`, { port: PORT, dataVersion, dataHash, tools: TOOL_DEFS.length, auth: AUTH_MODE });
+    log("info", `campus-tools-mcp 已启动`, { port: PORT, dataVersion, dataHash, tools: TOOL_DEFS.length, agentTools: AGENT_TOOL_PATHS.length, auth: AUTH_MODE });
   });
 }
 

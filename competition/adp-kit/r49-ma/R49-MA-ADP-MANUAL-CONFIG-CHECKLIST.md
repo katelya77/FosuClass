@@ -108,18 +108,24 @@
 
 ## 4. 工具绑定
 
-- 5 个 Agent Tool 作为自定义插件/HTTP 工具绑定到对应 Agent（映射见 `05-TOOL-CONTRACTS.md`）：
+> **R49.1.1 更新**：ADP 只绑定 5 个 **Agent Tool Façade**（`/api/campus_*`），**不是**底层 7 个 CampusTools。
+> Façade 已在 CloudBase HTTP Function（MCP 权威 server 层）真实实现：self 模式由服务端确定性复制 second=first，
+> day_plan 缺 visitorId 时确定性使用 `demoUsers[0].id`（user-demo-001），不依赖仓库内 r49-ma adapter。
+> 底层 `/api/query_schedule` 等旧接口保留，但 **ADP 不得直接绑定它们**。
 
-| Agent Tool | CampusTools | REST | 绑定 Agent |
+- 5 个 Agent Tool Façade 作为自定义插件/HTTP 工具绑定到对应 Agent（映射见 `05-TOOL-CONTRACTS.md`）：
+
+| Agent Tool（Façade） | 底层 CampusTools | ADP REST（Façade） | 绑定 Agent |
 |---|---|---|---|
-| campus_schedule_query | query_schedule | POST /api/query_schedule | 课程空间 |
-| campus_classroom_search | find_available_classrooms | POST /api/find_available_classrooms | 课程空间 |
-| campus_risk_check | compare_schedules | POST /api/compare_schedules | 风险规划 |
-| campus_day_plan | generate_day_plan | POST /api/generate_day_plan | 风险规划 |
-| campus_overview | get_campus_teaching_overview | POST /api/get_campus_teaching_overview | 校园洞察 |
+| campus_schedule_query | query_schedule | POST /api/campus_schedule_query | 课程空间 |
+| campus_classroom_search | find_available_classrooms | POST /api/campus_classroom_search | 课程空间 |
+| campus_risk_check | compare_schedules | POST /api/campus_risk_check | 风险规划 |
+| campus_day_plan | generate_day_plan | POST /api/campus_day_plan | 风险规划 |
+| campus_overview | get_campus_teaching_overview | POST /api/campus_overview | 校园洞察 |
 
-- 请求：`POST {campus_api_base_url}/api/<toolName>`，Header `Authorization: Bearer <campus_api_token>`。
-- OpenAPI 导入：`r49-ma/tools/openapi/campus-agent-tools.openapi.json`（含 5 个 Agent Tool 的 schema/example/error contract）。
+- 请求：`POST {campus_api_base_url}/api/campus_<tool>`，Header `Authorization: Bearer <campus_api_token>`。
+- OpenAPI 导入：**`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`**（R49.1.1：5 个 operation 全部指向 Agent Tool Façade path，每个工具带明确 description；含 schema/example/error contract）。
+- 部署后确认 `/health` 返回 `tools=7`（底层 CampusTools）**且** `agentTools=5`（ADP Façade）**且** `adpContractVersion=R49.1.1`，避免仅凭 dataVersion 猜测版本。
 - **真实 PluginID / Endpoint 未取得前 → 占位符 + FAIL CLOSED，不猜测。**
 
 ---
@@ -169,9 +175,12 @@
 
 - [ ] 导出 R47.7 基线 ZIP 并存档（用户手动）。
 - [ ] 创建 4 Agent 并按本清单逐字段配置。
-- [ ] 创建 CampusTools 插件（或 OpenAPI 导入）并回填真实 PluginID / Endpoint / Token。
+- [ ] 创建 CampusTools 插件（或导入 `campus-agent-tools.adp-import.json`）并回填真实 PluginID / Endpoint / Token。
 - [ ] 回填真实 AgentID 到 `tools/schemas/agent-tools.json` 的 `ids` 字段（当前为 PLACEHOLDER）。
 - [ ] 确认平台侧 KnowledgeRetrievalAnswer 重新绑定修复后的知识库 01-08 + taxonomy。
-- [ ] 确认 `mcp/campus-tools-mcp/src/contracts.ts` 的 `DATA_VERSION` 从 `competition-demo-v1` 更新为 `competition-demo-v2`（运行时类型常量，平台侧确认项）。
 - [ ] 确认对话流转策略「每个新 Turn 主 Agent 接管」在平台 UI 可用；不可用时以 Prompt 内规则兜底。
 - [ ] Widget Direct Output 第二阶段再开启（先文本全链验证）。
+
+> R49.1 已完成：`contracts.ts` 的 DATA_VERSION 已改为 v1/v2 类型兼容（运行时类型常量），不再需要手工改值。
+> R49.1.1 已完成：5 个 Agent Tool Façade 已部署到 CloudBase HTTP Function（`/api/campus_*`），
+> ADP 导入文件为 `campus-agent-tools.adp-import.json`；`/health` 新增 `agentTools=5` 与 `adpContractVersion=R49.1.1`。

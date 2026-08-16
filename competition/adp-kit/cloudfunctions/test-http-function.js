@@ -52,6 +52,8 @@ async function waitForHealth() {
     assert.equal(health.status, "ok");
     assert.equal(health.dataVersion, "competition-demo-v2");
     assert.equal(health.tools, 7);
+    assert.equal(health.agentTools, 5, "ADP Agent Tool Façade 数量应为 5");
+    assert.equal(health.adpContractVersion, "R49.1.1");
 
     const unauthorized = await fetch("http://127.0.0.1:9000/api/query_schedule", {
       method: "POST",
@@ -73,7 +75,21 @@ async function waitForHealth() {
     assert.equal(body.success, true);
     assert.equal(body.dataVersion, "competition-demo-v2");
     assert.equal(body.evidence.verified, true);
-    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具）");
+
+    // R49.1.1：部署包内 Agent Tool Façade 真实可用（self 模式无需第二对象）。
+    const risk = await fetch("http://127.0.0.1:9000/api/campus_risk_check", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mode: "self", entityType: "teacher", entityName: "T09", week: 1 }),
+    });
+    assert.equal(risk.status, 200);
+    const riskBody = await risk.json();
+    assert.equal(riskBody.success, true);
+    assert.equal(riskBody.summary.selfCompare, true);
+    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、Agent Tool Façade）");
   } finally {
     child.kill();
   }
