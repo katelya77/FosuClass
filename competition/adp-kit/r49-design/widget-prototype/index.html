@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R49 Widget Hero Prototype — Schedule Campus Blocks</title>
+<style>
+  :root{
+    --page:#F7F8F6; --card:#FFFFFF; --sunken:#F4F6F3;
+    --ink:#1F2521; --muted:#68726B; --faint:#98A29A;
+    --line:#E4E8E3; --lineStrong:#D2DAD1;
+    --brand:#173F35; --brandSoft:#E9F0EB;
+    --accent:#2563EB; --accentSoft:#EBF1FE;
+    --success:#2F7D5C; --successSoft:#E8F3ED;
+    --warning:#8A5A00; --warningSoft:#FBF3DF;
+    --danger:#A54232; --dangerSoft:#F9ECE8;
+    --c1:#DCE9E1; --c2:#E8E0D2; --c3:#D9E3EC; --c4:#EADFD8;
+    --c5:#E4E6D6; --c6:#DED9E8; --c7:#F0E3D6;
+    --radius:14px; --inner:10px;
+    --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:var(--font);font-size:13px;line-height:1.45}
+  .stage{max-width:430px;margin:0 auto;padding:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .head h1{font-size:17px;font-weight:700}
+  .head .meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;letter-spacing:.05em;
+    padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .badge.success{background:var(--successSoft);color:var(--success)}
+  .badge.warning{background:var(--warningSoft);color:var(--warning)}
+  .badge.danger{background:var(--dangerSoft);color:var(--danger)}
+  .badge.neutral{background:var(--sunken);color:var(--muted)}
+  .weekbar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:12px 0 2px}
+  .wd{background:var(--sunken);border:1px solid var(--line);border-radius:var(--inner);padding:6px 0;text-align:center;cursor:pointer}
+  .wd .n{font-size:12px;font-weight:600}
+  .wd .c{font-size:10px;color:var(--muted);margin-top:1px}
+  .wd.active{background:var(--brand);border-color:var(--brand)}
+  .wd.active .n,.wd.active .c{color:#fff}
+  .daytitle{font-size:12px;color:var(--muted);margin:10px 2px 6px}
+  .block{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:var(--inner);
+    padding:9px 10px;margin-bottom:8px;cursor:pointer;font-family:var(--font)}
+  .block .course{font-size:14px;font-weight:600;color:var(--ink)}
+  .block .row{display:flex;justify-content:space-between;gap:8px;margin-top:3px;font-size:12px;color:var(--ink)}
+  .block .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .block .warn{display:inline-flex;gap:4px;margin-top:6px}
+  .c1{background:var(--c1)} .c2{background:var(--c2)} .c3{background:var(--c3)}
+  .c4{background:var(--c4)} .c5{background:var(--c5)} .c6{background:var(--c6)} .c7{background:var(--c7)}
+  .toolbar{display:flex;gap:8px;margin-top:4px}
+  .btn{flex:1;height:40px;border-radius:var(--inner);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+  .btn.primary{background:var(--brand);color:#fff;border:1px solid var(--brand)}
+  .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--lineStrong)}
+  .form{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-top:12px}
+  .form label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  .form input[type=date]{width:100%;height:38px;border:1px solid var(--lineStrong);border-radius:var(--inner);padding:0 10px;font-family:var(--font);font-size:13px}
+  .radio-row{display:flex;gap:10px}
+  .radio-row label{display:flex;align-items:center;gap:5px;margin:0;font-size:13px;color:var(--ink);cursor:pointer}
+  .chk-row{display:flex;gap:14px;margin-top:2px}
+  .chk-row label{display:flex;align-items:center;gap:5px;margin:0;font-size:13px;color:var(--ink);cursor:pointer}
+  .detail{display:none}
+  .detail.show{display:block}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin-top:10px}
+  .kv dt{color:var(--muted)}
+  .kv dd{font-weight:600;text-align:right}
+  .actions{margin-top:12px}
+  .hint{font-size:11px;color:var(--faint);margin-top:10px;text-align:center}
+  @media (min-width:900px){
+    .stage{max-width:960px}
+    .grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:12px}
+    .col7{background:var(--sunken);border:1px solid var(--line);border-radius:var(--inner);padding:6px;min-height:180px}
+    .col7 h3{font-size:11px;color:var(--muted);margin-bottom:6px;text-align:center}
+    .col7 .block{margin-bottom:6px;padding:6px}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="card">
+    <div class="head">
+      <div>
+        <h1>T09老师 · 第1周课表</h1>
+        <div class="meta">2026-08-31 ~ 09-06 · 6 门课程 · 3 个有课日 · 2 个校区</div>
+      </div>
+      <span class="badge success">已核验</span>
+    </div>
+
+    <div class="weekbar" id="weekbar"></div>
+
+    <div id="mobileView">
+      <div class="daytitle" id="daytitle">周三 · 2026-09-02</div>
+      <div id="blocks"></div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn ghost" onclick="showPicker()">换日期 / 筛选</button>
+      <button class="btn primary" onclick="detail('self')">检查本周风险</button>
+    </div>
+  </div>
+
+  <div class="form" id="picker" style="display:none">
+    <label>日期</label>
+    <input type="date" id="dateInput" value="2026-09-02">
+    <label>范围</label>
+    <div class="radio-row">
+      <label><input type="radio" name="scope" value="day" checked> 当天</label>
+      <label><input type="radio" name="scope" value="week"> 整周</label>
+    </div>
+    <label>校区</label>
+    <div class="chk-row">
+      <label><input type="checkbox" checked> A</label>
+      <label><input type="checkbox"> B</label>
+      <label><input type="checkbox"> C</label>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn primary" onclick="applyFilter()">查看课表</button>
+    </div>
+  </div>
+
+  <div class="card" id="detailCard" style="margin-top:12px">
+    <div class="head">
+      <div><h1 id="dCourse">科学计算</h1></div>
+      <span class="badge neutral">第 7-8 节</span>
+    </div>
+    <dl class="kv">
+      <dt>星期 / 日期</dt><dd id="dDay">周三 · 2026-09-02</dd>
+      <dt>节次</dt><dd id="dPeriod">第 7-8 节</dd>
+      <dt>时间</dt><dd id="dTime">16:00-17:40</dd>
+      <dt>校区</dt><dd id="dCampus">校区A</dd>
+      <dt>楼栋 / 教室</dt><dd id="dRoom">B2-301</dd>
+      <dt>教师</dt><dd id="dTeacher">T09</dd>
+      <dt>班级</dt><dd id="dClass">G01</dd>
+    </dl>
+    <div class="actions">
+      <button class="btn ghost" onclick="detail('check')">检查风险</button>
+      <button class="btn ghost" onclick="detail('day')">查看当天</button>
+      <button class="btn ghost" onclick="detail('room')">找对应时段空教室</button>
+    </div>
+  </div>
+
+  <div class="card" id="weekGridWrap" style="display:none;margin-top:12px">
+    <div class="grid7" id="weekGrid"></div>
+  </div>
+
+  <div class="hint">R49 设计原型 · 仅供浏览器审美预览 · 非正式 Widget · 无 WidgetID</div>
+</div>
+
+<script>
+  const DAYS = ['一','二','三','四','五','六','日'];
+  const WEEK = {
+    1:{date:'2026-08-31',count:1,courses:[{n:'高等数学A',p:'第 3-4 节',t:'10:00-11:40',campus:'校区A',room:'A1-101',teacher:'T09',cls:'G01',color:'c1'}]},
+    2:{date:'2026-09-01',count:2,courses:[{n:'大学物理B',p:'第 1-2 节',t:'08:00-09:40',campus:'校区A',room:'A2-204',teacher:'T09',cls:'G02',color:'c3'},{n:'程序设计基础',p:'第 5-6 节',t:'14:00-15:40',campus:'校区B',room:'B1-107',teacher:'T09',cls:'G03',color:'c5'}]},
+    3:{date:'2026-09-02',count:2,courses:[{n:'数据结构基础',p:'第 1-2 节',t:'08:00-09:40',campus:'校区B',room:'B1-107',teacher:'T09',cls:'G03',color:'c5'},{n:'科学计算',p:'第 7-8 节',t:'16:00-17:40',campus:'校区A',room:'B2-301',teacher:'T09',cls:'G01',color:'c2',rush:true}]},
+    4:{date:'2026-09-03',count:1,courses:[{n:'高等数学A',p:'第 3-4 节',t:'10:00-11:40',campus:'校区A',room:'A1-101',teacher:'T09',cls:'G01',color:'c1'}]},
+    5:{date:'2026-09-04',count:0,courses:[]},
+    6:{date:'2026-09-05',count:0,courses:[]},
+    7:{date:'2026-09-06',count:0,courses:[]}
+  };
+  let active = 3;
+
+  function renderWeek(){
+    const bar = document.getElementById('weekbar');
+    bar.innerHTML = DAYS.map((d,i)=>
+      `<div class="wd ${i+1===active?'active':''}" onclick="selectDay(${i+1})">
+        <div class="n">周${d}</div><div class="c">${WEEK[i+1].count}门</div>
+      </div>`).join('');
+    renderDay();
+    renderGrid();
+  }
+  function renderDay(){
+    const day = WEEK[active];
+    document.getElementById('daytitle').textContent = `周${DAYS[active-1]} · ${day.date}`;
+    document.getElementById('blocks').innerHTML = day.courses.map((c,i)=>
+      `<button class="block ${c.color}" onclick="detail(${i})">
+        <div class="course">${c.n}</div>
+        <div class="row"><span>${c.p} · ${c.t}</span><span>${c.campus}</span></div>
+        <div class="sub">${c.room} · ${c.teacher} · ${c.cls}</div>
+        ${c.rush?'<div class="warn"><span class="badge warning">跨校区赶场</span></div>':''}
+      </button>`).join('') || '<div class="sub">当天暂无已核验课程</div>';
+  }
+  function renderGrid(){
+    if(!window.matchMedia('(min-width:900px)').matches) return;
+    document.getElementById('weekGridWrap').style.display='block';
+    document.getElementById('weekGrid').innerHTML = DAYS.map((d,i)=>{
+      const day=WEEK[i+1];
+      return `<div class="col7"><h3>周${d} · ${day.date.slice(5)}</h3>`+
+        (day.courses.map(c=>`<button class="block ${c.color}" onclick="selectDay(${i+1});detail(${day.courses.indexOf(c)})">
+          <div class="course" style="font-size:11px">${c.n}</div>
+          <div class="sub">${c.p} · ${c.room}</div></button>`).join('')||'<div class="sub" style="text-align:center">无课</div>')+
+        `</div>`;
+    }).join('');
+  }
+  function selectDay(d){ active=d; renderWeek(); }
+  function detail(idx){
+    const day = WEEK[active];
+    const c = idx==='self'?{n:'本周风险',p:'—'}:day.courses[idx];
+    document.getElementById('detailCard').scrollIntoView({behavior:'smooth'});
+    if(idx==='self'){
+      document.getElementById('dCourse').textContent='T09老师 · 第1周风险';
+      document.getElementById('dDay').textContent='整周';
+      document.getElementById('dPeriod').textContent='—';
+      document.getElementById('dTime').textContent='—';
+      document.getElementById('dCampus').textContent='—';
+      document.getElementById('dRoom').textContent='—';
+      document.getElementById('dTeacher').textContent='T09';
+      document.getElementById('dClass').textContent='—';
+      return;
+    }
+    document.getElementById('dCourse').textContent=c.n;
+    document.getElementById('dDay').textContent=`周${DAYS[active-1]} · ${day.date}`;
+    document.getElementById('dPeriod').textContent=c.p;
+    document.getElementById('dTime').textContent=c.t;
+    document.getElementById('dCampus').textContent=c.campus;
+    document.getElementById('dRoom').textContent=c.room;
+    document.getElementById('dTeacher').textContent=c.teacher;
+    document.getElementById('dClass').textContent=c.cls;
+  }
+  function showPicker(){ document.getElementById('picker').style.display='block'; }
+  function applyFilter(){ showPicker(); }
+  renderWeek();
+</script>
+</body>
+</html>
