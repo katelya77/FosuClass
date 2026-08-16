@@ -44,6 +44,8 @@ function normalizeName(raw) {
   s = s.replace(/^[a-z]/, (c) => c.toUpperCase());
   s = s.replace(/级([a-d])班$/i, (m, g) => `级${g.toUpperCase()}班`);
   s = s.replace(/^教师(\d)$/, "教师00$1").replace(/^教师(\d\d)$/, "教师0$1");
+  // 口语别名：T09 / T03 → 教师009 / 教师003（与 05-TOOL-CONTRACTS.md「教师009 / T09」一致）
+  s = s.replace(/^T(\d{1,2})$/i, (m, g) => `教师${String(Number(g)).padStart(3, "0")}`);
   s = s.replace(/^([ab])(\d)-/i, (m, g1, g2) => `${g1.toUpperCase()}${g2}-`);
   return s;
 }

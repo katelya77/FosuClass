@@ -1,12 +1,12 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "校园智序 · 小序 — R49-MA Agent Tools",
-    "version": "1.0.0",
-    "description": "面向 Multi-Agent 的 5 个确定性 Agent Tool，映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算；本 spec 用于腾讯 ADP 自定义插件/HTTP 工具导入。真实 URL 为占位符，部署时替换并配置 Bearer token。"
+    "title": "校园智序 · 小序 — R49-MA Agent Tools (ADP Import)",
+    "version": "1.1.0",
+    "description": "面向腾讯云智能 ADP「基于 API」自定义插件导入的 import-ready OpenAPI。5 个确定性 Agent Tool 映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算。本文件仅声明 bearer/APIKey 鉴权需求，不包含任何 token；实际 token 在 ADP 控制台配置。"
   },
   "servers": [
-    { "url": "PLACEHOLDER_CAMPUS_API_BASE_URL", "description": "CampusTools REST 基址（部署时替换；未配置前 FAIL CLOSED）" }
+    { "url": "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools", "description": "腾讯 CloudBase 比赛 CampusTools HTTP Function 网关（竞争比赛测试实例，鉴权需 Bearer token）" }
   ],
   "tags": [
     { "name": "campus_schedule", "description": "课表/空教室（课程空间 Agent）" },
@@ -116,7 +116,7 @@
       "DayPlanInput": {
         "type": "object",
         "properties": {
-          "visitorId": { "type": "string", "description": "演示用户（唯一真源 competition-demo-v2.json demoUsers[0].id = user-demo-001）" },
+          "visitorId": { "type": "string", "description": "演示用户 ID（唯一真源 = competition-demo-v2.json demoUsers[0].id = user-demo-001；ADP 层可固定为隐藏参数，但 API 契约层必须保留本字段以保证正确性）" },
           "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
           "preferredCampus": { "type": "string" },
           "preferredStudyDuration": { "type": "integer", "minimum": 1, "maximum": 10 }

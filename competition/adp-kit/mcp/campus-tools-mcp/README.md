@@ -5,10 +5,21 @@
 
 ## 安全边界（比赛铁律）
 
-- **只读** `competition-demo-v1` 匿名数据集；
-- 数据文件名守卫：仅允许加载 `competition-demo-*` 文件，其他路径直接抛出 `DATA_GUARD`；
-- **严禁**比赛接口失败后回退读取 production 真实数据；
+- **只读** `competition-demo-*` 匿名数据集（数据文件名守卫：仅允许加载 `competition-demo-*` 文件，其他路径直接抛出 `DATA_GUARD`）；
+- **严禁**任何入口在失败后回退读取 production 真实数据；本服务无 production 数据路径；
 - 服务内无真实学校、学院、教师、学生身份信息。
+
+## 数据版本与运行形态
+
+不同运行形态的数据版本语义不同，不要笼统说“全部改为 v2”：
+
+| 运行形态 | 默认数据 | 说明 |
+|---|---|---|
+| reusable MCP（本地 `npm start`） | `mock-data/competition-demo-v1.json` | 默认 v1，供 Golden / QA / Widget 样例等评审资产回归锚定；可通过 `CAMPUS_DATA_PATH` 显式指向任意 `competition-demo-*` 文件（如 v2） |
+| CloudBase 比赛 HTTP Function | `competition-demo-v2.json`（强制） | 默认且强制 v2；缺 token 拒绝启动；数据缺失即冷启动失败，**无 v1 / production 回退**；部署包内保留 v1 仅供显式 `CAMPUS_DATA_PATH` 回滚 |
+| R49 Multi-Agent（正式比赛动态事实） | `competition-demo-v2` | 5 个 Agent Tool 的正式动态事实只由 CampusTools → v2 确定性输出 |
+
+`/health` 返回当前实际加载的 `dataVersion` / `dataHash`，以该值为准，不要凭文档假设数据版本。
 
 ## 七个工具
 
@@ -28,11 +39,11 @@
 {
   "success": true,
   "queryId": "q-20260805143000-a1b2c3",
-  "dataVersion": "competition-demo-v1",
-  "resolvedEntity": { "type": "teacher", "id": "t-003", "name": "教师003" },
+  "dataVersion": "competition-demo-v2",
+  "resolvedEntity": { "type": "teacher", "id": "teacher-009", "name": "教师009" },
   "items": [],
   "actions": [],
-  "evidence": { "dataVersion": "competition-demo-v1", "dataHash": "sha1:...", "verified": true },
+  "evidence": { "dataVersion": "competition-demo-v2", "dataHash": "sha1:4f3bbbb45d1f", "verified": true },
   "error": null
 }
 ```

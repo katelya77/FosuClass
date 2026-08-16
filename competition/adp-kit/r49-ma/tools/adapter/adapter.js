@@ -104,6 +104,24 @@ function resolveAgentToolParams(name, rawParams) {
 }
 
 /**
+ * 将 Agent Tool 参数映射到底层 CampusTools 参数（ADP Tool Wiring）。
+ * 目前仅 campus_risk_check 需要映射：Agent Tool 层使用 entityType/entityName/
+ * secondEntityType/secondEntityName，而 CampusTools compare_schedules 要求
+ * firstType/firstName/secondType/secondName。其余 4 个工具字段名一致，原样透传。
+ */
+function mapAgentToolParams(name, params) {
+  if (name !== "campus_risk_check") return params;
+  const { entityType, entityName, secondEntityType, secondEntityName, ...rest } = params || {};
+  return {
+    firstType: entityType,
+    firstName: entityName,
+    secondType: secondEntityType,
+    secondName: secondEntityName,
+    ...rest,
+  };
+}
+
+/**
  * 组装 CampusTools REST 请求。
  * @returns { url, method, headers, body }
  */
@@ -114,11 +132,12 @@ function buildRestRequest(name, params, opts) {
   const token = (opts && opts.token) || "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
+  const body = mapAgentToolParams(name, params);
   return {
     url: `${baseUrl}${tool.restPath}`,
     method: "POST",
     headers,
-    body: JSON.stringify(params),
+    body: JSON.stringify(body),
   };
 }
 
@@ -133,6 +152,7 @@ module.exports = {
   findTool,
   resolveAgentToolParams,
   buildRestRequest,
+  mapAgentToolParams,
   isFailClosed,
   validateAgainstSchema,
 };

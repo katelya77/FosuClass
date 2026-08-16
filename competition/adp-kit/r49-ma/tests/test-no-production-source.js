@@ -21,10 +21,20 @@ function walk(dir, acc = []) {
   return acc;
 }
 
+// R49.1 例外：campus-agent-tools.adp-import.json 是用户第六步明确要求的 import-ready OpenAPI，
+// 必须携带真实比赛 CloudBase endpoint 供腾讯 ADP 人工导入；test-adp-import-openapi.js 仅做断言引用。
+// 其余契约/代码层仍必须 FAIL CLOSED（占位符），不得硬编码真实生产 Endpoint。
+const IMPORT_ALLOWLIST = [
+  "tools/openapi/campus-agent-tools.adp-import.json",
+  "tests/test-adp-import-openapi.js",
+];
+
 test("契约/代码层（.js/.json）不得硬编码真实 tcloudbase 生产 Endpoint", () => {
   const files = walk(R49).filter((f) => /\.(js|json)$/.test(f));
   const hits = [];
   for (const f of files) {
+    const rel = path.relative(R49, f).split(path.sep).join("/");
+    if (IMPORT_ALLOWLIST.includes(rel)) continue;
     const txt = fs.readFileSync(f, "utf8");
     const urls = txt.match(/https?:\/\/[^\s"'`,}\]]+/g) || [];
     for (const u of urls) {

@@ -25,7 +25,7 @@
   "success": true,
   "queryId": "q-...",
   "dataVersion": "competition-demo-v2",
-  "resolvedEntity": { "type": "teacher", "id": "t-009", "name": "教师009" } | null,
+  "resolvedEntity": { "type": "teacher", "id": "teacher-009", "name": "教师009" } | null,
   "items": [...],
   "actions": [...],
   "evidence": {
@@ -152,7 +152,7 @@ rushWarnings: [ {entity, weekday, from, to, gapMinutes} ]
 {
   "description": "为演示用户生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。",
   "properties": {
-    "visitorId": {"type":"string","description":"演示用户（默认 demo-user-001 / 演示用户001）"},
+    "visitorId": {"type":"string","description":"演示用户（唯一真源 competition-demo-v2.json demoUsers[0].id = user-demo-001）"},
     "date": {"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"},
     "preferredCampus": {"type":"string"},
     "preferredStudyDuration": {"type":"integer","minimum":1,"maximum":10}
