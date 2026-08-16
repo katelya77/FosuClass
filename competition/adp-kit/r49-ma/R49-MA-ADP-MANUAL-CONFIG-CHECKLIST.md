@@ -1,0 +1,177 @@
+# R49-MA ADP 后台逐字段配置清单
+
+> 本文件是 R49-MA「一核三域 · 确定性工具底座」在腾讯云智能 ADP 控制台的**逐字段人工配置清单**，可直接照着点击执行。
+> 配套：`01-ARCHITECTURE.md`（架构）、`02-AGENT-RESPONSIBILITY-MATRIX.md`（职责）、`03-HANDOFF-POLICY.md`（转交）、`05-TOOL-CONTRACTS.md`（工具契约）、`09-MULTI-AGENT-E2E-MATRIX.md`（验收矩阵）。
+> **ID 纪律**：所有 AgentID / PluginID / WidgetID 均为真实导出物；未取得真实 ID 前**一律用占位符并 FAIL CLOSED，禁止猜测**。
+
+---
+
+## 0. 操作顺序总览
+
+1. 备份当前 R47.7 Golden Baseline（在 ADP 控制台导出 `00-小序会话总控-R47.7-Graph-Context-Integrity` 完整工作流 ZIP + 已绑定 Widget 包，见 `11-R47.7-BASELINE-AND-ROLLBACK.md`）。
+2. 确认 CampusTools（competition-demo-v2）在线可调：`GET {campus_api_base_url}/health` 返回 `dataVersion=competition-demo-v2` 且 `dataHash=sha1:4f3bbbb45d1f`。
+3. 创建/导入 4 个 Agent（主协调 + 三域）。
+4. 按第 1 节逐字段配置 Agent 高级设置。
+5. 按第 2 节配置转交关系（Main→Child、Child→Main；**禁止 Child→Child 横向自由转交**）。
+6. 按第 3 节配置对话流转策略（**每个新 Turn 由主 Agent 接管**）。
+7. 按第 4 节绑定 5 个 Agent Tool（→ CampusTools 插件）与知识库（Main）。
+8. 按第 5 节导入复用 r48-v3 Widget（Clarification / Agent Output；第一阶段 Tool Direct Output=OFF）。
+9. 按第 6 节在应用首页跑验收矩阵（A~H + 13 case + R48 A~G），全部绿灯后才进入模型 A/B（第 7 节）。
+
+---
+
+## 1. 四个 Agent 创建与高级设置
+
+### 1.1 小序 · 主协调（Main）
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| Agent 名称 | 小序 · 主协调 | 中文名合法（中文/英文/数字/下划线/中划线/空格） |
+| 用途/转交描述 | 会话总控与路由：判定 NEW_TASK/FOLLOW_UP/CHAT/META/CLARIFY；理解代词/日期/Top1 引用；判断旧上下文相关性；决定转交哪个域 Agent；唯一澄清出口；静态知识走 KnowledgeRetrievalAnswer；动态事实一律转交域 Agent，不得自行编造课表/空教室/风险/负载 | 供平台 Agent 选择与主 Agent 路由 |
+| Prompt | `agents/main-orchestrator.md` | 见第 8 节 Prompt 就位 |
+| 模型 | youtu-agent | baseline，不第一天双切 |
+| 思考模式 thinking | 效果优先 | |
+| maxReasoningRound | 8 | |
+| historyLimit | 6 | |
+| clarification | ON | 主协调负责澄清 |
+| clarificationStyle | Widget | 用 Clarification Widget |
+| output | text | 第一阶段文本全链验证 |
+| 知识库 | 校园智序赛事知识（01-08 + taxonomy，已按 v2 修复） | 仅静态知识；禁答动态事实 |
+| 可用工具 | KnowledgeRetrievalAnswer + 路由（转交）；**不直接持有 5 个动态 Tool** | 兜底可选放开 `campus_schedule_query`（只读课表） |
+
+### 1.2 小序 · 课程空间（Schedule）
+
+| 字段 | 值 |
+|---|---|
+| Agent 名称 | 小序 · 课程空间 |
+| 用途/转交描述 | 教师/班级/教室/课程课表、整周/单日/节次、空教室、校区/楼栋/容量/连续节次。缺参返回 NEED_CLARIFICATION 给主协调，不自行追问 |
+| Prompt | `agents/schedule-space.md` |
+| 模型 | youtu-agent |
+| thinking | 效果优先 |
+| maxReasoningRound | 8 |
+| historyLimit | 6 |
+| clarification | OFF |
+| output | text |
+| 工具 | `campus_schedule_query`、`campus_classroom_search` |
+
+### 1.3 小序 · 风险规划（Risk）
+
+| 字段 | 值 |
+|---|---|
+| Agent 名称 | 小序 · 风险规划 |
+| 用途/转交描述 | 单对象自身冲突/赶场风险（comparisonMode=self，**不得要求第二对象**）；显式双对象冲突比较（comparisonMode=compare）；一日规划与下一天推进。缺参返回 NEED_CLARIFICATION |
+| Prompt | `agents/risk-planning.md` |
+| 模型 | youtu-agent |
+| thinking | 效果优先 |
+| maxReasoningRound | 12 |
+| historyLimit | 6 |
+| clarification | OFF |
+| output | text |
+| 工具 | `campus_risk_check`（self/compare）、`campus_day_plan` |
+
+### 1.4 小序 · 校园洞察（Insight）
+
+| 字段 | 值 |
+|---|---|
+| Agent 名称 | 小序 · 校园洞察 |
+| 用途/转交描述 | 未来四周校区负载、教师负载、空间压力、Top1/TopN、教学趋势、全局风险。Top1 下钻**交回主协调**再转对应域 Agent，不伪造个人事实 |
+| Prompt | `agents/campus-insight.md` |
+| 模型 | youtu-agent |
+| thinking | 效果优先 |
+| maxReasoningRound | 12 |
+| historyLimit | 6 |
+| clarification | OFF |
+| output | text |
+| 工具 | `campus_overview` |
+
+---
+
+## 2. 转交关系配置（Multi-Agent 协同）
+
+| 从 | 到 | 允许 |
+|---|---|---|
+| 主协调 | 课程空间 / 风险规划 / 校园洞察 | ✅ 允许 |
+| 课程空间 / 风险规划 / 校园洞察 | 主协调 | ✅ 允许（必须回传结果与 Top1/实体） |
+| 课程空间 ↔ 风险规划 ↔ 校园洞察 | 任意子 Agent | ❌ **禁止横向自由转交**（第一阶段仅中心化 Main→Child、Child→Main） |
+
+---
+
+## 3. 对话流转策略（关键，解决 stale context）
+
+- 平台流转策略设为：**每一个新 Turn 重新由主 Agent 接管**。
+- 目的：任何时刻 Main 都能 escape 旧的 suspended/pending workflow 状态，防止 stale context 污染：
+  - T09 课表 → 检查风险 → 「那看看他周三的课」（risk→schedule 干净切换）
+  - 安排 09-04 → 「下一天呢」（day-plan 日期推进）
+  - risk clarification 态 → 「A校区下午空教室」（立即 escape 到 classroom）
+
+---
+
+## 4. 工具绑定
+
+- 5 个 Agent Tool 作为自定义插件/HTTP 工具绑定到对应 Agent（映射见 `05-TOOL-CONTRACTS.md`）：
+
+| Agent Tool | CampusTools | REST | 绑定 Agent |
+|---|---|---|---|
+| campus_schedule_query | query_schedule | POST /api/query_schedule | 课程空间 |
+| campus_classroom_search | find_available_classrooms | POST /api/find_available_classrooms | 课程空间 |
+| campus_risk_check | compare_schedules | POST /api/compare_schedules | 风险规划 |
+| campus_day_plan | generate_day_plan | POST /api/generate_day_plan | 风险规划 |
+| campus_overview | get_campus_teaching_overview | POST /api/get_campus_teaching_overview | 校园洞察 |
+
+- 请求：`POST {campus_api_base_url}/api/<toolName>`，Header `Authorization: Bearer <campus_api_token>`。
+- OpenAPI 导入：`r49-ma/tools/openapi/campus-agent-tools.openapi.json`（含 5 个 Agent Tool 的 schema/example/error contract）。
+- **真实 PluginID / Endpoint 未取得前 → 占位符 + FAIL CLOSED，不猜测。**
+
+---
+
+## 5. Widget 绑定（第一阶段 Tool Direct Output=OFF）
+
+| Widget 类型 | 用途 | 绑定 | 第一阶段 |
+|---|---|---|---|
+| A. Clarification Widget | 主协调缺参时澄清 | 主协调 clarificationStyle=Widget | ✅ 启用 |
+| B. Agent Output Widget | Agent 最终分析结果 | 各域 Agent 最终轮 | ✅ 启用（文本全链先验证，再接入） |
+| C. Tool Direct Widget | 工具即本轮最终结果 | 不开启 | ❌ **OFF**（复杂请求 schedule→risk→classroom 若首个工具直接终止会切断后续推理） |
+
+- 复用 r48-v3 为 Widget V3 baseline（不推翻）。最终 Campus Hero Widget 视觉规范见 `08-WIDGET-OUTPUT-POLICY.md`。
+- **真实 WidgetID 未取得前不写死。**
+
+---
+
+## 6. 验证步骤（控制台人工验收）
+
+1. 应用首页（非单工作流调试）逐条跑 `09-MULTI-AGENT-E2E-MATRIX.md`：
+   - 硬回归 A~H（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
+   - 13 核心 case + R48 A~G 回归。
+2. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
+3. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（youtu-agent vs DeepSeek V4 Flash，单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
+
+---
+
+## 7. 模型 A/B（不是第一天）
+
+- Multi-Agent 基线跑通且 13 case 全绿后，仅对 **Main** 做 `youtu-agent VS DeepSeek V4 Flash` 单变量 A/B。
+- 只有 13 个核心 E2E case 总体优于 baseline 才切换；三域 Agent 保持 youtu-agent。
+
+---
+
+## 8. Prompt 就位
+
+| Agent | Prompt 文件（仓库真源，逐字导入控制台） |
+|---|---|
+| 主协调 | `agents/main-orchestrator.md` |
+| 课程空间 | `agents/schedule-space.md` |
+| 风险规划 | `agents/risk-planning.md` |
+| 校园洞察 | `agents/campus-insight.md` |
+
+---
+
+## 9. 平台侧待办（非本轮仓库可完成）
+
+- [ ] 导出 R47.7 基线 ZIP 并存档（用户手动）。
+- [ ] 创建 4 Agent 并按本清单逐字段配置。
+- [ ] 创建 CampusTools 插件（或 OpenAPI 导入）并回填真实 PluginID / Endpoint / Token。
+- [ ] 回填真实 AgentID 到 `tools/schemas/agent-tools.json` 的 `ids` 字段（当前为 PLACEHOLDER）。
+- [ ] 确认平台侧 KnowledgeRetrievalAnswer 重新绑定修复后的知识库 01-08 + taxonomy。
+- [ ] 确认 `mcp/campus-tools-mcp/src/contracts.ts` 的 `DATA_VERSION` 从 `competition-demo-v1` 更新为 `competition-demo-v2`（运行时类型常量，平台侧确认项）。
+- [ ] 确认对话流转策略「每个新 Turn 主 Agent 接管」在平台 UI 可用；不可用时以 Prompt 内规则兜底。
+- [ ] Widget Direct Output 第二阶段再开启（先文本全链验证）。
