@@ -1,0 +1,79 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CLASSROOM · 空教室" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={1} wrap="wrap">
+      {filters.map((filter) => (
+        <Badge
+          key={filter.id}
+          label={filter.label}
+          color={filter.id === 'capacity' ? 'warning' : 'info'}
+          variant="soft"
+          size="sm"
+          pill
+        />
+      ))}
+    </Row>
+
+    <Row gap={2} wrap="wrap">
+      <Badge
+        label={summary.empty ? '暂无匹配' : `${summary.totalCount} 间可用`}
+        color={summary.empty ? 'warning' : 'success'}
+        variant="soft"
+        size="sm"
+      />
+      {summary.hiddenCount > 0 ? (
+        <Badge label={`另有 ${summary.hiddenCount} 间`} color="secondary" variant="soft" size="sm" />
+      ) : null}
+    </Row>
+
+    {summary.empty ? (
+      <Card size="sm" background="#F7F8F6">
+        <Col gap={1}>
+          <Text value="没有同时满足这些条件的空教室" weight="semibold" />
+          <Caption value="可以放宽容量、取消楼栋限制，或换一个时段。" color="secondary" />
+        </Col>
+      </Card>
+    ) : (
+      <ListView limit={5} status={`显示前 ${summary.shownCount} 间`}>
+        {items.map((item, index) => (
+          <ListViewItem key={`${item.roomName}-${index}`} gap="12px" align="start">
+            <Col gap={1} flex={1}>
+              <Row gap={2} align="center">
+                <Text value={item.roomName} size="md" weight="semibold" />
+                <Badge label={`${item.capacity}人`} color="info" variant="outline" size="sm" />
+              </Row>
+              <Caption value={[item.campusName, item.building, item.roomType].filter(Boolean).join(' · ')} color="secondary" />
+              <Caption value={`${item.date} · ${item.periodText}`} color="#2563EB" />
+            </Col>
+          </ListViewItem>
+        ))}
+      </ListView>
+    )}
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

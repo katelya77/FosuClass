@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>校园智序 · 小序 R48 Widget V3 本地视觉预览</title>
+<link rel="stylesheet" href="../design-tokens.css" />
+<style>
+  :root {
+    --preview-border: #E4E8E3;
+    --preview-muted: #68726B;
+    --preview-faint: #98A29A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--r48-page);
+    color: var(--r48-ink);
+    font-family: var(--r48-font);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  /* ---------- page header ---------- */
+  .page-header {
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--preview-border);
+    padding: 14px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .page-header h1 { font-size: 17px; font-weight: 700; color: var(--r48-brand); }
+  .page-header p { font-size: 12px; color: var(--preview-muted); margin-top: 2px; }
+  .page-header .note {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--preview-muted);
+    background: var(--r48-card-sunken);
+    border: 1px solid var(--preview-border);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  /* ---------- mode switch ---------- */
+  .mode-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .mode-bar button {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--r48-line-strong);
+    background: #FFFFFF;
+    color: var(--r48-ink);
+    border-radius: 999px;
+    padding: 6px 14px;
+    min-height: 34px;
+    cursor: pointer;
+  }
+  .mode-bar button.active {
+    background: var(--r48-brand);
+    border-color: var(--r48-brand);
+    color: #FFFFFF;
+  }
+  /* ---------- nav chips ---------- */
+  .nav-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    position: sticky;
+    top: 108px;
+    background: rgba(247, 248, 246, 0.95);
+    z-index: 10;
+    border-bottom: 1px solid var(--preview-border);
+  }
+  .nav-bar a {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--r48-brand);
+    text-decoration: none;
+    background: #FFFFFF;
+    border: 1px solid var(--r48-line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    min-height: 28px;
+  }
+  .nav-bar a:hover { border-color: var(--r48-brand); }
+  /* ---------- stage ---------- */
+  .stage {
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 16px 12px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .stage.split {
+    max-width: 1080px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .stage.split .preview-frame { flex: 1 1 430px; max-width: 460px; }
+  .preview-frame {
+    background: #FFFFFF;
+    border: 1px solid var(--preview-border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .preview-frame > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--r48-card-sunken);
+    border-bottom: 1px solid var(--preview-border);
+  }
+  .preview-frame > header h2 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--r48-brand);
+    letter-spacing: 0.04em;
+  }
+  .preview-frame > header span {
+    font-size: 11px;
+    color: var(--preview-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .phone {
+    width: 390px;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 12px;
+    background: var(--r48-page);
+  }
+  .phone::after { content: ""; display: table; clear: both; }
+  /* ---------- widget card primitives ---------- */
+  .w-card {
+    background: var(--r48-card);
+    border: 1px solid var(--preview-border);
+    border-radius: var(--r48-radius-card);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .w-card.sunken { background: var(--r48-card-sunken); border-color: transparent; border-radius: var(--r48-radius-inner); }
+  .w-card.brand-soft { background: var(--r48-brand-soft); border-color: transparent; border-radius: var(--r48-radius-inner); }
+  .w-row { display: flex; gap: 8px; align-items: flex-start; }
+  .w-row.center { align-items: center; }
+  .w-col { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .w-col.gap2 { gap: 8px; }
+  .w-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--r48-brand);
+    text-transform: uppercase;
+  }
+  .w-title { font-size: 17px; font-weight: 700; color: var(--r48-ink); line-height: 1.35; }
+  .w-text { font-size: 14px; font-weight: 600; color: var(--r48-ink); line-height: 1.45; }
+  .w-text.sm { font-size: 13px; font-weight: 600; }
+  .w-caption { font-size: 12px; color: var(--preview-muted); line-height: 1.45; }
+  .w-caption.accent { color: var(--r48-accent); }
+  .w-caption.brand { color: var(--r48-brand); }
+  .w-caption.danger { color: var(--r48-danger); }
+  .w-caption.warning { color: var(--r48-warning); }
+  .w-divider { height: 1px; background: var(--preview-border); }
+  /* ---------- badges ---------- */
+  .badge-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .w-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 3px 10px;
+    min-height: 22px;
+    white-space: nowrap;
+  }
+  .b-info { background: var(--r48-accent-soft); color: var(--r48-accent); }
+  .b-success { background: var(--r48-success-soft); color: var(--r48-success); }
+  .b-warning { background: var(--r48-warning-soft); color: var(--r48-warning); }
+  .b-danger { background: var(--r48-danger-soft); color: var(--r48-danger); }
+  .b-neutral { background: var(--r48-card-sunken); color: var(--preview-muted); }
+  .b-info-o { border: 1px solid var(--r48-accent); color: var(--r48-accent); background: #FFFFFF; }
+  .b-success-o { border: 1px solid var(--r48-success); color: var(--r48-success); background: #FFFFFF; }
+  .b-warning-o { border: 1px solid var(--r48-warning); color: var(--r48-warning); background: #FFFFFF; }
+  .b-danger-o { border: 1px solid var(--r48-danger); color: var(--r48-danger); background: #FFFFFF; }
+  .b-neutral-o { border: 1px solid var(--r48-line-strong); color: var(--preview-muted); background: #FFFFFF; }
+  .b-soft-active { background: var(--r48-accent-soft); color: var(--r48-accent); }
+  /* ---------- list ---------- */
+  .w-list { display: flex; flex-direction: column; gap: 10px; }
+  .w-list-item { display: flex; gap: 12px; align-items: flex-start; }
+  .w-list-item + .w-list-item { padding-top: 10px; border-top: 1px dashed var(--r48-line); }
+  /* ---------- buttons ---------- */
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .w-btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    min-height: 40px;
+    padding: 8px 16px;
+    border-radius: var(--r48-radius-inner);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .w-btn.solid { background: var(--r48-brand); color: #FFFFFF; }
+  .w-btn.outline { background: #FFFFFF; border-color: var(--r48-line-strong); color: var(--r48-ink); }
+  /* ---------- schedule week bars ---------- */
+  .week-bar { display: flex; gap: 4px; align-items: flex-end; height: 26px; }
+  .week-bar i {
+    flex: 1;
+    background: var(--r48-accent-soft);
+    border-radius: 3px;
+    min-height: 4px;
+  }
+  .week-bar i.hot { background: var(--r48-accent); }
+  /* ---------- footer ---------- */
+  .page-footer {
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 0 16px 32px;
+    font-size: 11px;
+    color: var(--preview-faint);
+  }
+  @media (max-width: 480px) {
+    .nav-bar { top: 96px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto !important; }
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <h1>校园智序 · 小序 — R48 Widget V3 本地视觉预览</h1>
+  <p>7 个 Canonical Widget · 13 个状态 · 数据来自 samples（Adapter 真实输出）</p>
+  <div class="mode-bar">
+    <button data-mode="list" class="active" type="button">纵向列表</button>
+    <button data-mode="split" type="button">390px 网格</button>
+    <span class="note">本地预览仅用于审美复核，非 ADP 真实渲染</span>
+  </div>
+</header>
+<nav class="nav-bar" id="navBar"></nav>
+<main class="stage" id="stage"></main>
+<footer class="page-footer">
+  校园智序 · 小序 Widget V3 —— 无外部依赖（无 CDN / 字体 / 图标库）。所有动态字段来自 samples/*.json，
+  由 generate-samples.js 从 envelopes.json 经 adapter.js 生成。
+</footer>
+
+<script src="../samples/samples.js"></script>
+<script>
+"use strict";
+
+var SAMPLES = window.R48V3Samples;
+var GROUPS = [
+  { id: "schedule", title: "Schedule V3 Ultimate · 课表票据", samples: ["schedule-day", "schedule-week", "schedule-date"] },
+  { id: "classroom", title: "Classroom V3 Ultimate · 空教室票据", samples: ["classroom-normal", "classroom-empty"] },
+  { id: "conflict", title: "Conflict V3 Ultimate · 冲突赶场票据", samples: ["conflict-compare", "conflict-self", "conflict-safe"] },
+  { id: "dayplan", title: "DayPlan V3 Ultimate · 一天安排（Hero）", samples: ["day-plan"] },
+  { id: "overview", title: "CampusOverview V3 Ultimate · 校园教学态势", samples: ["campus-overview"] },
+  { id: "choice", title: "Choice V3 Ultimate · 候选确认", samples: ["choice"] },
+  { id: "recovery", title: "Recovery V3 Ultimate · 任务恢复", samples: ["recovery-range", "recovery-tool"] }
+];
+
+function el(tag, className, text) {
+  var node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function badge(label, color, variant) {
+  return el("span", "w-badge " + (variant === "outline" ? "b-" + color + "-o" : "b-" + color), label);
+}
+
+function caption(textContent, color) {
+  var node = el("div", "w-caption" + (color ? " " + color : ""), textContent || "");
+  return node;
+}
+
+function button(label, variant, message) {
+  var node = el("button", "w-btn " + (variant === "solid" ? "solid" : "outline"), label);
+  node.type = "button";
+  node.title = message || label;
+  return node;
+}
+
+function actionRow(actions) {
+  var row = el("div", "btn-row");
+  (actions || []).forEach(function (action, index) {
+    row.appendChild(button(action.label, index === 0 ? "solid" : "outline", action.message));
+  });
+  return row;
+}
+
+function headerBlock(view, eyebrow) {
+  var row = el("div", "w-row");
+  var col = el("div", "w-col");
+  col.appendChild(el("div", "w-eyebrow", eyebrow));
+  col.appendChild(el("div", "w-title", view.title));
+  if (view.timeText) col.appendChild(caption(view.timeText));
+  row.appendChild(col);
+  row.appendChild(badge(view.statusText || "已核验", "success", "soft"));
+  return row;
+}
+
+function renderSchedule(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "SCHEDULE · 课表"));
+  card.appendChild(el("div", "w-divider"));
+  var badges = el("div", "badge-row");
+  badges.appendChild(badge("共 " + view.summary.totalCount + " 节课程", "info", "soft"));
+  if (view.viewMode === "week") {
+    badges.appendChild(badge("涉及 " + view.summary.campusCount + " 个校区", "neutral", "outline"));
+  }
+  card.appendChild(badges);
+
+  if (view.viewMode === "week" && view.days) {
+    var bar = el("div", "week-bar");
+    view.days.forEach(function (day) {
+      var cell = el("i", day.count > 0 ? "hot" : "");
+      cell.style.height = Math.max(4, day.count * 6) + "px";
+      bar.appendChild(cell);
+    });
+    card.appendChild(bar);
+    var chips = el("div", "badge-row");
+    view.days.forEach(function (day) {
+      chips.appendChild(badge(
+        day.weekdayName + " · " + day.count,
+        day.count > 0 ? "info" : "neutral",
+        day.weekday === view.activeWeekday ? "soft" : "outline"
+      ));
+    });
+    card.appendChild(chips);
+  }
+
+  if (!view.items || view.items.length === 0) {
+    var empty = el("div", "w-card sunken");
+    empty.appendChild(el("div", "w-text", "当前范围没有课程安排"));
+    empty.appendChild(caption("可以查看整周，或换一天继续。"));
+    card.appendChild(empty);
+  } else {
+    var list = el("div", "w-list");
+    view.items.forEach(function (item, index) {
+      var li = el("div", "w-list-item");
+      li.appendChild(badge(item.periodText, "info", "outline"));
+      var col = el("div", "w-col");
+      col.appendChild(el("div", "w-text", item.courseName));
+      if (view.viewMode === "week") {
+        col.appendChild(caption(item.date + " · " + item.weekdayName + " · " + item.startTime + "-" + item.endTime, "accent"));
+      } else {
+        col.appendChild(caption(item.startTime + "-" + item.endTime, "accent"));
+      }
+      col.appendChild(caption([item.campusName, item.building, item.roomName].filter(Boolean).join(" · ")));
+      col.appendChild(caption([].concat(item.teachers || [], item.classes || []).filter(Boolean).join(" · ")));
+      li.appendChild(col);
+      list.appendChild(li);
+    });
+    card.appendChild(list);
+  }
+
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderClassroom(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "CLASSROOM · 空教室"));
+  card.appendChild(el("div", "w-divider"));
+  var chips = el("div", "badge-row");
+  (view.filters || []).forEach(function (filter) {
+    chips.appendChild(badge(filter.label, filter.id === "capacity" ? "warning" : "info", "soft"));
+  });
+  card.appendChild(chips);
+  var status = el("div", "badge-row");
+  status.appendChild(badge(view.summary.empty ? "暂无匹配" : view.summary.totalCount + " 间可用", view.summary.empty ? "warning" : "success", "soft"));
+  if (view.summary.hiddenCount > 0) {
+    status.appendChild(badge("另有 " + view.summary.hiddenCount + " 间", "neutral", "soft"));
+  }
+  card.appendChild(status);
+
+  if (view.summary.empty) {
+    var empty = el("div", "w-card sunken");
+    empty.appendChild(el("div", "w-text", "没有同时满足这些条件的空教室"));
+    empty.appendChild(caption("可以放宽容量、取消楼栋限制，或换一个时段。"));
+    card.appendChild(empty);
+  } else {
+    var list = el("div", "w-list");
+    (view.items || []).forEach(function (item, index) {
+      var li = el("div", "w-list-item");
+      var col = el("div", "w-col");
+      var row = el("div", "w-row center");
+      row.appendChild(el("div", "w-text sm", item.roomName));
+      row.appendChild(badge(item.capacity + "人", "info", "outline"));
+      col.appendChild(row);
+      col.appendChild(caption([item.campusName, item.building, item.roomType].filter(Boolean).join(" · ")));
+      col.appendChild(caption(item.date + " · " + item.periodText, "accent"));
+      li.appendChild(col);
+      list.appendChild(li);
+    });
+    card.appendChild(list);
+  }
+
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderConflict(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "RISK · 冲突与赶场"));
+  card.appendChild(el("div", "w-divider"));
+  var badges = el("div", "badge-row");
+  badges.appendChild(badge("时间冲突 " + view.summary.conflictCount, view.summary.conflictCount > 0 ? "danger" : "success", "soft"));
+  badges.appendChild(badge("赶场风险 " + view.summary.rushWarningCount, view.summary.rushWarningCount > 0 ? "warning" : "success", "soft"));
+  card.appendChild(badges);
+
+  if ((!view.items || view.items.length === 0) && (!view.rushWarnings || view.rushWarnings.length === 0)) {
+    var safe = el("div", "w-card sunken");
+    safe.appendChild(el("div", "w-text", "本时段未发现时间冲突或跨校区赶场风险"));
+    card.appendChild(safe);
+  }
+
+  if (view.items && view.items.length > 0) {
+    var conflictCol = el("div", "w-col gap2");
+    conflictCol.appendChild(caption("时间冲突", "danger"));
+    var list = el("div", "w-list");
+    view.items.forEach(function (item, index) {
+      var li = el("div", "w-list-item");
+      li.appendChild(badge(item.periodText, "danger", "outline"));
+      var col = el("div", "w-col");
+      col.appendChild(el("div", "w-text sm", item.first.courseName + " ↔ " + item.second.courseName));
+      col.appendChild(caption(item.date + " · " + item.weekdayName + " · " + item.periodText, "danger"));
+      col.appendChild(caption(item.first.campusName + " " + item.first.roomName + " / " + item.second.campusName + " " + item.second.roomName));
+      li.appendChild(col);
+      list.appendChild(li);
+    });
+    conflictCol.appendChild(list);
+    card.appendChild(conflictCol);
+  }
+
+  if (view.rushWarnings && view.rushWarnings.length > 0) {
+    var rushCol = el("div", "w-col gap2");
+    rushCol.appendChild(caption("跨校区赶场", "warning"));
+    var list = el("div", "w-list");
+    view.rushWarnings.forEach(function (warning, index) {
+      var li = el("div", "w-list-item");
+      li.appendChild(badge("赶场", "warning", "soft"));
+      var col = el("div", "w-col");
+      col.appendChild(el("div", "w-text sm", warning.from.courseName + " → " + warning.to.courseName));
+      col.appendChild(caption(warning.date + " · " + warning.weekdayName + " · 间隔约 " + warning.gapMinutes + " 分钟", "warning"));
+      col.appendChild(caption(warning.from.periodText + " " + warning.from.campusName + "·" + warning.from.roomName + " → " + warning.to.periodText + " " + warning.to.campusName + "·" + warning.to.roomName));
+      li.appendChild(col);
+      list.appendChild(li);
+    });
+    rushCol.appendChild(list);
+    card.appendChild(rushCol);
+  }
+
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderDayPlan(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "DAY PLAN · 一天安排"));
+  card.appendChild(el("div", "w-divider"));
+  var badges = el("div", "badge-row");
+  badges.appendChild(badge(view.summary.lessonCount + " 节课程", "info", "soft"));
+  badges.appendChild(badge(view.summary.gapCount + " 个空档", "success", "soft"));
+  badges.appendChild(badge(view.summary.hasCrossCampus ? "有跨校区转场" : "动线稳定", view.summary.hasCrossCampus ? "warning" : "success", "soft"));
+  card.appendChild(badges);
+
+  var list = el("div", "w-list");
+  (view.items || []).forEach(function (item, index) {
+    var li = el("div", "w-list-item");
+    var isLesson = item.type === "lesson";
+    var color = isLesson ? "info" : item.type === "risk" ? "warning" : "success";
+    li.appendChild(badge(
+      isLesson ? item.periodText : item.type === "risk" ? "提醒" : item.type === "study" ? "自习" : "空档",
+      color,
+      isLesson ? "outline" : "soft"
+    ));
+    var col = el("div", "w-col");
+    if (isLesson) {
+      col.appendChild(el("div", "w-text", item.courseName));
+      col.appendChild(caption(item.startTime + "-" + item.endTime, "accent"));
+      col.appendChild(caption([item.campusName, item.roomName].filter(Boolean).join(" · ")));
+      col.appendChild(caption((item.teachers || []).join("、")));
+    } else {
+      col.appendChild(el("div", "w-text sm", item.suggestion || "空闲时段"));
+      col.appendChild(caption(item.startTime + "-" + item.endTime + " · " + item.periodText));
+      if (item.studyRooms && item.studyRooms.length > 0) {
+        col.appendChild(caption("可自习：" + item.studyRooms.join(" / "), "brand"));
+      }
+    }
+    li.appendChild(col);
+    list.appendChild(li);
+  });
+  card.appendChild(list);
+
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderOverview(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "OVERVIEW · 校园教学态势"));
+  if (view.phaseText) card.appendChild(caption(view.phaseText));
+  card.appendChild(el("div", "w-divider"));
+
+  var chips = el("div", "badge-row");
+  (view.metrics || []).forEach(function (metric) {
+    chips.appendChild(badge(metric.value + " · " + metric.label, "info", "soft"));
+  });
+  card.appendChild(chips);
+
+  card.appendChild(caption("周粒度趋势（课程次数）", "brand"));
+  var weeks = el("div", "badge-row");
+  (view.weeks || []).forEach(function (week) {
+    weeks.appendChild(badge(week.label + " · " + week.count, week.count > 0 ? "info" : "neutral", "outline"));
+  });
+  card.appendChild(weeks);
+
+  card.appendChild(caption("校区压力", "brand"));
+  var campusCol = el("div", "w-col gap2");
+  (view.campuses || []).forEach(function (campus) {
+    var block = el("div", "w-col");
+    block.appendChild(el("div", "w-text sm", campus.loadText));
+    block.appendChild(caption(campus.freeText));
+    campusCol.appendChild(block);
+  });
+  card.appendChild(campusCol);
+
+  if (view.top1) {
+    var top = el("div", "w-card brand-soft");
+    top.appendChild(caption("负载 TOP1 · 可钻取", "brand"));
+    top.appendChild(el("div", "w-text", view.top1.teacherName));
+    top.appendChild(caption(view.top1.loadText + " · 第" + view.top1.week + "周起"));
+    card.appendChild(top);
+  }
+
+  card.appendChild(caption("教师负载 Top 3", "brand"));
+  var teacherCol = el("div", "w-col");
+  (view.topTeachers || []).forEach(function (teacher, index) {
+    var row = el("div", "w-row center");
+    row.appendChild(badge(String(index + 1), "neutral", "outline"));
+    row.appendChild(el("div", "w-text sm", teacher.teacherName));
+    row.appendChild(caption(teacher.loadText));
+    teacherCol.appendChild(row);
+  });
+  card.appendChild(teacherCol);
+
+  card.appendChild(caption("风险摘要", "brand"));
+  var riskRow = el("div", "badge-row");
+  riskRow.appendChild(badge("时间冲突 " + view.risks.conflictCount, view.risks.conflictCount > 0 ? "danger" : "success", "soft"));
+  riskRow.appendChild(badge("跨校区赶场 " + view.risks.rushCount, view.risks.rushCount > 0 ? "warning" : "success", "soft"));
+  riskRow.appendChild(badge("连续课负载 " + view.risks.continuousLoadCount, view.risks.continuousLoadCount > 0 ? "warning" : "neutral", "outline"));
+  card.appendChild(riskRow);
+  if (view.risks.peakText) card.appendChild(caption(view.risks.peakText));
+
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderChoice(view) {
+  var card = el("div", "w-card");
+  card.appendChild(headerBlock(view, "CHOICE · 候选确认"));
+  card.appendChild(el("div", "w-divider"));
+  card.appendChild(caption("请选择查询对象", "brand"));
+  var col = el("div", "w-col gap2");
+  (view.items || []).forEach(function (item, index) {
+    var block = el("div", "w-col");
+    block.appendChild(button(item.name + " · " + item.typeLabel, index === 0 ? "solid" : "outline", item.message));
+    block.appendChild(caption(item.description));
+    col.appendChild(block);
+  });
+  card.appendChild(col);
+  if (view.actions && view.actions.length > 0) {
+    card.appendChild(actionRow(view.actions));
+  }
+  card.appendChild(caption("选择后直接继续刚才的任务，不需要重新输入。"));
+  return card;
+}
+
+function renderRecovery(view) {
+  var card = el("div", "w-card");
+  var row = el("div", "w-row");
+  var col = el("div", "w-col");
+  col.appendChild(el("div", "w-eyebrow", "RECOVERY · 任务恢复"));
+  col.appendChild(el("div", "w-title", view.title));
+  col.appendChild(caption(view.subtitle));
+  row.appendChild(col);
+  row.appendChild(badge("未核验", "neutral", "soft"));
+  card.appendChild(row);
+  card.appendChild(el("div", "w-divider"));
+
+  var reason = el("div", "w-card sunken");
+  reason.appendChild(el("div", "w-text sm", view.reasonText));
+  reason.appendChild(caption("本次没有使用模型补造任何校园事实。"));
+  card.appendChild(reason);
+
+  if (view.keptFilters && view.keptFilters.length > 0) {
+    var filterCol = el("div", "w-col");
+    filterCol.appendChild(caption("当前保留条件", "brand"));
+    var chips = el("div", "badge-row");
+    view.keptFilters.forEach(function (filter) {
+      chips.appendChild(badge(filter.label, "info", "outline"));
+    });
+    filterCol.appendChild(chips);
+    card.appendChild(filterCol);
+  }
+
+  card.appendChild(actionRow(view.actions));
+  card.appendChild(caption(view.footerText));
+  return card;
+}
+
+function renderView(view) {
+  switch (view.cardType) {
+    case "schedule": return renderSchedule(view);
+    case "classroom": return renderClassroom(view);
+    case "conflict": return renderConflict(view);
+    case "day_plan": return renderDayPlan(view);
+    case "campus_overview": return renderOverview(view);
+    case "choice": return renderChoice(view);
+    case "recovery": return renderRecovery(view);
+    default: return null;
+  }
+}
+
+function frame(group, name, view) {
+  var frame = el("section", "preview-frame");
+  frame.id = name;
+  var header = el("header");
+  var h2 = el("h2", "", group.title.replace(" · " + name, ""));
+  var label = el("span", "", name + " · " + view.cardType);
+  header.appendChild(h2);
+  header.appendChild(label);
+  frame.appendChild(header);
+  var phone = el("div", "phone");
+  var widget = renderView(view);
+  if (widget) phone.appendChild(widget);
+  frame.appendChild(phone);
+  return frame;
+}
+
+function buildNav() {
+  var nav = document.getElementById("navBar");
+  GROUPS.forEach(function (group) {
+    group.samples.forEach(function (name) {
+      var a = el("a", "", name);
+      a.href = "#" + name;
+      nav.appendChild(a);
+    });
+  });
+}
+
+function buildStage(mode) {
+  var stage = document.getElementById("stage");
+  stage.innerHTML = "";
+  stage.className = "stage" + (mode === "split" ? " split" : "");
+  GROUPS.forEach(function (group) {
+    group.samples.forEach(function (name) {
+      var view = SAMPLES[name];
+      if (!view) return;
+      stage.appendChild(frame(group, name, view));
+    });
+  });
+}
+
+document.querySelectorAll(".mode-bar button").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".mode-bar button").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    buildStage(btn.dataset.mode);
+  });
+});
+
+buildNav();
+buildStage("list");
+</script>
+</body>
+</html>

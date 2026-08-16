@@ -1,0 +1,45 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CHOICE · 候选确认" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={subtitle} color="secondary" />
+      </Col>
+      <Badge label="待确认" color="info" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Caption value="请选择查询对象" color="#173F35" />
+    <Col gap={2}>
+      {items.map((item, index) => (
+        <Col key={item.key} gap={1}>
+          <Button
+            label={`${item.name} · ${item.typeLabel}`}
+            size="sm"
+            variant={index === 0 ? 'solid' : 'outline'}
+            onClickAction={{ type: 'sys.chat', payload: { query: item.message } }}
+          />
+          <Caption value={item.description} color="secondary" />
+        </Col>
+      ))}
+    </Col>
+
+    {actions.length > 0 ? (
+      <Row gap={2} wrap="wrap">
+        {actions.map((action, actionIndex) => (
+          <Button
+            key={action.id}
+            label={action.label}
+            size="sm"
+            variant={actionIndex === 0 ? 'solid' : 'outline'}
+            onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+          />
+        ))}
+      </Row>
+    ) : null}
+
+    <Caption value="选择后直接继续刚才的任务，不需要重新输入。" color="secondary" />
+  </Col>
+</Card>

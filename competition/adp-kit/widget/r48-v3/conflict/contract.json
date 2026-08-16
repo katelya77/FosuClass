@@ -1,0 +1,21 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "conflict",
+  "logicalName": "Conflict V3 Ultimate",
+  "suggestedWidgetName": "小序-冲突赶场票据-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-冲突赶场票据-V2 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "fields": [
+    "title", "subtitle", "timeText", "statusText", "footerText",
+    "summary", "items", "rushWarnings", "actions"
+  ],
+  "modes": {
+    "compare": "title = A vs B · 课程冲突比较",
+    "selfCompare": "summary.selfCompare=true 时 title = A · 课程安排风险检查，绝不出现 A vs A",
+    "safe": "conflictCount=0 且 rushWarningCount=0 时展示绿色通过条"
+  },
+  "actionIntents": ["schedule_day", "schedule_week"]
+}

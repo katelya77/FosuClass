@@ -1,0 +1,25 @@
+{
+  "title": "校区A · 空教室",
+  "subtitle": "可用空间查询",
+  "timeText": "2026-09-03 · 第7-8节",
+  "statusText": "已核验",
+  "footerText": "数据源：空教室工具 · competition-demo-v1",
+  "filters": [
+    { "id": "campus", "label": "校区A", "value": "校区A" },
+    { "id": "date", "label": "2026-09-03", "value": "2026-09-03" },
+    { "id": "period", "label": "第7-8节", "value": "第7-8节" },
+    { "id": "capacity", "label": "≥60人", "value": 60 }
+  ],
+  "summary": { "totalCount": 4, "shownCount": 4, "hiddenCount": 0, "empty": false },
+  "items": [
+    { "roomName": "A1-103", "campusName": "校区A", "building": "教学楼A1", "capacity": 80, "roomType": "多媒体", "periodText": "第7-8节", "date": "2026-09-03" },
+    { "roomName": "A1-106", "campusName": "校区A", "building": "教学楼A1", "capacity": 80, "roomType": "多媒体", "periodText": "第7-8节", "date": "2026-09-03" },
+    { "roomName": "A2-201", "campusName": "校区A", "building": "教学楼A2", "capacity": 60, "roomType": "普通", "periodText": "第7-8节", "date": "2026-09-03" },
+    { "roomName": "A2-204", "campusName": "校区A", "building": "教学楼A2", "capacity": 60, "roomType": "普通", "periodText": "第7-8节", "date": "2026-09-03" }
+  ],
+  "actions": [
+    { "id": "classroom-change-campus", "type": "sys.chat", "label": "换校区", "message": "换成校区B，日期保持2026-09-03，节次保持第7-8节，其他条件不变" },
+    { "id": "classroom-change-date", "type": "sys.chat", "label": "换日期", "message": "改日期再查空教室（当前2026-09-03），其他条件不变" },
+    { "id": "classroom-relax-capacity", "type": "sys.chat", "label": "放宽容量", "message": "取消容量限制，日期保持2026-09-03，节次保持第7-8节，其他条件不变" }
+  ]
+}

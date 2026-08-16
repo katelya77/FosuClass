@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "schedule",
+  "success": true,
+  "queryId": "q-r48-schedule-date",
+  "dataVersion": "competition-demo-v1",
+  "title": "A1-101",
+  "subtitle": "教室",
+  "timeText": "2026-09-03",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "totalCount": 3,
+    "shownCount": 3,
+    "hiddenCount": 0,
+    "entityType": "room",
+    "entityTypeLabel": "教室",
+    "entityName": "A1-101",
+    "campusCount": 1
+  },
+  "items": [
+    {
+      "lessonId": "les-301",
+      "courseName": "大学物理B",
+      "periodText": "第1-2节",
+      "startTime": "08:00",
+      "endTime": "09:40",
+      "date": "2026-09-03",
+      "weekday": 4,
+      "weekdayName": "周四",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-101",
+      "teachers": [
+        "教师004"
+      ],
+      "classes": [
+        "2025级B班"
+      ]
+    },
+    {
+      "lessonId": "les-302",
+      "courseName": "大学物理B",
+      "periodText": "第3-4节",
+      "startTime": "10:00",
+      "endTime": "11:40",
+      "date": "2026-09-03",
+      "weekday": 4,
+      "weekdayName": "周四",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-101",
+      "teachers": [
+        "教师004"
+      ],
+      "classes": [
+        "2025级C班"
+      ]
+    },
+    {
+      "lessonId": "les-303",
+      "courseName": "思政通识",
+      "periodText": "第7-8节",
+      "startTime": "16:00",
+      "endTime": "17:40",
+      "date": "2026-09-03",
+      "weekday": 4,
+      "weekdayName": "周四",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-101",
+      "teachers": [
+        "教师007"
+      ],
+      "classes": [
+        "2025级A班"
+      ]
+    }
+  ],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "schedule-week",
+      "type": "sys.chat",
+      "label": "查看整周",
+      "message": "查看A1-101的整周课表",
+      "intentHint": "schedule_week",
+      "entityType": "room",
+      "entityName": "A1-101",
+      "date": "2026-09-03"
+    },
+    {
+      "id": "schedule-choose-day",
+      "type": "sys.chat",
+      "label": "换一天",
+      "message": "换日期查看A1-101的课表",
+      "intentHint": "schedule_choose_day",
+      "entityType": "room",
+      "entityName": "A1-101",
+      "date": "2026-09-03"
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "viewMode": "date",
+  "activeWeekday": 4,
+  "days": [
+    {
+      "weekday": 4,
+      "weekdayName": "周四",
+      "date": "2026-09-03",
+      "count": 3
+    }
+  ],
+  "footerText": "数据源：校园课表工具 · competition-demo-v1"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "campus_overview",
+  "logicalName": "CampusOverview V3 Ultimate",
+  "suggestedWidgetName": "小序-校园态势票据-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-校园态势票据-V2 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "fields": [
+    "title", "subtitle", "timeText", "phaseText", "statusText", "footerText",
+    "metrics", "weeks", "campuses", "topTeachers", "top1", "risks", "actions"
+  ],
+  "notes": [
+    "top1 为嵌套对象（teacherName/loadText/week），只读 CampusOverview 工具 teacherLoadTop[0]，Widget 不自选 Top1",
+    "最忙校区由 adapter 按 campusResources 的 lessonOccurrences 计算展示指标，不反解展示文本",
+    "准备期 0 课等特殊状态通过 phaseText 自然呈现"
+  ],
+  "actionIntents": ["schedule_week", "schedule_risk_check", "classroom_find"]
+}

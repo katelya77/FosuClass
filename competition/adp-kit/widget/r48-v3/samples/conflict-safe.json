@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "conflict",
+  "success": true,
+  "queryId": "q-r48-conflict-safe",
+  "dataVersion": "competition-demo-v1",
+  "title": "教师003 · 课程安排风险检查",
+  "subtitle": "单对象排课风险",
+  "timeText": "第1周 · 周二",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "conflictCount": 0,
+    "rushWarningCount": 0,
+    "selfCompare": true,
+    "firstBusySlots": 2,
+    "secondBusySlots": 2
+  },
+  "items": [],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "conflict-self-day",
+      "type": "sys.chat",
+      "label": "查看当天课表",
+      "message": "查询教师003第1周周二的课",
+      "intentHint": "schedule_day",
+      "entityName": "教师003",
+      "week": 1,
+      "weekday": 2
+    },
+    {
+      "id": "conflict-self-week",
+      "type": "sys.chat",
+      "label": "查看整周课表",
+      "message": "查询教师003第1周的课表",
+      "intentHint": "schedule_week",
+      "entityName": "教师003",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "footerText": "数据源：冲突比较工具 · competition-demo-v1"
+}

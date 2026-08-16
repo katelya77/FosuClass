@@ -1,0 +1,17 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "classroom",
+  "logicalName": "Classroom V3 Ultimate",
+  "suggestedWidgetName": "小序-空教室票据-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-空教室票据-V2 (9eb1ec5e1deb416ab5aba320359439a5) 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "fields": [
+    "title", "subtitle", "timeText", "statusText", "footerText",
+    "filters", "summary", "items", "actions"
+  ],
+  "emptyState": "summary.empty=true 时卡内中性空态 + 放宽容量/取消楼栋/换时段，不切 Recovery Widget",
+  "actionIntents": ["classroom_find"]
+}

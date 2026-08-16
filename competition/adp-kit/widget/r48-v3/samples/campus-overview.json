@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "campus_overview",
+  "success": true,
+  "queryId": "q-r48-campus-overview",
+  "dataVersion": "competition-demo-v1",
+  "title": "未来四周 · 校园教学态势",
+  "subtitle": "校园运行概览",
+  "timeText": "2026-08-25 ～ 2026-09-27",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "lessonOccurrences": 126,
+    "teacherCount": 8,
+    "roomCount": 22,
+    "campusCount": 2,
+    "weekCount": 4
+  },
+  "items": [],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "overview-top1-schedule",
+      "type": "sys.chat",
+      "label": "查看Top1课表",
+      "message": "查询教师002第1周的课表",
+      "intentHint": "schedule_week",
+      "entityType": "teacher",
+      "entityName": "教师002",
+      "week": 1
+    },
+    {
+      "id": "overview-top1-risk",
+      "type": "sys.chat",
+      "label": "检查Top1风险",
+      "message": "检查教师002第1周是否存在时间冲突或跨校区赶场",
+      "intentHint": "schedule_risk_check",
+      "entityType": "teacher",
+      "entityName": "教师002",
+      "week": 1
+    },
+    {
+      "id": "overview-classroom",
+      "type": "sys.chat",
+      "label": "查空教室",
+      "message": "查找第1周校园空教室",
+      "intentHint": "classroom_find",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "phaseText": "2026-08-25～2026-08-30 准备期无教学安排 · 2026-08-31 起进入教学周",
+  "metrics": [
+    {
+      "id": "lessons",
+      "label": "课程总量",
+      "value": "126 次"
+    },
+    {
+      "id": "busiest-campus",
+      "label": "最忙校区",
+      "value": "校区A"
+    },
+    {
+      "id": "top-teacher",
+      "label": "高负载教师",
+      "value": "教师002"
+    },
+    {
+      "id": "rush",
+      "label": "跨校区赶场",
+      "value": "8 起"
+    }
+  ],
+  "weeks": [
+    {
+      "label": "W1",
+      "count": 31
+    },
+    {
+      "label": "W2",
+      "count": 32
+    },
+    {
+      "label": "W3",
+      "count": 31
+    },
+    {
+      "label": "W4",
+      "count": 32
+    }
+  ],
+  "campuses": [
+    {
+      "campusName": "校区A",
+      "occurrences": 76,
+      "loadText": "校区A · 76 次课程 · 占用率 6.3%",
+      "freeText": "可用教室时段 2248 · ≥60人资源可用率 93.3%"
+    },
+    {
+      "campusName": "校区B",
+      "occurrences": 50,
+      "loadText": "校区B · 50 次课程 · 占用率 6.3%",
+      "freeText": "可用教室时段 1500 · ≥60人资源可用率 93.4%"
+    }
+  ],
+  "topTeachers": [
+    {
+      "teacherName": "教师002",
+      "loadText": "24 次课程 · 48 节次"
+    },
+    {
+      "teacherName": "教师003",
+      "loadText": "20 次课程 · 40 节次"
+    },
+    {
+      "teacherName": "教师001",
+      "loadText": "16 次课程 · 32 节次"
+    }
+  ],
+  "top1": {
+    "teacherName": "教师002",
+    "loadText": "24 次课程 · 48 节次",
+    "week": 1
+  },
+  "risks": {
+    "conflictCount": 0,
+    "rushCount": 8,
+    "continuousLoadCount": 24,
+    "summaryText": "时间冲突 0 · 跨校区赶场 8 · 连续课负载 24",
+    "peakText": "高峰：第1周周三第5节 · 3 次课程"
+  },
+  "footerText": "数据源：校园教学态势工具 · competition-demo-v1"
+}

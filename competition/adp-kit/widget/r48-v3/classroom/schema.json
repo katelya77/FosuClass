@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "timeText": { "type": "string" },
+    "statusText": { "type": "string" },
+    "footerText": { "type": "string" },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "value": {}
+        },
+        "required": ["id", "label", "value"],
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "shownCount": { "type": "integer", "minimum": 0 },
+        "hiddenCount": { "type": "integer", "minimum": 0 },
+        "empty": { "type": "boolean" }
+      },
+      "required": ["totalCount", "shownCount", "hiddenCount", "empty"],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "properties": {
+          "roomName": { "type": "string" },
+          "campusName": { "type": "string" },
+          "building": { "type": "string" },
+          "capacity": { "type": "integer", "minimum": 0 },
+          "roomType": { "type": "string" },
+          "periodText": { "type": "string" },
+          "date": { "type": "string" }
+        },
+        "required": ["roomName", "campusName", "building", "capacity", "roomType", "periodText", "date"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["id", "type", "label", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "subtitle", "timeText", "statusText", "footerText", "filters", "summary", "items", "actions"],
+  "additionalProperties": false
+}

@@ -1,0 +1,20 @@
+{
+  "title": "2026-09-04 · 一天安排",
+  "subtitle": "今日校园计划",
+  "timeText": "2026-09-04 · 周五",
+  "statusText": "已核验",
+  "footerText": "数据源：今日计划工具 · competition-demo-v1",
+  "summary": { "lessonCount": 2, "gapCount": 2, "studySuggestionCount": 2, "hasCrossCampus": true },
+  "items": [
+    { "type": "lesson", "lessonId": "les-401", "courseName": "思政通识", "periodText": "第1-2节", "startTime": "08:00", "endTime": "09:40", "campusName": "校区A", "roomName": "A1-201", "teachers": ["教师007"], "suggestion": "", "studyRooms": [] },
+    { "type": "gap", "lessonId": "", "courseName": "", "periodText": "第3-4节", "startTime": "10:00", "endTime": "11:40", "campusName": "", "roomName": "", "teachers": [], "suggestion": "空闲时段，可安排自习", "studyRooms": ["A1-203（60人）", "A1-205（60人）"] },
+    { "type": "lesson", "lessonId": "les-402", "courseName": "大学物理B", "periodText": "第5-6节", "startTime": "14:00", "endTime": "15:40", "campusName": "校区B", "roomName": "B1-201", "teachers": ["教师004"], "suggestion": "", "studyRooms": [] },
+    { "type": "risk", "lessonId": "", "courseName": "", "periodText": "午间转场", "startTime": "11:40", "endTime": "14:00", "campusName": "", "roomName": "", "teachers": [], "suggestion": "上午在校区A、下午在校区B，注意午间跨校区转场时间", "studyRooms": [] },
+    { "type": "gap", "lessonId": "", "courseName": "", "periodText": "第7-8节", "startTime": "16:00", "endTime": "17:40", "campusName": "", "roomName": "", "teachers": [], "suggestion": "空闲时段，可安排自习", "studyRooms": ["B1-301（45人）"] }
+  ],
+  "actions": [
+    { "id": "day-plan-next-day", "type": "sys.chat", "label": "下一天", "message": "基于2026-09-04继续安排下一天，其他偏好不变" },
+    { "id": "day-plan-campus-pref", "type": "sys.chat", "label": "换校区偏好", "message": "重新安排2026-09-04的一天，我想换校区偏好" },
+    { "id": "day-plan-study-2", "type": "sys.chat", "label": "连续自习2节", "message": "安排2026-09-04的一天，希望连续自习2节" }
+  ]
+}

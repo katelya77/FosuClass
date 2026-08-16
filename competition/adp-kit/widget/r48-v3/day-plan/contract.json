@@ -1,0 +1,21 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "day_plan",
+  "logicalName": "DayPlan V3 Ultimate (Hero)",
+  "suggestedWidgetName": "小序-今日校园计划-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-今日校园计划-V2 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "fields": [
+    "title", "subtitle", "timeText", "statusText", "footerText",
+    "summary", "items", "actions"
+  ],
+  "nodeTypes": ["lesson", "gap", "study", "risk", "note"],
+  "notes": [
+    "risk 节点仅在工具真实输出时出现；Widget 不自行计算 gap 或跨校区",
+    "下一天 Action 仅在工具给出已确认 nextDate 时携带确定日期，否则以已确认日期为锚点交回 00 总控"
+  ],
+  "actionIntents": ["day_plan"]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "recovery",
+  "logicalName": "Recovery V3 Ultimate",
+  "suggestedWidgetName": "小序-任务恢复-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-任务恢复-V2 (3161078fd4d54a27bae65f38cd44c537) 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "fields": [
+    "title", "subtitle", "statusText", "reasonText", "footerText",
+    "keptFilters", "actions"
+  ],
+  "errorCodes": ["ENTITY_NOT_FOUND", "AMBIGUOUS_ENTITY", "INVALID_PARAM", "OUT_OF_RANGE", "MISSING_PARAM", "TIMEOUT", "TOOL_FAILURE"],
+  "notes": [
+    "recovery 是任务恢复而非工程报错；不把 queryId / dataVersion / NodeID / trace_id 作为主视觉",
+    "工具失败时不补造事实，只提供 重试 / 修改条件"
+  ],
+  "actionIntents": ["semester_range", "schedule_week", "rephrase", "retry"]
+}

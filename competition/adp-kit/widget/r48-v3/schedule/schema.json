@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "timeText": { "type": "string" },
+    "statusText": { "type": "string" },
+    "viewMode": { "type": "string", "enum": ["day", "date", "week"] },
+    "activeWeekday": { "type": ["integer", "null"], "minimum": 1, "maximum": 7 },
+    "footerText": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "shownCount": { "type": "integer", "minimum": 0 },
+        "hiddenCount": { "type": "integer", "minimum": 0 },
+        "entityType": { "type": "string" },
+        "entityTypeLabel": { "type": "string" },
+        "entityName": { "type": "string" },
+        "campusCount": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["totalCount", "shownCount", "hiddenCount", "entityType", "entityTypeLabel", "entityName", "campusCount"],
+      "additionalProperties": false
+    },
+    "days": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
+          "weekdayName": { "type": "string" },
+          "date": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["weekday", "weekdayName", "date", "count"],
+        "additionalProperties": false
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lessonId": { "type": "string" },
+          "courseName": { "type": "string" },
+          "periodText": { "type": "string" },
+          "startTime": { "type": "string" },
+          "endTime": { "type": "string" },
+          "date": { "type": "string" },
+          "weekday": { "type": ["integer", "null"] },
+          "weekdayName": { "type": "string" },
+          "campusName": { "type": "string" },
+          "building": { "type": "string" },
+          "roomName": { "type": "string" },
+          "teachers": { "type": "array", "items": { "type": "string" } },
+          "classes": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["lessonId", "courseName", "periodText", "startTime", "endTime", "date", "weekday", "weekdayName", "campusName", "building", "roomName", "teachers", "classes"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["id", "type", "label", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "subtitle", "timeText", "statusText", "viewMode", "activeWeekday", "footerText", "summary", "days", "items", "actions"],
+  "additionalProperties": false
+}

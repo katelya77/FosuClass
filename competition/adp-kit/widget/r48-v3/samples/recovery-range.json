@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "recovery",
+  "success": false,
+  "queryId": "q-r48-recovery-range",
+  "dataVersion": "competition-demo-v1",
+  "title": "这个日期超出了当前学期可查询范围",
+  "subtitle": "任务恢复 · 事实未核验时不展示推测结果",
+  "timeText": "",
+  "statusText": "任务恢复",
+  "filters": [],
+  "summary": {},
+  "items": [],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "recovery-semester-range",
+      "type": "sys.chat",
+      "label": "查看学期范围",
+      "message": "本学期可查询的日期范围是什么",
+      "intentHint": "semester_range"
+    },
+    {
+      "id": "recovery-first-week",
+      "type": "sys.chat",
+      "label": "改到开学第一周",
+      "message": "查询开学第1周的安排",
+      "intentHint": "schedule_week",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": true
+  },
+  "evidence": {
+    "verified": false
+  },
+  "error": {
+    "code": "OUT_OF_RANGE"
+  },
+  "reasonText": "这个日期超出了当前学期可查询范围",
+  "keptFilters": [
+    {
+      "id": "date",
+      "label": "2027-03-01",
+      "value": "2027-03-01"
+    }
+  ],
+  "footerText": "未核验状态下不展示任何推测性校园事实"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "choice",
+  "logicalName": "Choice V3 Ultimate",
+  "suggestedWidgetName": "小序-候选确认-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-候选确认-V2 (f540588933a4459cbe78a6fe99aa022c) 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": true,
+  "fields": [
+    "title", "subtitle", "statusText",
+    "items", "actions"
+  ],
+  "localInteractions": [
+    "ADP 侧使用候选 Button 语义（等待用户操作）；不依赖 Radio/Select 是否可用",
+    "不暴露内部 canonical ID；message 只含展示名 + 动作的自然语言"
+  ],
+  "actionIntents": ["rephrase"],
+  "selectionMessageTemplate": "选择{name}，继续{originalTask}"
+}

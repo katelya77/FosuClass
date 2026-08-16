@@ -1,0 +1,233 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "schedule",
+  "success": true,
+  "queryId": "q-r48-schedule-week",
+  "dataVersion": "competition-demo-v1",
+  "title": "教师009",
+  "subtitle": "教师",
+  "timeText": "第1周 · 2026-08-31",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "totalCount": 7,
+    "shownCount": 7,
+    "hiddenCount": 0,
+    "entityType": "teacher",
+    "entityTypeLabel": "教师",
+    "entityName": "教师009",
+    "campusCount": 2
+  },
+  "items": [
+    {
+      "lessonId": "les-201",
+      "courseName": "操作系统",
+      "periodText": "第1-2节",
+      "startTime": "08:00",
+      "endTime": "09:40",
+      "date": "2026-08-31",
+      "weekday": 1,
+      "weekdayName": "周一",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-201",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级C班"
+      ]
+    },
+    {
+      "lessonId": "les-202",
+      "courseName": "操作系统",
+      "periodText": "第3-4节",
+      "startTime": "10:00",
+      "endTime": "11:40",
+      "date": "2026-08-31",
+      "weekday": 1,
+      "weekdayName": "周一",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-201",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级D班"
+      ]
+    },
+    {
+      "lessonId": "les-203",
+      "courseName": "编译原理",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "date": "2026-09-01",
+      "weekday": 2,
+      "weekdayName": "周二",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "roomName": "B1-102",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级C班"
+      ]
+    },
+    {
+      "lessonId": "les-204",
+      "courseName": "操作系统实验",
+      "periodText": "第7-8节",
+      "startTime": "16:00",
+      "endTime": "17:40",
+      "date": "2026-09-02",
+      "weekday": 3,
+      "weekdayName": "周三",
+      "campusName": "校区B",
+      "building": "实验楼B2",
+      "roomName": "B2-204",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级C班"
+      ]
+    },
+    {
+      "lessonId": "les-205",
+      "courseName": "编译原理",
+      "periodText": "第1-2节",
+      "startTime": "08:00",
+      "endTime": "09:40",
+      "date": "2026-09-03",
+      "weekday": 4,
+      "weekdayName": "周四",
+      "campusName": "校区A",
+      "building": "教学楼A2",
+      "roomName": "A2-305",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级D班"
+      ]
+    },
+    {
+      "lessonId": "les-206",
+      "courseName": "操作系统",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "date": "2026-09-04",
+      "weekday": 5,
+      "weekdayName": "周五",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-201",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2024级C班"
+      ]
+    },
+    {
+      "lessonId": "les-207",
+      "courseName": "专业导论",
+      "periodText": "第9-10节",
+      "startTime": "19:00",
+      "endTime": "20:40",
+      "date": "2026-09-04",
+      "weekday": 5,
+      "weekdayName": "周五",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-108",
+      "teachers": [
+        "教师009"
+      ],
+      "classes": [
+        "2025级A班"
+      ]
+    }
+  ],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "schedule-next-week",
+      "type": "sys.chat",
+      "label": "下一周",
+      "message": "查询教师009第2周的课表",
+      "intentHint": "schedule_week",
+      "entityType": "teacher",
+      "entityName": "教师009",
+      "week": 2
+    },
+    {
+      "id": "schedule-week-risk",
+      "type": "sys.chat",
+      "label": "检查本周风险",
+      "message": "检查教师009第1周是否存在时间冲突或跨校区赶场",
+      "intentHint": "schedule_risk_check",
+      "entityType": "teacher",
+      "entityName": "教师009",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "viewMode": "week",
+  "activeWeekday": 1,
+  "days": [
+    {
+      "weekday": 1,
+      "weekdayName": "周一",
+      "date": "2026-08-31",
+      "count": 2
+    },
+    {
+      "weekday": 2,
+      "weekdayName": "周二",
+      "date": "2026-09-01",
+      "count": 1
+    },
+    {
+      "weekday": 3,
+      "weekdayName": "周三",
+      "date": "2026-09-02",
+      "count": 1
+    },
+    {
+      "weekday": 4,
+      "weekdayName": "周四",
+      "date": "2026-09-03",
+      "count": 1
+    },
+    {
+      "weekday": 5,
+      "weekdayName": "周五",
+      "date": "2026-09-04",
+      "count": 2
+    },
+    {
+      "weekday": 6,
+      "weekdayName": "周六",
+      "date": "",
+      "count": 0
+    },
+    {
+      "weekday": 7,
+      "weekdayName": "周日",
+      "date": "",
+      "count": 0
+    }
+  ],
+  "footerText": "数据源：校园课表工具 · competition-demo-v1"
+}

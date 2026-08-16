@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "timeText": { "type": "string" },
+    "statusText": { "type": "string" },
+    "footerText": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "lessonCount": { "type": "integer", "minimum": 0 },
+        "gapCount": { "type": "integer", "minimum": 0 },
+        "studySuggestionCount": { "type": "integer", "minimum": 0 },
+        "hasCrossCampus": { "type": "boolean" }
+      },
+      "required": ["lessonCount", "gapCount", "studySuggestionCount", "hasCrossCampus"],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["lesson", "gap", "study", "risk", "note"] },
+          "lessonId": { "type": "string" },
+          "courseName": { "type": "string" },
+          "periodText": { "type": "string" },
+          "startTime": { "type": "string" },
+          "endTime": { "type": "string" },
+          "campusName": { "type": "string" },
+          "roomName": { "type": "string" },
+          "teachers": { "type": "array", "items": { "type": "string" } },
+          "suggestion": { "type": "string" },
+          "studyRooms": { "type": "array", "maxItems": 2, "items": { "type": "string" } }
+        },
+        "required": ["type", "lessonId", "courseName", "periodText", "startTime", "endTime", "campusName", "roomName", "teachers", "suggestion", "studyRooms"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["id", "type", "label", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "subtitle", "timeText", "statusText", "footerText", "summary", "items", "actions"],
+  "additionalProperties": false
+}

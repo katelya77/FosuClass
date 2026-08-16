@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "schedule",
+  "success": true,
+  "queryId": "q-r48-schedule-day",
+  "dataVersion": "competition-demo-v1",
+  "title": "教师003",
+  "subtitle": "教师",
+  "timeText": "第1周 · 周三 · 2026-09-02",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "totalCount": 2,
+    "shownCount": 2,
+    "hiddenCount": 0,
+    "entityType": "teacher",
+    "entityTypeLabel": "教师",
+    "entityName": "教师003",
+    "campusCount": 2
+  },
+  "items": [
+    {
+      "lessonId": "les-101",
+      "courseName": "高等数学A",
+      "periodText": "第1-2节",
+      "startTime": "08:00",
+      "endTime": "09:40",
+      "date": "2026-09-02",
+      "weekday": 3,
+      "weekdayName": "周三",
+      "campusName": "校区A",
+      "building": "教学楼A1",
+      "roomName": "A1-104",
+      "teachers": [
+        "教师003"
+      ],
+      "classes": [
+        "2025级A班"
+      ]
+    },
+    {
+      "lessonId": "les-102",
+      "courseName": "数据结构",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "date": "2026-09-02",
+      "weekday": 3,
+      "weekdayName": "周三",
+      "campusName": "校区B",
+      "building": "实验楼B2",
+      "roomName": "B2-301",
+      "teachers": [
+        "教师003"
+      ],
+      "classes": [
+        "2025级A班",
+        "2025级B班"
+      ]
+    }
+  ],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "schedule-week",
+      "type": "sys.chat",
+      "label": "查看整周",
+      "message": "查询教师003第1周的课表",
+      "intentHint": "schedule_week",
+      "entityType": "teacher",
+      "entityName": "教师003",
+      "week": 1,
+      "weekday": 3
+    },
+    {
+      "id": "schedule-choose-day",
+      "type": "sys.chat",
+      "label": "换一天",
+      "message": "【小序操作:选择课表日期】教师003|第1周",
+      "intentHint": "schedule_choose_day",
+      "entityType": "teacher",
+      "entityName": "教师003",
+      "week": 1,
+      "weekday": 3
+    },
+    {
+      "id": "schedule-risk",
+      "type": "sys.chat",
+      "label": "检查风险",
+      "message": "检查教师003第1周周三是否存在时间冲突或跨校区赶场",
+      "intentHint": "schedule_risk_check",
+      "entityType": "teacher",
+      "entityName": "教师003",
+      "week": 1,
+      "weekday": 3
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "viewMode": "day",
+  "activeWeekday": 3,
+  "days": [
+    {
+      "weekday": 3,
+      "weekdayName": "周三",
+      "date": "2026-09-02",
+      "count": 2
+    }
+  ],
+  "footerText": "数据源：校园课表工具 · competition-demo-v1"
+}

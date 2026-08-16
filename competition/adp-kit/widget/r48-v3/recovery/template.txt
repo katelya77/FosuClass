@@ -1,0 +1,53 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="RECOVERY · 任务恢复" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={subtitle} color="secondary" />
+      </Col>
+      <Badge label="未核验" color="secondary" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Card size="sm" background="#F7F8F6">
+      <Col gap={1}>
+        <Text value={reasonText} weight="semibold" />
+        <Caption value="本次没有使用模型补造任何校园事实。" color="secondary" />
+      </Col>
+    </Card>
+
+    {keptFilters.length > 0 ? (
+      <Col gap={1}>
+        <Caption value="当前保留条件" color="#173F35" />
+        <Row gap={1} wrap="wrap">
+          {keptFilters.map((filter) => (
+            <Badge
+              key={filter.id}
+              label={filter.label}
+              color="info"
+              variant="outline"
+              size="sm"
+              pill
+            />
+          ))}
+        </Row>
+      </Col>
+    ) : null}
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>
