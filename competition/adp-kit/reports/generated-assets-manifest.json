@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-15T08:20:55.152Z",
+  "generatedAt": "2026-08-17T12:30:55.051Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -29,6 +29,11 @@
       "sha256": "0e6adf53e51220100ca3ff894e3ad102277cdccc186456d30a72c346d13e8cf2"
     },
     {
+      "path": "cloudfunctions/campusflowAdpTools/src/agent-tools.js",
+      "bytes": 3710,
+      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
+    },
+    {
       "path": "cloudfunctions/campusflowAdpTools/src/data.js",
       "bytes": 5780,
       "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
@@ -45,13 +50,13 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/server.js",
-      "bytes": 11310,
-      "sha256": "39e28c9a7f3d517b70da460aa654fea13a068fde841180277dcee0ea91562f6e"
+      "bytes": 12552,
+      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
-      "bytes": 39650,
-      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
+      "bytes": 46484,
+      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
     },
     {
       "path": "cloudfunctions/README.md",
@@ -60,13 +65,13 @@
     },
     {
       "path": "cloudfunctions/sync-campusflow-function.js",
-      "bytes": 1885,
-      "sha256": "58c5b09afb6276e39b8237afb0cabdec30392050cf4f003435a73b98f305b0b6"
+      "bytes": 1903,
+      "sha256": "9b2a777e81ef803bb97d407393ed70de05c023c90d52765481d9ad53a33bd362"
     },
     {
       "path": "cloudfunctions/test-http-function.js",
-      "bytes": 2710,
-      "sha256": "c33a25826089ded29fb5c5e7711f1c5f8c24b6307102111e326362f5e2bb8a18"
+      "bytes": 3460,
+      "sha256": "defe8fd5affdc86ae9ee4a89346f617a0c529265d988495203c84ddef6d10190"
     },
     {
       "path": "evaluation/eval-dataset-v1.json",
@@ -110,8 +115,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27627,
-      "sha256": "106758fb8a9de53b404fde82a80871996e80024a6a486e69ce5c336211aae295"
+      "bytes": 27969,
+      "sha256": "af6580be2149f2306390c670fb2500db7765c189604245067e7f55ad143ad9ee"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -125,8 +130,8 @@
     },
     {
       "path": "knowledge/01-产品能力与使用边界.md",
-      "bytes": 4488,
-      "sha256": "cf09bef6ffe7b2d85e82f879e997e9a19a3c467f7080102ef55460b8917edf36"
+      "bytes": 4551,
+      "sha256": "517027c6fdf96086a94620725aa3dd1f304e959833ea5fd9e02f063bfeb0f71d"
     },
     {
       "path": "knowledge/02-课表查询参数与实体识别规则.md",
@@ -140,8 +145,8 @@
     },
     {
       "path": "knowledge/04-数据版本核验和防幻觉机制.md",
-      "bytes": 4031,
-      "sha256": "528bd50a120580a576fdfcbd8cbc565efa59cee8909de897f4620ddee75dc862"
+      "bytes": 4032,
+      "sha256": "faedaf9dab82c14ef7fa24b9f00cae2a0746c22ed102bf3ca17f68ddaf2dd718"
     },
     {
       "path": "knowledge/05-匿名评审隐私与安全规范.md",
@@ -155,13 +160,18 @@
     },
     {
       "path": "knowledge/07-校园任务智能体常见问题.md",
-      "bytes": 4213,
-      "sha256": "0fe6592dcdd4e7885ed17abc1697507db6801d7e1c6ce097b4ed5c3f6c11b937"
+      "bytes": 4214,
+      "sha256": "1bf848f537b2da0d97ed8ea1aa6c28a13ea5986118b9511e7cce29ab3f788593"
+    },
+    {
+      "path": "knowledge/08-功能导航与演示问题.md",
+      "bytes": 4686,
+      "sha256": "f78e5759e85d48135c28fa08e9995c477e36d89e661139a482f45af321425671"
     },
     {
       "path": "knowledge/taxonomy.json",
-      "bytes": 746,
-      "sha256": "df896b8271f2d1f5868134365d18f9b53b2394969465bd9444b25d3365deb383"
+      "bytes": 867,
+      "sha256": "92aaf7d1f1adf3378e51d3fb7c0ce620728492f7a419a00489f8a0c287241795"
     },
     {
       "path": "mcp/campus-tools-mcp/Dockerfile",
@@ -175,8 +185,13 @@
     },
     {
       "path": "mcp/campus-tools-mcp/README.md",
-      "bytes": 5141,
-      "sha256": "dd5a3eb92cb7dfcfe4f0f0d21294f6bddf6d2fa458c4c0c59a66755fbda35761"
+      "bytes": 6147,
+      "sha256": "c029a5d9236e79ec0cacb0e4590ccdac478eaae972454c4d9bbbfb197ca49429"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/agent-tools.js",
+      "bytes": 3710,
+      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
     },
     {
       "path": "mcp/campus-tools-mcp/src/client.ts",
@@ -185,8 +200,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/contracts.ts",
-      "bytes": 2944,
-      "sha256": "78d45b6b2ccfb238b44294d4b510a50f90e9050eb731cef9907bb4d3a95cc82b"
+      "bytes": 4102,
+      "sha256": "7d12e7fe08f810f669a7bf81b4b28d1c472907db146bfefa38298266600d1a94"
     },
     {
       "path": "mcp/campus-tools-mcp/src/data.js",
@@ -205,13 +220,13 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/server.js",
-      "bytes": 11310,
-      "sha256": "39e28c9a7f3d517b70da460aa654fea13a068fde841180277dcee0ea91562f6e"
+      "bytes": 12552,
+      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
     },
     {
       "path": "mcp/campus-tools-mcp/src/tools.js",
-      "bytes": 39650,
-      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
+      "bytes": 46484,
+      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
     },
     {
       "path": "mcp/campus-tools-mcp/test/security.test.js",
@@ -220,8 +235,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/test/tools.test.js",
-      "bytes": 18867,
-      "sha256": "49a974398130b6eb2ef11689937f7788924b855f9c8b305092a08668feb56dd4"
+      "bytes": 23696,
+      "sha256": "dc9e007a1b04ecb794bd3d99a8e9304b6ff3ea3e52176164d2da45aebe39cf6e"
     },
     {
       "path": "mcp/campus-tools-mcp/tsconfig.json",
@@ -265,8 +280,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 26173,
-      "sha256": "2e3012d7a79412f0c5a4ecb6765b8bcea73c7b3c1d677b7801be126aa3a5b767"
+      "bytes": 29232,
+      "sha256": "1d547c6d50e8fc8f03953a99eb1bb991e9f8ae5f158fd9deb7934e1d08d35db8"
     },
     {
       "path": "openapi/generate-openapi.js",
@@ -939,6 +954,316 @@
       "sha256": "f1d912e31b3f4de6e678854ac5c1300b3da7e47f4a4048207e1536ec461aba98"
     },
     {
+      "path": "widget/r48-v3/adapter.js",
+      "bytes": 31722,
+      "sha256": "01d28383981c43a551ddc945d8313d4cb47d24e64c0bd797368584e7fdc2418e"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/contract.json",
+      "bytes": 986,
+      "sha256": "1de42776ef413d0ac0b1012dc703314e47378177c0a19159095aca52fd225ac2"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/default.json",
+      "bytes": 2240,
+      "sha256": "9b47744efcb27468609e43acbc70a8cb53736df55216584c2b9695eb75bb6f29"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/schema.json",
+      "bytes": 3239,
+      "sha256": "ad3629800d9a47f3d4503b93b45cf154cd4d895e35e2d8368155013b3f4b3048"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/template.txt",
+      "bytes": 3161,
+      "sha256": "9197128d13760fada6b6593b872928c922b36460e271a61cf0f17fc1376843ba"
+    },
+    {
+      "path": "widget/r48-v3/choice/contract.json",
+      "bytes": 806,
+      "sha256": "563f6caf666b6a0ba6ceb440c8742cfaa98779e93f15217cf6966e8ffde9dac7"
+    },
+    {
+      "path": "widget/r48-v3/choice/default.json",
+      "bytes": 838,
+      "sha256": "6b7ac47a0bd898c9bea1e2c9cbd503c487f31a0043c087f9c5d58367aa14a568"
+    },
+    {
+      "path": "widget/r48-v3/choice/schema.json",
+      "bytes": 1231,
+      "sha256": "6e111f02552c8309030fcad097993d1a74751285aaf928d89d30027c5242c8e4"
+    },
+    {
+      "path": "widget/r48-v3/choice/template.txt",
+      "bytes": 1447,
+      "sha256": "2be1975104c1df01eb5ee18d8d55a9b1cbf0a0e85c37af1acbfaeb6232b22404"
+    },
+    {
+      "path": "widget/r48-v3/classroom/contract.json",
+      "bytes": 710,
+      "sha256": "2a80c40cc7cea75c814aa722b0de336314e4021892fb3a2fa5ff4245e4d9c19c"
+    },
+    {
+      "path": "widget/r48-v3/classroom/default.json",
+      "bytes": 1830,
+      "sha256": "c0abbb98c24475569b0e2dd039a0b7a56143c28312910287f9cefa129fb82696"
+    },
+    {
+      "path": "widget/r48-v3/classroom/schema.json",
+      "bytes": 2219,
+      "sha256": "14c0d654d8758ffd48f6b36e6c07ed094e12d76a81c71bb39d06d3c794d24c62"
+    },
+    {
+      "path": "widget/r48-v3/classroom/template.txt",
+      "bytes": 2632,
+      "sha256": "8697322018eb7bef7dd518131a59e6cdb0ed70b4ea203712a543d54e9e63928f"
+    },
+    {
+      "path": "widget/r48-v3/conflict/contract.json",
+      "bytes": 838,
+      "sha256": "9fcb5592a4f95ecd86fe7ef5e8cf815203ab368cfdcb4078cb40d252fd0aa2c3"
+    },
+    {
+      "path": "widget/r48-v3/conflict/default.json",
+      "bytes": 1069,
+      "sha256": "0325d2efef5a0f9e98a1c1a09dabdab715904179dcb6485461984f265b4fced0"
+    },
+    {
+      "path": "widget/r48-v3/conflict/schema.json",
+      "bytes": 3935,
+      "sha256": "31d3b485a83cedfa039414fdc442de1518dab6f4a126b3f068ad5289e10a1a1d"
+    },
+    {
+      "path": "widget/r48-v3/conflict/template.txt",
+      "bytes": 3405,
+      "sha256": "a9fea5f7368018a100acc8589ff621a09907540165282e3bf023fed73e7764d8"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/contract.json",
+      "bytes": 850,
+      "sha256": "67296f57b5ab79306d032a7906b1499d0586773a7a5ec26eb96bdf55cfee5117"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/default.json",
+      "bytes": 2158,
+      "sha256": "04758548262857e9e7706a85b9b4457cb287218e9cceb691f278de535baba292"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/schema.json",
+      "bytes": 2272,
+      "sha256": "5add4cd5f4a0d98435f19a047f22b926f72f08ef5cb79675b3624f4dd3fa0700"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/template.txt",
+      "bytes": 2875,
+      "sha256": "0781b1e25db1e66192c95f895a6e922336b6729e2430cdeb71dfa7b325c3027f"
+    },
+    {
+      "path": "widget/r48-v3/design-tokens.css",
+      "bytes": 820,
+      "sha256": "e2091aea96a63039d97a16df2aa18bac8f9021afb72b8a68094460d98c1e187d"
+    },
+    {
+      "path": "widget/r48-v3/design-tokens.json",
+      "bytes": 2257,
+      "sha256": "2dd5fd0db1df5f249c1eac048dbf98623fcddfd9491d474b9891f0da940ee83d"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-desktop-full.png",
+      "bytes": 1620214,
+      "sha256": "71ccbb07f48a503aa7d32d3712e7a30612dc8ee471c4a787d07fcb4d831df111"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-desktop-top.png",
+      "bytes": 206286,
+      "sha256": "e0b90bb8632c175ba74efcbfcf8b1a5220783511a82fa9cced3faacd406347f4"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-mobile-390.png",
+      "bytes": 160155,
+      "sha256": "116ee87501b1a45834d3b78e97398fff8978895573ff8d43b3523de1bd126588"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-mobile-grid-390.png",
+      "bytes": 160339,
+      "sha256": "e78be094857d349ac0efa836edabcd5c73f71b8a99eae7b6567006837e377b6b"
+    },
+    {
+      "path": "widget/r48-v3/preview/index.html",
+      "bytes": 26619,
+      "sha256": "b20f043fcc23a7820ae8cd2baf8f47b26a7b790589b8767d3d9ae1c1f8ba12dc"
+    },
+    {
+      "path": "widget/r48-v3/R48-WIDGET-V3-ADP-IMPORT-CHECKLIST.md",
+      "bytes": 4999,
+      "sha256": "b7b267954ded1270923610d7ff1aaeee20da850146f3b2d2e106ee26a5f261fb"
+    },
+    {
+      "path": "widget/r48-v3/R48-WIDGET-V3-HANDOFF.md",
+      "bytes": 6480,
+      "sha256": "3ab8009451758552c6870a7cb64e50e272c6cb572b5a90336c467e34a6f10f0e"
+    },
+    {
+      "path": "widget/r48-v3/recovery/contract.json",
+      "bytes": 943,
+      "sha256": "3ba3f9021a0248c6806446367e68b79b8d297f5358710cb30a32f4601a16fa26"
+    },
+    {
+      "path": "widget/r48-v3/recovery/default.json",
+      "bytes": 708,
+      "sha256": "06a2d4d3fff381e760daf2caa4c36da26cb31059a8636bbb6241c036a3afe419"
+    },
+    {
+      "path": "widget/r48-v3/recovery/schema.json",
+      "bytes": 1178,
+      "sha256": "a2a16a226bf90abc86bc0e9c3ff05fdf9cd321b44b6158c2ed40586e59bd99be"
+    },
+    {
+      "path": "widget/r48-v3/recovery/template.txt",
+      "bytes": 1522,
+      "sha256": "fc403f870168cb4875c7a66f023e65b4633f7b80c1f32d6315491590e615b5be"
+    },
+    {
+      "path": "widget/r48-v3/samples/campus-overview.json",
+      "bytes": 3338,
+      "sha256": "d19fe4473c01dcc8577d5d2f430706be2a537f9e59da54e81d7d547b9e9db59e"
+    },
+    {
+      "path": "widget/r48-v3/samples/choice.json",
+      "bytes": 1367,
+      "sha256": "e9e11be251f5adcb65a5f085e62e48b563dd280b6c3d5df14aa53d263c70d9df"
+    },
+    {
+      "path": "widget/r48-v3/samples/classroom-empty.json",
+      "bytes": 1861,
+      "sha256": "aabd89119a2fabc583cdd553767d91554859ed90182cc3cb4f76cf2658a37e22"
+    },
+    {
+      "path": "widget/r48-v3/samples/classroom-normal.json",
+      "bytes": 2605,
+      "sha256": "dc67f689679778bedc47895d157858e2895d002cb6fc45daa3b3b8529e9cbf18"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-compare.json",
+      "bytes": 2117,
+      "sha256": "047b6fb33b3bc0a45f0b27c1cee7abe4817cd80c158c0d9c131460ff22cfbb27"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-safe.json",
+      "bytes": 1235,
+      "sha256": "41c29681348a45c0c3b4effdd2659e28b683b4825081a1dcc5fbb8920e283141"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-self.json",
+      "bytes": 1679,
+      "sha256": "25b03df440afe6332d2e01d08a7488aca6667a49773dedf9b8b3da0c52cd3015"
+    },
+    {
+      "path": "widget/r48-v3/samples/day-plan.json",
+      "bytes": 3136,
+      "sha256": "6b1a928343ca9435080d30508918e70d17f4225d6ade805a5f0a416b11f62398"
+    },
+    {
+      "path": "widget/r48-v3/samples/envelopes.json",
+      "bytes": 13737,
+      "sha256": "3baf5b61ad67c9df0c42b39b7aab262ad321c0d8e06b9c343b0d53c42ed1574f"
+    },
+    {
+      "path": "widget/r48-v3/samples/generate-samples.js",
+      "bytes": 1840,
+      "sha256": "049d9839dce0e92f2acfa95e3d6a5040f09cec73096a9a3b90b6f10dd1838734"
+    },
+    {
+      "path": "widget/r48-v3/samples/recovery-range.json",
+      "bytes": 1263,
+      "sha256": "f092090611ec418aa26c6922942d0e9ea022044171b2704601203691b3c08622"
+    },
+    {
+      "path": "widget/r48-v3/samples/recovery-tool.json",
+      "bytes": 1356,
+      "sha256": "0158a7d29113ec743f24e095ce9572e261c880e9013e4c69a13b660345a374a3"
+    },
+    {
+      "path": "widget/r48-v3/samples/samples.js",
+      "bytes": 33507,
+      "sha256": "3c4a27fc18154eefd4785e8a41ca6f16641c1962d377fc8c4f21960e0b1d8590"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-date.json",
+      "bytes": 2736,
+      "sha256": "6d7c765a89666aa0e6140d2812be38d81a04c5a586f111aa3d3ca1bea41a26bb"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-day.json",
+      "bytes": 2743,
+      "sha256": "e3bcd4506d73ee28afedd37f661e92957ca3b4c7d2bbdf2387fdc527385a2a5f"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-week.json",
+      "bytes": 5169,
+      "sha256": "1a88afd96927554d9b25e92b62151a1ae480bc81161eea4565822ef0a2ceb5c4"
+    },
+    {
+      "path": "widget/r48-v3/schedule/contract.json",
+      "bytes": 907,
+      "sha256": "8d7013b8c1395f4049b66644e3f1fb94cf2d8ffa99630ad62ecc4a4530b90479"
+    },
+    {
+      "path": "widget/r48-v3/schedule/default.json",
+      "bytes": 1827,
+      "sha256": "2a433d5d36bb92b2210e520b7f6856580b952713a87fcac5b7706c0624da3288"
+    },
+    {
+      "path": "widget/r48-v3/schedule/schema.json",
+      "bytes": 3114,
+      "sha256": "39e948525c0cc951a78ffe98a0e003dc2d77528ebc19363cf05c62344411a1be"
+    },
+    {
+      "path": "widget/r48-v3/schedule/template.txt",
+      "bytes": 2962,
+      "sha256": "fc6028174bec3bc7989f8479126f1806518e3d005b52e160d67aba919a31e036"
+    },
+    {
+      "path": "widget/r48-v3/tests/run-all.js",
+      "bytes": 869,
+      "sha256": "2346f153a03f7727b5f4496077899085c3f84bc13c6347843c836b83c8010fbe"
+    },
+    {
+      "path": "widget/r48-v3/tests/schema-utils.js",
+      "bytes": 4771,
+      "sha256": "19734fea8976166ef2299e5f16aa1140a3eb11722db7bd483b1d09f4e9992494"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-action-contract.js",
+      "bytes": 6756,
+      "sha256": "fa94e47c8f0ec1b23558239f182eca479454958df647911bd15425862187b20f"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-adapter.js",
+      "bytes": 14895,
+      "sha256": "043bf2bd5204cdc44f439380245baecd7b9f4042b8b0c0a6cb78a8feebea5130"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-no-external-deps.js",
+      "bytes": 4429,
+      "sha256": "2695b76efccd414acb68e6d1d85d885d960d534a0ef7647912ebe4967eb3d8e7"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-schema.js",
+      "bytes": 5152,
+      "sha256": "796d74f9d932cbfea842bdf2e0dcd6eb867aca64817880b4a8bf8d6a546b16b0"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-template-syntax.js",
+      "bytes": 5272,
+      "sha256": "dea64b93b2eadc762a9b3571e95b3b10806b2f5f74a154b69aece4045c3c1566"
+    },
+    {
+      "path": "widget/r48-v3/viewmodel-schema.json",
+      "bytes": 3538,
+      "sha256": "ecf339c2c87cc1b004a0a0df3efcc8d0103e65d78f4827954f154f37a9b2399a"
+    },
+    {
       "path": "widget/README.md",
       "bytes": 3081,
       "sha256": "0fed0f3359d1183164208ebac60ae8bbfeccf04f8b7e44ce281e65ac5c3a696a"
@@ -1006,7 +1331,7 @@
     {
       "path": "workflows/application-config.json",
       "bytes": 3910,
-      "sha256": "49b8dfe2e63a9361ee4c10e4d3d9899c97adfde2344391b2ff91015d9781e7d6"
+      "sha256": "db677f4fb5dc179b59bb4c9353e8d57b37e792339af4d2ad6b762841612ce483"
     },
     {
       "path": "workflows/generate-workflows.js",

@@ -2,7 +2,7 @@
  * CampusTools 自动化测试（node:test，零依赖）。
  *
  * 覆盖：
- * - 6 个工具的正向用例（基于 competition-demo-v1 设计场景锚定断言）
+ * - 7 个工具的正向用例（基于 competition-demo-v1 设计场景锚定断言）
  * - 缺参 / 非法参数 / 实体不存在 / 范围越界 / 空结果 分支
  * - 统一信封结构完整性
  * - 数据守卫：非 competition-demo 数据文件被拒绝
@@ -194,15 +194,18 @@ test("query_schedule: 实体不存在", () => {
   assert.equal(env.error.code, "ENTITY_NOT_FOUND");
 });
 
-test("query_schedule: weekday=0 仍为非法参数", () => {
+test("query_schedule: weekday=0 按 R49.2 契约视为未指定（整周）", () => {
+  // 基线失败证据：HEAD（R49.2 commit 04d5c87）起 weekday=0 语义从 INVALID_PARAM
+  // 改为「0 填充可选整数视为未指定」→ 整周查询；本用例为契约同步，非削弱检查。
   const env = callTool("query_schedule", {
     entityType: "teacher",
     entityName: "教师001",
     week: 1,
     weekday: 0,
   });
-  assert.equal(env.success, false);
-  assert.equal(env.error.code, "INVALID_PARAM");
+  assert.equal(env.success, true);
+  assert.equal(env.query.weekday, null, "weekday=0 视为未指定，不回显 0");
+  assert.equal(env.items.length, 4);
 });
 
 // ---------------------------------------------------------------------------
@@ -401,6 +404,102 @@ test("get_campus_teaching_overview: 非冻结窗口 fail closed", () => {
   assert.equal(env.success, false);
   assert.equal(env.error.code, "INVALID_PARAM");
   assert.equal(env.evidence.verified, false);
+});
+
+// ---------------------------------------------------------------------------
+// query_teacher_load（R49.4：教师课表负载窗口聚合）
+// ---------------------------------------------------------------------------
+test("query_teacher_load: W1 窗口正向 + 排名形状", () => {
+  const env = callTool("query_teacher_load", { weekStart: 1, weekEnd: 1, topN: 3 });
+  assertEnvelope(env);
+  assert.equal(env.success, true);
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 1 });
+  assert.deepEqual(env.rankContext, { source: "query_teacher_load", list: "teacherLoadTop", selectedRank: null });
+  assert.equal(env.items.length, 3, "topN=3 应返回 3 位教师");
+  for (const item of env.items) {
+    assert.ok(Number.isInteger(item.rank) && item.rank >= 1);
+    assert.ok(item.teacher && typeof item.teacher.id === "string" && typeof item.teacher.name === "string");
+    assert.ok(Number.isInteger(item.lessonOccurrences) && item.lessonOccurrences >= 1);
+    assert.ok(Number.isInteger(item.periodUnits) && item.periodUnits >= item.lessonOccurrences);
+    assert.equal(typeof item.tiedWithPrevious, "boolean");
+  }
+  assert.equal(env.items[0].tiedWithPrevious, false, "第 1 名不存在上一名并列");
+  for (let i = 1; i < env.items.length; i += 1) {
+    const prev = env.items[i - 1];
+    const cur = env.items[i];
+    assert.ok(
+      prev.lessonOccurrences > cur.lessonOccurrences
+        || (prev.lessonOccurrences === cur.lessonOccurrences && prev.periodUnits >= cur.periodUnits),
+      "负载排序应按 出现次数 DESC → 节次单元 DESC",
+    );
+  }
+});
+
+test("query_teacher_load: W1..W4 与 overview teacherLoadTop 完全一致（v1 锚定）", () => {
+  const overview = callTool("get_campus_teaching_overview", {});
+  const load = callTool("query_teacher_load", { weekStart: 1, weekEnd: 4 });
+  assert.equal(load.success, true);
+  assert.deepEqual(load.window, { weekStart: 1, weekEnd: 4 });
+  assert.equal(load.items.length, 8, "无 topN 时返回全部教师（v1 共 8 位）");
+  const mapped = load.items.slice(0, 3).map((item) => ({
+    teacherId: item.teacher.id,
+    teacherName: item.teacher.name,
+    lessonOccurrences: item.lessonOccurrences,
+    periodUnits: item.periodUnits,
+  }));
+  assert.deepEqual(mapped, overview.items[0].teacherLoadTop, "相同窗口下负载指标应与 overview 一致");
+  assert.equal(mapped[0].teacherName, "教师002");
+  assert.equal(mapped[0].lessonOccurrences, 24);
+  assert.equal(mapped[0].periodUnits, 48);
+});
+
+test("query_teacher_load: 同一入参两次调用确定性一致", () => {
+  const first = callTool("query_teacher_load", { weekStart: 1, weekEnd: 4, topN: 5 });
+  const second = callTool("query_teacher_load", { weekStart: 1, weekEnd: 4, topN: 5 });
+  assert.equal(first.success, true);
+  assert.equal(second.success, true);
+  assert.deepEqual(
+    { window: first.window, rankContext: first.rankContext, items: first.items },
+    { window: second.window, rankContext: second.rankContext, items: second.items },
+  );
+});
+
+test("query_teacher_load: 校区过滤后仍成功聚合", () => {
+  const env = callTool("query_teacher_load", { weekStart: 1, weekEnd: 1, campus: "校区B" });
+  assertEnvelope(env);
+  assert.equal(env.success, true);
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 1 });
+  assert.ok(env.items.length >= 1, "校区B 第1周应有教师开课");
+});
+
+test("query_teacher_load: 缺 weekStart/weekEnd", () => {
+  const env = callTool("query_teacher_load", { topN: 3 });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "MISSING_PARAM");
+});
+
+test("query_teacher_load: topN=0 拒绝", () => {
+  const env = callTool("query_teacher_load", { weekStart: 1, weekEnd: 4, topN: 0 });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "INVALID_PARAM");
+});
+
+test("query_teacher_load: 反向窗口 4..1 拒绝", () => {
+  const env = callTool("query_teacher_load", { weekStart: 4, weekEnd: 1 });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "INVALID_PARAM");
+});
+
+test("query_teacher_load: 周次越界 21..21 拒绝", () => {
+  const env = callTool("query_teacher_load", { weekStart: 21, weekEnd: 21 });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "OUT_OF_RANGE");
+});
+
+test("query_teacher_load: 未知校区 fail closed", () => {
+  const env = callTool("query_teacher_load", { weekStart: 1, weekEnd: 1, campus: "校区Z" });
+  assert.equal(env.success, false);
+  assert.equal(env.error.code, "ENTITY_NOT_FOUND");
 });
 
 // ---------------------------------------------------------------------------

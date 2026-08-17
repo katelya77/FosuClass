@@ -754,6 +754,104 @@
           }
         }
       }
+    },
+    "/api/query_teacher_load": {
+      "post": {
+        "tags": [
+          "CampusTools"
+        ],
+        "operationId": "query_teacher_load",
+        "summary": "确定性汇总指定教学周窗口内每位教师的课表负载（课时出现次数与节次单元），按负载降序稳定排序，支持 topN 与校区过滤；只从当前 competition-demo 匿名数据集派生。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "hmacSignature": [],
+            "hmacTimestamp": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "weekStart": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "起始教学周（必填，1..20）"
+                  },
+                  "weekEnd": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "结束教学周（必填，1..20，须 >= weekStart）"
+                  },
+                  "topN": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "返回负载最高的前 N 位教师（可选，默认返回全部）"
+                  },
+                  "campus": {
+                    "type": "string",
+                    "description": "校区A / 校区B（可选，先按校区过滤再聚合）"
+                  }
+                },
+                "required": [
+                  "weekStart",
+                  "weekEnd"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务成功或可分支业务错误；读取 success/error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求限流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

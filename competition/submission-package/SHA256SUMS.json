@@ -38,8 +38,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27627,
-      "sha256": "9f7c00347f51a1bc57d223153ce688233a2714d903dd8b67fe36ffeb8735b9fe"
+      "bytes": 27969,
+      "sha256": "12b3f0397b4ee0b5c0ce90f033b96c79c0ef45d22eeb65eba5304dcb1cb4a5ca"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -48,8 +48,8 @@
     },
     {
       "path": "knowledge/01-产品能力与使用边界.md",
-      "bytes": 4488,
-      "sha256": "cf09bef6ffe7b2d85e82f879e997e9a19a3c467f7080102ef55460b8917edf36"
+      "bytes": 4551,
+      "sha256": "517027c6fdf96086a94620725aa3dd1f304e959833ea5fd9e02f063bfeb0f71d"
     },
     {
       "path": "knowledge/02-课表查询参数与实体识别规则.md",
@@ -63,8 +63,8 @@
     },
     {
       "path": "knowledge/04-数据版本核验和防幻觉机制.md",
-      "bytes": 4031,
-      "sha256": "528bd50a120580a576fdfcbd8cbc565efa59cee8909de897f4620ddee75dc862"
+      "bytes": 4032,
+      "sha256": "faedaf9dab82c14ef7fa24b9f00cae2a0746c22ed102bf3ca17f68ddaf2dd718"
     },
     {
       "path": "knowledge/05-匿名评审隐私与安全规范.md",
@@ -78,8 +78,13 @@
     },
     {
       "path": "knowledge/07-校园任务智能体常见问题.md",
-      "bytes": 4213,
-      "sha256": "0fe6592dcdd4e7885ed17abc1697507db6801d7e1c6ce097b4ed5c3f6c11b937"
+      "bytes": 4214,
+      "sha256": "1bf848f537b2da0d97ed8ea1aa6c28a13ea5986118b9511e7cce29ab3f788593"
+    },
+    {
+      "path": "knowledge/08-功能导航与演示问题.md",
+      "bytes": 4686,
+      "sha256": "f78e5759e85d48135c28fa08e9995c477e36d89e661139a482f45af321425671"
     },
     {
       "path": "mock-data/competition-demo-v1.json",
@@ -93,8 +98,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 25867,
-      "sha256": "29b79f367c9352fb5066a63f9de10a743fc2af65c40f72226616a733047a52b6"
+      "bytes": 28926,
+      "sha256": "e5fefa9bdb66614f52dd96e74a436c2dc599d3b38bdcfb9d66334c5bb5a4c56b"
     },
     {
       "path": "package.json",
@@ -132,14 +137,19 @@
       "sha256": "0e5d1e4cf45fe516e1175ab23c8101ea5698291453fc03ac756bedef6b0e671d"
     },
     {
+      "path": "tools/campus-tools-mcp/src/agent-tools.js",
+      "bytes": 3710,
+      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
+    },
+    {
       "path": "tools/campus-tools-mcp/src/client.ts",
       "bytes": 1858,
       "sha256": "2f983f332fcf9199067ac92d9902eb82b944a44a6d1ddb62a2220a6124f35727"
     },
     {
       "path": "tools/campus-tools-mcp/src/contracts.ts",
-      "bytes": 2944,
-      "sha256": "78d45b6b2ccfb238b44294d4b510a50f90e9050eb731cef9907bb4d3a95cc82b"
+      "bytes": 4102,
+      "sha256": "7d12e7fe08f810f669a7bf81b4b28d1c472907db146bfefa38298266600d1a94"
     },
     {
       "path": "tools/campus-tools-mcp/src/data.js",
@@ -158,13 +168,13 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/server.js",
-      "bytes": 11310,
-      "sha256": "39e28c9a7f3d517b70da460aa654fea13a068fde841180277dcee0ea91562f6e"
+      "bytes": 12552,
+      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 39650,
-      "sha256": "249acda98a11b82a0795cd6456dbe581e2e99e2d787ed7f3049273299ae198a3"
+      "bytes": 46484,
+      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
     },
     {
       "path": "tools/campus-tools-mcp/test/security.test.js",
@@ -173,8 +183,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/test/tools.test.js",
-      "bytes": 18867,
-      "sha256": "49a974398130b6eb2ef11689937f7788924b855f9c8b305092a08668feb56dd4"
+      "bytes": 23696,
+      "sha256": "dc9e007a1b04ecb794bd3d99a8e9304b6ff3ea3e52176164d2da45aebe39cf6e"
     },
     {
       "path": "tools/campus-tools-mcp/tsconfig.json",
@@ -244,7 +254,7 @@
     {
       "path": "workflows/application-config.json",
       "bytes": 3910,
-      "sha256": "49b8dfe2e63a9361ee4c10e4d3d9899c97adfde2344391b2ff91015d9781e7d6"
+      "sha256": "db677f4fb5dc179b59bb4c9353e8d57b37e792339af4d2ad6b762841612ce483"
     },
     {
       "path": "workflows/role-instruction.txt",

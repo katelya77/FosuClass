@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "4e371eae9d7b663622e4356c8d74cf125a36804f7dfb54fa515693cb9e28aee5",
+  "oracleSourceSha256": "df2364c74d5657d6c2b7cdd7c0ca3ada7961a4869a7fc4a09a025715d470cf81",
   "caseCount": 33,
   "cases": [
     {
@@ -1158,5 +1158,13 @@
         "verified": true
       }
     }
-  ]
+  ],
+  "lastOracleReview": {
+    "date": "2026-08-17",
+    "classification": "A",
+    "semanticDrift": 0,
+    "changedCases": [],
+    "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
+    "note": "R49.2(0-mask)/R49.2.1(alias+hardening) 合法修改 tools.js；33/33 case 语义输出与 committed expected 完全一致"
+  }
 }

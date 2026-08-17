@@ -30,7 +30,7 @@
   "appVariables": {
     "environment": "competition",
     "data_mode": "anonymous",
-    "data_version": "competition-demo-v1",
+    "data_version": "competition-demo-v2",
     "timezone": "Asia/Shanghai",
     "default_language": "zh-CN",
     "default_campus": ""

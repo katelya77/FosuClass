@@ -1,5 +1,5 @@
 /**
- * CampusTools 六个确定性校园工具。
+ * CampusTools 七个确定性校园工具。
  *
  * 每个工具都是纯函数（params => 统一信封），同时服务于：
  * - MCP（tools/call）
@@ -44,6 +44,8 @@ function normalizeName(raw) {
   s = s.replace(/^[a-z]/, (c) => c.toUpperCase());
   s = s.replace(/级([a-d])班$/i, (m, g) => `级${g.toUpperCase()}班`);
   s = s.replace(/^教师(\d)$/, "教师00$1").replace(/^教师(\d\d)$/, "教师0$1");
+  // 口语别名：T09 / T03 → 教师009 / 教师003（与 05-TOOL-CONTRACTS.md「教师009 / T09」一致）
+  s = s.replace(/^T(\d{1,2})$/i, (m, g) => `教师${String(Number(g)).padStart(3, "0")}`);
   s = s.replace(/^([ab])(\d)-/i, (m, g1, g2) => `${g1.toUpperCase()}${g2}-`);
   return s;
 }
@@ -168,6 +170,36 @@ function resolveTimeRange(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 校区别名解析（type-specific，仅用于 campus 语义参数；不改动全局 normalizeName，
+// 避免孤立 A/B/C 污染班级、课程等其他实体）。别名从 data.campuses 的 name/id 动态派生：
+// 校区A / A校区 / A / a / campus-a / campusA 等；B、C 同理。
+// ---------------------------------------------------------------------------
+function resolveCampus(data, raw) {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  const campuses = data.campuses || [];
+  const exact = campuses.find((c) => c.name === trimmed || c.id === trimmed);
+  if (exact) return exact;
+  const lower = trimmed.toLowerCase();
+  for (const c of campuses) {
+    const name = String(c.name || "").trim();
+    const id = String(c.id || "").toLowerCase();
+    const baseLower = name.replace(/^校区/, "").toLowerCase();
+    const aliases = new Set([
+      name.toLowerCase(),
+      id,
+      `${baseLower}校区`,
+      baseLower,
+      `campus${baseLower}`,
+      id.replace(/^campus-/, ""),
+    ]);
+    if (aliases.has(lower)) return c;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // 工具 1：resolve_entity —— 实体解析与歧义候选
 // ---------------------------------------------------------------------------
 function resolveEntity(params) {
@@ -246,7 +278,12 @@ function getAcademicContext(params) {
 const SCHEDULE_INDEX_OF = { class: "class", teacher: "teacher", room: "room", course: "course" };
 
 function querySchedule(params) {
-  const { entityType, entityName } = params || {};
+  const input = { ...(params || {}) };
+  // ADP 平台归一化：缺失可选整数参数会被填充为 0，一律视为「未指定」
+  if (Number(input.weekday) === 0) delete input.weekday;
+  if (Number(input.periodStart) === 0) delete input.periodStart;
+  if (Number(input.periodEnd) === 0) delete input.periodEnd;
+  const { entityType, entityName } = input;
   if (!entityType || !SCHEDULE_INDEX_OF[entityType]) {
     return fail(ERR.INVALID_PARAM, "entityType 需为 class/teacher/room/course", { entityType });
   }
@@ -255,7 +292,7 @@ function querySchedule(params) {
   if (!resolved.success) return resolved;
   const entity = resolved.resolvedEntity;
 
-  const tr = resolveTimeRange(params);
+  const tr = resolveTimeRange(input);
   if (tr.error) return tr.error;
 
   const { idx } = loadDataset();
@@ -263,8 +300,8 @@ function querySchedule(params) {
   const filtered = all.filter((les) => {
     if (!expandWeeks(les).includes(tr.week)) return false;
     if (tr.weekday != null && les.weekday !== tr.weekday) return false;
-    if (params.periodStart != null && params.periodEnd != null
-      && !periodsOverlap(les.periodStart, les.periodEnd, Number(params.periodStart), Number(params.periodEnd))) return false;
+    if (input.periodStart != null && input.periodEnd != null
+      && !periodsOverlap(les.periodStart, les.periodEnd, Number(input.periodStart), Number(input.periodEnd))) return false;
     return true;
   }).sort((a, b) => (a.weekday - b.weekday) || (a.periodStart - b.periodStart));
 
@@ -288,7 +325,11 @@ function querySchedule(params) {
 // 工具 4：find_available_classrooms —— 空教室规划
 // ---------------------------------------------------------------------------
 function findAvailableClassrooms(params) {
-  const input = params || {};
+  const input = { ...(params || {}) };
+  // ADP 平台归一化：缺失可选整数参数会被填充为 0，一律视为「未指定」
+  if (Number(input.weekday) === 0) delete input.weekday;
+  if (Number(input.periodStart) === 0) delete input.periodStart;
+  if (Number(input.periodEnd) === 0) delete input.periodEnd;
   const { campus } = input;
   const hasConsecutive = input.startPeriod != null && input.consecutivePeriods != null;
   const start = Number(hasConsecutive ? input.startPeriod : input.periodStart);
@@ -300,18 +341,19 @@ function findAvailableClassrooms(params) {
       periodStart: input.periodStart, periodEnd: input.periodEnd,
     });
   }
-  const tr = resolveTimeRange(params);
+  const tr = resolveTimeRange(input);
   if (tr.error) return tr.error;
   if (tr.weekday == null) {
     return fail(ERR.MISSING_PARAM, "空教室查询需要明确的 weekday（或由 date 推导）", {});
   }
 
   const { data, byId } = loadDataset();
+  let campusEntity = null;
   if (campus) {
-    const hit = data.campuses.find((c) => c.name === normalizeName(campus));
-    if (!hit) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${campus}」`, {});
+    campusEntity = resolveCampus(data, campus);
+    if (!campusEntity) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${campus}」`, {});
   }
-  const campusId = campus ? data.campuses.find((c) => c.name === normalizeName(campus)).id : null;
+  const campusId = campusEntity ? campusEntity.id : null;
   const building = input.building ? String(input.building) : null;
   const capacityValue = input.minCapacity != null ? input.minCapacity : input.capacity;
   const minCapacity = capacityValue != null ? Number(capacityValue) : null;
@@ -375,7 +417,11 @@ function compareSchedules(params) {
   if (!r2.success) return r2;
 
   const timeParams = { ...(params || {}) };
+  // ADP 平台归一化会把缺失的可选整数参数填充为 0；0 一律视为「未指定」，
+  // 不得解释成真实约束（星期0 / 节次0），否则会把全部课程过滤成空结果。
   if (Number(timeParams.weekday) === 0) delete timeParams.weekday;
+  if (Number(timeParams.periodStart) === 0) delete timeParams.periodStart;
+  if (Number(timeParams.periodEnd) === 0) delete timeParams.periodEnd;
   const tr = resolveTimeRange(timeParams);
   if (tr.error) return tr.error;
 
@@ -387,8 +433,8 @@ function compareSchedules(params) {
     .filter((les) => expandWeeks(les).includes(tr.week))
     .filter((les) => tr.weekday == null || les.weekday === tr.weekday)
     .filter((les) => {
-      if (params.periodStart == null || params.periodEnd == null) return true;
-      return periodsOverlap(les.periodStart, les.periodEnd, Number(params.periodStart), Number(params.periodEnd));
+      if (timeParams.periodStart == null || timeParams.periodEnd == null) return true;
+      return periodsOverlap(les.periodStart, les.periodEnd, Number(timeParams.periodStart), Number(timeParams.periodEnd));
     });
   const busy1 = busyOf(firstType, r1.resolvedEntity.id);
   const busy2 = busyOf(secondType, r2.resolvedEntity.id);
@@ -504,7 +550,7 @@ function generateDayPlan(params) {
   let cursor = null;
 
   const requestedCampus = params.preferredCampus
-    ? data.campuses.find((campus) => campus.name === normalizeName(params.preferredCampus))
+    ? resolveCampus(data, params.preferredCampus)
     : null;
   if (params.preferredCampus && !requestedCampus) {
     return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${params.preferredCampus}」`, {});
@@ -830,6 +876,98 @@ function getCampusTeachingOverview(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 工具 8：query_teacher_load —— 教师课表负载窗口聚合（R49.4）
+// ---------------------------------------------------------------------------
+function queryTeacherLoad(params) {
+  const input = params || {};
+  const weekStart = input.weekStart;
+  const weekEnd = input.weekEnd;
+  if (weekStart == null || weekEnd == null) {
+    return fail(ERR.MISSING_PARAM, "缺少必填参数 weekStart/weekEnd", {});
+  }
+  const { data, byId } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+  if (!Number.isInteger(weekStart) || !Number.isInteger(weekEnd)) {
+    return fail(ERR.INVALID_PARAM, "weekStart/weekEnd 需为整数", { weekStart, weekEnd });
+  }
+  if (weekStart < 1 || weekEnd > totalWeeks) {
+    return fail(ERR.OUT_OF_RANGE, `周次必须在 1..${totalWeeks} 之间`, { weekStart, weekEnd });
+  }
+  if (weekEnd < weekStart) {
+    return fail(ERR.INVALID_PARAM, "weekEnd 不得小于 weekStart", { weekStart, weekEnd });
+  }
+  let topN = null;
+  if (input.topN != null) {
+    topN = Number(input.topN);
+    if (!Number.isInteger(topN) || topN < 1 || topN > 10) {
+      return fail(ERR.INVALID_PARAM, "topN 需为 1..10 的整数", { topN: input.topN });
+    }
+  }
+  let campusEntity = null;
+  if (input.campus) {
+    campusEntity = resolveCampus(data, input.campus);
+    if (!campusEntity) {
+      return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${input.campus}」`, { campus: input.campus });
+    }
+  }
+  const campusId = campusEntity ? campusEntity.id : null;
+
+  // 聚合：每个 (lesson, week) 记一次课时出现；periodUnits 累加该次节次跨度。
+  const counts = new Map();
+  for (const lesson of data.lessons) {
+    if (campusId && lesson.campusId !== campusId) continue;
+    for (const week of expandWeeks(lesson)) {
+      if (week < weekStart || week > weekEnd) continue;
+      for (const teacherId of lesson.teacherIds) {
+        const entry = counts.get(teacherId) || { lessonOccurrences: 0, periodUnits: 0 };
+        entry.lessonOccurrences += 1;
+        entry.periodUnits += lesson.periodEnd - lesson.periodStart + 1;
+        counts.set(teacherId, entry);
+      }
+    }
+  }
+
+  const ranked = [...counts.entries()]
+    .map(([teacherId, metrics]) => ({
+      teacherId,
+      teacherName: byId.teachers[teacherId] ? byId.teachers[teacherId].name : teacherId,
+      ...metrics,
+    }))
+    .sort((left, right) => (
+      right.lessonOccurrences - left.lessonOccurrences
+      || right.periodUnits - left.periodUnits
+      || left.teacherName.localeCompare(right.teacherName, "zh-CN")
+      || left.teacherId.localeCompare(right.teacherId)
+    ));
+
+  const sliced = topN == null ? ranked : ranked.slice(0, topN);
+  const items = sliced.map((entry, index) => {
+    const prev = ranked[index - 1];
+    return {
+      rank: index + 1,
+      teacher: { id: entry.teacherId, name: entry.teacherName },
+      lessonOccurrences: entry.lessonOccurrences,
+      periodUnits: entry.periodUnits,
+      tiedWithPrevious: Boolean(prev
+        && prev.lessonOccurrences === entry.lessonOccurrences
+        && prev.periodUnits === entry.periodUnits),
+    };
+  });
+
+  const env = ok({ items, actions: [] });
+  env.window = { weekStart, weekEnd };
+  env.rankContext = { source: "query_teacher_load", list: "teacherLoadTop", selectedRank: null };
+  env.query = {
+    weekStart,
+    weekEnd,
+    topN: topN == null ? null : topN,
+    campus: campusEntity ? campusEntity.name : null,
+  };
+  if (items.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
 // 工具清单（MCP tools/list 与 OpenAPI 生成共用）
 // ---------------------------------------------------------------------------
 const TOOL_DEFS = [
@@ -945,6 +1083,21 @@ const TOOL_DEFS = [
       },
     },
     handler: getCampusTeachingOverview,
+  },
+  {
+    name: "query_teacher_load",
+    description: "确定性汇总指定教学周窗口内每位教师的课表负载（课时出现次数与节次单元），按负载降序稳定排序，支持 topN 与校区过滤；只从当前 competition-demo 匿名数据集派生。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        weekStart: { type: "integer", minimum: 1, maximum: 20, description: "起始教学周（必填，1..20）" },
+        weekEnd: { type: "integer", minimum: 1, maximum: 20, description: "结束教学周（必填，1..20，须 >= weekStart）" },
+        topN: { type: "integer", minimum: 1, maximum: 10, description: "返回负载最高的前 N 位教师（可选，默认返回全部）" },
+        campus: { type: "string", description: "校区A / 校区B（可选，先按校区过滤再聚合）" },
+      },
+      required: ["weekStart", "weekEnd"],
+    },
+    handler: queryTeacherLoad,
   },
 ];
 
