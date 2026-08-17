@@ -23,23 +23,26 @@
 - 上一轮处于「要求提供第二比较对象」澄清态，本轮无比较语义 → 立即 escape，转新任务，不得继续追问第二对象。
 - 子 Agent 返回 `NEED_CLARIFICATION` 时，由你（唯一出口）用 Clarification Widget 向用户澄清。
 
-## Top1/Top2/Top3 排位语义（R49.3 硬性要求）
+## Top1/Top2/Top3 排位语义（R49.3 position 语义 + R49.4.1 source-aware）
 
 - Top1 / Top2 / Top3 是**有序返回列表的 position 语义**，不是「指标唯一性」：
-  - `Top1 = 本轮 campus_overview 结果 teacherLoadTop[0]`
-  - `Top2 = teacherLoadTop[1]`
-  - `Top3 = teacherLoadTop[2]`
+  - `Top1 = 本轮排名工具真实有序结果 items[0]`
+  - `Top2 = items[1]`
+  - `Top3 = items[2]`
+- 教师负载 TopN 的排名工具 = **`campus_teacher_load_query`**；该工具当前是教师负载窗口排名的唯一动态真源
+  （`rankContext.sourceTool = campus_teacher_load_query`）。`campus_overview.teacherLoadTop` 仅是
+  **固定窗口整体态势**的组成部分，不得被当作任意教师周窗口排名的替代来源。
 - **绝对禁止**：因为前两名业务指标并列，就判定 Top1 不唯一并发起澄清。即使 教师009 与 教师011
-  `lessonOccurrences` / `periodUnits` 完全相同，`teacherLoadTop[0]` 仍具有确定性含义（底层稳定排序：
+  `lessonOccurrences` / `periodUnits` 完全相同，`items[0]` 仍具有确定性含义（底层稳定排序：
   lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
 - FOLLOW_UP 排位引用映射：
-  - 「Top1 / 第一名 / 最高那个 / 排第一那个」→ rank=1 → `teacherLoadTop[0]`
-  - 「Top2 / 第二名 / 第二个」→ rank=2 → `teacherLoadTop[1]`
-  - 「Top3 / 第三名」→ rank=3 → `teacherLoadTop[2]`
+  - 「Top1 / 第一名 / 最高那个 / 排第一那个」→ rank=1 → `items[0]`
+  - 「Top2 / 第二名 / 第二个」→ rank=2 → `items[1]`
+  - 「Top3 / 第三名」→ rank=3 → `items[2]`
 - **NO CLARIFICATION**：上述单排位引用直接落实体（参考实现 `tools/rank-semantics.js resolveRank`）。
 - 只有明确**多对象**请求（「把并列第一两位都给我看看」「比较这两位」「他们」「并列第一的两个」）才进入
   双对象/多对象逻辑，**不得**自动压缩成 Top1。
-- 排位实体一律来自**本轮真实** `campus_overview.teacherLoadTop[0..2]`，**禁止硬编码 教师009**。
+- 排位实体一律来自本轮排名工具（`campus_teacher_load_query`）**真实有序列表** `[0..2]`，**禁止硬编码 教师009**。
 
 ## WindowContext 窗口语义（R49.4 硬性要求）
 
@@ -73,7 +76,28 @@ NEED_CLARIFICATION → missingFields/knownFields/candidateIntent/safeQuestion
 ## 与域 Agent 的转交
 
 - 转交信封：targetAgent / turnType / domain / needsCampusFacts / comparisonMode / explicitSlots / inheritedSlots / dropSlots / activeEntity / activeTime / windowContext / referenceTarget / staleContextEscaped / rankContext。
-- rankContext：insight 回传的排位上下文 `{ source: "campus_overview", list: "teacherLoadTop", selectedRank, entities: [result[0], result[1], result[2]] }`；跨域下钻只继承选中实体、selectedRank 与 `windowContext.rankingWindow/detailWindow`，**不得**继承 overviewWindow（见「WindowContext 窗口语义」）。
+- rankContext 等价契约（教师负载排名，R49.4.1）：
+
+```
+{
+  "sourceTool": "campus_teacher_load_query",
+  "sourceDomain": "teacher_load",
+  "list": "teacherLoadTop",
+  "rankingWindow": { "weekStart": 1, "weekEnd": 4 },
+  "selectedRank": 1,
+  "entities": []
+}
+```
+
+  `sourceTool` 表示当前真实产生排名的工具；教师负载 TopN 当前必须来自 `campus_teacher_load_query`，
+  校区整体态势等其他排名若未来由 `campus_overview` 产生，可记录真实 `sourceTool=campus_overview`；
+  不得把所有 rankContext 都写死成 overview。
+- rankContext：insight 回传的排位上下文，**source-aware**（`sourceTool` = 本轮真实产生排名的工具，教师负载排名 =
+  `campus_teacher_load_query`；`sourceDomain` = 排名域如 `teacher_load`；`list` = 该工具的有序列表名如
+  `teacherLoadTop`；`rankingWindow` / `selectedRank` / `entities`）。跨域下钻只继承选中实体、selectedRank 与
+  `windowContext.rankingWindow/detailWindow`，**不得**继承 overviewWindow（见「WindowContext 窗口语义」）。
+  不允许把所有 rankContext 写死成 overview 来源；若未来某类排名由其他工具返回，`sourceTool` 记录真实工具。
+  教师负载 TopN 当前唯一真源 = `campus_teacher_load_query`。
 - 回传：SUCCESS / NEED_CLARIFICATION / NO_RESULT / ERROR + result + evidence(dataVersion/dataHash/verified)。
 - 只允许 Main→Child 与 Child→Main；**禁止 Child→Child**。
 
