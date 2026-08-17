@@ -1,5 +1,5 @@
 /**
- * CampusTools 六个确定性校园工具。
+ * CampusTools 七个确定性校园工具。
  *
  * 每个工具都是纯函数（params => 统一信封），同时服务于：
  * - MCP（tools/call）
@@ -876,6 +876,98 @@ function getCampusTeachingOverview(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 工具 8：query_teacher_load —— 教师课表负载窗口聚合（R49.4）
+// ---------------------------------------------------------------------------
+function queryTeacherLoad(params) {
+  const input = params || {};
+  const weekStart = input.weekStart;
+  const weekEnd = input.weekEnd;
+  if (weekStart == null || weekEnd == null) {
+    return fail(ERR.MISSING_PARAM, "缺少必填参数 weekStart/weekEnd", {});
+  }
+  const { data, byId } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+  if (!Number.isInteger(weekStart) || !Number.isInteger(weekEnd)) {
+    return fail(ERR.INVALID_PARAM, "weekStart/weekEnd 需为整数", { weekStart, weekEnd });
+  }
+  if (weekStart < 1 || weekEnd > totalWeeks) {
+    return fail(ERR.OUT_OF_RANGE, `周次必须在 1..${totalWeeks} 之间`, { weekStart, weekEnd });
+  }
+  if (weekEnd < weekStart) {
+    return fail(ERR.INVALID_PARAM, "weekEnd 不得小于 weekStart", { weekStart, weekEnd });
+  }
+  let topN = null;
+  if (input.topN != null) {
+    topN = Number(input.topN);
+    if (!Number.isInteger(topN) || topN < 1 || topN > 10) {
+      return fail(ERR.INVALID_PARAM, "topN 需为 1..10 的整数", { topN: input.topN });
+    }
+  }
+  let campusEntity = null;
+  if (input.campus) {
+    campusEntity = resolveCampus(data, input.campus);
+    if (!campusEntity) {
+      return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${input.campus}」`, { campus: input.campus });
+    }
+  }
+  const campusId = campusEntity ? campusEntity.id : null;
+
+  // 聚合：每个 (lesson, week) 记一次课时出现；periodUnits 累加该次节次跨度。
+  const counts = new Map();
+  for (const lesson of data.lessons) {
+    if (campusId && lesson.campusId !== campusId) continue;
+    for (const week of expandWeeks(lesson)) {
+      if (week < weekStart || week > weekEnd) continue;
+      for (const teacherId of lesson.teacherIds) {
+        const entry = counts.get(teacherId) || { lessonOccurrences: 0, periodUnits: 0 };
+        entry.lessonOccurrences += 1;
+        entry.periodUnits += lesson.periodEnd - lesson.periodStart + 1;
+        counts.set(teacherId, entry);
+      }
+    }
+  }
+
+  const ranked = [...counts.entries()]
+    .map(([teacherId, metrics]) => ({
+      teacherId,
+      teacherName: byId.teachers[teacherId] ? byId.teachers[teacherId].name : teacherId,
+      ...metrics,
+    }))
+    .sort((left, right) => (
+      right.lessonOccurrences - left.lessonOccurrences
+      || right.periodUnits - left.periodUnits
+      || left.teacherName.localeCompare(right.teacherName, "zh-CN")
+      || left.teacherId.localeCompare(right.teacherId)
+    ));
+
+  const sliced = topN == null ? ranked : ranked.slice(0, topN);
+  const items = sliced.map((entry, index) => {
+    const prev = ranked[index - 1];
+    return {
+      rank: index + 1,
+      teacher: { id: entry.teacherId, name: entry.teacherName },
+      lessonOccurrences: entry.lessonOccurrences,
+      periodUnits: entry.periodUnits,
+      tiedWithPrevious: Boolean(prev
+        && prev.lessonOccurrences === entry.lessonOccurrences
+        && prev.periodUnits === entry.periodUnits),
+    };
+  });
+
+  const env = ok({ items, actions: [] });
+  env.window = { weekStart, weekEnd };
+  env.rankContext = { source: "query_teacher_load", list: "teacherLoadTop", selectedRank: null };
+  env.query = {
+    weekStart,
+    weekEnd,
+    topN: topN == null ? null : topN,
+    campus: campusEntity ? campusEntity.name : null,
+  };
+  if (items.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
 // 工具清单（MCP tools/list 与 OpenAPI 生成共用）
 // ---------------------------------------------------------------------------
 const TOOL_DEFS = [
@@ -991,6 +1083,21 @@ const TOOL_DEFS = [
       },
     },
     handler: getCampusTeachingOverview,
+  },
+  {
+    name: "query_teacher_load",
+    description: "确定性汇总指定教学周窗口内每位教师的课表负载（课时出现次数与节次单元），按负载降序稳定排序，支持 topN 与校区过滤；只从当前 competition-demo 匿名数据集派生。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        weekStart: { type: "integer", minimum: 1, maximum: 20, description: "起始教学周（必填，1..20）" },
+        weekEnd: { type: "integer", minimum: 1, maximum: 20, description: "结束教学周（必填，1..20，须 >= weekStart）" },
+        topN: { type: "integer", minimum: 1, maximum: 10, description: "返回负载最高的前 N 位教师（可选，默认返回全部）" },
+        campus: { type: "string", description: "校区A / 校区B（可选，先按校区过滤再聚合）" },
+      },
+      required: ["weekStart", "weekEnd"],
+    },
+    handler: queryTeacherLoad,
   },
 ];
 

@@ -75,7 +75,7 @@ function assertEnvelope(env, label) {
   assert.strictEqual(env.error, null, `${label}: error 应为 null`);
 }
 
-test("/health 暴露 tools=7 + agentTools=5 + adpContractVersion=R49.1.1", async (t) => {
+test("/health 暴露 tools=8 + agentTools=5 + adpContractVersion=R49.1.1", async (t) => {
   const { base } = await startServer(t);
   const res = await fetch(`${base}/health`);
   assert.strictEqual(res.status, 200);
@@ -83,7 +83,7 @@ test("/health 暴露 tools=7 + agentTools=5 + adpContractVersion=R49.1.1", async
   assert.strictEqual(health.status, "ok");
   assert.strictEqual(health.dataVersion, EXPECTED_DATA_VERSION);
   assert.strictEqual(health.dataHash, EXPECTED_DATA_HASH);
-  assert.strictEqual(health.tools, 7, "tools=7 表示底层 CampusTools 数量");
+  assert.strictEqual(health.tools, 8, "tools=8 表示底层 CampusTools 数量");
   assert.strictEqual(health.agentTools, 5, "agentTools=5 表示 ADP Agent Tool Façade 数量");
   assert.strictEqual(health.adpContractVersion, EXPECTED_ADP_CONTRACT_VERSION);
 });

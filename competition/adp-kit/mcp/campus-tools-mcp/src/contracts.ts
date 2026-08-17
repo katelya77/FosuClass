@@ -17,7 +17,8 @@ export type CampusToolName =
   | "find_available_classrooms"
   | "compare_schedules"
   | "generate_day_plan"
-  | "get_campus_teaching_overview";
+  | "get_campus_teaching_overview"
+  | "query_teacher_load";
 
 export type CampusErrorCode =
   | "MISSING_PARAM"
@@ -131,6 +132,14 @@ export interface TeachingOverviewInput {
   windowEnd?: string;
 }
 
+/** 教师课表负载窗口聚合（R49.4）输入：weekStart/weekEnd 必填；topN、campus 可选。 */
+export interface QueryTeacherLoadInput {
+  weekStart: number;
+  weekEnd: number;
+  topN?: number;
+  campus?: string;
+}
+
 export interface CampusToolInputs {
   resolve_entity: ResolveEntityInput;
   get_academic_context: AcademicContextInput;
@@ -139,4 +148,5 @@ export interface CampusToolInputs {
   compare_schedules: CompareSchedulesInput;
   generate_day_plan: GenerateDayPlanInput;
   get_campus_teaching_overview: TeachingOverviewInput;
+  query_teacher_load: QueryTeacherLoadInput;
 }

@@ -36,11 +36,18 @@ test("overview 已登记进 CampusToolInputs + TeachingOverviewInput 存在", ()
   assert.match(CONTRACTS, /get_campus_teaching_overview: TeachingOverviewInput;/);
 });
 
+test("query_teacher_load 已登记进 CampusToolName + CampusToolInputs", () => {
+  const block = CONTRACTS.match(/export type CampusToolName =([\s\S]*?);/)[1];
+  assert.match(block, /\| "query_teacher_load"/);
+  assert.match(CONTRACTS, /export interface QueryTeacherLoadInput \{/);
+  assert.match(CONTRACTS, /query_teacher_load: QueryTeacherLoadInput;/);
+});
+
 test("JS runtime TOOL_DEFS 与 TS contract 工具集合一致（不许 JS 有 TS 没有）", () => {
   const jsTools = [...TOOLS.matchAll(/name: "([a-z_]+)",/g)].map((m) => m[1]);
   const block = CONTRACTS.match(/export type CampusToolName =([\s\S]*?);/)[1];
   const tsTools = [...block.matchAll(/\| "([a-z_]+)"/g)].map((m) => m[1]);
-  assert.strictEqual(jsTools.length, 7, "TOOL_DEFS 应为 7 个工具");
+  assert.strictEqual(jsTools.length, 8, "TOOL_DEFS 应为 8 个工具");
   for (const t of jsTools) {
     assert.ok(tsTools.includes(t), `TS contract 缺少 JS 运行时的工具: ${t}`);
   }
