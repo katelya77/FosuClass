@@ -2,7 +2,7 @@
 
 更新时间：2026-08-17 +08:00
 
-当前阶段：`CampusFlow ADP R49.3 / G2-D Drilldown State Semantics Hardening`（G2-PREFLIGHT=PASS；G2 真人控制台 A/B PASS、C 行为 PASS、**D=FAIL → 当前 blocker**；R49.3 修复完成，待真机复测 CASE D/D-2/D-3）
+当前阶段：`CampusFlow ADP R49.4 / Multi-School Anonymous Data Foundation`（R49.3 真机复测已完成；**R49.4 本地全绿，CloudBase 部署待凭据解锁**：tcb CLI 未登录 + 本机无 CAMPUS_API_TOKEN）
 
 ## 真实 ADP / Runtime 状态（2026-08-17 实测）
 
@@ -81,6 +81,17 @@
 - **Rank Selection State**：rankContext `{ source, list="teacherLoadTop", selectedRank, entities:[top[0],top[1],top[2]] }` 进入 handoff 信封（03 §2/§6.1/§6.2）；rank 别名与多对象判定参考实现 `r49-ma/tools/rank-semantics.js`（纯函数，测试与 Prompt 同源）。
 - **同步文件**：`agents/main-orchestrator.md`、`agents/campus-insight.md`、`agents/schedule-space.md`、`agents/risk-planning.md`、`03-HANDOFF-POLICY.md`、`04-CONTEXT-POLICY.md`、`09-MULTI-AGENT-E2E-MATRIX.md`（CASE D 重写 + D-2/D-3 变体 + CASE C evidence 契约）、`tests/fixtures/multi-turn-cases.json`（CASE D 更新 + rankDrilldown 段）、新增 `tests/test-drilldown-rank-semantics.js`（A~H 回归）、`test-g1-hardening.js`/`test-fixtures-consistency.js` 增强、`R49-MA-ADP-MANUAL-CONFIG-CHECKLIST.md`（R49.3 节）、G2 报告模板（真实 A/B/C/D 记录）。
 - 无 Runtime src 修改 → **不部署 CloudBase**；PR #49 KEEP OPEN / UNMERGED；不进入 Model A/B。
+
+## R49.4 / 多校匿名数据枢纽（2026-08-17，本轮）
+
+- **G2 CASE D 复测已收口**：multi-turn fixture CASE D 重写为 **D1(insight `campus_teacher_load_query` rankingWindow 1..4)→D2(schedule `campus_schedule_range_query` detailWindow 1..4)→D3(schedule `campus_schedule_query` detailWindow 1..1 week=1)→D5(clarify 时间窗口)**；`test-drilldown-rank-semantics.js` 契约 4 / `test-g1-hardening.js` 11-12 / `test-fixtures-consistency.js` / `09-MULTI-AGENT-E2E-MATRIX.md` / G2 报告模板同步；**并列不澄清 + 窗口继承 + 风险未给周次→Main 澄清（绝不默认 week=1）**。
+- **新增 2 个 Agent Tool Façade（共 7 个）**：`campus_teacher_load_query`（多周窗口负载 TopN）、`campus_schedule_range_query`（多周范围课表）；`adpContractVersion` **R49.2.1 → R49.4**；`r49-ma/tools/openapi/campus-agent-tools.adp-import.json` 已是 7 operations。
+- **数据枢纽（`r49-ma/data-hub/`）**：canonical-schema.json（draft-07 匿名命名空间 v2）、week-expression.js（1..20 单/双/离散周次解析）、validator.js、source-detector.js（OLE2/XLS 签名识别、中性描述）、adapters（base fail-closed + portal-family-qz-legacy 中性适配）、provider-capabilities.json（credentialed=false / rawImportAllowed=false / anonymous-only）、privacy-policy.json（personal-import 存储排除）。测试：`tests/fixtures/synthetic-legacy-timetable.json`（教师A01-A03、2026级示例1~3班、示例课程A-D、校区A/B/C）+ `test-r49-4-data-hub.js`（8 契约）。
+- **匿名边界（`test-r49-4-anonymity-boundary.js`，7 契约）**：镜像 builder 的 `submissionInputFiles()` 接受过滤器全量扫描 submission-package + r49-ma；真实学校身份仅存于 3 个 gate 校验器文件的 deny-list（`GATE_FILES_BY_PATH` 豁免），绝不复制进生成的比赛资产；凭据模式（quoted 值 + dummy 豁免 + 必填 padding 的 base64）；`.xls/.xlsx` 扩展名 + 个人文件名模式（`*课表*`、学号 `\d{6,}` 等）拒绝；`build-submission-package.js` 新增 `PERSONAL_IMPORT_EXCLUDED = ["personal-import","raw-import","private-import","personal-timetables"]` 目录硬守卫；`10-MIGRATION-RISK-REGISTER.md` #16 更新。
+- **本地验证全绿**：r49-ma `node --test "tests/*.js"` = **162/162**；mcp `npm test` = **51/51**；mcp `check`（tsc）/`typecheck`/`check:openapi` 全绿；`sync-campusflow-function.js --check` = **8 文件一致 PASS**；`test-http-function.js` = **health 200 / tools=9 / 7 Agent Tool Façade 冒烟 PASS**；`npm test --prefix competition/adp-kit` 全链 PASS（eval:golden 33/33、submission 54 文件 0 findings、widget CI、artifact 校验）**唯一基线失败**：末步 `sync-assets-manifest --check` 因用户未提交的 `generated-assets-manifest.json`/submission-package 漂移（改动前已存在，与 R49.4 无关；跑套件前已备份并逐字节还原用户漂移，`git status` 恢复原样）。
+- **ADP 清单更新**：`R49-MA-ADP-MANUAL-CONFIG-CHECKLIST.md`（§0 绑定 7 工具；§4 工具表 7 Façade；§6 D1~D5 验证；§8.1 重写为 R49.4 插件+Prompt 更新节，含两个新工具参数可见性表与「工具调用结果直接返回给用户=OFF」；§9 部署状态补 R49.4）；`06-ADP-MANUAL-CONFIG-CHECKLIST.md` 要点 4/6/7 同步。
+- **CloudBase 部署：待凭据解锁（blocked）**：本机 `tcb env list` → 无有效身份信息（需用户 `tcb login`）；`CAMPUS_API_TOKEN` 不在本会话环境。目标部署命令（沿用 R49.2 受控路径，不覆盖线上 envVariables）：`tcb fn deploy campusflowAdpTools --dir competition/adp-kit/cloudfunctions/campusflowAdpTools --httpFn --path /campusflow-adp-tools --force`；部署后 `/health` 目标值：`status=ok`、`tools=9`、`agentTools=7`、`adpContractVersion=R49.4`、`dataVersion=competition-demo-v2`、`dataHash=sha1:4f3bbbb45d1f`。
+- ADP 控制台待办：导入/更新插件为 7 operations，重新粘贴 4 Agent Prompt（8.1 节），应用首页按 D1~D5 复测 CASE D；**不进入 Model A/B**。
 
 ## G0 / G1 Gate 状态（2026-08-17）
 - **R49.2.1 验证证据（2026-08-17 本机）**：r49-ma `node --test "tests/*.js"` = **117/117**（含新增 `test-g1-hardening.js` 13 项：别名等价 A/B/C、未知校区 fail-closed、classroom 0-mask 三态、preferredStudyDuration=0 铁律、T09 整周 6 节 vs 周三 3 节重调、Top1 链路 overview→schedule→risk(self) conflictCount=1、overview 无个人下钻）；cloudfunctions `test-http-function.js` = 1/1；mcp `npm test` = **36/36**；mcp `check`+`typecheck`+`check:openapi` 全绿；`git diff --check` 干净。基线失败证据：mcp `query_schedule weekday=0` 在 HEAD（R49.2 commit 04d5c87）即失败（32/33），根因=R49.2 语义变更未同步测试，已按新契约同步该用例（成功+整周 4 条+weekday 不回显 0）。Golden `eval-golden.js`：`oracleSourceSha256` 断言曾失败（expected fb3182… / actual 7c5744…，因 tools.js 源码合法变更）→ **已在 G2-PREFLIGHT 完成人工重审（分类 A）并审计更新 golden 文件**，现 33/33 PASS（见「G2-PREFLIGHT 状态」节）。

@@ -14,7 +14,7 @@
 4. 按第 1 节逐字段配置 Agent 高级设置。
 5. 按第 2 节配置转交关系（Main→Child、Child→Main；**禁止 Child→Child 横向自由转交**）。
 6. 按第 3 节配置对话流转策略（**每个新 Turn 由主 Agent 接管**）。
-7. 按第 4 节绑定 5 个 Agent Tool（→ CampusTools 插件）与知识库（Main）。
+7. 按第 4 节绑定 7 个 Agent Tool（→ CampusTools 插件，导入 `campus-agent-tools.adp-import.json`）与知识库（Main）。
 8. 按第 5 节导入复用 r48-v3 Widget（Clarification / Agent Output；第一阶段 Tool Direct Output=OFF）。
 9. 按第 6 节在应用首页跑验收矩阵（A~H + 13 case + R48 A~G），全部绿灯后才进入模型 A/B（第 7 节）。
 
@@ -37,7 +37,7 @@
 | clarificationStyle | Widget | 用 Clarification Widget |
 | output | text | 第一阶段文本全链验证 |
 | 知识库 | 校园智序赛事知识（01-08 + taxonomy，已按 v2 修复） | 仅静态知识；禁答动态事实 |
-| 可用工具 | KnowledgeRetrievalAnswer + 路由（转交）；**不直接持有 5 个动态 Tool** | 兜底可选放开 `campus_schedule_query`（只读课表） |
+| 可用工具 | KnowledgeRetrievalAnswer + 路由（转交）；**不直接持有 7 个动态 Tool** | 兜底可选放开 `campus_schedule_query`（只读课表） |
 
 ### 1.2 小序 · 课程空间（Schedule）
 
@@ -177,7 +177,7 @@
 ## 6. 验证步骤（控制台人工验收）
 
 1. 应用首页（非单工作流调试）逐条跑 `09-MULTI-AGENT-E2E-MATRIX.md`：
-   - 硬回归 A~H + **D-2/D-3 变体**（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / **并列不澄清** / **week=1 不继承 overviewWindow** / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
+   - 硬回归 A~H + **D-2/D-3 变体**（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / **并列不澄清** / **D1~D5 窗口语义：rankingWindow 1..4 → detailWindow 继承 → 范围工具；只看第一周 → fresh 单周；风险未给周次 → Main 澄清，绝不默认 week=1** / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
    - 13 核心 case + R48 A~G 回归。
 2. CASE C evidence 契约：「下一天呢」必须观察到 fresh `campus_day_plan(date=2026-09-05)`、「再下一天」必须 `campus_day_plan(date=2026-09-06)`——不得仅根据历史返回文本生成答案（逐轮截屏取证）。
 3. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
@@ -203,22 +203,50 @@
 
 ---
 
-## 8.1 R49.3 / G2-D 提示词更新（2026-08-17，CASE D 修复）
+## 8.1 R49.4 / G2-D 提示词与插件更新（2026-08-17，D1~D5 窗口语义）
 
-> **本轮无需修改任何工具绑定 / 参数可见性 / Widget / 转交关系**——只重新粘贴 4 个 Agent 的 Prompt
-> （仓库真源已更新，逐字导入即可）。原因：CASE D 两个 bug（并列误澄清、week 污染）都在 Agent 状态层，
-> Runtime（teacherLoadTop 稳定排序、overview actions week=1）已验证正确。
+> **本轮要求两项手动改动（缺一不可）**：
+> 1. **自定义插件必须更新**：导入/更新 `r49-ma/tools/openapi/campus-agent-tools.adp-import.json`，插件必须暴露 **7 个 operation**（新增 `campus_teacher_load_query`、`campus_schedule_range_query`）；
+> 2. **重新粘贴 4 个 Agent 的 Prompt**（仓库真源已更新，逐字导入即可）。
+
+**Agent 绑定（插件更新后）**：
+
+| Agent | 工具绑定 | 说明 |
+|---|---|---|
+| Main | `KnowledgeRetrievalAnswer` only | 静态 meta/知识走知识库，与之前一致 |
+| Schedule | `campus_schedule_query`、`campus_schedule_range_query`、`campus_classroom_search` | 新增范围课表 |
+| Risk | `campus_risk_check`、`campus_day_plan` | 不变 |
+| Insight | `campus_overview`、`campus_teacher_load_query` | 新增教师负载 |
+
+**campus_teacher_load_query 参数可见性**：
+
+| 参数 | 可见性 | 必填 | 约束 |
+|---|---|---|---|
+| weekStart | ON | 是 | 整数 1..20 |
+| weekEnd | ON | 是 | 整数 1..20（不得小于 weekStart） |
+| topN | ON | 否 | 整数 1..10；Top1/Top3 意图明确时无需用户提供 |
+| campus | ON | 否 | — |
+
+**campus_schedule_range_query 参数可见性**：
+
+| 参数 | 可见性 | 必填 |
+|---|---|---|
+| entityType / entityName | ON | 是 |
+| weekStart / weekEnd | ON | 是 |
+| weekday / periodStart / periodEnd | ON | 否 |
+
+- 两个新工具的「工具调用结果直接返回给用户」= **OFF**（先文本全链验证，Widget Direct Output 第二阶段再开）。
 
 | Agent | 动作 | 变更要点 |
 |---|---|---|
-| 主协调 | **重新粘贴** `agents/main-orchestrator.md` | 新增「Top1/Top2/Top3 排位语义」（position 语义、并列不澄清、多对象短语例外、禁止硬编码教师009）+「overviewWindow 与教学周隔离」（drilldownAcademicWeek=1，绝不 4）；信封新增 rankContext |
-| 校园洞察 | **重新粘贴** `agents/campus-insight.md` | 新增「Rank Context」节（rankContext 结构、并列如实说明、多对象轮 selectedRank=null、不继承 overviewWindow） |
-| 课程空间 | **重新粘贴** `agents/schedule-space.md` | 继承规则补：跨域下钻只继承实体，week 用 Main 信封 drilldownAcademicWeek=1 |
-| 风险规划 | **重新粘贴** `agents/risk-planning.md` | 行为约束补：跨域下钻 mode=self 不要求第二对象、week=1 |
+| 主协调 | **重新粘贴** `agents/main-orchestrator.md` | 「7 个动态工具」；「WindowContext 窗口语义（R49.4 硬性要求）」（windowContext 信封、rankingWindow/detailWindow、6 条硬规则）；rankContext 跨域注记 |
+| 校园洞察 | **重新粘贴** `agents/campus-insight.md` | 「Ranking Window 语义（R49.4 硬性要求）」：窗口变化必须 fresh 负载查询；`campus_teacher_load_query` 映射 |
+| 课程空间 | **重新粘贴** `agents/schedule-space.md` | 「范围课表」继承规则：detailWindow 多周 → 范围工具、单周 → fresh 单周工具、无窗口 → NEED_CLARIFICATION 绝不默认 week=1 |
+| 风险规划 | **重新粘贴** `agents/risk-planning.md` | 显式周次/日期才下钻；未给时间 → NEED_CLARIFICATION 绝不静默 week=1 |
 
-- **验证口诀（控制台复测 CASE D）**：「看Top1课表」绝不弹「教师009/教师011/两位都看」选择；工具调用 week 必须=1（不得=4）；并列时回复「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011」。
-- 若控制台出现与上述不一致 → 确认 Prompt 已整体替换（不是增量追加）并重新粘贴。
-- 参考实现：`r49-ma/tools/rank-semantics.js`（resolveRank / resolveDrilldownWeek / isMultiObjectRequest，Prompt 语义与测试同源）。
+- **验证口诀（控制台复测 CASE D，R49.4 版）**：D1「未来四周教师负载最高的是谁」→ 工具调用 `campus_teacher_load_query(1,4)`；D2「看Top1课表」→ `campus_schedule_range_query(教师009,1,4)` 且绝不弹「教师009/教师011/两位都看」选择；D3「只看第一周」→ fresh `campus_schedule_query(week=1)`；D5「检查Top1风险」→ Main 澄清时间窗口，**不得**静默 week=1。并列时回复「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011」。
+- 若控制台出现与上述不一致 → 确认插件已更新（7 operations）且 Prompt 已整体替换（不是增量追加）并重新粘贴。
+- 参考实现：`r49-ma/tools/rank-semantics.js`（resolveRank / resolveDrilldownWeek / isMultiObjectRequest）与 `r49-ma/data-hub/`（窗口与周次表达式确定性解析，Prompt 语义与测试同源）。
 
 ## 9. 平台侧待办（非本轮仓库可完成）
 
@@ -239,3 +267,10 @@
 > **部署状态：CloudBase `/health` 实测仍为 R49.1.1（2026-08-17）** —— 需手动重部署
 > `cloudfunctions/campusflowAdpTools`（scf_bootstrap + index.js 包装，需 CAMPUS_API_TOKEN 环境变量）后，
 > `/health` 应返回 `adpContractVersion=R49.2` 再进入控制台验收。
+> **R49.3（2026-08-17）**：Top1/Top2 并列（27/54 与 27/54）position 语义修复（稳定排序 + 并列不澄清）；
+> `test-drilldown-rank-semantics.js` / `test-g1-hardening.js` / `09-MULTI-AGENT-E2E-MATRIX.md` 全绿。
+> **R49.4（2026-08-17）**：新增 `campus_teacher_load_query`、`campus_schedule_range_query` 两个 Agent Tool Façade
+> （共 7 个）；`adpContractVersion` 升至 R49.4；`/health` 应返回 `tools=9, agentTools=7, adpContractVersion=R49.4`；
+> 数据枢纽（`r49-ma/data-hub/`：canonical-schema、week-expression、validator、source-detector、neutral adapters、
+> privacy-policy）与匿名边界测试（`test-r49-4-data-hub.js` / `test-r49-4-anonymity-boundary.js`）就位；
+> 控制台 CASE D 按 D1~D5 复测（见 8.1 验证口诀）。
