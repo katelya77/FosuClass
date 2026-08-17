@@ -12,6 +12,14 @@ if (path.dirname(OUTPUT) !== COMPETITION_ROOT || path.basename(OUTPUT) !== "subm
   throw new Error(`拒绝清理非预期目录：${OUTPUT}`);
 }
 
+const PERSONAL_IMPORT_EXCLUDED = ["personal-import", "raw-import", "private-import", "personal-timetables"];
+for (const dir of PERSONAL_IMPORT_EXCLUDED) {
+  const candidate = path.join(COMPETITION_ROOT, dir);
+  if (fs.existsSync(candidate)) {
+    throw new Error(`拒绝打包个人导入目录：${candidate}（提交包只允许匿名数据，隐私边界见 r49-ma/data-hub/privacy-policy.json）`);
+  }
+}
+
 function ensureParent(file) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
 }

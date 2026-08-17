@@ -19,7 +19,7 @@
 | 13 | R47.7 回滚路径失效 | P1 | 紧急回滚不可用 | 11 文档定义 Golden Baseline 存档与回滚步骤；迁移前先导出基线 ZIP |
 | 14 | rankingWindow/detailWindow 碰撞 | P1 | 多周排名窗口被误继承为单周调用（或反之），week 语义串环境 | Main 硬规则「显式 > 继承」；windowContext 信封只携带 rankingWindow/detailWindow/academicWeek 三个字段；`resolveDetailWindow` 纯函数 fail-closed；test-r49-4-window-semantics 回归 |
 | 15 | 范围课表误去重重复周次课 | P1 | `campus_schedule_range_query` 把 1-4 周每周二这种重复课并成一条，破坏逐周事实 | 契约：每条 = (lesson, academicWeek) 一对一条，`academicWeek`/`date` 逐周展开；tools.test.js 教师003 1..4 周展开回归；adapter/OpenAPI 同步镜像 |
-| 16 | 私有导入物泄漏进比赛产物 | P0 | 私有 adp-kit 数据/脚本/mock 混入 competition/submission-package，触碰数据守卫 | build-submission-package 显式 excludes（r49-ma、私有 mock、脚本、XLS 原文）；privacy-policy.json + test-r49-4-anonymity-boundary 硬校验；Task 9 交付检查项 |
+| 16 | 私有导入物泄漏进比赛产物 | P0 | 私有 adp-kit 数据/脚本/mock 混入 competition/submission-package，触碰数据守卫 | build-submission-package 显式 excludes（r49-ma、私有 mock、脚本、XLS 原文）并拒绝 personal-import/raw-import/private-import 目录；privacy-policy.json + test-r49-4-anonymity-boundary 硬校验（凭据模式/身份 denylist/私有扩展名，denylist 仅存测试常量）；Task 9 交付检查项 |
 
 ## 未验证项（显式标注）
 
