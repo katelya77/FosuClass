@@ -104,7 +104,7 @@
 - 目的：任何时刻 Main 都能 escape 旧的 suspended/pending workflow 状态，防止 stale context 污染：
   - T09 课表 → 检查风险 → 「那看看他周三的课」（risk→schedule 干净切换）
   - 安排 09-04 → 「下一天呢」（day-plan 日期推进）
-  - risk clarification 态 → 「A校区下午空教室」（立即 escape 到 classroom）
+  - risk compare 澄清态（缺第二对象）→ 「A校区2026-09-03第5-6节有哪些60人以上的空教室？」（Main 判定 NEW_TASK，立即 escape 到 classroom，不追问第二对象）
 
 ---
 

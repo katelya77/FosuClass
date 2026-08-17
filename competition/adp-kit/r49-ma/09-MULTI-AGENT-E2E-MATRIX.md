@@ -25,15 +25,14 @@
 
 **硬性要求**：第 2 轮**不得**要求第二对象；第 3 轮从 risk 切回 schedule，不残留 risk pending。
 
-### CASE B：risk clarification 态 → 空教室（stale escape）
+### CASE B：risk compare 澄清态 → 空教室（stale escape）
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools |
 |---|---|---|---|---|---|---|
-| 1 | T09老师第1周风险怎么样 | risk | comparisonMode=self, entity=T09 | — | — | campus_risk_check(self) |
-| 2 | （系统若处于 clarification） | risk | pending=second_entity | — | — | — |
-| 3 | 校区A 2026-09-03 下午有哪些空教室 | **classroom** | NEW_TASK, staleContextEscaped=**true** | — | second_entity_pending, risk_local_state | campus_classroom_search |
+| 1 | 比较T09老师第1周和另一位老师的风险 | risk | comparisonMode=compare, firstEntity=T09, week=1, pending=**second_entity** | — | — | —（NEED_CLARIFICATION，不调工具） |
+| 2 | A校区2026-09-03第5-6节有哪些60人以上的空教室？ | **classroom** | NEW_TASK, staleContextEscaped=**true** | — | second_entity_pending, comparisonMode, risk_local_state | campus_classroom_search（campus=别名A校区，R49.2.1 解析） |
 
-**硬性要求**：第 3 轮立即 escape 旧 risk context → classroom；**不得**继续追问第二个比较对象。
+**硬性要求**：Turn 1 由 Main 作为唯一澄清出口询问第二位老师（compare intent 缺第二对象 → NEED_CLARIFICATION）；Turn 2 用户不回答第二对象而发起新任务，Main 判定 **NEW_TASK** 立即 escape 旧 risk 澄清态 → classroom，**不得**继续追问第二个比较对象。
 
 ### CASE C：安排一天 → 下一天
 

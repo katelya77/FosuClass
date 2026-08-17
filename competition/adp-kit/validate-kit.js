@@ -46,16 +46,26 @@ function unique(items, label) {
 }
 
 function validateKnowledge() {
-  const files = fs.readdirSync(path.join(ROOT, "knowledge"))
+  const taxonomy = json("knowledge/taxonomy.json");
+  assert.strictEqual(taxonomy.schema, "campus-adp-knowledge-taxonomy/v1", "taxonomy schema 必须为 v1");
+  const declared = taxonomy.categories.flatMap((category) => category.files);
+  assert(declared.length > 0, "taxonomy 不得为空");
+  unique(declared, "taxonomy 文件声明");
+  declared.forEach((name) => {
+    assert(/^\d{2}-.*\.md$/.test(name), `taxonomy 声明文件名不规范：${name}`);
+    assert(fs.existsSync(path.join(ROOT, "knowledge", name)), `taxonomy 声明但文件不存在：${name}`);
+  });
+  const onDisk = fs.readdirSync(path.join(ROOT, "knowledge"))
     .filter((name) => /^\d{2}-.*\.md$/.test(name))
     .sort();
-  assert.strictEqual(files.length, 7, "知识库 Markdown 必须恰好 7 份");
-  files.forEach((name) => {
+  assert.deepStrictEqual(onDisk, [...declared].sort(), "knowledge/ 文件必须与 taxonomy 声明 EXACT MATCH（禁止漏文件或未声明文件）");
+  onDisk.forEach((name) => {
     const content = read(path.join("knowledge", name));
     REQUIRED_KNOWLEDGE_SECTIONS.forEach((section) => {
       assert(content.includes(section), `${name} 缺少章节：${section}`);
     });
   });
+  return onDisk.length;
 }
 
 function validateQa() {
@@ -126,7 +136,7 @@ function validateApplication() {
   assert.strictEqual(app.conversation.webSearch, false);
   assert.strictEqual(app.appVariables.environment, "competition");
   assert.strictEqual(app.appVariables.data_mode, "anonymous");
-  assert.strictEqual(app.appVariables.data_version, "competition-demo-v1");
+  assert.strictEqual(app.appVariables.data_version, "competition-demo-v2", "应用数据版本必须为唯一赛事事实源 v2（R49 起 application-config 已声明 v2）");
   assert.deepStrictEqual(Object.keys(app.appVariables), [
     "environment", "data_mode", "data_version", "timezone", "default_language", "default_campus",
   ], "应用变量必须保持 6 个已核验项，不添加评测时钟等业务变量");
@@ -215,7 +225,7 @@ function validateAnonymousCompetitionAssets() {
 }
 
 function run() {
-  validateKnowledge();
+  const knowledgeCount = validateKnowledge();
   validateQa();
   validateEvaluation();
   validateWorkflows();
@@ -223,7 +233,7 @@ function run() {
   validateInterfaces();
   validateAnonymousCompetitionAssets();
   const qaCount = json("qa/standard-qa.json").items.length;
-  console.log(`ADP kit validation passed: 7 docs, ${qaCount} QA, 80 evals, 5 workflows, 7 tools, 6 widget v2 card types + 1 native Hero pilot`);
+  console.log(`ADP kit validation passed: ${knowledgeCount} docs (taxonomy 真源), ${qaCount} QA, 80 evals, 5 workflows, 7 tools, 6 widget v2 card types + 1 native Hero pilot`);
 }
 
 run();

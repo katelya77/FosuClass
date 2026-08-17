@@ -20,11 +20,10 @@
     },
     {
       "id": "B",
-      "name": "risk clarification 态 → 空教室（stale escape）",
+      "name": "risk compare 澄清态 → 空教室（stale escape）",
       "turns": [
-        { "input": "T09老师第1周风险怎么样", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "T09" } },
-        { "input": "（系统处于 clarification，缺参）", "route": "risk", "tools": [], "state": { "pending": "second_entity" } },
-        { "input": "校区A 2026-09-03 下午有哪些空教室", "route": "classroom", "tools": ["campus_classroom_search"], "state": { "staleContextEscaped": true }, "hard": "立即 escape 旧 risk context → classroom，不得继续追问第二对象" }
+        { "input": "比较T09老师第1周和另一位老师的风险", "route": "risk", "tools": [], "state": { "comparisonMode": "compare", "firstEntity": "T09", "week": 1, "pending": "second_entity" }, "hard": "compare intent 缺第二对象 → NEED_CLARIFICATION，由 Main 作为唯一澄清出口询问第二位老师，不调工具" },
+        { "input": "A校区2026-09-03第5-6节有哪些60人以上的空教室？", "route": "classroom", "tools": ["campus_classroom_search"], "state": { "staleContextEscaped": true, "newTask": true }, "dropped": ["second_entity_pending", "comparisonMode", "risk_local_state"], "hard": "Main 判定 NEW_TASK 立即 escape 旧 risk 澄清态 → classroom：不得继续追问第二对象；campus=别名 A校区 走 R49.2.1 解析" }
       ]
     },
     {
