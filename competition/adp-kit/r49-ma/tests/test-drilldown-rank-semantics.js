@@ -1,13 +1,14 @@
 "use strict";
 // R49.3 / G2-D Drilldown State Semantics Hardening 新增回归（2026-08-17）
+// R49.4 更新（2026-08-17）：下钻时间窗口改用显式 WindowContext 语义。
 //
 // 覆盖用户指定 A~H：
 //  A. campus_overview teacherLoadTop 稳定排序（指标并列时 Top1/Top2 position 仍稳定）
 //  B. 未来四周教师负载最高 → 看Top1课表 → 检查Top1风险（NO clarification；entity=teacherLoadTop[0]；
-//     risk mode=self；week=1）
-//  C. overviewWindow.count=4 不得变成 academicWeek=4
-//  D. schedule drilldown week=1
-//  E. risk drilldown week=1
+//     detailWindow=1..4；risk mode=self；risk 未指定时间必须澄清，不自动 week=1）
+//  C. overviewWindow.count=4 不得变成 academicWeek=4；四周排名后下钻保留 detailWindow=1..4
+//  D. schedule 下钻 detailWindow=1..4（范围工具）；「只看第一周」→ 1..1（单周工具）
+//  E. risk 下钻必须显式周次（不自动 week=1）
 //  F. 看Top2课表 → teacherLoadTop[1]（不得调用 Top1）
 //  G. 并列第一都有谁 → 如实列并列项，不压缩为 Top1，不破坏 rankContext
 //  H. 随后「看Top1课表」仍落 teacherLoadTop[0]
@@ -16,7 +17,8 @@
 // 旧 CASE D 行为下这些断言必然失败（并列触发澄清 / week 继承 4 / Top1 依赖指标唯一性），
 // 新行为下通过；禁止弱化既有断言。
 //
-// 模拟决策核心 = tools/rank-semantics.js 纯函数 + CampusTools 真实取数，与 Agent Prompt 同源同语义。
+// 模拟决策核心 = tools/rank-semantics.js 纯函数 + tools/window-semantics.js 纯函数
+// + CampusTools 真实取数，与 Agent Prompt 同源同语义。
 
 const test = require("node:test");
 const assert = require("node:assert");
@@ -28,6 +30,9 @@ process.env.CAMPUS_DATA_PATH = V2_PATH;
 
 const { callAgentTool } = require("../../cloudfunctions/campusflowAdpTools/src/agent-tools.js");
 const { isMultiObjectRequest, resolveRank, resolveDrilldownWeek } = require("../tools/rank-semantics.js");
+const { resolveDetailWindow, shouldUseRangeSchedule } = require("../tools/window-semantics.js");
+
+const RANKING_WINDOW_14 = { weekStart: 1, weekEnd: 4 };
 
 const R49_MA = path.join(__dirname, "..");
 const FIXTURES = require("./fixtures/multi-turn-cases.json");
@@ -76,11 +81,15 @@ test("A. teacherLoadTop 稳定排序：指标并列时 Top1/Top2 position 稳定
 // ---------------------------------------------------------------------------
 // B. 链路：未来四周 → 看Top1课表 → 检查Top1风险
 // ---------------------------------------------------------------------------
-test("B. 链路：Top1 drilldown NO clarification，entity=teacherLoadTop[0]，risk mode=self", () => {
+test("B. 链路：Top1 drilldown NO clarification，entity=teacherLoadTop[0]，detailWindow=1..4", () => {
   const item = overview();
   const top = item.teacherLoadTop;
-  const window = { kind: "future_weeks", count: 4 };
-  assert.strictEqual(resolveDrilldownWeek(window, null), 1, "未显式指定教学周 → drilldownAcademicWeek=1");
+  assert.deepStrictEqual(
+    resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14 }),
+    { weekStart: 1, weekEnd: 4 },
+    "未来四周排名后「看Top1课表」继承 detailWindow=1..4（不得默认 week=1，不得误成 week=4）",
+  );
+  assert.strictEqual(shouldUseRangeSchedule(RANKING_WINDOW_14), true, "1..4 必须走范围课表工具");
 
   const t2 = resolveRank("看Top1课表");
   assert.strictEqual(t2.kind, "single", "「看Top1课表」必须是单排位（即使指标并列），不得进入澄清分支");
@@ -90,11 +99,16 @@ test("B. 链路：Top1 drilldown NO clarification，entity=teacherLoadTop[0]，r
 
   const sch = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: entity1.teacherName, week: 1 });
   assert.strictEqual(sch.success, true, "Top1 课表必须成功（无澄清）");
-  assert.strictEqual(sch.items.length, 6, "教师009 第 1 周应 6 节");
+  assert.strictEqual(sch.items.length, 6, "教师009 第 1 周应 6 节（显式周次数据锚点）");
 
   const t3 = resolveRank("检查Top1风险");
   assert.strictEqual(t3.kind, "single");
   assert.strictEqual(t3.rank, 1);
+  assert.deepStrictEqual(
+    resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14 }),
+    RANKING_WINDOW_14,
+    "未指定时间的「检查Top1风险」不得自动收窄为 week=1（须澄清时间窗口）",
+  );
   const risk = callAgentTool("campus_risk_check", { mode: "self", entityType: "teacher", entityName: entity1.teacherName, week: 1 });
   assert.strictEqual(risk.success, true);
   assert.strictEqual(risk.summary.selfCompare, true, "Top1 风险必须 self 模式");
@@ -105,30 +119,34 @@ test("B. 链路：Top1 drilldown NO clarification，entity=teacherLoadTop[0]，r
 // ---------------------------------------------------------------------------
 // C. overviewWindow.count 不得成为 academicWeek
 // ---------------------------------------------------------------------------
-test("C. overviewWindow.count=4 与 academicWeek 严格隔离（week 恒为 1，绝不 4）", () => {
+test("C. overviewWindow.count=4 与 academicWeek 严格隔离（下钻保留 1..4，绝不自动 week=4）", () => {
   const item = overview();
   const window = item.window;
   assert.strictEqual(window.teachingWeeks.count, 4, "overview 聚合窗口应为 4 周");
   const overviewWindow = { kind: "future_weeks", count: window.teachingWeeks.count };
-  const drilldownWeek = resolveDrilldownWeek(overviewWindow, null);
-  assert.strictEqual(drilldownWeek, 1, "聚合窗口 count=4 不得推导为教学周 4");
-  assert.notStrictEqual(drilldownWeek, overviewWindow.count, "week 不得等于 overviewWindow.count（跨域 slot collision 回归）");
+  assert.strictEqual(resolveDrilldownWeek(overviewWindow, null), null, "聚合窗口不得推导出默认教学周（R49.4 退役 week=1 默认）");
+  const detail = resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14 });
+  assert.deepStrictEqual(detail, { weekStart: 1, weekEnd: 4 }, "四周排名后下钻保留 1..4（不丢窗口）");
+  assert.notStrictEqual(detail.weekStart, overviewWindow.count, "窗口起点不得被 count 污染");
+  assert.strictEqual(shouldUseRangeSchedule(detail), true, "1..4 使用范围课表");
+  const narrowed = resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14, explicitWeek: 1 });
+  assert.deepStrictEqual(narrowed, { weekStart: 1, weekEnd: 1 }, "「只看第一周」收窄为 1..1");
+  assert.strictEqual(shouldUseRangeSchedule(narrowed), false, "1..1 使用单周课表");
   const explicit = resolveDrilldownWeek(overviewWindow, 7);
   assert.strictEqual(explicit, 7, "用户显式指定教学周时用显式值");
 });
 
 // ---------------------------------------------------------------------------
-// D/E. schedule / risk drilldown 均 week=1
+// D/E. schedule 下钻窗口语义（detailWindow 1..4 / 显式收窄 1..1）
 // ---------------------------------------------------------------------------
-test("D/E. schedule 与 risk 下钻均携带 week=1（CASE D 标准链）", () => {
+test("D/E. schedule 下钻保留 detailWindow=1..4，「只看第一周」显式收窄 1..1（CASE D 标准链）", () => {
   const item = overview();
-  const caseD = FIXTURES.hardCases.find((c) => c.id === "D");
-  assert.strictEqual(caseD.turns[1].state.week, 1, "fixture：schedule 下钻 week=1");
-  assert.strictEqual(caseD.turns[2].state.week, 1, "fixture：risk 下钻 week=1");
-  assert.strictEqual(caseD.turns[1].state.rank, 1);
-  assert.strictEqual(caseD.turns[2].state.rank, 1);
-  const dropped = caseD.turns[1].dropped || [];
-  assert.ok(dropped.includes("overviewWindow"), "fixture：schedule 下钻必须 drop overviewWindow");
+  const detail = resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14 });
+  assert.deepStrictEqual(detail, { weekStart: 1, weekEnd: 4 }, "schedule 下钻必须继承四周窗口");
+  assert.strictEqual(shouldUseRangeSchedule(detail), true, "1..4 使用范围课表工具");
+  const narrowed = resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14, explicitWeek: 1 });
+  assert.deepStrictEqual(narrowed, { weekStart: 1, weekEnd: 1 }, "「只看第一周」→ 1..1（fresh 单周调用）");
+  assert.strictEqual(shouldUseRangeSchedule(narrowed), false, "1..1 使用单周课表工具");
   const ov = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: item.teacherLoadTop[0].teacherName, week: 1 });
   assert.strictEqual(ov.success, true);
   assert.ok(ov.items.length > 0);
@@ -151,7 +169,11 @@ test("F. Top2 下钻：entity=teacherLoadTop[1]，不得落在 Top1", () => {
   assert.ok(sch.items.length > 0, "教师011 第 1 周应有课");
   const d2 = FIXTURES.rankDrilldown.find((c) => c.id === "D2");
   assert.strictEqual(d2.turns[1].state.rank, 2);
-  assert.strictEqual(d2.turns[1].state.week, 1);
+  assert.deepStrictEqual(
+    resolveDetailWindow({ rankingWindow: RANKING_WINDOW_14 }),
+    { weekStart: 1, weekEnd: 4 },
+    "Top2 下钻同样继承 detailWindow=1..4（fixture 窗口字段随 Task 7 的 D1~D5 矩阵更新）",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -232,7 +254,7 @@ test("契约 4：矩阵 CASE D/D-2/D-3 与 fixtures rankDrilldown 同步", () =>
   assert.deepStrictEqual(d.turns.map((t) => t.route), ["insight", "schedule", "risk"], "CASE D 主链路由不变");
 });
 
-test("契约 5：rank-semantics 纯函数边界（多对象优先、未知引用 none）", () => {
+test("契约 5：rank-semantics 纯函数边界（多对象优先、未知引用 none、无默认周）", () => {
   assert.strictEqual(isMultiObjectRequest("把并列第一两位都给我看看"), true);
   assert.strictEqual(isMultiObjectRequest("他们呢"), true);
   assert.strictEqual(isMultiObjectRequest("比较这两位"), true);
@@ -240,7 +262,7 @@ test("契约 5：rank-semantics 纯函数边界（多对象优先、未知引用
   assert.strictEqual(resolveRank("排第一那个").rank, 1);
   assert.strictEqual(resolveRank("第二个").rank, 2);
   assert.strictEqual(resolveRank("随便看看").kind, "none");
-  assert.strictEqual(resolveDrilldownWeek({ kind: "future_weeks", count: 4 }, null), 1);
+  assert.strictEqual(resolveDrilldownWeek({ kind: "future_weeks", count: 4 }, null), null, "聚合窗口不得推导默认教学周（R49.4）");
   assert.strictEqual(resolveDrilldownWeek(null, null), null, "无窗口且无显式周 → 不猜（null）");
   assert.strictEqual(resolveDrilldownWeek({ kind: "future_weeks", count: 4 }, 4), 4, "用户显式说第4周则用 4");
 });

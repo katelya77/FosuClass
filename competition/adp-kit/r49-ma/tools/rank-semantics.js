@@ -5,8 +5,11 @@
 //  1. 教师负载并列最高时，Main 错误把「业务指标并列第一」当成「Top1 不唯一」而发起澄清。
 //     契约：Top1/Top2/Top3 是「有序返回列表的 position 语义」，与指标是否并列无关。
 //  2. 「未来四周」（overviewWindow.count=4）被错误继承为 campus_schedule_query 的 week=4。
-//     契约：overviewWindow 是聚合窗口，永远不得作为 academicWeek；跨域下钻默认
-//     drilldownAcademicWeek=1（对齐 campus_overview actions 的「查看第1周校园课表 → week=1」）。
+//
+// R49.4 更新：旧的「聚合窗口后下钻默认 drilldownAcademicWeek=1」语义已退役。
+//     下钻时间窗口一律由显式 WindowContext 决定（tools/window-semantics.js）：
+//     rankingWindow 继承为 detailWindow（「看Top1课表」→ 1..4），显式「只看第一周」→ 1..1。
+//     resolveDrilldownWeek 仅保留「用户显式指定教学周」的解析，绝不猜测默认周。
 //
 // 本模块只包含纯函数，不依赖任何 Agent 运行时；测试与 Prompt 共同约束同一语义。
 
@@ -61,16 +64,14 @@ function resolveRank(text) {
 }
 
 /**
- * 跨域下钻教学周解析。
- * overviewWindow = { kind: "future_weeks", count: 4 }（聚合窗口，只描述聚合范围）。
+ * 跨域下钻教学周解析（R49.4：不再提供默认周）。
  * 规则：
  *   - 用户显式指定教学周 → 用显式值；
- *   - 未指定 → drilldownAcademicWeek=1（对齐 overview actions week=1 语义）；
- *   - 任何情况下都不得返回 overviewWindow.count。
+ *   - 未显式指定 → null（fail closed，绝不猜测；下钻窗口由 window-semantics.js 的
+ *     WindowContext 决定，聚合窗口 count 永远不得推导为教学周）。
  */
 function resolveDrilldownWeek(overviewWindow, explicitWeek) {
   if (Number.isInteger(explicitWeek) && explicitWeek >= 1 && explicitWeek <= 20) return explicitWeek;
-  if (overviewWindow && overviewWindow.kind === "future_weeks") return 1;
   return null;
 }
 
