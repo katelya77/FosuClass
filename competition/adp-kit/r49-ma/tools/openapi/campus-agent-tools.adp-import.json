@@ -6,331 +6,1007 @@
     "description": "面向腾讯云智能 ADP「基于 API」自定义插件导入的 import-ready OpenAPI。5 个确定性 Agent Tool Façade（/api/campus_*）映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。本文件仅声明 bearer/APIKey 鉴权需求，不包含任何 token；实际 token 在 ADP 控制台配置。"
   },
   "servers": [
-    { "url": "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools", "description": "腾讯 CloudBase 比赛 CampusTools HTTP Function 网关（竞争比赛测试实例，鉴权需 Bearer token）" }
+    {
+      "url": "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools",
+      "description": "腾讯 CloudBase 比赛 CampusTools HTTP Function 网关（竞争比赛测试实例，鉴权需 Bearer token）"
+    }
   ],
   "tags": [
-    { "name": "campus_schedule", "description": "课表/空教室（课程空间 Agent）" },
-    { "name": "campus_risk", "description": "风险/日计划（风险规划 Agent）" },
-    { "name": "campus_insight", "description": "校园态势（校园洞察 Agent）" }
+    {
+      "name": "campus_schedule",
+      "description": "课表/空教室（课程空间 Agent）"
+    },
+    {
+      "name": "campus_risk",
+      "description": "风险/日计划（风险规划 Agent）"
+    },
+    {
+      "name": "campus_insight",
+      "description": "校园态势（校园洞察 Agent）"
+    }
   ],
   "paths": {
     "/api/campus_schedule_query": {
       "post": {
-        "tags": ["campus_schedule"],
+        "tags": [
+          "campus_schedule"
+        ],
         "summary": "查询课表（教师/班级/教室/课程）",
         "operationId": "campus_schedule_query",
         "description": "按实体类型与名称查询指定教学周、星期或日期的课表，支持节次过滤。entityType 仅允许 class/teacher/room/course；entityName 支持口语别名（如 T09 归一化为 教师009）。必须传入 entityType 与 entityName，否则返回 MISSING_PARAM。动态事实由确定性 CampusTools 计算，禁止模型编造课表。",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleQueryInput" } } } },
-        "responses": { "200": { "description": "课表查询结果信封（含 query/resolvedEntity/items/actions/evidence）", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleQueryResponse" } } } } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleQueryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "课表查询结果信封（含 query/resolvedEntity/items/actions/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleQueryResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/campus_classroom_search": {
       "post": {
-        "tags": ["campus_schedule"],
+        "tags": [
+          "campus_schedule"
+        ],
         "summary": "查询空教室",
         "operationId": "campus_classroom_search",
         "description": "查询指定日期/星期与节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。需提供 date 或 week+weekday 以确定具体星期；periodStart/periodEnd 必填（1-10 节）。空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记。动态事实由确定性 CampusTools 计算。",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClassroomSearchInput" } } } },
-        "responses": { "200": { "description": "空教室查询结果信封（含 query/items/actions/evidence）", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClassroomSearchResponse" } } } } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassroomSearchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "空教室查询结果信封（含 query/items/actions/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomSearchResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/campus_risk_check": {
       "post": {
-        "tags": ["campus_risk"],
+        "tags": [
+          "campus_risk"
+        ],
         "summary": "风险检查：self（单对象）或 compare（双对象）",
         "operationId": "campus_risk_check",
         "description": "检查单个校园实体自身的时间冲突/跨校区赶场风险，或显式比较两个实体的课表冲突。mode 缺省或为 self 时只需 entityType/entityName，服务端确定性复制 second=first，绝不允许模型生成或要求用户提供第二对象；mode=compare 才要求 secondEntityType/secondEntityName。结果含 summary.selfCompare 与 summary.conflictCount。动态事实由确定性 CampusTools 计算。",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RiskCheckInput" } } } },
-        "responses": { "200": { "description": "风险检查结果信封（含 summary/compared/rushWarnings/items/evidence）", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RiskCheckResponse" } } } } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskCheckInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "风险检查结果信封（含 summary/compared/rushWarnings/items/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskCheckResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/campus_day_plan": {
       "post": {
-        "tags": ["campus_risk"],
+        "tags": [
+          "campus_risk"
+        ],
         "summary": "生成演示用户某日计划",
         "operationId": "campus_day_plan",
         "description": "为当前比赛演示用户（demoUsers[0].id = user-demo-001）生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。date 必填；visitorId 可选——未传时服务端只允许确定性使用当前数据源的 demoUsers[0].id，禁止模型猜测或硬编码历史 ID。动态事实由确定性 CampusTools 计算。",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayPlanInput" } } } },
-        "responses": { "200": { "description": "日计划结果信封（含 summary/resolvedEntity/items/actions/evidence）", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayPlanResponse" } } } } }
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayPlanInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "日计划结果信封（含 summary/resolvedEntity/items/actions/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayPlanResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/campus_overview": {
       "post": {
-        "tags": ["campus_insight"],
+        "tags": [
+          "campus_insight"
+        ],
         "summary": "校园教学态势（固定窗口）",
         "operationId": "campus_overview",
         "description": "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：四周负载、校区空间压力、教师负载 Top、全局风险。请求体可为空 {}；所有指标只从当前 competition-demo 匿名数据集派生，禁止模型伪造 TopN 或任何校园事实。",
-        "requestBody": { "required": false, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OverviewInput" } } } },
-        "responses": { "200": { "description": "校园态势结果信封（含 summary/items/actions/evidence）", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OverviewResponse" } } } } }
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "校园态势结果信封（含 summary/items/actions/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
   "components": {
-    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
     "schemas": {
       "ScheduleQueryInput": {
         "type": "object",
         "properties": {
-          "entityType": { "type": "string", "enum": ["class", "teacher", "room", "course"] },
-          "entityName": { "type": "string" },
-          "week": { "type": "integer", "minimum": 1, "maximum": 20 },
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10 }
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "class",
+              "teacher",
+              "room",
+              "course"
+            ],
+            "description": "实体类型：class=班级 / teacher=教师 / room=教室 / course=课程；与 entityName 唯一确定实体"
+          },
+          "entityName": {
+            "type": "string",
+            "description": "实体名称（中文名或编号均可解析，如 教师009 / T09 / A2-110）"
+          },
+          "week": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "教学周 1-20；缺失时按当前教学周推断；ADP 平台归一化为 0 时视为未指定"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "星期 1-7（1=周一）；ADP 平台归一化为 0 时视为未指定，不得解释为「星期0」"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "日期 YYYY-MM-DD；同时给出 weekday 且不一致时报 INVALID_PARAM"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "起始节次 1-10；ADP 平台归一化为 0 时视为未指定，不得解释为「节次0」（否则会把全部课程过滤成空结果）"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "结束节次 1-10（>= periodStart）；ADP 平台归一化为 0 时视为未指定"
+          }
         },
-        "required": ["entityType", "entityName"]
+        "required": [
+          "entityType",
+          "entityName"
+        ]
       },
       "ClassroomSearchInput": {
         "type": "object",
         "properties": {
-          "campus": { "type": "string" },
-          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "week": { "type": "integer", "minimum": 1, "maximum": 20 },
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "minCapacity": { "type": "integer", "minimum": 1 },
-          "building": { "type": "string" },
-          "consecutivePeriods": { "type": "integer", "minimum": 1, "maximum": 10 }
+          "campus": {
+            "type": "string",
+            "description": "校区名（如 校区A / 校区B / 校区C）；缺失时全校区检索"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "日期 YYYY-MM-DD；同时给出 weekday 且不一致时报 INVALID_PARAM"
+          },
+          "week": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "教学周 1-20；缺失时按当前教学周推断；ADP 平台归一化为 0 时视为未指定"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "星期 1-7（1=周一）；ADP 平台归一化为 0 时视为未指定，不得解释为「星期0」"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "起始节次 1-10；ADP 平台归一化为 0 时视为未指定，不得解释为「节次0」（否则会把全部课程过滤成空结果）"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "结束节次 1-10（>= periodStart）；ADP 平台归一化为 0 时视为未指定"
+          },
+          "minCapacity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "最小容量（>=1），只返回容量不小于该值的教室"
+          },
+          "building": {
+            "type": "string",
+            "description": "教学楼名称过滤（可选）"
+          },
+          "consecutivePeriods": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "连排节数 1-10，教室空闲时段需连续覆盖该节数"
+          }
         },
-        "required": ["periodStart", "periodEnd"]
+        "required": [
+          "periodStart",
+          "periodEnd"
+        ]
       },
       "RiskCheckInput": {
         "type": "object",
         "properties": {
-          "mode": { "type": "string", "enum": ["self", "compare"], "description": "self=单对象自身风险（默认，无需第二对象）；compare=显式双对象" },
-          "entityType": { "type": "string", "enum": ["class", "teacher", "room", "course"] },
-          "entityName": { "type": "string" },
-          "secondEntityType": { "type": "string", "enum": ["class", "teacher", "room", "course"] },
-          "secondEntityName": { "type": "string" },
-          "week": { "type": "integer", "minimum": 1, "maximum": 20 },
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10 }
+          "mode": {
+            "type": "string",
+            "enum": [
+              "self",
+              "compare"
+            ],
+            "description": "self=单对象自身风险（默认，无需第二对象）；compare=显式双对象"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "class",
+              "teacher",
+              "room",
+              "course"
+            ],
+            "description": "实体类型：class=班级 / teacher=教师 / room=教室 / course=课程；与 entityName 唯一确定实体"
+          },
+          "entityName": {
+            "type": "string",
+            "description": "实体名称（中文名或编号均可解析，如 教师009 / T09 / A2-110）"
+          },
+          "secondEntityType": {
+            "type": "string",
+            "enum": [
+              "class",
+              "teacher",
+              "room",
+              "course"
+            ],
+            "description": "compare 模式的第二实体类型（mode=compare 时必填）"
+          },
+          "secondEntityName": {
+            "type": "string",
+            "description": "compare 模式的第二实体名称"
+          },
+          "week": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "教学周 1-20；缺失时按当前教学周推断；ADP 平台归一化为 0 时视为未指定"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "星期 1-7（1=周一）；ADP 平台归一化为 0 时视为未指定，不得解释为「星期0」"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "日期 YYYY-MM-DD；同时给出 weekday 且不一致时报 INVALID_PARAM"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "起始节次 1-10；ADP 平台归一化为 0 时视为未指定，不得解释为「节次0」（否则会把全部课程过滤成空结果）"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "结束节次 1-10（>= periodStart）；ADP 平台归一化为 0 时视为未指定"
+          }
         },
-        "required": ["entityType", "entityName"],
+        "required": [
+          "entityType",
+          "entityName"
+        ],
         "allOf": [
           {
-            "if": { "properties": { "mode": { "const": "compare" } } },
-            "then": { "required": ["secondEntityType", "secondEntityName"] }
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "compare"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "secondEntityType",
+                "secondEntityName"
+              ]
+            }
           }
         ]
       },
       "DayPlanInput": {
         "type": "object",
         "properties": {
-          "visitorId": { "type": "string", "description": "演示用户 ID（可选）。唯一真源 = competition-demo-v2.json demoUsers[0].id = user-demo-001；未传时由服务端确定性补齐，禁止模型猜测或硬编码历史 ID" },
-          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "preferredCampus": { "type": "string" },
-          "preferredStudyDuration": { "type": "integer", "minimum": 1, "maximum": 10 }
+          "visitorId": {
+            "type": "string",
+            "description": "演示用户 ID（可选）。唯一真源 = competition-demo-v2.json demoUsers[0].id = user-demo-001；未传时由服务端确定性补齐，禁止模型猜测或硬编码历史 ID"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "日期 YYYY-MM-DD；同时给出 weekday 且不一致时报 INVALID_PARAM"
+          },
+          "preferredCampus": {
+            "type": "string",
+            "description": "自习校区偏好（可选），自习室建议优先该校区"
+          },
+          "preferredStudyDuration": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "自习时长上限 1-10 节；0 或非法值返回 INVALID_PARAM（fail-closed，不得删除该校验）"
+          }
         },
-        "required": ["date"]
+        "required": [
+          "date"
+        ]
       },
       "OverviewInput": {
         "type": "object",
         "properties": {
-          "windowStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "teachingStart": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "windowEnd": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+          "windowStart": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "教学窗口起点 YYYY-MM-DD（可选，默认按数据 teachingStart）"
+          },
+          "teachingStart": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "教学窗口起点 YYYY-MM-DD（可选，优先级最高）"
+          },
+          "windowEnd": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "教学窗口终点 YYYY-MM-DD（可选，默认按数据 windowEnd）"
+          }
         }
       },
       "ResolvedEntity": {
         "type": "object",
         "description": "解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）",
         "properties": {
-          "type": { "type": "string", "description": "class/teacher/room/course/user 等实体类型" },
-          "id": { "type": "string", "description": "数据集中实体唯一 ID" },
-          "name": { "type": "string", "description": "实体显示名（如 教师009）" }
+          "type": {
+            "type": "string",
+            "description": "class/teacher/room/course/user 等实体类型"
+          },
+          "id": {
+            "type": "string",
+            "description": "数据集中实体唯一 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "实体显示名（如 教师009）"
+          }
         }
       },
       "Action": {
         "type": "object",
         "description": "建议的动作（open_widget 卡片展示 / sys.chat 后续对话）",
         "properties": {
-          "type": { "type": "string", "description": "动作类型：open_widget / sys.chat" },
-          "cardType": { "type": "string", "nullable": true, "description": "open_widget 的卡片类型：schedule/classroom/conflict/day_plan" },
-          "label": { "type": "string", "description": "动作文案" },
-          "intent": { "type": "string", "nullable": true, "description": "sys.chat 的意图标识" },
-          "query": { "type": "string", "nullable": true, "description": "sys.chat 的预填查询" },
-          "week": { "type": "integer", "nullable": true, "description": "sys.chat 关联的教学周" }
+          "type": {
+            "type": "string",
+            "description": "动作类型：open_widget / sys.chat"
+          },
+          "cardType": {
+            "type": "string",
+            "nullable": true,
+            "description": "open_widget 的卡片类型：schedule/classroom/conflict/day_plan"
+          },
+          "label": {
+            "type": "string",
+            "description": "动作文案"
+          },
+          "intent": {
+            "type": "string",
+            "nullable": true,
+            "description": "sys.chat 的意图标识"
+          },
+          "query": {
+            "type": "string",
+            "nullable": true,
+            "description": "sys.chat 的预填查询"
+          },
+          "week": {
+            "type": "integer",
+            "nullable": true,
+            "description": "sys.chat 关联的教学周"
+          }
         }
       },
       "Evidence": {
         "type": "object",
         "description": "可核查证据：动态事实全部来自当前匿名数据集的确定性计算",
         "properties": {
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "dataHash": { "type": "string", "example": "sha1:4f3bbbb45d1f" },
-          "source": { "type": "string", "description": "计算来源（固定 campus-tools-mcp）" },
-          "computedAt": { "type": "string", "description": "计算时间 ISO 字符串" },
-          "verified": { "type": "boolean", "description": "是否通过确定性校验；失败路径为 false" },
-          "note": { "type": "string", "nullable": true, "description": "EMPTY_RESULT 等附加标记" },
-          "derivation": { "type": "string", "nullable": true, "description": "overview 的派生过程说明" },
-          "preparationPeriodLessonCount": { "type": "integer", "nullable": true, "description": "overview 准备期课程数（固定 0）" }
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "dataHash": {
+            "type": "string",
+            "example": "sha1:4f3bbbb45d1f"
+          },
+          "source": {
+            "type": "string",
+            "description": "计算来源（固定 campus-tools-mcp）"
+          },
+          "computedAt": {
+            "type": "string",
+            "description": "计算时间 ISO 字符串"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "是否通过确定性校验；失败路径为 false"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "EMPTY_RESULT 等附加标记"
+          },
+          "derivation": {
+            "type": "string",
+            "nullable": true,
+            "description": "overview 的派生过程说明"
+          },
+          "preparationPeriodLessonCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "overview 准备期课程数（固定 0）"
+          }
         }
       },
       "ErrorInfo": {
         "type": "object",
         "description": "确定性错误结构，供 ADP 工作流分支判断",
         "properties": {
-          "code": { "type": "string", "description": "MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND / AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等" },
-          "message": { "type": "string", "description": "中文错误说明" },
-          "details": { "type": "object", "nullable": true, "description": "附加细节（如候选列表）" }
+          "code": {
+            "type": "string",
+            "description": "MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND / AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等"
+          },
+          "message": {
+            "type": "string",
+            "description": "中文错误说明"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "description": "附加细节（如候选列表）"
+          }
         }
       },
       "QueryRef": {
         "type": "object",
         "description": "本次查询的确定性时间/过滤上下文回显",
         "properties": {
-          "week": { "type": "integer", "nullable": true },
-          "weekday": { "type": "integer", "nullable": true },
-          "date": { "type": "string", "nullable": true, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "campus": { "type": "string", "nullable": true, "description": "空教室查询的校区名" },
-          "periodStart": { "type": "integer", "nullable": true },
-          "periodEnd": { "type": "integer", "nullable": true }
+          "week": {
+            "type": "integer",
+            "nullable": true
+          },
+          "weekday": {
+            "type": "integer",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "campus": {
+            "type": "string",
+            "nullable": true,
+            "description": "空教室查询的校区名"
+          },
+          "periodStart": {
+            "type": "integer",
+            "nullable": true
+          },
+          "periodEnd": {
+            "type": "integer",
+            "nullable": true
+          }
         }
       },
       "LessonItem": {
         "type": "object",
         "description": "课次条目（query_schedule items 元素；compare/day_plan 复用）",
         "properties": {
-          "lessonId": { "type": "string" },
-          "courseId": { "type": "string" },
-          "courseName": { "type": "string" },
-          "teachers": { "type": "array", "items": { "type": "string" }, "description": "任课教师名列表" },
-          "classes": { "type": "array", "items": { "type": "string" }, "description": "上课班级名列表" },
-          "roomId": { "type": "string" },
-          "roomName": { "type": "string" },
-          "building": { "type": "string", "nullable": true },
-          "campusId": { "type": "string" },
-          "campusName": { "type": "string" },
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "weekdayName": { "type": "string", "description": "如 周一" },
-          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodText": { "type": "string", "description": "如 第3-4节" },
-          "startTime": { "type": "string", "nullable": true, "description": "HH:mm" },
-          "endTime": { "type": "string", "nullable": true, "description": "HH:mm" },
-          "weeks": { "type": "array", "items": { "type": "integer" }, "description": "开课教学周列表" },
-          "date": { "type": "string", "nullable": true, "description": "YYYY-MM-DD（query_schedule/day_plan 会补齐）" }
+          "lessonId": {
+            "type": "string"
+          },
+          "courseId": {
+            "type": "string"
+          },
+          "courseName": {
+            "type": "string"
+          },
+          "teachers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "任课教师名列表"
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "上课班级名列表"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": "string"
+          },
+          "building": {
+            "type": "string",
+            "nullable": true
+          },
+          "campusId": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "如 周一"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第3-4节"
+          },
+          "startTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "endTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "weeks": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "开课教学周列表"
+          },
+          "date": {
+            "type": "string",
+            "nullable": true,
+            "description": "YYYY-MM-DD（query_schedule/day_plan 会补齐）"
+          }
         }
       },
       "RoomItem": {
         "type": "object",
         "description": "空闲教室条目（classroom_search items 元素）",
         "properties": {
-          "roomId": { "type": "string" },
-          "roomName": { "type": "string" },
-          "building": { "type": "string" },
-          "campusId": { "type": "string" },
-          "campusName": { "type": "string" },
-          "capacity": { "type": "integer" },
-          "type": { "type": "string", "description": "教室类型（体育场地被排除）" },
-          "freePeriodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "freePeriodEnd": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodText": { "type": "string", "description": "如 第5-6节" },
-          "date": { "type": "string", "description": "YYYY-MM-DD" }
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": "string"
+          },
+          "building": {
+            "type": "string"
+          },
+          "campusId": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "description": "教室类型（体育场地被排除）"
+          },
+          "freePeriodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "freePeriodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第5-6节"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          }
         }
       },
       "ConflictItem": {
         "type": "object",
         "description": "冲突条目（risk_check items 元素）",
         "properties": {
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "weekdayName": { "type": "string" },
-          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
-          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10 },
-          "first": { "$ref": "#/components/schemas/LessonItem", "description": "第一方冲突课次" },
-          "second": { "$ref": "#/components/schemas/LessonItem", "description": "第二方冲突课次" }
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "first": {
+            "$ref": "#/components/schemas/LessonItem",
+            "description": "第一方冲突课次"
+          },
+          "second": {
+            "$ref": "#/components/schemas/LessonItem",
+            "description": "第二方冲突课次"
+          }
         }
       },
       "RushWarning": {
         "type": "object",
         "description": "跨校区赶场提醒（risk_check rushWarnings 元素）",
         "properties": {
-          "entity": { "type": "string", "description": "发生赶场的实体名" },
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "weekdayName": { "type": "string" },
-          "from": { "$ref": "#/components/schemas/LessonItem" },
-          "to": { "$ref": "#/components/schemas/LessonItem" },
-          "gapMinutes": { "type": "integer", "description": "跨校区间隔分钟数（<=20）" }
+          "entity": {
+            "type": "string",
+            "description": "发生赶场的实体名"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/LessonItem"
+          },
+          "to": {
+            "$ref": "#/components/schemas/LessonItem"
+          },
+          "gapMinutes": {
+            "type": "integer",
+            "description": "跨校区间隔分钟数（<=20）"
+          }
         }
       },
       "RiskSummary": {
         "type": "object",
         "description": "风险检查汇总（selfCompare 标识 self/compare 模式）",
         "properties": {
-          "conflictCount": { "type": "integer", "description": "冲突课次数" },
-          "firstBusySlots": { "type": "integer", "description": "第一方节次占用数" },
-          "secondBusySlots": { "type": "integer", "description": "第二方节次占用数（self 模式与 first 相同）" },
-          "hasConflict": { "type": "boolean", "description": "是否存在冲突" },
-          "selfCompare": { "type": "boolean", "description": "true=self 模式（服务端确定性复制 second=first）；false=compare 双对象" },
-          "rushWarningCount": { "type": "integer", "description": "跨校区赶场提醒数" }
+          "conflictCount": {
+            "type": "integer",
+            "description": "冲突课次数"
+          },
+          "firstBusySlots": {
+            "type": "integer",
+            "description": "第一方节次占用数"
+          },
+          "secondBusySlots": {
+            "type": "integer",
+            "description": "第二方节次占用数（self 模式与 first 相同）"
+          },
+          "hasConflict": {
+            "type": "boolean",
+            "description": "是否存在冲突"
+          },
+          "selfCompare": {
+            "type": "boolean",
+            "description": "true=self 模式（服务端确定性复制 second=first）；false=compare 双对象"
+          },
+          "rushWarningCount": {
+            "type": "integer",
+            "description": "跨校区赶场提醒数"
+          }
         }
       },
       "DayPlanSummary": {
         "type": "object",
         "description": "日计划汇总",
         "properties": {
-          "lessonCount": { "type": "integer", "description": "当日课程数" },
-          "hasCrossCampus": { "type": "boolean", "description": "是否存在跨校区赶场提醒" }
+          "lessonCount": {
+            "type": "integer",
+            "description": "当日课程数"
+          },
+          "hasCrossCampus": {
+            "type": "boolean",
+            "description": "是否存在跨校区赶场提醒"
+          }
         }
       },
       "DayPlanItem": {
         "type": "object",
         "description": "日计划条目（type=lesson 课程 / gap 空闲空档 / tip 提醒）。各变体字段均为可选，按 type 读取。",
         "properties": {
-          "type": { "type": "string", "enum": ["lesson", "gap", "tip"] },
-          "level": { "type": "string", "nullable": true, "description": "tip 的级别（warning）" },
-          "text": { "type": "string", "nullable": true, "description": "tip 的文案" },
-          "suggestion": { "type": "string", "nullable": true, "description": "gap 的建议文案" },
-          "studyRooms": { "type": "array", "nullable": true, "items": { "type": "string" }, "description": "gap 的自习教室建议（如 A1-101（60人））" },
-          "periodStart": { "type": "integer", "nullable": true, "minimum": 1, "maximum": 10 },
-          "periodEnd": { "type": "integer", "nullable": true, "minimum": 1, "maximum": 10 },
-          "periodText": { "type": "string", "nullable": true },
-          "startTime": { "type": "string", "nullable": true, "description": "HH:mm" },
-          "endTime": { "type": "string", "nullable": true, "description": "HH:mm" },
-          "date": { "type": "string", "nullable": true, "description": "YYYY-MM-DD（lesson 变体补齐）" },
-          "lessonId": { "type": "string", "nullable": true },
-          "courseId": { "type": "string", "nullable": true },
-          "courseName": { "type": "string", "nullable": true },
-          "teachers": { "type": "array", "nullable": true, "items": { "type": "string" } },
-          "classes": { "type": "array", "nullable": true, "items": { "type": "string" } },
-          "roomId": { "type": "string", "nullable": true },
-          "roomName": { "type": "string", "nullable": true },
-          "building": { "type": "string", "nullable": true },
-          "campusId": { "type": "string", "nullable": true },
-          "campusName": { "type": "string", "nullable": true },
-          "weekday": { "type": "integer", "nullable": true, "minimum": 1, "maximum": 7 },
-          "weekdayName": { "type": "string", "nullable": true },
-          "weeks": { "type": "array", "nullable": true, "items": { "type": "integer" } }
+          "type": {
+            "type": "string",
+            "enum": [
+              "lesson",
+              "gap",
+              "tip"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "nullable": true,
+            "description": "tip 的级别（warning）"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true,
+            "description": "tip 的文案"
+          },
+          "suggestion": {
+            "type": "string",
+            "nullable": true,
+            "description": "gap 的建议文案"
+          },
+          "studyRooms": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "gap 的自习教室建议（如 A1-101（60人））"
+          },
+          "periodStart": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodText": {
+            "type": "string",
+            "nullable": true
+          },
+          "startTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "endTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "date": {
+            "type": "string",
+            "nullable": true,
+            "description": "YYYY-MM-DD（lesson 变体补齐）"
+          },
+          "lessonId": {
+            "type": "string",
+            "nullable": true
+          },
+          "courseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "courseName": {
+            "type": "string",
+            "nullable": true
+          },
+          "teachers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "classes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "roomId": {
+            "type": "string",
+            "nullable": true
+          },
+          "roomName": {
+            "type": "string",
+            "nullable": true
+          },
+          "building": {
+            "type": "string",
+            "nullable": true
+          },
+          "campusId": {
+            "type": "string",
+            "nullable": true
+          },
+          "campusName": {
+            "type": "string",
+            "nullable": true
+          },
+          "weekday": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "weeks": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "integer"
+            }
+          }
         }
       },
       "OverviewWindow": {
         "type": "object",
         "description": "overview 固定分析窗口",
         "properties": {
-          "windowStart": { "type": "string", "example": "2026-08-25" },
-          "teachingStart": { "type": "string", "example": "2026-08-31" },
-          "windowEnd": { "type": "string", "example": "2026-09-27" },
-          "phase": { "type": "string", "example": "preparation-and-teaching" },
+          "windowStart": {
+            "type": "string",
+            "example": "2026-08-25"
+          },
+          "teachingStart": {
+            "type": "string",
+            "example": "2026-08-31"
+          },
+          "windowEnd": {
+            "type": "string",
+            "example": "2026-09-27"
+          },
+          "phase": {
+            "type": "string",
+            "example": "preparation-and-teaching"
+          },
           "preparationPeriod": {
             "type": "object",
             "properties": {
-              "startDate": { "type": "string" },
-              "endDate": { "type": "string" },
-              "lessonCount": { "type": "integer" }
+              "startDate": {
+                "type": "string"
+              },
+              "endDate": {
+                "type": "string"
+              },
+              "lessonCount": {
+                "type": "integer"
+              }
             }
           },
           "teachingWeeks": {
             "type": "object",
             "properties": {
-              "start": { "type": "integer" },
-              "end": { "type": "integer" },
-              "count": { "type": "integer" }
+              "start": {
+                "type": "integer"
+              },
+              "end": {
+                "type": "integer"
+              },
+              "count": {
+                "type": "integer"
+              }
             }
           }
         }
@@ -339,223 +1015,582 @@
         "type": "object",
         "description": "overview 汇总指标（summary 字段）",
         "properties": {
-          "weekCount": { "type": "integer" },
-          "lessonOccurrences": { "type": "integer", "description": "四周内课次出现总数" },
-          "teacherCount": { "type": "integer" },
-          "activeTeacherCount": { "type": "integer" },
-          "roomCount": { "type": "integer" },
-          "activeRoomCount": { "type": "integer" },
-          "campusCount": { "type": "integer" }
+          "weekCount": {
+            "type": "integer"
+          },
+          "lessonOccurrences": {
+            "type": "integer",
+            "description": "四周内课次出现总数"
+          },
+          "teacherCount": {
+            "type": "integer"
+          },
+          "activeTeacherCount": {
+            "type": "integer"
+          },
+          "roomCount": {
+            "type": "integer"
+          },
+          "activeRoomCount": {
+            "type": "integer"
+          },
+          "campusCount": {
+            "type": "integer"
+          }
         }
       },
       "DayCell": {
         "type": "object",
         "properties": {
-          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
-          "weekdayName": { "type": "string" },
-          "date": { "type": "string" },
-          "lessonCount": { "type": "integer" }
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "lessonCount": {
+            "type": "integer"
+          }
         }
       },
       "WeekMatrix": {
         "type": "object",
         "description": "单周逐日课次负载矩阵（overview matrix 元素）",
         "properties": {
-          "week": { "type": "integer" },
-          "startDate": { "type": "string" },
-          "endDate": { "type": "string" },
-          "days": { "type": "array", "items": { "$ref": "#/components/schemas/DayCell" } }
+          "week": {
+            "type": "integer"
+          },
+          "startDate": {
+            "type": "string"
+          },
+          "endDate": {
+            "type": "string"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayCell"
+            }
+          }
         }
       },
       "CampusResource": {
         "type": "object",
         "description": "校区空间压力（overview campusResources 元素）",
         "properties": {
-          "campusId": { "type": "string" },
-          "campusName": { "type": "string" },
-          "roomCount": { "type": "integer" },
-          "lessonOccurrences": { "type": "integer" },
-          "occupiedRoomPeriodUnits": { "type": "integer" },
-          "freeRoomPeriodUnits": { "type": "integer" },
-          "occupancyRate": { "type": "number", "format": "float", "description": "0-1 占用率" },
-          "largeRoomCount": { "type": "integer" },
-          "largeRoomFreeUnits": { "type": "integer" },
-          "largeRoomAvailabilityRate": { "type": "number", "format": "float" }
+          "campusId": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "roomCount": {
+            "type": "integer"
+          },
+          "lessonOccurrences": {
+            "type": "integer"
+          },
+          "occupiedRoomPeriodUnits": {
+            "type": "integer"
+          },
+          "freeRoomPeriodUnits": {
+            "type": "integer"
+          },
+          "occupancyRate": {
+            "type": "number",
+            "format": "float",
+            "description": "0-1 占用率"
+          },
+          "largeRoomCount": {
+            "type": "integer"
+          },
+          "largeRoomFreeUnits": {
+            "type": "integer"
+          },
+          "largeRoomAvailabilityRate": {
+            "type": "number",
+            "format": "float"
+          }
         }
       },
       "TeacherLoad": {
         "type": "object",
         "description": "教师负载（overview teacherLoadTop 元素）",
         "properties": {
-          "teacherId": { "type": "string" },
-          "teacherName": { "type": "string" },
-          "lessonOccurrences": { "type": "integer" },
-          "periodUnits": { "type": "integer" }
+          "teacherId": {
+            "type": "string"
+          },
+          "teacherName": {
+            "type": "string"
+          },
+          "lessonOccurrences": {
+            "type": "integer"
+          },
+          "periodUnits": {
+            "type": "integer"
+          }
         }
       },
       "PeakSlot": {
         "type": "object",
         "description": "最繁忙时段（overview peakSlot）",
         "properties": {
-          "week": { "type": "integer" },
-          "weekday": { "type": "integer" },
-          "weekdayName": { "type": "string" },
-          "date": { "type": "string" },
-          "period": { "type": "integer" },
-          "lessonCount": { "type": "integer" }
+          "week": {
+            "type": "integer"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "weekdayName": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "period": {
+            "type": "integer"
+          },
+          "lessonCount": {
+            "type": "integer"
+          }
         }
       },
       "OverviewConflict": {
         "type": "object",
         "description": "overview 全局冲突（risks.conflicts 元素）",
         "properties": {
-          "week": { "type": "integer" },
-          "weekday": { "type": "integer" },
-          "date": { "type": "string" },
-          "lessonIds": { "type": "array", "items": { "type": "string" } },
-          "sharedTeacherCount": { "type": "integer" },
-          "sharedClassCount": { "type": "integer" },
-          "sameRoom": { "type": "boolean" }
+          "week": {
+            "type": "integer"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "date": {
+            "type": "string"
+          },
+          "lessonIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sharedTeacherCount": {
+            "type": "integer"
+          },
+          "sharedClassCount": {
+            "type": "integer"
+          },
+          "sameRoom": {
+            "type": "boolean"
+          }
         }
       },
       "OverviewRushWarning": {
         "type": "object",
         "description": "overview 跨校区赶场（risks.rushWarnings 元素）",
         "properties": {
-          "teacherId": { "type": "string" },
-          "teacherName": { "type": "string" },
-          "week": { "type": "integer" },
-          "weekday": { "type": "integer" },
-          "date": { "type": "string" },
-          "fromLessonId": { "type": "string" },
-          "toLessonId": { "type": "string" },
-          "gapMinutes": { "type": "integer" }
+          "teacherId": {
+            "type": "string"
+          },
+          "teacherName": {
+            "type": "string"
+          },
+          "week": {
+            "type": "integer"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "date": {
+            "type": "string"
+          },
+          "fromLessonId": {
+            "type": "string"
+          },
+          "toLessonId": {
+            "type": "string"
+          },
+          "gapMinutes": {
+            "type": "integer"
+          }
         }
       },
       "OverviewContinuousLoad": {
         "type": "object",
         "description": "overview 连续负载（risks.continuousLoads 元素）",
         "properties": {
-          "teacherId": { "type": "string" },
-          "teacherName": { "type": "string" },
-          "week": { "type": "integer" },
-          "weekday": { "type": "integer" },
-          "date": { "type": "string" },
-          "fromLessonId": { "type": "string" },
-          "toLessonId": { "type": "string" }
+          "teacherId": {
+            "type": "string"
+          },
+          "teacherName": {
+            "type": "string"
+          },
+          "week": {
+            "type": "integer"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "date": {
+            "type": "string"
+          },
+          "fromLessonId": {
+            "type": "string"
+          },
+          "toLessonId": {
+            "type": "string"
+          }
         }
       },
       "RiskReport": {
         "type": "object",
         "description": "overview 全局风险汇总（overview items[0].risks）",
         "properties": {
-          "conflictCount": { "type": "integer" },
-          "rushCount": { "type": "integer" },
-          "continuousLoadCount": { "type": "integer" },
-          "conflicts": { "type": "array", "items": { "$ref": "#/components/schemas/OverviewConflict" } },
-          "rushWarnings": { "type": "array", "items": { "$ref": "#/components/schemas/OverviewRushWarning" } },
-          "continuousLoads": { "type": "array", "items": { "$ref": "#/components/schemas/OverviewContinuousLoad" } }
+          "conflictCount": {
+            "type": "integer"
+          },
+          "rushCount": {
+            "type": "integer"
+          },
+          "continuousLoadCount": {
+            "type": "integer"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewConflict"
+            }
+          },
+          "rushWarnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewRushWarning"
+            }
+          },
+          "continuousLoads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewContinuousLoad"
+            }
+          }
         }
       },
       "OverviewItem": {
         "type": "object",
         "description": "overview 单条态势报告（items 元素，固定 1 条）",
         "properties": {
-          "window": { "$ref": "#/components/schemas/OverviewWindow" },
-          "summary": { "$ref": "#/components/schemas/OverviewSummary" },
-          "matrix": { "type": "array", "items": { "$ref": "#/components/schemas/WeekMatrix" } },
-          "campusResources": { "type": "array", "items": { "$ref": "#/components/schemas/CampusResource" } },
-          "teacherLoadTop": { "type": "array", "items": { "$ref": "#/components/schemas/TeacherLoad" } },
-          "peakSlot": { "$ref": "#/components/schemas/PeakSlot" },
-          "risks": { "$ref": "#/components/schemas/RiskReport" }
+          "window": {
+            "$ref": "#/components/schemas/OverviewWindow"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OverviewSummary"
+          },
+          "matrix": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeekMatrix"
+            }
+          },
+          "campusResources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CampusResource"
+            }
+          },
+          "teacherLoadTop": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeacherLoad"
+            }
+          },
+          "peakSlot": {
+            "$ref": "#/components/schemas/PeakSlot"
+          },
+          "risks": {
+            "$ref": "#/components/schemas/RiskReport"
+          }
         }
       },
       "ScheduleQueryResponse": {
         "type": "object",
         "description": "campus_schedule_query 成功/失败统一信封",
         "properties": {
-          "success": { "type": "boolean" },
-          "queryId": { "type": "string" },
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "resolvedEntity": { "$ref": "#/components/schemas/ResolvedEntity" },
-          "query": { "$ref": "#/components/schemas/QueryRef" },
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/LessonItem" } },
-          "actions": { "type": "array", "items": { "$ref": "#/components/schemas/Action" } },
-          "evidence": { "$ref": "#/components/schemas/Evidence" },
-          "error": { "$ref": "#/components/schemas/ErrorInfo" }
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QueryRef"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LessonItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
         },
-        "required": ["success", "queryId", "dataVersion", "items", "actions", "evidence", "error"]
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
       },
       "ClassroomSearchResponse": {
         "type": "object",
         "description": "campus_classroom_search 成功/失败统一信封",
         "properties": {
-          "success": { "type": "boolean" },
-          "queryId": { "type": "string" },
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "resolvedEntity": { "$ref": "#/components/schemas/ResolvedEntity" },
-          "query": { "$ref": "#/components/schemas/QueryRef" },
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/RoomItem" } },
-          "actions": { "type": "array", "items": { "$ref": "#/components/schemas/Action" } },
-          "evidence": { "$ref": "#/components/schemas/Evidence" },
-          "error": { "$ref": "#/components/schemas/ErrorInfo" }
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QueryRef"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
         },
-        "required": ["success", "queryId", "dataVersion", "items", "actions", "evidence", "error"]
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
       },
       "RiskCheckResponse": {
         "type": "object",
         "description": "campus_risk_check 成功/失败统一信封（self 模式 selfCompare=true 且 compared 两元素相同）",
         "properties": {
-          "success": { "type": "boolean" },
-          "queryId": { "type": "string" },
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "resolvedEntity": { "$ref": "#/components/schemas/ResolvedEntity" },
-          "query": { "$ref": "#/components/schemas/QueryRef" },
-          "compared": { "type": "array", "items": { "$ref": "#/components/schemas/ResolvedEntity" }, "description": "被比较的两个实体（self 模式为同一实体的确定性复制）" },
-          "rushWarnings": { "type": "array", "items": { "$ref": "#/components/schemas/RushWarning" } },
-          "summary": { "$ref": "#/components/schemas/RiskSummary" },
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ConflictItem" } },
-          "actions": { "type": "array", "items": { "$ref": "#/components/schemas/Action" } },
-          "evidence": { "$ref": "#/components/schemas/Evidence" },
-          "error": { "$ref": "#/components/schemas/ErrorInfo" }
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QueryRef"
+          },
+          "compared": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedEntity"
+            },
+            "description": "被比较的两个实体（self 模式为同一实体的确定性复制）"
+          },
+          "rushWarnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RushWarning"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RiskSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConflictItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
         },
-        "required": ["success", "queryId", "dataVersion", "items", "actions", "evidence", "error"]
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
       },
       "DayPlanResponse": {
         "type": "object",
         "description": "campus_day_plan 成功/失败统一信封（resolvedEntity 固定为当前数据源 demoUsers[0]）",
         "properties": {
-          "success": { "type": "boolean" },
-          "queryId": { "type": "string" },
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "resolvedEntity": { "$ref": "#/components/schemas/ResolvedEntity" },
-          "query": { "$ref": "#/components/schemas/QueryRef" },
-          "summary": { "$ref": "#/components/schemas/DayPlanSummary" },
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/DayPlanItem" } },
-          "actions": { "type": "array", "items": { "$ref": "#/components/schemas/Action" } },
-          "evidence": { "$ref": "#/components/schemas/Evidence" },
-          "error": { "$ref": "#/components/schemas/ErrorInfo" }
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QueryRef"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DayPlanSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayPlanItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
         },
-        "required": ["success", "queryId", "dataVersion", "resolvedEntity", "summary", "items", "actions", "evidence", "error"]
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "resolvedEntity",
+          "summary",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
       },
       "OverviewResponse": {
         "type": "object",
         "description": "campus_overview 成功/失败统一信封（items 固定 1 条态势报告）",
         "properties": {
-          "success": { "type": "boolean" },
-          "queryId": { "type": "string" },
-          "dataVersion": { "type": "string", "example": "competition-demo-v2" },
-          "resolvedEntity": { "$ref": "#/components/schemas/ResolvedEntity" },
-          "query": { "$ref": "#/components/schemas/QueryRef" },
-          "summary": { "$ref": "#/components/schemas/OverviewSummary" },
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OverviewItem" } },
-          "actions": { "type": "array", "items": { "$ref": "#/components/schemas/Action" } },
-          "evidence": { "$ref": "#/components/schemas/Evidence" },
-          "error": { "$ref": "#/components/schemas/ErrorInfo" }
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "query": {
+            "$ref": "#/components/schemas/QueryRef"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OverviewSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverviewItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
         },
-        "required": ["success", "queryId", "dataVersion", "summary", "items", "actions", "evidence", "error"]
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "summary",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
       }
     }
   },
-  "security": [{ "bearerAuth": [] }]
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
 }

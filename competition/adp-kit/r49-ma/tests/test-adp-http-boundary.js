@@ -16,7 +16,7 @@ const V2_PATH = path.join(__dirname, "..", "..", "mock-data", "competition-demo-
 
 const EXPECTED_DATA_VERSION = "competition-demo-v2";
 const EXPECTED_DATA_HASH = "sha1:4f3bbbb45d1f";
-const EXPECTED_ADP_CONTRACT_VERSION = "R49.1.1";
+const EXPECTED_ADP_CONTRACT_VERSION = "R49.2";
 const DEMO_USER_ID = "user-demo-001"; // 唯一真源 = v2.json demoUsers[0].id
 
 async function reservePort() {

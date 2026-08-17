@@ -124,9 +124,37 @@
 | campus_overview | get_campus_teaching_overview | POST /api/campus_overview | 校园洞察 |
 
 - 请求：`POST {campus_api_base_url}/api/campus_<tool>`，Header `Authorization: Bearer <campus_api_token>`。
-- OpenAPI 导入：**`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`**（R49.1.1：5 个 operation 全部指向 Agent Tool Façade path，每个工具带明确 description；含 schema/example/error contract）。
-- 部署后确认 `/health` 返回 `tools=7`（底层 CampusTools）**且** `agentTools=5`（ADP Façade）**且** `adpContractVersion=R49.1.1`，避免仅凭 dataVersion 猜测版本。
+- OpenAPI 导入：**`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`**（R49.2：5 个 operation 全部指向 Agent Tool Façade path，每个工具带明确 description；含 schema/example/error contract；输入字段已补冗余语义说明，含「ADP 归一化为 0 视为未指定」约束）。
+- 部署后确认 `/health` 返回 `tools=7`（底层 CampusTools）**且** `agentTools=5`（ADP Façade）**且** `adpContractVersion=R49.2`，避免仅凭 dataVersion 猜测版本。
 - **真实 PluginID / Endpoint 未取得前 → 占位符 + FAIL CLOSED，不猜测。**
+
+### 4.1 工具参数「模型可见性」配置表（R49.2）
+
+> 目的：模型看到的每个参数都要「名 + 语义 + 取值约束」自洽；0 值语义由 Façade 归一化兜底，
+> 模型描述不得自创「传 0 表示未指定」之外的解释。
+
+| Agent Tool | 参数 | 模型可见 | 语义（模型侧 description） |
+|---|---|---|---|
+| campus_schedule_query | entityType | ON | 仅 class/teacher/room/course 四值，与 entityName 唯一确定实体 |
+| campus_schedule_query | entityName | ON | 中文名或编号均可（如 教师009 / T09 / A2-110） |
+| campus_schedule_query | week | ON | 1-20；缺省按当前教学周；ADP 归一化 0 = 未指定 |
+| campus_schedule_query | weekday | ON | 1-7（1=周一）；0 = 未指定，绝不解释为「星期0」 |
+| campus_schedule_query | date | ON | YYYY-MM-DD；与 weekday 不一致时 INVALID_PARAM |
+| campus_schedule_query | periodStart / periodEnd | ON | 1-10，end>=start；0 = 未指定（不得把全部课程过滤成空） |
+| campus_classroom_search | campus / date / week / weekday | ON | 同 schedule 语义 |
+| campus_classroom_search | periodStart / periodEnd | **ON（必填）** | 1-10；**缺节次范围=INVALID_PARAM fail-closed**，不得静默全时段 |
+| campus_classroom_search | minCapacity / building / consecutivePeriods | ON | 可选过滤；consecutivePeriods 1-10 |
+| campus_risk_check | mode | ON | 仅 self/compare；self 无需第二对象（服务端确定性复制） |
+| campus_risk_check | entityType / entityName | ON | 同 schedule；compare 时第二对象为 secondEntityType/Name |
+| campus_risk_check | week / weekday / date / periodStart / periodEnd | ON | 同 schedule 语义（0 = 未指定） |
+| campus_day_plan | date | ON（必填） | YYYY-MM-DD |
+| campus_day_plan | visitorId | ON | 唯一真源 demoUsers[0].id=user-demo-001；缺省服务端补齐，禁止猜测 |
+| campus_day_plan | preferredCampus | ON | 可选自习校区偏好 |
+| campus_day_plan | preferredStudyDuration | ON | 1-10 节；**0 或非法=INVALID_PARAM（不得删除该校验）** |
+| campus_overview | windowStart / teachingStart / windowEnd | ON | 可选窗口覆盖；缺省用数据默认窗口 |
+
+- 隐藏参数：无。所有输入参数均需模型可见（当前无密钥类参数进入工具契约）。
+- 若平台侧某参数被标为「不可见」，必须先降级该工具的该字段（契约同步改 `campus-agent-tools.adp-import.json`）再回归 `test-adp-import-openapi.js`。
 
 ---
 
@@ -184,3 +212,9 @@
 > R49.1 已完成：`contracts.ts` 的 DATA_VERSION 已改为 v1/v2 类型兼容（运行时类型常量），不再需要手工改值。
 > R49.1.1 已完成：5 个 Agent Tool Façade 已部署到 CloudBase HTTP Function（`/api/campus_*`），
 > ADP 导入文件为 `campus-agent-tools.adp-import.json`；`/health` 新增 `agentTools=5` 与 `adpContractVersion=R49.1.1`。
+> **R49.2（2026-08-17）**：修复 ADP 0 值归一化掩码（weekday/periodStart/periodEnd=0 一律视为未指定；
+> 此前 periodStart/periodEnd=0 被当作 [0,0] 真实约束导致 SELF 风险与 overview 冲突事实不一致——本地与 CloudBase 均复现）。
+> 新增 `r49-ma/tests/test-semantic-consistency.js`（15 用例全绿）。`adpContractVersion` 升至 R49.2。
+> **部署状态：CloudBase `/health` 实测仍为 R49.1.1（2026-08-17）** —— 需手动重部署
+> `cloudfunctions/campusflowAdpTools`（scf_bootstrap + index.js 包装，需 CAMPUS_API_TOKEN 环境变量）后，
+> `/health` 应返回 `adpContractVersion=R49.2` 再进入控制台验收。

@@ -1,53 +1,52 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-14 22:00 +08:00
+更新时间：2026-08-17 +08:00
 
-当前阶段：`CampusFlow ADP R5 / Final Application Convergence + Platform Write Incident`
+当前阶段：`CampusFlow ADP R49.2 / Multi-Agent Runtime Convergence（0 值掩码修复）`
 
-## 真实 ADP 状态
+## 真实 ADP / Runtime 状态（2026-08-17 实测）
 
-- 01～04 R3：腾讯当前赛事空间导入、画布与调试启动均已通过，状态为 `TENCENT_WORKFLOW_DEBUG_PASS`。
-- 05 CampusOverview：真实腾讯导出已解析并绑定 WidgetID `876474681d584d95b4a99da929dfb3b1`；既有 05 版本可保留，但新的工作流创建/导入当前被平台 `10013 add vectors failed` 阻断。
-- 七类 Widget runtime registry：`Schedule / Classroom / Conflict / DayPlan / Choice / Error / CampusOverview`，均为非空、唯一、32 位真实环境 ID。
-- Application Hero Chain：尚未由用户在腾讯应用层完整执行，状态必须保持 `PENDING_USER_RUNTIME_E2E`。
-- PR #49 保持 `OPEN / UNMERGED`；不得正式 ADP 发布或生产部署。
+- 仓库分支：`feat/campusflow-adp-integration`（head `a25ac65` + 本次改动）；PR #49 保持 `OPEN / UNMERGED`。
+- CloudBase HTTP Function `/health`（只读 GET，2026-08-17）：
+  - `status=ok`、`dataVersion=competition-demo-v2`、`dataHash=sha1:4f3bbbb45d1f`、`tools=7`、`agentTools=5`
+  - **`adpContractVersion=R49.1.1`** → 线上仍是旧版（含 0 值掩码 bug），需手动重部署后升 R49.2。
+- ADP 契约：`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`（R49.2，description 已加固）。
+- Widget / Workflow：01～04 R3 与 05 状态沿用 2026-08-14 记录（`TENCENT_WORKFLOW_DEBUG_PASS`；05 等待平台恢复后收口）。
+- 平台事件（历史）：2026-08-14 `10013 add vectors failed` 仍记录于 `2026-08-14-adp-workflow-vector-service-incident.md`；该 incident 与本次 0 值掩码修复相互独立，互不影响判断。
 
-## 当前平台事件
+## R49.2 修复内容（2026-08-17）
 
-2026-08-14 21:57 已通过多条独立路径确认：
+- 根因（A 类，非部署漂移）：ADP 平台把缺失的可选整数参数归一化为 0；旧版只处理 `weekday=0`，
+  `periodStart=0 / periodEnd=0` 被当作真实节次约束 `[0,0]`，把全部课程过滤成空结果。
+  → `campus_risk_check(self, T09, week1)` 曾与 `campus_overview` 冲突事实不一致（本地与 CloudBase 均复现）。
+- 修复：`cloudfunctions/campusflowAdpTools` 与 `mcp/campus-tools-mcp` 两处 `src/tools.js`（字节一致）
+  对 `weekday / periodStart / periodEnd = 0` 一律视为未指定；`findAvailableClassrooms` 缺节次范围保持
+  INVALID_PARAM fail-closed；`preferredStudyDuration=0` 校验不删除。
+- 版本：`adpContractVersion` R49.1.1 → **R49.2**（agent-tools ×2、server ×2、测试期望同步）。
+- 新增测试：`r49-ma/tests/test-semantic-consistency.js`（12 项语义 + ADP 0 值回归 + compare_schedules 直调，15/15 通过）。
+- 证据：修复前 ADP 全 0 载荷 → conflictCount=0（EMPTY_RESULT）；修复后同载荷 → conflictCount=1
+  （lesson-018 vs lesson-051 @2026-09-02 周三 5-6 节）、rushWarningCount=1（lesson-051→lesson-052，20 分钟）。
+  schedule 同型掩码同步修复（T09 week1 weekday5 带 0 值 → 现正确返回 lesson-015）。
 
-```text
-POST /cgi/capi?cmd=CreateWorkflow
-HTTP 500
-FailedOperation
-code: 10013
-msg: add vectors failed
-```
+## 验证结论（2026-08-17）
 
-手动创建、旧工作流导入、Fresh WorkflowID + 0 `example_queries` 的 ImportSafe ZIP 均复现相同错误，因此当前主因不再指向 CampusFlow ZIP/Widget/WorkflowID/example_queries，而是工作流创建/导入后端的向量注册写入链路。
+- 本地 Runtime 15/15 语义用例全绿；导出包凭据审计通过（见 `2026-08-17-campus-tools-adp-plugin-export-audit.md`）。
+- **部署决定：需要更新线上 runtime 才能让 ADP 拿到修复**。用户手动重部署
+  `cloudfunctions/campusflowAdpTools`（index.js + scf_bootstrap，需 CAMPUS_API_TOKEN）后，
+  `/health` 应显示 `adpContractVersion=R49.2`，随后才进入控制台验收。
 
-状态：`ADP_WORKFLOW_VECTOR_REGISTRATION_INCIDENT = CONFIRMED`
+## 最终应用边界（沿用）
 
-这尚不等价于“腾讯全局服务故障”；下一最小 Gate 是在同赛事空间的全新空白应用创建一个最小工作流，用于区分“当前应用级”与“赛事空间/tenant 级”故障。
+- active target：01～04 R3 + 05（05 待平台恢复收口）；`schedule_risk_check` 只进 03。
+- 数据真源：`competition-demo-v2 / sha1:4f3bbbb45d1f`（05 准备期 2026-08-25～08-30 必须为 0 课）。
+- Widget Direct Output = OFF；真实 WidgetID/AgentID 未取得前保持占位符 + FAIL CLOSED。
 
-事件报告：`competition/adp-kit/reports/2026-08-14-adp-workflow-vector-service-incident.md`
+## 当前保全策略（沿用）
 
-## 最终应用边界
-
-- active target：`01-多维课表查询-R3 / 02-空教室规划-R3 / 03-课程冲突比较-R3 / 04-今日校园计划-R3 / 05-校园教学态势`。
-- excluded：历史 01～04、`01-多维课表查询-Final_9332`、`00-节点格式种子-勿启用` 与所有旧中间版本。
-- `schedule_risk_check` 只进入 03；校园总体态势与整体压力优先进入 05；具体空教室进入 02。
-- `competition-demo-v1 / sha1:fefef4bf425b` 保持不变；05 准备期 2026-08-25～08-30 必须为 0 课。
-
-## 当前保全策略
-
-- 不删除已成功导入且可运行的 01～04 R3。
-- 不继续通过生成 R4/R5 ZIP 猜测规避 `10013`。
-- 平台写链恢复前，主线转为 01～04 Runtime E2E、应用 Router、跨 Workflow handoff、量化评测与比赛演示。
-- 平台恢复后再完成 05 最终 Bound/激活收口。
-
-下一 Gate：
-
-1. 同赛事空间新建空白测试应用并只创建一个最小工作流；
-2. 向腾讯技术支持提交已记录 Request IDs；
-3. 并行执行 01～04 Runtime E2E，未完成前不得标记 Application E2E PASS。
+- 不删除已成功导入且可运行的 01～04 R3；不生成新 ZIP 规避 `10013`。
+- 平台写链恢复前：主线 = 01～04 Runtime E2E、应用 Router、跨 Workflow handoff、量化评测与比赛演示。
+- 下一 Gate：
+  1. 用户手动重部署 CloudBase HTTP Function 至 R49.2（`/health` 确认 `adpContractVersion=R49.2`）；
+  2. ADP 控制台按 R49.2 契约重新核对 5 个 Façade 绑定（参数可见性表见 `R49-MA-ADP-MANUAL-CONFIG-CHECKLIST.md` §4.1）；
+  3. 应用首页（非单工作流调试）跑 `09-MULTI-AGENT-E2E-MATRIX.md` 硬回归 A~H + 13 核心 case；
+  4. 平台 `10013` 恢复后完成 05 收口与知识库重新绑定。

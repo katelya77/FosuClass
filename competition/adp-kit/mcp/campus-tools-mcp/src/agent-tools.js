@@ -1,5 +1,5 @@
 /**
- * R49.1.1 Agent Tool HTTP Façade（零依赖 CommonJS）。
+ * R49.2 Agent Tool HTTP Façade（零依赖 CommonJS）。
  *
  * 5 个 Agent-facing 工具作为 REST alias 暴露给腾讯 ADP，禁止 ADP 依赖
  * 仓库内未部署的 r49-ma adapter：
@@ -18,7 +18,7 @@ const { callTool } = require("./tools");
 const { loadDataset } = require("./data");
 const { fail, ERR } = require("./envelope");
 
-const ADP_CONTRACT_VERSION = "R49.1.1";
+const ADP_CONTRACT_VERSION = "R49.2";
 
 const AGENT_TOOL_MAP = Object.freeze({
   campus_schedule_query: "query_schedule",

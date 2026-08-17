@@ -248,7 +248,12 @@ function getAcademicContext(params) {
 const SCHEDULE_INDEX_OF = { class: "class", teacher: "teacher", room: "room", course: "course" };
 
 function querySchedule(params) {
-  const { entityType, entityName } = params || {};
+  const input = { ...(params || {}) };
+  // ADP 平台归一化：缺失可选整数参数会被填充为 0，一律视为「未指定」
+  if (Number(input.weekday) === 0) delete input.weekday;
+  if (Number(input.periodStart) === 0) delete input.periodStart;
+  if (Number(input.periodEnd) === 0) delete input.periodEnd;
+  const { entityType, entityName } = input;
   if (!entityType || !SCHEDULE_INDEX_OF[entityType]) {
     return fail(ERR.INVALID_PARAM, "entityType 需为 class/teacher/room/course", { entityType });
   }
@@ -257,7 +262,7 @@ function querySchedule(params) {
   if (!resolved.success) return resolved;
   const entity = resolved.resolvedEntity;
 
-  const tr = resolveTimeRange(params);
+  const tr = resolveTimeRange(input);
   if (tr.error) return tr.error;
 
   const { idx } = loadDataset();
@@ -265,8 +270,8 @@ function querySchedule(params) {
   const filtered = all.filter((les) => {
     if (!expandWeeks(les).includes(tr.week)) return false;
     if (tr.weekday != null && les.weekday !== tr.weekday) return false;
-    if (params.periodStart != null && params.periodEnd != null
-      && !periodsOverlap(les.periodStart, les.periodEnd, Number(params.periodStart), Number(params.periodEnd))) return false;
+    if (input.periodStart != null && input.periodEnd != null
+      && !periodsOverlap(les.periodStart, les.periodEnd, Number(input.periodStart), Number(input.periodEnd))) return false;
     return true;
   }).sort((a, b) => (a.weekday - b.weekday) || (a.periodStart - b.periodStart));
 
@@ -290,7 +295,11 @@ function querySchedule(params) {
 // 工具 4：find_available_classrooms —— 空教室规划
 // ---------------------------------------------------------------------------
 function findAvailableClassrooms(params) {
-  const input = params || {};
+  const input = { ...(params || {}) };
+  // ADP 平台归一化：缺失可选整数参数会被填充为 0，一律视为「未指定」
+  if (Number(input.weekday) === 0) delete input.weekday;
+  if (Number(input.periodStart) === 0) delete input.periodStart;
+  if (Number(input.periodEnd) === 0) delete input.periodEnd;
   const { campus } = input;
   const hasConsecutive = input.startPeriod != null && input.consecutivePeriods != null;
   const start = Number(hasConsecutive ? input.startPeriod : input.periodStart);
@@ -377,7 +386,11 @@ function compareSchedules(params) {
   if (!r2.success) return r2;
 
   const timeParams = { ...(params || {}) };
+  // ADP 平台归一化会把缺失的可选整数参数填充为 0；0 一律视为「未指定」，
+  // 不得解释成真实约束（星期0 / 节次0），否则会把全部课程过滤成空结果。
   if (Number(timeParams.weekday) === 0) delete timeParams.weekday;
+  if (Number(timeParams.periodStart) === 0) delete timeParams.periodStart;
+  if (Number(timeParams.periodEnd) === 0) delete timeParams.periodEnd;
   const tr = resolveTimeRange(timeParams);
   if (tr.error) return tr.error;
 
@@ -389,8 +402,8 @@ function compareSchedules(params) {
     .filter((les) => expandWeeks(les).includes(tr.week))
     .filter((les) => tr.weekday == null || les.weekday === tr.weekday)
     .filter((les) => {
-      if (params.periodStart == null || params.periodEnd == null) return true;
-      return periodsOverlap(les.periodStart, les.periodEnd, Number(params.periodStart), Number(params.periodEnd));
+      if (timeParams.periodStart == null || timeParams.periodEnd == null) return true;
+      return periodsOverlap(les.periodStart, les.periodEnd, Number(timeParams.periodStart), Number(timeParams.periodEnd));
     });
   const busy1 = busyOf(firstType, r1.resolvedEntity.id);
   const busy2 = busyOf(secondType, r2.resolvedEntity.id);
