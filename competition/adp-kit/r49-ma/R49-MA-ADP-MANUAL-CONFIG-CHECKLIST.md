@@ -29,7 +29,7 @@
 | Agent 名称 | 小序 · 主协调 | 中文名合法（中文/英文/数字/下划线/中划线/空格） |
 | 用途/转交描述 | 会话总控与路由：判定 NEW_TASK/FOLLOW_UP/CHAT/META/CLARIFY；理解代词/日期/Top1 引用；判断旧上下文相关性；决定转交哪个域 Agent；唯一澄清出口；静态知识走 KnowledgeRetrievalAnswer；动态事实一律转交域 Agent，不得自行编造课表/空教室/风险/负载 | 供平台 Agent 选择与主 Agent 路由 |
 | Prompt | `agents/main-orchestrator.md` | 见第 8 节 Prompt 就位 |
-| 模型 | youtu-agent | baseline，不第一天双切 |
+| 模型 | DeepSeek V4 Flash（控制台实测 2026-08-17；见 07 §6） | baseline，不第一天双切 |
 | 思考模式 thinking | 效果优先 | |
 | maxReasoningRound | 8 | |
 | historyLimit | 6 | |
@@ -46,7 +46,7 @@
 | Agent 名称 | 小序 · 课程空间 |
 | 用途/转交描述 | 教师/班级/教室/课程课表、整周/单日/节次、空教室、校区/楼栋/容量/连续节次。缺参返回 NEED_CLARIFICATION 给主协调，不自行追问 |
 | Prompt | `agents/schedule-space.md` |
-| 模型 | youtu-agent |
+| 模型 | DeepSeek V4 Flash（控制台实测 2026-08-17；见 07 §6） |
 | thinking | 效果优先 |
 | maxReasoningRound | 8 |
 | historyLimit | 6 |
@@ -61,7 +61,7 @@
 | Agent 名称 | 小序 · 风险规划 |
 | 用途/转交描述 | 单对象自身冲突/赶场风险（comparisonMode=self，**不得要求第二对象**）；显式双对象冲突比较（comparisonMode=compare）；一日规划与下一天推进。缺参返回 NEED_CLARIFICATION |
 | Prompt | `agents/risk-planning.md` |
-| 模型 | youtu-agent |
+| 模型 | DeepSeek V4 Flash（控制台实测 2026-08-17；见 07 §6） |
 | thinking | 效果优先 |
 | maxReasoningRound | 12 |
 | historyLimit | 6 |
@@ -76,7 +76,7 @@
 | Agent 名称 | 小序 · 校园洞察 |
 | 用途/转交描述 | 未来四周校区负载、教师负载、空间压力、Top1/TopN、教学趋势、全局风险。Top1 下钻**交回主协调**再转对应域 Agent，不伪造个人事实 |
 | Prompt | `agents/campus-insight.md` |
-| 模型 | youtu-agent |
+| 模型 | DeepSeek V4 Flash（控制台实测 2026-08-17；见 07 §6） |
 | thinking | 效果优先 |
 | maxReasoningRound | 12 |
 | historyLimit | 6 |
@@ -92,7 +92,9 @@
 |---|---|---|
 | 主协调 | 课程空间 / 风险规划 / 校园洞察 | ✅ 允许 |
 | 课程空间 / 风险规划 / 校园洞察 | 主协调 | ✅ 允许（必须回传结果与 Top1/实体） |
-| 课程空间 ↔ 风险规划 ↔ 校园洞察 | 任意子 Agent | ❌ **禁止横向自由转交**（第一阶段仅中心化 Main→Child、Child→Main） |
+| 课程空间 ↔ 风险规划 ↔ 校园洞察 | 任意子 Agent | ⚠️ 控制台协同方式实测为「自由转交」（2026-08-17）；仓库设计协议仍以 **Main 中心化转交**为准（`03-HANDOFF-POLICY.md`），转交信封与回传协议不变，子 Agent 之间不得绕过 Main 直接传递未核验事实 |
+
+> **控制台事实（2026-08-17 用户核对）**：协同方式=自由转交；四 Agent 模型均为 DeepSeek V4 Flash（见 §1.x 与 `07-MODEL-AB-PLAN.md` §6）；Tool Direct Output=OFF（§5）。
 
 ---
 
@@ -128,7 +130,7 @@
 - 部署后确认 `/health` 返回 `tools=7`（底层 CampusTools）**且** `agentTools=5`（ADP Façade）**且** `adpContractVersion=R49.2`，避免仅凭 dataVersion 猜测版本。
 - **真实 PluginID / Endpoint 未取得前 → 占位符 + FAIL CLOSED，不猜测。**
 
-### 4.1 工具参数「模型可见性」配置表（R49.2）
+### 4.1 工具参数「模型可见性」配置表（R49.2.1，控制台实测 2026-08-17）
 
 > 目的：模型看到的每个参数都要「名 + 语义 + 取值约束」自洽；0 值语义由 Façade 归一化兜底，
 > 模型描述不得自创「传 0 表示未指定」之外的解释。
@@ -141,20 +143,21 @@
 | campus_schedule_query | weekday | ON | 1-7（1=周一）；0 = 未指定，绝不解释为「星期0」 |
 | campus_schedule_query | date | ON | YYYY-MM-DD；与 weekday 不一致时 INVALID_PARAM |
 | campus_schedule_query | periodStart / periodEnd | ON | 1-10，end>=start；0 = 未指定（不得把全部课程过滤成空） |
-| campus_classroom_search | campus / date / week / weekday | ON | 同 schedule 语义 |
+| campus_classroom_search | campus / date / week / weekday | ON | 同 schedule 语义；campus 支持 校区A/A校区/A/campus-a 等别名（R49.2.1） |
 | campus_classroom_search | periodStart / periodEnd | **ON（必填）** | 1-10；**缺节次范围=INVALID_PARAM fail-closed**，不得静默全时段 |
 | campus_classroom_search | minCapacity / building / consecutivePeriods | ON | 可选过滤；consecutivePeriods 1-10 |
-| campus_risk_check | mode | ON | 仅 self/compare；self 无需第二对象（服务端确定性复制） |
+| campus_risk_check | mode | ON | 仅 self/compare；**默认 self（控制台实测）**；self 无需第二对象（服务端确定性复制） |
 | campus_risk_check | entityType / entityName | ON | 同 schedule；compare 时第二对象为 secondEntityType/Name |
 | campus_risk_check | week / weekday / date / periodStart / periodEnd | ON | 同 schedule 语义（0 = 未指定） |
-| campus_day_plan | date | ON（必填） | YYYY-MM-DD |
-| campus_day_plan | visitorId | ON | 唯一真源 demoUsers[0].id=user-demo-001；缺省服务端补齐，禁止猜测 |
-| campus_day_plan | preferredCampus | ON | 可选自习校区偏好 |
+| campus_day_plan | date | ON（必填） | YYYY-MM-DD（控制台可见且必填） |
+| campus_day_plan | visitorId | **OFF（控制台实测）** | 模型不可见；服务端确定性补齐 demoUsers[0].id=user-demo-001，模型不得猜测 |
+| campus_day_plan | preferredCampus | ON | 可选自习校区偏好（控制台可见） |
 | campus_day_plan | preferredStudyDuration | ON | 1-10 节；**0 或非法=INVALID_PARAM（不得删除该校验）** |
-| campus_overview | windowStart / teachingStart / windowEnd | ON | 可选窗口覆盖；缺省用数据默认窗口 |
+| campus_overview | windowStart / teachingStart / windowEnd | **OFF（控制台实测）** | 模型不可见；窗口固定 2026-08-25 ~ 2026-09-27，缺省用数据默认窗口 |
 
-- 隐藏参数：无。所有输入参数均需模型可见（当前无密钥类参数进入工具契约）。
-- 若平台侧某参数被标为「不可见」，必须先降级该工具的该字段（契约同步改 `campus-agent-tools.adp-import.json`）再回归 `test-adp-import-openapi.js`。
+- **隐藏参数（控制台实测 2026-08-17）**：`campus_day_plan.visitorId`、`campus_overview.windowStart / teachingStart / windowEnd`。
+  契约仍保留这些字段作为服务端可接受输入（服务端确定性补齐/取默认），模型不可见即不会传参，也不得在回复中伪造其取值。
+- 其余参数均可见；若平台侧后续把某参数标为「不可见」，必须同步核对契约（服务端是否仍接受该字段）再回归 `test-adp-import-openapi.js` 与语义测试。
 
 ---
 
@@ -177,14 +180,14 @@
    - 硬回归 A~H（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
    - 13 核心 case + R48 A~G 回归。
 2. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
-3. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（youtu-agent vs DeepSeek V4 Flash，单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
+3. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（控制台现行基线=四 Agent 均 DeepSeek V4 Flash，见 07 §6；单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
 
 ---
 
 ## 7. 模型 A/B（不是第一天）
 
-- Multi-Agent 基线跑通且 13 case 全绿后，仅对 **Main** 做 `youtu-agent VS DeepSeek V4 Flash` 单变量 A/B。
-- 只有 13 个核心 E2E case 总体优于 baseline 才切换；三域 Agent 保持 youtu-agent。
+- Multi-Agent 基线跑通且 13 case 全绿后，按 `07-MODEL-AB-PLAN.md` 做单变量 A/B。
+- 控制台现行基线（2026-08-17 实测）：**四 Agent 均为 DeepSeek V4 Flash**（`07-MODEL-AB-PLAN.md` §6）；A/B 目标由 07 §1-§4 定义，一次只切一个角色，以回归矩阵为准。
 
 ---
 

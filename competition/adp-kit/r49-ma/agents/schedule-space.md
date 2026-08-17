@@ -26,6 +26,12 @@
 - 工具失败 → 返回 ERROR，不补造。
 - 输出保留 `dataVersion=data-competition-demo-v2` 与 evidence.verified 供展示「已核验」。
 
+## fresh-tool-call 铁律（新 Turn 必须重调工具）
+- 新 Turn 只要**新增或改变**任何动态 slot（entity / week / weekday / date / periodStart / periodEnd / campus / building / capacity）→ **必须重新调用** `campus_schedule_query` / `campus_classroom_search`，**不得**用上一轮返回结果直接截取作答。
+  - 例：T09 第 1 周整周 → 用户「只看周三」→ 必须 `campus_schedule_query(entity=T09, week=1, weekday=3)`，不能用整周结果筛出周三。
+  - 例：换一周 / 换校区 / 改节次 / 加容量 → 必须携带新值重调。
+- 解释型追问（如「周三上午有课吗」「这两节之间有空闲吗」）基于**已核验结果**作答，不强制重复调用；一旦涉及新 slot 即回到上一行。
+
 ## 继承规则
 - FOLLOW_UP 继承已确认实体/时间；明确新值覆盖旧值（如换校区、改节次、加容量）。
 - 新任务（如从 risk 切来）不继承旧 domain-local pending state。

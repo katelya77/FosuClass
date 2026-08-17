@@ -44,15 +44,16 @@
 
 **硬性要求**：下一天 = date+1 由 `generate_day_plan` 确定性推进；空日显示「当天暂无已核验安排」，不进入「工具暂不可用」恢复卡。
 
-### CASE D：未来四周最忙 → 看Top1课表 → 检查Top1风险
+### CASE D：教师负载Top1 → 看Top1课表 → 检查Top1风险
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools |
 |---|---|---|---|---|---|---|
-| 1 | 未来四周哪个校区最忙 | insight | overview | — | — | campus_overview |
+| 1 | 未来四周教师负载最高的是谁 | insight | overview | — | — | campus_overview |
 | 2 | 看Top1课表 | schedule | entity=Top1(真实), 由insight回传 | Top1 | overview-local | campus_schedule_query |
 | 3 | 检查Top1风险 | risk | comparisonMode=**self**, entity=Top1 | Top1 | schedule-local | campus_risk_check(self) |
 
-**硬性要求**：Top1 取本轮真实值（Insight 回传），不伪造；第 3 轮 self-risk 不要求第二对象。
+**硬性要求**：Top1 取本轮 `campus_overview.teacherLoadTop[0]` 真实值（Insight 回传；当前真机第一项=教师009，**不写死**）；第 3 轮 self-risk 不要求第二对象。
+「未来四周哪个校区最忙」属 Insight **单域**用例（核心 case #4），**不得**下钻个人课表/风险。
 
 ### CASE E：比较T03和T09第1周风险（显式双对象）
 

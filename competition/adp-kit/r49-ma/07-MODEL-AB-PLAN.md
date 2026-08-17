@@ -3,6 +3,7 @@
 ## 0. 原则
 
 - 当前运行基线：Thinking=`youtu-intent-pro`、Generation=`youtu-mrc-pro`、Rewrite=`youtu-rewrite`。
+  > **2026-08-17 控制台实测更新（§6）**：四 Agent 已均为 `DeepSeek V4 Flash`，协同方式=自由转交；§1-§4 的 A/B 目标按 §6 冻结基线重新校准。
 - **youtu-mrc-pro 腾讯计划 2026-08-28 下线**，必须在此之前完成 Generation 迁移评估。
 - Multi-Agent 架构先全绿（14 用例门槛），**再**切模型；不做第一天双切。
 - 一次只切一个角色，单变量回滚，以回归矩阵为准。
@@ -48,11 +49,11 @@
 
 | 位置 | 平台实测模型 | 备注 |
 |---|---|---|
-| 主协调 / 判定类节点 | `u-intent-pro` | 导出包 workflow.json `ModelParams` 实测（Temperature 0 / TopP 0.6） |
-| 各域 Agent 生成节点 | `u-intent-pro`（800/256 tokens） | 同日同一平台模型族；与文档所称 youtu-* 命名不同但属同一意图-生成模型族 |
-| 三域 Agent | 同上（未做 Generation 独立切换） | 保持 baseline 不动 |
+| 主协调 | `DeepSeek V4 Flash`（控制台实测 2026-08-17） | 用户控制台核对；2026-08-12 导出包 workflow.json `ModelParams` 曾为 `u-intent-pro`（Temperature 0 / TopP 0.6）——**该导出为过时快照，以控制台实测为准** |
+| 课程空间 / 风险规划 / 校园洞察 | `DeepSeek V4 Flash`（控制台实测 2026-08-17，四 Agent 全部） | 与主协调同模型；未做 Generation 独立切换 |
+| 协同方式 | `自由转交`（控制台实测 2026-08-17） | 仓库设计仍以 Main 中心化转交协议为准（03-HANDOFF-POLICY），转交信封/回传协议不变 |
 | Rewrite | `youtu-rewrite`（文档基线，未实测到独立节点） | 不参与本轮改动 |
 
-- 冻结内容：模型名、Temperature/TopP/MaxTokens 均为平台导出事实；本次 R49.2 改动**不触碰任何模型配置**。
+- 冻结内容：模型名、协同方式均为控制台实测事实；本次 R49.2.1 改动**不触碰任何模型配置**。
 - A/B 仍按 §1-§4 执行；切模型是用户手动操作，Agent 只提供评估证据。
-- 2026-08-28 `youtu-mrc-pro` 下线提醒仍有效；若控制台实际为 `u-intent-pro` 族，需在控制台确认其替代模型后再评估。
+- 2026-08-28 `youtu-mrc-pro` 下线提醒仍有效；控制台现行基线为 DeepSeek V4 Flash 族，需在控制台确认其替代模型后再评估。

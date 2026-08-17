@@ -37,9 +37,9 @@
     },
     {
       "id": "D",
-      "name": "未来四周最忙 → Top1课表 → Top1风险",
+      "name": "教师负载Top1 → Top1课表 → Top1风险",
       "turns": [
-        { "input": "未来四周哪个校区最忙", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true } },
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true }, "hard": "Top1 取本轮 campus_overview.teacherLoadTop[0] 真实值（当前=教师009，不写死）" },
         { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "source": "insight回传" }, "hard": "Top1 取本轮真实值，不伪造" },
         { "input": "检查Top1风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "Top1" }, "hard": "self-risk 不要求第二对象" }
       ]
@@ -79,7 +79,7 @@
     { "id": 1, "input": "T09第1周整周课表 → 周三呢 → 下一周呢", "route": "schedule→schedule→schedule", "widget": "schedule(week/day)" },
     { "id": 2, "input": "T09第1周整周课表 → 检查一下他的风险", "route": "schedule→risk(self)", "widget": "conflict" },
     { "id": 3, "input": "上述之后 → 校区A 2026-09-03 下午有哪些空教室", "route": "→classroom", "widget": "classroom" },
-    { "id": 4, "input": "再 → 未来四周哪个校区最忙", "route": "→overview", "widget": "campus-overview" },
+    { "id": 4, "input": "再 → 未来四周哪个校区最忙", "route": "→overview", "widget": "campus-overview", "hard": "单域 insight，不得下钻个人 schedule/risk" },
     { "id": 5, "input": "A校区第1周周一第5-6节60人以上 → B校区呢 → 改第7-8节 → 80人以上 → 下一周同一时间", "route": "classroom 5轮 slot 覆盖", "widget": "classroom" },
     { "id": 6, "input": "帮我安排2026-09-04的一天 → 下一天呢 → 再下一天", "route": "day_plan(09-04→09-05→09-06)", "widget": "day-plan" },
     { "id": 7, "input": "未来四周教学态势 → 看Top1课表 → 看他的风险 → 那周三呢", "route": "insight→schedule→risk(self)→schedule", "widget": "campus-overview→schedule→conflict→schedule" },

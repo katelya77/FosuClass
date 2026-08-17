@@ -29,5 +29,10 @@
 - 空结果 → NO_RESULT；失败 → ERROR；均不虚构。
 - 下一天：调用 `campus_day_plan(date=下一天)`，由 `generate_day_plan` 确定性计算；空日如实显示「当天暂无已核验安排」。
 
+## fresh-tool-call 铁律（新 Turn 必须重调工具）
+- 「下一天 / 上一天 / 再看某天」→ **必须重新调用** `campus_day_plan`（携带推进后的 date），不得沿用上一轮计划结果。
+- 复查新时间窗口 / 新对象的风险 → **必须重新调用** `campus_risk_check`（携带新 week/date 或新实体），不得用上一轮风险结果代答。
+- 解释型追问（如「刚才的冲突为什么算冲突」）基于已核验结果作答，不强制重复调用；一旦涉及新对象或新时间窗口即回到上一行。
+
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=12 · historyLimit=6 · clarification=OFF · output=text

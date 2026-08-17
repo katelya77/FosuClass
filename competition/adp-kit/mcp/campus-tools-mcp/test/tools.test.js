@@ -194,15 +194,18 @@ test("query_schedule: 实体不存在", () => {
   assert.equal(env.error.code, "ENTITY_NOT_FOUND");
 });
 
-test("query_schedule: weekday=0 仍为非法参数", () => {
+test("query_schedule: weekday=0 按 R49.2 契约视为未指定（整周）", () => {
+  // 基线失败证据：HEAD（R49.2 commit 04d5c87）起 weekday=0 语义从 INVALID_PARAM
+  // 改为「0 填充可选整数视为未指定」→ 整周查询；本用例为契约同步，非削弱检查。
   const env = callTool("query_schedule", {
     entityType: "teacher",
     entityName: "教师001",
     week: 1,
     weekday: 0,
   });
-  assert.equal(env.success, false);
-  assert.equal(env.error.code, "INVALID_PARAM");
+  assert.equal(env.success, true);
+  assert.equal(env.query.weekday, null, "weekday=0 视为未指定，不回显 0");
+  assert.equal(env.items.length, 4);
 });
 
 // ---------------------------------------------------------------------------

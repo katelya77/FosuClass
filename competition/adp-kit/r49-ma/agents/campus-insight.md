@@ -26,5 +26,9 @@
 - 缺参/异常 → 返回 `NEED_CLARIFICATION` / `ERROR` 给主协调。
 - 输出保留 dataVersion / dataHash / evidence.verified。
 
+## fresh-tool-call 铁律（新 Turn 必须重调工具）
+- 新 Turn 只要**新增或改变聚合口径/窗口**（不同时间窗口、不同负载口径、TopN、哪个校区/哪周最忙）→ **必须重新调用** `campus_overview`，不得用上一轮窗口结果代答。
+- 用户继续「看Top1课表 / 检查Top1风险」→ 把本轮真实 Top1（teacherLoadTop[0]）**交回主协调**转对应域 Agent（见上「Top1 下钻规则」），Top1 下钻必须由对应域 Agent 用 `campus_schedule_query` / `campus_risk_check` **重新取数**，不得由 Insight 从 overview 结果推断个人课表/风险。
+
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=12 · historyLimit=6 · clarification=OFF · output=text

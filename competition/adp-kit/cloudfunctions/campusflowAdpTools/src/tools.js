@@ -170,6 +170,36 @@ function resolveTimeRange(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 校区别名解析（type-specific，仅用于 campus 语义参数；不改动全局 normalizeName，
+// 避免孤立 A/B/C 污染班级、课程等其他实体）。别名从 data.campuses 的 name/id 动态派生：
+// 校区A / A校区 / A / a / campus-a / campusA 等；B、C 同理。
+// ---------------------------------------------------------------------------
+function resolveCampus(data, raw) {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  const campuses = data.campuses || [];
+  const exact = campuses.find((c) => c.name === trimmed || c.id === trimmed);
+  if (exact) return exact;
+  const lower = trimmed.toLowerCase();
+  for (const c of campuses) {
+    const name = String(c.name || "").trim();
+    const id = String(c.id || "").toLowerCase();
+    const baseLower = name.replace(/^校区/, "").toLowerCase();
+    const aliases = new Set([
+      name.toLowerCase(),
+      id,
+      `${baseLower}校区`,
+      baseLower,
+      `campus${baseLower}`,
+      id.replace(/^campus-/, ""),
+    ]);
+    if (aliases.has(lower)) return c;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // 工具 1：resolve_entity —— 实体解析与歧义候选
 // ---------------------------------------------------------------------------
 function resolveEntity(params) {
@@ -311,18 +341,19 @@ function findAvailableClassrooms(params) {
       periodStart: input.periodStart, periodEnd: input.periodEnd,
     });
   }
-  const tr = resolveTimeRange(params);
+  const tr = resolveTimeRange(input);
   if (tr.error) return tr.error;
   if (tr.weekday == null) {
     return fail(ERR.MISSING_PARAM, "空教室查询需要明确的 weekday（或由 date 推导）", {});
   }
 
   const { data, byId } = loadDataset();
+  let campusEntity = null;
   if (campus) {
-    const hit = data.campuses.find((c) => c.name === normalizeName(campus));
-    if (!hit) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${campus}」`, {});
+    campusEntity = resolveCampus(data, campus);
+    if (!campusEntity) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${campus}」`, {});
   }
-  const campusId = campus ? data.campuses.find((c) => c.name === normalizeName(campus)).id : null;
+  const campusId = campusEntity ? campusEntity.id : null;
   const building = input.building ? String(input.building) : null;
   const capacityValue = input.minCapacity != null ? input.minCapacity : input.capacity;
   const minCapacity = capacityValue != null ? Number(capacityValue) : null;
@@ -519,7 +550,7 @@ function generateDayPlan(params) {
   let cursor = null;
 
   const requestedCampus = params.preferredCampus
-    ? data.campuses.find((campus) => campus.name === normalizeName(params.preferredCampus))
+    ? resolveCampus(data, params.preferredCampus)
     : null;
   if (params.preferredCampus && !requestedCampus) {
     return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${params.preferredCampus}」`, {});
