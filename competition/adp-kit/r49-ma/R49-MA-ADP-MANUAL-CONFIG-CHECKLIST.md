@@ -14,7 +14,8 @@
 4. 按第 1 节逐字段配置 Agent 高级设置。
 5. 按第 2 节配置转交关系（Main→Child、Child→Main；**禁止 Child→Child 横向自由转交**）。
 6. 按第 3 节配置对话流转策略（**每个新 Turn 由主 Agent 接管**）。
-7. 按第 4 节绑定 7 个 Agent Tool（→ CampusTools 插件，导入 `campus-agent-tools.adp-import.json`）与知识库（Main）。
+7. 按第 4 节绑定 7 个 Agent Tool（→ CampusTools 插件，全量导入 `campus-agent-tools.adp-import.json`；
+   既有 5 工具插件升级走增量导入 `campus-agent-tools.r49.4-existing-plugin-additions.json`，见 §4）与知识库（Main）。
 8. 按第 5 节导入复用 r48-v3 Widget（Clarification / Agent Output；第一阶段 Tool Direct Output=OFF）。
 9. 按第 6 节在应用首页跑验收矩阵（A~H + 13 case + R48 A~G），全部绿灯后才进入模型 A/B（第 7 节）。
 
@@ -52,7 +53,7 @@
 | historyLimit | 6 |
 | clarification | OFF |
 | output | text |
-| 工具 | `campus_schedule_query`、`campus_classroom_search` |
+| 工具 | `campus_schedule_query`、`campus_schedule_range_query`、`campus_classroom_search` |
 
 ### 1.3 小序 · 风险规划（Risk）
 
@@ -82,7 +83,7 @@
 | historyLimit | 6 |
 | clarification | OFF |
 | output | text |
-| 工具 | `campus_overview` |
+| 工具 | `campus_overview`、`campus_teacher_load_query` |
 
 ---
 
@@ -110,24 +111,34 @@
 
 ## 4. 工具绑定
 
-> **R49.1.1 更新**：ADP 只绑定 5 个 **Agent Tool Façade**（`/api/campus_*`），**不是**底层 7 个 CampusTools。
+> **R49.1.1 更新**：ADP 只绑定 **Agent Tool Façade**（`/api/campus_*`），**不是**底层 CampusTools。
 > Façade 已在 CloudBase HTTP Function（MCP 权威 server 层）真实实现：self 模式由服务端确定性复制 second=first，
 > day_plan 缺 visitorId 时确定性使用 `demoUsers[0].id`（user-demo-001），不依赖仓库内 r49-ma adapter。
 > 底层 `/api/query_schedule` 等旧接口保留，但 **ADP 不得直接绑定它们**。
+> R49.4 起为 **7 个 Agent Tool Façade**（R49.1.1/R49.2 时代的 5 工具表为历史，见 §9 历史注记）。
 
-- 5 个 Agent Tool Façade 作为自定义插件/HTTP 工具绑定到对应 Agent（映射见 `05-TOOL-CONTRACTS.md`）：
+- 7 个 Agent Tool Façade 作为自定义插件/HTTP 工具绑定到对应 Agent（映射见 `05-TOOL-CONTRACTS.md`）：
 
 | Agent Tool（Façade） | 底层 CampusTools | ADP REST（Façade） | 绑定 Agent |
 |---|---|---|---|
 | campus_schedule_query | query_schedule | POST /api/campus_schedule_query | 课程空间 |
+| campus_schedule_range_query | query_schedule_range | POST /api/campus_schedule_range_query | 课程空间 |
 | campus_classroom_search | find_available_classrooms | POST /api/campus_classroom_search | 课程空间 |
 | campus_risk_check | compare_schedules | POST /api/campus_risk_check | 风险规划 |
 | campus_day_plan | generate_day_plan | POST /api/campus_day_plan | 风险规划 |
 | campus_overview | get_campus_teaching_overview | POST /api/campus_overview | 校园洞察 |
+| campus_teacher_load_query | query_teacher_load | POST /api/campus_teacher_load_query | 校园洞察 |
 
 - 请求：`POST {campus_api_base_url}/api/campus_<tool>`，Header `Authorization: Bearer <campus_api_token>`。
-- OpenAPI 导入：**`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`**（R49.2：5 个 operation 全部指向 Agent Tool Façade path，每个工具带明确 description；含 schema/example/error contract；输入字段已补冗余语义说明，含「ADP 归一化为 0 视为未指定」约束）。
-- 部署后确认 `/health` 返回 `tools=7`（底层 CampusTools）**且** `agentTools=5`（ADP Façade）**且** `adpContractVersion=R49.2`，避免仅凭 dataVersion 猜测版本。
+- OpenAPI 导入（R49.4 / R49.4.1）：
+  - **新建插件**：全量导入 **`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`**（7 个 operation 全部指向
+    Agent Tool Façade path，每个工具带明确 description；含 schema/example/error contract；输入字段含
+    「ADP 归一化为 0 视为未指定」约束）。
+  - **升级既有 5 工具插件（推荐）**：增量导入 **`r49-ma/tools/openapi/campus-agent-tools.r49.4-existing-plugin-additions.json`**
+    （恰 2 个 operation：`campus_teacher_load_query`、`campus_schedule_range_query`，与全量文件同 server、
+    自包含可解析 $ref、无任何明文凭据）；导入后插件必须验证为 7 operations。
+- 部署后确认 `/health` 返回 `tools=9`（底层 CampusTools）**且** `agentTools=7`（ADP Façade）**且**
+  `adpContractVersion=R49.4`（2026-08-17 已部署确认），避免仅凭 dataVersion 猜测版本。
 - **真实 PluginID / Endpoint 未取得前 → 占位符 + FAIL CLOSED，不猜测。**
 
 ### 4.1 工具参数「模型可见性」配置表（R49.2.1，控制台实测 2026-08-17）
@@ -178,10 +189,12 @@
 
 1. 应用首页（非单工作流调试）逐条跑 `09-MULTI-AGENT-E2E-MATRIX.md`：
    - 硬回归 A~H + **D-2/D-3 变体**（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / **并列不澄清** / **D1~D5 窗口语义：rankingWindow 1..4 → detailWindow 继承 → 范围工具；只看第一周 → fresh 单周；风险未给周次 → Main 澄清，绝不默认 week=1** / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
+   - **D4 新会话单句链**：「看未来第一周课表负载最高的教师课表」→ `campus_teacher_load_query(1,1)` → Top1 → fresh `campus_schedule_query(week=1)`，不得 KnowledgeRetrievalAnswer 兜底、不得模型计数、不得 Main↔Insight 循环。
    - 13 核心 case + R48 A~G 回归。
 2. CASE C evidence 契约：「下一天呢」必须观察到 fresh `campus_day_plan(date=2026-09-05)`、「再下一天」必须 `campus_day_plan(date=2026-09-06)`——不得仅根据历史返回文本生成答案（逐轮截屏取证）。
 3. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
 4. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（控制台现行基线=四 Agent 均 DeepSeek V4 Flash，见 07 §6；单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
+5. **Console Gate（R49.4.1）**：只有 ADP 插件侧实测展示 **7 个 CampusTools**（5 既有 + delta 导入 2），且 D1~D5 每轮都有真实工具调用证据（HTTP 请求截图/日志）后，才允许声明「R49.4-GOLDEN」；插件仍为 5 工具或证据缺失 → 不满足 gate，不得宣布完成。
 
 ---
 
@@ -246,6 +259,9 @@
 
 - **验证口诀（控制台复测 CASE D，R49.4 版）**：D1「未来四周教师负载最高的是谁」→ 工具调用 `campus_teacher_load_query(1,4)`；D2「看Top1课表」→ `campus_schedule_range_query(教师009,1,4)` 且绝不弹「教师009/教师011/两位都看」选择；D3「只看第一周」→ fresh `campus_schedule_query(week=1)`；D5「检查Top1风险」→ Main 澄清时间窗口，**不得**静默 week=1。并列时回复「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011」。
 - 若控制台出现与上述不一致 → 确认插件已更新（7 operations）且 Prompt 已整体替换（不是增量追加）并重新粘贴。
+- **R49.4.1（2026-08-17）**：四份 Prompt 已按 source-aware 语义再次整体更新（`rankContext.sourceTool` 如实记录、
+  教师负载排名真源 = `campus_teacher_load_query`、`campus_overview` 职责拆分、多周窗口不是有效 risk week）；
+  此前已粘贴 R49.4 版的仍需**逐字重贴**四份 Prompt。
 - 参考实现：`r49-ma/tools/rank-semantics.js`（resolveRank / resolveDrilldownWeek / isMultiObjectRequest）与 `r49-ma/data-hub/`（窗口与周次表达式确定性解析，Prompt 语义与测试同源）。
 
 ## 9. 平台侧待办（非本轮仓库可完成）
@@ -274,3 +290,9 @@
 > 数据枢纽（`r49-ma/data-hub/`：canonical-schema、week-expression、validator、source-detector、neutral adapters、
 > privacy-policy）与匿名边界测试（`test-r49-4-data-hub.js` / `test-r49-4-anonymity-boundary.js`）就位；
 > 控制台 CASE D 按 D1~D5 复测（见 8.1 验证口诀）。
+> **R49.4.1（2026-08-17）**：提示词语义收敛——教师负载排名真源 = `campus_teacher_load_query`，
+> `rankContext.sourceTool` 一律如实记录（禁止写死 `campus_overview`）；`campus_overview` 仅保留固定窗口整体态势，
+> 不作为任意教师周窗口排名的替代来源；4 个 Prompt（main-orchestrator / campus-insight / schedule-space /
+> risk-planning）与 03/04 策略、E2E 矩阵（含新增 D4 单句链）、fixtures、测试全部同步；
+> 新增增量 OpenAPI `campus-agent-tools.r49.4-existing-plugin-additions.json`（恰 2 operations，升级既有 5 工具插件用）；
+> Console Gate：插件实测 7 工具 + D1~D5 真实调用证据齐备后才允许声明 R49.4-GOLDEN。
