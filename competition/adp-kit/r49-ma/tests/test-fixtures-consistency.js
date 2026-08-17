@@ -19,7 +19,7 @@ test("hardCases 标识为 A~H 且唯一", () => {
   assert.deepStrictEqual([...ids].sort(), ["A", "B", "C", "D", "E", "F", "G", "H"], "hardCases 必须 A~H");
 });
 
-test("所有 tools 引用必须合法（5 个 Agent Tool 或 KnowledgeRetrievalAnswer）", () => {
+test("所有 tools 引用必须合法（7 个 Agent Tool 或 KnowledgeRetrievalAnswer）", () => {
   for (const c of fixtures.hardCases) {
     for (const t of c.turns) {
       for (const tool of t.tools || []) {
@@ -29,14 +29,18 @@ test("所有 tools 引用必须合法（5 个 Agent Tool 或 KnowledgeRetrievalA
   }
 });
 
-test("self 模式轮次不得出现第二对象状态（A/D）；仅 E 允许 compare", () => {
+test("self 模式轮次不得出现第二对象状态；仅 E 允许 compare", () => {
   for (const c of fixtures.hardCases) {
     if (c.id === "E") continue;
     for (const t of c.turns) {
       const st = t.state || {};
       if (st.comparisonMode === "self") {
         assert.ok(!("second" in st), `case ${c.id} self 轮次不得携带 second 状态`);
-        assert.ok(t.tools.includes("campus_risk_check"), `case ${c.id} self 轮次应调用 campus_risk_check`);
+        if (t.route === "clarify") {
+          assert.deepStrictEqual(t.tools, [], `case ${c.id} self 澄清轮（未给周次）不得调任何工具`);
+        } else {
+          assert.ok(t.tools.includes("campus_risk_check"), `case ${c.id} self 轮次应调用 campus_risk_check`);
+        }
       }
     }
   }
@@ -75,7 +79,7 @@ test("agentToolNames 与契约 7 工具一致", () => {
   assert.deepStrictEqual([...fixtures.agentToolNames].sort(), [...validAgentTools].sort());
 });
 
-test("rankDrilldown 引用合法；CASE D 并列不澄清 + week 隔离", () => {
+test("rankDrilldown 引用合法；CASE D（D1~D5）并列不澄清 + windowContext 语义", () => {
   assert.ok(Array.isArray(fixtures.rankDrilldown) && fixtures.rankDrilldown.length >= 2, "rankDrilldown 应至少 D2/D3 两条链");
   for (const c of fixtures.rankDrilldown) {
     for (const t of c.turns) {
@@ -85,8 +89,20 @@ test("rankDrilldown 引用合法；CASE D 并列不澄清 + week 隔离", () => 
     }
   }
   const d = fixtures.hardCases.find((c) => c.id === "D");
-  assert.strictEqual(d.turns[1].state.week, 1, "CASE D schedule 下钻 week 必须为 1（不继承 overviewWindow.count=4）");
-  assert.strictEqual(d.turns[2].state.week, 1, "CASE D risk 下钻 week 必须为 1");
-  assert.ok((d.turns[1].dropped || []).includes("overviewWindow"), "CASE D schedule 下钻必须 drop overviewWindow");
+  // D1：排名意图走教师负载工具，携带 rankingWindow=1..4
+  assert.ok(d.turns[0].tools.includes("campus_teacher_load_query"), "D1 必须调用 campus_teacher_load_query");
+  assert.deepStrictEqual(d.turns[0].state.windowContext.rankingWindow, { weekStart: 1, weekEnd: 4 }, "D1 rankingWindow 必须为 1..4");
+  // D2：看Top1课表 → detailWindow=1..4（继承 rankingWindow）→ 范围课表工具
+  assert.ok(d.turns[1].tools.includes("campus_schedule_range_query"), "D2 必须调用 campus_schedule_range_query");
+  assert.deepStrictEqual(d.turns[1].state.windowContext.detailWindow, { weekStart: 1, weekEnd: 4 }, "D2 detailWindow 必须继承为 1..4");
+  assert.ok((d.turns[1].dropped || []).includes("overviewWindow"), "CASE D 下钻必须 drop overviewWindow");
   assert.ok(d.turns[1].hard.includes("并列"), "CASE D 必须声明指标并列时也不得澄清");
+  // D3：只看第一周 → detailWindow 收窄 1..1 → fresh 单周工具
+  assert.ok(d.turns[2].tools.includes("campus_schedule_query"), "D3 必须调用 fresh 单周 campus_schedule_query");
+  assert.deepStrictEqual(d.turns[2].state.windowContext.detailWindow, { weekStart: 1, weekEnd: 1 }, "D3 detailWindow 必须显式收窄为 1..1");
+  assert.strictEqual(d.turns[2].state.windowContext.academicWeek, 1, "D3 academicWeek 必须为 1（显式单周）");
+  // D5：检查Top1风险未给周次 → Main 澄清，不调 risk 工具，绝不静默 week=1
+  assert.strictEqual(d.turns[3].route, "clarify", "D5 必须走 Main 澄清");
+  assert.deepStrictEqual(d.turns[3].tools, [], "D5 不得调用任何工具（含 campus_risk_check）");
+  assert.strictEqual(d.turns[3].state.pending, "time_window", "D5 澄清项必须为 time_window");
 });

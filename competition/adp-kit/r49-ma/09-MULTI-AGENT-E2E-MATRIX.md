@@ -6,7 +6,7 @@
 ## 0. 图例
 
 - route：Main → (schedule/risk/insight) → 最终域
-- state：`comparisonMode`、`activeEntity`、`activeTime`、`staleContextEscaped`
+- state：`comparisonMode`、`activeEntity`、`activeTime`、`windowContext{rankingWindow,detailWindow,academicWeek}`、`staleContextEscaped`
 - inherited：本轮继承的槽位；dropped：本轮清除的槽位
 - tools：应调用的 Agent Tool（→ CampusTools）
 - widget：预期 Widget（第一阶段文本全链，Widget 属预期规划）
@@ -46,41 +46,59 @@
 **Evidence 契约（R49.3）**：「下一天呢」必须观察到 fresh `campus_day_plan(date=2026-09-05)`、「再下一天」必须
 `campus_day_plan(date=2026-09-06)`——**不得仅根据历史返回文本生成答案**（G2 验收按此逐轮核 evidence）。
 
-### CASE D：教师负载Top1 → 看Top1课表 → 检查Top1风险
+### CASE D：教师负载Top1 → Top1课表(范围) → 只看第一周 → Top1风险澄清（R49.4 D1~D5）
 
-| 轮次 | 输入 | route | state | inherited | dropped | tools |
-|---|---|---|---|---|---|---|
-| 1 | 未来四周教师负载最高的是谁 | insight | overview, overviewWindow={kind:"future_weeks",count:4}, rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_overview |
-| 2 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, week=**1**（drilldown 默认）, NO_CLARIFICATION | Top1 实体 | overviewWindow, overview_local_filters | campus_schedule_query |
-| 3 | 检查Top1风险 | risk | comparisonMode=**self**, entity=Top1, rank=1, week=**1** | Top1 实体 | schedule-local | campus_risk_check(self) |
+#### D1：未来四周教师负载最高的是谁（insight）
 
-**硬性要求（R49.3）**：
-- Top1 = 本轮 `campus_overview.teacherLoadTop[0]` 真实值（Insight 回传 rankContext；当前真机第一项=教师009，**不写死**）。
+| 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
+|---|---|---|---|---|---|---|---|
+| 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4}, detailWindow=null, academicWeek=null；rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_teacher_load_query(weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_teacher_load_query，body 含 weekStart:1,weekEnd:4 |
+
+#### D2：看Top1课表（schedule，范围下钻）
+
+| 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
+|---|---|---|---|---|---|---|---|
+| 2 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:4}**（继承 rankingWindow）, NO_CLARIFICATION | Top1 实体 + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=teacherLoadTop[0], weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_schedule_range_query；返回逐周展开（每条 academicWeek/date） |
+
+#### D3：只看第一周（schedule，显式收窄）
+
+| 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
+|---|---|---|---|---|---|---|---|
+| 3 | 只看第一周 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:1}**, academicWeek=1 | Top1 实体 | — | campus_schedule_query(entity=teacherLoadTop[0], week=1) | 观察 fresh POST /api/campus_schedule_query，week=1（**绝不默认**、绝不=聚合窗口 count） |
+
+#### D5：检查Top1风险（未给时间 → Main 澄清）
+
+| 轮次 | 输入 | route | state | tools |
+|---|---|---|---|---|
+| 4 | 检查Top1风险 | **clarify** | comparisonMode=self, entity=Top1, rank=1, pending=**time_window**（week/date 均未给） | —（**不调** campus_risk_check，绝不静默 week=1） |
+
+**硬性要求（R49.4）**：
+- Top1 = 本轮真实排名 `teacherLoadTop[0]`（Insight 回传 rankContext；当前真机第一项=教师009，**不写死**）。
 - **并列不澄清**：即使 teacherLoadTop[0] 与 [1] 业务指标完全相同（如均 27/54），`teacherLoadTop[0]` 仍唯一确定
   （position 语义；底层稳定排序 lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
   「看Top1课表」**NO CLARIFICATION**，不得弹出「教师009/教师011/两位都看」选择。
 - 并列事实如实说明：「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011。」
-- **week 隔离**：「未来四周」的 4 是 overviewWindow.count，**绝不等于** academicWeek；下钻默认 week=1，
-  不得把 week=4 传给 campus_schedule_query / campus_risk_check。
-- 第 3 轮 self-risk 不要求第二对象；`conflictCount=1 / rushWarningCount=1`（Top1=教师009 时，2026-09-02 周三5-6节 冲突）。
+- **窗口语义**：D1 排名窗口=rankingWindow 1..4 → D2 继承为 detailWindow 1..4 → **范围课表工具**逐周展开；
+  D3 显式收窄 detailWindow=1..1 → fresh 单周工具；**overviewWindow.count 绝不等于 academicWeek**，绝不默认 week=1。
+- **D5 澄清铁律**：多周排名后「检查Top1风险」未给周次/日期 → Main 澄清时间窗口，**不得**调 risk 工具、**不得**静默 week=1。
 - 「未来四周哪个校区最忙」属 Insight **单域**用例（核心 case #4），**不得**下钻个人课表/风险。
 
-### CASE D-2：Top2 下钻（R49.3 新增）
+### CASE D-2：Top2 下钻（R49.4）
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools |
 |---|---|---|---|---|---|---|
-| 1 | 未来四周教师负载最高的是谁 | insight | overview, overviewWindow={kind:"future_weeks",count:4} | — | — | campus_overview |
-| 2 | 看Top2课表 | schedule | entity=Top2(真实), rank=2, week=**1** | rankContext | overviewWindow, overview_local_filters | campus_schedule_query(entity=teacherLoadTop[1]) |
+| 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4} | — | — | campus_teacher_load_query(1,4) |
+| 2 | 看Top2课表 | schedule | entity=Top2(真实), rank=2, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=teacherLoadTop[1], 1, 4) |
 
 **硬性要求**：`Top2 = teacherLoadTop[1]`，**不得**调用 Top1 实体；NO_CLARIFICATION。
 
-### CASE D-3：并列多对象 → 再单排位（R49.3 新增）
+### CASE D-3：并列多对象 → 再单排位（R49.4）
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools |
 |---|---|---|---|---|---|---|
-| 1 | 未来四周教师负载最高的是谁 | insight | overview, rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_overview |
+| 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4}, rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_teacher_load_query(1,4) |
 | 2 | 并列第一都有谁 | insight | multi-object, selectedRank=**null**（rankContext 保持） | rankContext | — | 基于本轮 teacherLoadTop 如实列并列项（不调工具也行，不新建窗口） |
-| 3 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, week=1 | rankContext(selectedRank=1) | overviewWindow | campus_schedule_query(entity=teacherLoadTop[0]) |
+| 3 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext(selectedRank=1) + rankingWindow 1..4 | overviewWindow | campus_schedule_range_query(entity=teacherLoadTop[0], 1, 4) |
 
 **硬性要求**：多对象轮不得把并列项压缩为 Top1、不得破坏 rankContext；随后单排位仍落 teacherLoadTop[0]。
 
@@ -128,7 +146,7 @@
 | 4 | 再 → 未来四周哪个校区最忙 | →overview | campus-overview |
 | 5 | A校区第1周周一第5-6节60人以上 → B校区呢 → 改第7-8节 → 80人以上 → 下一周同一时间 | classroom 5 轮 slot 覆盖 | classroom |
 | 6 | 帮我安排2026-09-04的一天 → 下一天呢 → 再下一天 | day_plan(09-04→09-05→09-06) | day-plan |
-| 7 | 未来四周教学态势 → 看Top1课表 → 看他的风险 → 那周三呢 | insight→schedule→risk(self)→schedule | campus-overview→schedule→conflict→schedule |
+| 7 | 未来四周教学态势 → 看Top1课表 → 只看第一周 → 那周三呢 | insight→schedule→schedule→schedule | campus-overview→schedule(1..4)→schedule(week=1)→schedule(weekday=3) |
 | 8 | 功能示例 | knowledge(meta) | — |
 | 9 | 你能干什么 | knowledge(meta) | — |
 | 10 | 你好 | chat | — |

@@ -253,15 +253,15 @@ test("契约 3：Handoff/Context policy 含排位语义与窗口语义；Schedul
   assert.ok(!RISK.includes("drilldownAcademicWeek"), "risk-planning 不得再声明 drilldownAcademicWeek=1 默认");
 });
 
-test("契约 4：矩阵 CASE D/D-2/D-3 与 fixtures rankDrilldown 同步", () => {
+test("契约 4：矩阵 CASE D/D-2/D-3 与 fixtures rankDrilldown 同步（R49.4 D1~D5）", () => {
   assert.ok(E2E_MATRIX.includes("CASE D-2"), "矩阵必须含 Top2 变体");
   assert.ok(E2E_MATRIX.includes("CASE D-3"), "矩阵必须含并列多对象变体");
   assert.ok(E2E_MATRIX.includes("并列不澄清"), "矩阵必须声明并列不澄清");
-  assert.ok(E2E_MATRIX.includes("drilldown"), "矩阵必须含下钻周次说明");
+  assert.ok(E2E_MATRIX.includes("rankingWindow") && E2E_MATRIX.includes("detailWindow"), "矩阵必须含 R49.4 窗口字段");
   assert.ok(E2E_MATRIX.includes("campus_day_plan(date=2026-09-06)"), "矩阵 CASE C 必须含 09-06 evidence 契约");
   assert.deepStrictEqual(FIXTURES.rankDrilldown.map((c) => c.id), ["D2", "D3"]);
   const d = FIXTURES.hardCases.find((c) => c.id === "D");
-  assert.deepStrictEqual(d.turns.map((t) => t.route), ["insight", "schedule", "risk"], "CASE D 主链路由不变");
+  assert.deepStrictEqual(d.turns.map((t) => t.route), ["insight", "schedule", "schedule", "clarify"], "CASE D 主链路由必须为 D1→D2→D3→D5（risk 未给周次 → 澄清）");
 });
 
 test("契约 5：rank-semantics 纯函数边界（多对象优先、未知引用 none、无默认周）", () => {

@@ -38,11 +38,12 @@
     },
     {
       "id": "D",
-      "name": "教师负载Top1 → Top1课表 → Top1风险（并列不澄清 / week 隔离）",
+      "name": "教师负载Top1 → Top1课表(范围) → 只看第一周 → Top1风险澄清（R49.4 D1~D5）",
       "turns": [
-        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "overviewWindow": { "kind": "future_weeks", "count": 4 }, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } }, "hard": "Top1 取本轮 campus_overview.teacherLoadTop[0] 真实值（当前=教师009，不写死）；overviewWindow.count=4 是聚合窗口" },
-        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "week": 1, "source": "insight回传" }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "Top1=teacherLoadTop[0] position 语义；指标并列（27/54 与 27/54）也不得澄清；week=1（drilldown 默认），绝不继承 overviewWindow.count=4" },
-        { "input": "检查Top1风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "Top1", "rank": 1, "week": 1 }, "hard": "self-risk 不要求第二对象；week=1；conflictCount=1 / rushWarningCount=1" }
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null }, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } }, "hard": "D1：rankingWindow=1..4 → campus_teacher_load_query(1,4)；Top1 取本轮真实 teacherLoadTop[0]（当前=教师009，不写死）；指标并列（27/54 与 27/54）不得澄清" },
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "D2：Top1=teacherLoadTop[0] position 语义；指标并列也不得澄清；detailWindow=1..4 继承 rankingWindow → 范围工具逐周展开（每条 academicWeek/date）；绝不继承 overviewWindow.count=4" },
+        { "input": "只看第一周", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 1 }, "academicWeek": 1 } }, "hard": "D3：detailWindow 显式收窄 1..1 → fresh 单周 campus_schedule_query(week=1)，绝不默认 week=1" },
+        { "input": "检查Top1风险", "route": "clarify", "tools": [], "state": { "comparisonMode": "self", "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 1 }, "academicWeek": null }, "pending": "time_window" }, "hard": "D5：多周排名后未给周次/日期 → Main 澄清时间窗口；不得调 campus_risk_check，绝不静默 week=1" }
       ]
     },
     {
@@ -79,19 +80,19 @@
   "rankDrilldown": [
     {
       "id": "D2",
-      "name": "Top2 下钻（R49.3）",
+      "name": "Top2 下钻（R49.4 范围语义）",
       "turns": [
-        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "overviewWindow": { "kind": "future_weeks", "count": 4 } } },
-        { "input": "看Top2课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top2", "rank": 2, "week": 1 }, "hard": "Top2=teacherLoadTop[1]，不得调用 Top1 实体；NO_CLARIFICATION；week=1" }
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null } } },
+        { "input": "看Top2课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top2", "rank": 2, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "hard": "Top2=teacherLoadTop[1]，不得调用 Top1 实体；detailWindow=1..4 继承 rankingWindow → 范围工具；NO_CLARIFICATION" }
       ]
     },
     {
       "id": "D3",
-      "name": "并列多对象 → 再单排位（R49.3）",
+      "name": "并列多对象 → 再单排位（R49.4）",
       "turns": [
-        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } } },
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null }, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } } },
         { "input": "并列第一都有谁", "route": "insight", "tools": [], "state": { "multiObject": true, "rankContext": { "selectedRank": null } }, "hard": "如实列出并列项，不得压缩为 Top1；不得破坏 rankContext" },
-        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "week": 1 }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "仍正确落 teacherLoadTop[0]；NO_CLARIFICATION；week=1" }
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "仍正确落 teacherLoadTop[0]；NO_CLARIFICATION；detailWindow=1..4 → 范围工具" }
       ]
     }
   ],
@@ -102,7 +103,7 @@
     { "id": 4, "input": "再 → 未来四周哪个校区最忙", "route": "→overview", "widget": "campus-overview", "hard": "单域 insight，不得下钻个人 schedule/risk" },
     { "id": 5, "input": "A校区第1周周一第5-6节60人以上 → B校区呢 → 改第7-8节 → 80人以上 → 下一周同一时间", "route": "classroom 5轮 slot 覆盖", "widget": "classroom" },
     { "id": 6, "input": "帮我安排2026-09-04的一天 → 下一天呢 → 再下一天", "route": "day_plan(09-04→09-05→09-06)", "widget": "day-plan" },
-    { "id": 7, "input": "未来四周教学态势 → 看Top1课表 → 看他的风险 → 那周三呢", "route": "insight→schedule→risk(self)→schedule", "widget": "campus-overview→schedule→conflict→schedule" },
+    { "id": 7, "input": "未来四周教学态势 → 看Top1课表 → 只看第一周 → 那周三呢", "route": "insight→schedule→schedule→schedule", "widget": "campus-overview→schedule(1..4)→schedule(week=1)→schedule(weekday=3)", "hard": "R49.4：风险下钻未给周次 → 澄清；此处链改以「只看第一周」显式收窄" },
     { "id": 8, "input": "功能示例", "route": "knowledge(meta)", "widget": "-" },
     { "id": 9, "input": "你能干什么", "route": "knowledge(meta)", "widget": "-" },
     { "id": 10, "input": "你好", "route": "chat", "widget": "-" },

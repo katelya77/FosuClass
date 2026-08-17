@@ -164,11 +164,12 @@ test("10. prompt 契约：三个域 Agent 均含 fresh-tool-call 铁律", () => 
   assert.ok(RISK_PLANNING.includes("campus_day_plan(date=下一天)"), "risk-planning 应含下一天重调示例");
 });
 
-test("11. fixtures/矩阵契约：CASE D 首轮为教师负载 Top1，校区最忙为单域用例", () => {
+test("11. fixtures/矩阵契约：CASE D（D1~D5）首轮为教师负载 Top1，校区最忙为单域用例", () => {
   const caseD = FIXTURES.hardCases.find((c) => c.id === "D");
   assert.ok(caseD.turns[0].input.includes("教师负载"), "CASE D 首轮应为教师负载问题");
   assert.ok(caseD.turns[0].hard.includes("teacherLoadTop[0]"), "CASE D 首轮 hard 应引用 teacherLoadTop[0]");
-  assert.deepStrictEqual(caseD.turns.map((t) => t.route), ["insight", "schedule", "risk"]);
+  assert.ok(caseD.turns[0].tools.includes("campus_teacher_load_query"), "CASE D 首轮必须走教师负载工具（D1）");
+  assert.deepStrictEqual(caseD.turns.map((t) => t.route), ["insight", "schedule", "schedule", "clarify"], "CASE D 路由必须为 D1→D2→D3→D5");
   const core4 = FIXTURES.coreCases.find((c) => c.id === 4);
   assert.ok(core4.input.includes("哪个校区最忙"), "核心 case 4 保留校区最忙单域用例");
   assert.ok(core4.hard.includes("不得下钻"), "核心 case 4 应声明不下钻个人 schedule/risk");
@@ -179,7 +180,7 @@ test("11. fixtures/矩阵契约：CASE D 首轮为教师负载 Top1，校区最�
 // ---------------------------------------------------------------------------
 // 4. Insight teacher Top1 → schedule → risk(self) 真实链路（不写死）
 // ---------------------------------------------------------------------------
-test("12. Top1 链路：overview.teacherLoadTop[0] → schedule → risk(self) 全部成功（并列不澄清 / week=1）", () => {
+test("12. Top1 链路：overview.teacherLoadTop[0] → schedule(显式W1) → risk(self, 显式W1) 全部成功（并列不澄清 / 显式单周）", () => {
   const ov = callAgentTool("campus_overview", {});
   assert.strictEqual(ov.success, true);
   const top1 = ov.items[0].teacherLoadTop[0];
@@ -189,7 +190,7 @@ test("12. Top1 链路：overview.teacherLoadTop[0] → schedule → risk(self) �
   // R49.3：v2 数据 Top1/Top2 业务指标并列（27/54 与 27/54），position 语义仍唯一确定，不得因此澄清
   assert.strictEqual(ov.items[0].teacherLoadTop[1].lessonOccurrences, top1.lessonOccurrences, "v2 数据 Top2 与 Top1 指标并列（锚点）");
   assert.strictEqual(ov.items[0].teacherLoadTop[1].periodUnits, top1.periodUnits, "v2 数据 Top2 与 Top1 periodUnits 并列（锚点）");
-  // 下钻契约：Insight 回传实体 name（03-HANDOFF-POLICY §6），下游域工具按 name 取数；week=1（drilldown 默认，绝不=聚合窗口 count）
+  // R49.4 下钻契约：显式单周（detailWindow 1..1 / academicWeek=1）才直接落 week=1；绝不默认、绝不=聚合窗口 count
   const sch = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: top1.teacherName, week: 1 });
   assert.strictEqual(sch.success, true);
   assert.ok(sch.items.length > 0, "Top1 教师第 1 周应有课");
