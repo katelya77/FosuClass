@@ -37,14 +37,16 @@ Main → 用户
   "windowContext": { "rankingWindow": {"weekStart":1,"weekEnd":4} | null, "detailWindow": {"weekStart":1,"weekEnd":4} | null, "academicWeek": 1 | null },
   "referenceTarget": "none | active_entity | top1_entity | previous_result",
   "staleContextEscaped": true | false,
-  "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null | 1 | 2 | 3, "entities": [result[0], result[1], result[2]] } | null,
+  "rankContext": { "sourceTool": "campus_teacher_load_query", "sourceDomain": "teacher_load", "list": "teacherLoadTop", "rankingWindow": {"weekStart":1,"weekEnd":4} | null, "selectedRank": null | 1 | 2 | 3, "entities": [result[0], result[1], result[2]] } | null,
   "source": "SYS.UserQuery | SYS.RewriteQuery | ChatHistory | resolved"
 }
 ```
 
 - `explicitSlots`（本轮显式）> `inheritedSlots`（上轮 confirmed）> `ChatHistory`。冲突时 explicit 覆盖。
 - `dropSlots`：Main 判定新任务不属于旧 domain 时，把旧 domain-local pending state 列入清除列表，随信封一起发出，子 Agent 不得再引用。
-- `rankContext`：insight 回传的排位上下文；跨域下钻只继承 `selectedRank` 对应实体，**不得**继承 overview 聚合状态（见 §6.1、§6.2）。
+- `rankContext`：insight 回传的排位上下文，**source-aware**——`sourceTool` 记录本轮真实产生排名的工具（教师负载排名 =
+  `campus_teacher_load_query`；不允许写死为 `campus_overview`；若未来其他排名由别的工具返回，如实记录真实工具）。
+  跨域下钻只继承 `selectedRank` 对应实体，**不得**继承 overview 聚合状态（见 §6.1、§6.2）。
 
 ## 3. 回传信封（Child → Main）
 
@@ -96,18 +98,20 @@ Main → 用户
 - 用户「检查 Top1 风险」→ Main 转 Risk(`campus_risk_check`, mode=self, entity=Top1)。
 - Insight **不得**代答个人课表/风险明细，只交回对象。
 
-### 6.1 Top1/Top2/Top3 排位语义（R49.3 硬性要求）
+### 6.1 Top1/Top2/Top3 排位语义（R49.3 position 语义 + R49.4.1 source-aware）
 
-- **Top1 = teacherLoadTop[0]、Top2 = teacherLoadTop[1]、Top3 = teacherLoadTop[2]（position 语义）。**
+- **Top1 = 排名工具真实有序结果 [0]、Top2 = [1]、Top3 = [2]（position 语义）。**
+- 教师负载 TopN 排名工具 = `campus_teacher_load_query`（当前教师负载窗口排名的唯一动态真源）；
+  `rankContext.sourceTool` 记录真实产生排名的工具，不得写死为 `campus_overview`。
 - 业务指标并列（lessonOccurrences/periodUnits 相同）**不构成**「Top1 不唯一」；即使并列，
-  `teacherLoadTop[0]` 仍唯一确定（底层稳定排序：lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
+  `[0]` 仍唯一确定（底层稳定排序：lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
 - FOLLOW_UP 排位引用 → 直接落实体，**NO CLARIFICATION**（参考实现 `tools/rank-semantics.js resolveRank`）：
-  - `Top1 / 第一名 / 最高那个 / 排第一那个` → rank=1 → `teacherLoadTop[0]`
-  - `Top2 / 第二名 / 第二个` → rank=2 → `teacherLoadTop[1]`
-  - `Top3 / 第三名` → rank=3 → `teacherLoadTop[2]`
+  - `Top1 / 第一名 / 最高那个 / 排第一那个` → rank=1 → `[0]`
+  - `Top2 / 第二名 / 第二个` → rank=2 → `[1]`
+  - `Top3 / 第三名` → rank=3 → `[2]`
 - 明确**多对象**短语（「把并列第一两位都给我看看」「比较这两位」「他们」「并列第一的两个」）→ 多对象逻辑，
   不得压缩为 Top1（`isMultiObjectRequest` 先于 rank 别名判定）。
-- 排位实体来自本轮真实 `teacherLoadTop`；**禁止硬编码 教师009**。
+- 排位实体来自本轮排名工具真实有序结果；**禁止硬编码 教师009**。
 
 ### 6.2 跨域下钻窗口策略（R49.4 硬性要求）
 
@@ -118,9 +122,9 @@ Main → 用户
   - 「检查Top1风险」未给任何周次/日期 → **Main 澄清时间窗口**，绝不静默 week=1。
 - `overviewWindow.count` **绝不等于 academicWeek**；跨域下钻只继承 `rankingWindow/detailWindow` 与选中实体，
   `dropSlots` 必须包含 overview-local state（如 `["overviewWindow", "overview_local_filters"]`）。
-- 示例（CASE D 标准链，R49.4）：
-  - T1「未来四周教师负载最高的是谁」→ Insight(`campus_overview` / `campus_teacher_load_query`) → rankingWindow=1..4
-  - T2「看Top1课表」→ Schedule：entity=teacherLoadTop[0]，detailWindow=1..4 → `campus_schedule_range_query`，NO_CLARIFICATION
+- 示例（CASE D 标准链，R49.4.1）：
+  - T1「未来四周教师负载最高的是谁」→ Insight(`campus_teacher_load_query`，weekStart=1, weekEnd=4) → rankingWindow=1..4
+  - T2「看Top1课表」→ Schedule：entity=排名结果[0]，detailWindow=1..4 → `campus_schedule_range_query`，NO_CLARIFICATION
   - T3「只看第一周」→ Schedule：detailWindow=1..1 → fresh `campus_schedule_query`(week=1)，NO_CLARIFICATION
   - T4「检查Top1风险」（无时间）→ Main 澄清时间窗口（week/date），不得静默 week=1
 

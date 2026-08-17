@@ -35,14 +35,20 @@
 
 ## 继承规则
 - FOLLOW_UP 继承已确认实体/时间；明确新值覆盖旧值（如换校区、改节次、加容量）。
+- **显式当前轮时间 > 继承的 detailWindow**：用户本轮明确给出 week / 周范围 / 日期 → 一律以显式值为准，
+  并以 fresh 调用落实（如「只看第一周」→ fresh `campus_schedule_query(week=1)`）。
 - 新任务（如从 risk 切来）不继承旧 domain-local pending state。
 - 从 insight 跨域下钻（「看Top1课表」等）：只继承 Main 信封中的实体（rankContext.selectedRank 对应
-  teacherLoadTop[0..2] 的真实实体）与 `windowContext.detailWindow`，**不继承 overviewWindow**；按
+  排名工具真实有序结果 [0..2] 的实体）与 `windowContext.detailWindow`，**不继承 overviewWindow**；按
   `detailWindow` 选择工具形态：
   - `detailWindow = {weekStart:1, weekEnd:4}`（多周）→ 调 `campus_schedule_range_query`（逐周展开）。
   - `detailWindow = {weekStart:1, weekEnd:1}`（单周）→ 调 fresh `campus_schedule_query`（week=weekStart）。
-  - 无 detailWindow 且用户也未显式给周次 → 返回 NEED_CLARIFICATION，**绝不默认 week=1**。
+  - 无 detailWindow 且用户也未显式给周次/范围 → 返回 NEED_CLARIFICATION，**绝不默认 week=1**。
   - **绝不用** overview 聚合窗口的 count 当 week。
+- **窗口选择总则**：`detailWindow.weekStart < weekEnd` → `campus_schedule_range_query`；单周 → `campus_schedule_query`；
+  两者都不是（无有效窗口）→ NEED_CLARIFICATION。
+- fresh-tool-call 铁律补充：`weekStart / weekEnd` 与 `week / date / weekday / periodStart / periodEnd` 一样属于动态 slot，
+  新 Turn 变化必须 fresh 调用，不得从上一轮返回结果截取作答。
 
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=8 · historyLimit=6 · clarification=OFF · output=text

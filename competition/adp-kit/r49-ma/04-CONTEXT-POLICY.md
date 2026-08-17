@@ -25,8 +25,8 @@
 | 明确新 domain | 清理旧 domain-local state |
 | 代词（他/它/这个） | 仅当 `continuationConfidence` 足够高才解析；置信不足则澄清 |
 | 首轮无历史 | 「只看周三」不得伪造实体 → 必须澄清对象 |
-| `Top1` | 引用上一轮 campus_overview 结果中的真实 Top1（= teacherLoadTop[0]，position 语义），由 Insight 回传，不凭记忆 |
-| `Top2` | = teacherLoadTop[1]；`Top3` = teacherLoadTop[2]；排位别名映射见 `tools/rank-semantics.js` |
+| `Top1` | 引用上一轮已核验 rankContext 中的真实 Top1（= 排名工具真实有序结果 [0]，position 语义），由 Insight 回传，不凭记忆 |
+| `Top2` | = [1]；`Top3` = [2]；排位别名映射见 `tools/rank-semantics.js`；教师负载排名真源 = `campus_teacher_load_query` |
 | overviewWindow | **聚合窗口**（`{ kind: "future_weeks", count: 4 }`），**绝不继承为 activeTime.week**；跨域下钻 drop |
 
 ## 3. Stale Context Escape（硬触发条件）
@@ -60,8 +60,10 @@
 
 - 「他/他的」：解析到 activeEntity（上轮 confirmed 实体）；无 activeEntity 或置信不足 → 澄清。
 - 「周三呢/下一周呢/下一天呢」：解析到 activeTime（周/日）推进；day_plan 的「下一天」用 `generate_day_plan` 的 date 推进，不模型自算。
-- 「Top1」：解析到 insight 回传的 Top1 实体（position 语义：teacherLoadTop[0]，即使指标并列也唯一确定）。
-- 「Top2/第二名/第二个」→ teacherLoadTop[1]；「Top3/第三名」→ teacherLoadTop[2]。
+- 「Top1」：解析到 insight 回传的 Top1 实体（position 语义：排名工具真实有序结果 [0]，即使指标并列也唯一确定）。
+- 「Top2/第二名/第二个」→ 排名工具结果 [1]；「Top3/第三名」→ 排名工具结果 [2]。
+- 教师负载排名的权威动态真源 = `campus_teacher_load_query`（weekStart..weekEnd / topN / campus 任一变化必须 fresh 调用）；
+  `campus_overview.teacherLoadTop` 仅是固定窗口整体态势的组成部分，不作为任意教师周窗口排名的替代来源。
 - **多对象短语**（「他们」「这两位」「并列第一的两个」「两位都给我看看」）→ 多对象语义，不得压缩为 Top1。
 - **overviewWindow 隔离**：「未来四周」的 4 是聚合窗口 count，解析为 `overviewWindow={kind:"future_weeks",count:4}`，
   跨域下钻（insight→schedule/risk）时作为 overview-local state **drop**；下钻窗口一律以

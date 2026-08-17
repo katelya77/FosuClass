@@ -7,7 +7,7 @@
 //  2. campus_classroom_search ADP 0 值掩码潜伏问题回归：resolveTimeRange 必须读归一化后的 input，
 //     weekday=0 视为未指定（date 可推导）；节次真缺失保持 INVALID_PARAM fail-closed。
 //  3. Domain Agent fresh-tool-call 纪律契约（prompt 文本 + 09 矩阵 + multi-turn fixtures）。
-//  4. Insight teacher Top1 → schedule → risk(self) 真实链路（Top1=teacherLoadTop[0]，不写死）。
+//  4. Insight teacher Top1 → schedule → risk(self) 真实链路（Top1=排名工具结果 [0]，不写死）。
 //  5. 「未来四周哪个校区最忙」= Insight 单域用例，不得下钻个人 schedule/risk。
 //
 // 断言只使用 competition-demo-v2 真实数据派生的事实；teacher-009 等仅作断言锚点，运行时不得硬编码。
@@ -167,7 +167,7 @@ test("10. prompt 契约：三个域 Agent 均含 fresh-tool-call 铁律", () => 
 test("11. fixtures/矩阵契约：CASE D（D1~D5）首轮为教师负载 Top1，校区最忙为单域用例", () => {
   const caseD = FIXTURES.hardCases.find((c) => c.id === "D");
   assert.ok(caseD.turns[0].input.includes("教师负载"), "CASE D 首轮应为教师负载问题");
-  assert.ok(caseD.turns[0].hard.includes("teacherLoadTop[0]"), "CASE D 首轮 hard 应引用 teacherLoadTop[0]");
+  assert.ok(caseD.turns[0].hard.includes("排名工具结果 [0]"), "CASE D 首轮 hard 应引用排名工具结果 [0]（R49.4.1）");
   assert.ok(caseD.turns[0].tools.includes("campus_teacher_load_query"), "CASE D 首轮必须走教师负载工具（D1）");
   assert.deepStrictEqual(caseD.turns.map((t) => t.route), ["insight", "schedule", "schedule", "clarify"], "CASE D 路由必须为 D1→D2→D3→D5");
   const core4 = FIXTURES.coreCases.find((c) => c.id === 4);
@@ -180,21 +180,20 @@ test("11. fixtures/矩阵契约：CASE D（D1~D5）首轮为教师负载 Top1，
 // ---------------------------------------------------------------------------
 // 4. Insight teacher Top1 → schedule → risk(self) 真实链路（不写死）
 // ---------------------------------------------------------------------------
-test("12. Top1 链路：overview.teacherLoadTop[0] → schedule(显式W1) → risk(self, 显式W1) 全部成功（并列不澄清 / 显式单周）", () => {
-  const ov = callAgentTool("campus_overview", {});
-  assert.strictEqual(ov.success, true);
-  const top1 = ov.items[0].teacherLoadTop[0];
-  assert.ok(top1 && top1.teacherId && top1.teacherId.startsWith("teacher-"), "Top1 必须是教师实体（teacherLoadTop[0]）");
-  assert.strictEqual(top1.teacherName, "教师009", "当前真机 Top1=教师009（仅作锚点，不写死运行时）");
-  assert.strictEqual(ov.items[0].window.teachingWeeks.count, 4, "overview 聚合窗口应为 4 周（overviewWindow）");
+test("12. Top1 链路：campus_teacher_load_query 结果[0] → schedule(显式W1) → risk(self, 显式W1) 全部成功（并列不澄清 / 显式单周）", () => {
+  const tl = callAgentTool("campus_teacher_load_query", { weekStart: 1, weekEnd: 4, topN: 3 });
+  assert.strictEqual(tl.success, true);
+  const top1 = tl.items[0];
+  assert.ok(top1 && top1.teacher && top1.teacher.id.startsWith("teacher-"), "Top1 必须是教师实体（排名工具结果 [0]）");
+  assert.strictEqual(top1.teacher.name, "教师009", "当前真机 Top1=教师009（仅作锚点，不写死运行时）");
   // R49.3：v2 数据 Top1/Top2 业务指标并列（27/54 与 27/54），position 语义仍唯一确定，不得因此澄清
-  assert.strictEqual(ov.items[0].teacherLoadTop[1].lessonOccurrences, top1.lessonOccurrences, "v2 数据 Top2 与 Top1 指标并列（锚点）");
-  assert.strictEqual(ov.items[0].teacherLoadTop[1].periodUnits, top1.periodUnits, "v2 数据 Top2 与 Top1 periodUnits 并列（锚点）");
+  assert.strictEqual(tl.items[1].lessonOccurrences, top1.lessonOccurrences, "v2 数据 Top2 与 Top1 指标并列（锚点）");
+  assert.strictEqual(tl.items[1].periodUnits, top1.periodUnits, "v2 数据 Top2 与 Top1 periodUnits 并列（锚点）");
   // R49.4 下钻契约：显式单周（detailWindow 1..1 / academicWeek=1）才直接落 week=1；绝不默认、绝不=聚合窗口 count
-  const sch = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: top1.teacherName, week: 1 });
+  const sch = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: top1.teacher.name, week: 1 });
   assert.strictEqual(sch.success, true);
   assert.ok(sch.items.length > 0, "Top1 教师第 1 周应有课");
-  const risk = callAgentTool("campus_risk_check", { mode: "self", entityType: "teacher", entityName: top1.teacherName, week: 1 });
+  const risk = callAgentTool("campus_risk_check", { mode: "self", entityType: "teacher", entityName: top1.teacher.name, week: 1 });
   assert.strictEqual(risk.success, true);
   assert.strictEqual(risk.summary.selfCompare, true, "Top1 风险应为 self 模式");
   assert.strictEqual(risk.summary.conflictCount, 1, "教师009 第 1 周应 1 冲突（与 risk self 既有语义一致）");

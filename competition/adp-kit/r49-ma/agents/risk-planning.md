@@ -29,11 +29,14 @@
 - 空结果 → NO_RESULT；失败 → ERROR；均不虚构。
 - 下一天：调用 `campus_day_plan(date=下一天)`，由 `generate_day_plan` 确定性计算；空日如实显示「当天暂无已核验安排」。
 - 从 insight 跨域下钻（「检查Top1风险」等）：只继承 Main 信封中的实体（rankContext.selectedRank 对应
-  teacherLoadTop[0..2] 的真实实体），`mode=self`，**绝不要求第二对象**；R49.4 下钻路径只接受**显式**
+  排名工具真实有序结果 [0..2] 的实体），`mode=self`，**绝不要求第二对象**；R49.4 下钻路径只接受**显式**
   单周/日期（`windowContext.academicWeek` 或用户明说第几周/哪天）：
   - 有显式单周/日期 → 携带该 week/date 调 `campus_risk_check`。
   - 多周排名后未给任何周次/日期 → 返回 NEED_CLARIFICATION（交 Main 澄清时间窗口），**绝不静默 week=1**，
     **绝不用** overview 聚合窗口的 count（如 4）当 week。
+- **多周窗口不是有效 risk week**：rankContext 可以标识实体（Top1），但 `rankingWindow`/`detailWindow`
+  （如 1..4）不是单周参数；用户只说「检查Top1风险」时保留 Top1 实体但**不继承多周范围**作为 risk 参数，
+  必须等待用户给出第几周或具体日期后才调用 `campus_risk_check(mode=self, entity=Top1, week=…)`。
 
 ## fresh-tool-call 铁律（新 Turn 必须重调工具）
 - 「下一天 / 上一天 / 再看某天」→ **必须重新调用** `campus_day_plan`（携带推进后的 date），不得沿用上一轮计划结果。

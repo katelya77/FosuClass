@@ -52,19 +52,28 @@
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
 |---|---|---|---|---|---|---|---|
-| 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4}, detailWindow=null, academicWeek=null；rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_teacher_load_query(weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_teacher_load_query，body 含 weekStart:1,weekEnd:4 |
+| 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4}, detailWindow=null, academicWeek=null；rankContext(sourceTool=**campus_teacher_load_query**, sourceDomain=teacher_load, selectedRank=null, entities=top[0..2]) | — | — | campus_teacher_load_query(weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_teacher_load_query，body 含 weekStart:1,weekEnd:4 |
 
 #### D2：看Top1课表（schedule，范围下钻）
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
 |---|---|---|---|---|---|---|---|
-| 2 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:4}**（继承 rankingWindow）, NO_CLARIFICATION | Top1 实体 + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=teacherLoadTop[0], weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_schedule_range_query；返回逐周展开（每条 academicWeek/date） |
+| 2 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:4}**（继承 rankingWindow）, NO_CLARIFICATION | Top1 实体 + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=排名工具结果[0], weekStart=1, weekEnd=4) | 观察 fresh POST /api/campus_schedule_range_query；返回逐周展开（每条 academicWeek/date） |
 
 #### D3：只看第一周（schedule，显式收窄）
 
 | 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
 |---|---|---|---|---|---|---|---|
-| 3 | 只看第一周 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:1}**, academicWeek=1 | Top1 实体 | — | campus_schedule_query(entity=teacherLoadTop[0], week=1) | 观察 fresh POST /api/campus_schedule_query，week=1（**绝不默认**、绝不=聚合窗口 count） |
+| 3 | 只看第一周 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow=**{weekStart:1,weekEnd:1}**, academicWeek=1 | Top1 实体 | — | campus_schedule_query(entity=排名工具结果[0], week=1) | 观察 fresh POST /api/campus_schedule_query，week=1（**绝不默认**、绝不=聚合窗口 count） |
+
+#### D4：新会话单句链「看未来第一周课表负载最高的教师课表」（insight→schedule 单链）
+
+| 轮次 | 输入 | route | state | inherited | dropped | tools | fresh-call evidence |
+|---|---|---|---|---|---|---|---|
+| 1 | 看未来第一周课表负载最高的教师课表 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:1}, rankContext(sourceTool=campus_teacher_load_query, selectedRank=null) | — | — | campus_teacher_load_query(weekStart=1, weekEnd=1) | 观察 fresh POST /api/campus_teacher_load_query，body 含 weekStart:1,weekEnd:1（W1..W1 锚点 Top1=教师003） |
+| 2 | 看Top1课表（同轮跟进） | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow={weekStart:1,weekEnd:1}, academicWeek=1 | Top1 实体 + rankingWindow 1..1 | overviewWindow, overview_local_filters | campus_schedule_query(entity=排名工具结果[0], week=1) | 观察 fresh POST /api/campus_schedule_query，week=1（单周窗口 → 单周工具） |
+
+**硬性要求（D4）**：新会话（无任何历史）单句意图链，**不得**出现 KnowledgeRetrievalAnswer 兜底、不得模型计数、不得 Main↔Insight 来回循环；单周窗口（1..1）直接落单周工具，**不得**先走范围工具。
 
 #### D5：检查Top1风险（未给时间 → Main 澄清）
 
@@ -72,12 +81,14 @@
 |---|---|---|---|---|
 | 4 | 检查Top1风险 | **clarify** | comparisonMode=self, entity=Top1, rank=1, pending=**time_window**（week/date 均未给） | —（**不调** campus_risk_check，绝不静默 week=1） |
 
-**硬性要求（R49.4）**：
-- Top1 = 本轮真实排名 `teacherLoadTop[0]`（Insight 回传 rankContext；当前真机第一项=教师009，**不写死**）。
-- **并列不澄清**：即使 teacherLoadTop[0] 与 [1] 业务指标完全相同（如均 27/54），`teacherLoadTop[0]` 仍唯一确定
+**硬性要求（R49.4 / R49.4.1）**：
+- Top1 = 本轮真实排名结果（`campus_teacher_load_query` 真实有序结果 [0]，position 语义；当前真机第一项=教师009，**不写死**）。
+- **并列不澄清**：即使排名结果 [0] 与 [1] 业务指标完全相同（如均 27/54），结果 [0] 仍唯一确定
   （position 语义；底层稳定排序 lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
   「看Top1课表」**NO CLARIFICATION**，不得弹出「教师009/教师011/两位都看」选择。
 - 并列事实如实说明：「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011。」
+- 教师负载排名真源 = `campus_teacher_load_query`（rankingWindow/topN/campus 变化必须 fresh 调用）；
+  `campus_overview.teacherLoadTop` 仅是固定窗口整体态势的组成部分，不作为任意教师周窗口排名的替代来源。
 - **窗口语义**：D1 排名窗口=rankingWindow 1..4 → D2 继承为 detailWindow 1..4 → **范围课表工具**逐周展开；
   D3 显式收窄 detailWindow=1..1 → fresh 单周工具；**overviewWindow.count 绝不等于 academicWeek**，绝不默认 week=1。
 - **D5 澄清铁律**：多周排名后「检查Top1风险」未给周次/日期 → Main 澄清时间窗口，**不得**调 risk 工具、**不得**静默 week=1。
@@ -88,9 +99,9 @@
 | 轮次 | 输入 | route | state | inherited | dropped | tools |
 |---|---|---|---|---|---|---|
 | 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4} | — | — | campus_teacher_load_query(1,4) |
-| 2 | 看Top2课表 | schedule | entity=Top2(真实), rank=2, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=teacherLoadTop[1], 1, 4) |
+| 2 | 看Top2课表 | schedule | entity=Top2(真实), rank=2, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext + rankingWindow 1..4 | overviewWindow, overview_local_filters | campus_schedule_range_query(entity=排名工具结果[1], 1, 4) |
 
-**硬性要求**：`Top2 = teacherLoadTop[1]`，**不得**调用 Top1 实体；NO_CLARIFICATION。
+**硬性要求**：`Top2 = 排名工具结果 [1]`，**不得**调用 Top1 实体；NO_CLARIFICATION。
 
 ### CASE D-3：并列多对象 → 再单排位（R49.4）
 
@@ -98,9 +109,9 @@
 |---|---|---|---|---|---|---|
 | 1 | 未来四周教师负载最高的是谁 | insight | windowContext.rankingWindow={weekStart:1,weekEnd:4}, rankContext(selectedRank=null, entities=top[0..2]) | — | — | campus_teacher_load_query(1,4) |
 | 2 | 并列第一都有谁 | insight | multi-object, selectedRank=**null**（rankContext 保持） | rankContext | — | 基于本轮 teacherLoadTop 如实列并列项（不调工具也行，不新建窗口） |
-| 3 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext(selectedRank=1) + rankingWindow 1..4 | overviewWindow | campus_schedule_range_query(entity=teacherLoadTop[0], 1, 4) |
+| 3 | 看Top1课表 | schedule | entity=Top1(真实), rank=1, windowContext.detailWindow={weekStart:1,weekEnd:4} | rankContext(selectedRank=1) + rankingWindow 1..4 | overviewWindow | campus_schedule_range_query(entity=排名工具结果[0], 1, 4) |
 
-**硬性要求**：多对象轮不得把并列项压缩为 Top1、不得破坏 rankContext；随后单排位仍落 teacherLoadTop[0]。
+**硬性要求**：多对象轮不得把并列项压缩为 Top1、不得破坏 rankContext；随后单排位仍落排名工具结果 [0]。
 
 ### CASE E：比较T03和T09第1周风险（显式双对象）
 
@@ -146,7 +157,7 @@
 | 4 | 再 → 未来四周哪个校区最忙 | →overview | campus-overview |
 | 5 | A校区第1周周一第5-6节60人以上 → B校区呢 → 改第7-8节 → 80人以上 → 下一周同一时间 | classroom 5 轮 slot 覆盖 | classroom |
 | 6 | 帮我安排2026-09-04的一天 → 下一天呢 → 再下一天 | day_plan(09-04→09-05→09-06) | day-plan |
-| 7 | 未来四周教学态势 → 看Top1课表 → 只看第一周 → 那周三呢 | insight→schedule→schedule→schedule | campus-overview→schedule(1..4)→schedule(week=1)→schedule(weekday=3) |
+| 7 | 未来四周教师负载最高的是谁 → 看Top1课表 → 只看第一周 → 那周三呢 | insight→schedule→schedule→schedule | teacher_load→schedule(1..4)→schedule(week=1)→schedule(weekday=3) |
 | 8 | 功能示例 | knowledge(meta) | — |
 | 9 | 你能干什么 | knowledge(meta) | — |
 | 10 | 你好 | chat | — |
@@ -169,3 +180,6 @@
 - 任一硬性要求（A~H 加粗项）失败 → 阻断发布。
 - 13 case + R48 A~G 全绿 → 进入模型 A/B。
 - 动态事实零编造；`dataVersion=competition-demo-v2` 且 evidence.verified=true。
+- **Console Gate（R49.4.1）**：只有 ADP 插件侧实测展示 7 个 CampusTools（5 既有 + delta 导入 2），
+  且 D1~D5 每轮都有真实工具调用证据（HTTP 请求截图/日志）后，才允许声明「R49.4-GOLDEN」；
+  截图/日志缺失、或插件仍为 5 工具 → 不满足 gate，不得宣布完成。
