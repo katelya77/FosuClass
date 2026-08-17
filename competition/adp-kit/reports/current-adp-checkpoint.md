@@ -2,14 +2,23 @@
 
 更新时间：2026-08-17 +08:00
 
-当前阶段：`CampusFlow ADP R49.4 / Multi-School Anonymous Data Foundation`（R49.3 真机复测已完成；**R49.4 已部署，远程 /health 与 8 项鉴权复验全部通过**：tools=9 / agentTools=7 / adpContractVersion=R49.4；等待用户 ADP 控制台插件更新 7 operations + 重新粘贴 Prompt + 应用首页 D1~D5 复测）
+当前阶段：`CampusFlow ADP R49.4.1 / Prompt Consistency Hardening`（仓库收敛已完成；**Runtime 未动**：CloudBase 保持 R49.4 已部署状态 tools=9 / agentTools=7 / adpContractVersion=R49.4；等待用户 ADP 控制台按验收模板执行：插件增量导入 2 个新 operation → 重新粘贴 4 份 Prompt → 应用首页 D1~D5（含 D4）复测 → Console Gate 通过后才允许声明 R49.4-GOLDEN）
+
+## R49.4.1 状态（本轮，2026-08-17）
+
+- **仓库收敛 = READY**（TDD：`test-r49-4-1-prompt-consistency.js` 先红后绿）：4 份 Prompt（main-orchestrator / campus-insight / schedule-space / risk-planning）与 03-HANDOFF / 04-CONTEXT 策略、E2E 矩阵、fixtures、drilldown 测试全部对齐 **source-aware 语义**——教师负载排名真源 = `campus_teacher_load_query`；`rankContext.sourceTool` 如实记录（禁止写死 `campus_overview`）；`campus_overview` 仅承担固定窗口整体态势（不作为任意教师周窗口排名的替代来源）；多周窗口不是有效 risk week（未给周次 → Main 澄清，绝不静默 week=1）；D4 新会话单句链（teacher_load(1,1) → Top1 → schedule week=1）入矩阵与验收模板。
+- **新增增量 OpenAPI**：`r49-ma/tools/openapi/campus-agent-tools.r49.4-existing-plugin-additions.json`（恰 2 operations，与全量 `campus-agent-tools.adp-import.json` 同 server、$ref 自包含、无明文凭据；派生一致性已入 `test-adp-import-openapi.js`）。
+- **手动清单同步**：`R49-MA-ADP-MANUAL-CONFIG-CHECKLIST.md`（§1.2/§1.4 工具绑定补全、§4 现行 7 Façade 表 + delta 导入说明、§6 D4 与 Console Gate、§8.1 R49.4.1 重贴提示、§9 历史注记）。
+- **测试**：r49-ma 全套 `node --test "tests/*.js"` = **171/171**（含新增 prompt-consistency 4 契约、drilldown source-aware 重写、import delta 4 契约）；`npm test --prefix competition/adp-kit` 全链其余步骤 PASS（golden 33/33、submission 54 文件 0 findings、widget CI、artifact 校验），**唯一基线失败**：末步 `sync-assets-manifest --check`（改动前已存在——用户快照提交 `7593322` 内的 submission-package/manifest 漂移；`git diff c0478c5..HEAD` 证明本轮 14 个改动文件不含 submission-package 与 generated-assets-manifest.json；跑套件后已 `git checkout` 逐字节还原 submission-package，`git status` 仅剩本轮 3 个预期文件）。
+- **Console Acceptance 模板就绪**：`r49-ma/reports/2026-08-17-r49.4.1-console-acceptance.md`（路径 A 增量推荐 / 路径 B 全量兜底、禁止先删旧插件、D1~D5 证据表、Console Gate 判定、回滚路径）。
+- **R49.4-GOLDEN 尚未宣布**：需用户控制台实测（插件 7 工具截图 + D1~D5 真实工具调用证据），仓库侧不代跑、不伪造 console PASS。
 
 ## 真实 ADP / Runtime 状态（2026-08-17 实测）
 
 - 仓库分支：`feat/campusflow-adp-integration`；**R49.3 patch 前 HEAD = `7208a5e`**；PR #49 保持 `OPEN / UNMERGED`（禁止 merge）。
-- CloudBase HTTP Function `/health`（只读 GET，2026-08-17）：`status=ok`、`dataVersion=competition-demo-v2`、`dataHash=sha1:4f3bbbb45d1f`、`tools=7`、`agentTools=5`、`adpContractVersion=R49.2.1`。
+- CloudBase HTTP Function `/health`（只读 GET，2026-08-17，R49.4 部署后实测）：`status=ok`、`dataVersion=competition-demo-v2`、`dataHash=sha1:4f3bbbb45d1f`、`tools=9`、`agentTools=7`、`adpContractVersion=R49.4`（R49.4.1 不重部署）。
 - 鉴权验证：假 Bearer token POST `/api/campus_risk_check` → 401（token 模式仍在；环境变量未因部署被覆盖）。
-- ADP 契约：`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`（R49.2，description 已加固）。
+- ADP 契约：`r49-ma/tools/openapi/campus-agent-tools.adp-import.json`（R49.4，7 operations）；增量升级用 `campus-agent-tools.r49.4-existing-plugin-additions.json`（R49.4.1，2 operations）。
 - Widget / Workflow：01～04 R3 与 05 状态沿用 2026-08-14 记录（`TENCENT_WORKFLOW_DEBUG_PASS`；05 等待平台恢复后收口）。
 - 平台事件（历史）：2026-08-14 `10013 add vectors failed` 仍记录于 `2026-08-14-adp-workflow-vector-service-incident.md`；与后续修复相互独立。
 

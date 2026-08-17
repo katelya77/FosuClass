@@ -23,9 +23,12 @@ function walk(dir, acc = []) {
 
 // R49.1 例外：campus-agent-tools.adp-import.json 是用户第六步明确要求的 import-ready OpenAPI，
 // 必须携带真实比赛 CloudBase endpoint 供腾讯 ADP 人工导入；test-adp-import-openapi.js 仅做断言引用。
+// R49.4.1 例外：campus-agent-tools.r49.4-existing-plugin-additions.json 是同性质的用户导入文件
+// （既有 5 工具插件增量升级用，恰 2 operations，与全量文件同一真实 server），同样豁免。
 // 其余契约/代码层仍必须 FAIL CLOSED（占位符），不得硬编码真实生产 Endpoint。
 const IMPORT_ALLOWLIST = [
   "tools/openapi/campus-agent-tools.adp-import.json",
+  "tools/openapi/campus-agent-tools.r49.4-existing-plugin-additions.json",
   "tests/test-adp-import-openapi.js",
 ];
 
