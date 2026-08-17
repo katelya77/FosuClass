@@ -36,12 +36,14 @@ Main → 用户
   "activeTime": { "week": 1 } | { "date": "2026-09-03" } | null,
   "referenceTarget": "none | active_entity | top1_entity | previous_result",
   "staleContextEscaped": true | false,
+  "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null | 1 | 2 | 3, "entities": [result[0], result[1], result[2]] } | null,
   "source": "SYS.UserQuery | SYS.RewriteQuery | ChatHistory | resolved"
 }
 ```
 
 - `explicitSlots`（本轮显式）> `inheritedSlots`（上轮 confirmed）> `ChatHistory`。冲突时 explicit 覆盖。
 - `dropSlots`：Main 判定新任务不属于旧 domain 时，把旧 domain-local pending state 列入清除列表，随信封一起发出，子 Agent 不得再引用。
+- `rankContext`：insight 回传的排位上下文；跨域下钻只继承 `selectedRank` 对应实体，**不得**继承 overview 聚合状态（见 §6.1、§6.2）。
 
 ## 3. 回传信封（Child → Main）
 
@@ -88,10 +90,37 @@ Main → 用户
 
 ## 6. Top1 下钻转交
 
-- Insight 返回本轮真实 `Top1`（实体 type+name+窗口）。
+- Insight 返回本轮真实 `Top1`（实体 type+name+窗口 + rankContext）。
 - 用户「看 Top1 课表」→ Insight 把 Top1 交回 Main → Main 转 Schedule(`campus_schedule_query`)。
 - 用户「检查 Top1 风险」→ Main 转 Risk(`campus_risk_check`, mode=self, entity=Top1)。
 - Insight **不得**代答个人课表/风险明细，只交回对象。
+
+### 6.1 Top1/Top2/Top3 排位语义（R49.3 硬性要求）
+
+- **Top1 = teacherLoadTop[0]、Top2 = teacherLoadTop[1]、Top3 = teacherLoadTop[2]（position 语义）。**
+- 业务指标并列（lessonOccurrences/periodUnits 相同）**不构成**「Top1 不唯一」；即使并列，
+  `teacherLoadTop[0]` 仍唯一确定（底层稳定排序：lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break）。
+- FOLLOW_UP 排位引用 → 直接落实体，**NO CLARIFICATION**（参考实现 `tools/rank-semantics.js resolveRank`）：
+  - `Top1 / 第一名 / 最高那个 / 排第一那个` → rank=1 → `teacherLoadTop[0]`
+  - `Top2 / 第二名 / 第二个` → rank=2 → `teacherLoadTop[1]`
+  - `Top3 / 第三名` → rank=3 → `teacherLoadTop[2]`
+- 明确**多对象**短语（「把并列第一两位都给我看看」「比较这两位」「他们」「并列第一的两个」）→ 多对象逻辑，
+  不得压缩为 Top1（`isMultiObjectRequest` 先于 rank 别名判定）。
+- 排位实体来自本轮真实 `teacherLoadTop`；**禁止硬编码 教师009**。
+
+### 6.2 跨域下钻时间策略（R49.3 硬性要求）
+
+- `overviewWindow = { kind: "future_weeks", count: 4 }` 是**聚合窗口**；`overviewWindow.count` **绝不等于 academicWeek**。
+- insight → schedule/risk 跨域信封：
+  - 可继承：`activeEntity` / `rankContext.selectedRank` 对应实体。
+  - 禁止继承：`overviewWindow.count`、overview 聚合范围、campus aggregate-local filters。
+  - `dropSlots` 必须包含 overview-local state（如 `["overviewWindow", "overview_local_filters"]`）。
+- 用户未显式指定教学周 → `drilldownAcademicWeek = 1`（对齐 `campus_overview` actions
+  「查看第1周校园课表 → week=1」「检查第1周校园教学风险 → week=1」），**不得**从「未来四周」推导 week=4。
+- 示例（CASE D 标准链）：
+  - T1「未来四周教师负载最高的是谁」→ Insight(campus_overview) → rankContext(entities=top[0..2])
+  - T2「看Top1课表」→ Schedule：entity=teacherLoadTop[0]，week=1（drilldown 默认），NO_CLARIFICATION
+  - T3「检查Top1风险」→ Risk：entity=teacherLoadTop[0]，week=1，mode=self，NO_CLARIFICATION
 
 ## 7. 转交失败处理
 

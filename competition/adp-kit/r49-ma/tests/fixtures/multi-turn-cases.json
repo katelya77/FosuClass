@@ -36,11 +36,11 @@
     },
     {
       "id": "D",
-      "name": "教师负载Top1 → Top1课表 → Top1风险",
+      "name": "教师负载Top1 → Top1课表 → Top1风险（并列不澄清 / week 隔离）",
       "turns": [
-        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true }, "hard": "Top1 取本轮 campus_overview.teacherLoadTop[0] 真实值（当前=教师009，不写死）" },
-        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "source": "insight回传" }, "hard": "Top1 取本轮真实值，不伪造" },
-        { "input": "检查Top1风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "Top1" }, "hard": "self-risk 不要求第二对象" }
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "overviewWindow": { "kind": "future_weeks", "count": 4 }, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } }, "hard": "Top1 取本轮 campus_overview.teacherLoadTop[0] 真实值（当前=教师009，不写死）；overviewWindow.count=4 是聚合窗口" },
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "week": 1, "source": "insight回传" }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "Top1=teacherLoadTop[0] position 语义；指标并列（27/54 与 27/54）也不得澄清；week=1（drilldown 默认），绝不继承 overviewWindow.count=4" },
+        { "input": "检查Top1风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "Top1", "rank": 1, "week": 1 }, "hard": "self-risk 不要求第二对象；week=1；conflictCount=1 / rushWarningCount=1" }
       ]
     },
     {
@@ -71,6 +71,25 @@
       "name": "T03第1周有什么课",
       "turns": [
         { "input": "T03第1周有什么课", "route": "schedule", "tools": ["campus_schedule_query"], "hard": "动态课表必须调 CampusTools，禁止 Knowledge 直接回答" }
+      ]
+    }
+  ],
+  "rankDrilldown": [
+    {
+      "id": "D2",
+      "name": "Top2 下钻（R49.3）",
+      "turns": [
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "overviewWindow": { "kind": "future_weeks", "count": 4 } } },
+        { "input": "看Top2课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top2", "rank": 2, "week": 1 }, "hard": "Top2=teacherLoadTop[1]，不得调用 Top1 实体；NO_CLARIFICATION；week=1" }
+      ]
+    },
+    {
+      "id": "D3",
+      "name": "并列多对象 → 再单排位（R49.3）",
+      "turns": [
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_overview"], "state": { "overview": true, "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null } } },
+        { "input": "并列第一都有谁", "route": "insight", "tools": [], "state": { "multiObject": true, "rankContext": { "selectedRank": null } }, "hard": "如实列出并列项，不得压缩为 Top1；不得破坏 rankContext" },
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "week": 1 }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "仍正确落 teacherLoadTop[0]；NO_CLARIFICATION；week=1" }
       ]
     }
   ],

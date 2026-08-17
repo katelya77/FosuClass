@@ -28,6 +28,9 @@
 - 缺关键参数 → 返回 `NEED_CLARIFICATION`（交主协调澄清），不自行追问。
 - 空结果 → NO_RESULT；失败 → ERROR；均不虚构。
 - 下一天：调用 `campus_day_plan(date=下一天)`，由 `generate_day_plan` 确定性计算；空日如实显示「当天暂无已核验安排」。
+- 从 insight 跨域下钻（「检查Top1风险」等）：只继承 Main 信封中的实体（rankContext.selectedRank 对应
+  teacherLoadTop[0..2] 的真实实体），`mode=self`，**绝不要求第二对象**；用户未显式给教学周时用
+  `drilldownAcademicWeek=1`，**绝不用** overview 聚合窗口的 count（如 4）当 week。
 
 ## fresh-tool-call 铁律（新 Turn 必须重调工具）
 - 「下一天 / 上一天 / 再看某天」→ **必须重新调用** `campus_day_plan`（携带推进后的 date），不得沿用上一轮计划结果。

@@ -177,10 +177,11 @@
 ## 6. 验证步骤（控制台人工验收）
 
 1. 应用首页（非单工作流调试）逐条跑 `09-MULTI-AGENT-E2E-MATRIX.md`：
-   - 硬回归 A~H（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
+   - 硬回归 A~H + **D-2/D-3 变体**（自检 self-risk 不得要第二对象 / stale escape / 下一天 / Top1 真实继承 / **并列不澄清** / **week=1 不继承 overviewWindow** / 澄清不伪造 / chat 不调工具 / 动态必调工具）。
    - 13 核心 case + R48 A~G 回归。
-2. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
-3. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（控制台现行基线=四 Agent 均 DeepSeek V4 Flash，见 07 §6；单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
+2. CASE C evidence 契约：「下一天呢」必须观察到 fresh `campus_day_plan(date=2026-09-05)`、「再下一天」必须 `campus_day_plan(date=2026-09-06)`——不得仅根据历史返回文本生成答案（逐轮截屏取证）。
+3. 任一动态事实字段与 R47.7 Golden Baseline 快照不一致 → 事实倒退，阻断发布。
+4. 全绿后 → 执行 `07-MODEL-AB-PLAN.md` 的模型 A/B（控制台现行基线=四 Agent 均 DeepSeek V4 Flash，见 07 §6；单变量；**避开 2026-08-28 youtu-mrc-pro 下线节点**）。
 
 ---
 
@@ -201,6 +202,23 @@
 | 校园洞察 | `agents/campus-insight.md` |
 
 ---
+
+## 8.1 R49.3 / G2-D 提示词更新（2026-08-17，CASE D 修复）
+
+> **本轮无需修改任何工具绑定 / 参数可见性 / Widget / 转交关系**——只重新粘贴 4 个 Agent 的 Prompt
+> （仓库真源已更新，逐字导入即可）。原因：CASE D 两个 bug（并列误澄清、week 污染）都在 Agent 状态层，
+> Runtime（teacherLoadTop 稳定排序、overview actions week=1）已验证正确。
+
+| Agent | 动作 | 变更要点 |
+|---|---|---|
+| 主协调 | **重新粘贴** `agents/main-orchestrator.md` | 新增「Top1/Top2/Top3 排位语义」（position 语义、并列不澄清、多对象短语例外、禁止硬编码教师009）+「overviewWindow 与教学周隔离」（drilldownAcademicWeek=1，绝不 4）；信封新增 rankContext |
+| 校园洞察 | **重新粘贴** `agents/campus-insight.md` | 新增「Rank Context」节（rankContext 结构、并列如实说明、多对象轮 selectedRank=null、不继承 overviewWindow） |
+| 课程空间 | **重新粘贴** `agents/schedule-space.md` | 继承规则补：跨域下钻只继承实体，week 用 Main 信封 drilldownAcademicWeek=1 |
+| 风险规划 | **重新粘贴** `agents/risk-planning.md` | 行为约束补：跨域下钻 mode=self 不要求第二对象、week=1 |
+
+- **验证口诀（控制台复测 CASE D）**：「看Top1课表」绝不弹「教师009/教师011/两位都看」选择；工具调用 week 必须=1（不得=4）；并列时回复「教师009与教师011并列最高。按当前稳定排序，Top1=教师009，Top2=教师011」。
+- 若控制台出现与上述不一致 → 确认 Prompt 已整体替换（不是增量追加）并重新粘贴。
+- 参考实现：`r49-ma/tools/rank-semantics.js`（resolveRank / resolveDrilldownWeek / isMultiObjectRequest，Prompt 语义与测试同源）。
 
 ## 9. 平台侧待办（非本轮仓库可完成）
 

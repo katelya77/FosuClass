@@ -74,3 +74,19 @@ test("coreCases 覆盖澄清/chat/knowledge/self/compare 边界", () => {
 test("agentToolNames 与契约 5 工具一致", () => {
   assert.deepStrictEqual([...fixtures.agentToolNames].sort(), [...validAgentTools].sort());
 });
+
+test("rankDrilldown 引用合法；CASE D 并列不澄清 + week 隔离", () => {
+  assert.ok(Array.isArray(fixtures.rankDrilldown) && fixtures.rankDrilldown.length >= 2, "rankDrilldown 应至少 D2/D3 两条链");
+  for (const c of fixtures.rankDrilldown) {
+    for (const t of c.turns) {
+      for (const tool of t.tools || []) {
+        assert.ok(validAgentTools.has(tool), `rankDrilldown ${c.id} 引用未知工具 ${tool}`);
+      }
+    }
+  }
+  const d = fixtures.hardCases.find((c) => c.id === "D");
+  assert.strictEqual(d.turns[1].state.week, 1, "CASE D schedule 下钻 week 必须为 1（不继承 overviewWindow.count=4）");
+  assert.strictEqual(d.turns[2].state.week, 1, "CASE D risk 下钻 week 必须为 1");
+  assert.ok((d.turns[1].dropped || []).includes("overviewWindow"), "CASE D schedule 下钻必须 drop overviewWindow");
+  assert.ok(d.turns[1].hard.includes("并列"), "CASE D 必须声明指标并列时也不得澄清");
+});

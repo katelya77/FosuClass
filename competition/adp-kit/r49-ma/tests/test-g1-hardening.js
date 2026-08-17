@@ -179,13 +179,17 @@ test("11. fixtures/矩阵契约：CASE D 首轮为教师负载 Top1，校区最�
 // ---------------------------------------------------------------------------
 // 4. Insight teacher Top1 → schedule → risk(self) 真实链路（不写死）
 // ---------------------------------------------------------------------------
-test("12. Top1 链路：overview.teacherLoadTop[0] → schedule → risk(self) 全部成功", () => {
+test("12. Top1 链路：overview.teacherLoadTop[0] → schedule → risk(self) 全部成功（并列不澄清 / week=1）", () => {
   const ov = callAgentTool("campus_overview", {});
   assert.strictEqual(ov.success, true);
   const top1 = ov.items[0].teacherLoadTop[0];
   assert.ok(top1 && top1.teacherId && top1.teacherId.startsWith("teacher-"), "Top1 必须是教师实体（teacherLoadTop[0]）");
   assert.strictEqual(top1.teacherName, "教师009", "当前真机 Top1=教师009（仅作锚点，不写死运行时）");
-  // 下钻契约：Insight 回传实体 name（03-HANDOFF-POLICY §6），下游域工具按 name 取数
+  assert.strictEqual(ov.items[0].window.teachingWeeks.count, 4, "overview 聚合窗口应为 4 周（overviewWindow）");
+  // R49.3：v2 数据 Top1/Top2 业务指标并列（27/54 与 27/54），position 语义仍唯一确定，不得因此澄清
+  assert.strictEqual(ov.items[0].teacherLoadTop[1].lessonOccurrences, top1.lessonOccurrences, "v2 数据 Top2 与 Top1 指标并列（锚点）");
+  assert.strictEqual(ov.items[0].teacherLoadTop[1].periodUnits, top1.periodUnits, "v2 数据 Top2 与 Top1 periodUnits 并列（锚点）");
+  // 下钻契约：Insight 回传实体 name（03-HANDOFF-POLICY §6），下游域工具按 name 取数；week=1（drilldown 默认，绝不=聚合窗口 count）
   const sch = callAgentTool("campus_schedule_query", { entityType: "teacher", entityName: top1.teacherName, week: 1 });
   assert.strictEqual(sch.success, true);
   assert.ok(sch.items.length > 0, "Top1 教师第 1 周应有课");
@@ -193,6 +197,7 @@ test("12. Top1 链路：overview.teacherLoadTop[0] → schedule → risk(self) �
   assert.strictEqual(risk.success, true);
   assert.strictEqual(risk.summary.selfCompare, true, "Top1 风险应为 self 模式");
   assert.strictEqual(risk.summary.conflictCount, 1, "教师009 第 1 周应 1 冲突（与 risk self 既有语义一致）");
+  assert.strictEqual(risk.summary.rushWarningCount, 1, "教师009 第 1 周应 1 赶场（非污染后 2/2）");
 });
 
 test("13. 校区最忙不下钻：overview actions 仅周级 sys.chat 意图，无个人 schedule/risk 下钻", () => {

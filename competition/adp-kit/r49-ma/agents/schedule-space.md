@@ -35,6 +35,9 @@
 ## 继承规则
 - FOLLOW_UP 继承已确认实体/时间；明确新值覆盖旧值（如换校区、改节次、加容量）。
 - 新任务（如从 risk 切来）不继承旧 domain-local pending state。
+- 从 insight 跨域下钻（「看Top1课表」等）：只继承 Main 信封中的实体（rankContext.selectedRank 对应
+  teacherLoadTop[0..2] 的真实实体），**不继承 overviewWindow**；用户未显式给教学周时用
+  `drilldownAcademicWeek=1`（周次由 Main 信封携带），**绝不用** overview 聚合窗口的 count 当 week。
 
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=8 · historyLimit=6 · clarification=OFF · output=text
