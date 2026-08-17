@@ -2,7 +2,7 @@
 
 更新时间：2026-08-17 +08:00
 
-当前阶段：`CampusFlow ADP R49.4 / Multi-School Anonymous Data Foundation`（R49.3 真机复测已完成；**R49.4 本地全绿，CloudBase 部署待凭据解锁**：tcb CLI 未登录 + 本机无 CAMPUS_API_TOKEN）
+当前阶段：`CampusFlow ADP R49.4 / Multi-School Anonymous Data Foundation`（R49.3 真机复测已完成；**R49.4 已部署并经远程 /health 验证（tools=9 / agentTools=7 / adpContractVersion=R49.4）；5 项鉴权复验待用户提供 token**）
 
 ## 真实 ADP / Runtime 状态（2026-08-17 实测）
 
@@ -90,7 +90,7 @@
 - **匿名边界（`test-r49-4-anonymity-boundary.js`，7 契约）**：镜像 builder 的 `submissionInputFiles()` 接受过滤器全量扫描 submission-package + r49-ma；真实学校身份仅存于 3 个 gate 校验器文件的 deny-list（`GATE_FILES_BY_PATH` 豁免），绝不复制进生成的比赛资产；凭据模式（quoted 值 + dummy 豁免 + 必填 padding 的 base64）；`.xls/.xlsx` 扩展名 + 个人文件名模式（`*课表*`、学号 `\d{6,}` 等）拒绝；`build-submission-package.js` 新增 `PERSONAL_IMPORT_EXCLUDED = ["personal-import","raw-import","private-import","personal-timetables"]` 目录硬守卫；`10-MIGRATION-RISK-REGISTER.md` #16 更新。
 - **本地验证全绿**：r49-ma `node --test "tests/*.js"` = **162/162**；mcp `npm test` = **51/51**；mcp `check`（tsc）/`typecheck`/`check:openapi` 全绿；`sync-campusflow-function.js --check` = **8 文件一致 PASS**；`test-http-function.js` = **health 200 / tools=9 / 7 Agent Tool Façade 冒烟 PASS**；`npm test --prefix competition/adp-kit` 全链 PASS（eval:golden 33/33、submission 54 文件 0 findings、widget CI、artifact 校验）**唯一基线失败**：末步 `sync-assets-manifest --check` 因用户未提交的 `generated-assets-manifest.json`/submission-package 漂移（改动前已存在，与 R49.4 无关；跑套件前已备份并逐字节还原用户漂移，`git status` 恢复原样）。
 - **ADP 清单更新**：`R49-MA-ADP-MANUAL-CONFIG-CHECKLIST.md`（§0 绑定 7 工具；§4 工具表 7 Façade；§6 D1~D5 验证；§8.1 重写为 R49.4 插件+Prompt 更新节，含两个新工具参数可见性表与「工具调用结果直接返回给用户=OFF」；§9 部署状态补 R49.4）；`06-ADP-MANUAL-CONFIG-CHECKLIST.md` 要点 4/6/7 同步。
-- **CloudBase 部署：待凭据解锁（blocked）**：本机 `tcb env list` → 无有效身份信息（需用户 `tcb login`）；`CAMPUS_API_TOKEN` 不在本会话环境。目标部署命令（沿用 R49.2 受控路径，不覆盖线上 envVariables）：`tcb fn deploy campusflowAdpTools --dir competition/adp-kit/cloudfunctions/campusflowAdpTools --httpFn --path /campusflow-adp-tools --force`；部署后 `/health` 目标值：`status=ok`、`tools=9`、`agentTools=7`、`adpContractVersion=R49.4`、`dataVersion=competition-demo-v2`、`dataHash=sha1:4f3bbbb45d1f`。
+- **CloudBase 部署：已完成（2026-08-17）**：用户 `tcb login` 后执行 `tcb fn deploy campusflowAdpTools --dir competition/adp-kit/cloudfunctions/campusflowAdpTools --httpFn --path /campusflow-adp-tools --force`（临时 cloudbaserc 条目后逐字节还原；未写 envVariables）。远程 `/health` 实测 = **目标值一致**：`status=ok / dataVersion=competition-demo-v2 / dataHash=sha1:4f3bbbb45d1f / tools=9 / agentTools=7 / adpContractVersion=R49.4`。环境变量保全证据：函数缺 token 会拒绝启动（README 契约）→ 冷启动正常即 token 未覆盖；无 token/伪造 token POST → 401（token 模式仍强制）。**5 项鉴权复验（§8 报告）待用户提供真实 token**（CLI 掩码显示、会话无该变量、纪律禁止扩权）。
 - ADP 控制台待办：导入/更新插件为 7 operations，重新粘贴 4 Agent Prompt（8.1 节），应用首页按 D1~D5 复测 CASE D；**不进入 Model A/B**。
 
 ## G0 / G1 Gate 状态（2026-08-17）
