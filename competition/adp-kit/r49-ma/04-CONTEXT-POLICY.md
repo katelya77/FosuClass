@@ -64,6 +64,8 @@
 - 「Top2/第二名/第二个」→ teacherLoadTop[1]；「Top3/第三名」→ teacherLoadTop[2]。
 - **多对象短语**（「他们」「这两位」「并列第一的两个」「两位都给我看看」）→ 多对象语义，不得压缩为 Top1。
 - **overviewWindow 隔离**：「未来四周」的 4 是聚合窗口 count，解析为 `overviewWindow={kind:"future_weeks",count:4}`，
-  跨域下钻（insight→schedule/risk）时作为 overview-local state **drop**；用户未显式给教学周时下钻周次
-  `drilldownAcademicWeek=1`，绝不把 count 写成 week。
+  跨域下钻（insight→schedule/risk）时作为 overview-local state **drop**；下钻窗口一律以
+  `windowContext` 为准——`rankingWindow`（排名窗口，可继承为 detailWindow）、`detailWindow`（下钻窗口，
+  多周用范围工具、单周用 fresh 单周工具）、`academicWeek`（仅用户显式单周）；**绝不把 count 写成 week，
+  也绝不默认 week=1**。
 - 解析失败或首轮无历史 → `NEED_CLARIFICATION`，不伪造。

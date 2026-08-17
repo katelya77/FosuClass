@@ -34,6 +34,7 @@ Main → 用户
   "dropSlots": [ ... 需要清除的旧 domain-local pending state ... ],
   "activeEntity": { "type": "teacher", "name": "T09" } | null,
   "activeTime": { "week": 1 } | { "date": "2026-09-03" } | null,
+  "windowContext": { "rankingWindow": {"weekStart":1,"weekEnd":4} | null, "detailWindow": {"weekStart":1,"weekEnd":4} | null, "academicWeek": 1 | null },
   "referenceTarget": "none | active_entity | top1_entity | previous_result",
   "staleContextEscaped": true | false,
   "rankContext": { "source": "campus_overview", "list": "teacherLoadTop", "selectedRank": null | 1 | 2 | 3, "entities": [result[0], result[1], result[2]] } | null,
@@ -108,19 +109,20 @@ Main → 用户
   不得压缩为 Top1（`isMultiObjectRequest` 先于 rank 别名判定）。
 - 排位实体来自本轮真实 `teacherLoadTop`；**禁止硬编码 教师009**。
 
-### 6.2 跨域下钻时间策略（R49.3 硬性要求）
+### 6.2 跨域下钻窗口策略（R49.4 硬性要求）
 
-- `overviewWindow = { kind: "future_weeks", count: 4 }` 是**聚合窗口**；`overviewWindow.count` **绝不等于 academicWeek**。
-- insight → schedule/risk 跨域信封：
-  - 可继承：`activeEntity` / `rankContext.selectedRank` 对应实体。
-  - 禁止继承：`overviewWindow.count`、overview 聚合范围、campus aggregate-local filters。
-  - `dropSlots` 必须包含 overview-local state（如 `["overviewWindow", "overview_local_filters"]`）。
-- 用户未显式指定教学周 → `drilldownAcademicWeek = 1`（对齐 `campus_overview` actions
-  「查看第1周校园课表 → week=1」「检查第1周校园教学风险 → week=1」），**不得**从「未来四周」推导 week=4。
-- 示例（CASE D 标准链）：
-  - T1「未来四周教师负载最高的是谁」→ Insight(campus_overview) → rankContext(entities=top[0..2])
-  - T2「看Top1课表」→ Schedule：entity=teacherLoadTop[0]，week=1（drilldown 默认），NO_CLARIFICATION
-  - T3「检查Top1风险」→ Risk：entity=teacherLoadTop[0]，week=1，mode=self，NO_CLARIFICATION
+- 信封携带 `windowContext: { rankingWindow, detailWindow, academicWeek }`：
+  - insight 排名窗口 = `rankingWindow`（如 `{weekStart:1, weekEnd:4}`），可继承为下钻窗口；
+  - 「看Top1课表」→ `detailWindow = rankingWindow`（如 1..4）→ Schedule 调 `campus_schedule_range_query`（逐周展开）；
+  - 「只看第一周」→ `detailWindow = 1..1` → Schedule 调 fresh `campus_schedule_query`（week=1）；
+  - 「检查Top1风险」未给任何周次/日期 → **Main 澄清时间窗口**，绝不静默 week=1。
+- `overviewWindow.count` **绝不等于 academicWeek**；跨域下钻只继承 `rankingWindow/detailWindow` 与选中实体，
+  `dropSlots` 必须包含 overview-local state（如 `["overviewWindow", "overview_local_filters"]`）。
+- 示例（CASE D 标准链，R49.4）：
+  - T1「未来四周教师负载最高的是谁」→ Insight(`campus_overview` / `campus_teacher_load_query`) → rankingWindow=1..4
+  - T2「看Top1课表」→ Schedule：entity=teacherLoadTop[0]，detailWindow=1..4 → `campus_schedule_range_query`，NO_CLARIFICATION
+  - T3「只看第一周」→ Schedule：detailWindow=1..1 → fresh `campus_schedule_query`(week=1)，NO_CLARIFICATION
+  - T4「检查Top1风险」（无时间）→ Main 澄清时间窗口（week/date），不得静默 week=1
 
 ## 7. 转交失败处理
 

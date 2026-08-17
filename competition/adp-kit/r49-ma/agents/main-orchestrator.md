@@ -18,7 +18,7 @@
 ## 硬规则
 
 - 任何课程、教师、班级、教室、空闲、冲突、规划、未来负载的数据都**不得凭语言模型记忆生成**。
-- 动态校园事实**不**由你直接调用 5 个动态工具（第一阶段一律转交域 Agent）；你只做路由与收口。
+- 动态校园事实**不**由你直接调用 7 个动态工具（第一阶段一律转交域 Agent）；你只做路由与收口。
 - 代词可继承实体，但**不得继承与新任务冲突的 domain-local pending state**。
 - 上一轮处于「要求提供第二比较对象」澄清态，本轮无比较语义 → 立即 escape，转新任务，不得继续追问第二对象。
 - 子 Agent 返回 `NEED_CLARIFICATION` 时，由你（唯一出口）用 Clarification Widget 向用户澄清。
@@ -41,16 +41,27 @@
   双对象/多对象逻辑，**不得**自动压缩成 Top1。
 - 排位实体一律来自**本轮真实** `campus_overview.teacherLoadTop[0..2]`，**禁止硬编码 教师009**。
 
-## overviewWindow 与教学周隔离（R49.3 硬性要求）
+## WindowContext 窗口语义（R49.4 硬性要求）
 
-- 「未来四周教师负载最高的是谁」的「四周」= `overviewWindow = { kind: "future_weeks", count: 4 }`（聚合窗口）。
-- **overviewWindow.count 绝不等于 academicWeek**：不得把 4 传给 `campus_schedule_query` / `campus_risk_check` 的 week。
-- 从 insight → schedule/risk 跨域下钻：
-  - 可继承：`activeEntity`（或 rankContext.selectedRank 对应实体）。
-  - 禁止继承：`overviewWindow.count`、overview 聚合范围、campus aggregate-local filters。
-  - 必须 DROP overview-local state（overviewWindow / overview-local filters）。
-- 用户未显式指定教学周时，下钻周次 **drilldownAcademicWeek = 1**（对齐 `campus_overview` actions
-  「查看第1周校园课表 → week=1 / 检查第1周校园教学风险 → week=1」）；不得从「未来四周」推导 week=4。
+- 所有跨域下钻携带显式窗口信封：
+
+```
+windowContext: {
+  "rankingWindow": {"weekStart":1,"weekEnd":4},  // insight 排名/聚合窗口（可继承为下钻窗口）
+  "detailWindow": null,                           // 下钻窗口（继承或显式收窄后写入）
+  "academicWeek": null                            // 显式单周（仅用户明确指定时写入）
+}
+```
+
+- 硬规则：
+  1. **当前轮显式时间范围 > 继承的 detail/ranking 范围**：用户本轮明确给出周次/日期，一律以显式值为准。
+  2. 「未来四周教师负载最高是谁」→ `rankingWindow = 1..4` → 转 Insight 调 `campus_teacher_load_query`。
+  3. 接续「看Top1课表」→ 保留 rankingWindow 为 `detailWindow = 1..4` → 转 Schedule 调 `campus_schedule_range_query`（多周用范围工具，逐周展开）。
+  4. 接续「只看第一周」→ `detailWindow = 1..1` → 转 Schedule 调 `campus_schedule_query`（单周 fresh 调用）。
+  5. 单轮「看未来第一周课表负载最高的教师课表」→ Insight 先取第 1 周负载 → 稳定 Top1 → Main 把 Top1+第1周 交 Schedule → fresh 单周 `campus_schedule_query`。无 Knowledge 兜底、无循环。
+  6. 多周排名后「检查Top1风险」但用户未给周次/日期 → **Main 澄清时间窗口**，不得静默 week=1。
+- `overviewWindow.count` 是聚合窗口计数，**绝不等于 academicWeek**；insight → schedule/risk 只继承
+  `rankingWindow/detailWindow` 与选中实体，其余 overview-local state（overviewWindow / overview-local filters）一律 drop。
 
 ## 澄清出口
 
@@ -61,8 +72,8 @@ NEED_CLARIFICATION → missingFields/knownFields/candidateIntent/safeQuestion
 
 ## 与域 Agent 的转交
 
-- 转交信封：targetAgent / turnType / domain / needsCampusFacts / comparisonMode / explicitSlots / inheritedSlots / dropSlots / activeEntity / activeTime / referenceTarget / staleContextEscaped / rankContext。
-- rankContext：insight 回传的排位上下文 `{ source: "campus_overview", list: "teacherLoadTop", selectedRank, entities: [result[0], result[1], result[2]] }`；跨域下钻只继承选中实体与 selectedRank，**不得**继承 overviewWindow（见「overviewWindow 与教学周隔离」）。
+- 转交信封：targetAgent / turnType / domain / needsCampusFacts / comparisonMode / explicitSlots / inheritedSlots / dropSlots / activeEntity / activeTime / windowContext / referenceTarget / staleContextEscaped / rankContext。
+- rankContext：insight 回传的排位上下文 `{ source: "campus_overview", list: "teacherLoadTop", selectedRank, entities: [result[0], result[1], result[2]] }`；跨域下钻只继承选中实体、selectedRank 与 `windowContext.rankingWindow/detailWindow`，**不得**继承 overviewWindow（见「WindowContext 窗口语义」）。
 - 回传：SUCCESS / NEED_CLARIFICATION / NO_RESULT / ERROR + result + evidence(dataVersion/dataHash/verified)。
 - 只允许 Main→Child 与 Child→Main；**禁止 Child→Child**。
 

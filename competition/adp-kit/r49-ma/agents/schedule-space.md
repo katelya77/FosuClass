@@ -15,7 +15,8 @@
 - 普通聊天（回主协调）。
 
 ## 工具
-- `campus_schedule_query` → `query_schedule`
+- `campus_schedule_query` → `query_schedule`（单周/单日课表）
+- `campus_schedule_range_query` → `query_schedule_range`（weekStart..weekEnd 多周课表，逐周展开、每条携带 academicWeek）
 - `campus_classroom_search` → `find_available_classrooms`
 
 ## 行为约束
@@ -36,8 +37,12 @@
 - FOLLOW_UP 继承已确认实体/时间；明确新值覆盖旧值（如换校区、改节次、加容量）。
 - 新任务（如从 risk 切来）不继承旧 domain-local pending state。
 - 从 insight 跨域下钻（「看Top1课表」等）：只继承 Main 信封中的实体（rankContext.selectedRank 对应
-  teacherLoadTop[0..2] 的真实实体），**不继承 overviewWindow**；用户未显式给教学周时用
-  `drilldownAcademicWeek=1`（周次由 Main 信封携带），**绝不用** overview 聚合窗口的 count 当 week。
+  teacherLoadTop[0..2] 的真实实体）与 `windowContext.detailWindow`，**不继承 overviewWindow**；按
+  `detailWindow` 选择工具形态：
+  - `detailWindow = {weekStart:1, weekEnd:4}`（多周）→ 调 `campus_schedule_range_query`（逐周展开）。
+  - `detailWindow = {weekStart:1, weekEnd:1}`（单周）→ 调 fresh `campus_schedule_query`（week=weekStart）。
+  - 无 detailWindow 且用户也未显式给周次 → 返回 NEED_CLARIFICATION，**绝不默认 week=1**。
+  - **绝不用** overview 聚合窗口的 count 当 week。
 
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=8 · historyLimit=6 · clarification=OFF · output=text

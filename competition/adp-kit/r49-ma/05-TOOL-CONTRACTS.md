@@ -2,21 +2,23 @@
 
 ## 0. 设计原则
 
-- 5 个 Agent Tool **从稳定 CampusTools 抽象**，不暴露 `resolve_entity` / `get_academic_context` 等内部能力。
+- 7 个 Agent Tool **从稳定 CampusTools 抽象**，不暴露 `resolve_entity` / `get_academic_context` 等内部能力。
 - 动态事实**完全来自 competition-demo-v2**，由 CampusTools 确定性计算；模型不得生成最终事实字段。
 - **Fail Closed**：任何缺失/非法/越界/未知工具 → 返回明确错误状态，不降级到猜测。
 - 每个工具输出保留 `source / dataVersion / dataHash / verified` 等核验字段。
 - 不向用户 UI 泄漏敏感内部信息（token、内部路径、内部工具名）。
 
-## 1. 五个 Agent Tool 总览
+## 1. 七个 Agent Tool 总览
 
 | # | Agent Tool | 归属 Agent | 底层 CampusTools（REST/MCP） | 核心场景 |
 |---|---|---|---|---|
 | 1 | `campus_schedule_query` | 课程空间 | `query_schedule`（+内部 resolve/date） | 教师/班级/教室/课程课表、整周/单日/节次 |
-| 2 | `campus_classroom_search` | 课程空间 | `find_available_classrooms` | 空教室、校区/楼栋/容量/连续节次 |
-| 3 | `campus_risk_check` | 风险规划 | `compare_schedules`（self/compare 两态） | 单对象自身风险 / 显式双对象冲突 |
-| 4 | `campus_day_plan` | 风险规划 | `generate_day_plan` | 演示用户某日计划 + 下一天推进 |
-| 5 | `campus_overview` | 校园洞察 | `get_campus_teaching_overview` | 未来四周校园负载/空间/教师负载/风险 |
+| 2 | `campus_schedule_range_query` | 课程空间 | `query_schedule_range`（+内部 resolve/date） | weekStart..weekEnd 多周课表，逐周展开（每条携带 academicWeek） |
+| 3 | `campus_classroom_search` | 课程空间 | `find_available_classrooms` | 空教室、校区/楼栋/容量/连续节次 |
+| 4 | `campus_risk_check` | 风险规划 | `compare_schedules`（self/compare 两态） | 单对象自身风险 / 显式双对象冲突 |
+| 5 | `campus_day_plan` | 风险规划 | `generate_day_plan` | 演示用户某日计划 + 下一天推进 |
+| 6 | `campus_overview` | 校园洞察 | `get_campus_teaching_overview` | 未来四周校园负载/空间/教师负载/风险 |
+| 7 | `campus_teacher_load_query` | 校园洞察 | `query_teacher_load` | weekStart..weekEnd 窗口内教师负载排名（topN/并列 tie） |
 
 ## 2. 统一输出信封（复用 CampusTools Envelope）
 
@@ -174,6 +176,45 @@ rushWarnings: [ {entity, weekday, from, to, gapMinutes} ]
 }
 ```
 （首版固定窗口 2026-08-25 / 2026-08-31 / 2026-09-27，越界返回 INVALID_PARAM。）
+
+### 4.5 campus_schedule_range_query（R49.4）
+```json
+{
+  "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表并逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。需要跨多个教学周查看时调用；只看单周请用 campus_schedule_query。动态事实由 CampusTools 确定性计算，禁止模型编造课表。",
+  "properties": {
+    "entityType": {"enum":["class","teacher","room","course"]},
+    "entityName": {"type":"string"},
+    "weekStart": {"type":"integer","minimum":1,"maximum":20},
+    "weekEnd": {"type":"integer","minimum":1,"maximum":20},
+    "weekday": {"type":"integer","minimum":1,"maximum":7},
+    "periodStart": {"type":"integer","minimum":1,"maximum":10},
+    "periodEnd": {"type":"integer","minimum":1,"maximum":10}
+  },
+  "required": ["entityType","entityName","weekStart","weekEnd"]
+}
+```
+- 每个返回项 = (lesson, academicWeek) 一对一条：`academicWeek` 为该节课出现的教学周，`date` 为对应星期日期；
+  同一节重复周次课（如 1-4 周每周二）**逐周展开，不得去重**。
+- 输出信封含 `window: { weekStart, weekEnd }` 与 `query: { weekStart, weekEnd, weekday, periodStart, periodEnd }`。
+- `weekEnd < weekStart` → 跨字段校验拒绝（adapter fail-closed）。
+
+### 4.6 campus_teacher_load_query（R49.4）
+```json
+{
+  "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。需要比较多周教师负载、或定位某窗口负载最高的教师时调用。动态事实由 CampusTools 确定性计算。",
+  "properties": {
+    "weekStart": {"type":"integer","minimum":1,"maximum":20},
+    "weekEnd": {"type":"integer","minimum":1,"maximum":20},
+    "campus": {"type":"string"},
+    "topN": {"type":"integer","minimum":1,"maximum":10}
+  },
+  "required": ["weekStart","weekEnd"]
+}
+```
+- 排名：`lessonOccurrences DESC → periodUnits DESC → teacherName zh-CN tie-break`；并列项 `rank` 相同、
+  `tiedWithPrevious=true`（position 语义：第 N 项稳定可引用）。
+- 输出信封含 `window: { weekStart, weekEnd }`、`query: { weekStart, weekEnd, campus, topN }` 与
+  `rankContext: { list: "teacherLoadTop", selectedRank }`。
 
 ## 5. Fail-Closed 规则汇总
 

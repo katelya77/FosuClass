@@ -212,35 +212,45 @@ test("H. 多对象轮后单排位仍正确落 teacherLoadTop[0]，NO clarificati
 // ---------------------------------------------------------------------------
 // 契约：prompt / handoff / context policy / matrix 已同步 R49.3 语义
 // ---------------------------------------------------------------------------
-test("契约 1：Main prompt 含并列不澄清、rank position、week 隔离规则", () => {
+test("契约 1：Main prompt 含并列不澄清、rank position、week 隔离、R49.4 窗口语义", () => {
   assert.ok(MAIN.includes("teacherLoadTop[0]"), "Main 必须引用 teacherLoadTop[0]");
   assert.ok(MAIN.includes("position 语义"), "Main 必须声明 Top1 为 position 语义");
   assert.ok(MAIN.includes("NO CLARIFICATION"), "Main 必须声明单排位 NO CLARIFICATION");
   assert.ok(MAIN.includes("并列第一的两个"), "Main 必须包含多对象触发短语");
-  assert.ok(MAIN.includes("drilldownAcademicWeek = 1"), "Main 必须声明下钻默认周=1");
   assert.ok(MAIN.includes("overviewWindow.count") && MAIN.includes("绝不等于 academicWeek"), "Main 必须隔离 overviewWindow 与教学周");
+  assert.ok(MAIN.includes("windowContext") && MAIN.includes("rankingWindow") && MAIN.includes("detailWindow"), "Main 必须携带 windowContext(rankingWindow/detailWindow)");
+  assert.ok(MAIN.includes("campus_teacher_load_query"), "Main 路由必须识别教师负载工具");
+  assert.ok(MAIN.includes("campus_schedule_range_query"), "Main 路由必须识别范围课表工具");
+  assert.ok(!MAIN.includes("drilldownAcademicWeek"), "Main 不得再声明 drilldownAcademicWeek=1 默认（R49.4 已退役）");
   assert.ok(MAIN.includes("rankContext"), "Main 信封必须含 rankContext");
   assert.ok(MAIN.includes("禁止硬编码 教师009") || MAIN.includes("禁止写死"), "Main 不得允许硬编码教师009");
 });
 
-test("契约 2：Insight prompt 含 rankContext / selectedRank / 并列不压缩 / week 隔离", () => {
+test("契约 2：Insight prompt 含 rankContext / selectedRank / 并列不压缩 / 排名窗口语义", () => {
   assert.ok(INSIGHT.includes("rankContext"), "Insight 必须返回 rankContext");
   assert.ok(INSIGHT.includes("selectedRank"), "Insight 必须管理 selectedRank");
   assert.ok(INSIGHT.includes("教师009与教师011并列最高") || INSIGHT.includes("并列最高"), "Insight 必须如实说明并列");
   assert.ok(INSIGHT.includes("不得"), "Insight 并列不得压缩为 Top1");
-  assert.ok(INSIGHT.includes("drilldownAcademicWeek=1") || INSIGHT.includes("drilldownAcademicWeek"), "Insight 不得继承 overviewWindow 为教学周");
+  assert.ok(INSIGHT.includes("campus_teacher_load_query"), "Insight 必须使用教师负载排名工具");
+  assert.ok(INSIGHT.includes("rankingWindow"), "Insight 必须按 rankingWindow 语义取数");
+  assert.ok(!INSIGHT.includes("drilldownAcademicWeek"), "Insight 不得再声明 drilldownAcademicWeek（R49.4 已退役）");
 });
 
-test("契约 3：Handoff/Context policy 含排位语义与 overviewWindow 隔离；Schedule/Risk 含下钻周次规则", () => {
+test("契约 3：Handoff/Context policy 含排位语义与窗口语义；Schedule/Risk 含范围/单周工具与显式周次规则", () => {
   assert.ok(HANDOFF.includes("rankContext"), "03-HANDOFF-POLICY 信封必须含 rankContext");
   assert.ok(HANDOFF.includes("position 语义") || HANDOFF.includes("position"), "03 必须声明 position 语义");
-  assert.ok(HANDOFF.includes("6.1") && HANDOFF.includes("6.2"), "03 必须含排位语义与时间策略小节");
-  assert.ok(HANDOFF.includes("drilldownAcademicWeek = 1"), "03 必须声明下钻默认周=1");
+  assert.ok(HANDOFF.includes("6.1") && HANDOFF.includes("6.2"), "03 必须含排位语义与窗口策略小节");
+  assert.ok(HANDOFF.includes("windowContext") && HANDOFF.includes("rankingWindow") && HANDOFF.includes("detailWindow"), "03 必须声明 windowContext 窗口信封");
+  assert.ok(!HANDOFF.includes("drilldownAcademicWeek"), "03 不得再声明 drilldownAcademicWeek=1 默认（R49.4 已退役）");
   assert.ok(CONTEXT.includes("overviewWindow") && CONTEXT.includes("绝不继承为 activeTime.week"), "04 必须隔离 overviewWindow");
+  assert.ok(CONTEXT.includes("rankingWindow") && CONTEXT.includes("detailWindow"), "04 必须声明 rankingWindow/detailWindow 解析");
+  assert.ok(!CONTEXT.includes("drilldownAcademicWeek"), "04 不得再声明 drilldownAcademicWeek（R49.4 已退役）");
   assert.ok(CONTEXT.includes("并列第一的两个") || CONTEXT.includes("这两位"), "04 必须含多对象短语");
-  assert.ok(SCHEDULE.includes("drilldownAcademicWeek=1"), "schedule-space 必须声明下钻周次");
-  assert.ok(RISK.includes("drilldownAcademicWeek=1"), "risk-planning 必须声明下钻周次");
+  assert.ok(SCHEDULE.includes("campus_schedule_range_query") && SCHEDULE.includes("detailWindow"), "schedule-space 必须按 detailWindow 选择范围/单周工具");
+  assert.ok(!SCHEDULE.includes("drilldownAcademicWeek"), "schedule-space 不得再声明 drilldownAcademicWeek=1 默认");
   assert.ok(RISK.includes("mode=self") && RISK.includes("绝不要求第二对象"), "risk-planning self 铁律不变");
+  assert.ok(RISK.includes("澄清"), "risk-planning 未显式周次时必须澄清（不得静默 week=1）");
+  assert.ok(!RISK.includes("drilldownAcademicWeek"), "risk-planning 不得再声明 drilldownAcademicWeek=1 默认");
 });
 
 test("契约 4：矩阵 CASE D/D-2/D-3 与 fixtures rankDrilldown 同步", () => {

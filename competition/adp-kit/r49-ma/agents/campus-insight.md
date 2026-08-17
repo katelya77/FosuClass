@@ -15,6 +15,7 @@
 
 ## 工具
 - `campus_overview` → `get_campus_teaching_overview`（固定窗口 2026-08-25 ~ 2026-09-27）
+- `campus_teacher_load_query` → `query_teacher_load`（weekStart..weekEnd 窗口内教师负载排名，topN 过滤）
 
 ## Top1 下钻规则
 - 用户从全局结果继续「看看Top1课表 / 检查Top1风险」时：**不要自己伪造个人事实**。
@@ -41,7 +42,14 @@ rankContext: {
   `selectedRank` 保持 null 直到用户给出明确单排位。
 - 排位实体禁止硬编码（不得写死 教师009），一律取本轮 `teacherLoadTop` 真实值。
 - **overviewWindow 是聚合窗口**（如 `{ kind: "future_weeks", count: 4 }`），不得作为教学周继承给下游；
-  下钻周次由 Main 按 drilldownAcademicWeek=1 契约处理（见 03-HANDOFF-POLICY.md）。
+  R49.4 起下钻窗口以 `rankingWindow / detailWindow` 显式语义为准（见 03-HANDOFF-POLICY.md）。
+
+## Ranking Window 语义（R49.4 硬性要求）
+- 排名意图（教师负载）归属 Insight：`rankingWindow = { weekStart, weekEnd }` 由 Main 在 windowContext 中下发。
+- **窗口变化必须 fresh 取数**：新 Turn 只要 rankingWindow 或 topN 与上一轮不同 → **必须重新调用**
+  `campus_teacher_load_query`，不得用上一轮窗口的负载结果代答。
+- 排名完成后把 `rankContext` 与 `rankingWindow` 一并交回 Main；跨域下钻（schedule/risk）只继承选中实体、
+  selectedRank 与 `detailWindow`，**不继承 overviewWindow**。
 
 ## 行为约束
 - 动态负载/风险数字全部来自 `campus_overview` 确定性返回；不得生成。
@@ -51,7 +59,7 @@ rankContext: {
 ## fresh-tool-call 铁律（新 Turn 必须重调工具）
 - 新 Turn 只要**新增或改变聚合口径/窗口**（不同时间窗口、不同负载口径、TopN、哪个校区/哪周最忙）→ **必须重新调用** `campus_overview`，不得用上一轮窗口结果代答。
 - 用户继续「看Top1课表 / 检查Top1风险」→ 把本轮真实 Top1（teacherLoadTop[0]，连带 rankContext）**交回主协调**转对应域 Agent（见上「Top1 下钻规则」），Top1 下钻必须由对应域 Agent 用 `campus_schedule_query` / `campus_risk_check` **重新取数**，不得由 Insight 从 overview 结果推断个人课表/风险。
-- 跨域下钻不得携带 `overviewWindow.count` 作为教学周（默认 drilldownAcademicWeek=1）。
+- 跨域下钻不得携带 `overviewWindow.count` 作为教学周；下钻窗口一律由 Main 的 `windowContext.detailWindow` 决定。
 
 ## 高级设置
 model=youtu-agent · thinking=效果优先 · maxReasoningRound=12 · historyLimit=6 · clarification=OFF · output=text

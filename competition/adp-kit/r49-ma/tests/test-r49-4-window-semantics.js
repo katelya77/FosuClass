@@ -12,6 +12,17 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
+const fs = require("fs");
+const path = require("path");
+
+const R49_MA = path.join(__dirname, "..");
+const MAIN = fs.readFileSync(path.join(R49_MA, "agents", "main-orchestrator.md"), "utf8");
+const INSIGHT = fs.readFileSync(path.join(R49_MA, "agents", "campus-insight.md"), "utf8");
+const SCHEDULE = fs.readFileSync(path.join(R49_MA, "agents", "schedule-space.md"), "utf8");
+const RISK = fs.readFileSync(path.join(R49_MA, "agents", "risk-planning.md"), "utf8");
+const HANDOFF = fs.readFileSync(path.join(R49_MA, "03-HANDOFF-POLICY.md"), "utf8");
+const CONTEXT = fs.readFileSync(path.join(R49_MA, "04-CONTEXT-POLICY.md"), "utf8");
+const CONTRACTS = fs.readFileSync(path.join(R49_MA, "05-TOOL-CONTRACTS.md"), "utf8");
 
 const {
   normalizeWeekRange,
@@ -99,4 +110,31 @@ test("normalizeWeekRange：非法窗口 fail closed（0..4 / 4..1 / 1..21 / 非�
   assert.strictEqual(normalizeWeekRange(1, null).ok, false, "缺失边界必须拒绝");
   const failed = normalizeWeekRange(4, 1);
   assert.ok(failed.code && failed.message, "失败结果必须带 code 与 message");
+});
+
+// ---------------------------------------------------------------------------
+// 契约：prompt / handoff / context / tool-contracts 已同步 R49.4 窗口语义
+// ---------------------------------------------------------------------------
+test("契约 1：Main/Insight 必须声明 rankingWindow 语义并拒绝 drilldownAcademicWeek 默认", () => {
+  assert.ok(MAIN.includes("rankingWindow") && MAIN.includes("detailWindow") && MAIN.includes("windowContext"), "Main 必须携带 windowContext(rankingWindow/detailWindow)");
+  assert.ok(MAIN.includes("campus_teacher_load_query") && MAIN.includes("campus_schedule_range_query"), "Main 必须认识两个 R49.4 新工具");
+  assert.ok(INSIGHT.includes("campus_teacher_load_query") && INSIGHT.includes("rankingWindow"), "Insight 必须使用排名窗口负载工具");
+  assert.ok(!MAIN.includes("drilldownAcademicWeek"), "Main 不得再声明 drilldownAcademicWeek 默认");
+  assert.ok(!INSIGHT.includes("drilldownAcademicWeek"), "Insight 不得再声明 drilldownAcademicWeek 默认");
+});
+
+test("契约 2：Schedule 按 detailWindow 选择工具；Risk 须显式周次", () => {
+  assert.ok(SCHEDULE.includes("campus_schedule_range_query") && SCHEDULE.includes("detailWindow"), "schedule-space 必须按 detailWindow 选择范围/单周工具");
+  assert.ok(!SCHEDULE.includes("drilldownAcademicWeek"), "schedule-space 不得再声明 drilldownAcademicWeek 默认");
+  assert.ok(!RISK.includes("drilldownAcademicWeek"), "risk-planning 不得再声明 drilldownAcademicWeek 默认");
+  assert.ok(RISK.includes("澄清"), "risk-planning 未显式周次时必须澄清");
+});
+
+test("契约 3：03/04/05 已发布 R49.4 窗口与工具契约", () => {
+  assert.ok(HANDOFF.includes("windowContext") && HANDOFF.includes("rankingWindow") && HANDOFF.includes("detailWindow"), "03 必须声明 windowContext");
+  assert.ok(!HANDOFF.includes("drilldownAcademicWeek"), "03 不得再声明 drilldownAcademicWeek 默认");
+  assert.ok(CONTEXT.includes("rankingWindow") && CONTEXT.includes("detailWindow"), "04 必须声明 rankingWindow/detailWindow 解析");
+  assert.ok(!CONTEXT.includes("drilldownAcademicWeek"), "04 不得再声明 drilldownAcademicWeek");
+  assert.ok(CONTRACTS.includes("campus_teacher_load_query") && CONTRACTS.includes("campus_schedule_range_query"), "05 必须登记 7 个 Agent Tool");
+  assert.ok(CONTRACTS.includes("七个 Agent Tool") || CONTRACTS.includes("7 个 Agent Tool"), "05 总览必须为 7 个工具");
 });
