@@ -1,0 +1,34 @@
+{
+  "version": "R49.4",
+  "purpose": "机构无关的数据枢纽能力清单：只描述 provider 家族的检测/解析/规范化能力与隐私边界，绝不包含学校身份、凭据或私有部署信息。",
+  "families": {
+    "portal-family-qz-legacy": {
+      "detectMagic": ["ole2"],
+      "parseWeeks": true,
+      "normalizeToCanonical": true,
+      "credentialed": false,
+      "rawImportAllowed": false,
+      "privacy": "anonymous-only",
+      "normalization": "week-expression + neutral worksheet mapping",
+      "note": "boundary/detector + normalization contract only; never credentialed scraper"
+    },
+    "xlsx-generic": {
+      "detectMagic": ["zip"],
+      "parseWeeks": true,
+      "normalizeToCanonical": false,
+      "credentialed": false,
+      "rawImportAllowed": false,
+      "privacy": "anonymous-only",
+      "normalization": "not implemented"
+    },
+    "csv-generic": {
+      "detectMagic": [],
+      "parseWeeks": true,
+      "normalizeToCanonical": false,
+      "credentialed": false,
+      "rawImportAllowed": false,
+      "privacy": "anonymous-only",
+      "normalization": "not implemented"
+    }
+  }
+}
