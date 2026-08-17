@@ -4,6 +4,9 @@
 //       server 指向真实比赛 CloudBase endpoint；不含 token 字面量；
 //       campus_risk_check self/compare 条件契约；campus_day_plan date 必填 + visitorId 保留；
 //       campus_overview 输入可为空；canonical 模板保持占位符（可移植）。
+// R49.4.1 新增：campus-agent-tools.r49.4-existing-plugin-additions.json 是恰 2 operation 的增量升级文件
+//       （campus_teacher_load_query / campus_schedule_range_query），与全量导入同 server、同 path/operation/schema
+//       语义（派生文件必须与权威全量文件逐字节一致），$ref 全部自包含可解析，不含 token 字面量。
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -11,9 +14,12 @@ const path = require("path");
 
 const IMPORT_PATH = path.join(__dirname, "..", "tools", "openapi", "campus-agent-tools.adp-import.json");
 const CANONICAL_PATH = path.join(__dirname, "..", "tools", "openapi", "campus-agent-tools.openapi.json");
+const DELTA_PATH = path.join(__dirname, "..", "tools", "openapi", "campus-agent-tools.r49.4-existing-plugin-additions.json");
 const spec = JSON.parse(fs.readFileSync(IMPORT_PATH, "utf8"));
 const canonical = JSON.parse(fs.readFileSync(CANONICAL_PATH, "utf8"));
 const raw = fs.readFileSync(IMPORT_PATH, "utf8");
+const delta = JSON.parse(fs.readFileSync(DELTA_PATH, "utf8"));
+const deltaRaw = fs.readFileSync(DELTA_PATH, "utf8");
 
 const EXPECTED_OPERATIONS = [
   "campus_schedule_query",
@@ -108,5 +114,57 @@ test("R49.1.1：import spec 每个 path 都是真实 server 可识别的 Agent T
   for (const p of paths) {
     const op = spec.paths[p].post;
     assert.ok(op.description && op.description.length >= 20, `${p} 必须带明确 description`);
+  }
+});
+
+test("R49.4.1：delta spec 是合法 OpenAPI 3.0，恰为 2 个 operation（增量升级既有 5 工具插件）", () => {
+  assert.strictEqual(delta.openapi, "3.0.0");
+  const ops = Object.values(delta.paths).flatMap((p) => Object.values(p).map((m) => m.operationId));
+  assert.strictEqual(ops.length, 2, "delta 必须恰为 2 个 operation");
+  assert.ok(ops.includes("campus_teacher_load_query"), "delta 必须含 campus_teacher_load_query");
+  assert.ok(ops.includes("campus_schedule_range_query"), "delta 必须含 campus_schedule_range_query");
+  assert.strictEqual(Object.keys(delta.paths).length, 2, "delta 不得含其他 path");
+});
+
+test("R49.4.1：delta 与全量导入同一 server、同 path/operation/schema 语义（派生一致性）", () => {
+  assert.deepStrictEqual(delta.servers, spec.servers, "delta server 必须与全量导入完全一致");
+  for (const p of Object.keys(delta.paths)) {
+    assert.ok(spec.paths[p], `全量导入必须含 delta 的 path ${p}`);
+    assert.deepStrictEqual(delta.paths[p], spec.paths[p], `delta path ${p} 必须与全量导入逐字节一致`);
+  }
+});
+
+test("R49.4.1：delta $ref 全部自包含可解析（插件导入不依赖全量文件）", () => {
+  const schemaNames = new Set(Object.keys(delta.components.schemas));
+  const refRe = /^#\/components\/schemas\/(.+)$/;
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (typeof node.$ref === "string") {
+      const m = refRe.exec(node.$ref);
+      assert.ok(m, `delta 出现非本文件 schema 的 $ref：${node.$ref}`);
+      assert.ok(schemaNames.has(m[1]), `delta $ref 指向缺失 schema：${node.$ref}`);
+      return;
+    }
+    for (const v of Object.values(node)) walk(v);
+  };
+  walk(delta.paths);
+  walk(delta.components.schemas);
+});
+
+test("R49.4.1：delta 不含任何 token/密钥字面量，不引用外部 URL", () => {
+  assert.ok(
+    !/["']?(?:token|api_key|apikey|secret|access_token)["']?\s*:\s*["'][A-Za-z0-9_\-]{8,}["']/i.test(deltaRaw),
+    "delta 不得出现 token/密钥字面量赋值",
+  );
+  assert.ok(!/Bearer\s+[A-Za-z0-9_\-]{12,}/.test(deltaRaw), "delta 不得出现具体 Bearer token 值");
+  const externalRefs = deltaRaw.match(/"\$ref"\s*:\s*"(?!#\/components\/schemas\/)[^"]+"/g) || [];
+  assert.strictEqual(externalRefs.length, 0, `delta 不得含外部/绝对 $ref：${externalRefs.join(", ")}`);
+  const urls = deltaRaw.match(/https?:\/\/[^"\s]+/g) || [];
+  for (const u of urls) {
+    assert.ok(u === "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools", `delta 出现非 server 的外部 URL：${u}`);
   }
 });
