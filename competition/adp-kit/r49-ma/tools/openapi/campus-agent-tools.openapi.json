@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "校园智序 · 小序 — R49-MA Agent Tools",
-    "version": "1.3.0",
-    "description": "面向 Multi-Agent 的 5 个确定性 Agent Tool Façade（/api/campus_*），映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算；本 spec 用于腾讯 ADP 自定义插件/HTTP 工具导入。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。真实 URL 为占位符，部署时替换并配置 Bearer token。"
+    "version": "1.4.0",
+    "description": "面向 Multi-Agent 的 7 个确定性 Agent Tool Façade（/api/campus_*），映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算；本 spec 用于腾讯 ADP 自定义插件/HTTP 工具导入。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。真实 URL 为占位符，部署时替换并配置 Bearer token。"
   },
   "servers": [
     {
@@ -179,6 +179,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_teacher_load_query": {
+      "post": {
+        "tags": [
+          "campus_insight"
+        ],
+        "summary": "教师课表负载排名（教学周窗口）",
+        "operationId": "campus_teacher_load_query",
+        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherLoadQueryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "教师负载排名信封（含 window/query/rankContext/items）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherLoadQueryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_schedule_range_query": {
+      "post": {
+        "tags": [
+          "campus_schedule"
+        ],
+        "summary": "多教学周课表展开（教师/班级/教室/课程）",
+        "operationId": "campus_schedule_range_query",
+        "description": "按实体类型与名称查询 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek 与具体日期），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由确定性 CampusTools 计算，禁止模型编造课表。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleRangeQueryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "课表窗口展开结果信封（含 window/query/items/evidence）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRangeQueryResponse"
                 }
               }
             }
@@ -1549,6 +1613,439 @@
           "queryId",
           "dataVersion",
           "summary",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "TeacherLoadQueryInput": {
+        "type": "object",
+        "description": "教师课表负载窗口聚合输入（weekStart/weekEnd 必填）",
+        "properties": {
+          "weekStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "起始教学周（必填）"
+          },
+          "weekEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "结束教学周（必填，须 >= weekStart）"
+          },
+          "topN": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回前 N 名（可选）"
+          },
+          "campus": {
+            "type": "string",
+            "description": "校区A / 校区B / 校区C（可选）"
+          }
+        },
+        "required": [
+          "weekStart",
+          "weekEnd"
+        ]
+      },
+      "ScheduleRangeQueryInput": {
+        "type": "object",
+        "description": "多教学周课表展开输入（weekStart/weekEnd 必填；weekday/节次可选，0 视为未指定）",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "class",
+              "teacher",
+              "room",
+              "course"
+            ]
+          },
+          "entityName": {
+            "type": "string",
+            "description": "实体名称，如 教师009 / 2025级A班 / A1-101"
+          },
+          "weekStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "起始教学周（必填）"
+          },
+          "weekEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "结束教学周（必填，须 >= weekStart）"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "星期 1-7（可选）"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "起始节次（可选）"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "结束节次（可选）"
+          }
+        },
+        "required": [
+          "entityType",
+          "entityName",
+          "weekStart",
+          "weekEnd"
+        ]
+      },
+      "TeacherLoadItem": {
+        "type": "object",
+        "description": "教师负载排名条目（query_teacher_load items 元素；排名基于确定性课时出现次数聚合）",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "description": "1 起排名（并列时共享排名，tiedWithPrevious 标记）"
+          },
+          "teacher": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "lessonOccurrences": {
+            "type": "integer",
+            "description": "窗口内 (课次, 教学周) 出现次数"
+          },
+          "periodUnits": {
+            "type": "integer",
+            "description": "窗口内节次总量"
+          },
+          "tiedWithPrevious": {
+            "type": "boolean",
+            "description": "与前一名是否存在并列"
+          }
+        },
+        "required": [
+          "rank",
+          "teacher",
+          "lessonOccurrences",
+          "periodUnits",
+          "tiedWithPrevious"
+        ]
+      },
+      "TeacherLoadQueryResponse": {
+        "type": "object",
+        "description": "campus_teacher_load_query 成功/失败统一信封（含 window/query/rankContext）",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeacherLoadItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "window": {
+            "type": "object",
+            "description": "查询教学周窗口",
+            "properties": {
+              "weekStart": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "weekEnd": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "weekStart",
+              "weekEnd"
+            ]
+          },
+          "query": {
+            "type": "object",
+            "properties": {
+              "weekStart": {
+                "type": "integer"
+              },
+              "weekEnd": {
+                "type": "integer"
+              },
+              "topN": {
+                "type": "integer",
+                "nullable": true
+              },
+              "campus": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "rankContext": {
+            "type": "object",
+            "description": "排名上下文（drilldown 语义锚点）",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "list": {
+                "type": "string"
+              },
+              "selectedRank": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "ScheduleRangeItem": {
+        "type": "object",
+        "description": "课次条目（query_schedule_range items 元素；携带 academicWeek 与具体日期）",
+        "properties": {
+          "lessonId": {
+            "type": "string"
+          },
+          "courseId": {
+            "type": "string"
+          },
+          "courseName": {
+            "type": "string"
+          },
+          "teachers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "任课教师名列表"
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "上课班级名列表"
+          },
+          "roomId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": "string"
+          },
+          "building": {
+            "type": "string",
+            "nullable": true
+          },
+          "campusId": {
+            "type": "string"
+          },
+          "campusName": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "如 周一"
+          },
+          "periodStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第3-4节"
+          },
+          "startTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "endTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "HH:mm"
+          },
+          "weeks": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "开课教学周列表"
+          },
+          "academicWeek": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "本条所属教学周（窗口展开）"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD（本周该星期对应日期）"
+          }
+        },
+        "required": [
+          "lessonId",
+          "courseId",
+          "courseName",
+          "weekday",
+          "periodStart",
+          "periodEnd",
+          "academicWeek",
+          "date"
+        ]
+      },
+      "ScheduleRangeQueryResponse": {
+        "type": "object",
+        "description": "campus_schedule_range_query 成功/失败统一信封（含 window/query）",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "queryId": {
+            "type": "string"
+          },
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRangeItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "window": {
+            "type": "object",
+            "description": "查询教学周窗口",
+            "properties": {
+              "weekStart": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "weekEnd": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "weekStart",
+              "weekEnd"
+            ]
+          },
+          "query": {
+            "type": "object",
+            "description": "回显查询条件（可选字段 0 视为未指定）",
+            "properties": {
+              "entityType": {
+                "type": "string"
+              },
+              "entityName": {
+                "type": "string"
+              },
+              "weekStart": {
+                "type": "integer"
+              },
+              "weekEnd": {
+                "type": "integer"
+              },
+              "weekday": {
+                "type": "integer",
+                "nullable": true
+              },
+              "periodStart": {
+                "type": "integer",
+                "nullable": true
+              },
+              "periodEnd": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
           "items",
           "actions",
           "evidence",

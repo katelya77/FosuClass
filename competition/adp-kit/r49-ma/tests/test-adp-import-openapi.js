@@ -1,6 +1,6 @@
 "use strict";
 // R49.1 新增测试：ADP Import-Ready OpenAPI 规范
-// 验证：campus-agent-tools.adp-import.json 是 5 operation 的合法 OpenAPI 3.0；
+// 验证：campus-agent-tools.adp-import.json 是 7 operation 的合法 OpenAPI 3.0；
 //       server 指向真实比赛 CloudBase endpoint；不含 token 字面量；
 //       campus_risk_check self/compare 条件契约；campus_day_plan date 必填 + visitorId 保留；
 //       campus_overview 输入可为空；canonical 模板保持占位符（可移植）。
@@ -17,16 +17,18 @@ const raw = fs.readFileSync(IMPORT_PATH, "utf8");
 
 const EXPECTED_OPERATIONS = [
   "campus_schedule_query",
+  "campus_schedule_range_query",
   "campus_classroom_search",
   "campus_risk_check",
   "campus_day_plan",
   "campus_overview",
+  "campus_teacher_load_query",
 ];
 
-test("import spec 是合法 OpenAPI 3.0 且恰为 5 个 operation", () => {
+test("import spec 是合法 OpenAPI 3.0 且恰为 7 个 operation", () => {
   assert.strictEqual(spec.openapi, "3.0.0");
   const ops = Object.values(spec.paths).flatMap((p) => Object.values(p).map((m) => m.operationId));
-  assert.strictEqual(ops.length, 5, "必须恰为 5 个 operation");
+  assert.strictEqual(ops.length, 7, "必须恰为 7 个 operation");
   for (const op of EXPECTED_OPERATIONS) {
     assert.ok(ops.includes(op), `缺 operation ${op}`);
   }
@@ -93,7 +95,7 @@ test("R49.1.1：import spec 每个 path 都是真实 server 可识别的 Agent T
   const agentTools = require("../../mcp/campus-tools-mcp/src/agent-tools.js");
   assert.strictEqual(agentTools.AGENT_TOOL_PATHS.length, 7, "server 必须恰有 7 个 Agent Tool façade");
   const paths = Object.keys(spec.paths);
-  assert.strictEqual(paths.length, 5, "import spec 必须恰有 5 个 path");
+  assert.strictEqual(paths.length, 7, "import spec 必须恰有 7 个 path");
   for (const p of paths) {
     assert.ok(p.startsWith("/api/"), `${p} 必须是 /api/ 前缀`);
     const name = p.slice("/api/".length);

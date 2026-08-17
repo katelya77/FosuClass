@@ -112,7 +112,7 @@
       "agent": "insight",
       "campusTool": "query_teacher_load",
       "restPath": "/api/query_teacher_load",
-      "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。动态事实由 CampusTools 确定性计算，所有指标只从 competition-demo-v2 匿名数据集派生。",
+      "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。需要比较多周教师负载、或定位某窗口负载最高的教师时调用。动态事实由 CampusTools 确定性计算，所有指标只从 competition-demo-v2 匿名数据集派生。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -130,7 +130,7 @@
       "agent": "schedule",
       "campusTool": "query_schedule_range",
       "restPath": "/api/query_schedule_range",
-      "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。动态事实由 CampusTools 确定性计算。",
+      "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表并逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由 CampusTools 确定性计算，禁止模型编造课表。",
       "inputSchema": {
         "type": "object",
         "properties": {
