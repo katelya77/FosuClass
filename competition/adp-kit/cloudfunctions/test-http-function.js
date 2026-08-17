@@ -51,7 +51,7 @@ async function waitForHealth() {
     const health = await waitForHealth();
     assert.equal(health.status, "ok");
     assert.equal(health.dataVersion, "competition-demo-v2");
-    assert.equal(health.tools, 8);
+    assert.equal(health.tools, 9);
     assert.equal(health.agentTools, 5, "ADP Agent Tool Façade 数量应为 5");
     assert.equal(health.adpContractVersion, "R49.2.1");
 

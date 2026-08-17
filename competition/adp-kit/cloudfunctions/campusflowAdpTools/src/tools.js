@@ -322,6 +322,78 @@ function querySchedule(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 工具 3b：query_schedule_range —— 多教学周课表展开（R49.4）
+// ---------------------------------------------------------------------------
+function queryScheduleRange(params) {
+  const input = { ...(params || {}) };
+  // ADP 平台归一化：缺失可选整数参数会被填充为 0，一律视为「未指定」
+  if (Number(input.weekday) === 0) delete input.weekday;
+  if (Number(input.periodStart) === 0) delete input.periodStart;
+  if (Number(input.periodEnd) === 0) delete input.periodEnd;
+  const { entityType, entityName, weekStart, weekEnd } = input;
+  if (!entityType || !SCHEDULE_INDEX_OF[entityType]) {
+    return fail(ERR.INVALID_PARAM, "entityType 需为 class/teacher/room/course", { entityType });
+  }
+  if (!entityName) return fail(ERR.MISSING_PARAM, "缺少必填参数 entityName", {});
+  if (weekStart == null || weekEnd == null) {
+    return fail(ERR.MISSING_PARAM, "缺少必填参数 weekStart/weekEnd", {});
+  }
+  const resolved = resolveEntity({ type: entityType, name: entityName });
+  if (!resolved.success) return resolved;
+  const entity = resolved.resolvedEntity;
+
+  const { data, idx } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+  if (!Number.isInteger(weekStart) || !Number.isInteger(weekEnd)) {
+    return fail(ERR.INVALID_PARAM, "weekStart/weekEnd 需为整数", { weekStart, weekEnd });
+  }
+  if (weekStart < 1 || weekEnd > totalWeeks) {
+    return fail(ERR.OUT_OF_RANGE, `周次必须在 1..${totalWeeks} 之间`, { weekStart, weekEnd });
+  }
+  if (weekEnd < weekStart) {
+    return fail(ERR.INVALID_PARAM, "weekEnd 不得小于 weekStart", { weekStart, weekEnd });
+  }
+
+  const all = idx[SCHEDULE_INDEX_OF[entityType]].get(entity.id) || [];
+  const items = [];
+  for (const les of all) {
+    if (input.weekday != null && les.weekday !== Number(input.weekday)) continue;
+    if (input.periodStart != null && input.periodEnd != null
+      && !periodsOverlap(les.periodStart, les.periodEnd, Number(input.periodStart), Number(input.periodEnd))) continue;
+    for (const week of expandWeeks(les)) {
+      if (week < weekStart || week > weekEnd) continue;
+      const d = lessonDisplay(les);
+      d.academicWeek = week;
+      d.date = weekWeekdayToDate(week, les.weekday);
+      items.push(d);
+    }
+  }
+  items.sort((a, b) => (
+    a.academicWeek - b.academicWeek
+    || a.weekday - b.weekday
+    || a.periodStart - b.periodStart
+    || a.lessonId.localeCompare(b.lessonId)
+  ));
+
+  const env = ok({ resolvedEntity: entity, items, actions: [] });
+  if (items.length === 0) {
+    env.evidence.note = "EMPTY_RESULT";
+    env.actions.push({ type: "broaden_query", label: "扩大查询范围（整周/换一周）" });
+  } else {
+    env.actions.push({ type: "open_widget", cardType: "schedule", label: "以卡片查看" });
+  }
+  env.window = { weekStart, weekEnd };
+  env.query = {
+    weekStart,
+    weekEnd,
+    weekday: input.weekday == null ? null : Number(input.weekday),
+    periodStart: input.periodStart == null ? null : Number(input.periodStart),
+    periodEnd: input.periodEnd == null ? null : Number(input.periodEnd),
+  };
+  return env;
+}
+
+// ---------------------------------------------------------------------------
 // 工具 4：find_available_classrooms —— 空教室规划
 // ---------------------------------------------------------------------------
 function findAvailableClassrooms(params) {
@@ -1014,6 +1086,24 @@ const TOOL_DEFS = [
       required: ["entityType", "entityName"],
     },
     handler: querySchedule,
+  },
+  {
+    name: "query_schedule_range",
+    description: "按班级/教师/教室/课程查询指定教学周窗口内的课表，逐周展开（每个匹配周一条），支持星期与节次过滤；只从当前 competition-demo 匿名数据集确定性派生。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entityType: { type: "string", enum: ["class", "teacher", "room", "course"] },
+        entityName: { type: "string" },
+        weekStart: { type: "integer", minimum: 1, maximum: 20, description: "起始教学周（必填，1..20）" },
+        weekEnd: { type: "integer", minimum: 1, maximum: 20, description: "结束教学周（必填，1..20，须 >= weekStart）" },
+        weekday: { type: "integer", minimum: 1, maximum: 7 },
+        periodStart: { type: "integer", minimum: 1, maximum: 10 },
+        periodEnd: { type: "integer", minimum: 1, maximum: 10 },
+      },
+      required: ["entityType", "entityName", "weekStart", "weekEnd"],
+    },
+    handler: queryScheduleRange,
   },
   {
     name: "find_available_classrooms",

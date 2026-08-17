@@ -503,6 +503,119 @@ test("query_teacher_load: 未知校区 fail closed", () => {
 });
 
 // ---------------------------------------------------------------------------
+// query_schedule_range（R49.4：多教学周课表展开）
+// ---------------------------------------------------------------------------
+test("query_schedule_range: 教师003 W1..W4 逐教学周展开", () => {
+  const env = callTool("query_schedule_range", {
+    entityType: "teacher",
+    entityName: "教师003",
+    weekStart: 1,
+    weekEnd: 4,
+  });
+  assertEnvelope(env);
+  assert.equal(env.success, true);
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 4 });
+  assert.ok(env.items.length >= 4, "教师003 每周都有课，W1..W4 至少 4 条");
+  const weeks = env.items.map((item) => item.academicWeek);
+  assert.deepEqual([...new Set(weeks)].sort((a, b) => a - b), [1, 2, 3, 4], "每个匹配教学周恰好出现");
+  for (const item of env.items) {
+    assert.ok(Number.isInteger(item.academicWeek) && item.academicWeek >= 1 && item.academicWeek <= 4);
+    assert.ok(typeof item.lessonId === "string");
+    assert.ok(typeof item.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+  }
+});
+
+test("query_schedule_range: 单周 1..1 与 query_schedule(week=1) 语义等价", () => {
+  const range = callTool("query_schedule_range", {
+    entityType: "teacher",
+    entityName: "教师003",
+    weekStart: 1,
+    weekEnd: 1,
+  });
+  const single = callTool("query_schedule", { entityType: "teacher", entityName: "教师003", week: 1 });
+  assert.equal(range.success, true);
+  assert.equal(single.success, true);
+  const strip = (items) => items
+    .map(({ academicWeek, ...rest }) => rest)
+    .sort((a, b) => a.lessonId.localeCompare(b.lessonId));
+  assert.deepEqual(strip(range.items), strip(single.items), "去掉 academicWeek 后应与单周查询完全一致");
+});
+
+test("query_schedule_range: weekday=0/periodStart=0/periodEnd=0 视为未指定（R49.2 语义）", () => {
+  const zero = callTool("query_schedule_range", {
+    entityType: "teacher",
+    entityName: "教师003",
+    weekStart: 1,
+    weekEnd: 1,
+    weekday: 0,
+    periodStart: 0,
+    periodEnd: 0,
+  });
+  const plain = callTool("query_schedule_range", {
+    entityType: "teacher",
+    entityName: "教师003",
+    weekStart: 1,
+    weekEnd: 1,
+  });
+  assert.equal(zero.success, true);
+  assert.equal(zero.query.weekday, null, "weekday=0 不回显为约束");
+  assert.equal(zero.query.periodStart, null);
+  assert.equal(zero.query.periodEnd, null);
+  assert.deepEqual(zero.items, plain.items, "0 填充与省略等价");
+});
+
+test("query_schedule_range: 节次过滤作用于每个教学周", () => {
+  const env = callTool("query_schedule_range", {
+    entityType: "class",
+    entityName: "2025级A班",
+    weekStart: 1,
+    weekEnd: 4,
+    weekday: 5,
+    periodStart: 5,
+    periodEnd: 6,
+  });
+  assert.equal(env.success, true);
+  assert.ok(env.items.length >= 1, "fri-afternoon-ab-overlap 场景应在窗口内命中");
+  for (const item of env.items) {
+    assert.equal(item.weekday, 5);
+    assert.ok(item.periodStart <= 6 && item.periodEnd >= 5, "节次应与 5-6 节存在交集");
+  }
+});
+
+test("query_schedule_range: 周次越界 / 反向窗口 / 缺参受控失败", () => {
+  const out = callTool("query_schedule_range", {
+    entityType: "teacher", entityName: "教师003", weekStart: 21, weekEnd: 21,
+  });
+  assert.equal(out.success, false);
+  assert.equal(out.error.code, "OUT_OF_RANGE");
+
+  const reversed = callTool("query_schedule_range", {
+    entityType: "teacher", entityName: "教师003", weekStart: 4, weekEnd: 1,
+  });
+  assert.equal(reversed.success, false);
+  assert.equal(reversed.error.code, "INVALID_PARAM");
+
+  const missing = callTool("query_schedule_range", { entityType: "teacher", entityName: "教师003" });
+  assert.equal(missing.success, false);
+  assert.equal(missing.error.code, "MISSING_PARAM");
+});
+
+test("query_schedule_range: 实体不存在 / 无匹配周", () => {
+  const notFound = callTool("query_schedule_range", {
+    entityType: "class", entityName: "2099级Z班", weekStart: 1, weekEnd: 4,
+  });
+  assert.equal(notFound.success, false);
+  assert.equal(notFound.error.code, "ENTITY_NOT_FOUND");
+
+  const empty = callTool("query_schedule_range", {
+    entityType: "teacher", entityName: "教师003", weekStart: 1, weekEnd: 1, weekday: 7,
+  });
+  assert.equal(empty.success, true);
+  assert.equal(empty.items.length, 0, "周日无课应返回空结果而非报错");
+  assert.equal(empty.evidence.note, "EMPTY_RESULT");
+});
+
+// ---------------------------------------------------------------------------
 // 通用分发与数据守卫
 // ---------------------------------------------------------------------------
 test("callTool: 未知工具", () => {

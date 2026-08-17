@@ -14,6 +14,7 @@ export type CampusToolName =
   | "resolve_entity"
   | "get_academic_context"
   | "query_schedule"
+  | "query_schedule_range"
   | "find_available_classrooms"
   | "compare_schedules"
   | "generate_day_plan"
@@ -98,6 +99,17 @@ export interface QueryScheduleInput extends TimeRangeInput {
   periodEnd?: number;
 }
 
+/** 多教学周课表展开（R49.4）输入：weekStart/weekEnd 必填；weekday/节次可选（0 视为未指定）。 */
+export interface QueryScheduleRangeInput {
+  entityType: ScheduleEntityType;
+  entityName: string;
+  weekStart: number;
+  weekEnd: number;
+  weekday?: number;
+  periodStart?: number;
+  periodEnd?: number;
+}
+
 export interface AvailableClassroomsInput extends TimeRangeInput {
   campus?: string;
   periodStart?: number;
@@ -144,6 +156,7 @@ export interface CampusToolInputs {
   resolve_entity: ResolveEntityInput;
   get_academic_context: AcademicContextInput;
   query_schedule: QueryScheduleInput;
+  query_schedule_range: QueryScheduleRangeInput;
   find_available_classrooms: AvailableClassroomsInput;
   compare_schedules: CompareSchedulesInput;
   generate_day_plan: GenerateDayPlanInput;
