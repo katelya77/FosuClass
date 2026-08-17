@@ -106,6 +106,45 @@
         "required": []
       },
       "outputStatus": ["success", "clarification", "no_result", "error"]
+    },
+    {
+      "name": "campus_teacher_load_query",
+      "agent": "insight",
+      "campusTool": "query_teacher_load",
+      "restPath": "/api/query_teacher_load",
+      "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。动态事实由 CampusTools 确定性计算，所有指标只从 competition-demo-v2 匿名数据集派生。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "weekStart": { "type": "integer", "minimum": 1, "maximum": 20, "description": "起始教学周（必填）" },
+          "weekEnd": { "type": "integer", "minimum": 1, "maximum": 20, "description": "结束教学周（必填，须 >= weekStart）" },
+          "topN": { "type": "integer", "minimum": 1, "maximum": 10, "description": "返回前 N 名（可选）" },
+          "campus": { "type": "string", "description": "校区A / 校区B / 校区C（可选）" }
+        },
+        "required": ["weekStart", "weekEnd"]
+      },
+      "outputStatus": ["success", "clarification", "no_result", "error"]
+    },
+    {
+      "name": "campus_schedule_range_query",
+      "agent": "schedule",
+      "campusTool": "query_schedule_range",
+      "restPath": "/api/query_schedule_range",
+      "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。动态事实由 CampusTools 确定性计算。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entityType": { "type": "string", "enum": ["class", "teacher", "room", "course"], "description": "实体类型" },
+          "entityName": { "type": "string", "description": "实体名称，如 教师009 / 2025级A班 / A1-101" },
+          "weekStart": { "type": "integer", "minimum": 1, "maximum": 20, "description": "起始教学周（必填）" },
+          "weekEnd": { "type": "integer", "minimum": 1, "maximum": 20, "description": "结束教学周（必填，须 >= weekStart）" },
+          "weekday": { "type": "integer", "minimum": 1, "maximum": 7, "description": "星期 1-7（可选，0 视为未指定）" },
+          "periodStart": { "type": "integer", "minimum": 1, "maximum": 10, "description": "起始节次（可选，0 视为未指定）" },
+          "periodEnd": { "type": "integer", "minimum": 1, "maximum": 10, "description": "结束节次（可选，0 视为未指定）" }
+        },
+        "required": ["entityType", "entityName", "weekStart", "weekEnd"]
+      },
+      "outputStatus": ["success", "clarification", "no_result", "error"]
     }
   ],
   "ids": {

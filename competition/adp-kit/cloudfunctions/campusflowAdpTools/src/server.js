@@ -5,7 +5,7 @@
  * - MCP（Streamable HTTP）：POST /mcp  （JSON-RPC：initialize / tools/list / tools/call / ping）
  *   SSE 兼容：GET /sse + POST /messages（旧式 SSE 传输，供只支持 SSE 的平台使用）
  * - REST：POST /api/<toolName>   （如 /api/query_schedule）
- * - Agent Tool Façade：POST /api/campus_* （R49.2.1，ADP 只调用这 5 个 alias，
+ * - Agent Tool Façade：POST /api/campus_* （R49.4，ADP 只调用这 7 个 alias，
  *   由 agent-tools.js 确定性转换为底层 CampusTools，禁止 ADP 依赖仓库内 adapter）
  * - GET  /health  健康检查（返回数据版本、底层工具数与 Agent Tool 数）
  *
@@ -228,7 +228,7 @@ async function handleRestTool(req, res, toolName) {
 }
 
 // ---------------------------------------------------------------------------
-// Agent Tool Façade：POST /api/campus_*（R49.2.1）
+// Agent Tool Façade：POST /api/campus_*（R49.4）
 // ---------------------------------------------------------------------------
 async function handleAgentRestTool(req, res, toolName) {
   const raw = await readBody(req);

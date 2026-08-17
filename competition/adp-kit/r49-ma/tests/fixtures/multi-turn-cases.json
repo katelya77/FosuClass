@@ -6,7 +6,9 @@
     "campus_classroom_search",
     "campus_risk_check",
     "campus_day_plan",
-    "campus_overview"
+    "campus_overview",
+    "campus_teacher_load_query",
+    "campus_schedule_range_query"
   ],
   "hardCases": [
     {

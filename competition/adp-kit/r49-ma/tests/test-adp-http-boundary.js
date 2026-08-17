@@ -16,7 +16,7 @@ const V2_PATH = path.join(__dirname, "..", "..", "mock-data", "competition-demo-
 
 const EXPECTED_DATA_VERSION = "competition-demo-v2";
 const EXPECTED_DATA_HASH = "sha1:4f3bbbb45d1f";
-const EXPECTED_ADP_CONTRACT_VERSION = "R49.2.1";
+const EXPECTED_ADP_CONTRACT_VERSION = "R49.4";
 const DEMO_USER_ID = "user-demo-001"; // 唯一真源 = v2.json demoUsers[0].id
 
 async function reservePort() {
@@ -75,7 +75,7 @@ function assertEnvelope(env, label) {
   assert.strictEqual(env.error, null, `${label}: error 应为 null`);
 }
 
-test("/health 暴露 tools=9 + agentTools=5 + adpContractVersion=R49.1.1", async (t) => {
+test("/health 暴露 tools=9 + agentTools=7 + adpContractVersion=R49.4", async (t) => {
   const { base } = await startServer(t);
   const res = await fetch(`${base}/health`);
   assert.strictEqual(res.status, 200);
@@ -84,7 +84,7 @@ test("/health 暴露 tools=9 + agentTools=5 + adpContractVersion=R49.1.1", async
   assert.strictEqual(health.dataVersion, EXPECTED_DATA_VERSION);
   assert.strictEqual(health.dataHash, EXPECTED_DATA_HASH);
   assert.strictEqual(health.tools, 9, "tools=9 表示底层 CampusTools 数量");
-  assert.strictEqual(health.agentTools, 5, "agentTools=5 表示 ADP Agent Tool Façade 数量");
+  assert.strictEqual(health.agentTools, 7, "agentTools=7 表示 ADP Agent Tool Façade 数量");
   assert.strictEqual(health.adpContractVersion, EXPECTED_ADP_CONTRACT_VERSION);
 });
 
@@ -180,6 +180,39 @@ test("case6 HTTP POST /api/campus_overview: 空输入 {}", async (t) => {
   const it = env.items[0];
   assert.ok(it.window && it.summary && it.campusResources && it.teacherLoadTop && it.peakSlot && it.risks,
     "case6: overview 输出应含 window/summary/campusResources/teacherLoadTop/peakSlot/risks");
+});
+
+test("case9 HTTP POST /api/campus_teacher_load_query: weekStart=1 / weekEnd=1 / topN=3", async (t) => {
+  const { base } = await startServer(t);
+  const res = await postJson(base, "/api/campus_teacher_load_query", {
+    weekStart: 1, weekEnd: 1, topN: 3,
+  });
+  assert.strictEqual(res.status, 200);
+  const env = await res.json();
+  assertEnvelope(env, "case9");
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 1 }, "case9: 窗口应回显");
+  assert.strictEqual(env.items.length, 3, "case9: topN=3 只返回 3 名教师");
+  assert.strictEqual(env.items[0].rank, 1);
+  for (const it of env.items) {
+    assert.ok(it.teacher && typeof it.teacher.name === "string");
+    assert.ok(Number.isInteger(it.lessonOccurrences) && it.lessonOccurrences > 0);
+  }
+});
+
+test("case10 HTTP POST /api/campus_schedule_range_query: teacher / T09 / W1..W4 逐周展开", async (t) => {
+  const { base } = await startServer(t);
+  const res = await postJson(base, "/api/campus_schedule_range_query", {
+    entityType: "teacher", entityName: "T09", weekStart: 1, weekEnd: 4,
+  });
+  assert.strictEqual(res.status, 200);
+  const env = await res.json();
+  assertEnvelope(env, "case10");
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 4 }, "case10: 窗口应回显");
+  assert.ok(env.items.length > 0, "case10: T09 在第 1..4 周应有课");
+  for (const it of env.items) {
+    assert.ok(Number.isInteger(it.academicWeek) && it.academicWeek >= 1 && it.academicWeek <= 4,
+      "case10: 每个条目必须携带 1..4 之间的 academicWeek");
+  }
 });
 
 test("鉴权：无 Authorization → 401；正确 Bearer token → 200", async (t) => {

@@ -71,7 +71,7 @@ test("coreCases 覆盖澄清/chat/knowledge/self/compare 边界", () => {
   assert.ok(c13.route.includes("self"));
 });
 
-test("agentToolNames 与契约 5 工具一致", () => {
+test("agentToolNames 与契约 7 工具一致", () => {
   assert.deepStrictEqual([...fixtures.agentToolNames].sort(), [...validAgentTools].sort());
 });
 

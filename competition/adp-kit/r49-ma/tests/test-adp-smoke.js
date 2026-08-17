@@ -1,5 +1,5 @@
 "use strict";
-// R49.1 新增测试：ADP Tool Smoke Fixtures（5 个 Agent Tool，共 6 个 case）
+// R49.1 新增测试：ADP Tool Smoke Fixtures（7 个 Agent Tool，共 8 个 case）
 // 验证链路：adapter.resolveAgentToolParams → buildRestRequest → 本地 callTool(competition-demo-v2)
 // 每个 case 断言统一信封：success / dataVersion / evidence.dataHash / evidence.verified / error / contract。
 const test = require("node:test");
@@ -114,4 +114,29 @@ test("case6 campus_overview: 空输入 {}", () => {
   const it = env.items[0];
   assert.ok(it.window && it.summary && it.campusResources && it.teacherLoadTop && it.peakSlot && it.risks,
     "case6: overview 输出应含 window/summary/campusResources/teacherLoadTop/peakSlot/risks");
+});
+
+test("case7 campus_teacher_load_query: weekStart=1 / weekEnd=1 / topN=3", () => {
+  const env = smoke("campus_teacher_load_query", { weekStart: 1, weekEnd: 1, topN: 3 });
+  assertEnvelope(env, "case7");
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 1 }, "case7: 窗口应回显");
+  assert.strictEqual(env.items.length, 3, "case7: topN=3 只返回 3 名教师");
+  assert.strictEqual(env.items[0].rank, 1);
+  for (const it of env.items) {
+    assert.ok(it.teacher && typeof it.teacher.name === "string");
+    assert.ok(Number.isInteger(it.lessonOccurrences) && it.lessonOccurrences > 0);
+  }
+});
+
+test("case8 campus_schedule_range_query: teacher / T09 / W1..W4 逐周展开", () => {
+  const env = smoke("campus_schedule_range_query", {
+    entityType: "teacher", entityName: "T09", weekStart: 1, weekEnd: 4,
+  });
+  assertEnvelope(env, "case8");
+  assert.deepEqual(env.window, { weekStart: 1, weekEnd: 4 }, "case8: 窗口应回显");
+  assert.ok(env.items.length > 0, "case8: T09 在第 1..4 周应有课");
+  const weeks = env.items.map((it) => it.academicWeek);
+  for (const w of weeks) {
+    assert.ok(Number.isInteger(w) && w >= 1 && w <= 4, "case8: academicWeek 必须在 1..4 之间");
+  }
 });

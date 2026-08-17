@@ -52,8 +52,8 @@ async function waitForHealth() {
     assert.equal(health.status, "ok");
     assert.equal(health.dataVersion, "competition-demo-v2");
     assert.equal(health.tools, 9);
-    assert.equal(health.agentTools, 5, "ADP Agent Tool Façade 数量应为 5");
-    assert.equal(health.adpContractVersion, "R49.2.1");
+    assert.equal(health.agentTools, 7, "ADP Agent Tool Façade 数量应为 7");
+    assert.equal(health.adpContractVersion, "R49.4");
 
     const unauthorized = await fetch("http://127.0.0.1:9000/api/query_schedule", {
       method: "POST",
@@ -89,7 +89,38 @@ async function waitForHealth() {
     const riskBody = await risk.json();
     assert.equal(riskBody.success, true);
     assert.equal(riskBody.summary.selfCompare, true);
-    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、Agent Tool Façade）");
+
+    // R49.4：新增 Agent Tool Façade 真实可用（教师负载窗口 + 多周课表展开）。
+    const load = await fetch("http://127.0.0.1:9000/api/campus_teacher_load_query", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ weekStart: 1, weekEnd: 1, topN: 3 }),
+    });
+    assert.equal(load.status, 200);
+    const loadBody = await load.json();
+    assert.equal(loadBody.success, true);
+    assert.equal(loadBody.items.length, 3);
+    assert.equal(loadBody.items[0].rank, 1);
+
+    const range = await fetch("http://127.0.0.1:9000/api/campus_schedule_range_query", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ entityType: "teacher", entityName: "T09", weekStart: 1, weekEnd: 4 }),
+    });
+    assert.equal(range.status, 200);
+    const rangeBody = await range.json();
+    assert.equal(rangeBody.success, true);
+    assert.ok(rangeBody.items.length > 0);
+    for (const it of rangeBody.items) {
+      assert.ok(Number.isInteger(it.academicWeek) && it.academicWeek >= 1 && it.academicWeek <= 4);
+    }
+    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、7 个 Agent Tool Façade）");
   } finally {
     child.kill();
   }

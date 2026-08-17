@@ -1,14 +1,16 @@
 /**
- * R49.2.1 Agent Tool HTTP Façade（零依赖 CommonJS）。
+ * R49.4 Agent Tool HTTP Façade（零依赖 CommonJS）。
  *
- * 5 个 Agent-facing 工具作为 REST alias 暴露给腾讯 ADP，禁止 ADP 依赖
+ * 7 个 Agent-facing 工具作为 REST alias 暴露给腾讯 ADP，禁止 ADP 依赖
  * 仓库内未部署的 r49-ma adapter：
  *
- *   campus_schedule_query   -> query_schedule
- *   campus_classroom_search -> find_available_classrooms
- *   campus_risk_check       -> compare_schedules   （self/compare 模式确定性转换）
- *   campus_day_plan         -> generate_day_plan    （visitorId 可选，缺失时确定性使用 demoUsers[0].id）
- *   campus_overview         -> get_campus_teaching_overview
+ *   campus_schedule_query     -> query_schedule
+ *   campus_classroom_search   -> find_available_classrooms
+ *   campus_risk_check         -> compare_schedules   （self/compare 模式确定性转换）
+ *   campus_day_plan           -> generate_day_plan    （visitorId 可选，缺失时确定性使用 demoUsers[0].id）
+ *   campus_overview           -> get_campus_teaching_overview
+ *   campus_teacher_load_query -> query_teacher_load   （R49.4：教学周窗口教师负载排名）
+ *   campus_schedule_range_query -> query_schedule_range （R49.4：多教学周课表逐周展开）
  *
  * 底层 CampusTools 与 MCP 接口保持不变；本模块只做参数映射与失败关闭校验，
  * 动态校园事实仍然只由 CampusTools 确定性计算。
@@ -18,7 +20,7 @@ const { callTool } = require("./tools");
 const { loadDataset } = require("./data");
 const { fail, ERR } = require("./envelope");
 
-const ADP_CONTRACT_VERSION = "R49.2.1";
+const ADP_CONTRACT_VERSION = "R49.4";
 
 const AGENT_TOOL_MAP = Object.freeze({
   campus_schedule_query: "query_schedule",
@@ -26,6 +28,8 @@ const AGENT_TOOL_MAP = Object.freeze({
   campus_risk_check: "compare_schedules",
   campus_day_plan: "generate_day_plan",
   campus_overview: "get_campus_teaching_overview",
+  campus_teacher_load_query: "query_teacher_load",
+  campus_schedule_range_query: "query_schedule_range",
 });
 
 const AGENT_TOOL_PATHS = Object.freeze(Object.keys(AGENT_TOOL_MAP));
