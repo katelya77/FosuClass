@@ -1,18 +1,21 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-18 +08:00（复核）
+更新时间：2026-08-18 +08:00（R50.1 收尾）
 
-当前阶段：`CampusFlow ADP R50.0 / Semantic Core + 13 Agent Tools`（仓库收敛 + **CloudBase 部署与远程验证均已完成**：远程 `/health` 实测 = tools=14 / agentTools=13 / adpContractVersion=R50.0 / dataVersion=competition-demo-v3，见下方 R50.0 节）
+当前阶段：`CampusFlow ADP R50.1 / Prompt Convergence + 13-Tool Console Cutover + Generic E2E`（仓库收敛完成、3 commits 已 push、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1 节）
 
 ## R50.1 状态（本机收敛中，2026-08-18）
 
 - **范围**：Agent Prompt Convergence + 13-Tool ADP Console Cutover + Generic E2E（PR #49 保持 OPEN / UNMERGED；**本轮不部署 CloudBase**）。
-- **§1.3 HEAD Semantics**：`implementationHead=9db8447`（T3~T7 代码实现）／`currentBranchHead=989cbe5`（R50.0 最终）／`reportCommit=989cbe5`（R50.1 收尾提交后回填）。
+- **§1.3 HEAD Semantics**：`implementationHead=9db8447`（T3~T7 代码实现）／`currentBranchHead=38dfee5`／`reportCommit=38dfee5`（R50.1 收尾提交 0fdb2f0 / 97aa086 / 38dfee5 后回填）。
 - **Prompt 收敛门禁 = 19/19 PASS**：`test-r50-prompt-architecture.js` P1~P10 + `test-r50-1-prompt-convergence.js` R51-P1~P9（branding 统一 校园智序·小序、去案例化第二轮、model= 硬编码删除并冻结 DeepSeek V4 Flash 为 Console Baseline、Paste Pack 纯净度、final.md 与编译器导出字节一致）。
 - **Generic E2E Matrix = 14/14 PASS**：`test-r50-1-e2e-matrix.js`（A 实体搜索 / B Temporal Context / C 课表 / D 空教室 / E 共同空闲 / F 群体计划 / G 风险 / H 调课模拟 / I 排名 / J 跨域组合 / K-L Context Model），V3 数据动态发现实体，表驱动 + 语义断言。
 - **R50 全测试组 = 55/55 PASS**（P/R51/E2E/R50-1~6/CTX-01~07/ADP smoke 8）。
 - **Paste Pack（Prompt 部分）已生成**：`competition/adp-kit/r50.1/prompts/*.final.md`（main-orchestrator / schedule-space / risk-planning / campus-insight，编译器 `--export-final` 导出，与 `--print-final` 字节一致；长度 11377/9920/9778/9949）。
-- **待办**：Paste Pack 配套文档（CUTOVER / E2E-MATRIX / PROMPT-PASTE-GUIDE / RUNTIME-CONFIG / TOOL-MODEL-VISIBILITY / CONSOLE-ACCEPTANCE）、新 6 工具参数可见性表（OpenAPI 真源）、全量回归、最终 23 项报告、分阶段 commit/push。
+- **Paste Pack 6 文档 + 参数可见性表已生成**：`r50.1/`（CUTOVER / E2E-MATRIX / PROMPT-PASTE-GUIDE / RUNTIME-CONFIG / TOOL-MODEL-VISIBILITY（`generate-tool-visibility.js` 从 OpenAPI 真源幂等生成，baseDate=仅 Console）/ CONSOLE-ACCEPTANCE（D1~D6 真机证据表））。
+- **全量回归 = 全绿**：r49-ma **259/259**、mcp **51/51 + check（tsc 无错）**、golden **33/33**（oracleSourceSha256 审计回填 `79bda318…`，classification A、semanticDrift=0）、sync --check **11 files**（已同步 data.js 注释）、test-http **PASS**、compiler --check **PASS**、`git diff --check` 干净。
+- **最终报告**：`r50.1/2026-08-18-r50.1-final-report.md`（23 项核对清单；§1.3 HEAD 已回填）。
+- **待办（用户动作）**：按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行控制台真机验收 D1~D6（工具 Cutover + 4 份 final Prompt 粘贴）。
 
 ## R50.0 状态（本轮，2026-08-18）
 
