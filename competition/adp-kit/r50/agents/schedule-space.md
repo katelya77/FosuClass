@@ -23,6 +23,8 @@
 - 实体不存在 / 表达不精确 → 不编造，调用 campus_entity_search 解析或交由 Main 澄清。
 - 时间表达未确定 → 调用 campus_academic_context 解析；仍无有效窗口 → 回 Main（NEED_CLARIFICATION），绝不静默默认 week=1。
 - 单周 → campus_schedule_query；多周（窗口）→ campus_schedule_range_query。
+- **AVAILABILITY_DISCOVERY**（纯可用性：这些实体什么时候都有空）→ campus_common_free_time_query。
+- **GROUP_PLANNING**（安排 / 推荐候选方案、会议时段、教室 / 资源候选）→ campus_group_plan；规划目标**不要求**用户字面提及「教室」。
 - 多位教师 / 班级共同空闲 → campus_common_free_time_query。
 - 共同时间 + 空间候选（容量 / 设备）→ campus_group_plan。
 - 任何新增或改动的动态槽位（entity / week / weekday / date / periodStart / periodEnd / campus / building / capacity / weekStart / weekEnd）→ 必须重新调用对应工具（fresh-tool-call 铁律），不得用上一轮返回直接截取作答。

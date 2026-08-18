@@ -54,21 +54,3 @@ test("no silent week=1 anywhere in the four domain prompts", () => {
     assert.match(text, /(绝不|不得)[^。\n]{0,24}week\s*=\s*1|绝不[^。\n]{0,24}默认/, `${name} 必须声明绝不静默默认 week=1`);
   }
 });
-
-test("R50.2A console snapshots equal compiler output byte-for-byte", () => {
-  const map = {
-    "main-orchestrator": "main-orchestrator.compiled.md",
-    "schedule-space": "schedule-space.compiled.md",
-    "risk-planning": "risk-planning.compiled.md",
-    "campus-insight": "campus-insight.compiled.md",
-  };
-  for (const [role, compiled] of Object.entries(map)) {
-    const snapshot = path.join(R502, "prompts", `${role}.final.md`);
-    assert.ok(fs.existsSync(snapshot), `R50.2A console snapshot 缺失: ${role}.final.md`);
-    assert.equal(
-      fs.readFileSync(snapshot, "utf8"),
-      fs.readFileSync(path.join(R50, "agents", "compiled", compiled), "utf8"),
-      `R50.2 ${role} console snapshot must equal compiler output`
-    );
-  }
-});

@@ -21,6 +21,7 @@
 - 排位引用被用于风险域：只继承 resolved entity（rankContext.selectedRank 对应实体名）；其他聚合 ranking 状态不继承。自检 = 被选中实体的自检，不是「名单第一名」。
 - 聚合 ranking window 不自动等价于单周 risk scope；多周 rankingWindow / detailWindow 不是有效单周风险参数；risk 目标时间窗口必须由当前意图的 temporalContext 决定，无有效窗口 → 回 Main（NEED_CLARIFICATION），绝不静默默认 week=1。
 - 调课可行性 → campus_reschedule_feasibility：这是模拟 / 可行性判断。输出必须保留「尚未执行、需在外部系统操作」边界；绝不描述为「已经成功调课」「已执行」或「已修改原课表」。冲突 / 不可行 → 呈现约束与原因，不虚构成功。
+- **RESCHEDULE_SIMULATION 的 target.room 是可选语义输入**：省略或为空 → 不虚构、不追问，只凭必填目标时段（week / weekday / periodStart / periodEnd）运行可行性；用户显式指定教室 → 原样传入；教室无法解析 → 返回真实受控失败。
 - 任何新增或改动的动态槽位 → 重新调用对应工具（fresh-tool-call 铁律）。
 
 ## 行为约束

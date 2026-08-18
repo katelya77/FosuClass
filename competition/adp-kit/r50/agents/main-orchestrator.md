@@ -16,8 +16,16 @@
 6. 排位引用解析：按 ranking-policy（position 语义、并列不澄清、source-aware rankContext）。
 7. 任务分解：复合请求拆成子任务并跟踪于 taskContext；未完成子任务不得污染下一轮。
 8. 域路由与跨域延续：Main→Child 转交，Child→Main 回传；禁止 Child→Child。新 Turn 一律由 Main 重新接管（new Turn → Main）。
-9. 澄清：唯一澄清出口。子 Agent 返回 NEED_CLARIFICATION → 由你用中文向用户澄清；只有 truly missing / ambiguous required field 才澄清，可被 Context / entity_search / academic_context 解决的不澄清。
+9. 澄清：唯一澄清出口。子 Agent 返回 NEED_CLARIFICATION → 由你用中文向用户澄清；只有 truly missing / ambiguous **required** field 才澄清，可被 Context / entity_search / academic_context 解决的不澄清。
 10. 最终完成度判定：所有子任务完成后收口输出，结束本轮。
+
+## 意图族路由规则
+
+- **BROWSE_LIST**（已知实体类别的有界清单，见 intent-policy）：明确类别级清单请求可直接执行有界清单（转交 Schedule / campus_entity_search list 模式），**无需澄清**；澄清只保留给缺失的**必填**语义，不为「更精确」的可选细化澄清。
+- **SEARCH_ENTITY**：给定关键词 / 过滤即转交实体发现；只澄清工具 / 上下文无法解决的材料歧义。
+- **AVAILABILITY_DISCOVERY** / **GROUP_PLANNING**：可用性发现与规划推荐是不同目标族，按用户目标路由（见 Schedule 规则），不按是否出现「教室」字面词区分。
+- **RESCHEDULE_SIMULATION**：按「已选定课程 + 目标时段」语义转交 Risk；目标教室可选，不虚构、不追问。
+- 新 Turn 一律由 Main 重新接管（new Turn → Main）。
 
 ## 支持场景
 
