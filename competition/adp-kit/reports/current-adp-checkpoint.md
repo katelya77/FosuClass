@@ -1,8 +1,22 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-18 +08:00（R50.1.2 收尾）
+更新时间：2026-08-19 +08:00（R50.2A 收尾）
 
-当前阶段：`CampusFlow ADP R50.1.2 / Control-Plane SSOT Closure`（Tool Binding 唯一真源收敛、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1.2 节）
+当前阶段：`CampusFlow ADP R50.2A / Interaction Semantics + Prompt Hardening`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户执行，见下方 R50.2A 节）
+
+## R50.2A 状态（收尾，2026-08-19）
+
+- **范围**：Interaction Semantics（可选房间参数归一化）+ Prompt Hardening（四 Agent Prompt 瘦身/去实现细节）+ 协议冒烟 vs 产品 E2E 分层（PR #49 保持 OPEN / UNMERGED，**本轮不部署 CloudBase**）。
+- **交互语义**：`r49-ma/tools/adapter/adapter.js` 新增 `normalizeAgentToolInput` / `normalizeOptionalBySchema` / `OMIT` / `isSemanticallyEmpty`——按 schema 可选性把 `null`/空白串/`[]`/`{}` 归一为缺省；必填值与合法数值不得抹除。调课不带目标教室时不再触发假教室查询、不再强制教室澄清。RED→GREEN：RED 7 失败（`test-r50-2-optional-normalization.js` 首批）→ GREEN 50/50。
+- **Intent 族**：`shared/intent-policy.md` 定义 5 个目标族（BROWSE_LIST / SEARCH_ENTITY / AVAILABILITY_DISCOVERY / GROUP_PLANNING / RESCHEDULE_SIMULATION）与 Main→Schedule/Risk 路由规则；39/39 语义门禁 PASS。
+- **Prompt 硬化（T4）**：shared 7 策略去除 TS 块与实现模块名（temporal-core.js / ranking-core.js / query_entity_search）；core-safety 增「澄清仅限必填语义」边界；output-policy 增「可汇总已验证工具结果数字、禁止发明新动态事实」；四 Agent 域 Prompt 重写为 角色与边界 / 工具绑定 / 目标→工具 / 澄清与失败 / 输出边界 / 高级设置 六段。主 Prompt 尺寸：main-orchestrator 4134→3862、schedule-space 2158→2107、risk-planning 2042→2139、campus-insight 1984→2016（字符）。R50-P1..P10 / R51-P1..P9 / R50.2A-P1..P5 全部保留。
+- **快照（T5）**：`r50.2/prompts/*.final.md` 4 份与编译器导出逐字节一致（main-orchestrator 21204 B / schedule-space 18776 B / risk-planning 19003 B / campus-insight 18657 B），快照相等契约入 `test-r50-2-interaction-semantics.js`（6/6 PASS）。
+- **E2E 分层（T7）**：`test-r50-1-e2e-matrix.js` 重设计——H1 `[protocol-smoke]`（固定 fixture lesson）与 H2 `[product-e2e]`（动态 `campus_entity_search` → `campus_schedule_query` → `items[0].lessonId` → 无教室调课，断言不发明教室、无写入动作）；15/15 PASS；矩阵文档同步分层说明。
+- **AI 一键优化纪律（T6）**：`r50.2/R50.2A-ADP-AI-PROMPT-OPTIMIZATION-GUIDE.md`——平台生成文案只作候选，逐 Agent diff 语义不变量后选择性合并，一次一个 Agent。
+- **全量回归 = 全绿**：r49-ma **295/295**（274 基线 + R50.2A 21）；聚焦 9 文件 **88/88**；adp-kit `npm test` 全链 PASS（mcp 52/52 + check + typecheck + check:openapi 14 工具、golden 33/33 v1 sha1:fefef4bf425b、widget/r4/r5、cloudfunctions test-http），**唯一基线失败 = `sync-assets-manifest --check`**（改动前已存在；本轮提交不含 manifest/submission-package，证据保留）；compiler --check **4 files**；root 四门禁 test:agent-foundation **42/42**、test:agent-regression **197/197**（首跑 `test-agent-memory-autonomy.js` 环境性失败 → 单独重跑 PASS 28 cases + 全量重跑 PASS，判定 transient 非代码问题）、test:ai-competition PASS、test:agent-final-convergence all passed；`git diff --check` 干净。
+- **提交（8 commits，HEAD 见报告）**：2b55ef0（T1 gate+矩阵）、fad1b60（T2 归一化 RED→GREEN）、06790a1（T3 intent 族）、2e3eed3（T4 prompt 硬化，+376/−667）、4992604（T5 快照）、aa97e92（T6 优化纪律指南）、b82330c（T7 协议冒烟 vs 产品 E2E）、T8 收尾提交（检查点 + 最终报告）。
+- **判定**：`R50.2A REPO GOLDEN`（repo 全绿，唯一失败项为已分类 B 类基线）；**Console GOLDEN 未宣称**——待用户按 `r50.2/R50.2A-ADP-AI-PROMPT-OPTIMIZATION-GUIDE.md` 流程粘贴基线并逐 Agent 评估候选。
+- **待办（用户动作）**：按指南做 Console 基线粘贴 + AI 一键优化候选评估（一次一个 Agent）；D1~D6 真机验收沿用 R50.1 模板。
 
 ## R50.1.2 状态（收尾，2026-08-18）
 
