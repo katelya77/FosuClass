@@ -75,6 +75,48 @@ function validateAgainstSchema(schema, value) {
   return errors;
 }
 
+const OMIT = Symbol("omit-optional");
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSemanticallyEmpty(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  if (isPlainObject(value)) return Object.keys(value).length === 0;
+  return false;
+}
+
+/**
+ * R50.2A schema-aware 可选值归一化：可选字段的语义空值（null / undefined /
+ * 空白字符串 / 空数组 / 空对象）在进入校验与映射前按「缺失」处理。
+ * 必填字段与合法数值（含 0）绝不被删除；嵌套对象按子 schema 递归。
+ */
+function normalizeOptionalBySchema(schema, value, required) {
+  if (!required && isSemanticallyEmpty(value)) return OMIT;
+  if (schema && schema.type === "object" && isPlainObject(value)) {
+    const props = schema.properties || {};
+    const requiredKeys = new Set(schema.required || []);
+    const out = { ...value };
+    for (const [key, childSchema] of Object.entries(props)) {
+      if (!Object.hasOwn(out, key)) continue;
+      const child = normalizeOptionalBySchema(childSchema, out[key], requiredKeys.has(key));
+      if (child === OMIT) delete out[key];
+      else out[key] = child;
+    }
+    return out;
+  }
+  return value;
+}
+
+function normalizeAgentToolInput(schema, rawParams) {
+  const input = isPlainObject(rawParams) ? { ...rawParams } : {};
+  const normalized = normalizeOptionalBySchema(schema, input, true);
+  return normalized === OMIT ? {} : normalized;
+}
+
 /**
  * 解析并规范化 Agent Tool 请求参数。
  * 返回 { ok: true, tool, params } 或 { ok: false, errors, tool, status: "clarification" }。
@@ -83,7 +125,7 @@ function resolveAgentToolParams(name, rawParams) {
   const tool = findTool(name);
   if (!tool) return { ok: false, status: "error", errors: [`未知 Agent Tool: ${name}`] };
 
-  const input = { ...(rawParams || {}) };
+  const input = normalizeAgentToolInput(tool.inputSchema, rawParams);
   const errors = validateAgainstSchema(tool.inputSchema, input);
   if (errors.length) return { ok: false, status: "clarification", errors, tool };
 
@@ -167,4 +209,5 @@ module.exports = {
   mapAgentToolParams,
   isFailClosed,
   validateAgainstSchema,
+  normalizeAgentToolInput,
 };
