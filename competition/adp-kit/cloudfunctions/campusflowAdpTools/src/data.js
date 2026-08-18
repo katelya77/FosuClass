@@ -58,7 +58,9 @@ function loadDataset() {
     byId,
     idx,
     dataVersion: data.meta.dataVersion,
-    dataHash: data.dataHash,
+    // v2 布局：顶层 dataHash；v3 布局：meta.dataHash（生成器 computeDataHash
+    // 将 dataHash 置于 meta）。两者都兼容，避免 v3 runtime 读到 undefined。
+    dataHash: data.meta.dataHash || data.dataHash,
   };
   return cached;
 }

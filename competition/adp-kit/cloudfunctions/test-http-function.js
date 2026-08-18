@@ -7,6 +7,12 @@ const { spawn, spawnSync } = require("child_process");
 
 const functionRoot = path.join(__dirname, "campusflowAdpTools");
 const token = "campusflow-http-function-test-token";
+// R50.0 V3 运行时 fixture：从权威 mock-data 真源动态取 lesson/teacher 标识，
+// 避免把具体 ID 硬编码进部署冒烟断言。
+const fs = require("fs");
+const v3 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "mock-data", "competition-demo-v3.json"), "utf8"));
+const firstLessonId = v3.lessons[0].id;
+const firstTwoTeachers = v3.teachers.slice(0, 2).map((t) => ({ type: "teacher", id: t.id, name: t.name }));
 const noTokenEnv = { ...process.env };
 delete noTokenEnv.CAMPUS_API_TOKEN;
 delete noTokenEnv.CAMPUS_API_AUTH_MODE;
@@ -50,10 +56,11 @@ async function waitForHealth() {
   try {
     const health = await waitForHealth();
     assert.equal(health.status, "ok");
-    assert.equal(health.dataVersion, "competition-demo-v2");
-    assert.equal(health.tools, 9);
-    assert.equal(health.agentTools, 7, "ADP Agent Tool Façade 数量应为 7");
-    assert.equal(health.adpContractVersion, "R49.4");
+    assert.equal(health.dataVersion, "competition-demo-v3");
+    assert.equal(health.dataHash, "sha1:842b7959e808");
+    assert.equal(health.tools, 14, "底层 CampusTools 数量应为 14（R50.0）");
+    assert.equal(health.agentTools, 13, "ADP Agent Tool Façade 数量应为 13");
+    assert.equal(health.adpContractVersion, "R50.0");
 
     const unauthorized = await fetch("http://127.0.0.1:9000/api/query_schedule", {
       method: "POST",
@@ -73,7 +80,7 @@ async function waitForHealth() {
     assert.equal(authorized.status, 200);
     const body = await authorized.json();
     assert.equal(body.success, true);
-    assert.equal(body.dataVersion, "competition-demo-v2");
+    assert.equal(body.dataVersion, "competition-demo-v3");
     assert.equal(body.evidence.verified, true);
 
     // R49.2.1：部署包内 Agent Tool Façade 真实可用（self 模式无需第二对象）。
@@ -120,7 +127,66 @@ async function waitForHealth() {
     for (const it of rangeBody.items) {
       assert.ok(Number.isInteger(it.academicWeek) && it.academicWeek >= 1 && it.academicWeek <= 4);
     }
-    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、7 个 Agent Tool Façade）");
+    // R50.0：6 个新增 Agent Tool Façade 的本地 smoke 等价用例（V3 运行时）。
+    const entity = await fetch("http://127.0.0.1:9000/api/campus_entity_search", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ entityType: "teacher", limit: 5 }),
+    });
+    assert.equal(entity.status, 200);
+    const entityBody = await entity.json();
+    assert.equal(entityBody.success, true);
+    assert.ok(entityBody.items.length > 0 && entityBody.items[0].type === "teacher");
+
+    const acad = await fetch("http://127.0.0.1:9000/api/campus_academic_context", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ intent: { kind: "future_weeks", count: 4 } }),
+    });
+    assert.equal(acad.status, 200);
+    const acadBody = await acad.json();
+    assert.equal(acadBody.success, true);
+    assert.ok(acadBody.items[0].temporalContext, "academic_context 应暴露 temporalContext");
+
+    const freeTime = await fetch("http://127.0.0.1:9000/api/campus_common_free_time_query", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ entities: firstTwoTeachers, week: 1, minConsecutivePeriods: 1 }),
+    });
+    assert.equal(freeTime.status, 200);
+    const freeTimeBody = await freeTime.json();
+    assert.equal(freeTimeBody.success, true);
+
+    const util = await fetch("http://127.0.0.1:9000/api/campus_room_utilization_query", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ weekStart: 1, weekEnd: 4, sort: "highest", topN: 3 }),
+    });
+    assert.equal(util.status, 200);
+    const utilBody = await util.json();
+    assert.equal(utilBody.success, true);
+    assert.equal(utilBody.items.length, 3);
+
+    const resch = await fetch("http://127.0.0.1:9000/api/campus_reschedule_feasibility", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceLessonId: firstLessonId, target: { week: 1, weekday: 1, periodStart: 3, periodEnd: 4 } }),
+    });
+    assert.equal(resch.status, 200);
+    const reschBody = await resch.json();
+    assert.equal(reschBody.success, true);
+    assert.ok(reschBody.summary && typeof reschBody.summary.feasible === "boolean");
+
+    const group = await fetch("http://127.0.0.1:9000/api/campus_group_plan", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ entities: firstTwoTeachers, week: 1, minConsecutivePeriods: 1 }),
+    });
+    assert.equal(group.status, 200);
+    const groupBody = await group.json();
+    assert.equal(groupBody.success, true);
+
+    console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、13 个 Agent Tool Façade / V3 runtime）");
   } finally {
     child.kill();
   }

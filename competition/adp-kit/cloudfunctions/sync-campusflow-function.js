@@ -11,9 +11,11 @@ const TARGET_SOURCE_ROOT = path.join(FUNCTION_ROOT, "src");
 const TARGET_DATA_ROOT = path.join(FUNCTION_ROOT, "mock-data");
 const CHECK = process.argv.includes("--check");
 const RUNTIME_FILES = ["agent-tools.js", "data.js", "envelope.js", "ratelimit.js", "server.js", "tools.js", "temporal-core.js", "ranking-core.js"];
-// v2 是线上默认数据源；v1 保留在部署包中仅供显式 CAMPUS_DATA_PATH 回滚，
-// 运行时默认不会悄悄回退到 v1（index.js 默认指向 v2）。
-const DATA_FILES = ["competition-demo-v1.json", "competition-demo-v2.json"];
+// v3 是线上默认数据源（R50.0 V3 runtime cutover）；v2 保留在部署包中供
+// CAMPUS_DEMO_DATA_VERSION=competition-demo-v2 或显式 CAMPUS_DATA_PATH 回滚，
+// v1 仅供显式 CAMPUS_DATA_PATH 回滚；运行时默认不会悄悄回退旧版本
+// （index.js 默认指向 v3）。
+const DATA_FILES = ["competition-demo-v1.json", "competition-demo-v2.json", "competition-demo-v3.json"];
 
 const copies = [
   ...RUNTIME_FILES.map((name) => ({
