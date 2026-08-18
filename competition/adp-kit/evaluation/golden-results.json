@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "e46974e6b7bc37765cb5f23ee53a9c6ceac6da5857061db68df7171a82bf8cae",
+  "oracleSourceSha256": "4cc58e0b5612400ab3dd266c018af56c928bab9bc9f5f7b2a742874681f69c5d",
   "caseCount": 33,
   "cases": [
     {
@@ -1160,11 +1160,11 @@
     }
   ],
   "lastOracleReview": {
-    "date": "2026-08-17",
+    "date": "2026-08-18",
     "classification": "A",
     "semanticDrift": 0,
     "changedCases": [],
     "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
-    "note": "R49.2(0-mask)/R49.2.1(alias+hardening) 合法修改 tools.js；33/33 case 语义输出与 committed expected 完全一致"
+    "note": "R50.0 合法修改 mcp 源码（tools.js 新增 6 R50 CampusTools、agent-tools.js R49.4→R50.0、新增 temporal/ranking/context core）：33/33 case 语义输出与 committed expected 逐字节一致，仅 oracleSourceSha256 更新为 4cc58e0b5（自动重审脚本对比 changed cases=0 后 --accept-reviewed 重生成）"
   }
 }

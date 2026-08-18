@@ -1,10 +1,21 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-17 +08:00
+更新时间：2026-08-18 +08:00
 
-当前阶段：`CampusFlow ADP R49.4.1 / Prompt Consistency Hardening`（仓库收敛已完成；**Runtime 未动**：CloudBase 保持 R49.4 已部署状态 tools=9 / agentTools=7 / adpContractVersion=R49.4；等待用户 ADP 控制台按验收模板执行：插件增量导入 2 个新 operation → 重新粘贴 4 份 Prompt → 应用首页 D1~D5（含 D4）复测 → Console Gate 通过后才允许声明 R49.4-GOLDEN）
+当前阶段：`CampusFlow ADP R50.0 / Semantic Core + 13 Agent Tools`（仓库收敛已完成；**Runtime 待用户授权部署**：CloudBase 保持 R49.4 已部署状态 tools=9 / agentTools=7 / adpContractVersion=R49.4；T3~T7 本地代码与 T8a/T8b/T8c 交付已全绿，见下方 R50.0 节）
 
-## R49.4.1 状态（本轮，2026-08-17）
+## R50.0 状态（本轮，2026-08-18）
+
+- **Coze agent T3~T7 已审计落地（5 commits，HEAD=9db8447）**：Semantic Core（temporal-core.js / ranking-core.js / context-model.js）、6 个新 CampusTools（TOOL_DEFS 15、Agent Tool Façade 13、`ADP_CONTRACT_VERSION=R50.0`）、competition-demo-v3 数据集（生成器/schema/validator）、OpenAPI 全量 13 ops + r50 delta 恰 6 ops（$ref 自包含、无凭据）、CloudBase V3 runtime cutover（index.js 默认 v3；sync 脚本 RUNTIME_FILES 8 + DATA_FILES v1/v2/v3）。
+- **测试全绿**：r49-ma `node --test "tests/*.js"` = **236/236**（含 Coze 新增 test-temporal-core / test-ranking-core / test-context-model / test-r50-new-tools / test-dataset-quality + 本轮新增 test-r50-prompt-architecture 10 契约）；mcp `npm test` = **51/51**、`npm run check` 绿；`git diff --check` 干净；`sync-campusflow-function.js --check` = **11 文件一致 PASS**；`test-http-function.js` = **health 200 / 13 个 Agent Tool Façade / V3 runtime PASS**。
+- **Golden 33/33 重审 = 分类 A（2026-08-18）**：oracleSourceSha256 更新为 `4cc58e0b…`（R50 合法源码变更），33/33 case 语义 0 漂移、dataVersion=competition-demo-v1 / sha1:fefef4bf425b 未变；`lastOracleReview={date:2026-08-18, classification:"A", semanticDrift:0, changedCases:[], datasetAnchor:"competition-demo-v1 / sha1:fefef4bf425b（未变）"}` 已写入；`eval-golden.js` 33/33 PASS。
+- **T8a Prompt 架构（新交付）**：`r50/agents/shared/` 7 个 policy（core-safety / intent-policy / temporal-policy / entity-policy / context-policy / ranking-policy / output-policy）+ `r50/agents/` 4 个组合 Prompt（main-orchestrator / schedule-space / risk-planning / campus-insight，13 工具路由、去 Case 化、无比赛实体字面）+ `r50/build-agent-prompts.js` 编译器（确定性生成 `agents/compiled/*.compiled.md`，`--check` 漂移检测）。
+- **T8b Prompt 一致性门禁（新交付）**：`r49-ma/tests/test-r50-prompt-architecture.js` 10/10（架构存在性、编译器确定性、shared 注入、13 工具绑定无越权、Temporal/排名/self-risk/fresh-tool-call 语义契约、去 Case 化、高级设置保留）。
+- **T8c Console 升级手册（新交付）**：`r50/R50.0-ADP-CONSOLE-UPGRADE.md`（7→13 工具表、delta JSON 导入、新 6 工具单独验证清单、Agent 绑定映射、Direct Result 全 OFF、/health 三字段、V2/V3 状态、Prompt 暂不手工替换、回滚路径）。
+- **CloudBase 部署：已完成并远程验证（2026-08-18，用户授权）**：`tcb fn deploy campusflowAdpTools --dir competition/adp-kit/cloudfunctions/campusflowAdpTools --httpFn --path /campusflow-adp-tools --force`（临时 cloudbaserc 追加条目后已还原；未写 envVariables，线上 token 等环境变量保持不变）。远程 `/health` 实测 = **目标值一致**：`status=ok / dataVersion=competition-demo-v3 / dataHash=sha1:842b7959e808 / tools=14 / agentTools=13 / adpContractVersion=R50.0`。**6 个新 façade remote smoke 全部 PASS**（真实 token 仅内存使用，未打印/落盘）：entity_search（5 教师）、academic_context（future_weeks → temporalContext）、common_free_time_query（2 教师共同空闲 8 窗口）、room_utilization_query（1..4 周 top3）、reschedule_feasibility（lesson-001 what-if）、group_plan（2 教师 + 容量 ≥60 → 8 候选），全部 success=true / verified=true / dataVersion=competition-demo-v3。
+- **最终报告**：`r50/2026-08-18-r50.0-final-report.md`（27 项达标清单，见该文件）。
+
+## R49.4.1 状态（历史，2026-08-17）
 
 - **仓库收敛 = READY**（TDD：`test-r49-4-1-prompt-consistency.js` 先红后绿）：4 份 Prompt（main-orchestrator / campus-insight / schedule-space / risk-planning）与 03-HANDOFF / 04-CONTEXT 策略、E2E 矩阵、fixtures、drilldown 测试全部对齐 **source-aware 语义**——教师负载排名真源 = `campus_teacher_load_query`；`rankContext.sourceTool` 如实记录（禁止写死 `campus_overview`）；`campus_overview` 仅承担固定窗口整体态势（不作为任意教师周窗口排名的替代来源）；多周窗口不是有效 risk week（未给周次 → Main 澄清，绝不静默 week=1）；D4 新会话单句链（teacher_load(1,1) → Top1 → schedule week=1）入矩阵与验收模板。
 - **新增增量 OpenAPI**：`r49-ma/tools/openapi/campus-agent-tools.r49.4-existing-plugin-additions.json`（恰 2 operations，与全量 `campus-agent-tools.adp-import.json` 同 server、$ref 自包含、无明文凭据；派生一致性已入 `test-adp-import-openapi.js`）。
