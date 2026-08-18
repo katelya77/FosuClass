@@ -1,10 +1,10 @@
-export type CompetitionDataVersion = "competition-demo-v1" | "competition-demo-v2";
+export type CompetitionDataVersion = "competition-demo-v1" | "competition-demo-v2" | "competition-demo-v3";
 
 // 默认数据版本常量（保留向后兼容，避免破坏旧 import）。
 // 注意：运行时真实数据版本由 loadDataset() 从数据文件 meta.dataVersion 动态取得，
-// 类型层以 CompetitionDataVersion 联合表示 v1/v2，不再把 Evidence/ToolEnvelope 锁死为单一 v1。
+// 类型层以 CompetitionDataVersion 联合表示 v1/v2/v3，不再把 Evidence/ToolEnvelope 锁死为单一版本。
 export const DATA_VERSION: CompetitionDataVersion = "competition-demo-v1";
-export const DATA_VERSIONS: readonly CompetitionDataVersion[] = ["competition-demo-v1", "competition-demo-v2"];
+export const DATA_VERSIONS: readonly CompetitionDataVersion[] = ["competition-demo-v1", "competition-demo-v2", "competition-demo-v3"];
 
 export type EntityType = "class" | "teacher" | "room" | "course" | "campus" | "college" | "user";
 export type ScheduleEntityType = Extract<EntityType, "class" | "teacher" | "room" | "course">;
