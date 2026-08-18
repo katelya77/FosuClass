@@ -2,7 +2,7 @@
   "name": "campus-tools-mcp",
   "version": "1.0.0",
   "private": true,
-  "description": "校园智序 · 小序 —— 确定性校园工具服务（MCP Streamable HTTP + SSE 兼容 + REST，只读匿名演示数据 competition-demo）",
+  "description": "校园智序 · 小序 —— 确定性校园工具服务（MCP Streamable HTTP + SSE 兼容 + REST，只读匿名演示数据 competition-demo-v1）",
   "main": "src/server.js",
   "types": "dist/contracts.d.ts",
   "scripts": {
