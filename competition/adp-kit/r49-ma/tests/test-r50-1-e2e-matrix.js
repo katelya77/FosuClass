@@ -220,7 +220,9 @@ test("G1 self（单对象） + G2 显式 compare + G3 赶场", async () => {
 });
 
 // ---------- H Reschedule ----------
-test("H1 调课模拟：可行/冲突均返回判断且绝不修改数据", async () => {
+// H1 = Protocol Smoke（协议冒烟）：允许使用 fixture 课程 ID（dataset.lessons[0]），
+//     仅验证确定性 façade 行为；产品级验收见 R50.2A-PRODUCT-E2E-MATRIX.md（P-RESCHEDULE）。
+test("H1 [protocol-smoke] 调课模拟：可行/冲突均返回判断且绝不修改数据", async () => {
   const lesson = dataset.lessons[0];
   const r = await call("campus_reschedule_feasibility", {
     sourceLessonId: lesson.id,
@@ -230,6 +232,31 @@ test("H1 调课模拟：可行/冲突均返回判断且绝不修改数据", asyn
   const sum = r.body.summary || {};
   assert.ok("feasible" in sum || "conflicts" in sum || "checks" in sum, "H1 返回可行性判断结构");
   assert.ok(r.body.actions === undefined || r.body.actions.length === 0, "H1 不得包含任何写操作 action");
+});
+
+// H2 = Product E2E（产品级用户路径）：冷启动动态发现 → 选课 → 自然调课（不硬编码任何 ID），
+//     且 target 不含 room（可选字段缺省，绝不被假教室查询替代）。
+test("H2 [product-e2e] 动态发现课程后自然调课（省略教室，绝不虚构 room）", async () => {
+  const found = await call("campus_entity_search", { entityType: "teacher", limit: 1 });
+  expectOk(found, "H2a");
+  const teacher = found.body.items[0];
+  assert.ok(teacher, "H2 动态发现教师");
+
+  const sched = await call("campus_schedule_query", { entityType: "teacher", entityName: teacher.name, week: 1 });
+  expectOk(sched, "H2b");
+  assert.ok(Array.isArray(sched.body.items) && sched.body.items.length >= 1, "H2 该教师第1周有课");
+  const lesson = sched.body.items[0];
+  assert.ok(lesson.lessonId, "H2 课表条目携带 lessonId（自然调课引用）");
+
+  const r = await call("campus_reschedule_feasibility", {
+    sourceLessonId: lesson.lessonId,
+    target: { week: 2, weekday: 5, periodStart: 7, periodEnd: 8 },
+  });
+  expectOk(r, "H2c");
+  assert.ok(r.body.requested === undefined || !r.body.requested || !("room" in (r.body.requested || {})), "H2 未指定教室时请求不得虚构 room 字段");
+  const sum = r.body.summary || {};
+  assert.ok("feasible" in sum || "conflicts" in sum || "checks" in sum, "H2 返回可行性判断结构");
+  assert.ok(r.body.actions === undefined || r.body.actions.length === 0, "H2 绝不产生写操作");
 });
 
 // ---------- I Insight Ranking ----------
