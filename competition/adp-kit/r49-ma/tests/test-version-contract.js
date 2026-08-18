@@ -11,11 +11,14 @@ const MCP_SRC = path.join(__dirname, "..", "..", "mcp", "campus-tools-mcp", "src
 const CONTRACTS = fs.readFileSync(path.join(MCP_SRC, "contracts.ts"), "utf8");
 const TOOLS = fs.readFileSync(path.join(MCP_SRC, "tools.js"), "utf8");
 
-test("DATA_VERSION 契约支持 v1/v2 联合（不再锁死 v1）", () => {
-  assert.match(CONTRACTS, /export type CompetitionDataVersion = "competition-demo-v1" \| "competition-demo-v2";/);
+test("DATA_VERSION 契约支持 v1/v2/v3 联合（不再锁死 v1）", () => {
   assert.match(
     CONTRACTS,
-    /DATA_VERSIONS: readonly CompetitionDataVersion\[\] = \["competition-demo-v1", "competition-demo-v2"\]/,
+    /export type CompetitionDataVersion = "competition-demo-v1" \| "competition-demo-v2" \| "competition-demo-v3";/,
+  );
+  assert.match(
+    CONTRACTS,
+    /DATA_VERSIONS: readonly CompetitionDataVersion\[\] = \["competition-demo-v1", "competition-demo-v2", "competition-demo-v3"\]/,
   );
   assert.ok(
     !/dataVersion: typeof DATA_VERSION/.test(CONTRACTS),

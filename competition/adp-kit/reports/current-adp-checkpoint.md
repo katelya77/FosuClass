@@ -1,8 +1,25 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-18 +08:00（R50.1 收尾）
+更新时间：2026-08-18 +08:00（R50.1.1 收尾）
 
-当前阶段：`CampusFlow ADP R50.1 / Prompt Convergence + 13-Tool Console Cutover + Generic E2E`（仓库收敛完成、3 commits 已 push、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1 节）
+当前阶段：`CampusFlow ADP R50.1.1 / Console Contract Consistency 热修复`（远程 19 commits 已 fast-forward 落地并本地验证、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1.1 节）
+
+## R50.1.1 状态（收尾，2026-08-18）
+
+- **范围**：修复 R50.1-ADP-CONSOLE-CUTOVER §3 绑定表漂移（根因 A：Prompt/测试从未错，文档手工表错：Schedule 缺 academic_context、错含 reschedule_feasibility；Risk 错含 schedule_query/entity_search；假声明「每个 Agent Tool 恰好出现一次」）+ contracts.ts 类型契约滞后（根因 B：v1|v2 不含 v3）。修复仅动控制面文档 + 类型契约 + 锁契约测试，不触碰 runtime。
+- **HEAD Semantics**：`implementationBase=19da961`／`initialHead=verificationHead=d462031`（fast-forward，与 ChatGPT 确认 HEAD 一致）／`reportCommit=intentionally omitted / self-referential`。
+- **规范绑定表（13 unique / 14 bindings）**：Main=0（仅 KnowledgeRetrievalAnswer + Agent 转移）；Schedule 7 = schedule_query / schedule_range_query / classroom_search / entity_search / academic_context / common_free_time_query / group_plan；Risk 4 = risk_check / day_plan / academic_context / reschedule_feasibility；Insight 3 = overview / teacher_load_query / room_utilization_query。`campus_academic_context` 为唯一合法跨域共享（Schedule+Risk），无其它跨域重复。
+- **RED→GREEN 证据**：PRE-FIX（`git show 19da961` 只读快照 + 复用正式测试解析逻辑的 probe）= **FAIL**（Schedule 行漂移 + 假唯一性声明 + 缺 14 绑定陈述）；POST-FIX（HEAD）= **PASS**。
+- **R50.1.1 回归门 = 3/3 PASS**：`test-r50-1-1-console-contract-consistency.js`（CUTOVER + ACCEPTANCE 绑定表 = 规范映射，顺序敏感）。
+- **v3 类型契约**：`contracts.ts` `CompetitionDataVersion = v1|v2|v3`、`DATA_VERSIONS=[v1,v2,v3]`、`DATA_VERSION` 默认保持 `competition-demo-v1`（runtime 由 `loadDataset()` meta.dataVersion 决定）；`test/data-version-contract.test.js` 纳入 mcp `npm test` 门（52/52）。
+- **全量回归 = 全绿（262/262 修正后）**：r49-ma 全套 **262/262**（首跑 261/262 —— ChatGPT 9f7738f 引入真实回归：`test-version-contract.js` 仍断言 v1|v2 → 本轮修复为 v1/v2/v3 联合断言，重跑全绿）；mcp **52/52 + check（tsc 无错）+ check:openapi（14 工具）**；golden **33/33**（v1、sha1:fefef4bf425b、verified=100%）；sync --check **11 files**；test-http **PASS**；compiler --check **4 files**；顶层 `npm test --prefix adp-kit` 全链 PASS，唯一基线失败 = `sync-assets-manifest --check`（B 类 pre-existing：manifest 自 R49 未同步，19da961..HEAD 对 manifest/submission-package 零改动；证据保留不静默吞）。
+- **submission-package 审计**：生成器 `build-submission-package.js` 已运行（build 57 files PASS + validate findings=0 + SHA256SUMS 自洽），产物 diff（+2054 行）全部为 R49/R50 时代 pre-existing 快照漂移（`git diff 19da961..HEAD -- submission-package` = 空），已 `git checkout` 还原；评审包锚定 v1，v3 类型声明不改变评审包行为，R50.1.1 无需进包。
+- **4 个 final Prompt 未修改**：`git diff 19da961..HEAD -- r50.1/prompts` = 空；`r50.1/` 目录仅 CUTOVER + ACCEPTANCE 两文档变更。
+- **CI（PR #49 @ d462031）= 5/5 SUCCESS**：Xiaofu Agent CI（agent-release-gate）、Competition ADP Widget CI（widget-contract）、Public Security Gate ×2、Admin CI（admin-checks）；push 后对新 HEAD 重跑。
+- **最终报告**：`r50.1/2026-08-18-r50.1.1-final-report.md`（§3 规范绑定表 + RED/GREEN 证据 + B 类基线分类 + HEAD 语义）。
+- **判定**：`R50.1.1 REPO GOLDEN`（repo + CI 全绿，唯一失败项为已分类 B 类基线）；**Console GOLDEN 未宣布**——待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行 D1~D6（Agent Cutover 按规范绑定表 + 4 个 final Prompt 粘贴）。
+- **待办（用户动作）**：D1~D6 真机验收；R50.2（Widget 等）未启动。
+
 
 ## R50.1 状态（本机收敛中，2026-08-18）
 
