@@ -171,3 +171,39 @@ test("R50-P10 高级设置行保留（域 Prompt）", () => {
   assert.match(MAIN, /clarification=ON/, "Main 必须保留 clarification=ON（唯一澄清出口）");
   assert.doesNotMatch(SCHEDULE + RISK + INSIGHT, /clarification=ON/, "子 Agent 必须 clarification=OFF（不得直接追问用户）");
 });
+
+test("R50.2A-P1 编译产物无 TS / 实现细节代码块", () => {
+  for (const [file, content] of Object.entries(COMPILED)) {
+    assert.doesNotMatch(content, /```\s*(ts|typescript|tsx)/, `${file} 不得包含 TS 代码块（实现细节不属于 LLM 语义契约）`);
+    assert.doesNotMatch(content, /\binterface\s+\w+|:\s*string\s*[,\n}]/, `${file} 不得包含类型注解（interface / : string 等）`);
+  }
+});
+
+test("R50.2A-P2 编译产物不含实现模块名（temporal-core.js / ranking-core.js / query_entity_search）", () => {
+  for (const [file, content] of Object.entries(COMPILED)) {
+    assert.doesNotMatch(content, /temporal-core\.js|ranking-core\.js|query_entity_search/, `${file} 不得泄漏实现模块名（改为语义名称：Temporal/Ranking Semantic Core、campus_entity_search）`);
+  }
+});
+
+test("R50.2A-P3 必填 vs 可选澄清边界（core-safety 承载）", () => {
+  const safety = read("agents/shared/core-safety.md");
+  assert.match(safety, /必填[\s\S]{0,120}(NEED_CLARIFICATION|澄清)/, "core-safety 必须声明只有必填缺失才澄清");
+  assert.match(safety, /可选[\s\S]{0,120}(不澄清|不虚构|不补默认)/, "core-safety 必须声明可选空缺不澄清 / 不虚构 / 不补默认");
+  for (const [file, content] of Object.entries(COMPILED)) {
+    assert.match(content, /必填/, `${file} 编译产物必须包含必填澄清边界`);
+  }
+});
+
+test("R50.2A-P4 汇总允许 / 新增禁止（output-policy 承载）", () => {
+  const output = read("agents/shared/output-policy.md");
+  assert.match(output, /汇总[\s\S]{0,120}(新增|虚构)/, "output-policy 必须声明：可汇总工具返回数值，绝不新增未返回的动态事实");
+});
+
+test("R50.2A-P5 域 Prompt 收敛结构（角色边界 / 目标→工具 / 输出边界）", () => {
+  for (const [name, text] of [["SCHEDULE", SCHEDULE], ["RISK", RISK], ["INSIGHT", INSIGHT]]) {
+    assert.match(text, /Does-not-own|不负责/, `${name} 必须声明边界（does-not-own）`);
+    assert.match(text, /目标\s*→\s*工具|工具选择/, `${name} 必须保留目标→工具映射结构`);
+    assert.match(text, /输出边界/, `${name} 必须保留输出边界（内部协议不默认展示）`);
+  }
+  assert.match(MAIN, /Does-not-own|不直接执行/, "Main 必须声明不直接执行 CampusTools（纯 Orchestrator 边界）");
+});

@@ -23,7 +23,8 @@
 
 ## 3. 失败关闭（Fail Closed）
 
-- 关键参数缺失 → 返回 NEED_CLARIFICATION（交给主协调，作为唯一澄清出口），**绝不猜测默认值**（尤其不得静默默认 week=1）。
+- **必填**参数 truly missing / ambiguous → 返回 NEED_CLARIFICATION（交给主协调，作为唯一澄清出口），**绝不猜测默认值**（尤其不得静默默认 week=1）。
+- **可选**字段空缺（未提及 / 省略 / 空值）→ 不澄清、不虚构、不补默认：按契约原样缺省传递，仅在用户显式给出时透传（见 intent-policy 目标族与各域工具原则）。
 - 非法输入、未知实体、越界周次、反向窗口 → 受控失败（INVALID_PARAM / ENTITY_NOT_FOUND / WEEK_OUT_OF_RANGE），不模糊匹配、不补造。
 - 任何「0 值语义」按 R49.2 契约：weekday / periodStart / periodEnd = 0 视为未指定，不当作真实节次参与过滤。
 

@@ -1,6 +1,6 @@
 # Shared Policy · Temporal Policy（R50.1）
 
-所有时间解析由 **Temporal Semantic Core（temporal-core.js）** 确定性计算；Agent 只输出结构化 temporal intent，不得用 Prompt 猜测日期 / 教学周 / 窗口。
+所有时间解析由 **Temporal Semantic Core** 确定性计算；Agent 只输出结构化 temporal intent，不得用 Prompt 猜测日期 / 教学周 / 窗口。
 
 ## 1. 「未来 / 接下来 N 个教学周」唯一契约
 
@@ -20,22 +20,8 @@
 - 未显式给出时间窗口的排名下钻：只继承选中实体与 detailWindow（多周）或显式单周；**没有有效单周/日期参数时不得静默默认 week=1**。
 - overview 的聚合窗口计数（overviewWindow.count）**绝不是**教学周参数，不得继承为 week。
 
-## 4. temporalContext 输出契约（内部协议）
+## 4. temporalContext（内部协议，不默认展示）
 
-```ts
-{
-  referenceDate: string,
-  semesterId: string,
-  inSemester: boolean,
-  currentAcademicWeek: number | null,
-  resolvedDate: string | null,
-  resolvedWeek: number | null,
-  resolvedWeekStart: number | null,
-  resolvedWeekEnd: number | null,
-  resolutionKind: string,   // absolute | relative_day | ... | pre_semester | post_semester | none
-  note?: string
-}
-```
-
-- temporalContext 原始 JSON 属于内部协议，**不得默认展示给用户**；用户看到的只是解析后的业务结果。
+- temporalContext 是语义核心返回的内部字段集（referenceDate / semesterId / inSemester / currentAcademicWeek / resolvedDate / resolvedWeek / resolvedWeekStart / resolvedWeekEnd / resolutionKind / note），供域 Agent 编排与跨域继承使用。
+- 原始 JSON 属于内部协议，**不得默认展示给用户**；用户看到的只是解析后的业务结果。
 - 非法 intent → fail-closed（不猜测）；语义核心对同一输入重复调用字节级一致。

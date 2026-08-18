@@ -2,18 +2,8 @@
 
 ## 1. 通用 Context 模型（内部协议）
 
-```ts
-context = {
-  intentContext,      // 本轮结构化意图（turnType + intent kind + 业务域）
-  entityContext,      // 当前明确/继承实体（activeEntity + candidates）
-  temporalContext,    // 由 Temporal Semantic Core 解析（见 temporal-policy）
-  rankingContext,     // 仅当本轮/历史真正产生排序结果时存在
-  comparisonContext,  // 仅显式比较任务需要
-  taskContext,        // 复合请求未完成子任务跟踪
-}
-```
-
-- 不新增针对单一 Case 的特殊字段；现有字段保持向后兼容。
+- 本轮结构化上下文由 intentContext / entityContext / temporalContext / rankingContext（仅当本轮或历史真正产生排序结果时存在）/ comparisonContext（仅显式比较任务需要）/ taskContext（复合请求未完成子任务跟踪）组成。
+- 原始 JSON 属于内部协议，不默认展示给用户；不新增针对单一 Case 的特殊字段，现有字段保持向后兼容。
 
 ## 2. 继承规则
 
@@ -32,13 +22,6 @@ context = {
 
 ## 4. 窗口上下文（内部协议）
 
-```ts
-windowContext = {
-  rankingWindow: { weekStart, weekEnd } | null,  // 排名/聚合窗口
-  detailWindow:  { weekStart, weekEnd } | null,  // 下钻窗口（继承或显式收窄）
-  academicWeek:  1..20 | null,                   // 显式单周（仅用户明确指定时写入）
-}
-```
-
+- windowContext 承载 rankingWindow（排名 / 聚合窗口）、detailWindow（下钻窗口，继承或显式收窄）、academicWeek（显式单周，仅用户明确指定时写入）。
 - 多周窗口（weekStart < weekEnd）→ 使用范围类工具（逐周展开）；单周（1..1）→ 使用单周工具 fresh 调用。
 - overviewWindow.count **绝不等于** academicWeek；聚合计数不得继承为教学周参数。

@@ -1,6 +1,6 @@
 # Shared Policy · Ranking Policy（R50.1）
 
-排名由 **Ranking Semantic Core（ranking-core.js）** 确定性计算；所有「最高 / 最忙 / 利用率最高 / TopN / 第一名」类问题走本策略。
+排名由 **Ranking Semantic Core** 确定性计算；所有「最高 / 最忙 / 利用率最高 / TopN / 第一名」类问题走本策略。
 
 ## 1. metric 语义 vs position 语义
 
@@ -22,18 +22,7 @@
 - `campus_overview` 只承担固定窗口整体态势，不作为任意教师周窗口排名的替代来源。
 - 通用排名实体：room / building / campus 等复用同一 Ranking Core 模型。
 
-## 4. RankingResult 结构（内部协议）
+## 4. RankingResult（内部协议，不默认展示）
 
-```ts
-{
-  rank: number,            // 1-based 位置（position 语义）
-  metricRank: number | null, // 业务指标并列组内排序
-  tiedWithPrevious: boolean,
-  tieGroupId: string | null,
-  tieGroupSize: number,
-  entity: { id, name, type },
-  metrics: Record<string, number | string>,
-}
-```
-
+- 排名结果条目包含 rank（1-based 稳定位置）、metricRank（业务指标并列组内排序）、tiedWithPrevious / tieGroupId / tieGroupSize（并列元数据）、entity（id / name / type）、metrics。
 - rankContext 只在与下游真正相关时传递（下钻实体、selectedRank、窗口）；原始 JSON 不默认展示给用户。

@@ -2,7 +2,7 @@
 
 ## 1. 实体解析确定性
 
-- 实体（教师 / 班级 / 教室 / 课程 / 校区 / 楼栋）解析由 `campus_entity_search`（→ `query_entity_search`）或各工具自身的 resolve 层确定性完成。
+- 实体（教师 / 班级 / 教室 / 课程 / 校区 / 楼栋）解析由 `campus_entity_search` 或各工具自身的 resolve 层确定性完成。
 - **禁止** Agent 编造、猜测或凭记忆拼写实体 id / 名称；实体名一律取自工具返回的 resolvedEntity / items。
 - 口语归一化（如「教师1」→ 规范化编号）由解析层完成，Agent 不自行实现命名规则。
 
