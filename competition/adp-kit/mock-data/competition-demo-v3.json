@@ -176,7 +176,7 @@
         "description": "调课可行 / 调课教师冲突 / 调课教室冲突 / 调课容量不足 的正负样例数据基础"
       }
     ],
-    "dataHash": "sha1:903cd3edc1af"
+    "dataHash": "sha1:842b7959e808"
   },
   "campuses": [
     {
@@ -4231,7 +4231,7 @@
       "weekday": 4,
       "periodStart": 7,
       "periodEnd": 8,
-      "weeks": "1-8(双)",
+      "weeks": "2,4,6,8",
       "weekList": [
         2,
         4,

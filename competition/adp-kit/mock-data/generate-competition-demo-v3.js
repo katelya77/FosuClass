@@ -494,7 +494,7 @@ const LESSON_TABLE = [
   { course: "course-067", teacher: "teacher-039", cls: "class-phy-01", room: "room-a-602", weekday: 2, ps: 7, pe: 8, weeks: "1-16" }, // 大学体育
   { course: "course-020", teacher: "teacher-013", cls: "class-phy-01", weekday: 2, ps: 1, pe: 2, weeks: "1-16" }, // 概率统计
   { course: "course-028", teacher: "teacher-018", cls: "class-phy-01", weekday: 5, ps: 1, pe: 2, weeks: "1-8" }, // 学术写作
-  { course: "course-022", teacher: "teacher-011", cls: "class-phy-01", room: "room-a-303", weekday: 4, ps: 7, pe: 8, weeks: "1-8(双)" }, // 物理实验
+  { course: "course-022", teacher: "teacher-011", cls: "class-phy-01", room: "room-a-303", weekday: 4, ps: 7, pe: 8, weeks: "2,4,6,8" }, // 物理实验（g18 枚举周次，与 1-8(双) 等价）
   // ---- class-chem-01 ----
   { course: "course-023", teacher: "teacher-014", cls: "class-chem-01", weekday: 1, ps: 1, pe: 2, weeks: "1-16" }, // 化学原理
   { course: "course-024", teacher: "teacher-014", cls: "class-chem-01", room: "room-a-304", weekday: 3, ps: 3, pe: 6, weeks: "1-16(单)" }, // 无机化学实验（g06 连续4节）
@@ -704,6 +704,8 @@ const coursesById = Object.fromEntries(COURSES.map((c) => [c.id, c]));
 const roomsById = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
 
 function resolveRooms() {
+  // 幂等：清空历史占用，保证重复调用结果确定性（byte-stable）
+  for (const k of Object.keys(ROOM_OCCUPANCY)) delete ROOM_OCCUPANCY[k];
   // 第一遍：钉死教室
   for (const t of LESSON_TABLE) {
     if (!t.room) continue;
@@ -841,4 +843,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { expandWeeks, buildLessons, buildDataset, findConflicts, EXPECTED_CONFLICT_KEYS };
+module.exports = { expandWeeks, resolveRooms, buildLessons, buildDataset, findConflicts, EXPECTED_CONFLICT_KEYS };
