@@ -4,6 +4,16 @@
 
 当前阶段：`CampusFlow ADP R50.0 / Semantic Core + 13 Agent Tools`（仓库收敛 + **CloudBase 部署与远程验证均已完成**：远程 `/health` 实测 = tools=14 / agentTools=13 / adpContractVersion=R50.0 / dataVersion=competition-demo-v3，见下方 R50.0 节）
 
+## R50.1 状态（本机收敛中，2026-08-18）
+
+- **范围**：Agent Prompt Convergence + 13-Tool ADP Console Cutover + Generic E2E（PR #49 保持 OPEN / UNMERGED；**本轮不部署 CloudBase**）。
+- **§1.3 HEAD Semantics**：`implementationHead=9db8447`（T3~T7 代码实现）／`currentBranchHead=989cbe5`（R50.0 最终）／`reportCommit=989cbe5`（R50.1 收尾提交后回填）。
+- **Prompt 收敛门禁 = 19/19 PASS**：`test-r50-prompt-architecture.js` P1~P10 + `test-r50-1-prompt-convergence.js` R51-P1~P9（branding 统一 校园智序·小序、去案例化第二轮、model= 硬编码删除并冻结 DeepSeek V4 Flash 为 Console Baseline、Paste Pack 纯净度、final.md 与编译器导出字节一致）。
+- **Generic E2E Matrix = 14/14 PASS**：`test-r50-1-e2e-matrix.js`（A 实体搜索 / B Temporal Context / C 课表 / D 空教室 / E 共同空闲 / F 群体计划 / G 风险 / H 调课模拟 / I 排名 / J 跨域组合 / K-L Context Model），V3 数据动态发现实体，表驱动 + 语义断言。
+- **R50 全测试组 = 55/55 PASS**（P/R51/E2E/R50-1~6/CTX-01~07/ADP smoke 8）。
+- **Paste Pack（Prompt 部分）已生成**：`competition/adp-kit/r50.1/prompts/*.final.md`（main-orchestrator / schedule-space / risk-planning / campus-insight，编译器 `--export-final` 导出，与 `--print-final` 字节一致；长度 11377/9920/9778/9949）。
+- **待办**：Paste Pack 配套文档（CUTOVER / E2E-MATRIX / PROMPT-PASTE-GUIDE / RUNTIME-CONFIG / TOOL-MODEL-VISIBILITY / CONSOLE-ACCEPTANCE）、新 6 工具参数可见性表（OpenAPI 真源）、全量回归、最终 23 项报告、分阶段 commit/push。
+
 ## R50.0 状态（本轮，2026-08-18）
 
 - **Coze agent T3~T7 已审计落地（5 commits，HEAD=9db8447）**：Semantic Core（temporal-core.js / ranking-core.js / context-model.js）、6 个新 CampusTools（TOOL_DEFS 15、Agent Tool Façade 13、`ADP_CONTRACT_VERSION=R50.0`）、competition-demo-v3 数据集（生成器/schema/validator）、OpenAPI 全量 13 ops + r50 delta 恰 6 ops（$ref 自包含、无凭据）、CloudBase V3 runtime cutover（index.js 默认 v3；sync 脚本 RUNTIME_FILES 8 + DATA_FILES v1/v2/v3）。**T8a/T8b/T8c/T9 已提交（HEAD=939c990，2026-08-18，用户授权 push，PR #49 保持 OPEN）**。
