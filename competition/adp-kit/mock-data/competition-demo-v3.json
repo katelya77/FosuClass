@@ -1,0 +1,8425 @@
+{
+  "meta": {
+    "dataVersion": "competition-demo-v3",
+    "schema": "campus-demo/v3",
+    "timezone": "Asia/Shanghai",
+    "demoReferenceDate": "2026-08-31",
+    "generatedBy": "competition/adp-kit/mock-data/generate-competition-demo-v3.js",
+    "anonymization": "本数据集全部为虚构匿名演示数据，不对应任何真实学校、学院、教师、学生、用户与团队身份。",
+    "semester": {
+      "id": "2026-2027-1",
+      "name": "2026-2027学年第一学期",
+      "startDate": "2026-08-31",
+      "endDate": "2027-01-17",
+      "totalWeeks": 20
+    },
+    "periods": [
+      {
+        "period": 1,
+        "start": "08:00",
+        "end": "08:45"
+      },
+      {
+        "period": 2,
+        "start": "08:55",
+        "end": "09:40"
+      },
+      {
+        "period": 3,
+        "start": "10:00",
+        "end": "10:45"
+      },
+      {
+        "period": 4,
+        "start": "10:55",
+        "end": "11:40"
+      },
+      {
+        "period": 5,
+        "start": "14:00",
+        "end": "14:45"
+      },
+      {
+        "period": 6,
+        "start": "14:55",
+        "end": "15:40"
+      },
+      {
+        "period": 7,
+        "start": "16:00",
+        "end": "16:45"
+      },
+      {
+        "period": 8,
+        "start": "16:55",
+        "end": "17:40"
+      },
+      {
+        "period": 9,
+        "start": "19:00",
+        "end": "19:45"
+      },
+      {
+        "period": 10,
+        "start": "19:55",
+        "end": "20:40"
+      }
+    ],
+    "weekdayNames": [
+      "周一",
+      "周二",
+      "周三",
+      "周四",
+      "周五",
+      "周六",
+      "周日"
+    ],
+    "designedScenarios": [
+      {
+        "id": "g01",
+        "name": "single-teacher-conflict",
+        "description": "teacher-012 周二5-6 同时上计算思维与信息素养（单教师硬冲突）"
+      },
+      {
+        "id": "g02",
+        "name": "class-conflict",
+        "description": "class-life-01 周五5-6 同时上普通生物学与生物实验（班级硬冲突）"
+      },
+      {
+        "id": "g03",
+        "name": "room-conflict",
+        "description": "room-a-101 周四5-6 同时容纳统计学与电路基础（教室硬冲突）"
+      },
+      {
+        "id": "g04",
+        "name": "cross-campus-rush-20min",
+        "description": "teacher-003 周一 5-6@校区A 数据结构 → 7-8@校区B 程序设计（A→B=20分钟赶场）"
+      },
+      {
+        "id": "g05",
+        "name": "cross-campus-enough-gap",
+        "description": "teacher-030 周三 5-6@校区C 市场分析 → 7-8@校区D 电子商务（C→D=10分钟，间隔20分钟非风险）"
+      },
+      {
+        "id": "g06",
+        "name": "consecutive-4-periods-lab",
+        "description": "chem-01 无机化学实验 周三3-6 连续4节实验"
+      },
+      {
+        "id": "g07",
+        "name": "high-load-teacher",
+        "description": "teacher-039 承担 8 条体育课（高负载教师）"
+      },
+      {
+        "id": "g08",
+        "name": "low-load-teacher",
+        "description": "teacher-038 仅承担 1 条教学实习（低负载教师）"
+      },
+      {
+        "id": "g09",
+        "name": "high-utilization-room",
+        "description": "room-a-101 同一 slot 两条且多 slot 复用（高利用率教室）"
+      },
+      {
+        "id": "g10",
+        "name": "low-utilization-room",
+        "description": "存在课时数<=2 的教室（低利用率教室样例）"
+      },
+      {
+        "id": "g11",
+        "name": "multi-teacher-common-free",
+        "description": "teacher-005/teacher-006/teacher-014 周四上午均空闲（共同空闲阳性）"
+      },
+      {
+        "id": "g12",
+        "name": "no-common-free",
+        "description": "teacher-012/teacher-013 周四下午 5-6 与 7-8 互相占满（无共同空闲）"
+      },
+      {
+        "id": "g13",
+        "name": "capacity-tiered",
+        "description": "60/100/120 容量教室 + 38~120 班级规模分级筛选"
+      },
+      {
+        "id": "g14",
+        "name": "feature-match",
+        "description": "课程 requiredFeatures 与教室 features 一致；reschedule_feasibility 可构造不匹配样例"
+      },
+      {
+        "id": "g15",
+        "name": "evening-course",
+        "description": "biz-01 电子商务 周五9-10 晚间课"
+      },
+      {
+        "id": "g16",
+        "name": "weekend-course",
+        "description": "bio-01 生物信息学 周六1-2 周末课"
+      },
+      {
+        "id": "g17",
+        "name": "odd-even-weeks",
+        "description": "单/双周交替课程（如 1-16(单)、1-8(双)）"
+      },
+      {
+        "id": "g18",
+        "name": "irregular-cross-week",
+        "description": "psych-01 研讨课 1-4,7-10 周跨周不规则"
+      },
+      {
+        "id": "g19",
+        "name": "group-plan-candidates",
+        "description": "共同空闲+空教室+容量+设备需求 的 group_plan 多候选/无候选资源"
+      },
+      {
+        "id": "g20",
+        "name": "reschedule-feasibility",
+        "description": "调课可行 / 调课教师冲突 / 调课教室冲突 / 调课容量不足 的正负样例数据基础"
+      }
+    ],
+    "dataHash": "sha1:903cd3edc1af"
+  },
+  "campuses": [
+    {
+      "id": "campus-a",
+      "name": "校区A",
+      "buildings": [
+        "A综合教学楼",
+        "A公共教学楼",
+        "A基础实验楼",
+        "A工程实践楼",
+        "A创新中心",
+        "A体育场馆"
+      ]
+    },
+    {
+      "id": "campus-b",
+      "name": "校区B",
+      "buildings": [
+        "B综合教学楼",
+        "B公共教学楼",
+        "B基础实验楼",
+        "B工程实践楼",
+        "B创新中心",
+        "B体育场馆"
+      ]
+    },
+    {
+      "id": "campus-c",
+      "name": "校区C",
+      "buildings": [
+        "C综合教学楼",
+        "C公共教学楼",
+        "C基础实验楼",
+        "C工程实践楼",
+        "C创新中心",
+        "C体育场馆"
+      ]
+    },
+    {
+      "id": "campus-d",
+      "name": "校区D",
+      "buildings": [
+        "D综合教学楼",
+        "D公共教学楼",
+        "D基础实验楼",
+        "D工程实践楼",
+        "D创新中心",
+        "D体育场馆"
+      ]
+    }
+  ],
+  "campusTravelMatrix": {
+    "unit": "minutes",
+    "matrix": {
+      "campus-a": {
+        "campus-b": 20,
+        "campus-c": 30,
+        "campus-d": 45
+      },
+      "campus-b": {
+        "campus-a": 20,
+        "campus-c": 12,
+        "campus-d": 28
+      },
+      "campus-c": {
+        "campus-a": 30,
+        "campus-b": 12,
+        "campus-d": 10
+      },
+      "campus-d": {
+        "campus-a": 45,
+        "campus-b": 28,
+        "campus-c": 10
+      }
+    }
+  },
+  "colleges": [
+    {
+      "id": "college-cs",
+      "name": "工程与计算类"
+    },
+    {
+      "id": "college-sci",
+      "name": "基础科学类"
+    },
+    {
+      "id": "college-life",
+      "name": "生命与环境类"
+    },
+    {
+      "id": "college-hum",
+      "name": "人文与设计类"
+    },
+    {
+      "id": "college-bus",
+      "name": "经管与公共类"
+    },
+    {
+      "id": "college-edu",
+      "name": "教育与体育类"
+    }
+  ],
+  "classes": [
+    {
+      "id": "class-cs-01",
+      "name": "2025级计算机类01班",
+      "collegeId": "college-cs",
+      "campusId": "campus-a",
+      "size": 120
+    },
+    {
+      "id": "class-cs-02",
+      "name": "2025级计算机类02班",
+      "collegeId": "college-cs",
+      "campusId": "campus-a",
+      "size": 56
+    },
+    {
+      "id": "class-sw-01",
+      "name": "2025级软件类01班",
+      "collegeId": "college-cs",
+      "campusId": "campus-a",
+      "size": 48
+    },
+    {
+      "id": "class-me-01",
+      "name": "2024级机械类01班",
+      "collegeId": "college-cs",
+      "campusId": "campus-a",
+      "size": 48
+    },
+    {
+      "id": "class-math-01",
+      "name": "2025级数学类01班",
+      "collegeId": "college-sci",
+      "campusId": "campus-a",
+      "size": 52
+    },
+    {
+      "id": "class-phy-01",
+      "name": "2025级物理类01班",
+      "collegeId": "college-sci",
+      "campusId": "campus-a",
+      "size": 46
+    },
+    {
+      "id": "class-chem-01",
+      "name": "2025级化学类01班",
+      "collegeId": "college-sci",
+      "campusId": "campus-a",
+      "size": 48
+    },
+    {
+      "id": "class-stat-01",
+      "name": "2024级统计类01班",
+      "collegeId": "college-sci",
+      "campusId": "campus-a",
+      "size": 46
+    },
+    {
+      "id": "class-chi-01",
+      "name": "2025级中文类01班",
+      "collegeId": "college-hum",
+      "campusId": "campus-b",
+      "size": 55
+    },
+    {
+      "id": "class-jour-01",
+      "name": "2025级传播类01班",
+      "collegeId": "college-hum",
+      "campusId": "campus-b",
+      "size": 44
+    },
+    {
+      "id": "class-design-01",
+      "name": "2025级设计类01班",
+      "collegeId": "college-hum",
+      "campusId": "campus-b",
+      "size": 44
+    },
+    {
+      "id": "class-hist-01",
+      "name": "2024级历史类01班",
+      "collegeId": "college-hum",
+      "campusId": "campus-b",
+      "size": 44
+    },
+    {
+      "id": "class-biz-01",
+      "name": "2025级经管类01班",
+      "collegeId": "college-bus",
+      "campusId": "campus-b",
+      "size": 90
+    },
+    {
+      "id": "class-econ-01",
+      "name": "2025级经济类01班",
+      "collegeId": "college-bus",
+      "campusId": "campus-b",
+      "size": 48
+    },
+    {
+      "id": "class-acct-01",
+      "name": "2025级会计类01班",
+      "collegeId": "college-bus",
+      "campusId": "campus-b",
+      "size": 45
+    },
+    {
+      "id": "class-pub-01",
+      "name": "2024级公共类01班",
+      "collegeId": "college-bus",
+      "campusId": "campus-b",
+      "size": 44
+    },
+    {
+      "id": "class-life-01",
+      "name": "2025级生命科学类01班",
+      "collegeId": "college-life",
+      "campusId": "campus-c",
+      "size": 100
+    },
+    {
+      "id": "class-life-02",
+      "name": "2025级生命科学类02班",
+      "collegeId": "college-life",
+      "campusId": "campus-c",
+      "size": 48
+    },
+    {
+      "id": "class-bio-01",
+      "name": "2025级生物类01班",
+      "collegeId": "college-life",
+      "campusId": "campus-c",
+      "size": 46
+    },
+    {
+      "id": "class-env-01",
+      "name": "2024级环境类01班",
+      "collegeId": "college-life",
+      "campusId": "campus-c",
+      "size": 45
+    },
+    {
+      "id": "class-edu-01",
+      "name": "2025级教育类01班",
+      "collegeId": "college-edu",
+      "campusId": "campus-d",
+      "size": 72
+    },
+    {
+      "id": "class-pe-01",
+      "name": "2025级体育类01班",
+      "collegeId": "college-edu",
+      "campusId": "campus-d",
+      "size": 40
+    },
+    {
+      "id": "class-psych-01",
+      "name": "2025级心理类01班",
+      "collegeId": "college-edu",
+      "campusId": "campus-d",
+      "size": 42
+    },
+    {
+      "id": "class-prim-01",
+      "name": "2024级小学教育类01班",
+      "collegeId": "college-edu",
+      "campusId": "campus-d",
+      "size": 38
+    }
+  ],
+  "teachers": [
+    {
+      "id": "teacher-001",
+      "name": "教师001",
+      "collegeId": "college-sci",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-002",
+      "name": "教师002",
+      "collegeId": "college-sci",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-003",
+      "name": "教师003",
+      "collegeId": "college-cs",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-004",
+      "name": "教师004",
+      "collegeId": "college-cs",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-005",
+      "name": "教师005",
+      "collegeId": "college-sci",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-006",
+      "name": "教师006",
+      "collegeId": "college-cs",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-007",
+      "name": "教师007",
+      "collegeId": "college-cs",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-008",
+      "name": "教师008",
+      "collegeId": "college-cs",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-009",
+      "name": "教师009",
+      "collegeId": "college-cs",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-010",
+      "name": "教师010",
+      "collegeId": "college-cs",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-011",
+      "name": "教师011",
+      "collegeId": "college-sci",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-012",
+      "name": "教师012",
+      "collegeId": "college-sci",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-013",
+      "name": "教师013",
+      "collegeId": "college-sci",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-014",
+      "name": "教师014",
+      "collegeId": "college-sci",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-015",
+      "name": "教师015",
+      "collegeId": "college-hum",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-016",
+      "name": "教师016",
+      "collegeId": "college-hum",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-017",
+      "name": "教师017",
+      "collegeId": "college-hum",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-018",
+      "name": "教师018",
+      "collegeId": "college-hum",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-019",
+      "name": "教师019",
+      "collegeId": "college-life",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-020",
+      "name": "教师020",
+      "collegeId": "college-bus",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-021",
+      "name": "教师021",
+      "collegeId": "college-bus",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-022",
+      "name": "教师022",
+      "collegeId": "college-bus",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-023",
+      "name": "教师023",
+      "collegeId": "college-bus",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-024",
+      "name": "教师024",
+      "collegeId": "college-bus",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-025",
+      "name": "教师025",
+      "collegeId": "college-edu",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-026",
+      "name": "教师026",
+      "collegeId": "college-life",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-027",
+      "name": "教师027",
+      "collegeId": "college-life",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-028",
+      "name": "教师028",
+      "collegeId": "college-life",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-029",
+      "name": "教师029",
+      "collegeId": "college-life",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-030",
+      "name": "教师030",
+      "collegeId": "college-bus",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-031",
+      "name": "教师031",
+      "collegeId": "college-life",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-032",
+      "name": "教师032",
+      "collegeId": "college-edu",
+      "title": "教授"
+    },
+    {
+      "id": "teacher-033",
+      "name": "教师033",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-034",
+      "name": "教师034",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-035",
+      "name": "教师035",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-036",
+      "name": "教师036",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-037",
+      "name": "教师037",
+      "collegeId": "college-edu",
+      "title": "副教授"
+    },
+    {
+      "id": "teacher-038",
+      "name": "教师038",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-039",
+      "name": "教师039",
+      "collegeId": "college-edu",
+      "title": "讲师"
+    },
+    {
+      "id": "teacher-040",
+      "name": "教师040",
+      "collegeId": "college-edu",
+      "title": "副教授"
+    }
+  ],
+  "courses": [
+    {
+      "id": "course-001",
+      "name": "程序设计",
+      "collegeId": "college-cs",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 120
+    },
+    {
+      "id": "course-002",
+      "name": "数据结构",
+      "collegeId": "college-cs",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 120
+    },
+    {
+      "id": "course-003",
+      "name": "数据库原理",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "computer_lab"
+      ],
+      "expectedSize": 56
+    },
+    {
+      "id": "course-004",
+      "name": "操作系统",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 56
+    },
+    {
+      "id": "course-005",
+      "name": "计算机网络",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "computer_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-006",
+      "name": "软件工程导论",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-007",
+      "name": "工程制图",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-008",
+      "name": "机械基础",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-009",
+      "name": "自动控制原理",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-010",
+      "name": "计算思维",
+      "collegeId": "college-cs",
+      "credits": 2,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "computer_lab",
+        "projector"
+      ],
+      "expectedSize": 56
+    },
+    {
+      "id": "course-011",
+      "name": "信息素养",
+      "collegeId": "college-cs",
+      "credits": 2,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "computer_lab",
+        "projector"
+      ],
+      "expectedSize": 52
+    },
+    {
+      "id": "course-012",
+      "name": "电路基础",
+      "collegeId": "college-cs",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-013",
+      "name": "工程实践",
+      "collegeId": "college-cs",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "computer_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-014",
+      "name": "创新训练",
+      "collegeId": "college-cs",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "seminar",
+        "studio"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-015",
+      "name": "数据结构实验",
+      "collegeId": "college-cs",
+      "credits": 1,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "computer_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-016",
+      "name": "程序设计实验",
+      "collegeId": "college-cs",
+      "credits": 1,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "computer_lab"
+      ],
+      "expectedSize": 56
+    },
+    {
+      "id": "course-017",
+      "name": "高等数学A",
+      "collegeId": "college-sci",
+      "credits": 5,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 120
+    },
+    {
+      "id": "course-018",
+      "name": "高等数学B",
+      "collegeId": "college-sci",
+      "credits": 5,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-019",
+      "name": "线性代数",
+      "collegeId": "college-sci",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-020",
+      "name": "概率统计",
+      "collegeId": "college-sci",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-021",
+      "name": "大学物理",
+      "collegeId": "college-sci",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-022",
+      "name": "物理实验",
+      "collegeId": "college-sci",
+      "credits": 1,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab",
+        "projector"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-023",
+      "name": "化学原理",
+      "collegeId": "college-sci",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-024",
+      "name": "无机化学实验",
+      "collegeId": "college-sci",
+      "credits": 2,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-025",
+      "name": "有机化学",
+      "collegeId": "college-sci",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-026",
+      "name": "数学建模",
+      "collegeId": "college-sci",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "computer_lab",
+        "projector"
+      ],
+      "expectedSize": 52
+    },
+    {
+      "id": "course-027",
+      "name": "统计学",
+      "collegeId": "college-sci",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-028",
+      "name": "学术写作",
+      "collegeId": "college-sci",
+      "credits": 2,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-029",
+      "name": "普通生物学",
+      "collegeId": "college-life",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 100
+    },
+    {
+      "id": "course-030",
+      "name": "生物化学",
+      "collegeId": "college-life",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-031",
+      "name": "遗传学基础",
+      "collegeId": "college-life",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-032",
+      "name": "动物生理学",
+      "collegeId": "college-life",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-033",
+      "name": "生态学基础",
+      "collegeId": "college-life",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-034",
+      "name": "实验技能",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-035",
+      "name": "生物实验",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab"
+      ],
+      "expectedSize": 100
+    },
+    {
+      "id": "course-036",
+      "name": "化学实验",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab"
+      ],
+      "expectedSize": 45
+    },
+    {
+      "id": "course-037",
+      "name": "环境工程实验",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实验",
+      "courseType": "lab",
+      "requiredFeatures": [
+        "wet_lab"
+      ],
+      "expectedSize": 45
+    },
+    {
+      "id": "course-038",
+      "name": "环境监测",
+      "collegeId": "college-life",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 45
+    },
+    {
+      "id": "course-039",
+      "name": "微生物学",
+      "collegeId": "college-life",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "wet_lab"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-040",
+      "name": "生物信息学",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "选修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "computer_lab",
+        "projector"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-041",
+      "name": "生态学野外实践",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-042",
+      "name": "毕业设计指导",
+      "collegeId": "college-life",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 40
+    },
+    {
+      "id": "course-043",
+      "name": "现代汉语",
+      "collegeId": "college-hum",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 55
+    },
+    {
+      "id": "course-044",
+      "name": "中国文学",
+      "collegeId": "college-hum",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 55
+    },
+    {
+      "id": "course-045",
+      "name": "传播基础",
+      "collegeId": "college-hum",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 50
+    },
+    {
+      "id": "course-046",
+      "name": "新闻采访与写作",
+      "collegeId": "college-hum",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "recording"
+      ],
+      "expectedSize": 50
+    },
+    {
+      "id": "course-047",
+      "name": "学术阅读",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-048",
+      "name": "视觉传达设计",
+      "collegeId": "college-hum",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "studio",
+        "projector"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-049",
+      "name": "中国历史通论",
+      "collegeId": "college-hum",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-050",
+      "name": "文化创意产业",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "选修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 42
+    },
+    {
+      "id": "course-051",
+      "name": "摄影与摄像",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "studio",
+        "recording"
+      ],
+      "expectedSize": 40
+    },
+    {
+      "id": "course-052",
+      "name": "播音与主持",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "studio",
+        "recording"
+      ],
+      "expectedSize": 40
+    },
+    {
+      "id": "course-053",
+      "name": "设计软件应用",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "computer_lab",
+        "studio"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-054",
+      "name": "媒体伦理",
+      "collegeId": "college-hum",
+      "credits": 2,
+      "category": "选修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 42
+    },
+    {
+      "id": "course-055",
+      "name": "管理学",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-056",
+      "name": "经济学基础",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-057",
+      "name": "市场分析",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-058",
+      "name": "会计学",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 48
+    },
+    {
+      "id": "course-059",
+      "name": "电子商务",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 90
+    },
+    {
+      "id": "course-060",
+      "name": "公共管理",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-061",
+      "name": "金融学基础",
+      "collegeId": "college-bus",
+      "credits": 2,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 45
+    },
+    {
+      "id": "course-062",
+      "name": "商务英语",
+      "collegeId": "college-bus",
+      "credits": 2,
+      "category": "选修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "language_lab",
+        "projector"
+      ],
+      "expectedSize": 40
+    },
+    {
+      "id": "course-063",
+      "name": "市场营销",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-064",
+      "name": "数据分析实务",
+      "collegeId": "college-bus",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "computer_lab"
+      ],
+      "expectedSize": 46
+    },
+    {
+      "id": "course-065",
+      "name": "经济学原理",
+      "collegeId": "college-bus",
+      "credits": 3,
+      "category": "选修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 44
+    },
+    {
+      "id": "course-066",
+      "name": "大学英语",
+      "collegeId": "college-edu",
+      "credits": 4,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 60
+    },
+    {
+      "id": "course-067",
+      "name": "大学体育",
+      "collegeId": "college-edu",
+      "credits": 1,
+      "category": "必修",
+      "courseType": "pe",
+      "requiredFeatures": [
+        "movable_seats"
+      ],
+      "expectedSize": 120
+    },
+    {
+      "id": "course-068",
+      "name": "教育学",
+      "collegeId": "college-edu",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 72
+    },
+    {
+      "id": "course-069",
+      "name": "心理学基础",
+      "collegeId": "college-edu",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 42
+    },
+    {
+      "id": "course-070",
+      "name": "课程设计",
+      "collegeId": "college-edu",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 72
+    },
+    {
+      "id": "course-071",
+      "name": "教学实习",
+      "collegeId": "college-edu",
+      "credits": 2,
+      "category": "实践",
+      "courseType": "practice",
+      "requiredFeatures": [
+        "projector",
+        "smart_board"
+      ],
+      "expectedSize": 72
+    },
+    {
+      "id": "course-072",
+      "name": "研讨课",
+      "collegeId": "college-edu",
+      "credits": 2,
+      "category": "选修",
+      "courseType": "seminar",
+      "requiredFeatures": [
+        "seminar",
+        "movable_seats"
+      ],
+      "expectedSize": 42
+    },
+    {
+      "id": "course-073",
+      "name": "运动生理学",
+      "collegeId": "college-edu",
+      "credits": 3,
+      "category": "必修",
+      "courseType": "lecture",
+      "requiredFeatures": [
+        "projector"
+      ],
+      "expectedSize": 40
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-a-101",
+      "name": "A1-101",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-102",
+      "name": "A1-102",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-103",
+      "name": "A1-103",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-a-104",
+      "name": "A1-104",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "projector",
+        "computer_lab",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-105",
+      "name": "A1-105",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-106",
+      "name": "A1-106",
+      "campusId": "campus-a",
+      "building": "A综合教学楼",
+      "capacity": 80,
+      "type": "机房",
+      "features": [
+        "projector",
+        "computer_lab",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-201",
+      "name": "A1-201",
+      "campusId": "campus-a",
+      "building": "A公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-a-202",
+      "name": "A1-202",
+      "campusId": "campus-a",
+      "building": "A公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-a-203",
+      "name": "A1-203",
+      "campusId": "campus-a",
+      "building": "A公共教学楼",
+      "capacity": 100,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-a-301",
+      "name": "A2-301",
+      "campusId": "campus-a",
+      "building": "A基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-302",
+      "name": "A2-302",
+      "campusId": "campus-a",
+      "building": "A基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-303",
+      "name": "A2-303",
+      "campusId": "campus-a",
+      "building": "A基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-304",
+      "name": "A2-304",
+      "campusId": "campus-a",
+      "building": "A基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-401",
+      "name": "A3-401",
+      "campusId": "campus-a",
+      "building": "A工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-402",
+      "name": "A3-402",
+      "campusId": "campus-a",
+      "building": "A工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-403",
+      "name": "A3-403",
+      "campusId": "campus-a",
+      "building": "A工程实践楼",
+      "capacity": 48,
+      "type": "实验室",
+      "features": [
+        "wet_lab"
+      ]
+    },
+    {
+      "id": "room-a-501",
+      "name": "A4-501",
+      "campusId": "campus-a",
+      "building": "A创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-a-502",
+      "name": "A4-502",
+      "campusId": "campus-a",
+      "building": "A创新中心",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-a-503",
+      "name": "A4-503",
+      "campusId": "campus-a",
+      "building": "A创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-a-601",
+      "name": "A5-601",
+      "campusId": "campus-a",
+      "building": "A体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-a-602",
+      "name": "A5-602",
+      "campusId": "campus-a",
+      "building": "A体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-b-101",
+      "name": "B1-101",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-102",
+      "name": "B1-102",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-103",
+      "name": "B1-103",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-104",
+      "name": "B1-104",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 70,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-105",
+      "name": "B1-105",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 70,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-106",
+      "name": "B1-106",
+      "campusId": "campus-b",
+      "building": "B综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-b-107",
+      "name": "B1-107",
+      "campusId": "campus-b",
+      "building": "B语言实验室",
+      "capacity": 60,
+      "type": "语言实验室",
+      "features": [
+        "language_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-201",
+      "name": "B1-201",
+      "campusId": "campus-b",
+      "building": "B公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-b-202",
+      "name": "B1-202",
+      "campusId": "campus-b",
+      "building": "B公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-b-203",
+      "name": "B1-203",
+      "campusId": "campus-b",
+      "building": "B公共教学楼",
+      "capacity": 100,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-b-301",
+      "name": "B2-301",
+      "campusId": "campus-b",
+      "building": "B基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-302",
+      "name": "B2-302",
+      "campusId": "campus-b",
+      "building": "B基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-303",
+      "name": "B2-303",
+      "campusId": "campus-b",
+      "building": "B基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-304",
+      "name": "B2-304",
+      "campusId": "campus-b",
+      "building": "B基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-401",
+      "name": "B3-401",
+      "campusId": "campus-b",
+      "building": "B工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "studio",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-402",
+      "name": "B3-402",
+      "campusId": "campus-b",
+      "building": "B工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-403",
+      "name": "B3-403",
+      "campusId": "campus-b",
+      "building": "B工程实践楼",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-b-501",
+      "name": "B4-501",
+      "campusId": "campus-b",
+      "building": "B创新中心",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-502",
+      "name": "B4-502",
+      "campusId": "campus-b",
+      "building": "B创新中心",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "recording",
+        "studio",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-b-503",
+      "name": "B4-503",
+      "campusId": "campus-b",
+      "building": "B创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-b-601",
+      "name": "B5-601",
+      "campusId": "campus-b",
+      "building": "B体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-b-602",
+      "name": "B5-602",
+      "campusId": "campus-b",
+      "building": "B体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-c-101",
+      "name": "C1-101",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-102",
+      "name": "C1-102",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-103",
+      "name": "C1-103",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-104",
+      "name": "C1-104",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-105",
+      "name": "C1-105",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-106",
+      "name": "C1-106",
+      "campusId": "campus-c",
+      "building": "C综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-c-201",
+      "name": "C1-201",
+      "campusId": "campus-c",
+      "building": "C公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-c-202",
+      "name": "C1-202",
+      "campusId": "campus-c",
+      "building": "C公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-c-203",
+      "name": "C1-203",
+      "campusId": "campus-c",
+      "building": "C公共教学楼",
+      "capacity": 100,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-c-301",
+      "name": "C2-301",
+      "campusId": "campus-c",
+      "building": "C基础实验楼",
+      "capacity": 100,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-302",
+      "name": "C2-302",
+      "campusId": "campus-c",
+      "building": "C基础实验楼",
+      "capacity": 100,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-303",
+      "name": "C2-303",
+      "campusId": "campus-c",
+      "building": "C基础实验楼",
+      "capacity": 100,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-304",
+      "name": "C2-304",
+      "campusId": "campus-c",
+      "building": "C基础实验楼",
+      "capacity": 100,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-401",
+      "name": "C3-401",
+      "campusId": "campus-c",
+      "building": "C工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-402",
+      "name": "C3-402",
+      "campusId": "campus-c",
+      "building": "C工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-403",
+      "name": "C3-403",
+      "campusId": "campus-c",
+      "building": "C工程实践楼",
+      "capacity": 48,
+      "type": "实验室",
+      "features": [
+        "wet_lab"
+      ]
+    },
+    {
+      "id": "room-c-501",
+      "name": "C4-501",
+      "campusId": "campus-c",
+      "building": "C创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-c-502",
+      "name": "C4-502",
+      "campusId": "campus-c",
+      "building": "C创新中心",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-c-503",
+      "name": "C4-503",
+      "campusId": "campus-c",
+      "building": "C创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-c-601",
+      "name": "C5-601",
+      "campusId": "campus-c",
+      "building": "C体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-c-602",
+      "name": "C5-602",
+      "campusId": "campus-c",
+      "building": "C体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-d-101",
+      "name": "D1-101",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-102",
+      "name": "D1-102",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-103",
+      "name": "D1-103",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-104",
+      "name": "D1-104",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-105",
+      "name": "D1-105",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 60,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-106",
+      "name": "D1-106",
+      "campusId": "campus-d",
+      "building": "D综合教学楼",
+      "capacity": 80,
+      "type": "多媒体",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-d-201",
+      "name": "D1-201",
+      "campusId": "campus-d",
+      "building": "D公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-d-202",
+      "name": "D1-202",
+      "campusId": "campus-d",
+      "building": "D公共教学楼",
+      "capacity": 120,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-d-203",
+      "name": "D1-203",
+      "campusId": "campus-d",
+      "building": "D公共教学楼",
+      "capacity": 100,
+      "type": "阶梯",
+      "features": [
+        "projector",
+        "smart_board"
+      ]
+    },
+    {
+      "id": "room-d-301",
+      "name": "D2-301",
+      "campusId": "campus-d",
+      "building": "D基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-302",
+      "name": "D2-302",
+      "campusId": "campus-d",
+      "building": "D基础实验楼",
+      "capacity": 60,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-303",
+      "name": "D2-303",
+      "campusId": "campus-d",
+      "building": "D基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-304",
+      "name": "D2-304",
+      "campusId": "campus-d",
+      "building": "D基础实验楼",
+      "capacity": 50,
+      "type": "实验室",
+      "features": [
+        "wet_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-401",
+      "name": "D3-401",
+      "campusId": "campus-d",
+      "building": "D工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-402",
+      "name": "D3-402",
+      "campusId": "campus-d",
+      "building": "D工程实践楼",
+      "capacity": 48,
+      "type": "机房",
+      "features": [
+        "computer_lab",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-403",
+      "name": "D3-403",
+      "campusId": "campus-d",
+      "building": "D工程实践楼",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-d-501",
+      "name": "D4-501",
+      "campusId": "campus-d",
+      "building": "D创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-d-502",
+      "name": "D4-502",
+      "campusId": "campus-d",
+      "building": "D创新中心",
+      "capacity": 48,
+      "type": "研讨室",
+      "features": [
+        "seminar",
+        "projector"
+      ]
+    },
+    {
+      "id": "room-d-503",
+      "name": "D4-503",
+      "campusId": "campus-d",
+      "building": "D创新中心",
+      "capacity": 48,
+      "type": "工作室",
+      "features": [
+        "studio",
+        "recording"
+      ]
+    },
+    {
+      "id": "room-d-601",
+      "name": "D5-601",
+      "campusId": "campus-d",
+      "building": "D体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    },
+    {
+      "id": "room-d-602",
+      "name": "D5-602",
+      "campusId": "campus-d",
+      "building": "D体育场馆",
+      "capacity": 200,
+      "type": "体育场地",
+      "features": [
+        "movable_seats"
+      ]
+    }
+  ],
+  "lessons": [
+    {
+      "id": "lesson-001",
+      "courseId": "course-002",
+      "teacherIds": [
+        "teacher-003"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-002",
+      "courseId": "course-017",
+      "teacherIds": [
+        "teacher-001"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-003",
+      "courseId": "course-001",
+      "teacherIds": [
+        "teacher-004"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-004",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-005",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-601",
+      "roomName": "A5-601",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-006",
+      "courseId": "course-019",
+      "teacherIds": [
+        "teacher-005"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-007",
+      "courseId": "course-021",
+      "teacherIds": [
+        "teacher-011"
+      ],
+      "classIds": [
+        "class-cs-01"
+      ],
+      "roomId": "room-a-201",
+      "roomName": "A1-201",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-008",
+      "courseId": "course-010",
+      "teacherIds": [
+        "teacher-012"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-104",
+      "roomName": "A1-104",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-009",
+      "courseId": "course-018",
+      "teacherIds": [
+        "teacher-002"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-010",
+      "courseId": "course-001",
+      "teacherIds": [
+        "teacher-004"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-011",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-012",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-602",
+      "roomName": "A5-602",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-013",
+      "courseId": "course-003",
+      "teacherIds": [
+        "teacher-007"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-104",
+      "roomName": "A1-104",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-014",
+      "courseId": "course-004",
+      "teacherIds": [
+        "teacher-008"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-015",
+      "courseId": "course-016",
+      "teacherIds": [
+        "teacher-004"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-302",
+      "roomName": "A2-302",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16(双)",
+      "weekList": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16
+      ]
+    },
+    {
+      "id": "lesson-016",
+      "courseId": "course-020",
+      "teacherIds": [
+        "teacher-013"
+      ],
+      "classIds": [
+        "class-cs-02"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-017",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-018",
+      "courseId": "course-006",
+      "teacherIds": [
+        "teacher-009"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-019",
+      "courseId": "course-002",
+      "teacherIds": [
+        "teacher-003"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-020",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-601",
+      "roomName": "A5-601",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-021",
+      "courseId": "course-005",
+      "teacherIds": [
+        "teacher-006"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-104",
+      "roomName": "A1-104",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-022",
+      "courseId": "course-018",
+      "teacherIds": [
+        "teacher-002"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-023",
+      "courseId": "course-007",
+      "teacherIds": [
+        "teacher-010"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-024",
+      "courseId": "course-015",
+      "teacherIds": [
+        "teacher-003"
+      ],
+      "classIds": [
+        "class-sw-01"
+      ],
+      "roomId": "room-a-402",
+      "roomName": "A3-402",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "lesson-025",
+      "courseId": "course-007",
+      "teacherIds": [
+        "teacher-010"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-026",
+      "courseId": "course-008",
+      "teacherIds": [
+        "teacher-010"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-027",
+      "courseId": "course-018",
+      "teacherIds": [
+        "teacher-002"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-028",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-601",
+      "roomName": "A5-601",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-029",
+      "courseId": "course-009",
+      "teacherIds": [
+        "teacher-010"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-030",
+      "courseId": "course-021",
+      "teacherIds": [
+        "teacher-011"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-031",
+      "courseId": "course-001",
+      "teacherIds": [
+        "teacher-004"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-032",
+      "courseId": "course-013",
+      "teacherIds": [
+        "teacher-010"
+      ],
+      "classIds": [
+        "class-me-01"
+      ],
+      "roomId": "room-a-401",
+      "roomName": "A3-401",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-033",
+      "courseId": "course-011",
+      "teacherIds": [
+        "teacher-012"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-106",
+      "roomName": "A1-106",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-034",
+      "courseId": "course-017",
+      "teacherIds": [
+        "teacher-001"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-035",
+      "courseId": "course-020",
+      "teacherIds": [
+        "teacher-013"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-036",
+      "courseId": "course-021",
+      "teacherIds": [
+        "teacher-011"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-037",
+      "courseId": "course-026",
+      "teacherIds": [
+        "teacher-013"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-104",
+      "roomName": "A1-104",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-038",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-601",
+      "roomName": "A5-601",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-039",
+      "courseId": "course-019",
+      "teacherIds": [
+        "teacher-005"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-040",
+      "courseId": "course-010",
+      "teacherIds": [
+        "teacher-012"
+      ],
+      "classIds": [
+        "class-math-01"
+      ],
+      "roomId": "room-a-104",
+      "roomName": "A1-104",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-041",
+      "courseId": "course-012",
+      "teacherIds": [
+        "teacher-007"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-042",
+      "courseId": "course-021",
+      "teacherIds": [
+        "teacher-011"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-103",
+      "roomName": "A1-103",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-043",
+      "courseId": "course-017",
+      "teacherIds": [
+        "teacher-001"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-103",
+      "roomName": "A1-103",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-044",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-602",
+      "roomName": "A5-602",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-045",
+      "courseId": "course-020",
+      "teacherIds": [
+        "teacher-013"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-103",
+      "roomName": "A1-103",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-046",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-047",
+      "courseId": "course-022",
+      "teacherIds": [
+        "teacher-011"
+      ],
+      "classIds": [
+        "class-phy-01"
+      ],
+      "roomId": "room-a-303",
+      "roomName": "A2-303",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-8(双)",
+      "weekList": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    {
+      "id": "lesson-048",
+      "courseId": "course-023",
+      "teacherIds": [
+        "teacher-014"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-103",
+      "roomName": "A1-103",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-049",
+      "courseId": "course-024",
+      "teacherIds": [
+        "teacher-014"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-304",
+      "roomName": "A2-304",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 6,
+      "weeks": "1-16(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "lesson-050",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-602",
+      "roomName": "A5-602",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-051",
+      "courseId": "course-018",
+      "teacherIds": [
+        "teacher-002"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-052",
+      "courseId": "course-025",
+      "teacherIds": [
+        "teacher-014"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-053",
+      "courseId": "course-047",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-054",
+      "courseId": "course-042",
+      "teacherIds": [
+        "teacher-014"
+      ],
+      "classIds": [
+        "class-chem-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-055",
+      "courseId": "course-027",
+      "teacherIds": [
+        "teacher-023"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-056",
+      "courseId": "course-017",
+      "teacherIds": [
+        "teacher-001"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-101",
+      "roomName": "A1-101",
+      "campusId": "campus-a",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-057",
+      "courseId": "course-020",
+      "teacherIds": [
+        "teacher-013"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-103",
+      "roomName": "A1-103",
+      "campusId": "campus-a",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-058",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-039"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-601",
+      "roomName": "A5-601",
+      "campusId": "campus-a",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-059",
+      "courseId": "course-047",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-102",
+      "roomName": "A1-102",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-060",
+      "courseId": "course-064",
+      "teacherIds": [
+        "teacher-023"
+      ],
+      "classIds": [
+        "class-stat-01"
+      ],
+      "roomId": "room-a-301",
+      "roomName": "A2-301",
+      "campusId": "campus-a",
+      "weekday": 2,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-8(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "id": "lesson-061",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-062",
+      "courseId": "course-043",
+      "teacherIds": [
+        "teacher-015"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-063",
+      "courseId": "course-044",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-064",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-601",
+      "roomName": "B5-601",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-065",
+      "courseId": "course-047",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-066",
+      "courseId": "course-050",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-chi-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-067",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-068",
+      "courseId": "course-045",
+      "teacherIds": [
+        "teacher-017"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-069",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-601",
+      "roomName": "B5-601",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-070",
+      "courseId": "course-043",
+      "teacherIds": [
+        "teacher-015"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-071",
+      "courseId": "course-046",
+      "teacherIds": [
+        "teacher-017"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-502",
+      "roomName": "B4-502",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-072",
+      "courseId": "course-052",
+      "teacherIds": [
+        "teacher-017"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-503",
+      "roomName": "B4-503",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8(双)",
+      "weekList": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    {
+      "id": "lesson-073",
+      "courseId": "course-051",
+      "teacherIds": [
+        "teacher-017"
+      ],
+      "classIds": [
+        "class-jour-01"
+      ],
+      "roomId": "room-b-502",
+      "roomName": "B4-502",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-074",
+      "courseId": "course-001",
+      "teacherIds": [
+        "teacher-003"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-075",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-602",
+      "roomName": "B5-602",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-076",
+      "courseId": "course-048",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-501",
+      "roomName": "B4-501",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-077",
+      "courseId": "course-045",
+      "teacherIds": [
+        "teacher-017"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-078",
+      "courseId": "course-014",
+      "teacherIds": [
+        "teacher-040"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-503",
+      "roomName": "B4-503",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-079",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-080",
+      "courseId": "course-053",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-design-01"
+      ],
+      "roomId": "room-b-401",
+      "roomName": "B3-401",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-8(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "id": "lesson-081",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-082",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-602",
+      "roomName": "B5-602",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-083",
+      "courseId": "course-044",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-084",
+      "courseId": "course-043",
+      "teacherIds": [
+        "teacher-015"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-103",
+      "roomName": "B1-103",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-085",
+      "courseId": "course-047",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-086",
+      "courseId": "course-049",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-087",
+      "courseId": "course-054",
+      "teacherIds": [
+        "teacher-016"
+      ],
+      "classIds": [
+        "class-hist-01"
+      ],
+      "roomId": "room-b-103",
+      "roomName": "B1-103",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-088",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-089",
+      "courseId": "course-055",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-090",
+      "courseId": "course-057",
+      "teacherIds": [
+        "teacher-022"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-202",
+      "roomName": "B1-202",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-091",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-601",
+      "roomName": "B5-601",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-092",
+      "courseId": "course-056",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-093",
+      "courseId": "course-058",
+      "teacherIds": [
+        "teacher-024"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-094",
+      "courseId": "course-059",
+      "teacherIds": [
+        "teacher-030"
+      ],
+      "classIds": [
+        "class-biz-01"
+      ],
+      "roomId": "room-b-201",
+      "roomName": "B1-201",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 9,
+      "periodEnd": 10,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-095",
+      "courseId": "course-057",
+      "teacherIds": [
+        "teacher-022"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-104",
+      "roomName": "B1-104",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-096",
+      "courseId": "course-056",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-103",
+      "roomName": "B1-103",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-097",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-601",
+      "roomName": "B5-601",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-098",
+      "courseId": "course-055",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-099",
+      "courseId": "course-058",
+      "teacherIds": [
+        "teacher-024"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-100",
+      "courseId": "course-018",
+      "teacherIds": [
+        "teacher-002"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-101",
+      "courseId": "course-061",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-102",
+      "courseId": "course-062",
+      "teacherIds": [
+        "teacher-024"
+      ],
+      "classIds": [
+        "class-econ-01"
+      ],
+      "roomId": "room-b-107",
+      "roomName": "B1-107",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-103",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-103",
+      "roomName": "B1-103",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-104",
+      "courseId": "course-058",
+      "teacherIds": [
+        "teacher-024"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-105",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-602",
+      "roomName": "B5-602",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-106",
+      "courseId": "course-056",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-104",
+      "roomName": "B1-104",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-107",
+      "courseId": "course-055",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-108",
+      "courseId": "course-027",
+      "teacherIds": [
+        "teacher-023"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-109",
+      "courseId": "course-061",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-acct-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-110",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-034"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-602",
+      "roomName": "B5-602",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-111",
+      "courseId": "course-055",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-103",
+      "roomName": "B1-103",
+      "campusId": "campus-b",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-112",
+      "courseId": "course-056",
+      "teacherIds": [
+        "teacher-021"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-113",
+      "courseId": "course-027",
+      "teacherIds": [
+        "teacher-023"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-114",
+      "courseId": "course-060",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-115",
+      "courseId": "course-063",
+      "teacherIds": [
+        "teacher-022"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-102",
+      "roomName": "B1-102",
+      "campusId": "campus-b",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-116",
+      "courseId": "course-065",
+      "teacherIds": [
+        "teacher-020"
+      ],
+      "classIds": [
+        "class-pub-01"
+      ],
+      "roomId": "room-b-101",
+      "roomName": "B1-101",
+      "campusId": "campus-b",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-117",
+      "courseId": "course-029",
+      "teacherIds": [
+        "teacher-026"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-201",
+      "roomName": "C1-201",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-118",
+      "courseId": "course-035",
+      "teacherIds": [
+        "teacher-027"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-302",
+      "roomName": "C2-302",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "lesson-119",
+      "courseId": "course-057",
+      "teacherIds": [
+        "teacher-030"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-201",
+      "roomName": "C1-201",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-120",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-033"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-601",
+      "roomName": "C5-601",
+      "campusId": "campus-c",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-121",
+      "courseId": "course-030",
+      "teacherIds": [
+        "teacher-027"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-201",
+      "roomName": "C1-201",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-122",
+      "courseId": "course-033",
+      "teacherIds": [
+        "teacher-029"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-201",
+      "roomName": "C1-201",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-123",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-201",
+      "roomName": "C1-201",
+      "campusId": "campus-c",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-124",
+      "courseId": "course-034",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-life-01"
+      ],
+      "roomId": "room-c-301",
+      "roomName": "C2-301",
+      "campusId": "campus-c",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8(双)",
+      "weekList": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    {
+      "id": "lesson-125",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-126",
+      "courseId": "course-035",
+      "teacherIds": [
+        "teacher-019"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-304",
+      "roomName": "C2-304",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "lesson-127",
+      "courseId": "course-031",
+      "teacherIds": [
+        "teacher-028"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-128",
+      "courseId": "course-029",
+      "teacherIds": [
+        "teacher-026"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-129",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-033"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-602",
+      "roomName": "C5-602",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-130",
+      "courseId": "course-034",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-301",
+      "roomName": "C2-301",
+      "campusId": "campus-c",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-131",
+      "courseId": "course-039",
+      "teacherIds": [
+        "teacher-027"
+      ],
+      "classIds": [
+        "class-life-02"
+      ],
+      "roomId": "room-c-303",
+      "roomName": "C2-303",
+      "campusId": "campus-c",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-132",
+      "courseId": "course-033",
+      "teacherIds": [
+        "teacher-029"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-133",
+      "courseId": "course-032",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-134",
+      "courseId": "course-031",
+      "teacherIds": [
+        "teacher-028"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-135",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-033"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-601",
+      "roomName": "C5-601",
+      "campusId": "campus-c",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-136",
+      "courseId": "course-030",
+      "teacherIds": [
+        "teacher-027"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-137",
+      "courseId": "course-029",
+      "teacherIds": [
+        "teacher-026"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-138",
+      "courseId": "course-040",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-401",
+      "roomName": "C3-401",
+      "campusId": "campus-c",
+      "weekday": 6,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-139",
+      "courseId": "course-041",
+      "teacherIds": [
+        "teacher-029"
+      ],
+      "classIds": [
+        "class-bio-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-140",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-141",
+      "courseId": "course-036",
+      "teacherIds": [
+        "teacher-019"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-303",
+      "roomName": "C2-303",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    {
+      "id": "lesson-142",
+      "courseId": "course-033",
+      "teacherIds": [
+        "teacher-029"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-102",
+      "roomName": "C1-102",
+      "campusId": "campus-c",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-143",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-033"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-601",
+      "roomName": "C5-601",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-144",
+      "courseId": "course-037",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-301",
+      "roomName": "C2-301",
+      "campusId": "campus-c",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8(单)",
+      "weekList": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "id": "lesson-145",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-102",
+      "roomName": "C1-102",
+      "campusId": "campus-c",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-146",
+      "courseId": "course-038",
+      "teacherIds": [
+        "teacher-031"
+      ],
+      "classIds": [
+        "class-env-01"
+      ],
+      "roomId": "room-c-101",
+      "roomName": "C1-101",
+      "campusId": "campus-c",
+      "weekday": 4,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-147",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-148",
+      "courseId": "course-068",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-149",
+      "courseId": "course-059",
+      "teacherIds": [
+        "teacher-030"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-201",
+      "roomName": "D1-201",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-150",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-035"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-601",
+      "roomName": "D5-601",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-151",
+      "courseId": "course-070",
+      "teacherIds": [
+        "teacher-037"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 2,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-152",
+      "courseId": "course-069",
+      "teacherIds": [
+        "teacher-036"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-153",
+      "courseId": "course-071",
+      "teacherIds": [
+        "teacher-038"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-154",
+      "courseId": "course-042",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-edu-01"
+      ],
+      "roomId": "room-d-106",
+      "roomName": "D1-106",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-155",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-156",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-035"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-601",
+      "roomName": "D5-601",
+      "campusId": "campus-d",
+      "weekday": 1,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-157",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-035"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-602",
+      "roomName": "D5-602",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-158",
+      "courseId": "course-068",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-159",
+      "courseId": "course-073",
+      "teacherIds": [
+        "teacher-036"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 2,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-160",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-161",
+      "courseId": "course-070",
+      "teacherIds": [
+        "teacher-037"
+      ],
+      "classIds": [
+        "class-pe-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 5,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-162",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 5,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-163",
+      "courseId": "course-069",
+      "teacherIds": [
+        "teacher-036"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-164",
+      "courseId": "course-068",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-102",
+      "roomName": "D1-102",
+      "campusId": "campus-d",
+      "weekday": 2,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-165",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-035"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-601",
+      "roomName": "D5-601",
+      "campusId": "campus-d",
+      "weekday": 1,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-166",
+      "courseId": "course-072",
+      "teacherIds": [
+        "teacher-040"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-501",
+      "roomName": "D4-501",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-4,7-10",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "id": "lesson-167",
+      "courseId": "course-047",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-168",
+      "courseId": "course-042",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-psych-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-169",
+      "courseId": "course-066",
+      "teacherIds": [
+        "teacher-025"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-102",
+      "roomName": "D1-102",
+      "campusId": "campus-d",
+      "weekday": 4,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-170",
+      "courseId": "course-070",
+      "teacherIds": [
+        "teacher-037"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-102",
+      "roomName": "D1-102",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-171",
+      "courseId": "course-068",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 1,
+      "periodStart": 1,
+      "periodEnd": 2,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-172",
+      "courseId": "course-067",
+      "teacherIds": [
+        "teacher-035"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-602",
+      "roomName": "D5-602",
+      "campusId": "campus-d",
+      "weekday": 2,
+      "periodStart": 7,
+      "periodEnd": 8,
+      "weeks": "1-16",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "id": "lesson-173",
+      "courseId": "course-072",
+      "teacherIds": [
+        "teacher-040"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-501",
+      "roomName": "D4-501",
+      "campusId": "campus-d",
+      "weekday": 5,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-8(双)",
+      "weekList": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    {
+      "id": "lesson-174",
+      "courseId": "course-028",
+      "teacherIds": [
+        "teacher-018"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-102",
+      "roomName": "D1-102",
+      "campusId": "campus-d",
+      "weekday": 3,
+      "periodStart": 5,
+      "periodEnd": 6,
+      "weeks": "1-8",
+      "weekList": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": "lesson-175",
+      "courseId": "course-042",
+      "teacherIds": [
+        "teacher-032"
+      ],
+      "classIds": [
+        "class-prim-01"
+      ],
+      "roomId": "room-d-101",
+      "roomName": "D1-101",
+      "campusId": "campus-d",
+      "weekday": 5,
+      "periodStart": 3,
+      "periodEnd": 4,
+      "weeks": "9-16",
+      "weekList": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    }
+  ],
+  "demoUsers": [
+    {
+      "id": "user-demo-001",
+      "name": "演示用户001",
+      "role": "student",
+      "classIds": [
+        "class-cs-01"
+      ],
+      "campusId": "campus-a",
+      "collegeId": "college-cs"
+    },
+    {
+      "id": "user-demo-002",
+      "name": "演示用户002",
+      "role": "student",
+      "classIds": [
+        "class-life-01"
+      ],
+      "campusId": "campus-c",
+      "collegeId": "college-life"
+    },
+    {
+      "id": "user-demo-003",
+      "name": "演示用户003",
+      "role": "teacher",
+      "teacherId": "teacher-039",
+      "campusId": "campus-a",
+      "collegeId": "college-edu"
+    }
+  ]
+}

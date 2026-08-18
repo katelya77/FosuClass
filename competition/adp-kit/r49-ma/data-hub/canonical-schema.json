@@ -21,7 +21,7 @@
   "properties": {
     "namespace": {
       "type": "string",
-      "enum": ["anonymous", "synthetic-example", "competition-demo-v2"]
+      "enum": ["anonymous", "synthetic-example", "competition-demo-v2", "competition-demo-v3"]
     },
     "semesterId": { "type": "string", "minLength": 1 },
     "course": {
