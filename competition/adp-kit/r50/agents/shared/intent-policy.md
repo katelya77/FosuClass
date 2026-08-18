@@ -1,4 +1,4 @@
-# Shared Policy · Intent Policy（R50.0）
+# Shared Policy · Intent Policy（R50.1）
 
 ## 1. Turn 类型判定（每个新 Turn 重新接管）
 

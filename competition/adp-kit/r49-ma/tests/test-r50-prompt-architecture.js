@@ -164,7 +164,7 @@ test("R50-P9 去 Case 化：域 Prompt / shared 禁止比赛数据实体硬编�
 
 test("R50-P10 高级设置行保留（域 Prompt）", () => {
   for (const [name, text] of [["MAIN", MAIN], ["SCHEDULE", SCHEDULE], ["RISK", RISK], ["INSIGHT", INSIGHT]]) {
-    assert.match(text, /model=youtu-agent/, `${name} 必须保留高级设置 model=youtu-agent`);
+    assert.doesNotMatch(text, /model\s*=|youtu-agent/, `${name} 不得包含模型硬编码（R50.1：模型属于 Console Runtime Config，不属 Prompt 契约）`);
     assert.match(text, /maxReasoningRound=\d+/, `${name} 必须保留 maxReasoningRound`);
     assert.match(text, /historyLimit=\d+/, `${name} 必须保留 historyLimit`);
   }

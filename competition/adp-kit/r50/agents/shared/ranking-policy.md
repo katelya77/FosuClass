@@ -1,4 +1,4 @@
-# Shared Policy · Ranking Policy（R50.0）
+# Shared Policy · Ranking Policy（R50.1）
 
 排名由 **Ranking Semantic Core（ranking-core.js）** 确定性计算；所有「最高 / 最忙 / 利用率最高 / TopN / 第一名」类问题走本策略。
 

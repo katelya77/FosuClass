@@ -1,4 +1,4 @@
-# Shared Policy · Temporal Policy（R50.0）
+# Shared Policy · Temporal Policy（R50.1）
 
 所有时间解析由 **Temporal Semantic Core（temporal-core.js）** 确定性计算；Agent 只输出结构化 temporal intent，不得用 Prompt 猜测日期 / 教学周 / 窗口。
 

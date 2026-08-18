@@ -1,4 +1,4 @@
-# Shared Policy · Core Safety（R50.0）
+# Shared Policy · Core Safety（R50.1）
 
 本策略被 4 个 Agent Prompt 共同引用，任何 Agent 都不得违反。
 

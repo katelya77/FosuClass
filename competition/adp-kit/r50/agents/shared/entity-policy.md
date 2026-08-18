@@ -1,4 +1,4 @@
-# Shared Policy · Entity Policy（R50.0）
+# Shared Policy · Entity Policy（R50.1）
 
 ## 1. 实体解析确定性
 
