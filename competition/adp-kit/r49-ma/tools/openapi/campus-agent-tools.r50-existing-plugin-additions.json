@@ -1,0 +1,2296 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "校园智序 · 小序 — R50.0 新增 6 个 Agent Tools（增量导入）",
+    "version": "1.5.0",
+    "description": "面向腾讯智能 ADP「基于 API」自定义插件增量导入：仅含 R50.0 新增的 6 个确定性 Agent Tool Façade（/api/campus_*），与全量 campus-agent-tools.adp-import.json 同 server、同 path/operation/schema 语义；$ref 全部自包含，不删除用户现有插件。"
+  },
+  "servers": [
+    {
+      "url": "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools",
+      "description": "腾讯 CloudBase 比赛 CampusTools HTTP Function 网关（竞争比赛测试实例，鉴权需 Bearer token）"
+    }
+  ],
+  "tags": [
+    {
+      "name": "campus_schedule",
+      "description": "课表/空教室/实体/时间上下文/共同空闲/群体计划（课程空间 Agent）"
+    },
+    {
+      "name": "campus_risk",
+      "description": "风险/日计划/调课模拟（风险规划 Agent）"
+    },
+    {
+      "name": "campus_insight",
+      "description": "校园态势/教室利用率（校园洞察 Agent）"
+    }
+  ],
+  "paths": {
+    "/api/campus_entity_search": {
+      "post": {
+        "tags": [
+          "campus_schedule"
+        ],
+        "summary": "校园实体搜索/清单（教师/班级/教室/课程/校区/学院）",
+        "operationId": "campus_entity_search",
+        "description": "通用校园实体搜索与清单：支持 exact/normalized_exact/prefix/substring/fuzzy 确定性匹配（matchType 由服务端判定）与确定排序，禁止模型编造实体；不传关键词返回该类型清单。支持 campus/college 过滤与 limit 上限（1..100，默认 20）。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntitySearchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_entity_search 结果信封（含 EntitySearchResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntitySearchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_academic_context": {
+      "post": {
+        "tags": [
+          "campus_schedule"
+        ],
+        "summary": "教学周/学期/节次时间上下文（Temporal Semantic Core）",
+        "operationId": "campus_academic_context",
+        "description": "封装 Temporal Semantic Core：解析绝对/相对日期与结构化 temporal intent（absolute/relative_day/relative_weekday/academic_week/academic_week_weekday/week_range/future_weeks/recent_weeks/next_week/prev_week/current），确定性输出教学周、星期、学期与节次时间轴并暴露 temporalContext；日期与周次由确定性服务计算，禁止模型猜测。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcademicContextInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_academic_context 结果信封（含 AcademicContextResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicContextResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_common_free_time_query": {
+      "post": {
+        "tags": [
+          "campus_schedule"
+        ],
+        "summary": "多实体共同空闲窗口（2..6 教师/班级）",
+        "operationId": "campus_common_free_time_query",
+        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommonFreeTimeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_common_free_time_query 结果信封（含 CommonFreeTimeResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonFreeTimeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_room_utilization_query": {
+      "post": {
+        "tags": [
+          "campus_insight"
+        ],
+        "summary": "教室/楼栋/校区利用率排名（Ranking Core）",
+        "operationId": "campus_room_utilization_query",
+        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomUtilizationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_room_utilization_query 结果信封（含 RoomUtilizationResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomUtilizationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_reschedule_feasibility": {
+      "post": {
+        "tags": [
+          "campus_risk"
+        ],
+        "summary": "调课 What-if 模拟可行性（绝不修改数据）",
+        "operationId": "campus_reschedule_feasibility",
+        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleFeasibilityInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_reschedule_feasibility 结果信封（含 RescheduleFeasibilityResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RescheduleFeasibilityResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campus_group_plan": {
+      "post": {
+        "tags": [
+          "campus_schedule"
+        ],
+        "summary": "群体计划候选（共同空闲 + 空教室 ranked）",
+        "operationId": "campus_group_plan",
+        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupPlanInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "campus_group_plan 结果信封（含 GroupPlanResponse 声明的字段）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupPlanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EntitySearchInput": {
+        "type": "object",
+        "description": "实体搜索/清单输入：entityType 可选（缺省搜索全部类型）；keyword 为空则返回清单",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "description": "实体类型（可选，缩小搜索范围）",
+            "enum": [
+              "campus",
+              "college",
+              "class",
+              "teacher",
+              "room",
+              "course",
+              "user"
+            ]
+          },
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词（可选，空则返回清单）"
+          },
+          "campus": {
+            "type": "string",
+            "description": "校区A / 校区B（可选，对支持校区字段的实体过滤）"
+          },
+          "college": {
+            "type": "string",
+            "description": "学院 id 或名称（可选，对支持学院字段的实体过滤）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回上限，默认 20",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "EntitySearchResponse": {
+        "type": "object",
+        "description": "campus_entity_search 成功/失败统一信封（含 query/summary）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "实体搜索结果条目",
+            "items": {
+              "$ref": "#/components/schemas/EntitySearchItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "query": {
+            "type": "object",
+            "description": "回显查询条件",
+            "properties": {
+              "entityType": {
+                "type": "string",
+                "description": "实体类型（null 表示未指定）"
+              },
+              "keyword": {
+                "type": "string",
+                "description": "搜索关键词（null 表示清单）"
+              },
+              "campus": {
+                "type": "string",
+                "description": "校区名称（null 表示未过滤）"
+              },
+              "college": {
+                "type": "string",
+                "description": "学院（null 表示未过滤）"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "返回上限"
+              }
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EntitySearchSummary"
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "AcademicContextInput": {
+        "type": "object",
+        "description": "教学周/学期上下文输入：结构化 intent 优先；dateText 走口语解析；baseDate 为评测固定基准",
+        "properties": {
+          "intent": {
+            "type": "object",
+            "description": "结构化 temporal intent（对象或 JSON 字符串）",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "description": "intent 类型",
+                "enum": [
+                  "absolute",
+                  "relative_day",
+                  "relative_weekday",
+                  "academic_week",
+                  "academic_week_weekday",
+                  "week_range",
+                  "future_weeks",
+                  "recent_weeks",
+                  "next_week",
+                  "prev_week",
+                  "current"
+                ]
+              },
+              "date": {
+                "type": "string",
+                "description": "绝对日期 YYYY-MM-DD"
+              },
+              "offset": {
+                "type": "integer",
+                "description": "相对偏移（天数/周数，随 kind 语义）"
+              },
+              "weekday": {
+                "type": "integer",
+                "description": "星期 1..7",
+                "minimum": 1,
+                "maximum": 7
+              },
+              "week": {
+                "type": "integer",
+                "description": "教学周 1..20",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "weekStart": {
+                "type": "integer",
+                "description": "周窗口起点",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "weekEnd": {
+                "type": "integer",
+                "description": "周窗口终点",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "count": {
+                "type": "integer",
+                "description": "未来/最近 N 个教学周",
+                "minimum": 1
+              }
+            }
+          },
+          "date": {
+            "type": "string",
+            "description": "显式日期 YYYY-MM-DD（优先级最高）",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "dateText": {
+            "type": "string",
+            "description": "今天/明天/后天/本周X/这周X/下周X/第N周周X/YYYY-MM-DD"
+          },
+          "baseDate": {
+            "type": "string",
+            "description": "评测固定基准日期；缺省使用 Asia/Shanghai 当前日期",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        }
+      },
+      "AcademicContextResponse": {
+        "type": "object",
+        "description": "campus_academic_context 成功/失败统一信封（items[0] 携带 temporalContext）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "教学周/学期上下文条目",
+            "items": {
+              "$ref": "#/components/schemas/AcademicContextItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "CommonFreeTimeInput": {
+        "type": "object",
+        "description": "共同空闲窗口输入：entities 为 2..6 个教师/班级；week 或 weekStart/weekEnd 二选一",
+        "properties": {
+          "entities": {
+            "type": "array",
+            "description": "2..6 个教师/班级实体",
+            "items": {
+              "type": "object",
+              "description": "实体",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "实体类型",
+                  "enum": [
+                    "teacher",
+                    "class"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "description": "实体名称"
+                }
+              },
+              "required": [
+                "type",
+                "name"
+              ]
+            },
+            "minItems": 2,
+            "maxItems": 6
+          },
+          "week": {
+            "type": "integer",
+            "description": "单周查询（与 weekStart/weekEnd 二选一）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekStart": {
+            "type": "integer",
+            "description": "周窗口起点",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekEnd": {
+            "type": "integer",
+            "description": "周窗口终点（须 >= weekStart）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdays": {
+            "type": "array",
+            "description": "星期数组（缺省 1..7）",
+            "items": {
+              "type": "integer",
+              "description": "星期",
+              "minimum": 1,
+              "maximum": 7
+            }
+          },
+          "periodStart": {
+            "type": "integer",
+            "description": "节次范围起点（缺省 1）",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "description": "节次范围终点（缺省末节）",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "minConsecutivePeriods": {
+            "type": "integer",
+            "description": "最小连续空闲节数，默认 1",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回上限，默认 50",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "entities"
+        ]
+      },
+      "CommonFreeTimeResponse": {
+        "type": "object",
+        "description": "campus_common_free_time_query 成功/失败统一信封（含 query/summary）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "共同空闲窗口条目",
+            "items": {
+              "$ref": "#/components/schemas/CommonFreeTimeItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "query": {
+            "type": "object",
+            "description": "回显查询条件",
+            "properties": {
+              "weekStart": {
+                "type": "integer",
+                "description": "周窗口起点"
+              },
+              "weekEnd": {
+                "type": "integer",
+                "description": "周窗口终点"
+              },
+              "weekdays": {
+                "type": "array",
+                "description": "星期数组",
+                "items": {
+                  "type": "integer",
+                  "description": "星期",
+                  "minimum": 1,
+                  "maximum": 7
+                }
+              },
+              "periodStart": {
+                "type": "integer",
+                "description": "节次起点"
+              },
+              "periodEnd": {
+                "type": "integer",
+                "description": "节次终点"
+              },
+              "minConsecutivePeriods": {
+                "type": "integer",
+                "description": "最小连续空闲节数"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "返回上限"
+              }
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CommonFreeTimeSummary"
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "RoomUtilizationInput": {
+        "type": "object",
+        "description": "教室利用率输入：weekStart/weekEnd 必填；groupBy/sort/topN 可选",
+        "properties": {
+          "weekStart": {
+            "type": "integer",
+            "description": "起始教学周（必填）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekEnd": {
+            "type": "integer",
+            "description": "结束教学周（必填，须 >= weekStart）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "campus": {
+            "type": "string",
+            "description": "校区A / 校区B（可选）"
+          },
+          "building": {
+            "type": "string",
+            "description": "楼栋名（可选）"
+          },
+          "roomType": {
+            "type": "string",
+            "description": "教室类型（可选）"
+          },
+          "groupBy": {
+            "type": "string",
+            "description": "聚合粒度，默认 room",
+            "enum": [
+              "room",
+              "building",
+              "campus"
+            ]
+          },
+          "sort": {
+            "type": "string",
+            "description": "highest=利用率最高（默认）/ lowest=最低",
+            "enum": [
+              "highest",
+              "lowest"
+            ]
+          },
+          "topN": {
+            "type": "integer",
+            "description": "返回前 N 名（可选，默认全部）",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "weekStart",
+          "weekEnd"
+        ]
+      },
+      "RoomUtilizationResponse": {
+        "type": "object",
+        "description": "campus_room_utilization_query 成功/失败统一信封（含 window/rankContext/query）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "利用率排名条目",
+            "items": {
+              "$ref": "#/components/schemas/RoomUtilizationItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "window": {
+            "type": "object",
+            "description": "查询教学周窗口",
+            "properties": {
+              "weekStart": {
+                "type": "integer",
+                "description": "起始周"
+              },
+              "weekEnd": {
+                "type": "integer",
+                "description": "结束周"
+              }
+            },
+            "required": [
+              "weekStart",
+              "weekEnd"
+            ]
+          },
+          "rankContext": {
+            "type": "object",
+            "description": "排名上下文（Ranking Core）",
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "排名来源标识"
+              },
+              "list": {
+                "type": "string",
+                "description": "排名列表标识"
+              },
+              "selectedRank": {
+                "type": "integer",
+                "description": "当前选中排名（可为 null）"
+              },
+              "metric": {
+                "type": "string",
+                "description": "排名指标"
+              },
+              "direction": {
+                "type": "string",
+                "description": "排序方向",
+                "enum": [
+                  "highest",
+                  "lowest"
+                ]
+              }
+            }
+          },
+          "query": {
+            "type": "object",
+            "description": "回显查询条件",
+            "properties": {
+              "weekStart": {
+                "type": "integer",
+                "description": "起始教学周"
+              },
+              "weekEnd": {
+                "type": "integer",
+                "description": "结束教学周"
+              },
+              "groupBy": {
+                "type": "string",
+                "description": "聚合粒度"
+              },
+              "sort": {
+                "type": "string",
+                "description": "排序方向"
+              },
+              "topN": {
+                "type": "integer",
+                "description": "返回上限（null 表示全部）"
+              },
+              "campus": {
+                "type": "string",
+                "description": "校区名称（null 表示未过滤）"
+              },
+              "building": {
+                "type": "string",
+                "description": "楼栋（null 表示未过滤）"
+              },
+              "roomType": {
+                "type": "string",
+                "description": "教室类型（null 表示未过滤）"
+              }
+            }
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "RescheduleFeasibilityInput": {
+        "type": "object",
+        "description": "调课 What-if 模拟输入：sourceLessonId 必填；target 含 week/weekday/periodStart/periodEnd（room 可选）",
+        "properties": {
+          "sourceLessonId": {
+            "type": "string",
+            "description": "源课程 lessonId（必填）"
+          },
+          "target": {
+            "type": "object",
+            "description": "目标时段/教室",
+            "properties": {
+              "week": {
+                "type": "integer",
+                "description": "目标教学周",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "weekday": {
+                "type": "integer",
+                "description": "目标星期 1..7",
+                "minimum": 1,
+                "maximum": 7
+              },
+              "periodStart": {
+                "type": "integer",
+                "description": "目标节次起点",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "periodEnd": {
+                "type": "integer",
+                "description": "目标节次终点",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "room": {
+                "type": "string",
+                "description": "目标教室 id 或名称（可选）"
+              }
+            },
+            "required": [
+              "week",
+              "weekday",
+              "periodStart",
+              "periodEnd"
+            ]
+          }
+        },
+        "required": [
+          "sourceLessonId",
+          "target"
+        ]
+      },
+      "RescheduleFeasibilityResponse": {
+        "type": "object",
+        "description": "campus_reschedule_feasibility 成功/失败统一信封（含 summary/simulation）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "调课模拟结果条目",
+            "items": {
+              "$ref": "#/components/schemas/RescheduleItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RescheduleSummary"
+          },
+          "simulation": {
+            "type": "object",
+            "description": "模拟元信息",
+            "properties": {
+              "sourceLessonId": {
+                "type": "string",
+                "description": "源课程 lessonId"
+              },
+              "target": {
+                "type": "object",
+                "description": "目标时段解析",
+                "properties": {
+                  "week": {
+                    "type": "integer",
+                    "description": "目标教学周"
+                  },
+                  "weekday": {
+                    "type": "integer",
+                    "description": "目标星期"
+                  },
+                  "weekdayName": {
+                    "type": "string",
+                    "description": "星期名称"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "目标日期"
+                  },
+                  "periodStart": {
+                    "type": "integer",
+                    "description": "节次起点"
+                  },
+                  "periodEnd": {
+                    "type": "integer",
+                    "description": "节次终点"
+                  },
+                  "periodText": {
+                    "type": "string",
+                    "description": "节次文本"
+                  },
+                  "room": {
+                    "type": "object",
+                    "description": "目标教室（可为 null）",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "教室 id"
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "教室名称"
+                      },
+                      "capacity": {
+                        "type": "integer",
+                        "description": "容量"
+                      },
+                      "campusId": {
+                        "type": "string",
+                        "description": "校区 id"
+                      },
+                      "campusName": {
+                        "type": "string",
+                        "description": "校区名称"
+                      }
+                    }
+                  }
+                }
+              },
+              "mutatedData": {
+                "type": "boolean",
+                "description": "是否修改数据（恒为 false）"
+              }
+            },
+            "required": [
+              "sourceLessonId",
+              "target",
+              "mutatedData"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "GroupPlanInput": {
+        "type": "object",
+        "description": "群体计划输入：entities 为 2..6 个教师/班级；week 必填",
+        "properties": {
+          "entities": {
+            "type": "array",
+            "description": "2..6 个教师/班级实体",
+            "items": {
+              "type": "object",
+              "description": "实体",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "实体类型",
+                  "enum": [
+                    "teacher",
+                    "class"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "description": "实体名称"
+                }
+              },
+              "required": [
+                "type",
+                "name"
+              ]
+            },
+            "minItems": 2,
+            "maxItems": 6
+          },
+          "week": {
+            "type": "integer",
+            "description": "教学周（必填）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "campus": {
+            "type": "string",
+            "description": "校区A / 校区B（可选）"
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdays": {
+            "type": "array",
+            "description": "星期数组（缺省 1..7）",
+            "items": {
+              "type": "integer",
+              "description": "星期",
+              "minimum": 1,
+              "maximum": 7
+            }
+          },
+          "periodStart": {
+            "type": "integer",
+            "description": "节次范围起点（缺省 1）",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "description": "节次范围终点（缺省末节）",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "minConsecutivePeriods": {
+            "type": "integer",
+            "description": "最小连续空闲节数，默认 1",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "minCapacity": {
+            "type": "integer",
+            "description": "最小教室容量（可选）",
+            "minimum": 1
+          },
+          "requiredFeatures": {
+            "type": "array",
+            "description": "所需教室功能设备（可选）",
+            "items": {
+              "type": "string",
+              "description": "功能设备名"
+            }
+          }
+        },
+        "required": [
+          "entities",
+          "week"
+        ]
+      },
+      "GroupPlanResponse": {
+        "type": "object",
+        "description": "campus_group_plan 成功/失败统一信封（含 query/summary）",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "统一成功标志"
+          },
+          "queryId": {
+            "type": "string",
+            "description": "查询 ID"
+          },
+          "dataVersion": {
+            "type": "string",
+            "description": "数据版本标识",
+            "example": "competition-demo-v2"
+          },
+          "resolvedEntity": {
+            "$ref": "#/components/schemas/ResolvedEntity"
+          },
+          "items": {
+            "type": "array",
+            "description": "群体计划候选",
+            "items": {
+              "$ref": "#/components/schemas/GroupPlanItem"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "description": "可执行动作（当前为空数组）",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "query": {
+            "type": "object",
+            "description": "回显查询条件",
+            "properties": {
+              "week": {
+                "type": "integer",
+                "description": "教学周"
+              },
+              "weekdays": {
+                "type": "array",
+                "description": "星期数组",
+                "items": {
+                  "type": "integer",
+                  "description": "星期",
+                  "minimum": 1,
+                  "maximum": 7
+                }
+              },
+              "campus": {
+                "type": "string",
+                "description": "校区名称（null 表示未过滤）"
+              },
+              "periodStart": {
+                "type": "integer",
+                "description": "节次起点"
+              },
+              "periodEnd": {
+                "type": "integer",
+                "description": "节次终点"
+              },
+              "minConsecutivePeriods": {
+                "type": "integer",
+                "description": "最小连续空闲节数"
+              },
+              "minCapacity": {
+                "type": "integer",
+                "description": "最小容量（null 表示未指定）"
+              },
+              "requiredFeatures": {
+                "type": "array",
+                "description": "所需功能设备",
+                "items": {
+                  "type": "string",
+                  "description": "功能设备名"
+                }
+              }
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/GroupPlanSummary"
+          }
+        },
+        "required": [
+          "success",
+          "queryId",
+          "dataVersion",
+          "items",
+          "actions",
+          "evidence",
+          "error"
+        ]
+      },
+      "ResolvedEntity": {
+        "type": "object",
+        "description": "解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "class/teacher/room/course/user 等实体类型"
+          },
+          "id": {
+            "type": "string",
+            "description": "数据集中实体唯一 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "实体显示名（如 教师009）"
+          }
+        }
+      },
+      "EntitySearchItem": {
+        "type": "object",
+        "description": "实体搜索结果条目：matchType 由服务端确定性判定（exact/normalized_exact/prefix/substring/fuzzy/list）",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "实体 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "实体名称"
+          },
+          "type": {
+            "type": "string",
+            "description": "实体类型",
+            "enum": [
+              "campus",
+              "college",
+              "class",
+              "teacher",
+              "room",
+              "course",
+              "user"
+            ]
+          },
+          "matchType": {
+            "type": "string",
+            "description": "确定性匹配类型",
+            "enum": [
+              "exact",
+              "normalized_exact",
+              "prefix",
+              "substring",
+              "fuzzy",
+              "list"
+            ]
+          },
+          "campusId": {
+            "type": "string",
+            "description": "校区 id（room 类型携带）"
+          },
+          "campusName": {
+            "type": "string",
+            "description": "校区名称"
+          },
+          "building": {
+            "type": "string",
+            "description": "楼栋（room 类型携带）"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "教室容量（room 类型携带）"
+          },
+          "roomType": {
+            "type": "string",
+            "description": "教室类型（room 类型携带）"
+          },
+          "collegeId": {
+            "type": "string",
+            "description": "学院 id（class/course 类型携带）"
+          },
+          "collegeName": {
+            "type": "string",
+            "description": "学院名称"
+          },
+          "classId": {
+            "type": "string",
+            "description": "班级 id（teacher 类型携带）"
+          },
+          "className": {
+            "type": "string",
+            "description": "班级名称（teacher 类型携带）"
+          }
+        }
+      },
+      "Action": {
+        "type": "object",
+        "description": "建议的动作（open_widget 卡片展示 / sys.chat 后续对话）",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "动作类型：open_widget / sys.chat"
+          },
+          "cardType": {
+            "type": "string",
+            "nullable": true,
+            "description": "open_widget 的卡片类型：schedule/classroom/conflict/day_plan"
+          },
+          "label": {
+            "type": "string",
+            "description": "动作文案"
+          },
+          "intent": {
+            "type": "string",
+            "nullable": true,
+            "description": "sys.chat 的意图标识"
+          },
+          "query": {
+            "type": "string",
+            "nullable": true,
+            "description": "sys.chat 的预填查询"
+          },
+          "week": {
+            "type": "integer",
+            "nullable": true,
+            "description": "sys.chat 关联的教学周"
+          }
+        }
+      },
+      "Evidence": {
+        "type": "object",
+        "description": "可核查证据：动态事实全部来自当前匿名数据集的确定性计算",
+        "properties": {
+          "dataVersion": {
+            "type": "string",
+            "example": "competition-demo-v2"
+          },
+          "dataHash": {
+            "type": "string",
+            "example": "sha1:4f3bbbb45d1f"
+          },
+          "source": {
+            "type": "string",
+            "description": "计算来源（固定 campus-tools-mcp）"
+          },
+          "computedAt": {
+            "type": "string",
+            "description": "计算时间 ISO 字符串"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "是否通过确定性校验；失败路径为 false"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "EMPTY_RESULT 等附加标记"
+          },
+          "derivation": {
+            "type": "string",
+            "nullable": true,
+            "description": "overview 的派生过程说明"
+          },
+          "preparationPeriodLessonCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "overview 准备期课程数（固定 0）"
+          }
+        }
+      },
+      "ErrorInfo": {
+        "type": "object",
+        "description": "确定性错误结构，供 ADP 工作流分支判断",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND / AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等"
+          },
+          "message": {
+            "type": "string",
+            "description": "中文错误说明"
+          },
+          "details": {
+            "type": "object",
+            "nullable": true,
+            "description": "附加细节（如候选列表）"
+          }
+        }
+      },
+      "EntitySearchSummary": {
+        "type": "object",
+        "description": "实体搜索汇总",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "命中总数"
+          },
+          "returned": {
+            "type": "integer",
+            "description": "实际返回条数"
+          },
+          "matchTypes": {
+            "type": "array",
+            "description": "返回条目的匹配类型集合",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "returned",
+          "matchTypes"
+        ]
+      },
+      "AcademicContextItem": {
+        "type": "object",
+        "description": "教学周/学期上下文条目",
+        "properties": {
+          "resolvedDate": {
+            "type": "string",
+            "description": "解析后的日期 YYYY-MM-DD（无法解析时为 null）"
+          },
+          "date": {
+            "type": "string",
+            "description": "解析后的日期（与 resolvedDate 一致，向后兼容）"
+          },
+          "week": {
+            "type": "integer",
+            "description": "教学周 1..20（学期外为 null）",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "星期名称，如 周一"
+          },
+          "inSemester": {
+            "type": "boolean",
+            "description": "是否在学期内（开学前/学期后为 false）"
+          },
+          "semester": {
+            "type": "object",
+            "description": "学期元信息",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "学期 id"
+              },
+              "name": {
+                "type": "string",
+                "description": "学期名称"
+              },
+              "startDate": {
+                "type": "string",
+                "description": "开学日期 YYYY-MM-DD"
+              },
+              "totalWeeks": {
+                "type": "integer",
+                "description": "教学周总数"
+              }
+            }
+          },
+          "periods": {
+            "type": "array",
+            "description": "节次时间轴",
+            "items": {
+              "type": "object",
+              "description": "节次",
+              "properties": {
+                "period": {
+                  "type": "integer",
+                  "description": "节次序号 1..10"
+                },
+                "start": {
+                  "type": "string",
+                  "description": "开始时间 HH:mm"
+                },
+                "end": {
+                  "type": "string",
+                  "description": "结束时间 HH:mm"
+                }
+              }
+            }
+          },
+          "baseDate": {
+            "type": "string",
+            "description": "本次解析使用的基准日期"
+          },
+          "resolutionSource": {
+            "type": "string",
+            "description": "解析来源（intent kind 或口语来源标记）"
+          },
+          "temporalContext": {
+            "type": "object",
+            "description": "Temporal Semantic Core 结构化上下文（内部协议）",
+            "properties": {
+              "referenceDate": {
+                "type": "string",
+                "description": "参考日期（可为 null）"
+              },
+              "semesterId": {
+                "type": "string",
+                "description": "学期 id（可为 null）"
+              },
+              "inSemester": {
+                "type": "boolean",
+                "description": "是否在学期内"
+              },
+              "currentAcademicWeek": {
+                "type": "integer",
+                "description": "当前教学周（可为 null）"
+              },
+              "resolvedDate": {
+                "type": "string",
+                "description": "解析后日期（可为 null）"
+              },
+              "resolvedWeek": {
+                "type": "integer",
+                "description": "解析后教学周（可为 null）"
+              },
+              "resolvedWeekStart": {
+                "type": "integer",
+                "description": "周窗口起点（可为 null）"
+              },
+              "resolvedWeekEnd": {
+                "type": "integer",
+                "description": "周窗口终点（可为 null）"
+              },
+              "resolutionKind": {
+                "type": "string",
+                "description": "解析类型（absolute/future_weeks/... 或 none）"
+              },
+              "note": {
+                "type": "string",
+                "description": "补充说明（可选）"
+              }
+            }
+          }
+        },
+        "required": [
+          "inSemester",
+          "semester",
+          "periods",
+          "baseDate",
+          "resolutionSource"
+        ]
+      },
+      "CommonFreeTimeItem": {
+        "type": "object",
+        "description": "共同空闲窗口条目",
+        "properties": {
+          "week": {
+            "type": "integer",
+            "description": "教学周",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "星期名称"
+          },
+          "date": {
+            "type": "string",
+            "description": "该周该星期对应日期 YYYY-MM-DD"
+          },
+          "periodStart": {
+            "type": "integer",
+            "description": "空闲节次起点",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodEnd": {
+            "type": "integer",
+            "description": "空闲节次终点",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第3-4节"
+          },
+          "freePeriodCount": {
+            "type": "integer",
+            "description": "连续空闲节数"
+          },
+          "entities": {
+            "type": "array",
+            "description": "参与该窗口的实体（已解析）",
+            "items": {
+              "type": "object",
+              "description": "已解析实体",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "实体类型",
+                  "enum": [
+                    "teacher",
+                    "class"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "description": "实体 id"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "实体名称"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "week",
+          "weekday",
+          "periodStart",
+          "periodEnd",
+          "freePeriodCount",
+          "entities"
+        ]
+      },
+      "CommonFreeTimeSummary": {
+        "type": "object",
+        "description": "共同空闲窗口汇总",
+        "properties": {
+          "entityCount": {
+            "type": "integer",
+            "description": "成功解析的实体数"
+          },
+          "totalWindows": {
+            "type": "integer",
+            "description": "命中窗口总数"
+          },
+          "returned": {
+            "type": "integer",
+            "description": "实际返回窗口数"
+          }
+        },
+        "required": [
+          "entityCount",
+          "totalWindows",
+          "returned"
+        ]
+      },
+      "RoomUtilizationItem": {
+        "type": "object",
+        "description": "利用率排名条目（Ranking Core 语义）",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "description": "position 语义：1..N 唯一递增，永不因并列失效"
+          },
+          "metricRank": {
+            "type": "integer",
+            "description": "metric 语义：并列同档（competition ranking）"
+          },
+          "tiedWithPrevious": {
+            "type": "boolean",
+            "description": "是否与排序中前一项业务指标完全并列"
+          },
+          "tieGroupId": {
+            "type": "string",
+            "description": "并列组标识（单元素组为 null）"
+          },
+          "tieGroupSize": {
+            "type": "integer",
+            "description": "并列组内实体数（单元素组为 1）"
+          },
+          "entity": {
+            "type": "object",
+            "description": "排名实体",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "实体 id"
+              },
+              "name": {
+                "type": "string",
+                "description": "实体名称"
+              },
+              "type": {
+                "type": "string",
+                "description": "实体类型"
+              }
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "description": "请求指标取值快照",
+            "properties": {
+              "utilizationRate": {
+                "type": "number",
+                "description": "利用率 0..1"
+              }
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "聚合对象 id"
+          },
+          "name": {
+            "type": "string",
+            "description": "聚合对象名称"
+          },
+          "type": {
+            "type": "string",
+            "description": "聚合粒度类型",
+            "enum": [
+              "room",
+              "building",
+              "campus"
+            ]
+          },
+          "occupiedPeriodUnits": {
+            "type": "integer",
+            "description": "占用节次单元数"
+          },
+          "availablePeriodUnits": {
+            "type": "integer",
+            "description": "可用节次单元数"
+          },
+          "utilizationRate": {
+            "type": "number",
+            "description": "利用率 0..1"
+          },
+          "lessonOccurrences": {
+            "type": "integer",
+            "description": "课次出现次数"
+          },
+          "campusId": {
+            "type": "string",
+            "description": "校区 id（groupBy=room 携带）"
+          },
+          "campusName": {
+            "type": "string",
+            "description": "校区名称"
+          },
+          "building": {
+            "type": "string",
+            "description": "楼栋（groupBy=room 携带）"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "教室容量（groupBy=room 携带）"
+          },
+          "roomType": {
+            "type": "string",
+            "description": "教室类型（groupBy=room 携带）"
+          },
+          "roomCount": {
+            "type": "integer",
+            "description": "聚合内教室数（groupBy=building/campus 携带）"
+          }
+        },
+        "required": [
+          "rank",
+          "metricRank",
+          "entity",
+          "metrics",
+          "id",
+          "name",
+          "type",
+          "occupiedPeriodUnits",
+          "availablePeriodUnits",
+          "utilizationRate",
+          "lessonOccurrences"
+        ]
+      },
+      "RescheduleItem": {
+        "type": "object",
+        "description": "调课模拟结果条目",
+        "properties": {
+          "sourceLesson": {
+            "$ref": "#/components/schemas/RescheduleSourceLesson"
+          },
+          "target": {
+            "type": "object",
+            "description": "目标时段解析",
+            "properties": {
+              "week": {
+                "type": "integer",
+                "description": "目标教学周"
+              },
+              "weekday": {
+                "type": "integer",
+                "description": "目标星期"
+              },
+              "weekdayName": {
+                "type": "string",
+                "description": "星期名称"
+              },
+              "date": {
+                "type": "string",
+                "description": "目标日期 YYYY-MM-DD"
+              },
+              "periodStart": {
+                "type": "integer",
+                "description": "节次起点"
+              },
+              "periodEnd": {
+                "type": "integer",
+                "description": "节次终点"
+              },
+              "periodText": {
+                "type": "string",
+                "description": "如 第3-4节"
+              },
+              "room": {
+                "type": "object",
+                "description": "目标教室（未指定为 null）",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "教室 id"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "教室名称"
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "description": "容量"
+                  },
+                  "campusId": {
+                    "type": "string",
+                    "description": "校区 id"
+                  },
+                  "campusName": {
+                    "type": "string",
+                    "description": "校区名称"
+                  }
+                }
+              }
+            },
+            "required": [
+              "week",
+              "weekday",
+              "periodStart",
+              "periodEnd"
+            ]
+          },
+          "checks": {
+            "type": "object",
+            "description": "逐项检查",
+            "properties": {
+              "teacherConflict": {
+                "$ref": "#/components/schemas/RescheduleConflictCheck"
+              },
+              "classConflict": {
+                "$ref": "#/components/schemas/RescheduleConflictCheck"
+              },
+              "roomConflict": {
+                "$ref": "#/components/schemas/RescheduleConflictCheck"
+              },
+              "capacity": {
+                "$ref": "#/components/schemas/RescheduleCapabilityCheck"
+              },
+              "feature": {
+                "$ref": "#/components/schemas/RescheduleCapabilityCheck"
+              }
+            },
+            "required": [
+              "teacherConflict",
+              "classConflict",
+              "roomConflict",
+              "capacity",
+              "feature"
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "description": "风险提示列表",
+            "items": {
+              "$ref": "#/components/schemas/RescheduleWarning"
+            }
+          }
+        },
+        "required": [
+          "sourceLesson",
+          "target",
+          "checks",
+          "warnings"
+        ]
+      },
+      "RescheduleSummary": {
+        "type": "object",
+        "description": "调课可行性汇总",
+        "properties": {
+          "feasible": {
+            "type": "boolean",
+            "description": "是否可行"
+          },
+          "reason": {
+            "type": "string",
+            "description": "可行性结论说明"
+          },
+          "conflictCount": {
+            "type": "integer",
+            "description": "冲突总数"
+          },
+          "warningCount": {
+            "type": "integer",
+            "description": "风险提示数"
+          }
+        },
+        "required": [
+          "feasible",
+          "reason",
+          "conflictCount",
+          "warningCount"
+        ]
+      },
+      "GroupPlanItem": {
+        "type": "object",
+        "description": "群体计划候选（ranked）",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "description": "候选序号 1..N（按 roomCount 降序）"
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7"
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "星期名称"
+          },
+          "date": {
+            "type": "string",
+            "description": "该周该星期对应日期 YYYY-MM-DD"
+          },
+          "periodStart": {
+            "type": "integer",
+            "description": "空闲节次起点"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "description": "空闲节次终点"
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第3-4节"
+          },
+          "freePeriodCount": {
+            "type": "integer",
+            "description": "连续空闲节数"
+          },
+          "roomCount": {
+            "type": "integer",
+            "description": "该窗口空闲教室数"
+          },
+          "rooms": {
+            "type": "array",
+            "description": "空闲教室列表",
+            "items": {
+              "$ref": "#/components/schemas/GroupPlanRoom"
+            }
+          },
+          "entities": {
+            "type": "array",
+            "description": "参与实体（已解析）",
+            "items": {
+              "type": "object",
+              "description": "已解析实体",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "实体类型",
+                  "enum": [
+                    "teacher",
+                    "class"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "description": "实体 id"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "实体名称"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "rank",
+          "weekday",
+          "periodStart",
+          "periodEnd",
+          "freePeriodCount",
+          "roomCount",
+          "rooms",
+          "entities"
+        ]
+      },
+      "GroupPlanSummary": {
+        "type": "object",
+        "description": "群体计划汇总",
+        "properties": {
+          "entityCount": {
+            "type": "integer",
+            "description": "成功解析的实体数"
+          },
+          "candidateCount": {
+            "type": "integer",
+            "description": "候选窗口数"
+          }
+        },
+        "required": [
+          "entityCount",
+          "candidateCount"
+        ]
+      },
+      "RescheduleSourceLesson": {
+        "type": "object",
+        "description": "源课程信息（lessonDisplay 形态）",
+        "properties": {
+          "lessonId": {
+            "type": "string",
+            "description": "课次 id"
+          },
+          "courseId": {
+            "type": "string",
+            "description": "课程 id"
+          },
+          "courseName": {
+            "type": "string",
+            "description": "课程名称"
+          },
+          "teachers": {
+            "type": "array",
+            "description": "任课教师名称列表",
+            "items": {
+              "type": "string",
+              "description": "教师名称"
+            }
+          },
+          "classes": {
+            "type": "array",
+            "description": "上课班级名称列表",
+            "items": {
+              "type": "string",
+              "description": "班级名称"
+            }
+          },
+          "roomId": {
+            "type": "string",
+            "description": "教室 id"
+          },
+          "roomName": {
+            "type": "string",
+            "description": "教室名称"
+          },
+          "building": {
+            "type": "string",
+            "description": "楼栋（可为 null）"
+          },
+          "campusId": {
+            "type": "string",
+            "description": "校区 id"
+          },
+          "campusName": {
+            "type": "string",
+            "description": "校区名称"
+          },
+          "weekday": {
+            "type": "integer",
+            "description": "星期 1..7"
+          },
+          "weekdayName": {
+            "type": "string",
+            "description": "星期名称"
+          },
+          "periodStart": {
+            "type": "integer",
+            "description": "节次起点"
+          },
+          "periodEnd": {
+            "type": "integer",
+            "description": "节次终点"
+          },
+          "periodText": {
+            "type": "string",
+            "description": "如 第3-4节"
+          },
+          "startTime": {
+            "type": "string",
+            "description": "开始时间 HH:mm"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "结束时间 HH:mm"
+          },
+          "weeks": {
+            "type": "array",
+            "description": "开课教学周列表",
+            "items": {
+              "type": "integer",
+              "description": "教学周"
+            }
+          }
+        },
+        "required": [
+          "lessonId",
+          "courseId",
+          "courseName",
+          "teachers",
+          "classes",
+          "roomId",
+          "roomName",
+          "campusId",
+          "campusName",
+          "weekday",
+          "periodStart",
+          "periodEnd",
+          "weeks"
+        ]
+      },
+      "RescheduleConflictCheck": {
+        "type": "object",
+        "description": "冲突检查结果（teacher/class/room 三类）",
+        "properties": {
+          "conflict": {
+            "type": "boolean",
+            "description": "是否存在冲突"
+          },
+          "details": {
+            "type": "array",
+            "description": "冲突课次明细（lessonDisplay 形态）",
+            "items": {
+              "$ref": "#/components/schemas/RescheduleSourceLesson"
+            }
+          }
+        },
+        "required": [
+          "conflict",
+          "details"
+        ]
+      },
+      "RescheduleCapabilityCheck": {
+        "type": "object",
+        "description": "容量/功能设备检查结果",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "是否通过"
+          },
+          "note": {
+            "type": "string",
+            "description": "检查说明（fail-open 或失败原因，可为 null）"
+          }
+        },
+        "required": [
+          "ok",
+          "note"
+        ]
+      },
+      "RescheduleWarning": {
+        "type": "object",
+        "description": "调课风险提示",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "风险类型（continuous_load/cross_campus_rush 等）"
+          },
+          "level": {
+            "type": "string",
+            "description": "风险级别",
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "风险说明"
+          }
+        },
+        "required": [
+          "type",
+          "level",
+          "text"
+        ]
+      },
+      "GroupPlanRoom": {
+        "type": "object",
+        "description": "候选窗口内空闲教室",
+        "properties": {
+          "roomId": {
+            "type": "string",
+            "description": "教室 id"
+          },
+          "roomName": {
+            "type": "string",
+            "description": "教室名称"
+          },
+          "building": {
+            "type": "string",
+            "description": "楼栋"
+          },
+          "campusId": {
+            "type": "string",
+            "description": "校区 id"
+          },
+          "campusName": {
+            "type": "string",
+            "description": "校区名称"
+          },
+          "capacity": {
+            "type": "integer",
+            "description": "容量"
+          },
+          "type": {
+            "type": "string",
+            "description": "教室类型"
+          }
+        },
+        "required": [
+          "roomId",
+          "roomName",
+          "campusId",
+          "campusName",
+          "capacity",
+          "type"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

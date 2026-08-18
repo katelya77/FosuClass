@@ -1,9 +1,9 @@
 "use strict";
 // R49.1.2 新增测试：ADP OpenAPI 输出契约硬化
 // 验证：import + canonical 两个 OpenAPI 的每个 array 都有合法 items；
-//       7 个 operation 各自拥有独立且可解析的 200 响应 Schema；
+//       13 个 operation 各自拥有独立且可解析的 200 响应 Schema；
 //       risk/day_plan/overview 响应声明 summary（含所需子字段）、risk 声明 compared+rushWarnings；
-//       响应 Schema 声明的字段覆盖真实运行时 7 个 façade 的实际返回（防 OpenAPI 与运行时漂移）；
+//       响应 Schema 声明的字段覆盖真实运行时 13 个 façade 的实际返回（防 OpenAPI 与运行时漂移）；
 //       OpenAPI 不含 token/密钥类属性名；canonical 与 import 响应 Schema 完全镜像。
 const test = require("node:test");
 const assert = require("node:assert");
@@ -19,6 +19,9 @@ const canonical = JSON.parse(fs.readFileSync(CANONICAL_PATH, "utf8"));
 const V2_PATH = path.join(__dirname, "..", "..", "mock-data", "competition-demo-v2.json");
 process.env.CAMPUS_DATA_PATH = V2_PATH;
 const agentTools = require("../../mcp/campus-tools-mcp/src/agent-tools.js");
+const v2Dataset = JSON.parse(fs.readFileSync(V2_PATH, "utf8"));
+const V2_FIRST_TEACHERS = v2Dataset.teachers.slice(0, 2).map((t) => ({ type: "teacher", id: t.id, name: t.name }));
+const V2_FIRST_LESSON_ID = v2Dataset.lessons[0].id;
 
 const RESPONSE_SCHEMA_OF = {
   campus_schedule_query: "ScheduleQueryResponse",
@@ -28,6 +31,12 @@ const RESPONSE_SCHEMA_OF = {
   campus_day_plan: "DayPlanResponse",
   campus_overview: "OverviewResponse",
   campus_teacher_load_query: "TeacherLoadQueryResponse",
+  campus_entity_search: "EntitySearchResponse",
+  campus_academic_context: "AcademicContextResponse",
+  campus_common_free_time_query: "CommonFreeTimeResponse",
+  campus_room_utilization_query: "RoomUtilizationResponse",
+  campus_reschedule_feasibility: "RescheduleFeasibilityResponse",
+  campus_group_plan: "GroupPlanResponse",
 };
 
 function resolveRef(ref, doc) {
@@ -89,15 +98,15 @@ test("R49.1.2：所有 array 类型都必须有合法 items Schema（import + ca
   }
 });
 
-test("R49.1.2：7 个 operation 各自拥有独立且可解析的响应 Schema", () => {
+test("R49.1.2：13 个 operation 各自拥有独立且可解析的响应 Schema", () => {
   const responses = operationResponseSchema(spec);
-  assert.strictEqual(Object.keys(responses).length, 7, "必须恰有 7 个 operation 响应");
+  assert.strictEqual(Object.keys(responses).length, 13, "必须恰有 13 个 operation 响应");
   for (const [name, expected] of Object.entries(RESPONSE_SCHEMA_OF)) {
     assert.strictEqual(responses[name].ref, `#/components/schemas/${expected}`, `${name} 应使用 ${expected}`);
     assert.strictEqual(responses[name].schema.type, "object", `${name} 响应 Schema 应为 object`);
   }
   const refs = Object.values(responses).map((r) => r.ref);
-  assert.strictEqual(new Set(refs).size, 7, "7 个响应 Schema 必须各不相同（每个 operation 输出语义独立）");
+  assert.strictEqual(new Set(refs).size, 13, "13 个响应 Schema 必须各不相同（每个 operation 输出语义独立）");
 });
 
 test("R49.1.2：risk 响应声明 summary（selfCompare/conflictCount/hasConflict）+ compared + rushWarnings", () => {
@@ -155,7 +164,7 @@ test("R49.1.2：schedule / classroom 响应声明 query + items + resolvedEntity
   }
 });
 
-test("R49.1.2：响应 Schema 声明字段覆盖真实运行时 7 个 façade 实际返回（防漂移）", () => {
+test("R49.1.2：响应 Schema 声明字段覆盖真实运行时 13 个 façade 实际返回（防漂移）", () => {
   const responses = operationResponseSchema(spec);
   const cases = [
     { name: "campus_schedule_query", params: { entityType: "teacher", entityName: "T09", week: 1 }, responseSchema: "ScheduleQueryResponse", itemSchema: "LessonItem" },
@@ -165,6 +174,12 @@ test("R49.1.2：响应 Schema 声明字段覆盖真实运行时 7 个 façade �
     { name: "campus_day_plan", params: { date: "2026-09-04" }, responseSchema: "DayPlanResponse", itemSchema: "DayPlanItem" },
     { name: "campus_overview", params: {}, responseSchema: "OverviewResponse", itemSchema: "OverviewItem" },
     { name: "campus_teacher_load_query", params: { weekStart: 1, weekEnd: 1, topN: 3 }, responseSchema: "TeacherLoadQueryResponse", itemSchema: "TeacherLoadItem" },
+    { name: "campus_entity_search", params: { entityType: "teacher", limit: 5 }, responseSchema: "EntitySearchResponse", itemSchema: "EntitySearchItem" },
+    { name: "campus_academic_context", params: { intent: { kind: "future_weeks", count: 4 }, baseDate: "2026-08-18" }, responseSchema: "AcademicContextResponse", itemSchema: "AcademicContextItem" },
+    { name: "campus_common_free_time_query", params: { entities: V2_FIRST_TEACHERS, week: 1, minConsecutivePeriods: 1 }, responseSchema: "CommonFreeTimeResponse", itemSchema: "CommonFreeTimeItem" },
+    { name: "campus_room_utilization_query", params: { weekStart: 1, weekEnd: 4, sort: "highest", topN: 3 }, responseSchema: "RoomUtilizationResponse", itemSchema: "RoomUtilizationItem" },
+    { name: "campus_reschedule_feasibility", params: { sourceLessonId: V2_FIRST_LESSON_ID, target: { week: 1, weekday: 1, periodStart: 3, periodEnd: 4 } }, responseSchema: "RescheduleFeasibilityResponse", itemSchema: "RescheduleItem" },
+    { name: "campus_group_plan", params: { entities: V2_FIRST_TEACHERS, week: 1, minConsecutivePeriods: 1 }, responseSchema: "GroupPlanResponse", itemSchema: "GroupPlanItem" },
   ];
   for (const item of cases) {
     const env = agentTools.callAgentTool(item.name, item.params);

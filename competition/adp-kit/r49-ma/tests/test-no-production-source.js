@@ -25,10 +25,13 @@ function walk(dir, acc = []) {
 // 必须携带真实比赛 CloudBase endpoint 供腾讯 ADP 人工导入；test-adp-import-openapi.js 仅做断言引用。
 // R49.4.1 例外：campus-agent-tools.r49.4-existing-plugin-additions.json 是同性质的用户导入文件
 // （既有 5 工具插件增量升级用，恰 2 operations，与全量文件同一真实 server），同样豁免。
+// R50.0 例外：campus-agent-tools.r50-existing-plugin-additions.json 是同性质的用户导入文件
+// （6 个新增 R50 CampusTools 增量升级用，恰 6 operations，与全量文件同一真实 server），同样豁免。
 // 其余契约/代码层仍必须 FAIL CLOSED（占位符），不得硬编码真实生产 Endpoint。
 const IMPORT_ALLOWLIST = [
   "tools/openapi/campus-agent-tools.adp-import.json",
   "tools/openapi/campus-agent-tools.r49.4-existing-plugin-additions.json",
+  "tools/openapi/campus-agent-tools.r50-existing-plugin-additions.json",
   "tests/test-adp-import-openapi.js",
 ];
 
