@@ -1,8 +1,23 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-18 +08:00（R50.1.1 收尾）
+更新时间：2026-08-18 +08:00（R50.1.2 收尾）
 
-当前阶段：`CampusFlow ADP R50.1.1 / Console Contract Consistency 热修复`（远程 19 commits 已 fast-forward 落地并本地验证、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1.1 节）
+当前阶段：`CampusFlow ADP R50.1.2 / Control-Plane SSOT Closure`（Tool Binding 唯一真源收敛、PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行，见下方 R50.1.2 节）
+
+## R50.1.2 状态（收尾，2026-08-18）
+
+- **范围**：Control-Plane SSOT Closure —— R50.1.1 已修 CUTOVER/ACCEPTANCE/契约测试，但 ChatGPT 独立审计发现 `generate-tool-visibility.js` 手工 BINDINGS 与 `R50.1-TOOL-MODEL-VISIBILITY.md` 仍含 pre-fix 旧绑定（entity_search→课程空间+洞察、academic_context→Main、common_free_time→课程空间+洞察、reschedule_feasibility→课程空间）。Runtime / Prompt / CampusTools 算法无问题，纯控制面文档/生成器漂移。
+- **SSOT 建立**：`r50.1/agent-tool-bindings.json`（`version=R50.1.2`；13 unique / 14 bindings；agents.main=[]、schedule 7、risk 4、insight 3；sharedTools={campus_academic_context:[schedule,risk]}）。绑定关系不再在 Markdown/JS 中硬编码。
+- **生成器重写**：`r50.1/generate-tool-visibility.js` 删除手工 `BINDINGS`，从 SSOT 派生绑定列（`bindingsOf`），参数 required/optional/console-only 仍以 OpenAPI 为真源、baseDate 仍 console-only、Direct Result 全 OFF；新增 `--check` 幂等模式。
+- **Visibility 文档已重新生成**：6 行绑定 = entity_search→课程空间（Schedule）／academic_context→课程空间（Schedule）＋风险规划（Risk）／common_free_time→课程空间（Schedule）／room_utilization→校园洞察（Insight）／reschedule_feasibility→风险规划（Risk）／group_plan→课程空间（Schedule），含 13/14 + 唯一共享 + Main 不绑定陈述；禁止出现的旧错误组合已全部消失。
+- **RED→GREEN**：probe（`git show 8170049` 旧文档+旧生成器只读）＝ **PRE-FIX FAIL**（4 工具绑定错误 + 生成器含手工 BINDINGS + 未读 SSOT）／ **POST-FIX PASS**（6 工具全对，含 room_utilization/group_plan 正确项）。
+- **R50.1.2 契约门 = 12/12 PASS**：`test-r50-1-2-control-plane-ssot.js`（A SSOT 13/14 自洽、B Main=0、C Schedule 7、D Risk 4、E Insight 3、F academic_context 唯一跨域共享、G 其余不重复、H CUTOVER=SSOT、I ACCEPTANCE=SSOT、J Visibility=SSOT、K 生成器 --check 幂等、L OpenAPI adp-import 13 ops=SSOT unique set；解析真实 tool set，非关键词匹配）。
+- **全量回归 = 全绿**：r49-ma **274/274**（262 基线 + R50.1.1 3 + R50.1.2 12）；mcp **52/52 + check + typecheck + check:openapi（14 工具）**；golden **33/33**（v1、sha1:fefef4bf425b、verified=100%）；compiler --check **4 files**；sync --check **11 files**；test-http **PASS**；`git diff --check` 干净。
+- **CI**：PR #49 @ 8170049 = **5/5 SUCCESS**（Xiaofu Agent CI / Competition ADP Widget CI / Public Security Gate ×2 / Admin CI）；push 后对新 HEAD 重跑。
+- **最终报告**：`r50.1/2026-08-18-r50.1.2-final-report.md`（RED/GREEN 证据 + SSOT 表 + 12 契约 + 验证矩阵）。
+- **判定**：**`R50.1.2 CONTROL-PLANE GOLDEN`**（repo + CI 全绿）；**Console GOLDEN 未宣布**——待用户按 `r50.1/R50.1-CONSOLE-ACCEPTANCE.md` 执行 D1~D6（Agent Cutover 按规范绑定表 + 4 个 final Prompt 粘贴）。
+- **待办（用户动作）**：D1~D6 真机验收；R50.2（Widget 等）未启动。
+
 
 ## R50.1.1 状态（收尾，2026-08-18）
 
