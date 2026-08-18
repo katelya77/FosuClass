@@ -99,9 +99,9 @@ test("R49.1.1：import spec 每个 path 都是真实 server 可识别的 Agent T
   // import spec 的 path 必须与权威 server 层（mcp/campus-tools-mcp/src/agent-tools.js）注册的
   // Agent Tool façade path 完全一致，且 operationId 与 path 名称一一对应。
   const agentTools = require("../../mcp/campus-tools-mcp/src/agent-tools.js");
-  assert.strictEqual(agentTools.AGENT_TOOL_PATHS.length, 7, "server 必须恰有 7 个 Agent Tool façade");
   const paths = Object.keys(spec.paths);
-  assert.strictEqual(paths.length, 7, "import spec 必须恰有 7 个 path");
+  assert.ok(agentTools.AGENT_TOOL_PATHS.length >= paths.length, "server 必须覆盖 import spec 全部 Agent Tool façade");
+  assert.strictEqual(paths.length, 7, "import spec 必须恰有 7 个 path（T6 随 OpenAPI 增量扩到 13）");
   for (const p of paths) {
     assert.ok(p.startsWith("/api/"), `${p} 必须是 /api/ 前缀`);
     const name = p.slice("/api/".length);

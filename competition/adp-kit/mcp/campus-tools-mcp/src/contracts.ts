@@ -19,7 +19,12 @@ export type CampusToolName =
   | "compare_schedules"
   | "generate_day_plan"
   | "get_campus_teaching_overview"
-  | "query_teacher_load";
+  | "query_teacher_load"
+  | "query_entity_search"
+  | "query_common_free_time"
+  | "query_room_utilization"
+  | "check_reschedule_feasibility"
+  | "plan_group";
 
 export type CampusErrorCode =
   | "MISSING_PARAM"
@@ -86,7 +91,47 @@ export interface ResolveEntityInput {
   name: string;
 }
 
+export type TemporalIntentKind =
+  | "absolute"
+  | "relative_day"
+  | "relative_weekday"
+  | "academic_week"
+  | "academic_week_weekday"
+  | "week_range"
+  | "future_weeks"
+  | "recent_weeks"
+  | "next_week"
+  | "prev_week"
+  | "current";
+
+/** 结构化 temporal intent（Temporal Semantic Core 输入）。 */
+export interface TemporalIntent {
+  kind: TemporalIntentKind;
+  date?: string;
+  offset?: number;
+  weekday?: number;
+  week?: number;
+  weekStart?: number;
+  weekEnd?: number;
+  count?: number;
+}
+
+/** R50.0：temporalContext（由 temporal-core 确定性解析，内部协议不默认展示给用户）。 */
+export interface TemporalContext {
+  referenceDate: string | null;
+  semesterId: string | null;
+  inSemester: boolean;
+  currentAcademicWeek: number | null;
+  resolvedDate: string | null;
+  resolvedWeek: number | null;
+  resolvedWeekStart: number | null;
+  resolvedWeekEnd: number | null;
+  resolutionKind: string;
+  note?: string;
+}
+
 export interface AcademicContextInput {
+  intent?: TemporalIntent | string;
   date?: string;
   dateText?: string;
   baseDate?: string;
@@ -152,6 +197,72 @@ export interface QueryTeacherLoadInput {
   campus?: string;
 }
 
+export interface NamedEntityInput {
+  type: "teacher" | "class";
+  name: string;
+}
+
+/** R50.0 实体搜索：matchType 由服务端确定性判定（exact/normalized_exact/prefix/substring/fuzzy/list）。 */
+export interface QueryEntitySearchInput {
+  entityType?: EntityType;
+  keyword?: string;
+  campus?: string;
+  college?: string;
+  limit?: number;
+}
+
+/** R50.0 多实体共同空闲：entities[2..6] + week 或 weekStart/weekEnd。 */
+export interface QueryCommonFreeTimeInput {
+  entities: NamedEntityInput[];
+  week?: number;
+  weekStart?: number;
+  weekEnd?: number;
+  weekday?: number;
+  weekdays?: number[];
+  periodStart?: number;
+  periodEnd?: number;
+  minConsecutivePeriods?: number;
+  limit?: number;
+}
+
+/** R50.0 教室利用率：groupBy room|building|campus，sort highest|lowest，Ranking Core 排名。 */
+export interface QueryRoomUtilizationInput {
+  weekStart: number;
+  weekEnd: number;
+  campus?: string;
+  building?: string;
+  roomType?: string;
+  groupBy?: "room" | "building" | "campus";
+  sort?: "highest" | "lowest";
+  topN?: number;
+}
+
+/** R50.0 调课 What-if：sourceLessonId + target{week,weekday,periodStart,periodEnd,room?}。 */
+export interface CheckRescheduleFeasibilityInput {
+  sourceLessonId: string;
+  target: {
+    week: number;
+    weekday: number;
+    periodStart: number;
+    periodEnd: number;
+    room?: string;
+  };
+}
+
+/** R50.0 群体计划：共同空闲 + 空教室 + 容量/设备过滤 ranked 候选。 */
+export interface PlanGroupInput {
+  entities: NamedEntityInput[];
+  week: number;
+  campus?: string;
+  weekday?: number;
+  weekdays?: number[];
+  periodStart?: number;
+  periodEnd?: number;
+  minConsecutivePeriods?: number;
+  minCapacity?: number;
+  requiredFeatures?: string[];
+}
+
 export interface CampusToolInputs {
   resolve_entity: ResolveEntityInput;
   get_academic_context: AcademicContextInput;
@@ -162,4 +273,9 @@ export interface CampusToolInputs {
   generate_day_plan: GenerateDayPlanInput;
   get_campus_teaching_overview: TeachingOverviewInput;
   query_teacher_load: QueryTeacherLoadInput;
+  query_entity_search: QueryEntitySearchInput;
+  query_common_free_time: QueryCommonFreeTimeInput;
+  query_room_utilization: QueryRoomUtilizationInput;
+  check_reschedule_feasibility: CheckRescheduleFeasibilityInput;
+  plan_group: PlanGroupInput;
 }

@@ -54,7 +54,7 @@ test("JS runtime TOOL_DEFS 与 TS contract 工具集合一致（不许 JS 有 TS
   const jsTools = [...TOOLS.matchAll(/name: "([a-z_]+)",/g)].map((m) => m[1]);
   const block = CONTRACTS.match(/export type CampusToolName =([\s\S]*?);/)[1];
   const tsTools = [...block.matchAll(/\| "([a-z_]+)"/g)].map((m) => m[1]);
-  assert.strictEqual(jsTools.length, 9, "TOOL_DEFS 应为 9 个工具");
+  assert.strictEqual(jsTools.length, 14, "TOOL_DEFS 应为 14 个工具（R50.0 新增 5 个底层 CampusTools）");
   for (const t of jsTools) {
     assert.ok(tsTools.includes(t), `TS contract 缺少 JS 运行时的工具: ${t}`);
   }

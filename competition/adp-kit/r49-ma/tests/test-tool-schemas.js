@@ -8,7 +8,7 @@ const path = require("path");
 const CONTRACT_PATH = path.join(__dirname, "..", "tools", "schemas", "agent-tools.json");
 const contract = JSON.parse(fs.readFileSync(CONTRACT_PATH, "utf8"));
 
-// 7 个 Agent Tool → CampusTools 确定性映射（不允许把内部 resolver 直接暴露）
+// 13 个 Agent Tool → CampusTools 确定性映射（不允许把内部 resolver 直接暴露）
 const EXPECTED_MAP = {
   campus_schedule_query: "query_schedule",
   campus_classroom_search: "find_available_classrooms",
@@ -17,19 +17,25 @@ const EXPECTED_MAP = {
   campus_overview: "get_campus_teaching_overview",
   campus_teacher_load_query: "query_teacher_load",
   campus_schedule_range_query: "query_schedule_range",
+  campus_entity_search: "query_entity_search",
+  campus_academic_context: "get_academic_context",
+  campus_common_free_time_query: "query_common_free_time",
+  campus_room_utilization_query: "query_room_utilization",
+  campus_reschedule_feasibility: "check_reschedule_feasibility",
+  campus_group_plan: "plan_group",
 };
 
 const OUTPUT_STATUSES = ["success", "clarification", "no_result", "error"];
 
-test("agent-tools.json 存在且恰为 7 个 Agent Tool", () => {
+test("agent-tools.json 存在且恰为 13 个 Agent Tool", () => {
   assert.ok(contract.toolContractVersion, "缺 toolContractVersion");
   assert.ok(Array.isArray(contract.tools), "tools 必须是数组");
-  assert.strictEqual(contract.tools.length, 7, "必须是 7 个 Agent Tool（不暴露内部 resolver）");
+  assert.strictEqual(contract.tools.length, 13, "必须是 13 个 Agent Tool（不暴露内部 resolver）");
 });
 
 test("工具名唯一，且映射到稳定 CampusTools 工具", () => {
   const names = contract.tools.map((t) => t.name);
-  assert.strictEqual(new Set(names).size, 7, "工具名不允许重复");
+  assert.strictEqual(new Set(names).size, 13, "工具名不允许重复");
   for (const [agentTool, campusTool] of Object.entries(EXPECTED_MAP)) {
     const t = contract.tools.find((x) => x.name === agentTool);
     assert.ok(t, `缺少 Agent Tool: ${agentTool}`);

@@ -23,6 +23,8 @@ const {
   parseCalendarDate,
 } = require("./data");
 const { ok, fail, ERR } = require("./envelope");
+const temporalCore = require("./temporal-core");
+const { buildRankingResult } = require("./ranking-core");
 
 const ENTITY_TYPES = ["class", "teacher", "room", "course", "campus", "college", "user"];
 const COLLECTION_OF = {
@@ -34,6 +36,43 @@ const COLLECTION_OF = {
   college: "colleges",
   user: "demoUsers",
 };
+
+/**
+ * 安全 JSON 解析：用于接收 ADP 平台可能以字符串传递的结构化参数（如 intent / entities /
+ * requiredFeatures）。对象直接透传，字符串按 JSON.parse 尝试，失败返回 null（fail-open
+ * 到无该参数路径，由业务层做确定性兜底），绝不抛异常。
+ */
+function safeJsonParse(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "object") return raw;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+/** 节次连续段展开：[[start,end], ...] 形式的 occupied periods → 空闲连续窗口。 */
+function freeWindows(occupied, rangeStart, rangeEnd, minConsecutive) {
+  const busy = new Set();
+  for (const [s, e] of occupied) {
+    for (let p = Math.max(s, rangeStart); p <= Math.min(e, rangeEnd); p += 1) busy.add(p);
+  }
+  const windows = [];
+  let runStart = null;
+  for (let p = rangeStart; p <= rangeEnd + 1; p += 1) {
+    if (!busy.has(p) && p <= rangeEnd) {
+      if (runStart == null) runStart = p;
+    } else if (runStart != null) {
+      if (p - runStart >= minConsecutive) windows.push({ periodStart: runStart, periodEnd: p - 1 });
+      runStart = null;
+    }
+  }
+  return windows;
+}
 
 // ---------------------------------------------------------------------------
 // 名称归一化：容忍「教师1」「2025级a班」「a1-101」等口语写法
@@ -246,6 +285,46 @@ function resolveEntity(params) {
 // ---------------------------------------------------------------------------
 function getAcademicContext(params) {
   const { data, dataVersion, dataHash } = loadDataset();
+  const input = params || {};
+
+  // R50.0 Temporal Semantic Core 路径：Agent 输出结构化 intent（对象或 JSON 字符串），
+  // 日期/周次/窗口由 temporal-core 确定性计算（不猜测）。
+  const rawIntent = input.intent;
+  const intent = safeJsonParse(rawIntent);
+  if (intent && typeof intent === "object" && typeof intent.kind === "string") {
+    const baseDate = String(input.baseDate || input.date || shanghaiCurrentDate()).trim();
+    if (parseCalendarDate(baseDate) != null) {
+      const temporalContext = temporalCore.resolveTemporalIntent(intent, {
+        referenceDate: baseDate,
+        semester: data.meta.semester,
+      });
+      const resolvedDate = temporalContext.resolvedDate;
+      const weekday = resolvedDate ? dateToWeekday(resolvedDate) : null;
+      const item = {
+        resolvedDate,
+        date: resolvedDate || null,
+        week: temporalContext.resolvedWeek,
+        weekday,
+        weekdayName: weekday ? data.meta.weekdayNames[weekday - 1] : null,
+        inSemester: temporalContext.inSemester,
+        semester: data.meta.semester,
+        periods: data.meta.periods,
+        baseDate,
+        resolutionSource: temporalContext.resolutionKind,
+        temporalContext,
+      };
+      const env = ok({ items: [item], actions: [] });
+      env.evidence.dataHash = dataHash;
+      env.dataVersion = dataVersion;
+      if (temporalContext.resolvedWeekStart == null && temporalContext.resolvedWeekEnd == null
+        && temporalContext.resolutionKind !== "none") {
+        env.evidence.note = "无法解析到有效教学周（开学前/学期后按契约退化）";
+      }
+      return env;
+    }
+  }
+
+  // 原 backward-compatible 路径（未提供有效 intent 时行为完全不变）。
   const resolved = resolveAcademicDate(params, data);
   if (resolved.error) return resolved.error;
   const resolvedDate = resolved.resolvedDate;
@@ -1040,6 +1119,701 @@ function queryTeacherLoad(params) {
 }
 
 // ---------------------------------------------------------------------------
+// 工具 9（R50.0）：query_entity_search —— 实体清单/搜索（确定排序，禁止编造）
+// matchType 优先级：exact > normalized_exact > prefix > substring > fuzzy；空关键词=list。
+// ---------------------------------------------------------------------------
+const MATCH_ORDER = { exact: 0, normalized_exact: 1, prefix: 2, substring: 3, fuzzy: 4, list: 5 };
+
+function queryEntitySearch(params) {
+  const input = params || {};
+  const { data, byId } = loadDataset();
+  let type = input.entityType;
+  if (type && !ENTITY_TYPES.includes(type)) {
+    return fail(ERR.INVALID_PARAM, "entityType 非法", { entityType: type, allowed: ENTITY_TYPES });
+  }
+  let limit = input.limit == null ? 20 : Number(input.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    return fail(ERR.INVALID_PARAM, "limit 需为 1..100 的整数", { limit: input.limit });
+  }
+  const keyword = String(input.keyword || "").trim();
+  const types = type ? [type] : ENTITY_TYPES;
+  const campus = input.campus ? resolveCampus(data, input.campus) : null;
+  if (input.campus && !campus) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${input.campus}」`, {});
+  const campusId = campus ? campus.id : null;
+  const collegeId = input.college ? String(input.college).trim() : null;
+  const nkw = normalizeName(keyword);
+  const compact = (s) => String(s || "").replace(/[\s\-_]/g, "");
+
+  const results = [];
+  for (const t of types) {
+    for (const item of data[COLLECTION_OF[t]]) {
+      // 校区/学院过滤：字段存在才过滤（部分实体类型缺字段时 fail-open 跳过）
+      if (campusId) {
+        if (t === "room" && item.campusId !== campusId) continue;
+        if (item.campusId != null && item.campusId !== campusId) continue;
+      }
+      if (collegeId && item.collegeId != null && item.collegeId !== collegeId) continue;
+      let matchType = null;
+      if (!keyword) matchType = "list";
+      else if (item.name === keyword) matchType = "exact";
+      else if (normalizeName(item.name) === nkw) matchType = "normalized_exact";
+      else if (normalizeName(item.name).startsWith(nkw)) matchType = "prefix";
+      else if (normalizeName(item.name).includes(nkw)) matchType = "substring";
+      else if (compact(item.name).includes(compact(keyword))) matchType = "fuzzy";
+      if (!matchType) continue;
+      const entry = { matchOrder: MATCH_ORDER[matchType], type: t, id: item.id, name: item.name, matchType };
+      if (t === "room") {
+        entry.campusId = item.campusId;
+        entry.campusName = byId.campuses[item.campusId] ? byId.campuses[item.campusId].name : null;
+        entry.building = item.building;
+        entry.capacity = item.capacity;
+        entry.roomType = item.type;
+      } else if (t === "class" || t === "course") {
+        entry.collegeId = item.collegeId || null;
+        entry.collegeName = item.collegeId && byId.colleges[item.collegeId] ? byId.colleges[item.collegeId].name : null;
+      } else if (t === "teacher") {
+        entry.classId = item.classId || null;
+        entry.className = item.classId && byId.classes[item.classId] ? byId.classes[item.classId].name : null;
+      }
+      results.push(entry);
+    }
+  }
+  results.sort((a, b) => (
+    a.matchOrder - b.matchOrder
+    || a.type.localeCompare(b.type)
+    || a.name.localeCompare(b.name, "zh-CN")
+    || a.id.localeCompare(b.id)
+  ));
+  const sliced = results.slice(0, limit);
+  const items = sliced.map(({ matchOrder, ...rest }) => rest);
+
+  const env = ok({ items, actions: [] });
+  env.query = {
+    entityType: type || null,
+    keyword: keyword || null,
+    campus: campus ? campus.name : null,
+    college: collegeId || null,
+    limit,
+  };
+  env.summary = {
+    total: results.length,
+    returned: items.length,
+    matchTypes: [...new Set(items.map((i) => i.matchType))],
+  };
+  if (items.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
+// 工具 10（R50.0）：query_common_free_time —— 2~6 个教师/班级共同空闲窗口
+// ---------------------------------------------------------------------------
+function queryCommonFreeTime(params) {
+  const input = params || {};
+  const entitiesRaw = safeJsonParse(input.entities);
+  const entities = Array.isArray(entitiesRaw) ? entitiesRaw : null;
+  if (!entities || entities.length < 2 || entities.length > 6) {
+    return fail(ERR.INVALID_PARAM, "entities 需为 2..6 个 { type, name } 实体", { entities });
+  }
+  const { data, idx } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+
+  let weekStart = null;
+  let weekEnd = null;
+  if (input.week != null) {
+    weekStart = Number(input.week);
+    weekEnd = Number(input.week);
+  } else if (input.weekStart != null && input.weekEnd != null) {
+    weekStart = Number(input.weekStart);
+    weekEnd = Number(input.weekEnd);
+  }
+  if (weekStart == null || weekEnd == null) {
+    return fail(ERR.MISSING_PARAM, "需提供 week 或 weekStart/weekEnd", {});
+  }
+  if (!Number.isInteger(weekStart) || !Number.isInteger(weekEnd) || weekStart < 1 || weekEnd > totalWeeks || weekEnd < weekStart) {
+    return fail(ERR.OUT_OF_RANGE, `周次必须在 1..${totalWeeks} 之间且 weekEnd>=weekStart`, { weekStart, weekEnd });
+  }
+
+  let weekdays = input.weekdays != null ? safeJsonParse(input.weekdays) : null;
+  if (weekdays == null && input.weekday != null) weekdays = [Number(input.weekday)];
+  if (weekdays == null) weekdays = [1, 2, 3, 4, 5, 6, 7];
+  if (!Array.isArray(weekdays) || !weekdays.length || weekdays.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+    return fail(ERR.INVALID_PARAM, "weekdays 需为 1..7 的整数数组", { weekdays });
+  }
+  weekdays = [...new Set(weekdays)].sort((a, b) => a - b);
+
+  const rangeStart = input.periodStart == null ? 1 : Number(input.periodStart);
+  const rangeEnd = input.periodEnd == null ? data.meta.periods.length : Number(input.periodEnd);
+  if (!Number.isInteger(rangeStart) || !Number.isInteger(rangeEnd) || rangeStart < 1 || rangeEnd > data.meta.periods.length || rangeStart > rangeEnd) {
+    return fail(ERR.INVALID_PARAM, `periodStart/periodEnd 需在 1..${data.meta.periods.length} 且 start<=end`, { rangeStart, rangeEnd });
+  }
+  const minConsecutive = input.minConsecutivePeriods == null ? 1 : Number(input.minConsecutivePeriods);
+  if (!Number.isInteger(minConsecutive) || minConsecutive < 1 || minConsecutive > data.meta.periods.length) {
+    return fail(ERR.INVALID_PARAM, "minConsecutivePeriods 需为 1..10 的整数", { minConsecutive: input.minConsecutivePeriods });
+  }
+  const limit = input.limit == null ? 50 : Number(input.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    return fail(ERR.INVALID_PARAM, "limit 需为 1..200 的整数", { limit: input.limit });
+  }
+
+  const resolvedEntities = [];
+  for (const e of entities) {
+    if (!e || typeof e !== "object" || !e.type || !e.name) {
+      return fail(ERR.INVALID_PARAM, "每个实体需包含 type 与 name", { entity: e });
+    }
+    if (e.type !== "teacher" && e.type !== "class") {
+      return fail(ERR.INVALID_PARAM, "共同空闲仅支持 teacher/class 实体", { type: e.type });
+    }
+    const r = resolveEntity({ type: e.type, name: e.name });
+    if (!r.success) return r;
+    resolvedEntities.push(r.resolvedEntity);
+  }
+
+  const busyOf = (type, id, week, weekday) => (idx[type === "teacher" ? "teacher" : "class"].get(id) || [])
+    .filter((les) => expandWeeks(les).includes(week) && les.weekday === weekday);
+
+  const items = [];
+  for (let week = weekStart; week <= weekEnd; week += 1) {
+    for (const weekday of weekdays) {
+      const occupied = [];
+      for (const ent of resolvedEntities) {
+        for (const les of busyOf(ent.type, ent.id, week, weekday)) occupied.push([les.periodStart, les.periodEnd]);
+      }
+      for (const win of freeWindows(occupied, rangeStart, rangeEnd, minConsecutive)) {
+        items.push({
+          week,
+          weekday,
+          weekdayName: data.meta.weekdayNames[weekday - 1],
+          date: weekWeekdayToDate(week, weekday),
+          periodStart: win.periodStart,
+          periodEnd: win.periodEnd,
+          periodText: `第${win.periodStart}-${win.periodEnd}节`,
+          freePeriodCount: win.periodEnd - win.periodStart + 1,
+          entities: resolvedEntities.map((ent) => ({ type: ent.type, id: ent.id, name: ent.name })),
+        });
+      }
+    }
+  }
+  items.sort((a, b) => (a.week - b.week) || (a.weekday - b.weekday) || (a.periodStart - b.periodStart));
+  const sliced = items.slice(0, limit);
+
+  const env = ok({ items: sliced, actions: [] });
+  env.query = {
+    weekStart,
+    weekEnd,
+    weekdays,
+    periodStart: rangeStart,
+    periodEnd: rangeEnd,
+    minConsecutivePeriods: minConsecutive,
+    limit,
+  };
+  env.summary = { entityCount: resolvedEntities.length, totalWindows: items.length, returned: sliced.length };
+  if (sliced.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
+// 工具 11（R50.0）：query_room_utilization —— 教室/楼栋/校区利用率（Ranking Core）
+// ---------------------------------------------------------------------------
+function queryRoomUtilization(params) {
+  const input = params || {};
+  const { data, byId } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+  const weekStart = input.weekStart;
+  const weekEnd = input.weekEnd;
+  if (weekStart == null || weekEnd == null) {
+    return fail(ERR.MISSING_PARAM, "缺少必填参数 weekStart/weekEnd", {});
+  }
+  if (!Number.isInteger(weekStart) || !Number.isInteger(weekEnd)) {
+    return fail(ERR.INVALID_PARAM, "weekStart/weekEnd 需为整数", { weekStart, weekEnd });
+  }
+  if (weekStart < 1 || weekEnd > totalWeeks) {
+    return fail(ERR.OUT_OF_RANGE, `周次必须在 1..${totalWeeks} 之间`, { weekStart, weekEnd });
+  }
+  if (weekEnd < weekStart) {
+    return fail(ERR.INVALID_PARAM, "weekEnd 不得小于 weekStart", { weekStart, weekEnd });
+  }
+  const groupBy = input.groupBy || "room";
+  if (!["room", "building", "campus"].includes(groupBy)) {
+    return fail(ERR.INVALID_PARAM, "groupBy 需为 room/building/campus", { groupBy: input.groupBy });
+  }
+  const sort = input.sort || "highest";
+  if (!["highest", "lowest"].includes(sort)) {
+    return fail(ERR.INVALID_PARAM, "sort 需为 highest/lowest", { sort: input.sort });
+  }
+  let topN = null;
+  if (input.topN != null) {
+    topN = Number(input.topN);
+    if (!Number.isInteger(topN) || topN < 1 || topN > 100) {
+      return fail(ERR.INVALID_PARAM, "topN 需为 1..100 的整数", { topN: input.topN });
+    }
+  }
+  let campusEntity = null;
+  if (input.campus) {
+    campusEntity = resolveCampus(data, input.campus);
+    if (!campusEntity) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${input.campus}」`, {});
+  }
+  const campusId = campusEntity ? campusEntity.id : null;
+  const building = input.building ? String(input.building) : null;
+  const roomType = input.roomType ? String(input.roomType) : null;
+
+  const weekCount = weekEnd - weekStart + 1;
+  const periodsCount = data.meta.periods.length;
+  const totalUnitsPerRoom = weekCount * 7 * periodsCount;
+
+  const occupiedUnits = new Map();
+  const lessonOccurrences = new Map();
+  for (const lesson of data.lessons) {
+    for (const week of expandWeeks(lesson)) {
+      if (week < weekStart || week > weekEnd) continue;
+      let roomUnits = occupiedUnits.get(lesson.roomId);
+      if (!roomUnits) { roomUnits = new Set(); occupiedUnits.set(lesson.roomId, roomUnits); }
+      for (let p = lesson.periodStart; p <= lesson.periodEnd; p += 1) {
+        roomUnits.add(`${week}:${lesson.weekday}:${p}`);
+      }
+      lessonOccurrences.set(lesson.roomId, (lessonOccurrences.get(lesson.roomId) || 0) + 1);
+    }
+  }
+
+  const rooms = data.rooms.filter((r) => {
+    if (r.type === "体育场地") return false;
+    if (campusId && r.campusId !== campusId) return false;
+    if (building && r.building !== building) return false;
+    if (roomType && r.type !== roomType) return false;
+    return true;
+  });
+
+  const rows = [];
+  if (groupBy === "room") {
+    for (const r of rooms) {
+      const occ = occupiedUnits.get(r.id) ? occupiedUnits.get(r.id).size : 0;
+      rows.push({
+        id: r.id,
+        name: r.name,
+        type: "room",
+        occupiedPeriodUnits: occ,
+        availablePeriodUnits: Math.max(totalUnitsPerRoom - occ, 0),
+        utilizationRate: totalUnitsPerRoom ? Number((occ / totalUnitsPerRoom).toFixed(4)) : 0,
+        lessonOccurrences: lessonOccurrences.get(r.id) || 0,
+        campusId: r.campusId,
+        campusName: byId.campuses[r.campusId] ? byId.campuses[r.campusId].name : null,
+        building: r.building,
+        capacity: r.capacity,
+        roomType: r.type,
+      });
+    }
+  } else {
+    const buckets = new Map();
+    for (const r of rooms) {
+      const key = groupBy === "building" ? `${r.campusId}::${r.building}` : r.campusId;
+      if (!buckets.has(key)) buckets.set(key, { ids: [] });
+      buckets.get(key).ids.push(r.id);
+    }
+    for (const [key, bucket] of buckets.entries()) {
+      let occ = 0;
+      let lessons = 0;
+      for (const rid of bucket.ids) {
+        occ += occupiedUnits.get(rid) ? occupiedUnits.get(rid).size : 0;
+        lessons += lessonOccurrences.get(rid) || 0;
+      }
+      const roomCount = bucket.ids.length;
+      const totalUnits = roomCount * totalUnitsPerRoom;
+      let id = key;
+      let name = key;
+      if (groupBy === "building") {
+        const cId = key.split("::")[0];
+        name = `${byId.campuses[cId] ? byId.campuses[cId].name : cId} ${key.split("::")[1]}`;
+      } else if (byId.campuses[key]) {
+        name = byId.campuses[key].name;
+      }
+      rows.push({
+        id,
+        name,
+        type: groupBy,
+        occupiedPeriodUnits: occ,
+        availablePeriodUnits: Math.max(totalUnits - occ, 0),
+        utilizationRate: totalUnits ? Number((occ / totalUnits).toFixed(4)) : 0,
+        lessonOccurrences: lessons,
+        roomCount,
+      });
+    }
+  }
+
+  const ranked = buildRankingResult(rows, {
+    metrics: ["utilizationRate"],
+    tieBreak: ["name"],
+    direction: sort === "lowest" ? "asc" : "desc",
+  });
+
+  const sliced = topN == null ? ranked.items : ranked.items.slice(0, topN);
+  const items = sliced.map((it) => ({
+    rank: it.rank,
+    metricRank: it.metricRank,
+    tiedWithPrevious: it.tiedWithPrevious,
+    tieGroupId: it.tieGroupId,
+    tieGroupSize: it.tieGroupSize,
+    entity: it.entity,
+    metrics: it.metrics,
+    ...it.data,
+  }));
+
+  const env = ok({ items, actions: [] });
+  env.window = { weekStart, weekEnd };
+  env.rankContext = {
+    source: "query_room_utilization",
+    list: "utilizationRanking",
+    selectedRank: null,
+    metric: "utilizationRate",
+    direction: sort,
+  };
+  env.query = {
+    weekStart,
+    weekEnd,
+    groupBy,
+    sort,
+    topN: topN == null ? null : topN,
+    campus: campusEntity ? campusEntity.name : null,
+    building,
+    roomType,
+  };
+  if (items.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
+// 工具 12（R50.0）：check_reschedule_feasibility —— 调课 What-if 模拟（绝不改数据）
+// ---------------------------------------------------------------------------
+function checkRescheduleFeasibility(params) {
+  const input = params || {};
+  const { data, byId, idx } = loadDataset();
+  const sourceLessonId = input.sourceLessonId;
+  if (!sourceLessonId) return fail(ERR.MISSING_PARAM, "缺少必填参数 sourceLessonId", {});
+  const source = data.lessons.find((les) => les.id === sourceLessonId);
+  if (!source) return fail(ERR.ENTITY_NOT_FOUND, `未找到课程「${sourceLessonId}」`, {});
+
+  const target = input.target && typeof input.target === "object" ? input.target : {};
+  const week = Number(target.week);
+  const weekday = Number(target.weekday);
+  const periodStart = Number(target.periodStart);
+  const periodEnd = Number(target.periodEnd);
+  if (!Number.isInteger(week) || !Number.isInteger(weekday) || !Number.isInteger(periodStart) || !Number.isInteger(periodEnd)) {
+    return fail(ERR.MISSING_PARAM, "target 需包含 week/weekday/periodStart/periodEnd", { target });
+  }
+  const totalWeeks = data.meta.semester.totalWeeks;
+  if (week < 1 || week > totalWeeks) return fail(ERR.OUT_OF_RANGE, `week 需在 1..${totalWeeks}`, { week });
+  if (weekday < 1 || weekday > 7) return fail(ERR.INVALID_PARAM, "weekday 需为 1..7", { weekday });
+  if (periodStart < 1 || periodEnd > data.meta.periods.length || periodStart > periodEnd) {
+    return fail(ERR.INVALID_PARAM, `periodStart/periodEnd 需在 1..${data.meta.periods.length} 且 start<=end`, { periodStart, periodEnd });
+  }
+
+  let targetRoom = null;
+  if (target.room != null) {
+    const roomParam = String(target.room).trim();
+    targetRoom = data.rooms.find((r) => r.id === roomParam || r.name === roomParam);
+    if (!targetRoom) {
+      const r = resolveEntity({ type: "room", name: roomParam });
+      if (r.success && r.resolvedEntity) targetRoom = byId.rooms[r.resolvedEntity.id];
+    }
+    if (!targetRoom) return fail(ERR.ENTITY_NOT_FOUND, `未找到教室「${target.room}」`, {});
+  }
+
+  const overlapCheck = (list) => list.filter((les) => (
+    les.id !== source.id
+    && expandWeeks(les).includes(week)
+    && les.weekday === weekday
+    && periodsOverlap(les.periodStart, les.periodEnd, periodStart, periodEnd)
+  ));
+
+  const teacherConflicts = [];
+  for (const tid of source.teacherIds) {
+    for (const les of overlapCheck(idx.teacher.get(tid) || [])) teacherConflicts.push(lessonDisplay(les));
+  }
+  const classConflicts = [];
+  for (const cid of source.classIds) {
+    for (const les of overlapCheck(idx.class.get(cid) || [])) classConflicts.push(lessonDisplay(les));
+  }
+  const roomConflicts = [];
+  if (targetRoom) {
+    for (const les of overlapCheck(idx.room.get(targetRoom.id) || [])) roomConflicts.push(lessonDisplay(les));
+  }
+
+  const course = byId.courses[source.courseId];
+  let capacityOk = true;
+  let capacityNote = null;
+  if (targetRoom && course && course.expectedSize != null) {
+    if (Number(targetRoom.capacity) < Number(course.expectedSize)) {
+      capacityOk = false;
+      capacityNote = `容量不足：需要 ${course.expectedSize} 人，${targetRoom.name} 仅 ${targetRoom.capacity} 人`;
+    }
+  } else if (targetRoom && course && course.expectedSize == null) {
+    capacityNote = "数据源未提供课程 expectedSize，容量校验跳过（fail-open）";
+  }
+  let featureOk = true;
+  let featureNote = null;
+  if (targetRoom && course && Array.isArray(course.requiredFeatures) && course.requiredFeatures.length) {
+    const missing = course.requiredFeatures.filter((f) => !(Array.isArray(targetRoom.features) && targetRoom.features.includes(f)));
+    if (missing.length) {
+      featureOk = false;
+      featureNote = `缺少功能设备：${missing.join("/")}`;
+    }
+  } else if (targetRoom && course && !(Array.isArray(course.requiredFeatures) && course.requiredFeatures.length)) {
+    featureNote = "数据源未提供课程 requiredFeatures，功能校验跳过（fail-open）";
+  }
+
+  const warnings = [];
+  const periodTimes = data.meta.periods;
+  const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+  // 相邻连续负荷：目标时段并入后，教师在该日最长连续节数
+  const teacherPeriods = new Set();
+  for (const tid of source.teacherIds) {
+    for (const les of idx.teacher.get(tid) || []) {
+      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) {
+        for (let p = les.periodStart; p <= les.periodEnd; p += 1) teacherPeriods.add(p);
+      }
+    }
+  }
+  for (let p = periodStart; p <= periodEnd; p += 1) teacherPeriods.add(p);
+  let longestRun = 0;
+  let run = 0;
+  for (let p = 1; p <= data.meta.periods.length + 1; p += 1) {
+    if (teacherPeriods.has(p)) { run += 1; longestRun = Math.max(longestRun, run); } else run = 0;
+  }
+  if (longestRun >= 4) {
+    warnings.push({ type: "continuous_load", level: "warning", text: `调整后教师连续 ${longestRun} 节，可能存在连堂负荷` });
+  }
+
+  // 跨校区赶场：目标教室与源课不同校区时，检查相邻课间隔（V2 无 campusTravelMatrix → 缺省 20 分钟）
+  const adjacentOf = [];
+  for (const tid of source.teacherIds) {
+    for (const les of idx.teacher.get(tid) || []) {
+      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
+    }
+  }
+  for (const cid of source.classIds) {
+    for (const les of idx.class.get(cid) || []) {
+      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
+    }
+  }
+  const uniqueAdjacent = [...new Map(adjacentOf.map((les) => [les.id, les])).values()];
+  if (targetRoom && source.campusId !== targetRoom.campusId) {
+    const matrix = (data.campusTravelMatrix || {})[source.campusId] || {};
+    const travel = matrix[targetRoom.campusId] || 20;
+    const fromName = byId.campuses[source.campusId] ? byId.campuses[source.campusId].name : source.campusId;
+    const toName = byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : targetRoom.campusId;
+    for (const les of uniqueAdjacent) {
+      const gapBefore = toMinutes(periodTimes[periodStart - 1].start) - toMinutes(periodTimes[les.periodEnd - 1].end);
+      const gapAfter = toMinutes(periodTimes[les.periodStart - 1].start) - toMinutes(periodTimes[periodEnd - 1].end);
+      if (les.periodEnd + 1 === periodStart && gapBefore <= travel) {
+        warnings.push({
+          type: "cross_campus_rush",
+          level: "warning",
+          text: `跨校区赶场：${fromName} → ${toName}，仅 ${gapBefore} 分钟（交通 ${travel} 分钟）`,
+        });
+      }
+      if (periodEnd + 1 === les.periodStart && gapAfter <= travel) {
+        warnings.push({
+          type: "cross_campus_rush",
+          level: "warning",
+          text: `跨校区赶场：${toName} → ${fromName}，仅 ${gapAfter} 分钟（交通 ${travel} 分钟）`,
+        });
+      }
+    }
+  }
+
+  const hasConflict = teacherConflicts.length > 0 || classConflicts.length > 0 || roomConflicts.length > 0;
+  const feasible = !hasConflict && capacityOk && featureOk;
+  const reasons = [];
+  if (teacherConflicts.length) reasons.push("教师时间冲突");
+  if (classConflicts.length) reasons.push("班级时间冲突");
+  if (roomConflicts.length) reasons.push("教室被占用");
+  if (!capacityOk) reasons.push("容量不足");
+  if (!featureOk) reasons.push("功能设备不匹配");
+
+  const item = {
+    sourceLesson: lessonDisplay(source),
+    target: {
+      week,
+      weekday,
+      weekdayName: data.meta.weekdayNames[weekday - 1],
+      date: weekWeekdayToDate(week, weekday),
+      periodStart,
+      periodEnd,
+      periodText: `第${periodStart}-${periodEnd}节`,
+      room: targetRoom ? {
+        id: targetRoom.id,
+        name: targetRoom.name,
+        capacity: targetRoom.capacity,
+        campusId: targetRoom.campusId,
+        campusName: byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : null,
+      } : null,
+    },
+    checks: {
+      teacherConflict: { conflict: teacherConflicts.length > 0, details: teacherConflicts },
+      classConflict: { conflict: classConflicts.length > 0, details: classConflicts },
+      roomConflict: { conflict: roomConflicts.length > 0, details: roomConflicts },
+      capacity: { ok: capacityOk, note: capacityNote },
+      feature: { ok: featureOk, note: featureNote },
+    },
+    warnings,
+  };
+  const env = ok({ items: [item], actions: [] });
+  env.summary = {
+    feasible,
+    reason: feasible ? "可行" : `不可行：${reasons.join("；") || "存在冲突"}`,
+    conflictCount: teacherConflicts.length + classConflicts.length + roomConflicts.length,
+    warningCount: warnings.length,
+  };
+  env.simulation = { sourceLessonId, target: item.target, mutatedData: false };
+  return env;
+}
+
+// ---------------------------------------------------------------------------
+// 工具 13（R50.0）：plan_group —— 群体共同空闲 + 空教室 ranked 候选
+// ---------------------------------------------------------------------------
+function planGroup(params) {
+  const input = params || {};
+  const entitiesRaw = safeJsonParse(input.entities);
+  const entities = Array.isArray(entitiesRaw) ? entitiesRaw : null;
+  if (!entities || entities.length < 2 || entities.length > 6) {
+    return fail(ERR.INVALID_PARAM, "entities 需为 2..6 个 { type, name } 实体", { entities });
+  }
+  const { data, byId, idx } = loadDataset();
+  const totalWeeks = data.meta.semester.totalWeeks;
+  const week = input.week != null ? Number(input.week) : null;
+  if (week == null || !Number.isInteger(week) || week < 1 || week > totalWeeks) {
+    return fail(ERR.OUT_OF_RANGE, `week 需在 1..${totalWeeks}`, { week: input.week });
+  }
+  let campusEntity = null;
+  if (input.campus) {
+    campusEntity = resolveCampus(data, input.campus);
+    if (!campusEntity) return fail(ERR.ENTITY_NOT_FOUND, `未找到校区「${input.campus}」`, {});
+  }
+  let weekdays = input.weekdays != null ? safeJsonParse(input.weekdays) : null;
+  if (weekdays == null && input.weekday != null) weekdays = [Number(input.weekday)];
+  if (weekdays == null) weekdays = [1, 2, 3, 4, 5, 6, 7];
+  if (!Array.isArray(weekdays) || !weekdays.length || weekdays.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+    return fail(ERR.INVALID_PARAM, "weekdays 需为 1..7 的整数数组", { weekdays });
+  }
+  weekdays = [...new Set(weekdays)].sort((a, b) => a - b);
+  const rangeStart = input.periodStart == null ? 1 : Number(input.periodStart);
+  const rangeEnd = input.periodEnd == null ? data.meta.periods.length : Number(input.periodEnd);
+  if (!Number.isInteger(rangeStart) || !Number.isInteger(rangeEnd) || rangeStart < 1 || rangeEnd > data.meta.periods.length || rangeStart > rangeEnd) {
+    return fail(ERR.INVALID_PARAM, `periodStart/periodEnd 需在 1..${data.meta.periods.length} 且 start<=end`, { rangeStart, rangeEnd });
+  }
+  const minConsecutive = input.minConsecutivePeriods == null ? 1 : Number(input.minConsecutivePeriods);
+  if (!Number.isInteger(minConsecutive) || minConsecutive < 1 || minConsecutive > data.meta.periods.length) {
+    return fail(ERR.INVALID_PARAM, "minConsecutivePeriods 需为 1..10", { minConsecutive: input.minConsecutivePeriods });
+  }
+  const minCapacity = input.minCapacity != null ? Number(input.minCapacity) : null;
+  if (minCapacity != null && (!Number.isInteger(minCapacity) || minCapacity < 1)) {
+    return fail(ERR.INVALID_PARAM, "minCapacity 需为正整数", { minCapacity: input.minCapacity });
+  }
+  const requiredFeatures = Array.isArray(safeJsonParse(input.requiredFeatures)) ? safeJsonParse(input.requiredFeatures) : [];
+  for (const f of requiredFeatures) {
+    if (typeof f !== "string" || !f) return fail(ERR.INVALID_PARAM, "requiredFeatures 需为字符串数组", { requiredFeatures });
+  }
+
+  const resolvedEntities = [];
+  for (const e of entities) {
+    if (!e || typeof e !== "object" || !e.type || !e.name) {
+      return fail(ERR.INVALID_PARAM, "每个实体需包含 type 与 name", { entity: e });
+    }
+    if (e.type !== "teacher" && e.type !== "class") {
+      return fail(ERR.INVALID_PARAM, "群体计划仅支持 teacher/class 实体", { type: e.type });
+    }
+    const r = resolveEntity({ type: e.type, name: e.name });
+    if (!r.success) return r;
+    resolvedEntities.push(r.resolvedEntity);
+  }
+
+  const busyOf = (type, id, weekday) => (idx[type === "teacher" ? "teacher" : "class"].get(id) || [])
+    .filter((les) => expandWeeks(les).includes(week) && les.weekday === weekday);
+
+  const windows = [];
+  for (const weekday of weekdays) {
+    const occupied = [];
+    for (const ent of resolvedEntities) {
+      for (const les of busyOf(ent.type, ent.id, weekday)) occupied.push([les.periodStart, les.periodEnd]);
+    }
+    for (const win of freeWindows(occupied, rangeStart, rangeEnd, minConsecutive)) {
+      windows.push({
+        weekday,
+        periodStart: win.periodStart,
+        periodEnd: win.periodEnd,
+        freePeriodCount: win.periodEnd - win.periodStart + 1,
+      });
+    }
+  }
+
+  const candidates = [];
+  for (const win of windows) {
+    const sub = findAvailableClassrooms({
+      campus: campusEntity ? campusEntity.name : undefined,
+      week,
+      weekday: win.weekday,
+      periodStart: win.periodStart,
+      periodEnd: win.periodEnd,
+      minCapacity: minCapacity || undefined,
+    });
+    if (!sub.success) continue;
+    const rooms = sub.items.filter((r) => {
+      if (!requiredFeatures.length) return true;
+      const room = byId.rooms[r.roomId];
+      if (!room) return true; // 数据层未找到时 fail-open
+      if (!Array.isArray(room.features) || !room.features.length) return true; // V2 无 features → fail-open
+      return requiredFeatures.every((f) => room.features.includes(f));
+    });
+    if (rooms.length) {
+      candidates.push({
+        weekday: win.weekday,
+        weekdayName: data.meta.weekdayNames[win.weekday - 1],
+        date: weekWeekdayToDate(week, win.weekday),
+        periodStart: win.periodStart,
+        periodEnd: win.periodEnd,
+        periodText: `第${win.periodStart}-${win.periodEnd}节`,
+        freePeriodCount: win.freePeriodCount,
+        roomCount: rooms.length,
+        rooms: rooms.map((r) => ({
+          roomId: r.roomId,
+          roomName: r.roomName,
+          building: r.building,
+          campusId: r.campusId,
+          campusName: r.campusName,
+          capacity: r.capacity,
+          type: r.type,
+        })),
+      });
+    }
+  }
+  candidates.sort((a, b) => (
+    b.roomCount - a.roomCount
+    || b.freePeriodCount - a.freePeriodCount
+    || a.weekday - b.weekday
+    || a.periodStart - b.periodStart
+  ));
+  const items = candidates.map((c, index) => ({
+    rank: index + 1,
+    ...c,
+    entities: resolvedEntities.map((ent) => ({ type: ent.type, id: ent.id, name: ent.name })),
+  }));
+
+  const env = ok({ items, actions: [] });
+  env.query = {
+    week,
+    weekdays,
+    campus: campusEntity ? campusEntity.name : null,
+    periodStart: rangeStart,
+    periodEnd: rangeEnd,
+    minConsecutivePeriods: minConsecutive,
+    minCapacity: minCapacity || null,
+    requiredFeatures,
+  };
+  env.summary = { entityCount: resolvedEntities.length, candidateCount: items.length };
+  if (items.length === 0) env.evidence.note = "EMPTY_RESULT";
+  return env;
+}
+
+// ---------------------------------------------------------------------------
 // 工具清单（MCP tools/list 与 OpenAPI 生成共用）
 // ---------------------------------------------------------------------------
 const TOOL_DEFS = [
@@ -1058,10 +1832,11 @@ const TOOL_DEFS = [
   },
   {
     name: "get_academic_context",
-    description: "确定性解析绝对/相对日期，并返回教学周、星期、学期与节次时间轴；默认按 Asia/Shanghai 今天。",
+    description: "确定性解析绝对/相对日期，并返回教学周、星期、学期与节次时间轴；默认按 Asia/Shanghai 今天。R50.0：支持结构化 intent（Temporal Semantic Core），返回 temporalContext。",
     inputSchema: {
       type: "object",
       properties: {
+        intent: { type: "object", description: "结构化 temporal intent：{ kind: absolute|relative_day|relative_weekday|academic_week|academic_week_weekday|week_range|future_weeks|recent_weeks|next_week|prev_week|current, ... }；对象或 JSON 字符串" },
         date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "显式日期 YYYY-MM-DD，优先级最高" },
         dateText: { type: "string", description: "今天/明天/后天/本周X/这周X/下周X/第N周周X/YYYY-MM-DD" },
         baseDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "评测固定基准；缺省使用 Asia/Shanghai 当前日期" },
@@ -1188,6 +1963,105 @@ const TOOL_DEFS = [
       required: ["weekStart", "weekEnd"],
     },
     handler: queryTeacherLoad,
+  },
+  {
+    name: "query_entity_search",
+    description: "通用校园实体搜索/清单：支持 exact/normalized/prefix/substring/fuzzy 确定性匹配与确定排序，禁止编造实体；空关键词返回该类型清单。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entityType: { type: "string", enum: ENTITY_TYPES, description: "实体类型（可选，缺省搜索全部类型）" },
+        keyword: { type: "string", description: "搜索关键词（可选，空则返回清单）" },
+        campus: { type: "string", description: "校区A / 校区B（可选，对支持校区字段的实体过滤）" },
+        college: { type: "string", description: "学院 id 或名称（可选，对支持学院字段的实体过滤）" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "返回上限，默认 20" },
+      },
+    },
+    handler: queryEntitySearch,
+  },
+  {
+    name: "query_common_free_time",
+    description: "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口；支持星期/节次范围/最小连续节数过滤。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entities: { type: "array", items: { type: "object", properties: { type: { type: "string", enum: ["teacher", "class"] }, name: { type: "string" } }, required: ["type", "name"] }, minItems: 2, maxItems: 6, description: "2..6 个教师/班级实体" },
+        week: { type: "integer", minimum: 1, maximum: 20, description: "单周查询（与 weekStart/weekEnd 二选一）" },
+        weekStart: { type: "integer", minimum: 1, maximum: 20 },
+        weekEnd: { type: "integer", minimum: 1, maximum: 20, description: "须 >= weekStart" },
+        weekday: { type: "integer", minimum: 1, maximum: 7 },
+        weekdays: { type: "array", items: { type: "integer", minimum: 1, maximum: 7 }, description: "星期数组（可选，缺省 1..7）" },
+        periodStart: { type: "integer", minimum: 1, maximum: 10 },
+        periodEnd: { type: "integer", minimum: 1, maximum: 10 },
+        minConsecutivePeriods: { type: "integer", minimum: 1, maximum: 10, description: "最小连续空闲节数，默认 1" },
+        limit: { type: "integer", minimum: 1, maximum: 200, description: "返回上限，默认 50" },
+      },
+      required: ["entities"],
+    },
+    handler: queryCommonFreeTime,
+  },
+  {
+    name: "query_room_utilization",
+    description: "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低确定性排名。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        weekStart: { type: "integer", minimum: 1, maximum: 20, description: "起始教学周（必填）" },
+        weekEnd: { type: "integer", minimum: 1, maximum: 20, description: "结束教学周（必填，须 >= weekStart）" },
+        campus: { type: "string", description: "校区A / 校区B（可选）" },
+        building: { type: "string", description: "楼栋名（可选）" },
+        roomType: { type: "string", description: "教室类型（可选）" },
+        groupBy: { type: "string", enum: ["room", "building", "campus"], description: "聚合粒度，默认 room" },
+        sort: { type: "string", enum: ["highest", "lowest"], description: "highest=利用率最高（默认）/ lowest=最低" },
+        topN: { type: "integer", minimum: 1, maximum: 100, description: "返回前 N 名（可选，默认全部）" },
+      },
+      required: ["weekStart", "weekEnd"],
+    },
+    handler: queryRoomUtilization,
+  },
+  {
+    name: "check_reschedule_feasibility",
+    description: "What-if 模拟调课可行性：以源课程 + 目标周/星期/节次/教室检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场；绝不修改任何数据。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sourceLessonId: { type: "string", description: "源课程 lessonId（必填）" },
+        target: {
+          type: "object",
+          properties: {
+            week: { type: "integer", minimum: 1, maximum: 20 },
+            weekday: { type: "integer", minimum: 1, maximum: 7 },
+            periodStart: { type: "integer", minimum: 1, maximum: 10 },
+            periodEnd: { type: "integer", minimum: 1, maximum: 10 },
+            room: { type: "string", description: "目标教室 id 或名称（可选）" },
+          },
+          required: ["week", "weekday", "periodStart", "periodEnd"],
+        },
+      },
+      required: ["sourceLessonId", "target"],
+    },
+    handler: checkRescheduleFeasibility,
+  },
+  {
+    name: "plan_group",
+    description: "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数确定性 ranked 排序；禁止 LLM 拼装虚构房间。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entities: { type: "array", items: { type: "object", properties: { type: { type: "string", enum: ["teacher", "class"] }, name: { type: "string" } }, required: ["type", "name"] }, minItems: 2, maxItems: 6, description: "2..6 个教师/班级实体" },
+        week: { type: "integer", minimum: 1, maximum: 20, description: "教学周（必填）" },
+        campus: { type: "string", description: "校区A / 校区B（可选）" },
+        weekday: { type: "integer", minimum: 1, maximum: 7 },
+        weekdays: { type: "array", items: { type: "integer", minimum: 1, maximum: 7 }, description: "星期数组（可选，缺省 1..7）" },
+        periodStart: { type: "integer", minimum: 1, maximum: 10 },
+        periodEnd: { type: "integer", minimum: 1, maximum: 10 },
+        minConsecutivePeriods: { type: "integer", minimum: 1, maximum: 10, description: "最小连续空闲节数，默认 1" },
+        minCapacity: { type: "integer", minimum: 1, description: "最小教室容量（可选）" },
+        requiredFeatures: { type: "array", items: { type: "string" }, description: "所需教室功能设备（可选，V3 数据集启用）" },
+      },
+      required: ["entities", "week"],
+    },
+    handler: planGroup,
   },
 ];
 

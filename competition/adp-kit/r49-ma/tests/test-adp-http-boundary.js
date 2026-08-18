@@ -16,7 +16,7 @@ const V2_PATH = path.join(__dirname, "..", "..", "mock-data", "competition-demo-
 
 const EXPECTED_DATA_VERSION = "competition-demo-v2";
 const EXPECTED_DATA_HASH = "sha1:4f3bbbb45d1f";
-const EXPECTED_ADP_CONTRACT_VERSION = "R49.4";
+const EXPECTED_ADP_CONTRACT_VERSION = "R50.0";
 const DEMO_USER_ID = "user-demo-001"; // 唯一真源 = v2.json demoUsers[0].id
 
 async function reservePort() {
@@ -75,7 +75,7 @@ function assertEnvelope(env, label) {
   assert.strictEqual(env.error, null, `${label}: error 应为 null`);
 }
 
-test("/health 暴露 tools=9 + agentTools=7 + adpContractVersion=R49.4", async (t) => {
+test("/health 暴露 tools=14 + agentTools=13 + adpContractVersion=R50.0", async (t) => {
   const { base } = await startServer(t);
   const res = await fetch(`${base}/health`);
   assert.strictEqual(res.status, 200);
@@ -83,8 +83,8 @@ test("/health 暴露 tools=9 + agentTools=7 + adpContractVersion=R49.4", async (
   assert.strictEqual(health.status, "ok");
   assert.strictEqual(health.dataVersion, EXPECTED_DATA_VERSION);
   assert.strictEqual(health.dataHash, EXPECTED_DATA_HASH);
-  assert.strictEqual(health.tools, 9, "tools=9 表示底层 CampusTools 数量");
-  assert.strictEqual(health.agentTools, 7, "agentTools=7 表示 ADP Agent Tool Façade 数量");
+  assert.strictEqual(health.tools, 14, "tools=14 表示底层 CampusTools 数量（9 + 5 个 R50 新底层）");
+  assert.strictEqual(health.agentTools, 13, "agentTools=13 表示 ADP Agent Tool Façade 数量（7 + 6 个 R50 新增）");
   assert.strictEqual(health.adpContractVersion, EXPECTED_ADP_CONTRACT_VERSION);
 });
 

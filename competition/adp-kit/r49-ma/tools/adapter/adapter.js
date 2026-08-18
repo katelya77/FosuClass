@@ -87,9 +87,11 @@ function resolveAgentToolParams(name, rawParams) {
   const errors = validateAgainstSchema(tool.inputSchema, input);
   if (errors.length) return { ok: false, status: "clarification", errors, tool };
 
-  // R49.4 跨字段校验：JSON Schema 的 minimum/maximum 无法表达 weekEnd >= weekStart。
+  // R49.4/R50.0 跨字段校验：JSON Schema 的 minimum/maximum 无法表达 weekEnd >= weekStart。
   if (
-    (name === "campus_teacher_load_query" || name === "campus_schedule_range_query") &&
+    (name === "campus_teacher_load_query"
+      || name === "campus_schedule_range_query"
+      || name === "campus_room_utilization_query") &&
     Number.isInteger(input.weekStart) &&
     Number.isInteger(input.weekEnd) &&
     input.weekEnd < input.weekStart
