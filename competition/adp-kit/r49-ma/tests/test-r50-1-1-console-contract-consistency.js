@@ -5,8 +5,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const ROOT = path.join(__dirname, "..", "..", "..");
-const R501 = path.join(ROOT, "r50.1");
+const ADP_KIT = path.join(__dirname, "..", "..");
+const R501 = path.join(ADP_KIT, "r50.1");
 
 const read = (file) => fs.readFileSync(path.join(R501, file), "utf8");
 const CUTOVER = read("R50.1-ADP-CONSOLE-CUTOVER.md");
@@ -59,8 +59,12 @@ test("R50.1.1 documents 13 unique operations but 14 Agent bindings with one inte
       "docs must state there are 13 unique Agent Tool operations");
     assert.match(text, /14\s*个\s*Agent\s*绑定|14\s*个\s*绑定/i,
       "docs must state there are 14 Agent bindings");
-    assert.match(text, /campus_academic_context[\s\S]{0,120}(Schedule|课程空间)[\s\S]{0,60}(Risk|风险规划)|campus_academic_context[\s\S]{0,120}(Risk|风险规划)[\s\S]{0,60}(Schedule|课程空间)/i,
-      "docs must identify campus_academic_context as shared by Schedule and Risk");
+    assert.match(text, /campus_academic_context/,
+      "docs must name campus_academic_context as the intentional shared tool");
+    assert.match(text, /(Schedule|课程空间)[^\n]{0,250}campus_academic_context/i,
+      "docs must bind campus_academic_context to Schedule");
+    assert.match(text, /(Risk|风险规划)[^\n]{0,250}campus_academic_context/i,
+      "docs must bind campus_academic_context to Risk");
     assert.match(text, /(其余|其他)[^。\n]{0,30}(工具|CampusTool)[^。\n]{0,30}(不得|禁止)[^。\n]{0,20}(重复|跨域)/,
       "docs must forbid other cross-domain duplicate bindings");
   }
