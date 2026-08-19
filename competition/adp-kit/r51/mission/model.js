@@ -38,6 +38,18 @@ function validateGoalSpec(spec) {
   if (spec.selection && spec.selection.topN != null && (!Number.isInteger(spec.selection.topN) || spec.selection.topN < 1)) {
     errors.push("selection.topN 必须是 ≥1 的整数");
   }
+  // visionAssets：多模态预留——只透传展示资产引用，绝不作事实来源、绝不进入工具参数
+  if (spec.visionAssets != null) {
+    if (!Array.isArray(spec.visionAssets)) {
+      errors.push("visionAssets 必须是数组（只透传，不作为事实）");
+    } else {
+      for (const a of spec.visionAssets) {
+        if (typeof a !== "string" && (!a || typeof a.id !== "string")) {
+          errors.push("visionAssets 元素须为字符串或含 id 的对象");
+        }
+      }
+    }
+  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -48,6 +60,10 @@ function baseState(goalSpec) {
       userOutcome: goalSpec.userOutcome || "",
       constraints: goalSpec.constraints || {},
       completionCriteria: [],
+      // 多模态预留：展示资产引用透传（复制快照），不参与完成度判定
+      visionAssets: Array.isArray(goalSpec.visionAssets)
+        ? JSON.parse(JSON.stringify(goalSpec.visionAssets))
+        : [],
     },
     steps: [],
     completedCapabilities: [],

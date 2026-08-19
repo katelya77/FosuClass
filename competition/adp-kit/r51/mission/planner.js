@@ -155,6 +155,10 @@ function planMission(goalSpec) {
     userOutcome: goalSpec.userOutcome || "",
     constraints: goalSpec.constraints || {},
     completionCriteria: criteria,
+    // 多模态预留：只随 goal 透传展示资产引用，绝不进入 steps / 工具参数
+    visionAssets: Array.isArray(goalSpec.visionAssets)
+      ? JSON.parse(JSON.stringify(goalSpec.visionAssets))
+      : [],
   };
 
   return { steps, completionCriteria: criteria.slice(), unresolved, goal };

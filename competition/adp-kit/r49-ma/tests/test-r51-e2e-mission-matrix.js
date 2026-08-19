@@ -188,12 +188,13 @@ test("E13. Widget sys.chat → Main → 下一能力：动作 payload 重新进�
   // 动作 payload 作为新用户回合 → Main 构造 follow-up mission（风险目标，继承实体）
   const followUp = planMission(goalSpec({
     goalFamily: "risk_inquiry",
-    userOutcome: riskAction.payload,
+    userOutcome: riskAction.payload.query,
     target: { entityType: "teacher", entityRef: "t-003", name: "教师003" },
     temporalScope: { kind: "inherited", weekStart: 1, weekEnd: 1 },
   }));
   assert.deepStrictEqual(followUp.steps.map((s) => s.capability), ["RISK_CHECK"]);
   assert.deepStrictEqual(followUp.completionCriteria, ["riskFacts"]);
-  assert.ok(riskAction.payload.includes("风险"), "payload 为自然语言语义 query");
-  assert.ok(!riskAction.payload.includes("t-003") && !riskAction.payload.includes("{")); 
+  assert.ok(riskAction.payload.query.includes("风险"), "payload 为自然语言语义 query");
+  assert.ok(!riskAction.payload.query.includes("t-003") && !riskAction.payload.query.includes("{"), "payload 不得含内部 id 或 JSON");
+  assert.deepStrictEqual(Object.keys(riskAction.payload), ["query"], "payload 只允许 query 字段");
 });
