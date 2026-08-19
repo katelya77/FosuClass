@@ -1,8 +1,21 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-19 +08:00（R50.4 收尾）
+更新时间：2026-08-19 +08:00（R51 收尾）
 
-当前阶段：`CampusFlow ADP R50.4 / Widget UX Convergence + Runtime Acceptance`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；真实 Tencent ADP Widget 导出集成待后续正式导出后执行，见下方 R50.4 节）
+当前阶段：`CampusFlow ADP R51 / Campus Mission Orchestration`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；R51 为确定性 Mission 内核 + bounded Runtime Prompt + 验证矩阵，线上 Console 切换见下方 R51 节，真实 Tencent ADP Widget 导出集成待后续正式导出后执行）
+
+## R51 状态（收尾，2026-08-19）
+
+- **范围**：目标完成型校园任务编排——Mission Core（planner / completion evaluator / FreshToolCallGuard / ToolCallPreflight / resolve-before-clarify / widget actions）+ bounded R51 Runtime Prompts（Main ≤5K / Child ≤4K 字符）+ 88 项 R51 测试（含 64 条 paraphrase 泛化 + 13 行 E2E Mission Matrix + prompt architecture 门禁）+ 一次性 Console Cutover 文档（PR #49 保持 OPEN / UNMERGED，**本轮不部署 CloudBase**）。
+- **架构保持**：4 Agent（Main/Schedule/Risk/Insight）、13 CampusTools、14 绑定（SSOT `r50.1/agent-tool-bindings.json` 未变）、Main=0 CampusTools、Main→Child→Main、无 Child→Child、Tool Direct Result=OFF、R50.4 统一 Widget 视觉冻结（仅 mission-aware `sys.chat` 动作文案）。
+- **Mission 模型（内部协议，不呈现用户）**：`r51/mission/model.js`（15 goal families / MissionGoal / MissionStep / MissionState / NEW_TASK·FOLLOW_UP 最小继承）；`planner.js` 13 能力↔13 工具双射（capability-driven，无关键词路由；teaching_assurance / collaboration_planning / campus_operations_insight 三族组合）；`completion.js` 确定性完成判定（collaboration 只有共同空闲 = 未完成）；`fresh-guard.js` 21 动态槽位（旧结果不得截取回答新槽位）；`preflight.js` 从 OpenAPI 契约派生枚举、失败关闭（实体类型中文先规范化，不浪费首调用）；`resolve-before-clarify.js`（可解析先解析，四情形才澄清）；`widget-actions.js`（仅 sys.chat，payload 纯语义 query）。
+- **Runtime Prompt 新源**：`r51/prompts/`（main-orchestrator / schedule-space / risk-planning / campus-insight .r51.md + README）；字符预算门禁 I1 PASS（Main ≤5000 / Child ≤4000）；旧 `r50.2/prompts/*.final.md` 保留为 engineering reference，R51 不再全文注入旧 Shared 编译产物。
+- **门禁全绿**：R51 套件（12 文件）**88/88 PASS**：mission-planner A1~A10、completion-evaluator B1~B5、fresh-guard C1~C5、tool-preflight D1~D5、resolve-before-clarify E1~E5、cross-domain F1~F3、ranking-drilldown G1~G3、state-isolation H1~H3、prompt-architecture I1~I8、widget-actions J1~J4、paraphrase-matrix P1~P3（64 样本全部分类正确 + 同族等价 plan + 生产零测试字符串）、e2e-mission-matrix E1~E13（能力 DAG / Agent 序列 / fresh calls / 完成判据 / 禁止行为）。
+- **Console Cutover 一次性文档**：`r51/R51-CONSOLE-CUTOVER.md`（Main TEXT+CLARIFY ON+Widget 风格 / Child Widget `小序-校园智序结果卡-R504`+CLARIFY OFF / Tool Direct Result=OFF / 新回合先到 Main / 无 AI 一键优化 / 回滚路径）；**不宣称 Console GOLDEN**——待用户切换后以线上验证为准。
+- **E2E 矩阵文档**：`r51/R51-MISSION-E2E-MATRIX.md`（13 行：目标 / 能力 DAG / Agent 序列 / 必需 fresh 工具 / 完成判据 / 禁止行为）。
+- **提交**：见 `r51/2026-08-19-r51-final-report.md`（Starting HEAD `4f7d6d14` → Final HEAD，PR #49 保持 OPEN/UNMERGED 验证）。
+- **判定**：`R51 REPO GOLDEN`（repo 全绿；runtime 零改动）；**Console GOLDEN 未宣称**——待用户按 `R51-CONSOLE-CUTOVER.md` 执行一次性切换 + 13 行 E2E 冒烟。
+- **待办（用户动作）**：按 `R51-CONSOLE-CUTOVER.md` 切换 Console 配置（约 5 分钟）→ 13 行 E2E 冒烟 → 后续真实 Tencent ADP Widget 导出后补齐 `.widget` 门禁与注册表。
 
 ## R50.4 状态（收尾，2026-08-19）
 
