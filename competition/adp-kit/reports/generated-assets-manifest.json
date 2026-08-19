@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-19T08:21:50.667Z",
+  "generatedAt": "2026-08-19T14:28:35.080Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -87,6 +87,26 @@
       "path": "cloudfunctions/test-http-function.js",
       "bytes": 8219,
       "sha256": "2e158dff7f82a0cc283676f9e71d101aae3af774206f2e0014349d03f2bf980a"
+    },
+    {
+      "path": "evaluation/dual-track/baseline-report.md",
+      "bytes": 2010,
+      "sha256": "893f266531723f6561614abaca16334c673f8ec55e2488856f79b037491b30ac"
+    },
+    {
+      "path": "evaluation/dual-track/judge.js",
+      "bytes": 5911,
+      "sha256": "58728696cd10adc736edd26d93c5bf62f30c847cd23789dded966c800bfe408c"
+    },
+    {
+      "path": "evaluation/dual-track/rubric.md",
+      "bytes": 2189,
+      "sha256": "45a2c87c201900ffea8bdc3362558c194576d45dc78e8caa42489fd32a495352"
+    },
+    {
+      "path": "evaluation/dual-track/widget-contract-testset.json",
+      "bytes": 2353,
+      "sha256": "5609a15d39434f188c72e44c21154fbf82497189434948fae7dbe791858e753e"
     },
     {
       "path": "evaluation/eval-dataset-v1.json",
@@ -182,6 +202,71 @@
       "path": "knowledge/08-功能导航与演示问题.md",
       "bytes": 4686,
       "sha256": "f78e5759e85d48135c28fa08e9995c477e36d89e661139a482f45af321425671"
+    },
+    {
+      "path": "knowledge/current/01-定位与能力边界.md",
+      "bytes": 1838,
+      "sha256": "1662780271de7cb44716e83bd90788a3640bc150b760a0b80c6b2e09c4e2a7fb"
+    },
+    {
+      "path": "knowledge/current/02-课表与校园实体理解.md",
+      "bytes": 1441,
+      "sha256": "604306e88a0acb25e453c281a2bf3fefeb4130b4a5a1d7453f61a875471eaba0"
+    },
+    {
+      "path": "knowledge/current/03-教学时间与节次规则.md",
+      "bytes": 1386,
+      "sha256": "fa2919a3e62560274ddb88ed7de1125cf419d2a298546970885765cac4e9b6fe"
+    },
+    {
+      "path": "knowledge/current/04-动态事实与可信度.md",
+      "bytes": 1390,
+      "sha256": "0cdc745744857473bae4a15bcf3afb297c8da352ba274935ed7f4c932a2c5156"
+    },
+    {
+      "path": "knowledge/current/05-隐私安全与授权边界.md",
+      "bytes": 1589,
+      "sha256": "32bcd58a48478483aee0ab76b381f019439670e343c16451a9c3b6c8af99b5e0"
+    },
+    {
+      "path": "knowledge/current/06-无结果歧义与恢复.md",
+      "bytes": 1311,
+      "sha256": "502334cae39cb56f3c6224adf15abc41467675a4f12dd42067951ab4ac6aeb4e"
+    },
+    {
+      "path": "knowledge/current/07-主动协作原则.md",
+      "bytes": 1273,
+      "sha256": "966c6cb0148186b8d2462258d31a736a24e32793fc0f6ff8398c6ca5c27a977f"
+    },
+    {
+      "path": "knowledge/current/08-功能导航与自然语言使用.md",
+      "bytes": 1658,
+      "sha256": "0b312a23e63537650e1d3abcc4513c07745e021b6151277b7e6ed5a63cb56cae"
+    },
+    {
+      "path": "knowledge/current/09-个人课表导入与同步.md",
+      "bytes": 1577,
+      "sha256": "54fdb3674aa09d504716b38419aeb82fd245d254a2b05cc280d32eff450f5e2f"
+    },
+    {
+      "path": "knowledge/current/10-常见问题.md",
+      "bytes": 1618,
+      "sha256": "0ccccc9ccafbff973fe84077d0a321aef2d6e601fca516ed707d5ea06050b169"
+    },
+    {
+      "path": "knowledge/current/README.md",
+      "bytes": 1639,
+      "sha256": "e4175b9a0f998c13d6dbaea5c5c25d7de89f3d555781e40216329f6321ff4e14"
+    },
+    {
+      "path": "knowledge/current/recall-matrix.md",
+      "bytes": 1916,
+      "sha256": "af0aa642546e6d6e56993f57f11f6bf93815e862471b7c90b3e9f99664e49328"
+    },
+    {
+      "path": "knowledge/legacy/LEGACY.md",
+      "bytes": 1044,
+      "sha256": "ba56b0e98bd1887550a1e2e1c91e7ac767e3e6d5f86ed776f6015f4ffb320e06"
     },
     {
       "path": "knowledge/taxonomy.json",
@@ -460,18 +545,23 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/adapter.py",
-      "bytes": 8630,
-      "sha256": "9d08903f31789ab53ca41c76dfb3d970a859758e8588c3aa5a1c8eda42318886"
+      "bytes": 8986,
+      "sha256": "4181db8c375564ccd51f66484332956b14b2065f8fdc6f9cd2e3c64577dc5a2c"
     },
     {
       "path": "widget/native/campus-result-unified-v1/contract.json",
-      "bytes": 2967,
-      "sha256": "43c0a6c9e21055bf98547a0ac0ac9f303708eaa608687c4563902e3bc415d041"
+      "bytes": 3304,
+      "sha256": "17406522f09f775969a0b11cc45a567469d0ce3eb35c7cde65128a250ee8d564"
     },
     {
       "path": "widget/native/campus-result-unified-v1/default.json",
       "bytes": 2202,
       "sha256": "f208ab3d9ca458ae97d4976c86bae611b4fd794109048c706b4da73efc4b7d31"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/payload-validator.js",
+      "bytes": 9318,
+      "sha256": "2d62403726f2fe8e980ed25443fd5624b663ac9f9c55e202cadd630ec38f3a64"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/collaboration.json",
@@ -536,7 +626,7 @@
     {
       "path": "widget/native/campus-result-unified-v1/schema.json",
       "bytes": 4700,
-      "sha256": "ff86aaecfeb8de78cec8d3544e5b87bc4a21f7d03585d6311658eaf09ceca43a"
+      "sha256": "772d1de509a82d2bc0d010c25e63ef07191b8ecee4e88706341e5bc06210c939"
     },
     {
       "path": "widget/native/campus-result-unified-v1/template.txt",
@@ -717,6 +807,11 @@
       "path": "widget/native/contracts/schedule/zod.txt",
       "bytes": 763,
       "sha256": "352b1a553997c2ba40d7375ff0a2c440e7079969d6e9d1d8e797b950036c7967"
+    },
+    {
+      "path": "widget/native/CSF-WIDGET-CONSOLE-UPDATE.md",
+      "bytes": 3932,
+      "sha256": "af6a67bcb7bed7a9e1e42e01540f68d7d3164e56ef62b02ac09e3cfa0ec63318"
     },
     {
       "path": "widget/native/dayplan-widget-adapter.py",
@@ -1402,6 +1497,11 @@
       "path": "workflows/generate-workflows.js",
       "bytes": 1060,
       "sha256": "6d4058f83b6f98b2e7b0e23e3741343f42672d76728dd41bd63dbfe5ffb0efb6"
+    },
+    {
+      "path": "workflows/LEGACY-WORKFLOWS.md",
+      "bytes": 2555,
+      "sha256": "b778e8cc04b6a160a5b6fb2432977e02accfb253653a6a4aa3452723121fa976"
     },
     {
       "path": "workflows/role-instruction.txt",
