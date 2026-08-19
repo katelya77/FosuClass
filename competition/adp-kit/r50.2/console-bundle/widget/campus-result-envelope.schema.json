@@ -5,11 +5,11 @@
   "version": "1.0",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "variant", "status", "title", "verified", "summary"],
+  "required": ["variant", "status", "title", "verified", "summary"],
   "properties": {
     "version": {
       "const": "1.0",
-      "description": "契约版本，固定 1.0"
+      "description": "平台内部版本，由确定性投影注入，Agent 不生成；缺省合法。UI 与 Runtime Prompt 不得展示"
     },
     "variant": {
       "type": "string",
@@ -115,7 +115,7 @@
         "simulated": { "type": "boolean", "description": "reschedule：结果仅为模拟，未执行" },
         "weekendMarked": { "type": "boolean", "description": "collaboration：候选明确标注工作日/周末" },
         "tieNote": { "type": "string", "description": "ranking：并列说明（如「并列最高」）" },
-        "tieGroupCount": { "type": "integer", "minimum": 1, "description": "ranking：并列组数" },
+        "tieGroupCount": { "type": "integer", "minimum": 0, "description": "ranking：并列组数；无并列时为 0 或缺省" },
         "recoverable": { "type": "boolean", "description": "error：是否可恢复" }
       }
     }

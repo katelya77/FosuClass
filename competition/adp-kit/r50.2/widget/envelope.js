@@ -20,7 +20,9 @@ const SCHEMA = JSON.parse(
 
 const VARIANTS = new Set(SCHEMA.properties.variant.enum);
 const STATUSES = new Set(SCHEMA.properties.status.enum);
-const REQUIRED = ["version", "variant", "status", "title", "verified", "summary"];
+// Agent-facing Envelope 不含 version：研发版本号由确定性投影层注入，模型不生成版本号。
+// 若出现 version，仅接受固定 "1.0"。
+const REQUIRED = ["variant", "status", "title", "verified", "summary"];
 
 // status 与 variant 的合法组合：success 仅富结果；empty 仅 empty；error 仅 error。
 const STATUS_OF_VARIANT = {

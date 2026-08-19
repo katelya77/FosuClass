@@ -33,8 +33,10 @@ test("J1. 所有动作 type=sys.chat 且 payload 仅自然语言（teaching_assu
   assert.ok(actions.some((a) => a.type === "sys.chat" && a.label === "检查风险"));
   for (const a of actions) {
     assert.strictEqual(a.type, "sys.chat");
+    assert.ok(a.payload && typeof a.payload === "object", "payload 必须是对象");
+    assert.deepStrictEqual(Object.keys(a.payload), ["query"], "payload 只允许 query 字段");
     for (const t of INTERNAL_TOKENS) {
-      assert.ok(!a.payload.includes(t), `payload 不得包含内部协议 ${t}`);
+      assert.ok(!a.payload.query.includes(t), `payload 不得包含内部协议 ${t}`);
       assert.ok(!a.label.includes(t), `label 不得包含内部协议 ${t}`);
     }
   }
@@ -49,8 +51,8 @@ test("J2. 排名完成 → 查看排位对象课表（payload 含业务实体名
   }));
   const drill = actions.find((a) => a.label === "查看课表");
   assert.ok(drill, "应生成查看课表动作");
-  assert.ok(drill.payload.includes("教师001"), "payload 使用业务实体名");
-  assert.ok(!drill.payload.includes("t-001"), "payload 不得包含内部实体 id");
+  assert.ok(drill.payload.query.includes("教师001"), "payload 使用业务实体名");
+  assert.ok(!drill.payload.query.includes("t-001"), "payload 不得包含内部实体 id");
 });
 
 test("J3. 风险完成 + whatIf 目标 → 模拟调课动作", () => {

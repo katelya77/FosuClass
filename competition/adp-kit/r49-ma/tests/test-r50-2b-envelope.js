@@ -68,7 +68,7 @@ test("R50.2B envelope: rejects unknown variant / status", () => {
 
 test("R50.2B envelope: rejects missing required public fields", () => {
   const { validateEnvelope } = loadEnvelope();
-  for (const missing of ["version", "variant", "status", "title", "verified", "summary"]) {
+  for (const missing of ["variant", "status", "title", "verified", "summary"]) {
     const raw = { ...compactSchedule };
     delete raw[missing];
     const result = validateEnvelope(raw);

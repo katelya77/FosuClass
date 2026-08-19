@@ -1,6 +1,6 @@
 "use strict";
 // R51 Mission-aware Widget Action —— 根据已完成能力生成下一步 sys.chat 动作。
-// 动作一律 type=sys.chat，payload 只允许自然语言 query；禁止内部 Mission / entity id / JSON。
+// 动作一律 type=sys.chat，payload 只允许 { query } 自然语言；禁止内部 Mission / entity id / JSON。
 const MAX_ACTIONS = 3;
 
 function goalHas(state, factKey) {
@@ -18,7 +18,7 @@ function nextActions(state) {
 
   const family = (state.goal && state.goal.goalFamily) || "";
   const actions = [];
-  const push = (label, payload) => actions.push({ type: "sys.chat", label, payload });
+  const push = (label, query) => actions.push({ type: "sys.chat", label, payload: { query } });
 
   const scheduleDone = caps.includes("SCHEDULE_DETAIL") || caps.includes("SCHEDULE_RANGE");
   const riskDone = caps.includes("RISK_CHECK");

@@ -1,9 +1,15 @@
-"""CampusResultUnified V5 adapter — R50.4 统一输出 Widget（双布局，ADP 导入侧投影）。
+"""CampusResultUnified V6 adapter — 小序-校园智序结果卡（双布局，ADP 导入侧投影）。
 
 输入必须是已经过服务端 envelope.js / variant-adapters.js / view-model.js 投影的
 CampusResultEnvelope + WidgetViewModel（仅含公开展示字段）。本适配器只做形状核对
 与内部字段剥离，不补全、不编造任何校园事实；发现内部协议字段时 fail closed
 （返回空结果并标记 route=fallback）。
+
+稳定化要点（fosuclass-adp-widget-contract/v6）：
+- version 由本适配器确定性注入 "1.0"，不接收模型生成的研发版本号（缺省合法）；
+- week-board 空日统一过滤（SSOT：投影层过滤空日，Widget 不接收空日）；
+- tieGroupCount 允许 0 / 缺省（无并列合法）；
+- 动作仅 sys.chat，payload 仅 { query }。
 
 布局规则（与 r50.2/widget/view-model.js 一致）：
 - layoutMode=week-board：整周/周范围课表；消费 weekBoardTitle / weekBoardSubtitle / days
@@ -17,7 +23,7 @@ CampusResultEnvelope + WidgetViewModel（仅含公开展示字段）。本适配
 payload 只含用户语义 query（官方 sys.chat），不携带意图标签/实体标识/
 查询编号/节点标识/业务标识等内部标识。
 
-设计约束（R50.2B → R50.4）：
+设计约束：
 - 禁止泄漏：查询编号 / 数据哈希 / 数据版本 / 来源工具 / 排名上下文 /
   时间上下文 / 节点标识 / 业务标识 / 令牌 / 授权信息 / 内部地址。
 - WidgetID 未注册前一律 widgetId=null + FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY。
@@ -243,7 +249,7 @@ def main(params: dict) -> dict:
         or status not in ALLOWED_STATUS
         or not title
         or not summary
-        or envelope.get("version") != "1.0"
+        or envelope.get("version", "1.0") != "1.0"
     ):
         return {"route": ROUTE_FALLBACK, "widgetId": None, "data": None}
     data = {

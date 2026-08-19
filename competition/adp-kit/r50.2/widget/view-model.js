@@ -138,7 +138,7 @@ function projectViewModel(raw, toolName, envelope) {
     return { ok: false, errors: ["envelope 非法或缺失"], viewModel: null };
   }
   const base = {
-    version: envelope.version,
+    version: envelope.version || "1.0",
     variant: envelope.variant,
     status: envelope.status,
     title: envelope.title,
@@ -201,6 +201,36 @@ function isWeekBoardViewModel(viewModel) {
   );
 }
 
+/**
+ * CSF P1.5 组合 Mission 最终 Widget 投影：最终 Widget 必须收口在最终完成能力的变体
+ * （如 课表→风险 以 risk 卡收口，而不是第一张课表卡）。
+ * - mission：{ completedCapabilities: [...] }（执行顺序追加）；
+ * - toolResults：{ toolName: rawToolResult }；
+ * - capabilityToolMap：{ capability: toolName }；
+ * - buildEnvelope(raw, toolName) → { ok, errors, envelope }（确定性，由调用方提供）。
+ * 最终变体依据 = 最后一个已完成能力的工具；确定性、无模型参与。
+ */
+function projectMissionFinalViewModel(mission, toolResults, capabilityToolMap, buildEnvelope) {
+  const caps = Array.isArray(mission && mission.completedCapabilities) ? mission.completedCapabilities : [];
+  if (caps.length === 0) {
+    return { ok: false, errors: ["无已完成能力，无法投影最终 Widget"], viewModel: null };
+  }
+  const finalCap = caps[caps.length - 1];
+  const toolName = capabilityToolMap && capabilityToolMap[finalCap];
+  if (!toolName) {
+    return { ok: false, errors: [`最终能力 ${finalCap} 无对应工具映射`], viewModel: null };
+  }
+  const raw = toolResults && toolResults[toolName];
+  if (!raw) {
+    return { ok: false, errors: [`最终工具 ${toolName} 无结果可投影`], viewModel: null };
+  }
+  const built = buildEnvelope(raw, toolName);
+  if (!built || !built.ok) {
+    return { ok: false, errors: (built && built.errors) || ["最终结果投影失败"], viewModel: null };
+  }
+  return projectViewModel(raw, toolName, built.envelope);
+}
+
 module.exports = {
   LAYOUT_WEEK_BOARD,
   LAYOUT_RESULT_CARD,
@@ -213,4 +243,5 @@ module.exports = {
   buildDayDetailAction,
   isWeekBoardViewModel,
   projectViewModel,
+  projectMissionFinalViewModel,
 };

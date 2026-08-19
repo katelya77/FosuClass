@@ -1,12 +1,13 @@
 {
-  "schema": "fosuclass-adp-widget-contract/v5",
+  "schema": "fosuclass-adp-widget-contract/v6",
   "kind": "campus-result-unified",
+  "name": "小序-校园智序结果卡",
   "status": "PREPARED_PENDING_REAL_ADP_WIDGET_EXPORT_INTEGRATION",
   "widgetId": null,
   "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
   "activeFallback": "小序-课表票据-V2 / RuntimeSafe V3",
   "adapter": "adapter.py",
-  "description": "R50.4 统一 Native Widget（双布局）：只消费 CampusResultEnvelope 公开字段（version/variant/status/title/subtitle/verified/summary/context/sections/actions/displayMeta）+ 服务端 WidgetViewModel 投影的布局字段（layoutMode/weekBoardTitle/weekBoardSubtitle/days）。layoutMode=week-board 用于整周/周范围课表，layoutMode=result-card 用于风险/空教室/态势/TopN/调课模拟/空结果/错误/单日明细。禁止任何内部协议字段进入本 Widget 数据。",
+  "description": "小序-校园智序结果卡（统一 Native Widget，双布局）v6 稳定化契约。消费 CampusResultEnvelope 公开字段 + WidgetViewModel 投影布局字段（layoutMode/weekBoardTitle/weekBoardSubtitle/days）。layoutMode=week-board 用于整周/周范围课表，layoutMode=result-card 用于风险/空教室/态势/TopN/调课模拟/空结果/错误/单日明细。稳定化要点：1) version 为系统注入固定值，模型不生成研发版本号；2) week-board 空日单一 SSOT = 确定性投影统一过滤空日，Widget 永不接收空日；3) tieGroupCount 允许 0/缺省（无并列合法）；4) actions 仅 sys.chat，payload 仅 { query }；5) 组合 Mission 最终 Widget 收口在最终完成能力的变体。禁止任何内部协议字段进入本 Widget 数据。",
   "variants": [
     "schedule",
     "space",
