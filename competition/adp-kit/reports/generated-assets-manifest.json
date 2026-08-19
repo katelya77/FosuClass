@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-19T06:01:14.217Z",
+  "generatedAt": "2026-08-19T08:21:50.667Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -460,78 +460,88 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/adapter.py",
-      "bytes": 6049,
-      "sha256": "a44baec9219fd9849a8c1b1bc4e48d454ba414cec8ae1228dd04311bc021026e"
+      "bytes": 8630,
+      "sha256": "9d08903f31789ab53ca41c76dfb3d970a859758e8588c3aa5a1c8eda42318886"
     },
     {
       "path": "widget/native/campus-result-unified-v1/contract.json",
-      "bytes": 1902,
-      "sha256": "da28b0ddc7ee5453eaec2aa412b3e19b8d5ada6cd9d6c86604b542927e32957a"
+      "bytes": 2967,
+      "sha256": "43c0a6c9e21055bf98547a0ac0ac9f303708eaa608687c4563902e3bc415d041"
     },
     {
       "path": "widget/native/campus-result-unified-v1/default.json",
-      "bytes": 1780,
-      "sha256": "11a8e6ba7779788ea63fe4f97519f26f06f5f58178cc2c8955556445f1daf48f"
+      "bytes": 2202,
+      "sha256": "f208ab3d9ca458ae97d4976c86bae611b4fd794109048c706b4da73efc4b7d31"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/collaboration.json",
-      "bytes": 1170,
-      "sha256": "decf24421243ec18f4b8a459832e5a5ff4bcbedf5b3b465576a19678bb2a9041"
+      "bytes": 1236,
+      "sha256": "ccc289c4aad8e0a082e81ad7e84f7cbce56f3bbbaf45b603cba393d7389bd43d"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/empty.json",
-      "bytes": 488,
-      "sha256": "439a8e73f3d753d1b2b80b3a55df8e3c12ee412232a938f8cb74508da6519341"
+      "bytes": 569,
+      "sha256": "fe1f13bfaa47a5dbbf8307fca475dcb3af4b7feb94c822a2ec489671a844ac98"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/error.json",
-      "bytes": 664,
-      "sha256": "abd6c97c758c643e9fac23794f4d1a1b0622d4c7fb6df1b6a662011b7527e048"
+      "bytes": 731,
+      "sha256": "37f9c3174c6c843b12e77fc8d5e7273e5c76b7a397e506d97b5f75836a46664f"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/message.json",
-      "bytes": 887,
-      "sha256": "8fb040244b497d62662d24113d63ca079797c0396e145edf758bf1507f2b2a43"
+      "bytes": 968,
+      "sha256": "011ad034002f85ef4d94770e75462b0f4e6496cbaf53f0083f0bc267d31ac091"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/overview.json",
-      "bytes": 2281,
-      "sha256": "c36cbf0bbaac1ca91e73f3a8718a617cdeec0304160304c26e31e337f1f68f84"
+      "bytes": 2346,
+      "sha256": "d88859085f386ed5526d10729b38047b05ad663a87a4f4decbf46aea89264c25"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/ranking.json",
-      "bytes": 1306,
-      "sha256": "bcff625558b6df735401c3151093c1bd56c4aa3fc589d9781aff5d6da8b413f7"
+      "bytes": 1376,
+      "sha256": "5d39e529b3157b3d06a3e3b0228cba096d99c3a787f5bcfb5c0c2d82b366221c"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/reschedule.json",
-      "bytes": 1291,
-      "sha256": "9b22379e12146ed08af8ce17c8683ef23c7078de1f785dd39f18fea5d4370c51"
+      "bytes": 1358,
+      "sha256": "1d8eda3687350b299b01eb4fed50e9979b0fdd815ddf002bcc378c1c058a6ce0"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/risk.json",
-      "bytes": 1190,
-      "sha256": "079030113a48e5fde212afce782bf71b111ef018b7e986a51fa26cd54e2299ec"
+      "bytes": 1253,
+      "sha256": "c87fd92010d22997064aacd784d615724e8407c746681ca27c600fd00b4c5b6f"
     },
     {
-      "path": "widget/native/campus-result-unified-v1/samples/schedule.json",
-      "bytes": 1809,
-      "sha256": "2946bb71f83f6e3cd029ddd28447124e24f796eb48c3579c400552ab4f180d02"
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-day.json",
+      "bytes": 1042,
+      "sha256": "d0c1056fbe846932f499c497cf17c5993df677ecd1a108f0fb59a0b434a510ac"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-range.json",
+      "bytes": 1812,
+      "sha256": "d005b1bb98e922cf3da3efd49a2544ef8b18fded56be32766000dafc627ebfb0"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-week.json",
+      "bytes": 2201,
+      "sha256": "fb34d52efb5f5f65eafa9b296524853dbd65f65b27fc100f0480361797f602cf"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/space.json",
-      "bytes": 1227,
-      "sha256": "c6329522c9a6fb58da062e526ccc704ef8b2fde4d5e0926e87264ab4eab03301"
+      "bytes": 1294,
+      "sha256": "108719bf9098457993e24e388f6318514e8b37633969ba31e1d6f954a14fabb2"
     },
     {
       "path": "widget/native/campus-result-unified-v1/schema.json",
-      "bytes": 2580,
-      "sha256": "69fc36f6887a11db7352e45cbae91cbc04c9103d1a1db1478405e8bacd6265d0"
+      "bytes": 4700,
+      "sha256": "ff86aaecfeb8de78cec8d3544e5b87bc4a21f7d03585d6311658eaf09ceca43a"
     },
     {
       "path": "widget/native/campus-result-unified-v1/template.txt",
-      "bytes": 1624,
-      "sha256": "a8ddc680c6dd4a6b2480c239c5b8beb06deb17123679a427b3386f773fe818a9"
+      "bytes": 3069,
+      "sha256": "20155b52e12dffde0db61d08c8de6faab25886b309a54983b5225c5fc424a17b"
     },
     {
       "path": "widget/native/classroom-widget-adapter.py",
@@ -935,8 +945,8 @@
     },
     {
       "path": "widget/native/test-r50-2b-widget-contract.js",
-      "bytes": 10411,
-      "sha256": "8c82f9b7edcc9b32832ab36931339db947e064331e034e6a13d009e7c5aa7f9d"
+      "bytes": 16853,
+      "sha256": "ba7705c0ede33c87eef0b7744e138cf025dc89f7b54755b5dac008ab213d4aaf"
     },
     {
       "path": "widget/native/test-real-adp-export-catalog.py",

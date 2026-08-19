@@ -13,10 +13,12 @@
       "id": "empty-broaden",
       "type": "sys.chat",
       "label": "扩大范围再试",
-      "payload": {
-        "query": "换一个教学周再查课表"
-      }
+      "payload": { "query": "换一个教学周再查课表" }
     }
   ],
-  "displayMeta": {}
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

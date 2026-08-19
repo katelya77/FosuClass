@@ -13,7 +13,11 @@
     "context",
     "sections",
     "actions",
-    "displayMeta"
+    "displayMeta",
+    "layoutMode",
+    "weekBoardTitle",
+    "weekBoardSubtitle",
+    "days"
   ],
   "properties": {
     "version": { "type": "string", "const": "1.0" },
@@ -83,6 +87,72 @@
         "tieNote": { "type": "string" },
         "tieGroupCount": { "type": "integer", "minimum": 1 },
         "recoverable": { "type": "boolean" }
+      }
+    },
+    "layoutMode": {
+      "type": "string",
+      "enum": ["result-card", "week-board"]
+    },
+    "weekBoardTitle": { "type": "string" },
+    "weekBoardSubtitle": { "type": "string" },
+    "days": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "blocks"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["time", "title", "location"],
+              "properties": {
+                "time": { "type": "string", "minLength": 1 },
+                "title": { "type": "string", "minLength": 1 },
+                "location": { "type": "string", "minLength": 1 },
+                "meta": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": { "layoutMode": { "const": "week-board" } },
+    "required": ["layoutMode"]
+  },
+  "then": {
+    "properties": {
+      "weekBoardTitle": { "type": "string", "minLength": 1 },
+      "weekBoardSubtitle": { "type": "string", "minLength": 1 },
+      "days": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["label", "blocks"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "blocks": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["time", "title", "location"],
+                "properties": {
+                  "time": { "type": "string", "minLength": 1 },
+                  "title": { "type": "string", "minLength": 1 },
+                  "location": { "type": "string", "minLength": 1 },
+                  "meta": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

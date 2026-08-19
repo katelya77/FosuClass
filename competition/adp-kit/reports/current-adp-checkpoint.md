@@ -1,8 +1,20 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-19 +08:00（R50.2B 收尾）
+更新时间：2026-08-19 +08:00（R50.4 收尾）
 
-当前阶段：`CampusFlow ADP R50.2B / Unified Native Widget + Console Cutover Bundle`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；真实 Tencent ADP Widget 导出集成待后续正式导出后执行，见下方 R50.2B 节）
+当前阶段：`CampusFlow ADP R50.4 / Widget UX Convergence + Runtime Acceptance`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；真实 Tencent ADP Widget 导出集成待后续正式导出后执行，见下方 R50.4 节）
+
+## R50.4 状态（收尾，2026-08-19）
+
+- **范围**：统一输出 Widget `campus-result-unified-v1` 双布局升级（week-board 周视图 + result-card 结果卡）+ 服务端确定性投影 + Runtime Acceptance 最小验证集（PR #49 保持 OPEN / UNMERGED，**本轮不部署 CloudBase**；4 个 Agent Prompt 冻结零改动、13 工具绑定 / 14 绑定 / 转移关系 / Direct Result=OFF 全部保持 R50.2B 现状）。
+- **确定性投影**：`r50.2/widget/view-model.js`（CampusResultEnvelope + raw 工具结果 → WidgetViewModel）：整周 / 周范围课表（campus_schedule_query / campus_schedule_range_query、无单日过滤、有课程事实）→ layoutMode=week-board（days[0..6] = 周一..周日对应 day0Label~day6Label，blocks[].{time,title,location,meta}，空天折叠，多周携带第X周，确定性排序）；单日过滤 / campus_day_plan / 非 schedule 变体 → result-card；week-board 数据损坏 → fail-closed 回退 result-card（事实经 sections 兜底不丢失）。
+- **Widget 资产升级 v5**：contract.json（`fosuclass-adp-widget-contract/v5`，登记 layoutModes / dayFields / blockFields / weekBoardFields）+ schema.json（新增 layoutMode enum / weekBoardTitle / weekBoardSubtitle / days，week-board 分支强制非空）+ template.txt（双分支渲染：周视图带「周视图」徽标 / 日板块 / 节次徽标 / 课程块；结果卡保留标题区 + 状态徽标 + sections 层级）+ default.json（旗舰预览改为整周 week-board）+ adapter.py（透传布局字段、week-board 损坏自动回退 result-card、UTF-8 管道读写修复 Windows 中文环境）+ 12 样例（schedule-week / schedule-range 为 week-board，schedule-day 单日 + 其余 9 变体为 result-card，统一 15 键）。动作仍仅官方 sys.chat、payload 仅 query；week-board 确定性追加「看某日明细」续接；零内部协议文本。
+- **门禁全绿**：widget 契约（升级版 test-r50-2b-widget-contract.js）**12/12 PASS**（含 python 运行时冒烟：整周→week-board 透传 / 损坏→result-card 回退 / 泄漏→fallback）；新 `r49-ma/tests/test-r50-4-view-model.js` **12/12 PASS**（P1 布局规则 / P2 确定性 / P3 fail-closed / P4 sys.chat-only + 日明细 / P5 零泄漏 + variant-adapters 集成）；R50.2B 聚焦套件 **8 文件全部 PASS**（envelope / no-leakage / variant-adapters / widget-actions / acceptance-matrix 4/4 / runtime-e2e）。
+- **控制台更新说明**：`r50.2/R50.4-CONSOLE-UPDATE.md`（升级导入包：替换 template/schema/default，samples 预览双形态；4 Prompt / 13 绑定 / 转移 / Direct Result 全部不动）+ `console-bundle/widget/` 已同步（contract / schema / default / template / adapter.py + view-model.js 参考）+ README 增 R50.4 双布局说明。
+- **Runtime Acceptance**：`r50.2/R50.4-RUNTIME-ACCEPTANCE.md` 最小高价值验证集（A1~A4 布局路由 / B1~B7 事实结果卡 / C1~C2 兜底；A1、A3、B1、B3、B5、B6 ≥6 项通过即达成）。
+- **提交（1 commit，HEAD 见最终报告）**：`feat(adp): R50.4 widget dual layout (week-board/result-card) + view-model projection`。
+- **判定**：`R50.4 REPO GOLDEN`（repo 全绿；runtime 侧零 Prompt/零绑定变更）；**Console GOLDEN 未宣称**——待用户按 `R50.4-CONSOLE-UPDATE.md` 替换 Widget 资产 + 按 `R50.4-RUNTIME-ACCEPTANCE.md` 跑 11 项最小验收。
+- **待办（用户动作）**：控制台升级 Widget 资产（约 5 分钟）→ Runtime Acceptance 11 项 → 后续真实 Tencent ADP Widget 导出后补齐 `.widget` 门禁与注册表。
 
 ## R50.2B 状态（收尾，2026-08-19）
 

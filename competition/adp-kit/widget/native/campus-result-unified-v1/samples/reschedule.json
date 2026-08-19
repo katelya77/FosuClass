@@ -32,20 +32,20 @@
       "id": "reschedule-simulate",
       "type": "sys.chat",
       "label": "再模拟一个时段",
-      "payload": {
-        "query": "再模拟一个调课时段"
-      }
+      "payload": { "query": "再模拟一个调课时段" }
     },
     {
       "id": "reschedule-execute",
       "type": "sys.chat",
       "label": "怎么正式调课",
-      "payload": {
-        "query": "正式调课需要怎么操作"
-      }
+      "payload": { "query": "正式调课需要怎么操作" }
     }
   ],
   "displayMeta": {
     "simulated": true
-  }
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

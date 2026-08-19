@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "variant": "schedule",
+  "status": "success",
+  "title": "教师003 · 周三课表明细",
+  "subtitle": "教师003 · 第1周 · 周三",
+  "verified": true,
+  "summary": "周三共 1 条课程。",
+  "context": "第1周 · 周三",
+  "sections": [
+    {
+      "title": "周三课程",
+      "rows": [
+        {
+          "label": "第3-4节",
+          "value": "操作系统 · 校区B B1-205",
+          "badge": "第3-4节",
+          "hint": "10:00-11:40 · 教师003 · 2025级B班"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "schedule-day-next",
+      "type": "sys.chat",
+      "label": "看周四的课表",
+      "payload": { "query": "查看教师003第1周周四的课表明细" }
+    },
+    {
+      "id": "schedule-day-week",
+      "type": "sys.chat",
+      "label": "看整周课表",
+      "payload": { "query": "查看教师003第1周的完整课表" }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

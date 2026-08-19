@@ -34,10 +34,12 @@
       "id": "message-browse",
       "type": "sys.chat",
       "label": "查看课表",
-      "payload": {
-        "query": "查看的课表"
-      }
+      "payload": { "query": "查看的课表" }
     }
   ],
-  "displayMeta": {}
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

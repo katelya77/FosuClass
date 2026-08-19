@@ -2,7 +2,7 @@
   "version": "1.0",
   "variant": "risk",
   "status": "success",
-  "title": "风险检查 · 教师003 与 教师007",
+  "title": "风险检查 · 教师003与教师007",
   "subtitle": "",
   "verified": true,
   "summary": "发现 1 处时间冲突、1 处跨校区赶场。",
@@ -12,8 +12,8 @@
       "title": "时间冲突",
       "rows": [
         {
-          "label": "周二 undefined",
-          "value": "高等数学 ↔ 线性代数",
+          "label": "周二 第3-4节",
+          "value": "高等数学 vs 线性代数",
           "badge": "冲突",
           "hint": "校区A A4-101 vs 校区B B2-101"
         }
@@ -24,9 +24,9 @@
       "rows": [
         {
           "label": "周三 · 间隔 10 分钟",
-          "value": "操作系统 → 大学英语",
+          "value": "操作系统 vs 大学英语",
           "badge": "赶场",
-          "hint": "校区A → 校区B"
+          "hint": "校区A 到 校区B"
         }
       ]
     }
@@ -36,18 +36,18 @@
       "id": "risk-resolve",
       "type": "sys.chat",
       "label": "看看怎么调整",
-      "payload": {
-        "query": "针对冲突给出调课建议"
-      }
+      "payload": { "query": "针对冲突给出调课建议" }
     },
     {
       "id": "risk-other-week",
       "type": "sys.chat",
       "label": "检查其他周",
-      "payload": {
-        "query": "检查另一个教学周的风险"
-      }
+      "payload": { "query": "检查另一个教学周的风险" }
     }
   ],
-  "displayMeta": {}
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

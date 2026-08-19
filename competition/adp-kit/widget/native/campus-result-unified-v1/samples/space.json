@@ -12,19 +12,19 @@
       "title": "可用教室",
       "rows": [
         {
-          "label": "A1-101 · 120人",
+          "label": "A1-101 · 120座",
           "value": "多媒体教室 · 校区A A1",
           "badge": "多媒体教室",
           "hint": "A1"
         },
         {
-          "label": "A1-102 · 60人",
+          "label": "A1-102 · 60座",
           "value": "普通教室 · 校区A A1",
           "badge": "普通教室",
           "hint": "A1"
         },
         {
-          "label": "A2-201 · 80人",
+          "label": "A2-201 · 80座",
           "value": "多媒体教室 · 校区A A2",
           "badge": "多媒体教室",
           "hint": "A2"
@@ -37,18 +37,18 @@
       "id": "space-other-day",
       "type": "sys.chat",
       "label": "换一天看看",
-      "payload": {
-        "query": "换一天再查空教室"
-      }
+      "payload": { "query": "换一天再查空教室" }
     },
     {
       "id": "space-campus",
       "type": "sys.chat",
       "label": "看另一个校区",
-      "payload": {
-        "query": "查看另一个校区的空教室"
-      }
+      "payload": { "query": "查看另一个校区的空教室" }
     }
   ],
-  "displayMeta": {}
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

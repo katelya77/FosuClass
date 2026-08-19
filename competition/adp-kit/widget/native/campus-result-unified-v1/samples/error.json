@@ -13,20 +13,20 @@
       "id": "error-retry",
       "type": "sys.chat",
       "label": "重试",
-      "payload": {
-        "query": "再查一次"
-      }
+      "payload": { "query": "再查一次" }
     },
     {
       "id": "error-rephrase",
       "type": "sys.chat",
       "label": "换一种问法",
-      "payload": {
-        "query": "换一种问法查询"
-      }
+      "payload": { "query": "换一种问法查询" }
     }
   ],
   "displayMeta": {
     "recoverable": true
-  }
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
 }

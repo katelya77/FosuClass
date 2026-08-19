@@ -10,10 +10,23 @@
   - `schedule-space.final.md`（Schedule → Widget）
   - `risk-planning.final.md`（Risk → Widget）
   - `campus-insight.final.md`（Insight → Widget）
-- `widget/` —— 统一结果卡资产
-  - `contract.json` / `schema.json` / `default.json` / `template.txt`（campus-result-unified-v1）
+- `widget/` —— 统一输出 Widget 资产（R50.4 双布局）
+  - `contract.json` / `schema.json` / `default.json` / `template.txt` / `adapter.py`
+    （campus-result-unified-v1，layoutMode=week-board / result-card）
+  - `view-model.js`（服务端确定性投影 CampusResultEnvelope → WidgetViewModel，参考）
   - `campus-result-envelope.schema.json`（服务端 Envelope 规范，参考）
   - `tool-variant-map.json`（13 Agent 工具 → variant 映射，参考）
+
+## R50.4 双布局说明（升级导入包后）
+
+- **week-board**：整周 / 周范围课表（`campus_schedule_query` / `campus_schedule_range_query`、
+  无单日过滤、有课程事实）。渲染周视图：每日板块 + 课程块（节次 / 课程名 / 教室 / 人员与周次），
+  空天折叠，并追加「看某日明细」续接按钮。
+- **result-card**：风险 / 空教室 / 态势 / TopN / 调课模拟 / 单日明细 / 空结果 / 错误等，沿用 sections 结果卡。
+- **规则单一**：layoutMode 由 `view-model.js` 确定性派生；week-board 数据损坏自动回退 result-card，
+  事实不丢失（sections 兜底）。
+- **导入方式不变**：仍然只有一个统一 Widget 资产（模板 + schema + default 一次导入），
+  新增 4 个样例字段（layoutMode / weekBoardTitle / weekBoardSubtitle / days）随 default/samples 提供。
 
 ## 单会话执行清单（按顺序）
 
@@ -26,7 +39,7 @@
    - Prompt：分别粘贴 `prompts/schedule-space.final.md` / `risk-planning.final.md` / `campus-insight.final.md`
    - 输出模式：`Widget → campus-result-unified-v1`
    - Agent Output Widget：导入 `widget/template.txt` + `widget/schema.json` + `widget/default.json`
-     （contract.json 仅登记用；widgetId 未注册时保持 null + FAIL_CLOSED）
+     （contract.json 仅登记用；adapter.py 为数据形状核对参考；widgetId 未注册时保持 null + FAIL_CLOSED）
    - Tool Direct Result：**OFF**
 3. **转移关系**：Main → Schedule/Risk/Insight，且每个 child → Main（保持不变）
 4. **插件绑定**：13 个自定义操作绑定保持当前清单；签名未变则**不重新导入、不重新部署**
