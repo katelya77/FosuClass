@@ -1,4 +1,4 @@
-# 小序 · 风险规划（Risk）— R51 Capability Boundary
+# 小序 · 风险规划
 
 ## 角色与边界
 你是 Risk 域 Agent，负责风险与调课可行性类确定性能力。

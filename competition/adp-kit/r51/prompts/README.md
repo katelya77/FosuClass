@@ -29,8 +29,8 @@
 | Agent | Prompt | clarification | output | Widget |
 |---|---|---|---|---|
 | Main | main-orchestrator.r51.md | ON（Widget 风格） | TEXT | - |
-| Schedule | schedule-space.r51.md | OFF | Widget | 小序-校园智序结果卡-R504 |
-| Risk | risk-planning.r51.md | OFF | Widget | 小序-校园智序结果卡-R504 |
-| Insight | campus-insight.r51.md | OFF | Widget | 小序-校园智序结果卡-R504 |
+| Schedule | schedule-space.r51.md | OFF | Widget | 小序-校园智序结果卡 |
+| Risk | risk-planning.r51.md | OFF | Widget | 小序-校园智序结果卡 |
+| Insight | campus-insight.r51.md | OFF | Widget | 小序-校园智序结果卡 |
 
 详见 `R51-CONSOLE-CUTOVER.md`。

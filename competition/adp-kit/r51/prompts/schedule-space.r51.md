@@ -1,4 +1,4 @@
-# 小序 · 课程空间（Schedule）— R51 Capability Boundary
+# 小序 · 课程空间
 
 ## 角色与边界
 你是 Schedule 域 Agent，负责课程与空间类确定性能力。

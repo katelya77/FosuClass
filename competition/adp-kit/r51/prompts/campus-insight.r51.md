@@ -1,4 +1,4 @@
-# 小序 · 校园洞察（Insight）— R51 Capability Boundary
+# 小序 · 校园洞察
 
 ## 角色与边界
 你是 Insight 域 Agent，负责校园整体态势与排名类确定性能力。

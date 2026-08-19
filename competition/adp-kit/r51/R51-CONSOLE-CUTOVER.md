@@ -12,9 +12,9 @@
 | Agent | Prompt 源 | output | clarification | Widget |
 |---|---|---|---|---|
 | Main（主协调） | `r51/prompts/main-orchestrator.r51.md` | TEXT | ON（Widget 风格） | - |
-| Schedule（课程空间） | `r51/prompts/schedule-space.r51.md` | Widget | OFF | 小序-校园智序结果卡-R504 |
-| Risk（风险规划） | `r51/prompts/risk-planning.r51.md` | Widget | OFF | 小序-校园智序结果卡-R504 |
-| Insight（校园洞察） | `r51/prompts/campus-insight.r51.md` | Widget | OFF | 小序-校园智序结果卡-R504 |
+| Schedule（课程空间） | `r51/prompts/schedule-space.r51.md` | Widget | OFF | 小序-校园智序结果卡 |
+| Risk（风险规划） | `r51/prompts/risk-planning.r51.md` | Widget | OFF | 小序-校园智序结果卡 |
+| Insight（校园洞察） | `r51/prompts/campus-insight.r51.md` | Widget | OFF | 小序-校园智序结果卡 |
 
 全局开关：
 
