@@ -77,7 +77,7 @@
 
 ## 10. Legacy Workflow（T7）
 
-- Git tag `adp-workflows-backup-2026-08-19` → `f0f12e1`（备份点，已推送）。
+- Git tag `adp-workflows-backup-2026-08-19` → `f0f12e1`（备份点；**仅本地**，未推送远端——远程改动需用户明确要求，推 tag 留待用户决定）。
 - `workflows/LEGACY-WORKFLOWS.md`：引用面核对（application-config.json roleInstruction、evaluation-dataset workflow 字段、
   real-adp-export-catalog、runtime-e2e-cases、action-contract、campus-overview-v1）→ 保持活动 + legacy-pending，删除推迟。
 - `widget/native/runtime-e2e-cases.json` 保持原样（legacy ADP manifest fixture，被 test-runtime-e2e-cases.js 断言）。
@@ -110,7 +110,7 @@
 3. 全量导入包：`output/competition-adp/final/CampusFlow-ADP-Import-Bundle.zip`（SHA256 `f0b08573…b15e9`）；01-Schedule-Final.zip 71/71 checks。
 4. 知识库：以 `knowledge/current/` 为现行事实（10 节 + recall matrix），`knowledge/legacy/LEGACY.md` 仅作回滚证据。
 5. 个人课表桥：仅呈现状态与导航（`personal-bridge/`），不伪造导入结果；写操作须 Authority L3 确认。
-6. 回滚路径：`git revert` 或 checkout `f0f12e1`（tag `adp-workflows-backup-2026-08-19`）恢复 R51 基线。
+6. 回滚路径：`git revert` 或 checkout `f0f12e1`（本地 tag `adp-workflows-backup-2026-08-19`）恢复 R51 基线。
 
 ## 15. 剩余事项 / Blockers
 
