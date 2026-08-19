@@ -35,6 +35,52 @@ assert.strictEqual(activeDefault.term, "2026-2027-1");
 
 assert.throws(() => selectPublisherTerm({}), (error) => error && error.code === "PUBLISHER_ACTIVE_TERM_MISSING");
 
+// A canonical preferred term ahead of the live active term is promoted
+// automatically so routine publishes pick up newly released cohorts.
+const promoted = selectPublisherTerm({
+  activeTerm: "2025-2026-2",
+  activeReleaseVersion: "release-2025",
+  activeSource: "oracle-active-pointer",
+  canonicalTerm: "2026-2027-1",
+});
+assert.strictEqual(promoted.term, "2026-2027-1");
+assert.strictEqual(promoted.source, "canonical-preferred-term");
+assert.strictEqual(promoted.promotedFromTerm, "2025-2026-2");
+
+const promotedWithStaleEnv = selectPublisherTerm({
+  envTerm: "2025-2026-2",
+  activeTerm: "2025-2026-2",
+  canonicalTerm: "2026-2027-1",
+});
+assert.strictEqual(promotedWithStaleEnv.term, "2026-2027-1");
+assert.strictEqual(promotedWithStaleEnv.ignoredEnvTerm, "2025-2026-2");
+
+// Canonical term equal to or older than the active term never hijacks a publish.
+const canonicalSame = selectPublisherTerm({
+  activeTerm: "2026-2027-1",
+  activeSource: "oracle-active-pointer",
+  canonicalTerm: "2026-2027-1",
+});
+assert.strictEqual(canonicalSame.term, "2026-2027-1");
+assert.strictEqual(canonicalSame.promotedFromTerm, undefined);
+
+const canonicalOlder = selectPublisherTerm({
+  activeTerm: "2026-2027-1",
+  activeSource: "oracle-active-pointer",
+  canonicalTerm: "2025-2026-2",
+});
+assert.strictEqual(canonicalOlder.term, "2026-2027-1");
+assert.strictEqual(canonicalOlder.promotedFromTerm, undefined);
+
+// An explicit --term still beats canonical promotion.
+const explicitBeatsCanonical = selectPublisherTerm({
+  cliTerm: "2025-2026-2",
+  activeTerm: "2025-2026-2",
+  canonicalTerm: "2026-2027-1",
+});
+assert.strictEqual(explicitBeatsCanonical.term, "2025-2026-2");
+assert.strictEqual(explicitBeatsCanonical.source, "cli");
+
 const canonical = loadPublisherTermConfig("2026-2027-1");
 assert.strictEqual(canonical.termStartDate, "2026-09-07");
 assert.strictEqual(canonical.totalWeeks, 19);

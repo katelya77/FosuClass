@@ -41,7 +41,8 @@ const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
 } = require("../fosu-sync-client/syncEnv");
-const { loadTermConfig } = require("../../shared/termConfig");
+const { loadTermConfig, resolvePreferredTerm } = require("../../shared/termConfig");
+const { compareTerms } = require("../../shared/termVisibility");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const SYNC_CLIENT_DIR = path.join(PROJECT_ROOT, "tools", "fosu-sync-client");
@@ -819,15 +820,30 @@ function cleanupPublisherRunArtifacts(options = {}) {
   return { removed, kept, keepLatest };
 }
 
-function selectPublisherTerm({ cliTerm = "", envTerm = "", activeTerm = "", activeReleaseVersion = "", activeSource = "" } = {}) {
+function selectPublisherTerm({ cliTerm = "", envTerm = "", activeTerm = "", activeReleaseVersion = "", activeSource = "", canonicalTerm = "" } = {}) {
   const explicit = String(cliTerm || "").trim();
   const preferred = String(envTerm || "").trim();
+  const canonical = String(canonicalTerm || "").trim();
   const active = String(activeTerm || "").trim();
   if (explicit) return { term: explicit, source: "cli", activeReleaseVersion };
   if (!active) {
     const error = new Error("PUBLISHER_ACTIVE_TERM_MISSING");
     error.code = "PUBLISHER_ACTIVE_TERM_MISSING";
     throw error;
+  }
+  // A config/terms/<term>.json marked preferred that is newer than the live active
+  // term means a new semester (and its new cohort, e.g. grade 2026) is configured
+  // locally but has never been published. Promote it automatically so a plain
+  // `sync:publish` does not keep re-syncing the old term and hiding the new
+  // cohort. Pinning any other term still requires an explicit --term.
+  if (canonical && canonical !== active && compareTerms({ term: canonical }, { term: active }) < 0) {
+    return {
+      term: canonical,
+      source: "canonical-preferred-term",
+      activeReleaseVersion,
+      promotedFromTerm: active,
+      ignoredEnvTerm: preferred && preferred !== canonical ? preferred : undefined,
+    };
   }
   if (preferred && preferred !== active) {
     return { term: active, source: activeSource, activeReleaseVersion, ignoredEnvTerm: preferred };
@@ -940,6 +956,14 @@ async function reconcileOracleTermConfig(args, termInfo) {
   };
 }
 
+function resolveCanonicalPreferredTerm() {
+  try {
+    return resolvePreferredTerm({ root: PROJECT_ROOT });
+  } catch (error) {
+    return "";
+  }
+}
+
 async function resolveTerm(args) {
   const cliTerm = String(args.term || args.semester || "").trim();
   if (cliTerm) return attachPublisherTermConfig(selectPublisherTerm({ cliTerm }), args);
@@ -951,7 +975,12 @@ async function resolveTerm(args) {
     activeTerm: active.term,
     activeReleaseVersion: active.releaseVersion,
     activeSource: source.source,
+    canonicalTerm: resolveCanonicalPreferredTerm(),
   });
+  if (selected.promotedFromTerm) {
+    console.warn(`[publisher] 检测到 canonical 新学期 ${selected.term} 领先线上当前学期 ${selected.promotedFromTerm}，已自动切换目标学期并升级为 full 全量同步（覆盖新年级课表）。`);
+    return attachPublisherTermConfig(selected, args);
+  }
   if (selected.ignoredEnvTerm) {
     // A stale PREFERRED_SEMESTER in local .env files must not silently retarget a
     // routine publish to an old term. The live active pointer is the source of
@@ -1687,7 +1716,15 @@ async function runMainPipeline(run, args) {
     await run.stage("checking-session", async () => verifyEducationSession());
 
     const effectiveMode = run.mode === "resume" ? run.originalMode : run.mode;
-    const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term, termInfo.termConfig);
+    // A canonical preferred term ahead of the live active term requires a full
+    // crawl: the catalog must be rediscovered from the network so newly released
+    // cohorts (e.g. grade 2026) are picked up instead of reusing the old term's
+    // validated catalog cache.
+    const promotedToFull = Boolean(termInfo && termInfo.promotedFromTerm) && effectiveMode === "routine";
+    if (promotedToFull) {
+      run.event("term-auto-promoted", { fromTerm: termInfo.promotedFromTerm, term, mode: "full" });
+    }
+    const crawlPlan = buildCrawlArgs(effectiveMode === "full" || promotedToFull ? "full" : "routine", args, run, term, termInfo.termConfig);
     await run.stage("crawling", async () => {
       const explicitGrades = String(args.grades || args.grade || "").trim();
       runNodeScript(crawlPlan.script, crawlPlan.args, {
@@ -1699,8 +1736,15 @@ async function runMainPipeline(run, args) {
           FOSU_SKIP_CAMPUS_NETWORK_CHECK: "1",
           // Do not inherit a previous semester's local grade filter. The live
           // catalog discovers all available cohorts unless --grades is explicit.
+          // SYNC_GRADE_RANGE must be neutralized together with SYNC_GRADES:
+          // a stale `custom` range plus a blanked grade list would either throw
+          // ("custom 但未设置 SYNC_GRADES") or silently reuse the old .env grade
+          // list, hiding a newly released cohort such as grade 2026. Leaving it
+          // empty falls back to the term-derived `active` range, which always
+          // includes the term's current admission year.
           SYNC_GRADES: explicitGrades,
           SYNC_CLASS_GRADES: explicitGrades,
+          SYNC_GRADE_RANGE: explicitGrades ? "custom" : "",
         },
       });
       if (process.env.FOSU_PUBLISHER_MOCK !== "1" && !fs.existsSync(crawlPlan.output)) {
@@ -2139,6 +2183,7 @@ module.exports = {
   runOracleOnlySmoke,
   sanitizeReceiptForUpload,
   selectPublisherTerm,
+  resolveCanonicalPreferredTerm,
   loadPublisherTermConfig,
   validateStaging,
 };

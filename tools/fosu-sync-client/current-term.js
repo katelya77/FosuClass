@@ -75,8 +75,11 @@ function buildCurrentTermInvocation(argv, options = {}) {
   const planEnv = Object.assign({}, env, {
     // Current-term catalog discovery is authoritative. An old local grade list
     // must not permanently hide a newly released cohort such as grade 2026.
+    // SYNC_GRADE_RANGE is cleared alongside the grade lists: a stale `custom`
+    // range with blanked grades would throw or silently reuse the old .env list.
     SYNC_GRADES: "",
     SYNC_CLASS_GRADES: "",
+    SYNC_GRADE_RANGE: "",
   });
   const plan = buildSyncPlan(action, {
     term,
@@ -116,6 +119,7 @@ function buildCurrentTermInvocation(argv, options = {}) {
     SYNC_LOCAL_STAGING_ONLY: env.ADMIN_API_TOKEN ? String(env.SYNC_LOCAL_STAGING_ONLY || "false") : "true",
     SYNC_GRADES: plan.filters.grades.join(","),
     SYNC_CLASS_GRADES: plan.filters.grades.join(","),
+    SYNC_GRADE_RANGE: plan.filters.grades.length ? "custom" : "",
   });
   const networkIsolation = prepareDirectNetworkEnvironment(runtimeEnv);
   return { args, config, plan, root, resume, runtimeEnv, networkIsolation };
