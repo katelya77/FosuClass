@@ -19,7 +19,7 @@ const ASSET_ROOTS = [
   "cloudfunctions",
   "widget",
 ];
-const EXCLUDED_SEGMENTS = new Set(["node_modules", "dist", ".tmp"]);
+const EXCLUDED_SEGMENTS = new Set(["node_modules", "dist", ".tmp", "__pycache__"]);
 const EXCLUDED_FILES = new Set(["package-lock.json"]);
 
 function listFiles(relativeRoot) {

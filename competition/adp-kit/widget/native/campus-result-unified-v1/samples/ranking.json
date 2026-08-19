@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "variant": "ranking",
+  "status": "success",
+  "title": "教师负载排行",
+  "subtitle": "第1周 · 由课程数据派生",
+  "verified": true,
+  "summary": "Top 3：教师001、教师002、教师003（第 2 名起出现并列）。",
+  "context": "第1周",
+  "sections": [
+    {
+      "title": "排名（位次稳定，并列同档）",
+      "rows": [
+        {
+          "label": "第1名",
+          "value": "教师001 · 24 次课程 · 48 节次",
+          "hint": "teacher"
+        },
+        {
+          "label": "第2名",
+          "value": "教师002 · 24 次课程 · 48 节次",
+          "badge": "并列",
+          "hint": "teacher"
+        },
+        {
+          "label": "第3名",
+          "value": "教师003 · 20 次课程 · 40 节次",
+          "hint": "teacher"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "ranking-top1",
+      "type": "sys.chat",
+      "label": "查看第1名的课表",
+      "payload": {
+        "query": "查看排名第1的教师的课表"
+      }
+    },
+    {
+      "id": "ranking-more",
+      "type": "sys.chat",
+      "label": "看前5名",
+      "payload": {
+        "query": "查看前5名的排行"
+      }
+    }
+  ],
+  "displayMeta": {
+    "tieGroupCount": 1,
+    "tieNote": "第2名起并列"
+  }
+}

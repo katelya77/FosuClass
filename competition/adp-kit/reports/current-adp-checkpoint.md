@@ -1,8 +1,21 @@
 # 校园智序 · 小序 — 当前 ADP 检查点
 
-更新时间：2026-08-19 +08:00（R50.2A 收尾）
+更新时间：2026-08-19 +08:00（R50.2B 收尾）
 
-当前阶段：`CampusFlow ADP R50.2A / Interaction Semantics + Prompt Hardening`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；控制台真机验收待用户执行，见下方 R50.2A 节）
+当前阶段：`CampusFlow ADP R50.2B / Unified Native Widget + Console Cutover Bundle`（PR #49 保持 OPEN / UNMERGED、**本轮不部署 CloudBase**；真实 Tencent ADP Widget 导出集成待后续正式导出后执行，见下方 R50.2B 节）
+
+## R50.2B 状态（收尾，2026-08-19）
+
+- **范围**：统一原生结果卡 `campus-result-unified-v1`（Schedule / Risk / Insight 三域 Envelope 投影）+ 控制台一次性切换包（`console-bundle`）+ 12 家族验收矩阵 + Prompt 输出策略 §5（fast-track 8 任务全部完成；PR #49 保持 OPEN / UNMERGED，**本轮不部署 CloudBase**）。
+- **Envelope（T1~T3）**：`r50.2/widget/` 提供 `campus-result-envelope.schema.json`（v1）+ `envelope.js`（11 公开字段：version / variant / status / title / subtitle / verified / summary / context / sections / actions / displayMeta）+ `tool-variant-map.json`（13 工具→8 变体）+ `variant-adapters.js`（10 fixtures）+ `action-builder.js`（仅官方 sys.chat，payload 只含用户语义 query）；focused 门禁 **30/30 PASS**。
+- **Native widget 契约（T4）**：`widget/native/campus-result-unified-v1/`（contract.json 契约 `fosuclass-adp-widget-contract/v4`、kind `campus-result-unified`、widgetId=null + `FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY`、10 样例、adapter.py 投影式 fail-closed 适配器：泄漏 envelope → route=fallback）；`test-r50-2b-widget-contract.js` **10/10 PASS**（含 python 运行时冒烟）。
+- **Prompt（T5）**：`shared/output-policy.md` 增 §5 统一结果卡（11 项白名单 / sys.chat-only / empty·error·simulated 标记）；schedule-space / risk-planning / campus-insight 各 +1 输出边界；重编译 → `r50.2/prompts/*.final.md` 与编译产物字节一致；`r50.2/prompt-candidate-gate.js` 基线 **PASS**（候选模式 SKIP，无候选）；`prompt-candidates/README.md` 候选纪律。`r50.1/prompts` Paste Pack 同步刷新（P9 门禁 9/9 PASS，遵循 R50.2A `2e3eed3` 先例）。
+- **控制台切换包（T6）**：`r50.2/console-bundle/`（prompts 4 份 + widget 资产 6 份 + 单会话清单）+ `R50.2B-ADP-BATCH-CUTOVER.md`（预检 / 10 步切换表 / 可选 AI 优化 / 回滚 / 发布纪律）。
+- **验收矩阵（T7）**：`r50.2/R50.2B-CONSOLE-ACCEPTANCE-MATRIX.md` 12 家族 + `test-r50-2b-acceptance-matrix.js` **4/4 PASS**（12 行完整性 / variant 合法+全覆盖 / 13 工具可产出 / 家族 12 sys.chat+Main-first）。
+- **回归（T8）**：R50.2A 兼容 **116/116**、聚焦 R50.2B **30/30**、widget 契约 **10/10**、验收矩阵 **4/4**、runtime-e2e PASS（6 fixtures + 6 真实 WidgetID + risk route 03）、compiler --check **4 files**、manifest 重生成 **281 files**（新增 15 个 unified-widget 资产；同步排除 `__pycache__` 生成物）。**遗留门禁（真实导出依赖，非失败）**：`audit-widget-contract.js` 需真实 `<file.widget>`、`test-native-import-preview-contract.js` 期望 6 个 `.widget` 文件——统一卡按契约不伪造导出，未注册入 `widget-registry.json` / `native-widget-import-bundle-manifest.json`（真实 Tencent 导出后补齐）。
+- **提交（1 commit，HEAD 见最终报告）**：`feat(adp): R50.2B unified native widget + console cutover bundle`（T1~T8 全部内容 + `2026-08-19-r50.2b-final-report.md`）。
+- **判定**：`R50.2B REPO GOLDEN`（repo 全绿；唯一未执行项为真实 Tencent `.widget` 导出门禁，属 pending-export 而非失败）；**Console GOLDEN 未宣称**——待用户按 `R50.2B-ADP-BATCH-CUTOVER.md` 执行 10 步切换 + 12 家族验收（D1~D6 真机沿用 R50.1 模板）。
+- **待办（用户动作）**：执行 Batch Cutover（console-bundle 粘贴 + 验收矩阵勾选）；后续导出真实 Tencent ADP Widget 后补齐 `.widget` 门禁与注册表。
 
 ## R50.2A 状态（收尾，2026-08-19）
 

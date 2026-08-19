@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0005",
+  "dataVersion": "competition-demo-v3",
+  "items": [
+    {
+      "sourceLesson": {
+        "lessonId": "les-301",
+        "courseId": "c-031",
+        "courseName": "高等数学",
+        "teachers": ["教师003"],
+        "classes": ["2025级A班"],
+        "roomId": "r-601",
+        "roomName": "A5-101",
+        "building": "A5",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 2,
+        "weekdayName": "周二",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "weeks": [1, 2, 3, 4],
+        "date": "2026-09-01"
+      },
+      "target": {
+        "week": 1,
+        "weekday": 4,
+        "weekdayName": "周四",
+        "date": "2026-09-03",
+        "periodStart": 7,
+        "periodEnd": 8,
+        "periodText": "第7-8节",
+        "room": null
+      },
+      "checks": {
+        "teacherConflict": { "conflict": false, "details": [] },
+        "classConflict": { "conflict": false, "details": [] },
+        "roomConflict": { "conflict": false, "details": [] },
+        "capacity": { "ok": true, "note": "教室暂未指定，仅核对教师与班级时间" },
+        "feature": { "ok": true, "note": "" }
+      }
+    }
+  ],
+  "actions": [],
+  "summary": {
+    "feasible": true,
+    "reason": "可行",
+    "conflictCount": 0,
+    "warningCount": 0
+  },
+  "simulation": { "sourceLessonId": "les-301", "target": { "week": 1, "weekday": 4, "weekdayName": "周四", "date": "2026-09-03", "periodStart": 7, "periodEnd": 8, "periodText": "第7-8节", "room": null }, "mutatedData": false },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:04:00.000Z",
+    "verified": true
+  }
+}

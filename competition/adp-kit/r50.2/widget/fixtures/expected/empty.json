@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "variant": "empty",
+  "status": "empty",
+  "title": "暂无已核验结果",
+  "verified": true,
+  "summary": "「教师099」该条件下没有已核验的课程/时段记录。",
+  "context": "第1周",
+  "sections": [],
+  "actions": [
+    {
+      "id": "empty-broaden",
+      "type": "sys.chat",
+      "label": "扩大范围再试",
+      "payload": {
+        "query": "换一个教学周再查课表"
+      }
+    }
+  ],
+  "displayMeta": {}
+}

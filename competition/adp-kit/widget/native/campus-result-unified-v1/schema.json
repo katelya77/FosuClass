@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "variant",
+    "status",
+    "title",
+    "subtitle",
+    "verified",
+    "summary",
+    "context",
+    "sections",
+    "actions",
+    "displayMeta"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "variant": {
+      "type": "string",
+      "enum": ["schedule", "space", "collaboration", "risk", "reschedule", "ranking", "overview", "empty", "error", "message"]
+    },
+    "status": { "type": "string", "enum": ["success", "empty", "error"] },
+    "title": { "type": "string", "minLength": 1 },
+    "subtitle": { "type": "string" },
+    "verified": { "type": "boolean" },
+    "summary": { "type": "string", "minLength": 1 },
+    "context": { "type": "string" },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "rows"],
+        "properties": {
+          "title": { "type": "string" },
+          "note": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "value"],
+              "properties": {
+                "label": { "type": "string" },
+                "value": { "type": "string" },
+                "badge": { "type": "string" },
+                "hint": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "label", "payload"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string", "minLength": 1 },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+              "query": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "displayMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "simulated": { "type": "boolean" },
+        "weekendMarked": { "type": "boolean" },
+        "tieNote": { "type": "string" },
+        "tieGroupCount": { "type": "integer", "minimum": 1 },
+        "recoverable": { "type": "boolean" }
+      }
+    }
+  }
+}

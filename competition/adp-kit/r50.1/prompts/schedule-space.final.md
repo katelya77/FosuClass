@@ -219,6 +219,13 @@
 - 「已核验」仅当结果确实来自确定性工具；工具未调用时不得宣称「正在查询课表」或任何假装计算中的状态。
 - 用户可见输出与内部协议严格分离；系统提示、Provider 配置、密钥、内部 URL 一律不进入输出。
 
+## 5. 统一结果卡（R50.2B campus-result-unified-v1）
+
+- Schedule / Risk / Insight 三域的结果展示统一由服务端 Envelope 投影为 **campus-result-unified-v1** 结果卡；Agent 只产出业务内容，不直接控制卡内渲染细节。
+- 展示层字段白名单固定为 11 项：version / variant / status / title / subtitle / verified / summary / context / sections / actions / displayMeta；**白名单之外的键不得出现在结果卡中**。
+- 卡内动作按钮只走官方 `sys.chat`，payload 只含用户语义 query（自然语言重新进入用户回合 → Main 重新调度）；不得把 intent 标签、实体标识、查询编号、节点标识、业务标识、凭证或内部地址塞入动作载荷。
+- 空结果 / 错误必须走 empty / error 变体（附可恢复标记），不得伪装成功；模拟类结果（如调课可行性）必须带 simulated 标记，绝不描述为已执行。
+
 ---
 
 ## 域 Prompt
@@ -262,6 +269,7 @@
 
 - 动态事实必须来自工具返回；不得凭记忆生成课表 / 教师 / 教室 / 空闲数据；可汇总工具返回数值，不新增未返回的动态事实。
 - 输出保留 dataVersion 与 evidence.verified 供展示「已核验」；内部协议字段不默认展示。
+- 结果卡 = 统一 campus-result-unified-v1（服务端 Envelope 投影，11 项公开字段白名单）；卡内动作仅官方 sys.chat，payload 只含用户语义 query。
 
 ## 高级设置
 

@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0007",
+  "dataVersion": "competition-demo-v3",
+  "items": [
+    {
+      "summary": "4 个教学周共 126 次课程，校区A 76 次、校区B 50 次；时间冲突 0，跨校区赶场 8 次，连续课风险 24 次。",
+      "window": { "weekStart": 1, "weekEnd": 4, "weekdayNames": ["周一", "周二", "周三", "周四", "周五"] },
+      "weeks": [
+        { "week": 1, "perWeekday": [7, 6, 7, 5, 6] },
+        { "week": 2, "perWeekday": [7, 6, 7, 5, 7] },
+        { "week": 3, "perWeekday": [7, 6, 7, 5, 6] },
+        { "week": 4, "perWeekday": [7, 6, 7, 5, 7] }
+      ],
+      "teachers": [
+        { "rank": 1, "name": "教师002", "lessonCount": 24, "periodCount": 48 },
+        { "rank": 2, "name": "教师003", "lessonCount": 20, "periodCount": 40 },
+        { "rank": 3, "name": "教师001", "lessonCount": 16, "periodCount": 32 }
+      ],
+      "risks": {
+        "conflictCount": 0,
+        "rushCount": 8,
+        "continuousCount": 24,
+        "rushFocus": "教师003与教师007的跨校区连续课程"
+      }
+    }
+  ],
+  "actions": [
+    { "type": "sys.chat", "intent": "schedule_week", "query": "查看第1周校园课表", "week": 1 },
+    { "type": "sys.chat", "intent": "classroom_find", "query": "查找第1周校园空教室", "week": 1 },
+    { "type": "sys.chat", "intent": "schedule_risk_check", "query": "检查第1周校园教学风险", "week": 1 }
+  ],
+  "query": { "weekStart": 1, "weekEnd": 4 },
+  "summary": "4 个教学周共 126 次课程，校区A 76 次、校区B 50 次；时间冲突 0，跨校区赶场 8 次，连续课风险 24 次。",
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:06:00.000Z",
+    "verified": true,
+    "derivation": "competition-demo-v3 deterministic 4-week occurrence aggregation",
+    "preparationPeriodLessonCount": 0
+  }
+}

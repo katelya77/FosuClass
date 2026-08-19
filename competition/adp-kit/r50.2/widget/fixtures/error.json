@@ -1,0 +1,18 @@
+{
+  "success": false,
+  "queryId": "q-20260819-0009",
+  "dataVersion": "competition-demo-v3",
+  "items": [],
+  "actions": [],
+  "error": {
+    "code": "ENTITY_NOT_FOUND",
+    "message": "未找到教师「不存在的老师」"
+  },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:08:00.000Z",
+    "verified": false
+  }
+}

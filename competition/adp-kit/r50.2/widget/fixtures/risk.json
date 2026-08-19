@@ -1,0 +1,126 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0004",
+  "dataVersion": "competition-demo-v3",
+  "items": [
+    {
+      "weekday": 2,
+      "weekdayName": "周二",
+      "periodStart": 5,
+      "periodEnd": 6,
+      "first": {
+        "lessonId": "les-201",
+        "courseId": "c-021",
+        "courseName": "高等数学",
+        "teachers": ["教师003"],
+        "classes": ["2025级A班"],
+        "roomId": "r-501",
+        "roomName": "A4-101",
+        "building": "A4",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 2,
+        "weekdayName": "周二",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "weeks": [1, 2, 3, 4],
+        "date": "2026-09-01"
+      },
+      "second": {
+        "lessonId": "les-202",
+        "courseId": "c-022",
+        "courseName": "线性代数",
+        "teachers": ["教师003"],
+        "classes": ["2025级B班"],
+        "roomId": "r-502",
+        "roomName": "B2-101",
+        "building": "B2",
+        "campusId": "campus-b",
+        "campusName": "校区B",
+        "weekday": 2,
+        "weekdayName": "周二",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "weeks": [1, 2, 3, 4],
+        "date": "2026-09-01"
+      }
+    }
+  ],
+  "actions": [{ "type": "open_widget", "cardType": "conflict", "label": "以卡片查看冲突对比" }],
+  "compared": [
+    { "type": "teacher", "id": "t-003", "name": "教师003" },
+    { "type": "teacher", "id": "t-007", "name": "教师007" }
+  ],
+  "rushWarnings": [
+    {
+      "entity": "教师003",
+      "weekday": 3,
+      "weekdayName": "周三",
+      "from": {
+        "lessonId": "les-203",
+        "courseId": "c-023",
+        "courseName": "操作系统",
+        "teachers": ["教师003"],
+        "classes": ["2025级B班"],
+        "roomId": "r-503",
+        "roomName": "A2-301",
+        "building": "A2",
+        "campusId": "campus-a",
+        "campusName": "校区A",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "periodStart": 3,
+        "periodEnd": 4,
+        "periodText": "第3-4节",
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "weeks": [1, 2, 3, 4],
+        "date": "2026-09-02"
+      },
+      "to": {
+        "lessonId": "les-204",
+        "courseId": "c-024",
+        "courseName": "大学英语",
+        "teachers": ["教师003"],
+        "classes": ["2025级B班"],
+        "roomId": "r-504",
+        "roomName": "B2-201",
+        "building": "B2",
+        "campusId": "campus-b",
+        "campusName": "校区B",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "periodStart": 5,
+        "periodEnd": 6,
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "weeks": [1, 2, 3, 4],
+        "date": "2026-09-02"
+      },
+      "gapMinutes": 10
+    }
+  ],
+  "query": { "week": 1, "weekday": null, "date": null },
+  "summary": {
+    "conflictCount": 1,
+    "firstBusySlots": 5,
+    "secondBusySlots": 5,
+    "hasConflict": true,
+    "selfCompare": false,
+    "rushWarningCount": 1
+  },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:03:00.000Z",
+    "verified": true
+  }
+}

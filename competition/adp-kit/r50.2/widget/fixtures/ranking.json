@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0006",
+  "dataVersion": "competition-demo-v3",
+  "items": [
+    {
+      "rank": 1,
+      "metricRank": 1,
+      "tiedWithPrevious": false,
+      "tieGroupId": null,
+      "tieGroupSize": 1,
+      "entity": { "id": "t-001", "name": "教师001", "type": "teacher" },
+      "metrics": { "loadCount": 24 },
+      "data": { "lessonCount": 24, "periodCount": 48 }
+    },
+    {
+      "rank": 2,
+      "metricRank": 1,
+      "tiedWithPrevious": true,
+      "tieGroupId": "tg-1",
+      "tieGroupSize": 2,
+      "entity": { "id": "t-002", "name": "教师002", "type": "teacher" },
+      "metrics": { "loadCount": 24 },
+      "data": { "lessonCount": 24, "periodCount": 48 }
+    },
+    {
+      "rank": 3,
+      "metricRank": 3,
+      "tiedWithPrevious": false,
+      "tieGroupId": null,
+      "tieGroupSize": 1,
+      "entity": { "id": "t-003", "name": "教师003", "type": "teacher" },
+      "metrics": { "loadCount": 20 },
+      "data": { "lessonCount": 20, "periodCount": 40 }
+    }
+  ],
+  "actions": [],
+  "summary": { "metric": "loadCount", "direction": "desc", "windowLabel": "第1周" },
+  "query": { "week": 1, "limit": 3 },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:05:00.000Z",
+    "verified": true
+  }
+}

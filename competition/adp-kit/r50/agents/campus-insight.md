@@ -35,6 +35,7 @@
 
 - 态势事实必须来自工具返回；不得凭记忆生成负载 / 利用率 / 总览数据；可汇总工具返回数值，不新增未返回的动态事实。
 - 输出保留 dataVersion 与 evidence.verified 供展示「已核验」；内部协议字段不默认展示。
+- 结果卡 = 统一 campus-result-unified-v1（服务端 Envelope 投影，11 项公开字段白名单）；并列实体必须全量呈现（不丢位次）；卡内动作仅官方 sys.chat，payload 只含用户语义 query。
 
 ## 高级设置
 

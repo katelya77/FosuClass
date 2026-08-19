@@ -1,0 +1,78 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v4",
+  "kind": "campus-result-unified",
+  "status": "PREPARED_PENDING_REAL_ADP_WIDGET_EXPORT_INTEGRATION",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-课表票据-V2 / RuntimeSafe V3",
+  "adapter": "adapter.py",
+  "description": "R50.2B 统一 Native Widget：只消费 CampusResultEnvelope 公开字段（version/variant/status/title/subtitle/verified/summary/context/sections/actions/displayMeta）。禁止任何内部协议字段进入本 Widget 数据。",
+  "variants": [
+    "schedule",
+    "space",
+    "collaboration",
+    "risk",
+    "reschedule",
+    "ranking",
+    "overview",
+    "empty",
+    "error",
+    "message"
+  ],
+  "fields": [
+    {"name": "version", "type": "string"},
+    {"name": "variant", "type": "string"},
+    {"name": "status", "type": "string"},
+    {"name": "title", "type": "string"},
+    {"name": "subtitle", "type": "string"},
+    {"name": "verified", "type": "boolean"},
+    {"name": "summary", "type": "string"},
+    {"name": "context", "type": "string"},
+    {"name": "sections", "type": "array<object>"},
+    {"name": "actions", "type": "array<object>"},
+    {"name": "displayMeta", "type": "object"}
+  ],
+  "sectionFields": [
+    "title",
+    "note",
+    "rows"
+  ],
+  "rowFields": [
+    "label",
+    "value",
+    "badge",
+    "hint"
+  ],
+  "actionFields": [
+    "id",
+    "type",
+    "label",
+    "payload"
+  ],
+  "actionPayloadFields": [
+    "query"
+  ],
+  "displayMetaFields": [
+    "simulated",
+    "weekendMarked",
+    "tieNote",
+    "tieGroupCount",
+    "recoverable"
+  ],
+  "leakFree": true,
+  "forbiddenFields": [
+    "queryId",
+    "dataHash",
+    "dataVersion",
+    "sourceTool",
+    "rankContext",
+    "temporalContext",
+    "NodeID",
+    "VarBizID",
+    "Authorization",
+    "Token",
+    "evidence",
+    "computedAt",
+    "internalUrl"
+  ]
+}

@@ -1,0 +1,41 @@
+<Card size="md" background="#F6F2E8" status={{ text: `${verified ? "已核验" : "未核验"}` }}>
+  <Col gap={3}>
+    <Title value={title} size="md" />
+    <Caption value={subtitle} color="secondary" />
+    <Text value={summary} size="sm" weight="semibold" />
+    <Caption value={context} color="secondary" />
+    {sections.map((section) => (
+      <Col gap={1} key={section.title}>
+        <Divider />
+        <Caption value={section.title} color="primary" weight="semibold" />
+        {section.note ? <Caption value={section.note} color="warning" /> : null}
+        {section.rows.map((row, index) => (
+          <Row gap={2} align="start" key={`${section.title}-${row.label}-${index}`}>
+            <Col gap={1} flex={1}>
+              <Text value={row.value} size="sm" weight="semibold" />
+              <Caption value={row.label} color="secondary" />
+              {row.hint ? <Caption value={row.hint} color="secondary" /> : null}
+            </Col>
+            {row.badge ? <Badge label={row.badge} color="info" variant="outline" size="sm" /> : null}
+          </Row>
+        ))}
+      </Col>
+    ))}
+    {actions.length ? (
+      <Col gap={2}>
+        <Divider />
+        <Row gap={2} wrap="wrap">
+          {actions.map((action) => (
+            <Button key={action.id} label={action.label} size="sm" onClickAction={{
+              type: "sys.chat",
+              payload: {
+                query: action.payload.query,
+              },
+            }} />
+          ))}
+        </Row>
+      </Col>
+    ) : null}
+    <Caption value="结果均由确定性校园工具核验派生" color="secondary" />
+  </Col>
+</Card>

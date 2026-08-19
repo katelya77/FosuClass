@@ -1,12 +1,12 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-17T12:30:55.051Z",
+  "generatedAt": "2026-08-19T06:01:14.217Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
       "path": "cloudfunctions/campusflowAdpTools/index.js",
-      "bytes": 1629,
-      "sha256": "566da489f8d69159230e137c27aeb3dd3d579d93485cbb27074b8b00815d8a38"
+      "bytes": 2079,
+      "sha256": "1793fb3daaf5558279f8d1d92b527f6494d7ca61509ffb79632994be96caf633"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v1.json",
@@ -17,6 +17,11 @@
       "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v2.json",
       "bytes": 32157,
       "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v3.json",
+      "bytes": 152894,
+      "sha256": "292345ebc952a9a2c71c53fe1ca3243660668efc482876385288ffad12b933d2"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/package.json",
@@ -30,18 +35,23 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/agent-tools.js",
-      "bytes": 3710,
-      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
+      "bytes": 4961,
+      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/data.js",
-      "bytes": 5780,
-      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/envelope.js",
       "bytes": 1842,
       "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/ratelimit.js",
@@ -50,28 +60,33 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/server.js",
-      "bytes": 12552,
-      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
-      "bytes": 46484,
-      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
+      "bytes": 91195,
+      "sha256": "445dd5e448b6778ba88fd270a4a1f45d9f15333b15c1e25a2ab045b375eeace1"
     },
     {
       "path": "cloudfunctions/README.md",
-      "bytes": 1946,
-      "sha256": "36cbe1ca1c3b0a3787fed91fddabb944e503b1519d453e3eee2c18941b607da0"
+      "bytes": 2052,
+      "sha256": "31e12594344ce83ec79b5893fd5a76c2fe2d8cab24d06bb294a5ea368ef664a6"
     },
     {
       "path": "cloudfunctions/sync-campusflow-function.js",
-      "bytes": 1903,
-      "sha256": "9b2a777e81ef803bb97d407393ed70de05c023c90d52765481d9ad53a33bd362"
+      "bytes": 2098,
+      "sha256": "a2b4a7f2d2f0e618948d95123500928de92e172fd89f4cfbe63c92a47d048416"
     },
     {
       "path": "cloudfunctions/test-http-function.js",
-      "bytes": 3460,
-      "sha256": "defe8fd5affdc86ae9ee4a89346f617a0c529265d988495203c84ddef6d10190"
+      "bytes": 8219,
+      "sha256": "2e158dff7f82a0cc283676f9e71d101aae3af774206f2e0014349d03f2bf980a"
     },
     {
       "path": "evaluation/eval-dataset-v1.json",
@@ -115,8 +130,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27969,
-      "sha256": "af6580be2149f2306390c670fb2500db7765c189604245067e7f55ad143ad9ee"
+      "bytes": 28070,
+      "sha256": "7cffe7428f465de9afd887f499e2fca424ec153e78a365be19735b56f2f9f13c"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -180,8 +195,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/package.json",
-      "bytes": 954,
-      "sha256": "0e5d1e4cf45fe516e1175ab23c8101ea5698291453fc03ac756bedef6b0e671d"
+      "bytes": 989,
+      "sha256": "49127719157fe39d1f7b93c77c9b1d7f79ba0aafabc8c7919a4bb142ce0ca4ff"
     },
     {
       "path": "mcp/campus-tools-mcp/README.md",
@@ -190,8 +205,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/agent-tools.js",
-      "bytes": 3710,
-      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
+      "bytes": 4961,
+      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
     },
     {
       "path": "mcp/campus-tools-mcp/src/client.ts",
@@ -200,18 +215,23 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/contracts.ts",
-      "bytes": 4102,
-      "sha256": "7d12e7fe08f810f669a7bf81b4b28d1c472907db146bfefa38298266600d1a94"
+      "bytes": 7966,
+      "sha256": "3b55fcba250026510d384a9b61de649fc371fb8ec90fbdf4e6910afd6bd16caf"
     },
     {
       "path": "mcp/campus-tools-mcp/src/data.js",
-      "bytes": 5780,
-      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
     },
     {
       "path": "mcp/campus-tools-mcp/src/envelope.js",
       "bytes": 1842,
       "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
     },
     {
       "path": "mcp/campus-tools-mcp/src/ratelimit.js",
@@ -220,13 +240,23 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/server.js",
-      "bytes": 12552,
-      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
     },
     {
       "path": "mcp/campus-tools-mcp/src/tools.js",
-      "bytes": 46484,
-      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
+      "bytes": 91195,
+      "sha256": "445dd5e448b6778ba88fd270a4a1f45d9f15333b15c1e25a2ab045b375eeace1"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/test/data-version-contract.test.js",
+      "bytes": 950,
+      "sha256": "c044bbb88de60f5e8f7ba708d2ca8aa119fa5198c376e534aa5932e3173895c5"
     },
     {
       "path": "mcp/campus-tools-mcp/test/security.test.js",
@@ -235,8 +265,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/test/tools.test.js",
-      "bytes": 23696,
-      "sha256": "dc9e007a1b04ecb794bd3d99a8e9304b6ff3ea3e52176164d2da45aebe39cf6e"
+      "bytes": 28163,
+      "sha256": "d9df2be88b1e0460368468f9b18964d79d60d679f43ee6eb9e8199750c92b51c"
     },
     {
       "path": "mcp/campus-tools-mcp/tsconfig.json",
@@ -259,6 +289,16 @@
       "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
     },
     {
+      "path": "mock-data/competition-demo-v3.json",
+      "bytes": 152894,
+      "sha256": "292345ebc952a9a2c71c53fe1ca3243660668efc482876385288ffad12b933d2"
+    },
+    {
+      "path": "mock-data/competition-demo-v3.schema.json",
+      "bytes": 7986,
+      "sha256": "346976b0089e8405d801b9ff7674d576ddef512ead3f810a7c7540ea89bbf91e"
+    },
+    {
       "path": "mock-data/data-hash.js",
       "bytes": 564,
       "sha256": "14bf3243906b53b9d4fc1977355bc6783b662469d9a19186780005e6ae5cfb4a"
@@ -267,6 +307,11 @@
       "path": "mock-data/generate-competition-demo-v1.js",
       "bytes": 19341,
       "sha256": "a225b5875339cb892becea6403a1d0d0b176893c24a35acb4441294cd54c2bb6"
+    },
+    {
+      "path": "mock-data/generate-competition-demo-v3.js",
+      "bytes": 76081,
+      "sha256": "75eedb9a0062a63354f3a9e38ae0ecd1b30575682e1890f541ed8ced4fceb29c"
     },
     {
       "path": "mock-data/validate-competition-demo-v1.js",
@@ -279,9 +324,14 @@
       "sha256": "b8006ffe2656550a131bbea212f0f887ac382cd4e33a0929266d2c9f42c1befd"
     },
     {
+      "path": "mock-data/validate-competition-demo-v3.js",
+      "bytes": 15795,
+      "sha256": "c89cf315a06146abaa9c64c9373fb0932714bd26e00f0091480e0022c3b68144"
+    },
+    {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 29232,
-      "sha256": "1d547c6d50e8fc8f03953a99eb1bb991e9f8ae5f158fd9deb7934e1d08d35db8"
+      "bytes": 53373,
+      "sha256": "4b6259fc6d4a15ff39393c20fa1e19c77681987d3f1aa5cfed4ece32efe6d127"
     },
     {
       "path": "openapi/generate-openapi.js",
@@ -344,76 +394,6 @@
       "sha256": "99ecc4a38bf182ca14828cf4c3e5ea99ae212016477647beeb4ecbeb3d03cee0"
     },
     {
-      "path": "widget/native/__pycache__/bind_runtime_environment.cpython-313.pyc",
-      "bytes": 60034,
-      "sha256": "28b1ddf7dbb295ac2137f04ff6908e3140f2849a4ada40e5f39321ce5e72633d"
-    },
-    {
-      "path": "widget/native/__pycache__/build_r4_closure_pack.cpython-313.pyc",
-      "bytes": 25884,
-      "sha256": "6681291882227540b053771bbbbeb5471b871f0c17f2100354cdfe88de6ebd41"
-    },
-    {
-      "path": "widget/native/__pycache__/build_r5_final_pack.cpython-313.pyc",
-      "bytes": 21133,
-      "sha256": "6ef825ca2ea0117ae70a63800b1376960f3f0ac0d914c504906421097bebb9bf"
-    },
-    {
-      "path": "widget/native/__pycache__/campus_widget_compiler.cpython-313.pyc",
-      "bytes": 22656,
-      "sha256": "e73881f15686a1706be97c641598de1b50a1c1f52af8e88fe656ec1e162f5b04"
-    },
-    {
-      "path": "widget/native/__pycache__/classroom-widget-adapter.cpython-313.pyc",
-      "bytes": 4910,
-      "sha256": "d66ef2d774353532b986cb65c5448ae9603ad8987ca26d3f4a5db37ca3a17eb8"
-    },
-    {
-      "path": "widget/native/__pycache__/compile_adp_bundle.cpython-313.pyc",
-      "bytes": 39631,
-      "sha256": "d0561d06a28cab068a93aebe2dd61d7145a9e3050bf774c6df1395590b837b34"
-    },
-    {
-      "path": "widget/native/__pycache__/dayplan-widget-adapter.cpython-313.pyc",
-      "bytes": 4988,
-      "sha256": "83227bba99b0024ee44394fa863e15db28f53f375d1c5b95fc27fcff0da465c4"
-    },
-    {
-      "path": "widget/native/__pycache__/recovery-widget-adapter.cpython-313.pyc",
-      "bytes": 4084,
-      "sha256": "b741284cfa44521a6295321c6af54c2cd0479e9e1df59e0c7af5925d8cd763de"
-    },
-    {
-      "path": "widget/native/__pycache__/schedule-runtime-safe-v3-adapter.cpython-313.pyc",
-      "bytes": 13615,
-      "sha256": "059c7adc9fe55b5ecf82cad4dc94cc4d3114eefd39cc720639bb7c1c8d31f221"
-    },
-    {
-      "path": "widget/native/__pycache__/test_application_convergence_r5.cpython-313.pyc",
-      "bytes": 16503,
-      "sha256": "20ca5152dcb6efa8191c34066497d486ae8d877eecf1f8821dc6e1ec42de4050"
-    },
-    {
-      "path": "widget/native/__pycache__/test_campus_overview_r4.cpython-313.pyc",
-      "bytes": 7159,
-      "sha256": "efdb266e052cace813ad2a4284b27a5e07e25004707f1d0413a6a18917258f3d"
-    },
-    {
-      "path": "widget/native/__pycache__/test_runtime_binding_r4.cpython-313.pyc",
-      "bytes": 10641,
-      "sha256": "278135883618a7c2a6aab680f5d7656be46ba2d1605345e814b0a91ff0acce00"
-    },
-    {
-      "path": "widget/native/__pycache__/test_widget_semantic_r5.cpython-313.pyc",
-      "bytes": 5499,
-      "sha256": "0094d94a3e98b32a77be04af14e92af0e30c867309009b2f191aff3bd5a01d2b"
-    },
-    {
-      "path": "widget/native/__pycache__/widget_semantic_view.cpython-313.pyc",
-      "bytes": 6523,
-      "sha256": "eb4f8397899610fdc137169c36f40f52c58fa6b504e179618b6789bc16f2572f"
-    },
-    {
       "path": "widget/native/action-contract.json",
       "bytes": 7164,
       "sha256": "86e2b0c9437f70d23a4d019e438c73f9d7d9551350f6adb2c25063b4109f1ace"
@@ -459,11 +439,6 @@
       "sha256": "0a94865ae61a8998455c27256005a8b1d3f1ec047806380f8c29205c6824748a"
     },
     {
-      "path": "widget/native/campus-overview-v1/__pycache__/adapter.cpython-313.pyc",
-      "bytes": 10823,
-      "sha256": "3d6e42c2514dded27e45535f35a3b0df149803f934aaff5480b1841576fd7165"
-    },
-    {
       "path": "widget/native/campus-overview-v1/adapter.py",
       "bytes": 7180,
       "sha256": "fb044a9788b614c1cd788d3986b6bc856765aa4e966756afe1fe985dc0a1b69a"
@@ -482,6 +457,81 @@
       "path": "widget/native/campus-overview-v1/template.txt",
       "bytes": 4444,
       "sha256": "a1e20a51af58b50f0b001a879e67f03e8e139fbb6cb2cf7c4d5d10575a893663"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/adapter.py",
+      "bytes": 6049,
+      "sha256": "a44baec9219fd9849a8c1b1bc4e48d454ba414cec8ae1228dd04311bc021026e"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/contract.json",
+      "bytes": 1902,
+      "sha256": "da28b0ddc7ee5453eaec2aa412b3e19b8d5ada6cd9d6c86604b542927e32957a"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/default.json",
+      "bytes": 1780,
+      "sha256": "11a8e6ba7779788ea63fe4f97519f26f06f5f58178cc2c8955556445f1daf48f"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/collaboration.json",
+      "bytes": 1170,
+      "sha256": "decf24421243ec18f4b8a459832e5a5ff4bcbedf5b3b465576a19678bb2a9041"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/empty.json",
+      "bytes": 488,
+      "sha256": "439a8e73f3d753d1b2b80b3a55df8e3c12ee412232a938f8cb74508da6519341"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/error.json",
+      "bytes": 664,
+      "sha256": "abd6c97c758c643e9fac23794f4d1a1b0622d4c7fb6df1b6a662011b7527e048"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/message.json",
+      "bytes": 887,
+      "sha256": "8fb040244b497d62662d24113d63ca079797c0396e145edf758bf1507f2b2a43"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/overview.json",
+      "bytes": 2281,
+      "sha256": "c36cbf0bbaac1ca91e73f3a8718a617cdeec0304160304c26e31e337f1f68f84"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/ranking.json",
+      "bytes": 1306,
+      "sha256": "bcff625558b6df735401c3151093c1bd56c4aa3fc589d9781aff5d6da8b413f7"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/reschedule.json",
+      "bytes": 1291,
+      "sha256": "9b22379e12146ed08af8ce17c8683ef23c7078de1f785dd39f18fea5d4370c51"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/risk.json",
+      "bytes": 1190,
+      "sha256": "079030113a48e5fde212afce782bf71b111ef018b7e986a51fa26cd54e2299ec"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule.json",
+      "bytes": 1809,
+      "sha256": "2946bb71f83f6e3cd029ddd28447124e24f796eb48c3579c400552ab4f180d02"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/space.json",
+      "bytes": 1227,
+      "sha256": "c6329522c9a6fb58da062e526ccc704ef8b2fde4d5e0926e87264ab4eab03301"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/schema.json",
+      "bytes": 2580,
+      "sha256": "69fc36f6887a11db7352e45cbae91cbc04c9103d1a1db1478405e8bacd6265d0"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/template.txt",
+      "bytes": 1624,
+      "sha256": "a8ddc680c6dd4a6b2480c239c5b8beb06deb17123679a427b3386f773fe818a9"
     },
     {
       "path": "widget/native/classroom-widget-adapter.py",
@@ -882,6 +932,11 @@
       "path": "widget/native/test-native-import-preview-contract.js",
       "bytes": 1704,
       "sha256": "379f31d59d4d1396a37d6e7adbec2a44ad38ce5db41796671fc68696b4956472"
+    },
+    {
+      "path": "widget/native/test-r50-2b-widget-contract.js",
+      "bytes": 10411,
+      "sha256": "8c82f9b7edcc9b32832ab36931339db947e064331e034e6a13d009e7c5aa7f9d"
     },
     {
       "path": "widget/native/test-real-adp-export-catalog.py",
