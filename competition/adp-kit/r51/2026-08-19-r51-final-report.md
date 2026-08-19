@@ -7,9 +7,9 @@
 ## 提交与 HEAD
 
 - Starting HEAD：`4f7d6d14e146e47a9701bd378385fb66b6c40b1a`（含独立的新学期课表同步修复；未 reset / 未 rebase）
-- Final HEAD：`d69a9bce6fe00452ff09ff08abb75497567a66a0`
-- Commits：`d69a9bc` `feat(adp): R51 campus mission orchestration (deterministic mission core + bounded runtime prompts + verification matrix)`（32 files，+2710/−3）
-- 分支：`feat/campusflow-adp-integration`；PR #49 @ Final HEAD = `OPEN` / `mergedAt=null`（UNMERGED）/ headRefOid 一致；推送后 CI 重跑中。
+- Final HEAD：`d7d223b82403e35058ecae55326eb4eb832bb495`
+- Commits：`d69a9bc` `feat(adp): R51 campus mission orchestration (deterministic mission core + bounded runtime prompts + verification matrix)`（32 files，+2710/−3）；`d7d223b` `docs(adp): backfill R51 final report HEAD`（+96）
+- 分支：`feat/campusflow-adp-integration`；PR #49 @ Final HEAD = `OPEN` / `mergedAt=null`（UNMERGED）/ headRefOid 一致；交付时 5 个 GitHub CI 于新 HEAD 上 `pending`（推送后自动重跑，完成后复核）
 
 ## 交付物路径
 
@@ -86,7 +86,7 @@
 
 ## PR #49 状态
 
-`gh pr view 49 --json state,headRefOid,mergedAt,mergeStateStatus`：`state=OPEN`、`mergedAt=null`（**UNMERGED**）、`headRefOid=d69a9bc…`（= Final HEAD，推送后一致）。未 merge、未 publish ADP、未动远程其他分支。
+`gh pr view 49 --json state,headRefOid,mergedAt,mergeStateStatus`：`state=OPEN`、`mergedAt=null`（**UNMERGED**）、`headRefOid=d7d223b…`（= Final HEAD，推送后一致）。`gh pr checks 49`：admin-checks / agent-release-gate / public-security ×2 / widget-contract = 5 项 `pending`（新 HEAD 自动重跑）。未 merge、未 publish ADP、未动远程其他分支。
 
 ## 待办（用户动作）
 
