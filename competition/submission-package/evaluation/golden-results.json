@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "df2364c74d5657d6c2b7cdd7c0ca3ada7961a4869a7fc4a09a025715d470cf81",
+  "oracleSourceSha256": "b29ca8e03d615ede325e30ef15d3660b13d0a39c31b6da09b2bbd31e5bcc7e50",
   "caseCount": 33,
   "cases": [
     {
@@ -1160,11 +1160,11 @@
     }
   ],
   "lastOracleReview": {
-    "date": "2026-08-17",
+    "date": "2026-08-18",
     "classification": "A",
     "semanticDrift": 0,
     "changedCases": [],
     "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
-    "note": "R49.2(0-mask)/R49.2.1(alias+hardening) 合法修改 tools.js；33/33 case 语义输出与 committed expected 完全一致"
+    "note": "R50.1 追加审计：mcp/campus-tools-mcp/src/data.js 仅注释修正（v2→v3 cutover 说明，§1.2 漂移修复），零语义变化；33/33 case 语义输出与 committed expected 逐字节一致，无需重建 golden"
   }
 }

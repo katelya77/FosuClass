@@ -38,8 +38,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 27969,
-      "sha256": "12b3f0397b4ee0b5c0ce90f033b96c79c0ef45d22eeb65eba5304dcb1cb4a5ca"
+      "bytes": 28070,
+      "sha256": "2ea419b58d3f2a8f808124f349a8f50f0105ae141c66e413b4ce02dabcef9668"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -98,8 +98,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 28926,
-      "sha256": "e5fefa9bdb66614f52dd96e74a436c2dc599d3b38bdcfb9d66334c5bb5a4c56b"
+      "bytes": 53067,
+      "sha256": "5dc2bf84bd842868359aa1209001723a89abe4c8248da0e5172db7fcc217e16d"
     },
     {
       "path": "package.json",
@@ -133,13 +133,13 @@
     },
     {
       "path": "tools/campus-tools-mcp/package.json",
-      "bytes": 954,
-      "sha256": "0e5d1e4cf45fe516e1175ab23c8101ea5698291453fc03ac756bedef6b0e671d"
+      "bytes": 989,
+      "sha256": "49127719157fe39d1f7b93c77c9b1d7f79ba0aafabc8c7919a4bb142ce0ca4ff"
     },
     {
       "path": "tools/campus-tools-mcp/src/agent-tools.js",
-      "bytes": 3710,
-      "sha256": "1c9e9c2daf3645ece5a694528a8f5ad0725a8ea5f4fd5c8be6289f6b6c4f71de"
+      "bytes": 4961,
+      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
     },
     {
       "path": "tools/campus-tools-mcp/src/client.ts",
@@ -148,18 +148,23 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/contracts.ts",
-      "bytes": 4102,
-      "sha256": "7d12e7fe08f810f669a7bf81b4b28d1c472907db146bfefa38298266600d1a94"
+      "bytes": 7966,
+      "sha256": "3b55fcba250026510d384a9b61de649fc371fb8ec90fbdf4e6910afd6bd16caf"
     },
     {
       "path": "tools/campus-tools-mcp/src/data.js",
-      "bytes": 5780,
-      "sha256": "8f39f7ff545e39bad63c58e54591938b57f72b5a2548b9717608dd316632d6ac"
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
     },
     {
       "path": "tools/campus-tools-mcp/src/envelope.js",
       "bytes": 1842,
       "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
     },
     {
       "path": "tools/campus-tools-mcp/src/ratelimit.js",
@@ -168,13 +173,23 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/server.js",
-      "bytes": 12552,
-      "sha256": "099b95a7b3f14bbc58cccc433f0e5610b6414d8d2d3854f027a4cf90c40bace9"
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 46484,
-      "sha256": "6bdac2f72b8aa4fbaf971e7651049a8210a29142a80e9af8f5bee0be2ca0ff47"
+      "bytes": 91195,
+      "sha256": "445dd5e448b6778ba88fd270a4a1f45d9f15333b15c1e25a2ab045b375eeace1"
+    },
+    {
+      "path": "tools/campus-tools-mcp/test/data-version-contract.test.js",
+      "bytes": 950,
+      "sha256": "c044bbb88de60f5e8f7ba708d2ca8aa119fa5198c376e534aa5932e3173895c5"
     },
     {
       "path": "tools/campus-tools-mcp/test/security.test.js",
@@ -183,8 +198,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/test/tools.test.js",
-      "bytes": 23696,
-      "sha256": "dc9e007a1b04ecb794bd3d99a8e9304b6ff3ea3e52176164d2da45aebe39cf6e"
+      "bytes": 28163,
+      "sha256": "d9df2be88b1e0460368468f9b18964d79d60d679f43ee6eb9e8199750c92b51c"
     },
     {
       "path": "tools/campus-tools-mcp/tsconfig.json",

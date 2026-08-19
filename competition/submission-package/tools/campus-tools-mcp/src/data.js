@@ -8,7 +8,8 @@
  *
  * 默认路径指向 kit 级 v1 数据集（Golden/QA/Widget 样例等评审资产均以 v1 锚定，
  * 并通过显式 CAMPUS_DATA_PATH 固定）；CloudBase 部署由 wrapper index.js 显式
- * 指向部署包内的 competition-demo-v2.json，不存在静默回退。
+ * 指向部署包内的 competition-demo-v3.json（R50.0 V3 runtime cutover 后默认），
+ * 不存在静默回退。
  */
 
 const fs = require("fs");
@@ -58,7 +59,9 @@ function loadDataset() {
     byId,
     idx,
     dataVersion: data.meta.dataVersion,
-    dataHash: data.dataHash,
+    // v2 布局：顶层 dataHash；v3 布局：meta.dataHash（生成器 computeDataHash
+    // 将 dataHash 置于 meta）。两者都兼容，避免 v3 runtime 读到 undefined。
+    dataHash: data.meta.dataHash || data.dataHash,
   };
   return cached;
 }
