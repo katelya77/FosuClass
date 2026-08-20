@@ -64,3 +64,12 @@ test("CP5. validateProfile 对已构造 profile 幂等（非法字段拒绝）",
   const bad = { hard: [{ id: "c", field: "capacity", op: "bad", value: 1 }], soft: [], exclusions: [] };
   assert.strictEqual(validateProfile(bad).ok, false);
 });
+
+test("CP6. 已提供但非数值的 minCapacity 保留为非法 hard，评估前 fail-closed", () => {
+  const mapped = profileFromGoalSpec({ constraints: { minCapacity: "eighty" }, preferences: {} });
+  assert.strictEqual(mapped.hard.length, 1, "不得静默丢弃已提供的硬约束");
+  assert.strictEqual(mapped.hard[0].id, "capacity-min");
+  const validation = validateProfile(mapped);
+  assert.strictEqual(validation.ok, false);
+  assert.match(validation.errors.join("; "), /capacity-min.*有限数/);
+});

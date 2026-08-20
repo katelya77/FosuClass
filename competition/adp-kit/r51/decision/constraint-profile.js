@@ -23,6 +23,9 @@ function validateEntry(entry, kind) {
   if (kind === "hard") {
     if (!HARD_OPS.includes(entry.op)) return `hard ${entry.id} 非法 op：${entry.op}`;
     if (entry.value === undefined) return `hard ${entry.id} 缺少 value`;
+    if ((entry.op === "gte" || entry.op === "lte") && !isFiniteNumber(entry.value)) {
+      return `hard ${entry.id} op=${entry.op} value 必须为有限数`;
+    }
     if ((entry.op === "in" || entry.op === "nin") && (!Array.isArray(entry.value) || entry.value.length === 0)) {
       return `hard ${entry.id} op=${entry.op} value 必须为非空数组`;
     }
@@ -106,7 +109,9 @@ function profileFromGoalSpec(goalSpec) {
   };
   const addNumericHard = (id, field, op, value, description) => {
     const numericValue = toFiniteNumber(value);
-    if (numericValue !== null) addHard(id, field, op, numericValue, description);
+    // 保留无效的、但确实提供过的值，让 profile 校验在评估前 fail-closed；
+    // 绝不能因无法转换就悄悄移除硬约束。
+    addHard(id, field, op, numericValue === null ? value : numericValue, description);
   };
 
   if (isPresent(c.minCapacity)) addNumericHard("capacity-min", "capacity", "gte", c.minCapacity, "容量下限");

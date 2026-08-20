@@ -39,7 +39,7 @@ function evalHard(candidate, entry) {
     case "gte": ok = !missing && compareValues(actual, value) >= 0; break;
     case "lte": ok = !missing && compareValues(actual, value) <= 0; break;
     case "in": ok = !missing && Array.isArray(value) && value.some((v) => sameValue(actual, v)); break;
-    case "nin": ok = !(Array.isArray(value) && value.some((v) => sameValue(actual, v))); break;
+    case "nin": ok = !missing && Array.isArray(value) && !value.some((v) => sameValue(actual, v)); break;
     default: ok = false;
   }
   return { ok, actual };
@@ -72,7 +72,7 @@ function softScoreFor(candidates, softEntries) {
           : (Array.isArray(entry.value) && entry.value.some((x) => sameValue(v, x)));
         if (hit) {
           scores[i].score += entry.weight;
-          scores[i].contributions.push({ id: entry.id, field: entry.field, value: v, contribution: 1 });
+          scores[i].contributions.push({ id: entry.id, field: entry.field, value: v, contribution: entry.weight });
         }
       }
       continue;
@@ -91,7 +91,7 @@ function softScoreFor(candidates, softEntries) {
         if (qWorse) worse += 1;
       }
       scores[p.i].score += entry.weight * worse;
-      scores[p.i].contributions.push({ id: entry.id, field: entry.field, value: p.v, contribution: worse });
+      scores[p.i].contributions.push({ id: entry.id, field: entry.field, value: p.v, contribution: entry.weight * worse });
     }
   }
   return scores;

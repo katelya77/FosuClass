@@ -117,6 +117,14 @@ test("EV5. exclusions 命中楼栋 → excluded，候选被淘汰", () => {
   assert.strictEqual(r.infeasible[0].excluded, true);
 });
 
+test("EV5b. hard nin 缺少 constrained attribute → infeasible，不能把缺失证据当作通过", () => {
+  const cs = [{ id: "r-unknown", label: "未知楼栋", attributes: { capacity: 120 }, toolRank: null, evidence: { verified: true } }];
+  const r = evaluateCandidates(cs, profile({ hard: [{ id: "exclude-building", field: "building", op: "nin", value: ["A2"] }] }));
+  assert.strictEqual(r.feasible.length, 0);
+  assert.strictEqual(r.infeasible.length, 1);
+  assert.strictEqual(r.infeasible[0].hardViolations[0].id, "exclude-building");
+});
+
 test("EV6. soft 偏好产生可解释差异：prefer-larger → 容量更大 softScore 更高", () => {
   const cs = [
     { id: "r-1", label: "A1-101", attributes: { capacity: 120 }, toolRank: null, evidence: { verified: true } },
@@ -128,6 +136,18 @@ test("EV6. soft 偏好产生可解释差异：prefer-larger → 容量更大 sof
   assert.strictEqual(byId["r-1"], 2, "120 优于另外两个 → 2");
   assert.strictEqual(byId["r-3"], 1, "80 优于 60 → 1");
   assert.strictEqual(byId["r-2"], 0);
+});
+
+test("EV6b. 非单位 soft weight 的 recorded contribution 与 softScore 精确一致", () => {
+  const cs = [
+    { id: "r-1", label: "A1-101", attributes: { capacity: 120 }, toolRank: null, evidence: { verified: true } },
+    { id: "r-2", label: "A1-102", attributes: { capacity: 60 }, toolRank: null, evidence: { verified: true } },
+  ];
+  const r = evaluateCandidates(cs, profile({ soft: [{ id: "prefer-larger", field: "capacity", weight: 2, direction: "desc" }] }));
+  const best = r.items.find((x) => x.candidate.id === "r-1");
+  assert.strictEqual(best.softScore, 2);
+  assert.strictEqual(best.softContributions[0].contribution, 2);
+  assert.strictEqual(best.softContributions.reduce((sum, item) => sum + item.contribution, 0), best.softScore);
 });
 
 test("EV7. 评估确定性：同输入两次结果字节一致", () => {
