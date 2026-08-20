@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-19T14:28:35.080Z",
+  "generatedAt": "2026-08-20T07:48:21.020Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -90,18 +90,23 @@
     },
     {
       "path": "evaluation/dual-track/baseline-report.md",
-      "bytes": 2010,
-      "sha256": "893f266531723f6561614abaca16334c673f8ec55e2488856f79b037491b30ac"
+      "bytes": 3400,
+      "sha256": "fb02314065903a14ccfab250ebc405784a7e1fd34f06a2f4fd76a15673a69f5a"
+    },
+    {
+      "path": "evaluation/dual-track/decision-testset.json",
+      "bytes": 11061,
+      "sha256": "a1a42f08d63fffae5981bafd6adfa4bb27910fce1ca1076d3b1e08958d26fd7a"
     },
     {
       "path": "evaluation/dual-track/judge.js",
-      "bytes": 5911,
-      "sha256": "58728696cd10adc736edd26d93c5bf62f30c847cd23789dded966c800bfe408c"
+      "bytes": 19194,
+      "sha256": "a5938861d609f1b6c6cea5dd011620ff145b55a5173c4b0f8a1a166272992b6a"
     },
     {
       "path": "evaluation/dual-track/rubric.md",
-      "bytes": 2189,
-      "sha256": "45a2c87c201900ffea8bdc3362558c194576d45dc78e8caa42489fd32a495352"
+      "bytes": 4487,
+      "sha256": "21f9a1578b184d438dccc07d5b8a6be37ea328e92df60e92e872a7dbccfeefa8"
     },
     {
       "path": "evaluation/dual-track/widget-contract-testset.json",

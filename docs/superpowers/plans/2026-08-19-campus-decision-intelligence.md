@@ -53,9 +53,10 @@ TDD：先写失败测试，再实现。批次内 RED→GREEN；批次间全量�
 - [x] `competition/showcase/contracts/public-decision-receipt.schema.json` 冻结路径核对。
 - [x] 提交（合理粒度）→ 不 push（未获明确要求）→ PR #49 OPEN/UNMERGED 验证 → 报告。
 
-验证注记：Decision 专项、受影响 Widget、r49-ma 全量、根目录四项 Agent 门禁均通过；
-`competition/adp-kit npm test` 保留起始基线已存在的资产清单不同步失败，旧版
-`test-r50-2b-widget-contract.js` 保留起始基线已存在的 v5/v6 断言漂移，均未改测试掩盖。
+验证注记：Decision 专项、受影响 Widget、r49-ma 全量、`competition/adp-kit npm test`、
+根目录四项 Agent 门禁均通过。资产清单在起始基线已不同步，且本分支新增/修改了纳入清单的
+dual-track 资产；已用权威脚本重建并通过一致性门禁。旧版 `test-r50-2b-widget-contract.js`
+仍保留起始基线已存在的 v5/v6 断言漂移，未改测试掩盖。
 
 完成判据：决策稳定 / hard 0 次静默放宽 / no evidence no reason / no candidates no alternatives /
 soft 可解释差异 / tool rank 保持 / tie 稳定 / L3 只确认 / simple schedule 直接查询 /

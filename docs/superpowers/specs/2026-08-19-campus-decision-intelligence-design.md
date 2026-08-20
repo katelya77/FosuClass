@@ -98,7 +98,8 @@
 
 ## 6. 可核验解释（explainability）
 
-每个理由条目：`{ kind, text, source }`，`source ∈ { constraintId, attribute, factKey }`。
+每个理由条目：`{ kind, text, source }`，其中 `source` 是
+`{ constraintId: string, attribute: string, factKey: string }` 对象。
 - 理由**只能**从证据（候选 attributes，来自 verified 工具结果）与约束评估结果构造。
 - `no evidence → no reason`：候选 `evidence.verified !== true` → 空理由；推荐无理由时 summary 不虚构因果。
 - `verified` 语义沿用 existing：`verified: true` + 「已核验」措辞只在有工具事实支撑时出现。
