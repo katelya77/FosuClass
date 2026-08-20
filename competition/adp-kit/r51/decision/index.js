@@ -2,6 +2,7 @@
 
 module.exports = {
   ...require("./constraint-profile.js"),
+  ...require("./intrinsic-constraints.js"),
   ...require("./candidate-source.js"),
   ...require("./evaluator.js"),
   ...require("./ranking.js"),

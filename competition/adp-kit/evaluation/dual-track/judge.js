@@ -11,6 +11,7 @@ const { rankFeasible } = require("../../r51/decision/ranking.js");
 const { explainCandidate } = require("../../r51/decision/explainability.js");
 const { confirmationOnlyAction } = require("../../r51/decision/authority-action.js");
 const { containsCredentialLeak } = require("../../r51/decision/credential-leak.js");
+const { verifyAuthoritativeIntrinsicProfile } = require("../../r51/decision/intrinsic-constraints.js");
 
 const TRACK_A_ITEMS = Object.freeze([
   "intent_complete",
@@ -242,7 +243,14 @@ function candidateIdOf(item) {
 function canonicalDecisionOracle(bundle) {
   const profile = bundle && bundle.profile;
   const candidates = Array.isArray(bundle && bundle.candidates) ? bundle.candidates : null;
-  if (!candidates || !validateProfile(profile).ok) return { ok: false, profile: null, evaluation: null, ranked: [], byId: new Map() };
+  const intrinsic = verifyAuthoritativeIntrinsicProfile(
+    profile,
+    { goalFamily: bundle && bundle.goalFamily },
+    bundle && bundle.intrinsicConstraintFingerprint,
+  );
+  if (!candidates || !validateProfile(profile).ok || !intrinsic.ok) {
+    return { ok: false, profile: null, evaluation: null, ranked: [], byId: new Map(), intrinsic };
+  }
   const ids = candidates.map((candidate) => candidate && candidate.id);
   if (ids.some((id) => typeof id !== "string" || id.length === 0) || new Set(ids).size !== ids.length) {
     return { ok: false, profile, evaluation: null, ranked: [], byId: new Map() };
@@ -256,6 +264,7 @@ function canonicalDecisionOracle(bundle) {
       evaluation,
       ranked,
       byId: new Map(evaluation.items.map((item) => [item.candidate.id, item])),
+      intrinsic,
     };
   } catch {
     return { ok: false, profile, evaluation: null, ranked: [], byId: new Map() };

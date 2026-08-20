@@ -9,6 +9,9 @@ const { selectDecision } = require("./alternatives.js");
 const { explainCandidate } = require("./explainability.js");
 const { nextBestAction } = require("./next-best-action.js");
 const { authorityAwareAction, authorityLevelFor } = require("./authority-action.js");
+const {
+  profileWithAuthoritativeIntrinsicConstraints,
+} = require("./intrinsic-constraints.js");
 
 const ELIGIBLE_GOAL_FAMILIES = Object.freeze([
   "collaboration_planning",
@@ -127,24 +130,22 @@ function enrich(item, profile) {
 }
 
 function profileForDecision(goalFamily, goalSpec) {
-  const profile = profileFromGoalSpec(goalSpec || {});
-  if (goalFamily === "reschedule_simulation") {
-    profile.hard.push({
-      id: "system-reschedule-feasible",
-      field: "feasible",
-      op: "eq",
-      value: true,
-      description: "规范调课检查必须完整且全部通过",
-    });
-  }
-  return profile;
+  return profileWithAuthoritativeIntrinsicConstraints(
+    profileFromGoalSpec(goalSpec || {}),
+    { goalFamily },
+  ).profile;
 }
 
 function decide({ missionState, toolResults, goalSpec } = {}) {
   const goalFamily = structuredGoalFamily(missionState, goalSpec);
   if (!isDecisionEligible(goalFamily)) return { eligible: false };
 
-  const profile = profileForDecision(goalFamily, goalSpec || {});
+  const authoritative = profileWithAuthoritativeIntrinsicConstraints(
+    profileFromGoalSpec(goalSpec || {}),
+    { goalFamily },
+  );
+  const profile = authoritative.profile;
+  if (authoritative.errors.length) return failedBundle(goalFamily, profile, authoritative.errors);
   const profileCheck = validateProfile(profile);
   if (!profileCheck.ok) return failedBundle(goalFamily, profile, profileCheck.errors);
 
@@ -178,6 +179,7 @@ function decide({ missionState, toolResults, goalSpec } = {}) {
     goalFamily,
     sourceFactKey: source ? source.factKey : null,
     profile,
+    intrinsicConstraintFingerprint: authoritative.fingerprint,
     candidates,
     evaluation,
     ranked,
