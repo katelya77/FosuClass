@@ -23,7 +23,7 @@ test("CP1 desired state freezes 4 Agents / 13 CampusTools / 14 bindings / Main=0
   assert.deepStrictEqual(state.agents.find((x) => x.key === "main").campusTools, []);
   assert.strictEqual(state.app.publishAllowed, false);
   assert.strictEqual(state.widget.name, "小序-校园智序结果卡");
-  assert.strictEqual(state.multimodal.mainOfficialVisionToolRequired, true);
+  assert.strictEqual(state.multimodal.mainOfficialVisionToolRequired, false);
   assert.ok(state.agents.filter((x) => x.key !== "main").every((x) => !x.officialVisionToolRequired));
   assert.deepStrictEqual(new Set(state.campusTools), new Set(canonicalTools.tools.map((x) => x.name)));
   for (const [agent, tools] of Object.entries(canonicalBindings.agents)) assert.deepStrictEqual(state.agents.find((x) => x.key === agent).campusTools, tools);
@@ -55,11 +55,12 @@ test("CP4 drift is classified into safe/manual/blocked and publish is always blo
   const state = desired.loadDesiredState();
   const snapshot = desired.makeSyntheticMatchingSnapshot(state);
   snapshot.agents.find((x) => x.key === "schedule").promptHash = "0".repeat(64);
-  snapshot.agents.find((x) => x.key === "main").officialVisionToolBound = false;
+  snapshot.widget.name = "旧结果卡";
   snapshot.releaseRequested = true;
   const result = diffState(state, snapshot);
   assert.ok(result.SAFE_AUTOMATABLE.some((x) => x.code === "AGENT_PROMPT_DRIFT"));
-  assert.ok(result.MANUAL_CONSOLE_REQUIRED.some((x) => x.code === "MAIN_VISION_TOOL_NOT_BOUND"));
+  assert.ok(result.MANUAL_CONSOLE_REQUIRED.some((x) => x.code === "WIDGET_NAME_DRIFT"));
+  assert.ok(!result.MANUAL_CONSOLE_REQUIRED.some((x) => x.code === "MAIN_VISION_TOOL_NOT_BOUND"));
   assert.ok(result.BLOCKED_UNKNOWN.some((x) => x.code === "PUBLISH_FORBIDDEN"));
 });
 

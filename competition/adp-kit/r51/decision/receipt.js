@@ -2,6 +2,7 @@
 // Campus Decision Intelligence —— 脱敏公开 PublicDecisionReceipt（2026-08-20）
 const crypto = require("crypto");
 const { containsCredentialLeak } = require("./credential-leak.js");
+const { projectPublicChoice } = require("./public-copy.js");
 
 const RECEIPT_VERSION = "1.0";
 const EXACT_KEYS = Object.freeze([
@@ -31,16 +32,13 @@ function safePublicText(value) {
   return text;
 }
 
-function reasonTexts(item) {
-  const reasons = Array.isArray(item && item.reasons) ? item.reasons : [];
-  return reasons
-    .map((reason) => safePublicText(typeof reason === "string" ? reason : reason && reason.text))
-    .filter(Boolean);
-}
-
-function publicChoice(item) {
-  const label = safePublicText(item && item.candidate && item.candidate.label);
-  return label ? { label, reasons: reasonTexts(item) } : null;
+function publicChoice(item, profile) {
+  const projected = projectPublicChoice(item, profile);
+  const label = safePublicText(projected && projected.label);
+  const reasons = projected && Array.isArray(projected.reasons)
+    ? projected.reasons.map(safePublicText).filter(Boolean)
+    : [];
+  return label ? { label, reasons } : null;
 }
 
 function publicNextAction(action) {
@@ -69,9 +67,11 @@ function decisionIdFor(content) {
 
 function createPublicDecisionReceipt(bundle) {
   const verified = bundle && bundle.verified === true;
-  const safeRecommendation = publicChoice(bundle && bundle.recommendation);
+  const profile = bundle && bundle.profile;
+  const safeRecommendation = publicChoice(bundle && bundle.recommendation, profile);
   const safeAlternatives = (Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [])
-    .map(publicChoice)
+    .slice(0, 5)
+    .map((item) => publicChoice(item, profile))
     .filter(Boolean);
   const nextAction = publicNextAction(bundle && bundle.nextAction);
   const decision = bundle && bundle.decision === "recommend" && verified && safeRecommendation

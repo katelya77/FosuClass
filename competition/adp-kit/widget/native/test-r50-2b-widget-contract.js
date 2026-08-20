@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-// R50.4 CampusResultUnified V5 Widget 契约门禁（2026-08-19）
+// Final CampusResultUnified V7 Widget 契约门禁（2026-08-20）
 // P1 契约/Schema/默认数据/样例四者字段集一致（15 键：Envelope 公开字段 + 布局字段），
-//    widgetId 不得伪造（null + FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY）；
+//    widgetId 必须来自用户提供的真实 Tencent 导出；
 // P2 双布局：schedule 整周/周范围 → week-board（weekBoardTitle/weekBoardSubtitle/days）；
 //    其余（单日明细/风险/空教室/态势/TopN/调课模拟/空结果/错误）→ result-card；
 // P3 week-board 渲染结构：days[].label ∈ 周一..周日，blocks[].{time,title,location} 非空，
@@ -56,10 +56,10 @@ function loadSample(name) {
 
 const fields = contract.fields.map((field) => field.name);
 
-test("contract: widgetId 未注册不得伪造，策略必须 FAIL_CLOSED，schema 升级 v5", () => {
-  assert.strictEqual(contract.widgetId, null, "must not fabricate a WidgetID");
+test("contract: widgetId 绑定真实 Tencent 导出，schema 升级 v7", () => {
+  assert.strictEqual(contract.widgetId, "978b004b2f054e8bbd5438159c7329ff");
   assert.strictEqual(contract.widgetIdPolicy, "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY");
-  assert.strictEqual(contract.schema, "fosuclass-adp-widget-contract/v5");
+  assert.strictEqual(contract.schema, "fosuclass-adp-widget-contract/v7");
   assert.strictEqual(contract.kind, "campus-result-unified");
   assert.strictEqual(contract.leakFree, true);
   assert.deepStrictEqual(contract.variants, [
@@ -138,8 +138,8 @@ test("contract: week-board 渲染结构 —— 日板块/课程块/空天折叠/
   }
   assert(template.includes("days.map"), "week-board 模板必须渲染 days 数组");
   assert(template.includes("day.blocks.map"), "week-board 模板必须渲染每日 blocks 数组");
-  assert(template.includes('layoutMode === "week-board"'), "模板必须按 layoutMode 双分支渲染");
-  assert(template.includes("周视图"), "week-board 必须展示「周视图」标识");
+  assert(/layoutMode === ['"]week-board['"]/.test(template), "模板必须按 layoutMode 双分支渲染");
+  assert(template.includes("课程时间板"), "week-board 必须展示时间板标识");
   assert(template.includes("day.blocks.length"), "每日板块必须展示节次徽标");
   const monday = loadSample("schedule-week.json").days.find((day) => day.label === "周一");
   assert.strictEqual(monday.blocks.length, 2, "周一必须有 2 个课程块（与第1周课表事实一致）");
@@ -153,7 +153,7 @@ test("contract: 模板渲染完整数组且不截断（全部 sections/rows/acti
 });
 
 test("contract: 动作只走官方 sys.chat，payload 仅含用户语义 query，上下文感知", () => {
-  assert(template.includes('type: "sys.chat"'), "actions must use official sys.chat");
+  assert(/type:\s*['"]sys\.chat['"]/.test(template), "actions must use official sys.chat");
   assert(template.includes("query: action.payload.query"), "payload must carry only the user-semantic query");
   assert(!template.includes("action.intent"), "must not leak intent to widget payload");
   assert(!template.includes("entityType"), "must not leak entity identifiers to widget payload");
@@ -224,7 +224,7 @@ test("contract: adapter 运行时行为（python 冒烟：整周→week-board；
   const week = loadSample("schedule-week.json");
   const result = runAdapter(week);
   assert.strictEqual(result.route, "widget", "合法 Envelope 必须 route=widget");
-  assert.strictEqual(result.widgetId, null);
+  assert.strictEqual(result.widgetId, contract.widgetId);
   assert.deepStrictEqual(Object.keys(result.data).sort(), [...fields].sort());
   assert.strictEqual(result.data.layoutMode, "week-board", "整周课表必须透传 week-board");
   assert.strictEqual(result.data.weekBoardTitle, week.weekBoardTitle);
@@ -250,8 +250,8 @@ test("contract: adapter 运行时行为（python 冒烟：整周→week-board；
   assert.strictEqual(fallback.route, "fallback", "含内部字段的输入必须 fail closed");
 });
 
-test("contract: 移动端安全 —— 无固定宽度、无固定高、尺寸由 size 控制", () => {
-  assert(!/width=["']?\d/.test(template), "template must not use fixed pixel widths");
+test("contract: 移动端安全 —— 仅允许百分比宽度、无固定高、尺寸由 size 控制", () => {
+  assert(!/width=["']\d+px["']/.test(template), "template must not use fixed pixel widths");
   assert(!/height=["']?\d/.test(template), "template must not use fixed pixel heights");
   assert(template.includes('size="md"'), "card size must be responsive (md)");
   assert(template.includes('size="sm"'), "child elements must use size props");

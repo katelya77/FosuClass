@@ -2,26 +2,30 @@
   {
     "key": "main",
     "name": "小序-主协调",
-    "promptSource": "competition/adp-kit/r51/prompts/main-orchestrator.r51.md",
+    "promptSource": "competition/adp-kit/final/prompts/main-orchestrator.md",
+    "model": "DeepSeek-V3-0324",
     "campusTools": [],
-    "officialVisionToolRequired": true
+    "officialVisionToolRequired": false
   },
   {
     "key": "schedule",
     "name": "课程空间",
-    "promptSource": "competition/adp-kit/r51/prompts/schedule-space.r51.md",
+    "promptSource": "competition/adp-kit/final/prompts/schedule-space.md",
+    "model": "DeepSeek-V3-0324",
     "officialVisionToolRequired": false
   },
   {
     "key": "risk",
     "name": "风险规划",
-    "promptSource": "competition/adp-kit/r51/prompts/risk-planning.r51.md",
+    "promptSource": "competition/adp-kit/final/prompts/risk-planning.md",
+    "model": "DeepSeek-V3-0324",
     "officialVisionToolRequired": false
   },
   {
     "key": "insight",
     "name": "校园洞察",
-    "promptSource": "competition/adp-kit/r51/prompts/campus-insight.r51.md",
+    "promptSource": "competition/adp-kit/final/prompts/campus-insight.md",
+    "model": "DeepSeek-V3-0324",
     "officialVisionToolRequired": false
   }
 ]

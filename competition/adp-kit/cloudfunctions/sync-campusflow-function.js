@@ -18,7 +18,7 @@ const DECISION_FILES = [
   "alternatives.js", "authority-action.js", "candidate-source.js", "constraint-profile.js",
   "controller.js", "credential-leak.js", "evaluator.js", "explainability.js",
   "intrinsic-constraints.js", "next-best-action.js", "outcome-synthesizer.js", "ranking.js",
-  "receipt.js", "runtime-activation.js",
+  "public-copy.js", "receipt.js", "runtime-activation.js",
 ];
 const MISSION_FILES = ["authority.js", "completion.js"];
 const WIDGET_FILES = ["campus-result-envelope.schema.json", "envelope.js", "view-model.js"];

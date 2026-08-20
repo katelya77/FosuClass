@@ -83,7 +83,7 @@ test("D4 无可行候选时 recommendation=null，且不发明备选", () => {
   assert.deepStrictEqual(envelope.decision.alternatives, []);
 });
 
-test("D5 verified risk-aware 调课推荐只使用系统可行性核验理由", () => {
+test("D5 verified risk-aware 调课推荐只公开确定性业务文案，不泄漏系统约束", () => {
   const envelope = callAgentTool("campus_reschedule_feasibility", {
     sourceLessonId: lesson.id,
     target: { week: 1, weekday: 1, periodStart: 3, periodEnd: 4 },
@@ -92,7 +92,8 @@ test("D5 verified risk-aware 调课推荐只使用系统可行性核验理由", 
   assert.strictEqual(envelope.summary.feasible, true);
   assertPublicDecision(envelope);
   assert.strictEqual(envelope.decision.status, "recommended");
-  assert.ok(envelope.decision.reasons.some((reason) => reason.includes("feasible") && reason.includes("system-reschedule-feasible")));
+  assert.deepStrictEqual(envelope.decision.reasons, ["目标安排已通过可行性检查"]);
+  assert.doesNotMatch(JSON.stringify(envelope.decision), /feasible|system-reschedule-feasible|constraint/i);
 });
 
 test("D6 reschedule feasible:false 永不推荐", () => {

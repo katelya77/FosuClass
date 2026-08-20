@@ -2,6 +2,23 @@
   "name": "校园智序 · 小序",
   "publishAllowed": false,
   "expectedAgentCount": 4,
-  "modelPolicy": "preserve_platform_recommended_unless_explicit",
-  "legacyWorkflowPolicy": "inactive_if_observable"
+  "model": "DeepSeek-V3-0324",
+  "modelPolicy": "explicit_user_confirmed_console_truth",
+  "descriptionPolicy": "preserve_user_confirmed_final_description",
+  "greetingPolicy": "preserve_user_confirmed_final_greeting",
+  "openingQuestions": [
+    "查看教师003第1周课表，并检查他的跨校区赶场风险",
+    "帮教师005、教师006、教师014找第1周周四上午的共同空闲，并推荐合适教室",
+    "未来四周教师负载最高的是谁？"
+  ],
+  "legacyWorkflowPolicy": "retain_exactly_six_end_named_disabled_unreachable",
+  "deletedWorkflowPolicy": "node_format_seed_must_remain_absent",
+  "knowledgeRetrieval": {
+    "document": true,
+    "qa": false,
+    "database": false,
+    "search": false,
+    "rerank": true,
+    "testQaMustRemainAbsent": true
+  }
 }

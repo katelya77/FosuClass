@@ -1,7 +1,7 @@
 "use strict";
 // CSF P1 Widget Output Contract Stabilization 门禁（2026-08-19）
 // W1 version 从 Agent-facing Envelope 移除必填（由确定性投影注入，模型不生成研发版本号）；
-// W2 tieGroupCount 允许 0 / 缺省（无并列合法）；
+// W2 tieGroupCount 内部 Envelope 允许 0；公开 Widget 省略 0，出现时至少为 1；
 // W3 week-board 空日单一 SSOT = 确定性投影过滤空日；
 // W4 动作 sys.chat-only，payload 形状 { query }；
 // W5 组合 Mission 最终 Widget = 最终完成能力的变体（课表→风险收口 risk）；
@@ -32,8 +32,8 @@ test("W1. Envelope（Agent-facing）version 非必填；出现时仅接受 1.0�
   assert.ok(!ENVELOPE_SCHEMA.required.includes("version"), "envelope schema required 不得包含 version");
 });
 
-test("W2. tieGroupCount 允许 0 / 缺省（无并列合法）", () => {
-  assert.strictEqual(WIDGET_SCHEMA.properties.displayMeta.properties.tieGroupCount.minimum, 0, "Widget schema tieGroupCount minimum 必须为 0");
+test("W2. tieGroupCount 内部 0 / 公开省略边界与真实导出一致", () => {
+  assert.strictEqual(WIDGET_SCHEMA.properties.displayMeta.properties.tieGroupCount.minimum, 1, "公开 Widget schema 出现时 minimum 必须为 1");
   assert.strictEqual(ENVELOPE_SCHEMA.properties.displayMeta.properties.tieGroupCount.minimum, 0, "Envelope schema tieGroupCount minimum 必须为 0");
   const ranking = {
     variant: "ranking", status: "success", title: "教师负载 TopN", verified: true, summary: "负载最高的是教师001。",
@@ -41,6 +41,11 @@ test("W2. tieGroupCount 允许 0 / 缺省（无并列合法）", () => {
   };
   assert.equal(ENVELOPE.validateEnvelope(ranking).ok, true, "tieGroupCount=0 必须通过");
   assert.equal(ENVELOPE.validateEnvelope({ ...ranking, displayMeta: {} }).ok, true, "无 tieGroupCount 必须通过");
+  const { validateWidgetPayload } = require(path.join(WIDGET_DIR, "payload-validator.js"));
+  const payload = { ...JSON.parse(fs.readFileSync(path.join(WIDGET_DIR, "default.json"), "utf8")), displayMeta: { tieGroupCount: 0 } };
+  assert.equal(validateWidgetPayload(payload).ok, false, "公开 Widget 不接受 0，应由投影层省略");
+  delete payload.displayMeta.tieGroupCount;
+  assert.equal(validateWidgetPayload(payload).ok, true, "无并列时缺省合法");
 });
 
 test("W3. week-board 空日单一 SSOT：确定性投影过滤空日，Widget 永不收到空日", () => {
@@ -51,9 +56,10 @@ test("W3. week-board 空日单一 SSOT：确定性投影过滤空日，Widget �
   const days = VIEW_MODEL.buildDays(lessons, {});
   assert.deepStrictEqual(days.map((d) => d.label), ["周一", "周三"], "空日必须被过滤，只保留有课的日期");
   assert.ok(days.every((d) => d.blocks.length > 0), "过滤后不允许空 blocks 日");
-  const thenDays = WIDGET_SCHEMA.then.properties.days;
-  assert.strictEqual(thenDays.minItems, 1, "week-board days minItems=1（过滤后的最小契约）");
-  assert.strictEqual(thenDays.items.properties.blocks.minItems, 1, "week-board blocks minItems=1（过滤后的最小契约）");
+  assert.ok(WIDGET_SCHEMA.properties.days.items.properties.blocks, "真实导出 schema 必须保留 days/blocks 结构");
+  const { validateWidgetPayload } = require(path.join(WIDGET_DIR, "payload-validator.js"));
+  const malformed = { ...JSON.parse(fs.readFileSync(path.join(WIDGET_DIR, "default.json"), "utf8")), days: [{ label: "周二", blocks: [] }] };
+  assert.equal(validateWidgetPayload(malformed).ok, false, "空日由 fail-closed validator 拒绝");
   assert.ok(WIDGET_CONTRACT.description.includes("空日"), "contract.json 必须文档化空日策略（SSOT）");
   assert.ok(WIDGET_CONTRACT.description.includes("过滤"), "contract.json 必须声明「过滤空日」为唯一策略");
 });
@@ -149,9 +155,11 @@ test("W8. WidgetPayloadValidator：week-board 结构损坏 / 空日 fail-closed 
   assert.ok(result.textFallback.includes("共 2 门课程。"), "fallback 保留工具事实摘要");
 });
 
-test("W9. 用户可见 Widget 名不含研发版本号；契约升级为 v6 并文档化新策略", () => {
+test("W9. 用户可见 Widget 名不含研发版本号；v7 契约绑定真实 Tencent Widget ID", () => {
   assert.ok(WIDGET_CONTRACT.name && typeof WIDGET_CONTRACT.name === "string", "contract.json 必须声明用户可见 name");
   assert.ok(!/R\d{2,}/.test(WIDGET_CONTRACT.name), `name 不得含研发版本号：${WIDGET_CONTRACT.name}`);
   assert.ok(!WIDGET_CONTRACT.name.includes("-R"), `name 不得含 -R 版本后缀：${WIDGET_CONTRACT.name}`);
-  assert.strictEqual(WIDGET_CONTRACT.schema, "fosuclass-adp-widget-contract/v6", "契约必须升级为 v6（稳定化基线）");
+  assert.strictEqual(WIDGET_CONTRACT.schema, "fosuclass-adp-widget-contract/v7");
+  assert.match(WIDGET_CONTRACT.widgetId, /^[0-9a-f]{32}$/);
+  assert.strictEqual(WIDGET_CONTRACT.status, "REAL_TENCENT_EXPORT_BOUND_FINAL_CANDIDATE");
 });

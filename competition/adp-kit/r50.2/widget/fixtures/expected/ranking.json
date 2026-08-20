@@ -4,28 +4,23 @@
   "status": "success",
   "title": "教师负载排行",
   "verified": true,
-  "summary": "Top 3：教师001、教师002、教师003（第 2 名起出现并列）。",
+  "summary": "第1名 教师001 · 24 次授课 · 48 课时。",
   "subtitle": "第1周 · 由课程数据派生",
   "context": "第1周",
   "sections": [
     {
-      "title": "排名（位次稳定，并列同档）",
+      "title": "其他排名",
       "rows": [
         {
-          "label": "第1名",
-          "value": "教师001 · 24 次课程 · 48 节次",
-          "hint": "teacher"
-        },
-        {
           "label": "第2名",
-          "value": "教师002 · 24 次课程 · 48 节次",
+          "value": "教师002 · 24 次授课 · 48 课时",
           "badge": "并列",
-          "hint": "teacher"
+          "hint": "教师"
         },
         {
           "label": "第3名",
-          "value": "教师003 · 20 次课程 · 40 节次",
-          "hint": "teacher"
+          "value": "教师003 · 20 次授课 · 40 课时",
+          "hint": "教师"
         }
       ]
     }

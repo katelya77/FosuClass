@@ -1,73 +1,213 @@
-<Card size="md" background="#F6F2E8" status={{ text: `${verified ? "已核验" : "未核验"}` }}>
-  {layoutMode === "week-board" ? (
+<Card size="md" background="#FBFAF7" status={verified ? '已核验' : '待核验'}>
+  {layoutMode === 'week-board' ? (
     <Col gap={3}>
-      <Row gap={2} align="center">
-        <Title value={weekBoardTitle} size="md" />
-        <Badge label="周视图" color="primary" variant="outline" size="sm" />
-      </Row>
-      <Caption value={weekBoardSubtitle} color="secondary" />
-      <Text value={summary} size="sm" weight="semibold" />
-      {days.map((day) => (
-        <Col gap={1} key={day.label}>
-          <Divider />
-          <Row gap={2} align="center">
-            <Caption value={day.label} color="primary" weight="semibold" />
-            <Badge label={`${day.blocks.length} 节`} color="primary" variant="outline" size="sm" />
-          </Row>
-          {day.blocks.map((block, index) => (
-            <Row gap={2} align="start" key={`${day.label}-${block.time}-${block.title}-${index}`}>
-              <Badge label={block.time} color="info" variant="outline" size="sm" />
-              <Col gap={1} flex={1}>
-                <Text value={block.title} size="sm" weight="semibold" />
-                <Caption value={`${block.location}${block.meta ? ` · ${block.meta}` : ""}`} color="secondary" />
-              </Col>
+      <Box direction="col" gap={2} padding="14px" background="#EAF3EE" radius="xl">
+        <Row gap={2} align="start" justify="between">
+          <Col gap={1} flex={1}>
+            <Caption value="课程时间板" color="#2F6B59" weight="semibold" />
+            <Title value={weekBoardTitle} size="md" />
+            <Caption value={weekBoardSubtitle} color="#66706B" />
+          </Col>
+          <Badge label="已核验" color="success" variant="soft" size="sm" pill={true} />
+        </Row>
+        <Text value={summary} size="sm" weight="semibold" color="#18201D" />
+      </Box>
+
+      <Row gap={2} wrap="wrap" align="stretch">
+        {days.map((day, dayIndex) => (
+          <Box
+            key={`${day.label}-${dayIndex}`}
+            direction="col"
+            gap={2}
+            padding="10px"
+            width="48%"
+            minWidth="148px"
+            background="#FFFFFF"
+            border={{ size: 1, color: '#E7EAE7', style: 'solid' }}
+            radius="lg"
+          >
+            <Row gap={1} align="center" justify="between">
+              <Text value={day.label} size="sm" weight="semibold" color="#18201D" />
+              <Caption value={`${day.blocks.length} 段`} color="#66706B" />
             </Row>
-          ))}
-        </Col>
-      ))}
+            <Col gap={2}>
+              {day.blocks.map((block, blockIndex) => (
+                <Box
+                  key={`${day.label}-${block.time}-${blockIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="9px"
+                  background={blockIndex % 2 === 0 ? '#F1F7F3' : '#F2F5FA'}
+                  radius="md"
+                  border={{ left: { size: 3, color: blockIndex % 2 === 0 ? '#2F6B59' : '#3F6FE5', style: 'solid' } }}
+                >
+                  <Badge label={block.time} color="info" variant="outline" size="sm" />
+                  <Text value={block.title} size="sm" weight="semibold" color="#18201D" />
+                  <Caption value={block.location} color="#66706B" />
+                  {block.meta ? <Caption value={block.meta} color="#66706B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          </Box>
+        ))}
+      </Row>
     </Col>
   ) : (
     <Col gap={3}>
-      <Row gap={2} align="center">
-        <Title value={title} size="md" />
-        <Badge label={status === "success" ? "已核验" : status === "empty" ? "空结果" : "可重试"} color="info" variant="outline" size="sm" />
-      </Row>
-      <Caption value={subtitle} color="secondary" />
-      <Text value={summary} size="sm" weight="semibold" />
-      <Caption value={context} color="secondary" />
-      {sections.map((section) => (
-        <Col gap={1} key={section.title}>
+      <Box
+        direction="col"
+        gap={2}
+        padding="14px"
+        background={
+          status === 'error'
+            ? '#FBF0EF'
+            : status === 'empty'
+              ? '#F3F4F2'
+              : variant === 'risk'
+                ? '#FBF3E8'
+                : variant === 'ranking'
+                  ? '#EEF2FB'
+                  : '#EDF5F1'
+        }
+        radius="xl"
+      >
+        <Row gap={2} align="start" justify="between">
+          <Col gap={1} flex={1}>
+            <Caption
+              value={
+                variant === 'risk'
+                  ? '教学风险'
+                  : variant === 'reschedule'
+                    ? '调课模拟'
+                    : variant === 'ranking'
+                      ? '校园排名'
+                      : variant === 'overview'
+                        ? '教学态势'
+                        : variant === 'space'
+                          ? '空间推荐'
+                          : variant === 'collaboration'
+                            ? '协作方案'
+                            : variant === 'schedule'
+                              ? '当日安排'
+                              : status === 'empty'
+                                ? '暂无结果'
+                                : status === 'error'
+                                  ? '需要重试'
+                                  : '校园结果'
+              }
+              color={variant === 'risk' ? '#B97828' : status === 'error' ? '#B94A48' : '#2F6B59'}
+              weight="semibold"
+            />
+            <Title value={title} size="md" />
+            {subtitle ? <Caption value={subtitle} color="#66706B" /> : null}
+          </Col>
+          <Badge
+            label={status === 'success' ? displayMeta.simulated ? '模拟' : '已核验' : status === 'empty' ? '暂无' : '可重试'}
+            color={status === 'error' ? 'danger' : displayMeta.simulated || variant === 'risk' ? 'warning' : status === 'empty' ? 'secondary' : 'success'}
+            variant="soft"
+            size="sm"
+            pill={true}
+          />
+        </Row>
+        <Text value={summary} size="sm" weight="semibold" color="#18201D" />
+        {context ? <Caption value={context} color="#66706B" /> : null}
+      </Box>
+
+      {displayMeta.tieNote ? (
+        <Row gap={2} align="center">
+          <Badge label="并列" color="info" variant="soft" size="sm" />
+          <Caption value={displayMeta.tieNote} color="#66706B" />
+        </Row>
+      ) : null}
+
+      {sections.map((section, sectionIndex) => (
+        <Col key={`${section.title}-${sectionIndex}`} gap={2}>
           <Divider />
-          <Caption value={section.title} color="primary" weight="semibold" />
-          {section.note ? <Caption value={section.note} color="warning" /> : null}
-          {section.rows.map((row, index) => (
-            <Row gap={2} align="start" key={`${section.title}-${row.label}-${index}`}>
-              <Col gap={1} flex={1}>
-                <Text value={row.value} size="sm" weight="semibold" />
-                <Caption value={row.label} color="secondary" />
-                {row.hint ? <Caption value={row.hint} color="secondary" /> : null}
-              </Col>
-              {row.badge ? <Badge label={row.badge} color="info" variant="outline" size="sm" /> : null}
+          <Row gap={2} align="center" justify="between">
+            <Text value={section.title} size="sm" weight="semibold" color="#18201D" />
+            {section.note ? <Caption value={section.note} color="#66706B" /> : null}
+          </Row>
+          {variant === 'overview' ? (
+            <Row gap={2} wrap="wrap" align="stretch">
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="10px"
+                  width="48%"
+                  minWidth="140px"
+                  background="#FFFFFF"
+                  border={{ size: 1, color: '#E7EAE7', style: 'solid' }}
+                  radius="md"
+                >
+                  <Caption value={row.label} color="#66706B" />
+                  <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                </Box>
+              ))}
             </Row>
-          ))}
+          ) : variant === 'schedule' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="start">
+                  <Badge label={row.badge || row.label} color="info" variant="outline" size="sm" />
+                  <Box
+                    direction="col"
+                    gap={1}
+                    padding="9px"
+                    flex={1}
+                    background="#F7F8F5"
+                    border={{ left: { size: 3, color: '#2F6B59', style: 'solid' } }}
+                    radius="md"
+                  >
+                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                    <Caption value={row.label} color="#66706B" />
+                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  </Box>
+                </Row>
+              ))}
+            </Col>
+          ) : (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="start">
+                  <Col gap={1} flex={1}>
+                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                    <Caption value={row.label} color="#66706B" />
+                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  </Col>
+                  {row.badge ? (
+                    <Badge
+                      label={row.badge}
+                      color={variant === 'risk' ? 'warning' : row.badge === '不可行' ? 'danger' : 'info'}
+                      variant="outline"
+                      size="sm"
+                    />
+                  ) : null}
+                </Row>
+              ))}
+            </Col>
+          )}
         </Col>
       ))}
     </Col>
   )}
+
   {actions.length ? (
     <Col gap={2}>
       <Divider />
       <Row gap={2} wrap="wrap">
-        {actions.map((action) => (
-          <Button key={action.id} label={action.label} size="sm" onClickAction={{
-            type: "sys.chat",
-            payload: {
-              query: action.payload.query,
-            },
-          }} />
+        {actions.map((action, actionIndex) => (
+          <Button
+            key={action.id}
+            label={action.label}
+            size="sm"
+            variant={actionIndex === 0 ? 'solid' : 'outline'}
+            onClickAction={{ type: 'sys.chat', payload: { query: action.payload.query } }}
+          />
         ))}
       </Row>
     </Col>
   ) : null}
-  <Caption value="结果均由确定性校园工具核验派生" color="secondary" />
 </Card>

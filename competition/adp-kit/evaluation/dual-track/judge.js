@@ -4,7 +4,7 @@
 // Track B = 表达呈现（结构化、可读、可渲染、后续动作、零内部泄漏）
 // 规则：Widget 不可渲染 ≠ 业务失败 —— B 轨失败绝不清零 A 轨业务分；
 // 安全违规与事实矛盾属于硬门禁，直接清零 A 轨。
-const { stableStringify, validatePublicDecisionReceipt } = require("../../r51/decision/receipt.js");
+const { stableStringify, createPublicDecisionReceipt, validatePublicDecisionReceipt } = require("../../r51/decision/receipt.js");
 const { validateProfile } = require("../../r51/decision/constraint-profile.js");
 const { evaluateCandidates } = require("../../r51/decision/evaluator.js");
 const { rankFeasible } = require("../../r51/decision/ranking.js");
@@ -106,8 +106,8 @@ function checkWidgetContract(payload) {
     }
   }
   if (payload.displayMeta && payload.displayMeta.tieGroupCount != null) {
-    if (!Number.isInteger(payload.displayMeta.tieGroupCount) || payload.displayMeta.tieGroupCount < 0) {
-      reasons.push("tieGroupCount 必须 ≥0 整数");
+    if (!Number.isInteger(payload.displayMeta.tieGroupCount) || payload.displayMeta.tieGroupCount < 1) {
+      reasons.push("tieGroupCount 出现时必须 ≥1 整数");
     }
   }
   const leakKeys = ["queryid", "datahash", "sourcetool", "rankcontext", "token"];
@@ -185,19 +185,6 @@ function scoreResponse(serialized, expected) {
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function publicReasonTexts(choice) {
-  return (Array.isArray(choice && choice.reasons) ? choice.reasons : [])
-    .map((reason) => typeof reason === "string" ? reason : reason && reason.text)
-    .filter((reason) => typeof reason === "string" && reason.length > 0);
-}
-
-function publicChoiceOf(choice) {
-  const label = choice && choice.candidate && choice.candidate.label;
-  return typeof label === "string" && label.length > 0
-    ? { label, reasons: publicReasonTexts(choice) }
-    : null;
 }
 
 function publicActionOf(action) {
@@ -458,11 +445,12 @@ function receiptSemanticsMatchBundle(bundle) {
     || receipt.verified !== (bundle.verified === true)
     || receipt.decision !== bundle.decision
     || !Array.isArray(receipt.alternatives)) return false;
-  const recommendation = publicChoiceOf(bundle.recommendation);
-  const alternatives = (Array.isArray(bundle.alternatives) ? bundle.alternatives : []).map(publicChoiceOf);
-  return sameJson(receipt.recommendation, recommendation)
-    && sameJson(receipt.alternatives, alternatives)
-    && sameJson(receipt.nextAction, publicActionOf(bundle.nextAction));
+  const expected = createPublicDecisionReceipt(bundle);
+  return sameJson(receipt.recommendation, expected.recommendation)
+    && sameJson(receipt.alternatives, expected.alternatives)
+    && sameJson(receipt.nextAction, expected.nextAction)
+    && receipt.decision === expected.decision
+    && receipt.verified === expected.verified;
 }
 
 function receiptMatchesBundle(bundle) {

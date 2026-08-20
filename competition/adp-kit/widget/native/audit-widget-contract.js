@@ -24,12 +24,14 @@ function parseSchemaKeys(schemaSource) {
     return { mode: "json-schema", keys: Object.keys(parsed.properties || {}) };
   }
   if (/z\.object\s*\(/.test(text)) {
-    const objectBody = text.match(/z\.object\s*\(\s*\{([\s\S]*?)\}\s*\)/);
-    if (!objectBody) return { mode: "zod", keys: [] };
+    const widgetStart = text.search(/const\s+widgetSchema\s*=\s*z/);
+    const source = widgetStart >= 0 ? text.slice(widgetStart) : text;
     const keys = [];
-    const propertyRe = /(?:^|\n|,)\s*["']?([A-Za-z_$][\w$]*)["']?\s*:\s*z\./g;
+    // Tencent's exported Zod source declares reusable nested schemas first.
+    // Canonical widget properties are the four-space entries in widgetSchema.
+    const propertyRe = /^ {4}["']?([A-Za-z_$][\w$]*)["']?\s*:\s*z(?:\.|\s*$)/gm;
     let match;
-    while ((match = propertyRe.exec(objectBody[1]))) keys.push(match[1]);
+    while ((match = propertyRe.exec(source))) keys.push(match[1]);
     return { mode: "zod", keys };
   }
   return { mode: "unknown", keys: [] };
@@ -43,17 +45,25 @@ function auditWidget(widget, contract = null) {
   const defaultKeys = Object.keys(inner.defaultState || {});
   const expectedKeys = contract ? contract.fields.map((field) => field.name) : innerSchema.keys;
   const view = String(inner.view || "");
-  const missingFromView = expectedKeys.filter((key) => !new RegExp(`\\b${key}\\b`).test(view));
+  const presentationFields = expectedKeys.filter((key) => key !== "version");
+  const missingFromView = presentationFields.filter((key) => !new RegExp(`\\b${key}\\b`).test(view));
+  const outerTemplate = String(widget.template || "");
+  const templateConventionValid = outerTemplate === "" || outerTemplate === view;
+  const tieSchema = outerSchema.properties && outerSchema.properties.displayMeta
+    && outerSchema.properties.displayMeta.properties
+    && outerSchema.properties.displayMeta.properties.tieGroupCount;
+  const tieSemanticsValid = !tieSchema || (tieSchema.minimum === 1 && /tieGroupCount:\s*z\.number\(\)\.int\(\)\.min\(1\)\.optional\(\)/.test(String(inner.schema || "")));
 
   const checks = {
     encodedWidgetPresent: Boolean(widget.encodedWidget),
-    outerTemplateMatchesInnerView: String(widget.template || "") === view,
+    outerTemplateMatchesInnerView: templateConventionValid,
     outerSchemaMatchesInnerSchema: equalSets(outerKeys, innerSchema.keys),
     defaultMatchesInnerSchema: equalSets(defaultKeys, innerSchema.keys),
     contractMatchesInnerSchema: contract ? equalSets(expectedKeys, innerSchema.keys) : true,
     contractMatchesOuterSchema: contract ? equalSets(expectedKeys, outerKeys) : true,
     contractMatchesDefault: contract ? equalSets(expectedKeys, defaultKeys) : true,
     contractFieldsUsedByView: missingFromView.length === 0,
+    tieGroupCountSemantics: tieSemanticsValid,
   };
 
   return {

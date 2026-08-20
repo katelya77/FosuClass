@@ -1,14 +1,14 @@
-"""CampusResultUnified V6 adapter — 小序-校园智序结果卡（双布局，ADP 导入侧投影）。
+"""CampusResultUnified V7 adapter — 小序-校园智序结果卡（双布局，ADP 导入侧投影）。
 
 输入必须是已经过服务端 envelope.js / variant-adapters.js / view-model.js 投影的
 CampusResultEnvelope + WidgetViewModel（仅含公开展示字段）。本适配器只做形状核对
 与内部字段剥离，不补全、不编造任何校园事实；发现内部协议字段时 fail closed
 （返回空结果并标记 route=fallback）。
 
-稳定化要点（fosuclass-adp-widget-contract/v6）：
+稳定化要点（fosuclass-adp-widget-contract/v7）：
 - version 由本适配器确定性注入 "1.0"，不接收模型生成的研发版本号（缺省合法）；
 - week-board 空日统一过滤（SSOT：投影层过滤空日，Widget 不接收空日）；
-- tieGroupCount 允许 0 / 缺省（无并列合法）；
+- tieGroupCount 无并列时省略；出现时必须为至少 1 的整数；
 - 动作仅 sys.chat，payload 仅 { query }。
 
 布局规则（与 r50.2/widget/view-model.js 一致）：
@@ -26,7 +26,7 @@ payload 只含用户语义 query（官方 sys.chat），不携带意图标签/�
 设计约束：
 - 禁止泄漏：查询编号 / 数据哈希 / 数据版本 / 来源工具 / 排名上下文 /
   时间上下文 / 节点标识 / 业务标识 / 令牌 / 授权信息 / 内部地址。
-- WidgetID 未注册前一律 widgetId=null + FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY。
+- WidgetID 只使用用户提供的真实腾讯 ADP 导出 ID，禁止生成或猜测。
 """
 
 import json
@@ -34,6 +34,7 @@ import json
 
 ROUTE_WIDGET = "widget"
 ROUTE_FALLBACK = "fallback"
+WIDGET_ID = "978b004b2f054e8bbd5438159c7329ff"
 
 
 ALLOWED_TOP_LEVEL = {
@@ -200,8 +201,17 @@ def _clean_actions(actions):
 
 def _clean_display_meta(meta):
     meta = _object(meta)
-    allowed = {"simulated", "weekendMarked", "tieNote", "tieGroupCount", "recoverable"}
-    return {key: meta[key] for key in allowed if key in meta}
+    out = {}
+    for key in ("simulated", "weekendMarked", "recoverable"):
+        if isinstance(meta.get(key), bool):
+            out[key] = meta[key]
+    tie_note = _text(meta.get("tieNote"))
+    if tie_note:
+        out["tieNote"] = tie_note
+    tie_count = meta.get("tieGroupCount")
+    if isinstance(tie_count, int) and not isinstance(tie_count, bool) and tie_count >= 1:
+        out["tieGroupCount"] = tie_count
+    return out
 
 
 def _clean_blocks(blocks):
@@ -282,7 +292,7 @@ def main(params: dict) -> dict:
         data["weekBoardTitle"] = ""
         data["weekBoardSubtitle"] = ""
         data["days"] = []
-    return {"route": ROUTE_WIDGET, "widgetId": None, "data": data}
+    return {"route": ROUTE_WIDGET, "widgetId": WIDGET_ID, "data": data}
 
 
 if __name__ == "__main__":

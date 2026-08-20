@@ -60,7 +60,7 @@ function buildDecisionEnvelope(bundle, receipt = createPublicDecisionReceipt(bun
 
   const displayMeta = {};
   if (variant === "reschedule") displayMeta.simulated = true;
-  if (variant === "ranking" && Number.isInteger(bundle.tieGroupCount) && bundle.tieGroupCount >= 0) {
+  if (variant === "ranking" && Number.isInteger(bundle.tieGroupCount) && bundle.tieGroupCount >= 1) {
     displayMeta.tieGroupCount = bundle.tieGroupCount;
   }
   const envelope = {

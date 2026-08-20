@@ -38,7 +38,7 @@ function lessonRow(lesson) {
 }
 
 function groupLabel(name) {
-  return String(name || "").split("、").slice(0, 2).join("、");
+  return String(name || "").split("、").slice(0, 3).join("、");
 }
 
 function isWeekendItem(item) {
@@ -114,14 +114,14 @@ function projectSpace(raw) {
   const items = Array.isArray(raw.items) ? raw.items : [];
   if (items.length === 0) return projectEmpty(raw);
   const campusName = raw.resolvedEntity && raw.resolvedEntity.name || "";
-  const rows = items.map((room) => ({
+  const rows = items.slice(0, 5).map((room) => ({
     label: `${room.roomName || ""}${room.capacity ? ` · ${room.capacity}人` : ""}`,
     value: `${room.type || "教室"} · ${room.campusName || campusName || ""}${room.building ? ` ${room.building}` : ""}`,
     badge: room.type || undefined,
-    hint: room.building || undefined,
+    hint: undefined,
   }));
   const summary = rows.length
-    ? `找到 ${rows.length} 间可用${raw.resolvedEntity && raw.resolvedEntity.type === "campus" ? "教室" : "教室"}。`
+    ? `找到 ${items.length} 间符合条件的教室。`
     : "该时段没有已核验的空教室。";
   return finishEnvelope(raw, {
     variant: "space",
@@ -131,7 +131,14 @@ function projectSpace(raw) {
     verified: true,
     summary,
     context: slotText(raw),
-    sections: [{ title: "可用教室", rows }],
+    sections: [
+      { title: "推荐教室", rows: rows.slice(0, 1) },
+      {
+        title: "其他选择",
+        rows: rows.slice(1),
+        ...(items.length > rows.length ? { note: `还有 ${items.length - rows.length} 间符合条件` } : {}),
+      },
+    ],
     displayMeta: {},
   });
 }
@@ -143,24 +150,62 @@ function projectCollaboration(raw) {
   if (!isVerified(raw)) return projectError(raw, "collaboration");
   const items = Array.isArray(raw.items) ? raw.items : [];
   if (items.length === 0) return projectEmpty(raw);
-  const hasRooms = items.some((item) => Array.isArray(item.rooms) && item.rooms.length > 0);
+  const recommended = items[0];
+  const hasRooms = Array.isArray(recommended.rooms) && recommended.rooms.length > 0;
   const weekendMarked = items.some(isWeekendItem);
-  const rows = items.map((item) => {
-    const roomText = hasRooms
-      ? `${item.rooms[0] ? `${item.rooms[0].campusName} ${item.rooms[0].roomName}` : ""}${item.roomCount > 1 ? ` 等 ${item.roomCount} 间` : ""}`
-      : item.entities && item.entities.length
-        ? item.entities.map((e) => e.name).join("、")
-        : "";
-    return {
-      label: `${item.weekdayName} ${item.periodText}`,
-      value: roomText || `${item.freePeriodCount} 节空闲`,
-      badge: isWeekendItem(item) ? "周末" : "工作日",
-      hint: `${item.date || ""} · ${item.freePeriodCount != null ? `${item.freePeriodCount} 节空闲` : ""}`.trim().replace(/^ · | · $/g, ""),
-    };
-  });
-  const entityText = raw.resolvedEntity && raw.resolvedEntity.name ? groupLabel(raw.resolvedEntity.name) : "多方";
-  const summary = rows.length
-    ? `${entityText}共同空闲 ${items.length} 个时段${hasRooms ? "，含可用教室" : ""}。`
+  const explicitPeople = Array.isArray(recommended.entities) ? recommended.entities.map((entry) => entry && entry.name).filter(Boolean) : [];
+  const people = explicitPeople.length
+    ? explicitPeople
+    : raw.resolvedEntity && typeof raw.resolvedEntity.name === "string"
+      ? raw.resolvedEntity.name.split(/[、，,]/).map((name) => name.trim()).filter(Boolean).slice(0, 8)
+      : [];
+  const entityText = raw.resolvedEntity && raw.resolvedEntity.name
+    ? groupLabel(raw.resolvedEntity.name)
+    : people.length ? people.join(" · ") : "多方";
+  const rooms = hasRooms ? recommended.rooms : [];
+  const firstRoom = rooms[0];
+  const minCapacity = Number(raw.query && raw.query.minCapacity);
+  const expectedSpan = Number(recommended.periodEnd) - Number(recommended.periodStart) + 1;
+  const whyRows = [];
+  if (people.length && recommended.freePeriodCount != null) {
+    whyRows.push({ label: "共同空闲", value: `${people.length} 位教师均空闲`, badge: "已核验" });
+  }
+  if (firstRoom && Number.isFinite(minCapacity) && Number(firstRoom.capacity) >= minCapacity) {
+    whyRows.push({ label: "空间容量", value: "容量满足需求", hint: `${firstRoom.capacity} 人` });
+  }
+  if (Number.isFinite(expectedSpan) && expectedSpan > 0 && Number(recommended.freePeriodCount) >= expectedSpan) {
+    whyRows.push({ label: "时段衔接", value: "时间连续", hint: `${recommended.freePeriodCount} 节` });
+  }
+  const sections = [{
+    title: "推荐方案",
+    rows: [{
+      label: `${recommended.weekdayName || ""} ${recommended.periodText || ""}`.trim(),
+      value: people.length ? people.join(" · ") : `${recommended.freePeriodCount || ""} 节共同空闲`,
+      badge: isWeekendItem(recommended) ? "周末" : "首选",
+    }],
+  }];
+  if (people.length) sections.push({ title: "参与", rows: [{ label: "参与人员", value: people.join(" · ") }] });
+  if (firstRoom) {
+    sections.push({ title: "首选空间", rows: [{
+      label: firstRoom.roomName || "教室",
+      value: `${firstRoom.capacity ? `${firstRoom.capacity} 人 · ` : ""}${firstRoom.campusName || ""}${firstRoom.building ? ` · ${firstRoom.building}` : ""}`,
+      badge: "推荐",
+    }] });
+  }
+  if (whyRows.length) sections.push({ title: "为什么推荐", rows: whyRows });
+  if (rooms.length > 1) {
+    const alternatives = rooms.slice(1, 4);
+    sections.push({
+      title: "备选空间",
+      rows: alternatives.map((room) => ({
+        label: room.roomName || "教室",
+        value: `${room.capacity ? `${room.capacity} 人 · ` : ""}${room.campusName || ""}`,
+      })),
+      ...(rooms.length > 4 ? { note: `还有 ${rooms.length - 4} 个空间候选` } : {}),
+    });
+  }
+  const summary = items.length
+    ? `推荐 ${recommended.weekdayName || ""} ${recommended.periodText || ""}${firstRoom ? `，首选 ${firstRoom.roomName}` : ""}。`
     : "该条件下没有已核验的共同空闲时段。";
   return finishEnvelope(raw, {
     variant: "collaboration",
@@ -170,7 +215,7 @@ function projectCollaboration(raw) {
     verified: true,
     summary,
     context: slotText(raw),
-    sections: [{ title: hasRooms ? "候选时段（含教室）" : "候选时段", rows }],
+    sections,
     displayMeta: { weekendMarked: weekendMarked || undefined },
   });
 }
@@ -184,35 +229,44 @@ function projectRisk(raw) {
   const conflicts = Array.isArray(raw.items) ? raw.items : [];
   const rushes = Array.isArray(raw.rushWarnings) ? raw.rushWarnings : [];
   const compared = (raw.compared || []).map((e) => e.name).filter(Boolean).join(" 与 ");
+  const subject = raw.resolvedEntity && raw.resolvedEntity.name || raw.query && raw.query.entityName || compared || "教学安排";
+  const week = windowText(raw) || "";
   const conflictRows = conflicts.map((conflict) => ({
-    label: `${conflict.weekdayName} ${conflict.periodText}`,
+    label: `${conflict.weekdayName || ""} ${conflict.periodText || (conflict.periodStart != null && conflict.periodEnd != null ? `第${conflict.periodStart}-${conflict.periodEnd}节` : "")}`.trim(),
     value: `${conflict.first ? conflict.first.courseName : ""} ↔ ${conflict.second ? conflict.second.courseName : ""}`,
     badge: "冲突",
-    hint: `${conflict.first ? `${conflict.first.campusName} ${conflict.first.roomName}` : ""} vs ${conflict.second ? `${conflict.second.campusName} ${conflict.second.roomName}` : ""}`,
+    hint: `${conflict.first ? `${conflict.first.campusName} ${conflict.first.roomName}` : ""}；${conflict.second ? `${conflict.second.campusName} ${conflict.second.roomName}` : ""}`,
   }));
   const rushRows = rushes.map((rush) => ({
-    label: `${rush.weekdayName} · 间隔 ${rush.gapMinutes} 分钟`,
+    label: `${rush.weekdayName || ""}${rush.from && rush.from.endTime ? ` · ${rush.from.endTime}` : ""}${rush.to && rush.to.startTime ? ` → ${rush.to.startTime}` : ""}`,
     value: `${rush.from ? rush.from.courseName : ""} → ${rush.to ? rush.to.courseName : ""}`,
     badge: "赶场",
-    hint: `${rush.from ? rush.from.campusName : ""} → ${rush.to ? rush.to.campusName : ""}`,
+    hint: `${rush.from ? rush.from.campusName : ""} → ${rush.to ? rush.to.campusName : ""} · 间隔 ${rush.gapMinutes} 分钟`,
   }));
   const sections = [];
   if (conflictRows.length) sections.push({ title: "时间冲突", rows: conflictRows });
-  if (rushRows.length) sections.push({ title: "跨校区赶场", rows: rushRows });
+  if (rushRows.length) sections.push({ title: "跨校区衔接", rows: rushRows });
   const hasConflict = summary.hasConflict === true || conflicts.length > 0;
   const summaryText = hasConflict
     ? `发现 ${conflicts.length} 处时间冲突${summary.rushWarningCount ? `、${summary.rushWarningCount} 处跨校区赶场` : ""}。`
     : summary.rushWarningCount
-      ? `无时间冲突；${summary.rushWarningCount} 处跨校区赶场提醒。`
+      ? `存在 ${summary.rushWarningCount} 项跨校区赶场提醒。`
       : "未发现时间冲突或跨校区赶场。";
+  sections.push({
+    title: "结论",
+    rows: [
+      { label: "课程安排", value: hasConflict ? "存在时间冲突" : "课程本身无时间冲突", badge: hasConflict ? "需处理" : "正常" },
+      ...(rushRows.length ? [{ label: "跨校区衔接", value: "预留时间较紧", badge: "提醒" }] : []),
+    ],
+  });
   return finishEnvelope(raw, {
     variant: "risk",
     status: "success",
-    title: `风险检查${compared ? ` · ${compared}` : ""}`,
-    subtitle: slotText(raw),
+    title: [subject, week, "教学风险"].filter(Boolean).join(" · "),
+    subtitle: week || slotText(raw),
     verified: true,
     summary: summaryText,
-    context: slotText(raw),
+    context: week || slotText(raw),
     sections,
     displayMeta: {},
   });
@@ -228,23 +282,35 @@ function projectReschedule(raw) {
   const target = item && item.target ? item.target : null;
   const summary = raw.summary || {};
   const simulated = !(raw.simulation && raw.simulation.mutatedData === true);
-  const rows = [];
+  const sections = [];
   if (source) {
-    rows.push({
+    sections.push({ title: "原安排", rows: [{
       label: `${source.weekdayName} ${source.periodText}`,
       value: `${source.courseName} · ${source.campusName} ${source.roomName || ""}`,
-      badge: "原时段",
+      badge: "当前",
       hint: (source.teachers || []).join("、") || undefined,
-    });
+    }] });
   }
   if (target) {
-    rows.push({
-      label: `调至 ${target.weekdayName} ${target.periodText}`,
+    sections.push({ title: "候选安排", rows: [{
+      label: `${target.weekdayName} ${target.periodText}`,
       value: summary.feasible ? "可行：教师与班级时间无冲突" : summary.reason || "不可行",
-      badge: simulated ? "模拟" : "已执行",
+      badge: summary.feasible ? "可行" : "不可行",
       hint: target.room ? `${target.room.campusName || ""} ${target.room.name || ""}` : "教室待指定",
-    });
+    }] });
   }
+  const checks = item && item.checks || {};
+  const checkRows = [
+    ["教师", checks.teacherConflict, "conflict"],
+    ["班级", checks.classConflict, "conflict"],
+    ["教室", checks.roomConflict, "conflict"],
+    ["容量", checks.capacity, "ok"],
+    ["教室属性", checks.feature, "ok"],
+  ].filter(([, check]) => check && typeof check === "object").map(([label, check, mode]) => ({
+    label,
+    value: mode === "conflict" ? (check.conflict ? "存在冲突" : "无冲突") : (check.ok ? "满足" : "不满足"),
+  }));
+  if (checkRows.length) sections.push({ title: "可行性检查", rows: checkRows });
   const title = source ? `调课模拟 · ${source.courseName}` : "调课模拟";
   const summaryText = summary.feasible
     ? `可以调至 ${target ? `${target.weekdayName} ${target.periodText}` : "目标时段"}${simulated ? "（模拟，未执行）" : ""}。`
@@ -257,7 +323,9 @@ function projectReschedule(raw) {
     verified: true,
     summary: summaryText,
     context: simulated ? "调课结果为模拟，未对课表做任何修改" : undefined,
-    sections: [{ title: "调课方案", note: simulated ? "仅为模拟，如需执行请走正式调课流程" : undefined, rows }],
+    sections: sections.map((section, index) => index === sections.length - 1 && simulated
+      ? { ...section, note: "仅为模拟，未修改课表" }
+      : section),
     displayMeta: { simulated: simulated || undefined },
   });
 }
@@ -270,16 +338,17 @@ function projectRanking(raw) {
   const items = Array.isArray(raw.items) ? raw.items : [];
   if (items.length === 0) return projectEmpty(raw);
   const ties = items.filter((item) => item.tiedWithPrevious);
-  const rows = items.map((item) => ({
+  const rows = items.slice(1, 4).map((item) => ({
     label: `第${item.rank}名`,
     value: `${item.entity ? item.entity.name : ""} · ${metricText(item.metrics, item.data)}`,
     badge: item.tiedWithPrevious ? "并列" : undefined,
-    hint: item.entity ? item.entity.type : undefined,
+    hint: publicEntityType(item.entity && item.entity.type),
   }));
   const title = (raw.summary && raw.summary.metric === "utilizationRate" ? "教室利用率" : "教师负载") + "排行";
   const windowLabel = (raw.summary && raw.summary.windowLabel) || slotText(raw) || "第1周";
-  const summary = rows.length
-    ? `Top ${rows.length}：${items.map((item) => item.entity ? item.entity.name : "").join("、")}${ties.length ? `（第 ${ties.length + 1} 名起出现并列）` : ""}。`
+  const top = items[0];
+  const summary = top
+    ? `第1名 ${top.entity ? top.entity.name : ""} · ${metricText(top.metrics, top.data)}。`
     : "暂无已核验排行结果。";
   return finishEnvelope(raw, {
     variant: "ranking",
@@ -289,7 +358,11 @@ function projectRanking(raw) {
     verified: true,
     summary,
     context: windowLabel,
-    sections: [{ title: "排名（位次稳定，并列同档）", rows }],
+    sections: [{
+      title: "其他排名",
+      rows,
+      ...(items.length > 4 ? { note: `还有 ${items.length - 4} 个排名结果` } : {}),
+    }],
     displayMeta: {
       tieGroupCount: new Set(items.filter((i) => i.tieGroupId).map((i) => i.tieGroupId)).size || undefined,
       tieNote: ties.length ? `第${firstTieRank(items)}名起并列` : undefined,
@@ -297,16 +370,21 @@ function projectRanking(raw) {
   });
 }
 
+function publicEntityType(type) {
+  return ({ teacher: "教师", room: "教室", building: "教学楼", campus: "校区", class: "班级", course: "课程" })[type] || undefined;
+}
+
 function metricText(metrics, data) {
   if (!metrics) return "";
   const parts = [];
   for (const key of Object.keys(metrics)) {
     const value = metrics[key];
-    if (key === "loadCount") parts.push(`${value} 次课程`);
+    if (key === "loadCount") parts.push(`${value} 次授课`);
     else if (key === "utilizationRate") parts.push(`利用率 ${value}%`);
-    else parts.push(`${key}=${value}`);
+    else if (key === "lessonOccurrences") parts.push(`${value} 次授课`);
+    else if (key === "periodUnits") parts.push(`${value} 课时`);
   }
-  if (data && data.periodCount != null) parts.push(`${data.periodCount} 节次`);
+  if (data && data.periodCount != null) parts.push(`${data.periodCount} 课时`);
   return parts.join(" · ");
 }
 
@@ -326,7 +404,7 @@ function projectOverview(raw) {
   const weeks = Array.isArray(item.weeks) ? item.weeks : [];
   const sections = [];
   if (weeks.length) {
-    const rows = weeks.map((week) => ({
+    const rows = weeks.slice(0, 2).map((week) => ({
       label: `第${week.week}周`,
       value: (week.perWeekday || []).map((count, index) => `${["一", "二", "三", "四", "五"][index]}${count}`).join(" · "),
     }));
@@ -335,7 +413,7 @@ function projectOverview(raw) {
   if (teachers.length) {
     sections.push({
       title: "教师负载 Top 3",
-      rows: teachers.map((teacher) => ({
+      rows: teachers.slice(0, 2).map((teacher) => ({
         label: `第${teacher.rank}名`,
         value: `${teacher.name} · ${teacher.lessonCount} 次课程`,
         badge: `第${teacher.rank}名`,
@@ -370,10 +448,10 @@ function projectEmpty(raw) {
   return finishEnvelope(raw, {
     variant: "empty",
     status: "empty",
-    title: "暂无已核验结果",
+    title: "当前条件下没有匹配结果",
     subtitle: slotText(raw) || undefined,
     verified: isVerified(raw),
-    summary: `${entityName}该条件下没有已核验的课程/时段记录。`,
+    summary: `${entityName}当前条件下没有匹配结果。可调整容量、校区或时间后再试。`,
     context: windowText(raw) || undefined,
     sections: [],
     displayMeta: {},
@@ -398,7 +476,7 @@ function projectError(raw) {
   return finishEnvelope(raw, {
     variant: "error",
     status: "error",
-    title: "查询失败，可重试",
+    title: "本次查询暂时没有完成",
     verified: false,
     summary: message,
     sections: [],

@@ -103,8 +103,8 @@
     },
     {
       "path": "knowledge/current/04-动态事实与可信度.md",
-      "bytes": 1390,
-      "sha256": "0cdc745744857473bae4a15bcf3afb297c8da352ba274935ed7f4c932a2c5156"
+      "bytes": 1427,
+      "sha256": "1747f2836ff0f226e6b40f22d5d2b63f93fccd6a3f851f6b7dedde6635a93f28"
     },
     {
       "path": "knowledge/current/05-隐私安全与授权边界.md",
@@ -133,18 +133,18 @@
     },
     {
       "path": "knowledge/current/10-常见问题.md",
-      "bytes": 1618,
-      "sha256": "0ccccc9ccafbff973fe84077d0a321aef2d6e601fca516ed707d5ea06050b169"
+      "bytes": 1649,
+      "sha256": "a825c4db93c9acd5f7daddf39d7d225935f863841fd1a01a1ed3d952dbe1fb38"
     },
     {
       "path": "knowledge/current/README.md",
-      "bytes": 1639,
-      "sha256": "e4175b9a0f998c13d6dbaea5c5c25d7de89f3d555781e40216329f6321ff4e14"
+      "bytes": 1625,
+      "sha256": "309e194ea47245c19fe53b400ea204dbfa28880a8eed9b6d9c0dc4324ecc9040"
     },
     {
       "path": "knowledge/current/recall-matrix.md",
-      "bytes": 1916,
-      "sha256": "af0aa642546e6d6e56993f57f11f6bf93815e862471b7c90b3e9f99664e49328"
+      "bytes": 1896,
+      "sha256": "8f52ae6ddae259a113f0b6131a5b63557567642820703c75346756f227e9fac1"
     },
     {
       "path": "knowledge/legacy/LEGACY.md",
@@ -213,8 +213,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/r50.2/widget/view-model.js",
-      "bytes": 10629,
-      "sha256": "89b8b87a13180a07751efb4fd7a0c050a958a186d40624ffa779dbf92e7bfd35"
+      "bytes": 10951,
+      "sha256": "8b05d38744011eccb2501f9c62a93deeaf41c5af4e633fc43a940260e0a3009f"
     },
     {
       "path": "tools/campus-tools-mcp/src/agent-tools.js",
@@ -289,7 +289,12 @@
     {
       "path": "tools/campus-tools-mcp/src/decision/outcome-synthesizer.js",
       "bytes": 3633,
-      "sha256": "b8a2d32994051ad07db859797450fe9774d5be5802787ae4676470e246eb35c4"
+      "sha256": "508afaf8dc7112774d1ed28606c53d1dd250352b631fb05693f1ed999495ee5b"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/public-copy.js",
+      "bytes": 4046,
+      "sha256": "80159dda1e08fd0dbf3bb17f7a65e52c3441ed55de0929b203e838c209892fe9"
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/ranking.js",
@@ -298,8 +303,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/receipt.js",
-      "bytes": 6103,
-      "sha256": "f1a7a38224a4494d7002eb326f146831a91ae4a5b3b3cf1d98ab6009c7428bd4"
+      "bytes": 6177,
+      "sha256": "31ebe709d22aa9c3886aaa06dfdc368d11b2e6eb6143f8782ee6559e668cc1f8"
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/runtime-activation.js",

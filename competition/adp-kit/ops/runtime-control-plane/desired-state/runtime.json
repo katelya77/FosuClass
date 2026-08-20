@@ -3,9 +3,10 @@
     "name": "小序-校园智序结果卡"
   },
   "multimodal": {
-    "mainOfficialVisionToolRequired": true,
+    "mainOfficialVisionToolRequired": false,
     "childOfficialVisionToolRequired": false,
-    "visionObservationSource": "competition/adp-kit/r51/vision/contract.js"
+    "visionObservationSource": "competition/adp-kit/r51/vision/contract.js",
+    "status": "future_ready_not_final_demo_dependency"
   },
   "cloudBase": {
     "functionAllowlist": ["campusflowAdpTools"]

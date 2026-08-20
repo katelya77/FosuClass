@@ -53,8 +53,9 @@
     },
     {
       "id": "tiegroup-count-zero",
-      "kind": "并列组数 0（合法，无并列）",
-      "expect": "pass",
+      "kind": "并列组数 0（公开契约应省略）",
+      "expect": "fail",
+      "mustMatch": ["≥1"],
       "payload": {
         "version": "1.0",
         "variant": "ranking",

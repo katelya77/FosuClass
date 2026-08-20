@@ -89,22 +89,23 @@ test("schedule: 课程行含时间、教室、班级且无内部标识", () => {
 test("space: 空教室行含容量与楼栋", () => {
   const { envelope } = project(loadFixture("space"), "campus_classroom_search");
   assert.equal(envelope.variant, "space");
-  assert.equal(envelope.sections[0].rows.length, 3);
+  assert.equal(envelope.sections.flatMap((section) => section.rows).length, 3);
   assert.equal(envelope.sections[0].rows[0].label, "A1-101 · 120人");
+  assert.equal(envelope.sections[0].title, "推荐教室");
 });
 
-test("collaboration: 周末候选被标记（工作日/周末徽标 + displayMeta）", () => {
+test("collaboration: 推荐方案优先，参与者可读且周末候选元数据保留", () => {
   const { envelope } = project(loadFixture("collaboration"), "campus_group_plan");
   assert.equal(envelope.displayMeta.weekendMarked, true);
-  const badges = envelope.sections[0].rows.map((row) => row.badge);
-  assert.ok(badges.includes("周末") && badges.includes("工作日"), `徽标=${JSON.stringify(badges)}`);
-  assert.ok(envelope.summary.includes("教师001、教师002"));
+  assert.equal(envelope.sections[0].title, "推荐方案");
+  assert.ok(envelope.sections.some((section) => section.title === "参与"));
+  assert.ok(JSON.stringify(envelope.sections).includes("教师001 · 教师002"));
 });
 
 test("risk: 冲突与赶场分区块呈现", () => {
   const { envelope } = project(loadFixture("risk"), "campus_risk_check");
   const sectionTitles = envelope.sections.map((section) => section.title);
-  assert.ok(sectionTitles.includes("时间冲突") && sectionTitles.includes("跨校区赶场"));
+  assert.ok(sectionTitles.includes("时间冲突") && sectionTitles.includes("跨校区衔接"));
   assert.ok(envelope.summary.includes("1 处时间冲突"));
   assert.ok(envelope.summary.includes("1 处跨校区赶场"));
 });
@@ -113,15 +114,17 @@ test("reschedule: 模拟结果明确标注未执行（simulated=true）", () => 
   const { envelope } = project(loadFixture("reschedule"), "campus_reschedule_feasibility");
   assert.equal(envelope.displayMeta.simulated, true);
   assert.ok(envelope.summary.includes("模拟"));
-  assert.ok(envelope.sections[0].note.includes("未执行") || envelope.sections[0].note.includes("模拟"));
-  assert.ok(envelope.sections[0].rows[1].badge === "模拟");
-  assert.ok(envelope.sections[0].rows[1].hint.includes("教室待指定"));
+  assert.deepStrictEqual(envelope.sections.slice(0, 2).map((section) => section.title), ["原安排", "候选安排"]);
+  assert.ok(envelope.sections.some((section) => (section.note || "").includes("模拟")));
+  assert.ok(envelope.sections[1].rows[0].badge === "可行");
+  assert.ok(envelope.sections[1].rows[0].hint.includes("教室待指定"));
 });
 
 test("ranking: 并列位次语义保留（badge=并列 + tieNote）", () => {
   const { envelope } = project(loadFixture("ranking"), "campus_teacher_load_query");
-  assert.equal(envelope.sections[0].rows[0].label, "第1名");
-  assert.equal(envelope.sections[0].rows[1].badge, "并列");
+  assert.ok(envelope.summary.includes("第1名 教师001"));
+  assert.equal(envelope.sections[0].rows[0].label, "第2名");
+  assert.equal(envelope.sections[0].rows[0].badge, "并列");
   assert.equal(envelope.displayMeta.tieGroupCount, 1);
   assert.ok(envelope.displayMeta.tieNote.includes("第2名起并列"));
 });

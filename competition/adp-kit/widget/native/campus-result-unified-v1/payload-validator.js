@@ -1,6 +1,6 @@
 "use strict";
 // CSF P1.6 WidgetPayloadValidator —— 唯一入口：校验所有 Agent 最终输出的 Widget payload，
-// 与 widget/native/campus-result-unified-v1/schema.json（fosuclass-adp-widget-contract/v6）同一 schema。
+// 与 widget/native/campus-result-unified-v1/schema.json（fosuclass-adp-widget-contract/v7）同一 schema。
 //
 // fail-closed：校验失败时输出可读中文文本 fallback（标题 / 副标题 / 摘要 / 上下文 / 区块行 /
 // 展示元数据），绝不输出原始 JSON 或内部协议字段。业务事实保留在 fallback 中。
@@ -8,7 +8,7 @@
 // 规则要点：
 //  - version 只接受固定 "1.0"（模型生成任何研发版本号一律拒绝；版本号由确定性投影注入）；
 //  - actions 仅允许 type=sys.chat，payload 仅 { query }；open_widget / broaden_query / 其它透传拒绝；
-//  - displayMeta.tieGroupCount 允许 0 / 缺省；
+//  - displayMeta.tieGroupCount 无并列时缺省；出现时必须为 ≥1 的整数；
 //  - layoutMode=week-board：days 每项 blocks 必须 ≥1（空日由确定性投影过滤，Widget 永不收到空日）；
 //  - 未知字段（含 queryId / dataHash / sourceTool / rankContext / temporalContext / token /
 //    authorization 等内部协议键）拒绝。
@@ -37,6 +37,13 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function rejectUnexpectedKeys(object, allowed, trail, errors) {
+  if (!isPlainObject(object)) return;
+  for (const key of Object.keys(object)) {
+    if (!allowed.has(key)) errors.push(`${trail} 含未知字段 ${key}`);
+  }
+}
+
 function findForbiddenKeys(node, trail, violations) {
   if (!isPlainObject(node)) return;
   for (const [key, value] of Object.entries(node)) {
@@ -56,6 +63,7 @@ function validateWidgetPayload(payload) {
     return { ok: false, errors: ["payload 必须是对象"], textFallback: TEXT_FALLBACK_DEFAULT };
   }
   const errors = [];
+  rejectUnexpectedKeys(payload, new Set(Object.keys(SCHEMA.properties)), "payload", errors);
 
   for (const field of REQUIRED) {
     if (!Object.hasOwn(payload, field)) errors.push(`缺少必填字段 ${field}`);
@@ -89,10 +97,12 @@ function validateWidgetPayload(payload) {
         errors.push(`sections[${index}] 必须含 title 与 rows 数组`);
         continue;
       }
+      rejectUnexpectedKeys(section, new Set(["title", "note", "rows"]), `sections[${index}]`, errors);
       for (const [rowIndex, row] of section.rows.entries()) {
         if (!isPlainObject(row) || !row.label || !row.value) {
           errors.push(`sections[${index}].rows[${rowIndex}] 必须含 label 与 value`);
         }
+        rejectUnexpectedKeys(row, new Set(["label", "value", "badge", "hint"]), `sections[${index}].rows[${rowIndex}]`, errors);
       }
     }
   } else if (payload.sections !== undefined) {
@@ -105,6 +115,7 @@ function validateWidgetPayload(payload) {
         errors.push(`actions[${index}] 必须是对象`);
         continue;
       }
+      rejectUnexpectedKeys(action, new Set(["id", "type", "label", "payload"]), `actions[${index}]`, errors);
       if (!ALLOWED_ACTION_TYPES.has(action.type)) {
         errors.push(`actions[${index}].type 仅允许 sys.chat（实际 ${JSON.stringify(action.type)}）；open_widget / broaden_query 等透传一律拒绝`);
       }
@@ -126,10 +137,13 @@ function validateWidgetPayload(payload) {
   if (payload.displayMeta !== undefined) {
     if (!isPlainObject(payload.displayMeta)) {
       errors.push("displayMeta 必须是对象");
-    } else if (payload.displayMeta.tieGroupCount !== undefined) {
-      const n = payload.displayMeta.tieGroupCount;
-      if (!Number.isInteger(n) || n < 0) {
-        errors.push(`displayMeta.tieGroupCount 必须为 ≥0 的整数（实际 ${JSON.stringify(n)}）`);
+    } else {
+      rejectUnexpectedKeys(payload.displayMeta, new Set(["simulated", "weekendMarked", "tieNote", "tieGroupCount", "recoverable"]), "displayMeta", errors);
+      if (payload.displayMeta.tieGroupCount !== undefined) {
+        const n = payload.displayMeta.tieGroupCount;
+        if (!Number.isInteger(n) || n < 1) {
+          errors.push(`displayMeta.tieGroupCount 出现时必须为 ≥1 的整数（实际 ${JSON.stringify(n)}）`);
+        }
       }
     }
   }
@@ -148,6 +162,7 @@ function validateWidgetPayload(payload) {
         if (!isPlainObject(day) || typeof day.label !== "string" || !day.label.length) {
           errors.push(`days[${index}] 缺少 label`);
         }
+        rejectUnexpectedKeys(day, new Set(["label", "blocks"]), `days[${index}]`, errors);
         if (!Array.isArray(day.blocks) || day.blocks.length === 0) {
           errors.push(`days[${index}].blocks 不能为空（空日由确定性投影过滤，Widget 不接收空日）`);
         } else {
@@ -155,6 +170,7 @@ function validateWidgetPayload(payload) {
             if (!isPlainObject(block) || !block.time || !block.title || !block.location) {
               errors.push(`days[${index}].blocks[${blockIndex}] 必须含 time / title / location`);
             }
+            rejectUnexpectedKeys(block, new Set(["time", "title", "location", "meta"]), `days[${index}].blocks[${blockIndex}]`, errors);
           }
         }
       }

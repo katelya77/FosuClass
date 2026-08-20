@@ -211,15 +211,20 @@ function isWeekBoardViewModel(viewModel) {
  * 最终变体依据 = 最后一个已完成能力的工具；确定性、无模型参与。
  */
 function projectMissionFinalViewModel(mission, toolResults, capabilityToolMap, buildEnvelope) {
+  // Mission orchestration is not bundled into the standalone CampusTools function.
+  // Load this only on the ADP mission projection path; projectViewModel remains a
+  // self-contained handler dependency.
+  const { selectFinalOutcome } = require("../../r51/mission/final-outcome-selector.js");
   const caps = Array.isArray(mission && mission.completedCapabilities) ? mission.completedCapabilities : [];
   if (caps.length === 0) {
     return { ok: false, errors: ["无已完成能力，无法投影最终 Widget"], viewModel: null };
   }
-  const finalCap = caps[caps.length - 1];
-  const toolName = capabilityToolMap && capabilityToolMap[finalCap];
-  if (!toolName) {
-    return { ok: false, errors: [`最终能力 ${finalCap} 无对应工具映射`], viewModel: null };
+  const selected = selectFinalOutcome(mission, capabilityToolMap || {});
+  if (!selected) {
+    return { ok: false, errors: ["没有可核验的最终结果"], viewModel: null };
   }
+  const finalCap = selected.capabilityId;
+  const toolName = selected.toolName;
   const raw = toolResults && toolResults[toolName];
   if (!raw) {
     return { ok: false, errors: [`最终工具 ${toolName} 无结果可投影`], viewModel: null };

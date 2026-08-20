@@ -34,7 +34,7 @@ def derive(downloads):
     registry = {
         "schema": "fosuclass-campus-widget-registry/v1",
         "source": "real Tencent ADP .widget exports",
-        "dataVersion": "competition-demo-v1",
+        "dataVersion": "competition-demo-v3",
         "widgets": {},
     }
     for kind, record in catalog["widgets"].items():

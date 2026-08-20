@@ -1,0 +1,85 @@
+import { z } from 'zod';
+
+const rowSchema = z
+  .object({
+    label: z.string(),
+    value: z.string(),
+    badge: z.string().optional(),
+    hint: z.string().optional(),
+  })
+  .strict();
+
+const sectionSchema = z
+  .object({
+    title: z.string(),
+    note: z.string().optional(),
+    rows: z.array(rowSchema),
+  })
+  .strict();
+
+const actionSchema = z
+  .object({
+    id: z.string(),
+    type: z.literal('sys.chat'),
+    label: z.string(),
+    payload: z.object({ query: z.string() }).strict(),
+  })
+  .strict();
+
+const blockSchema = z
+  .object({
+    time: z.string(),
+    title: z.string(),
+    location: z.string(),
+    meta: z.string().optional(),
+  })
+  .strict();
+
+const daySchema = z
+  .object({
+    label: z.string(),
+    blocks: z.array(blockSchema),
+  })
+  .strict();
+
+const widgetSchema = z
+  .object({
+    version: z.literal('1.0'),
+    variant: z.enum([
+      'schedule',
+      'space',
+      'collaboration',
+      'risk',
+      'reschedule',
+      'ranking',
+      'overview',
+      'empty',
+      'error',
+      'message',
+    ]),
+    status: z.enum(['success', 'empty', 'error']),
+    title: z.string(),
+    subtitle: z.string(),
+    verified: z.boolean(),
+    summary: z.string(),
+    context: z.string(),
+    sections: z.array(sectionSchema),
+    actions: z.array(actionSchema),
+    displayMeta: z
+      .object({
+        simulated: z.boolean().optional(),
+        weekendMarked: z.boolean().optional(),
+        tieNote: z.string().optional(),
+        tieGroupCount: z.number().int().min(1).optional(),
+        recoverable: z.boolean().optional(),
+      })
+      .strict(),
+    layoutMode: z.enum(['result-card', 'week-board']),
+    weekBoardTitle: z.string(),
+    weekBoardSubtitle: z.string(),
+    days: z.array(daySchema),
+  })
+  .strict();
+
+export default widgetSchema;
+
