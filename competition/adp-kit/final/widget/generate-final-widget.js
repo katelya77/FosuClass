@@ -11,8 +11,8 @@ const UNIFIED = path.join(KIT, "widget", "native", "campus-result-unified-v1");
 const DEFAULT_SOURCE = "C:\\Users\\Katelya\\Downloads\\小序-校园智序结果卡.widget";
 const OUTPUT = path.join(FINAL_ROOT, "小序-校园智序结果卡.widget");
 const CONSOLE_WIDGET = path.join(KIT, "r50.2", "console-bundle", "widget");
-const EXPECTED_ID = "978b004b2f054e8bbd5438159c7329ff";
-const EXPECTED_SOURCE_SHA256 = "074d4b99d46f618e71ae08d4ac6718900a0cdd71c9d1944ba7ddb77a6c8a50d5";
+const EXPECTED_ID = "601418106a374b2eb7de54c65a3de7e0";
+const EXPECTED_SOURCE_SHA256 = "93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252";
 
 function hash(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");

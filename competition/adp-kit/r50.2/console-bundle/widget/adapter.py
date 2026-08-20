@@ -1,11 +1,11 @@
-"""CampusResultUnified V7 adapter — 小序-校园智序结果卡（双布局，ADP 导入侧投影）。
+"""CampusResultUnified V8 adapter — 小序-校园智序结果卡（Campus Canvas，ADP 导入侧投影）。
 
 输入必须是已经过服务端 envelope.js / variant-adapters.js / view-model.js 投影的
 CampusResultEnvelope + WidgetViewModel（仅含公开展示字段）。本适配器只做形状核对
 与内部字段剥离，不补全、不编造任何校园事实；发现内部协议字段时 fail closed
 （返回空结果并标记 route=fallback）。
 
-稳定化要点（fosuclass-adp-widget-contract/v7）：
+稳定化要点（fosuclass-adp-widget-contract/v8）：
 - version 由本适配器确定性注入 "1.0"，不接收模型生成的研发版本号（缺省合法）；
 - week-board 空日统一过滤（SSOT：投影层过滤空日，Widget 不接收空日）；
 - tieGroupCount 无并列时省略；出现时必须为至少 1 的整数；
@@ -34,7 +34,7 @@ import json
 
 ROUTE_WIDGET = "widget"
 ROUTE_FALLBACK = "fallback"
-WIDGET_ID = "978b004b2f054e8bbd5438159c7329ff"
+WIDGET_ID = "601418106a374b2eb7de54c65a3de7e0"
 
 
 ALLOWED_TOP_LEVEL = {
@@ -92,6 +92,17 @@ ALLOWED_VARIANTS = {
 }
 
 ALLOWED_STATUS = {"success", "empty", "error"}
+ALLOWED_SECTION_KINDS = {
+    "metric",
+    "timeline",
+    "route",
+    "recommendation",
+    "ranking",
+    "comparison",
+    "entity-list",
+    "notice",
+    "prose",
+}
 
 
 def _object(value):
@@ -163,14 +174,32 @@ def _clean_rows(rows):
 
 
 def _clean_sections(sections):
+    if not isinstance(sections, list):
+        return None
     out = []
-    for raw in _array(sections):
-        section = _object(raw)
+    for raw in sections:
+        if not isinstance(raw, dict) or not set(raw).issubset({"title", "kind", "note", "rows"}):
+            return None
+        section = raw
         title = _text(section.get("title"))
-        rows = _clean_rows(section.get("rows"))
-        if not title or not rows:
-            continue
+        raw_rows = section.get("rows")
+        if not title or not isinstance(raw_rows, list):
+            return None
+        for row in raw_rows:
+            if (
+                not isinstance(row, dict)
+                or not set(row).issubset({"label", "value", "badge", "hint"})
+                or not _text(row.get("label"))
+                or not _text(row.get("value"))
+            ):
+                return None
+        rows = _clean_rows(raw_rows)
         item = {"title": title, "rows": rows}
+        kind = section.get("kind")
+        if kind is not None:
+            if kind not in ALLOWED_SECTION_KINDS:
+                return None
+            item["kind"] = kind
         note = _text(section.get("note"))
         if note:
             item["note"] = note
@@ -262,6 +291,9 @@ def main(params: dict) -> dict:
         or envelope.get("version", "1.0") != "1.0"
     ):
         return {"route": ROUTE_FALLBACK, "widgetId": None, "data": None}
+    sections = _clean_sections(envelope.get("sections"))
+    if sections is None:
+        return {"route": ROUTE_FALLBACK, "widgetId": None, "data": None}
     data = {
         "version": "1.0",
         "variant": variant,
@@ -271,7 +303,7 @@ def main(params: dict) -> dict:
         "verified": envelope.get("verified") is True,
         "summary": summary,
         "context": _text(envelope.get("context")),
-        "sections": _clean_sections(envelope.get("sections")),
+        "sections": sections,
         "actions": _clean_actions(envelope.get("actions")),
         "displayMeta": _clean_display_meta(envelope.get("displayMeta")),
     }

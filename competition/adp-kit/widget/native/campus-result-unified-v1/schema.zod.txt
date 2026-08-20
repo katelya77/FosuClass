@@ -12,6 +12,9 @@ const rowSchema = z
 const sectionSchema = z
   .object({
     title: z.string(),
+    kind: z
+      .enum(['metric', 'timeline', 'route', 'recommendation', 'ranking', 'comparison', 'entity-list', 'notice', 'prose'])
+      .optional(),
     note: z.string().optional(),
     rows: z.array(rowSchema),
   })

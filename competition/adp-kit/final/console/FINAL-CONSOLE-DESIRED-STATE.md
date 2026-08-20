@@ -1,6 +1,6 @@
 # Final Console Desired State
 
-## User-confirmed truth (2026-08-20 after 21:03)
+## User-confirmed truth (2026-08-21)
 
 - Application: `校园智序 · 小序`
 - Agents: 4; all models `DeepSeek-V3-0324`
@@ -8,6 +8,10 @@
 - Unique CampusTools: 13
 - Child bindings: 14 (`campus_academic_context` is intentionally bound to two Children)
 - User Widget: `小序-校园智序结果卡`
+- Current Widget ID: `601418106a374b2eb7de54c65a3de7e0`
+- New keyboard and Widget `sys.chat` turns start at Main
+- Transfer graph: Main → Schedule/Risk/Insight; each Child → Main only
+- CampusTools direct result output: OFF for all 13 operations
 - TEST QA: absent
 - Node-format seed workflow: absent
 - Historical workflows: exactly 6, names end in `-END`, all disabled
@@ -26,6 +30,8 @@
 - QA Retrieval: OFF
 - DB Retrieval: OFF
 - Search Retrieval: OFF
+
+The current screenshots show QA and DB enabled. This is known drift and remains **MANUAL_REQUIRED**; recall count and threshold must not be changed without evaluation evidence.
 
 ## Multimodal status
 

@@ -8,6 +8,7 @@
   "sections": [
     {
       "title": "结果列表",
+      "kind": "prose",
       "rows": [
         {
           "label": "教师001",

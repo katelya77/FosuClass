@@ -13,8 +13,8 @@ Only the following Console actions remain eligible. Do not publish the applicati
 
 - Page: Widget development → `小序-校园智序结果卡`
 - Action: import/replace from `competition/adp-kit/final/widget/小序-校园智序结果卡.widget`
-- Current value: real export ID `978b004b2f054e8bbd5438159c7329ff`
-- Desired value: same ID/name, Final Temporal Campus OS View and v7 public contract
+- Current value: latest real export ID `601418106a374b2eb7de54c65a3de7e0`
+- Desired value: same ID/name, Final Temporal Campus OS View and v8 Campus Canvas contract
 - Verify: preview all ten payloads in `final/acceptance/widget-payloads/`; buttons send only natural-language chat queries.
 
 ## 3. Verify application surface (no restoration from ZIP)
@@ -36,3 +36,10 @@ Only the following Console actions remain eligible. Do not publish the applicati
 - Run A–P in `FINAL-ACCEPTANCE-MATRIX.md`, including at least one paraphrase per row.
 - Confirm the combined schedule+risk task ends in a risk card and the soft-preference space task makes one business query.
 - Save Preview evidence, but do not create a release and do not publish.
+
+## 6. Verify result handoff and direct output
+
+- Page: Multi-Agent → transfer configuration. Verify Main can transfer only to Schedule, Risk and Insight; each Child can transfer only to Main.
+- Page: Application settings. Verify every new keyboard turn and Widget `sys.chat` turn starts at Main.
+- Page: CampusTools → each of the 13 operations → result settings. Verify **Tool Result Direct Output is OFF** for every operation.
+- Run the keyboard/sys.chat comparison in `HANDOFF-PROBE-MATRIX.md`; use the Console trace, not the visible Agent label, as evidence.

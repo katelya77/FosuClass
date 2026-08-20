@@ -10,6 +10,7 @@
   "sections": [
     {
       "title": "推荐教室",
+      "kind": "recommendation",
       "rows": [
         {
           "label": "A1-101 · 120人",
@@ -20,6 +21,7 @@
     },
     {
       "title": "其他选择",
+      "kind": "entity-list",
       "rows": [
         {
           "label": "A1-102 · 60人",

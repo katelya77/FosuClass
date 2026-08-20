@@ -8,6 +8,7 @@
   "sections": [
     {
       "title": "各周课程量（周一至周五）",
+      "kind": "metric",
       "rows": [
         {
           "label": "第1周",
@@ -21,6 +22,7 @@
     },
     {
       "title": "教师负载 Top 3",
+      "kind": "ranking",
       "rows": [
         {
           "label": "第1名",
@@ -38,6 +40,7 @@
     },
     {
       "title": "教学风险",
+      "kind": "notice",
       "note": "教师003与教师007的跨校区连续课程",
       "rows": [
         {

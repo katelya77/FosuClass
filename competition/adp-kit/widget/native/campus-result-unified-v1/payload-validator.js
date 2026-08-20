@@ -1,6 +1,6 @@
 "use strict";
 // CSF P1.6 WidgetPayloadValidator —— 唯一入口：校验所有 Agent 最终输出的 Widget payload，
-// 与 widget/native/campus-result-unified-v1/schema.json（fosuclass-adp-widget-contract/v7）同一 schema。
+// 与 widget/native/campus-result-unified-v1/schema.json（fosuclass-adp-widget-contract/v8）同一 schema。
 //
 // fail-closed：校验失败时输出可读中文文本 fallback（标题 / 副标题 / 摘要 / 上下文 / 区块行 /
 // 展示元数据），绝不输出原始 JSON 或内部协议字段。业务事实保留在 fallback 中。
@@ -22,6 +22,7 @@ const SCHEMA = JSON.parse(
 const VARIANTS = new Set(SCHEMA.properties.variant.enum);
 const STATUSES = new Set(SCHEMA.properties.status.enum);
 const LAYOUTS = new Set(SCHEMA.properties.layoutMode.enum);
+const SECTION_KINDS = new Set(SCHEMA.properties.sections.items.properties.kind.enum);
 const REQUIRED = SCHEMA.required.slice();
 
 const ALLOWED_ACTION_TYPES = new Set(["sys.chat"]);
@@ -97,7 +98,10 @@ function validateWidgetPayload(payload) {
         errors.push(`sections[${index}] 必须含 title 与 rows 数组`);
         continue;
       }
-      rejectUnexpectedKeys(section, new Set(["title", "note", "rows"]), `sections[${index}]`, errors);
+      rejectUnexpectedKeys(section, new Set(["title", "kind", "note", "rows"]), `sections[${index}]`, errors);
+      if (section.kind !== undefined && !SECTION_KINDS.has(section.kind)) {
+        errors.push(`sections[${index}].kind 非法：${JSON.stringify(section.kind)}`);
+      }
       for (const [rowIndex, row] of section.rows.entries()) {
         if (!isPlainObject(row) || !row.label || !row.value) {
           errors.push(`sections[${index}].rows[${rowIndex}] 必须含 label 与 value`);
@@ -221,4 +225,4 @@ function buildTextFallback(payload) {
   return lines.length ? lines.join("\n") : TEXT_FALLBACK_DEFAULT;
 }
 
-module.exports = { validateWidgetPayload, buildTextFallback, REQUIRED, VARIANTS, STATUSES, LAYOUTS };
+module.exports = { validateWidgetPayload, buildTextFallback, REQUIRED, VARIANTS, STATUSES, LAYOUTS, SECTION_KINDS };

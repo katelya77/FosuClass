@@ -63,6 +63,11 @@
         "required": ["title", "rows"],
         "properties": {
           "title": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["metric", "timeline", "route", "recommendation", "ranking", "comparison", "entity-list", "notice", "prose"],
+            "description": "确定性展示模块；缺省时按 v7 variant 兼容渲染"
+          },
           "note": { "type": "string", "description": "区块级说明（如并列说明 / 周末标记 / 未执行声明）" },
           "rows": {
             "type": "array",

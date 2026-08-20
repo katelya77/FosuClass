@@ -71,7 +71,7 @@ function makeSyntheticMatchingSnapshot(state = loadDesiredState()) {
       officialVisionToolBound: x.key === "main",
     })),
     plugin: { operationIds: state.campusTools.slice() },
-    widget: { name: state.widget.name },
+    widget: { name: state.widget.name, widgetId: state.widget.widgetId },
     knowledge: { documents: state.knowledge.documents.slice() },
     releaseRequested: false,
   };

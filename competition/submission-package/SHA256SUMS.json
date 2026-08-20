@@ -203,13 +203,13 @@
     },
     {
       "path": "tools/campus-tools-mcp/r50.2/widget/campus-result-envelope.schema.json",
-      "bytes": 5029,
-      "sha256": "a1b0a20c2d1f3243dabe4ecc9b319a7c66011695ce2a49ab3ee1a804de75e241"
+      "bytes": 5313,
+      "sha256": "bf06f3185882bf9ddb4c21f38f0a05039fb6056370a64fdcfdb76ceed9fc5a1c"
     },
     {
       "path": "tools/campus-tools-mcp/r50.2/widget/envelope.js",
-      "bytes": 8761,
-      "sha256": "16b333b5280839732781139dea4d9b948383f858f0a59426cfd7736eefd1b695"
+      "bytes": 9536,
+      "sha256": "ddabffdd15fa38350e18b671a5642cf9a35d8a5b9d1b296b493ae370706a9f9c"
     },
     {
       "path": "tools/campus-tools-mcp/r50.2/widget/view-model.js",
@@ -288,8 +288,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/outcome-synthesizer.js",
-      "bytes": 3633,
-      "sha256": "508afaf8dc7112774d1ed28606c53d1dd250352b631fb05693f1ed999495ee5b"
+      "bytes": 3694,
+      "sha256": "7362e27e1d3e3045f4be347f788a4f8e310360c9708cc0c913302ce9c6dac201"
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/public-copy.js",

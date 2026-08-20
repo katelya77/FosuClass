@@ -72,9 +72,9 @@ function buildDecisionEnvelope(bundle, receipt = createPublicDecisionReceipt(bun
     summary: receipt.recommendation ? `推荐：${receipt.recommendation.label}` : "暂无可行候选。",
     context: "",
     sections: [
-      { title: "推荐", rows: choiceRows(receipt.recommendation, "推荐方案") },
-      { title: "理由", rows: reasonRows(receipt.recommendation) },
-      { title: "备选", rows: alternativeRows(receipt.alternatives) },
+      { title: "推荐", kind: "recommendation", rows: choiceRows(receipt.recommendation, "推荐方案") },
+      { title: "理由", kind: "notice", rows: reasonRows(receipt.recommendation) },
+      { title: "备选", kind: "entity-list", rows: alternativeRows(receipt.alternatives) },
     ],
     actions: widgetAction(receipt.nextAction),
     displayMeta,

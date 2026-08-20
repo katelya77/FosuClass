@@ -38,6 +38,14 @@ function diffState(desired, current) {
     add(result, "SAFE_AUTOMATABLE", "PLUGIN_TOOL_LIST_DRIFT", "CampusTools operation list differs", { action: "ModifyPlugin", target: "campus-tools", updateMask: ["ToolList"] });
   }
   if (current.widget && current.widget.name !== desired.widget.name) add(result, "MANUAL_CONSOLE_REQUIRED", "WIDGET_NAME_DRIFT", current.widget.name);
+  if (current.widget && desired.widget.widgetId && current.widget.widgetId !== desired.widget.widgetId) {
+    add(
+      result,
+      "MANUAL_CONSOLE_REQUIRED",
+      "WIDGET_ID_DRIFT",
+      current.widget.widgetId || "Widget ID is not observable; verify the latest real export in Console",
+    );
+  }
   if (current.releaseRequested || (current.app && current.app.published)) add(result, "BLOCKED_UNKNOWN", "PUBLISH_FORBIDDEN", "CreateRelease and publish are prohibited");
   if (current.legacyWorkflowActive === true) add(result, "MANUAL_CONSOLE_REQUIRED", "LEGACY_WORKFLOW_ACTIVE", "Disable legacy workflow in Console after manual verification");
   return result;

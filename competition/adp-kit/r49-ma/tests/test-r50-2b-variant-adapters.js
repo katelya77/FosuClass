@@ -94,12 +94,14 @@ test("space: 空教室行含容量与楼栋", () => {
   assert.equal(envelope.sections[0].title, "推荐教室");
 });
 
-test("collaboration: 推荐方案优先，参与者可读且周末候选元数据保留", () => {
+test("collaboration: 推荐方案优先，参与者只出现一次且周末候选元数据保留", () => {
   const { envelope } = project(loadFixture("collaboration"), "campus_group_plan");
   assert.equal(envelope.displayMeta.weekendMarked, true);
   assert.equal(envelope.sections[0].title, "推荐方案");
-  assert.ok(envelope.sections.some((section) => section.title === "参与"));
-  assert.ok(JSON.stringify(envelope.sections).includes("教师001 · 教师002"));
+  const copy = JSON.stringify(envelope);
+  for (const person of ["教师001", "教师002"]) {
+    assert.equal((copy.match(new RegExp(person, "g")) || []).length, 1);
+  }
 });
 
 test("risk: 冲突与赶场分区块呈现", () => {

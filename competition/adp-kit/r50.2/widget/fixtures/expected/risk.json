@@ -8,6 +8,7 @@
   "sections": [
     {
       "title": "时间冲突",
+      "kind": "timeline",
       "rows": [
         {
           "label": "周二 第5-6节",
@@ -19,6 +20,7 @@
     },
     {
       "title": "跨校区衔接",
+      "kind": "route",
       "rows": [
         {
           "label": "周三 · 11:40 → 14:00",
@@ -30,6 +32,7 @@
     },
     {
       "title": "结论",
+      "kind": "notice",
       "rows": [
         {
           "label": "课程安排",

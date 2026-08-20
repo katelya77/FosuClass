@@ -15,4 +15,5 @@ module.exports = {
   ...require("./receipt.js"),
   ...require("./outcome-synthesizer.js"),
   ...require("./runtime-activation.js"),
+  ...require("../presentation/final-presentation-policy.js"),
 };

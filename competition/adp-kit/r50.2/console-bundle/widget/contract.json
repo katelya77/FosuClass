@@ -1,15 +1,15 @@
 {
-  "schema": "fosuclass-adp-widget-contract/v7",
+  "schema": "fosuclass-adp-widget-contract/v8",
   "kind": "campus-result-unified",
   "name": "小序-校园智序结果卡",
   "status": "REAL_TENCENT_EXPORT_BOUND_FINAL_CANDIDATE",
-  "widgetId": "978b004b2f054e8bbd5438159c7329ff",
+  "widgetId": "601418106a374b2eb7de54c65a3de7e0",
   "sourceFile": "小序-校园智序结果卡.widget",
-  "sourceSha256": "074d4b99d46f618e71ae08d4ac6718900a0cdd71c9d1944ba7ddb77a6c8a50d5",
+  "sourceSha256": "93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252",
   "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
   "activeFallback": null,
   "adapter": "adapter.py",
-  "description": "小序-校园智序结果卡是唯一用户可见 Native Widget。契约绑定用户提供的真实腾讯 ADP 导出结构与 Widget ID；保持 15 字段双布局，整周课表使用时间板，其余校园结果使用结论优先结果卡。version 由确定性投影注入；空日被投影层过滤；tieGroupCount 无并列时省略、出现时至少为 1；actions 仅 sys.chat 且 payload 仅含自然语言 query；最终变体由当前目标与完成结果确定。任何内部协议、约束标识或研发版本不得进入用户界面。",
+  "description": "小序-校园智序结果卡是唯一用户可见 Native Widget。契约绑定最新腾讯 ADP 导出结构与 Widget ID；保持 15 字段双布局，并以可选 section.kind 提供确定性 Campus Canvas 模块。v7 payload 缺少 kind 时兼容回退；未知 kind fail closed。version 由确定性投影注入；空日被过滤；tieGroupCount 无并列时省略、出现时至少为 1；actions 仅 sys.chat 且 payload 仅含自然语言 query。任何内部协议、约束标识或研发版本不得进入用户界面。",
   "variants": [
     "schedule",
     "space",
@@ -46,6 +46,7 @@
   ],
   "sectionFields": [
     "title",
+    "kind",
     "note",
     "rows"
   ],

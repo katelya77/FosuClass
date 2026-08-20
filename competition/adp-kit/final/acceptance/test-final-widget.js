@@ -70,6 +70,9 @@ test("FW3 collaboration and reschedule use recommendation and before-to-after in
   assert.equal(collaboration.ok, true);
   const copy = JSON.stringify(collaboration.envelope);
   for (const expected of ["推荐方案", "教师甲", "首选空间", "容量满足需求"]) assert.match(copy, new RegExp(expected));
+  for (const person of ["教师甲", "教师乙", "教师丙"]) {
+    assert.equal((copy.match(new RegExp(person, "g")) || []).length, 1, `${person} must be presented exactly once`);
+  }
   assert.doesNotMatch(copy, /capacity-min|constraint|score|toolRank|sourceIndex/i);
 
   const reschedule = ADAPTERS.projectReschedule(verified([{
@@ -113,15 +116,16 @@ test("FW6 real export Zod, outer schema, default and contract are audited with T
   const widget = JSON.parse(fs.readFileSync(widgetPath, "utf8"));
   const audit = auditWidget(widget, contract);
   assert.equal(audit.pass, true, JSON.stringify(audit, null, 2));
-  assert.equal(audit.widgetId, "978b004b2f054e8bbd5438159c7329ff");
+  assert.equal(audit.widgetId, "601418106a374b2eb7de54c65a3de7e0");
   assert.equal(audit.innerSchemaKeys.length, 15);
 });
 
 test("FW7 exported and repo Widget schemas agree: tieGroupCount is absent for zero and >=1 when present", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(UNIFIED, "schema.json"), "utf8"));
   const contract = JSON.parse(fs.readFileSync(path.join(UNIFIED, "contract.json"), "utf8"));
-  assert.equal(contract.schema, "fosuclass-adp-widget-contract/v7");
-  assert.equal(contract.widgetId, "978b004b2f054e8bbd5438159c7329ff");
+  assert.equal(contract.schema, "fosuclass-adp-widget-contract/v8");
+  assert.equal(contract.widgetId, "601418106a374b2eb7de54c65a3de7e0");
+  assert.equal(contract.sourceSha256, "93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252");
   assert.equal(schema.properties.displayMeta.properties.tieGroupCount.minimum, 1);
   const zeroPayload = JSON.parse(fs.readFileSync(path.join(UNIFIED, "default.json"), "utf8"));
   zeroPayload.displayMeta.tieGroupCount = 0;
@@ -157,4 +161,71 @@ test("FW8 ten Final UX payloads are renderable, compact, leak-free and sys.chat-
   }
   assert.equal(files.length, 10);
   assert.equal(variants.size, 9, "schedule week/day share one variant; remaining final variants are unique");
+});
+
+test("FW9 deterministic projectors assign semantic section kinds", () => {
+  const schedule = ADAPTERS.projectSchedule(verified([{
+    courseName: "课程甲", weekday: 1, weekdayName: "周一", periodStart: 1, periodEnd: 2,
+    periodText: "第1-2节", campusName: "校区A", roomName: "A1-101",
+  }], { resolvedEntity: { name: "某教师" }, window: { weekStart: 1, weekEnd: 1 } }), "campus_schedule_query");
+  assert.deepEqual(schedule.envelope.sections.map((section) => section.kind), ["timeline"]);
+
+  const space = ADAPTERS.projectSpace(verified([room(1), room(2), room(3)], { resolvedEntity: { name: "校区A" } }));
+  assert.deepEqual(space.envelope.sections.map((section) => section.kind), ["recommendation", "entity-list"]);
+
+  const collaboration = ADAPTERS.projectCollaboration(verified([{
+    weekdayName: "周四", periodStart: 1, periodEnd: 4, periodText: "第1-4节", freePeriodCount: 4,
+    entities: [{ name: "教师甲" }, { name: "教师乙" }], rooms: [room(1), room(2), room(3), room(4), room(5)],
+  }], { query: { minCapacity: 60 } }));
+  assert.deepEqual(collaboration.envelope.sections.map((section) => section.kind), [
+    "recommendation", "recommendation", "notice", "entity-list",
+  ]);
+
+  const risk = ADAPTERS.projectRisk(verified([], {
+    resolvedEntity: { name: "某教师" }, window: { weekStart: 1, weekEnd: 1 },
+    summary: { hasConflict: false, rushWarningCount: 1 },
+    rushWarnings: [{ weekdayName: "周三", gapMinutes: 20, from: { courseName: "课程甲", campusName: "校区A", endTime: "15:40" }, to: { courseName: "课程乙", campusName: "校区B", startTime: "16:00" } }],
+  }));
+  assert.deepEqual(risk.envelope.sections.map((section) => section.kind), ["route", "notice"]);
+
+  const ranking = ADAPTERS.projectRanking(verified([
+    { rank: 1, entity: { name: "教师甲", type: "teacher" }, metrics: { loadCount: 8 } },
+    { rank: 2, entity: { name: "教师乙", type: "teacher" }, metrics: { loadCount: 7 } },
+  ], { summary: { metric: "teacherLoad", windowLabel: "第1-4周" } }));
+  assert.deepEqual(ranking.envelope.sections.map((section) => section.kind), ["ranking"]);
+
+  const reschedule = ADAPTERS.projectReschedule(verified([{
+    sourceLesson: { courseName: "课程甲", weekdayName: "周一", periodText: "第1-2节", campusName: "校区A", roomName: "A1-101" },
+    target: { weekdayName: "周三", periodText: "第5-6节", room: { campusName: "校区A", name: "A1-201" } },
+    checks: { teacherConflict: { conflict: false }, capacity: { ok: true } },
+  }], { summary: { feasible: true } }));
+  assert.deepEqual(reschedule.envelope.sections.map((section) => section.kind), ["comparison", "comparison", "notice"]);
+
+  const overview = ADAPTERS.projectOverview(verified([{
+    weeks: [{ week: 1, perWeekday: [2, 3, 1, 2, 4] }],
+    teachers: [{ rank: 1, name: "教师甲", lessonCount: 8, periodCount: 16 }],
+    risks: { conflictCount: 1, rushCount: 2, continuousCount: 0 },
+    summary: "教学运行总体平稳。",
+  }], { window: { weekStart: 1, weekEnd: 4 } }));
+  assert.deepEqual(overview.envelope.sections.map((section) => section.kind), ["metric", "ranking", "notice"]);
+
+  const message = ADAPTERS.projectMessage(verified([{ name: "校历说明", note: "本学期共二十个教学周" }]));
+  assert.deepEqual(message.envelope.sections.map((section) => section.kind), ["prose"]);
+});
+
+test("FW10 section.kind is optional for v7 payloads and rejects unknown module kinds", () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(UNIFIED, "schema.json"), "utf8"));
+  assert.deepEqual(schema.properties.sections.items.properties.kind.enum, [
+    "metric", "timeline", "route", "recommendation", "ranking",
+    "comparison", "entity-list", "notice", "prose",
+  ]);
+  assert.equal(schema.properties.sections.items.required.includes("kind"), false);
+
+  const legacy = JSON.parse(fs.readFileSync(path.join(__dirname, "widget-payloads", "schedule-day.json"), "utf8"));
+  for (const section of legacy.sections) delete section.kind;
+  assert.equal(validateWidgetPayload(legacy).ok, true, "v7 payload without section.kind must remain valid");
+
+  const invalid = structuredClone(legacy);
+  invalid.sections[0].kind = "model-selected-layout";
+  assert.equal(validateWidgetPayload(invalid).ok, false);
 });

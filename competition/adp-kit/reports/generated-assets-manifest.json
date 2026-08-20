@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-20T14:35:29.025Z",
+  "generatedAt": "2026-08-20T18:20:09.414Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -30,13 +30,13 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/campus-result-envelope.schema.json",
-      "bytes": 5029,
-      "sha256": "a1b0a20c2d1f3243dabe4ecc9b319a7c66011695ce2a49ab3ee1a804de75e241"
+      "bytes": 5313,
+      "sha256": "bf06f3185882bf9ddb4c21f38f0a05039fb6056370a64fdcfdb76ceed9fc5a1c"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/envelope.js",
-      "bytes": 8761,
-      "sha256": "16b333b5280839732781139dea4d9b948383f858f0a59426cfd7736eefd1b695"
+      "bytes": 9536,
+      "sha256": "ddabffdd15fa38350e18b671a5642cf9a35d8a5b9d1b296b493ae370706a9f9c"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/view-model.js",
@@ -110,8 +110,8 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/decision/outcome-synthesizer.js",
-      "bytes": 3633,
-      "sha256": "508afaf8dc7112774d1ed28606c53d1dd250352b631fb05693f1ed999495ee5b"
+      "bytes": 3694,
+      "sha256": "7362e27e1d3e3045f4be347f788a4f8e310360c9708cc0c913302ce9c6dac201"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/decision/public-copy.js",
@@ -650,13 +650,13 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/adapter.py",
-      "bytes": 9343,
-      "sha256": "5bea2897e159904c655224332e918c1630ea209720f39d98470ad5fd0286d098"
+      "bytes": 10335,
+      "sha256": "108035db7fa262bd81d77b19b4794aecb05c4627b626e551c9adf322351ac41a"
     },
     {
       "path": "widget/native/campus-result-unified-v1/contract.json",
-      "bytes": 3181,
-      "sha256": "900cd01d5a0cd59fae48e9e81303e2bd3ce2cee9d0a6495d3be4ecf086ca77bf"
+      "bytes": 3172,
+      "sha256": "e2bd8fd4b2673b63fa9208f21081b98c2aeeeb984457e92161eca7d402313ac5"
     },
     {
       "path": "widget/native/campus-result-unified-v1/default.json",
@@ -665,8 +665,8 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/payload-validator.js",
-      "bytes": 10435,
-      "sha256": "07e622bf8186c68e0ad5b7fd1babe7787c24912e530635b1f33e1e7b81c47dfa"
+      "bytes": 10717,
+      "sha256": "5f730580326c87f5f70b1f5b489f236a0dbe545c83e095c667f05b5ef210671a"
     },
     {
       "path": "widget/native/campus-result-unified-v1/samples/collaboration.json",
@@ -730,18 +730,18 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/schema.json",
-      "bytes": 3405,
-      "sha256": "9302e9da2461c36099ef9706313ebefc74add67d15a1de069079fc2330a8bb21"
+      "bytes": 3563,
+      "sha256": "06adb6c9156e2e065101b8000fafc1a099404402b67d59b51c13eea393b145d2"
     },
     {
       "path": "widget/native/campus-result-unified-v1/schema.zod.txt",
-      "bytes": 1795,
-      "sha256": "16f2344eba853b61a8537ef4d953c28595ba4512713f83cb387ae48a308328d4"
+      "bytes": 1948,
+      "sha256": "9d7e855a3cc2a232b8156d823ea31952837ea7b5aecb338de36c39a9f0f9144c"
     },
     {
       "path": "widget/native/campus-result-unified-v1/template.txt",
-      "bytes": 8472,
-      "sha256": "3749f1fb3bf93c52f2b316c00c367d57ac6cb85f0723fad3f027c8c70d019291"
+      "bytes": 14910,
+      "sha256": "ed7af9bcd5e9aced228a0df312f51d6e04740dd84ded30479bbe3cc071f9850b"
     },
     {
       "path": "widget/native/classroom-widget-adapter.py",
@@ -1150,8 +1150,8 @@
     },
     {
       "path": "widget/native/test-r50-2b-widget-contract.js",
-      "bytes": 16851,
-      "sha256": "742e672fd6eebfb67cd1229f7d717286ddb5d25d231689958a6a6abda61f3727"
+      "bytes": 16857,
+      "sha256": "605dfb02e3b3337d5943b44ab8ad578e4a89f5bd0e1b944671a058e3d1b97e48"
     },
     {
       "path": "widget/native/test-real-adp-export-catalog.py",

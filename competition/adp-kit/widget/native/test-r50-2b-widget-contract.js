@@ -56,10 +56,10 @@ function loadSample(name) {
 
 const fields = contract.fields.map((field) => field.name);
 
-test("contract: widgetId 绑定真实 Tencent 导出，schema 升级 v7", () => {
-  assert.strictEqual(contract.widgetId, "978b004b2f054e8bbd5438159c7329ff");
+test("contract: widgetId 绑定最新真实 Tencent 导出，schema 升级 v8", () => {
+  assert.strictEqual(contract.widgetId, "601418106a374b2eb7de54c65a3de7e0");
   assert.strictEqual(contract.widgetIdPolicy, "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY");
-  assert.strictEqual(contract.schema, "fosuclass-adp-widget-contract/v7");
+  assert.strictEqual(contract.schema, "fosuclass-adp-widget-contract/v8");
   assert.strictEqual(contract.kind, "campus-result-unified");
   assert.strictEqual(contract.leakFree, true);
   assert.deepStrictEqual(contract.variants, [

@@ -127,7 +127,7 @@
             <Text value={section.title} size="sm" weight="semibold" color="#18201D" />
             {section.note ? <Caption value={section.note} color="#66706B" /> : null}
           </Row>
-          {variant === 'overview' ? (
+          {section.kind === 'metric' || (!section.kind && variant === 'overview') ? (
             <Row gap={2} wrap="wrap" align="stretch">
               {section.rows.map((row, rowIndex) => (
                 <Box
@@ -147,7 +147,7 @@
                 </Box>
               ))}
             </Row>
-          ) : variant === 'schedule' ? (
+          ) : section.kind === 'timeline' || (!section.kind && variant === 'schedule') ? (
             <Col gap={2}>
               {section.rows.map((row, rowIndex) => (
                 <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="start">
@@ -167,6 +167,127 @@
                   </Box>
                 </Row>
               ))}
+            </Col>
+          ) : section.kind === 'route' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="stretch">
+                  <Badge label={`${rowIndex + 1}`} color="warning" variant="soft" size="sm" pill={true} />
+                  <Box
+                    direction="col"
+                    gap={1}
+                    padding="10px"
+                    flex={1}
+                    background="#FBF3E8"
+                    border={{ left: { size: 3, color: '#B97828', style: 'solid' } }}
+                    radius="md"
+                  >
+                    <Row gap={2} align="center" justify="between">
+                      <Caption value={row.label} color="#8A5A22" />
+                      {row.badge ? <Badge label={row.badge} color="warning" variant="soft" size="sm" /> : null}
+                    </Row>
+                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  </Box>
+                </Row>
+              ))}
+            </Col>
+          ) : section.kind === 'recommendation' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="12px"
+                  background={rowIndex === 0 ? '#EAF3EE' : '#F7F8F5'}
+                  border={{ left: { size: 3, color: '#2F6B59', style: 'solid' } }}
+                  radius="md"
+                >
+                  <Row gap={2} align="center" justify="between">
+                    <Caption value={row.label} color="#2F6B59" weight="semibold" />
+                    {row.badge ? <Badge label={row.badge} color="success" variant="soft" size="sm" /> : null}
+                  </Row>
+                  <Text value={row.value} size="md" weight="semibold" color="#18201D" />
+                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'ranking' ? (
+            <Col gap={1}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="row"
+                  gap={2}
+                  padding="9px"
+                  background={rowIndex === 0 ? '#EEF2FB' : '#FFFFFF'}
+                  radius="md"
+                >
+                  <Badge label={row.label} color="info" variant={rowIndex === 0 ? 'soft' : 'outline'} size="sm" />
+                  <Col gap={1} flex={1}>
+                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  </Col>
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'comparison' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="10px"
+                  background={row.badge === '不可行' ? '#FBF0EF' : row.badge === '可行' ? '#EAF3EE' : '#F2F5FA'}
+                  border={{ left: { size: 3, color: row.badge === '不可行' ? '#B94A48' : row.badge === '可行' ? '#2F6B59' : '#3F6FE5', style: 'solid' } }}
+                  radius="md"
+                >
+                  <Row gap={2} align="center" justify="between">
+                    <Caption value={row.label} color="#66706B" />
+                    {row.badge ? <Badge label={row.badge} color={row.badge === '不可行' ? 'danger' : row.badge === '可行' ? 'success' : 'info'} variant="soft" size="sm" /> : null}
+                  </Row>
+                  <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'notice' ? (
+            <Box direction="col" gap={2} padding="10px" background={variant === 'risk' ? '#FBF3E8' : '#F3F6F4'} radius="md">
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="center" justify="between">
+                  <Col gap={1} flex={1}>
+                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
+                    <Caption value={row.label} color="#66706B" />
+                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  </Col>
+                  {row.badge ? <Badge label={row.badge} color={variant === 'risk' ? 'warning' : 'success'} variant="soft" size="sm" /> : null}
+                </Row>
+              ))}
+            </Box>
+          ) : section.kind === 'entity-list' ? (
+            <Col gap={1}>
+              {section.rows.map((row, rowIndex) => (
+                <Box key={`${section.title}-${row.label}-${rowIndex}`} direction="row" gap={2} padding="8px">
+                  <Col gap={1} flex={1}>
+                    <Text value={row.label} size="sm" weight="semibold" color="#18201D" />
+                    <Caption value={row.value} color="#66706B" />
+                  </Col>
+                  {row.badge ? <Badge label={row.badge} color="info" variant="outline" size="sm" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'prose' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Col key={`${section.title}-${row.label}-${rowIndex}`} gap={1}>
+                  <Text value={row.value} size="sm" color="#18201D" />
+                  <Caption value={row.label} color="#66706B" />
+                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                </Col>
+              ))}
+              {section.note && !section.rows.length ? <Text value={section.note} size="sm" color="#18201D" /> : null}
             </Col>
           ) : (
             <Col gap={2}>

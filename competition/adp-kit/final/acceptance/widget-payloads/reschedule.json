@@ -10,6 +10,7 @@
   "sections": [
     {
       "title": "原安排",
+      "kind": "comparison",
       "rows": [
         {
           "label": "周二 第5-6节",
@@ -21,6 +22,7 @@
     },
     {
       "title": "候选安排",
+      "kind": "comparison",
       "rows": [
         {
           "label": "周四 第7-8节",
@@ -32,6 +34,7 @@
     },
     {
       "title": "可行性检查",
+      "kind": "notice",
       "rows": [
         {
           "label": "教师",

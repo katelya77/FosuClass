@@ -85,10 +85,10 @@ function projectSchedule(raw, toolName) {
 
   const sections = [];
   if (lessons.length) {
-    sections.push({ title: "课程列表", rows: lessons.map(lessonRow) });
+    sections.push({ title: "课程列表", kind: "timeline", rows: lessons.map(lessonRow) });
   }
   if (notes.length) {
-    sections.push({ title: "补充说明", note: notes.join("；"), rows: [] });
+    sections.push({ title: "补充说明", kind: "prose", note: notes.join("；"), rows: [] });
   }
   const summary = lessons.length
     ? `${weekText || "当日"}共 ${lessons.length} 条课程。`
@@ -132,9 +132,10 @@ function projectSpace(raw) {
     summary,
     context: slotText(raw),
     sections: [
-      { title: "推荐教室", rows: rows.slice(0, 1) },
+      { title: "推荐教室", kind: "recommendation", rows: rows.slice(0, 1) },
       {
         title: "其他选择",
+        kind: "entity-list",
         rows: rows.slice(1),
         ...(items.length > rows.length ? { note: `还有 ${items.length - rows.length} 间符合条件` } : {}),
       },
@@ -178,25 +179,26 @@ function projectCollaboration(raw) {
   }
   const sections = [{
     title: "推荐方案",
+    kind: "recommendation",
     rows: [{
       label: `${recommended.weekdayName || ""} ${recommended.periodText || ""}`.trim(),
-      value: people.length ? people.join(" · ") : `${recommended.freePeriodCount || ""} 节共同空闲`,
+      value: `${recommended.freePeriodCount || ""} 节共同空闲`,
       badge: isWeekendItem(recommended) ? "周末" : "首选",
     }],
   }];
-  if (people.length) sections.push({ title: "参与", rows: [{ label: "参与人员", value: people.join(" · ") }] });
   if (firstRoom) {
-    sections.push({ title: "首选空间", rows: [{
+    sections.push({ title: "首选空间", kind: "recommendation", rows: [{
       label: firstRoom.roomName || "教室",
       value: `${firstRoom.capacity ? `${firstRoom.capacity} 人 · ` : ""}${firstRoom.campusName || ""}${firstRoom.building ? ` · ${firstRoom.building}` : ""}`,
       badge: "推荐",
     }] });
   }
-  if (whyRows.length) sections.push({ title: "为什么推荐", rows: whyRows });
+  if (whyRows.length) sections.push({ title: "为什么推荐", kind: "notice", rows: whyRows });
   if (rooms.length > 1) {
     const alternatives = rooms.slice(1, 4);
     sections.push({
       title: "备选空间",
+      kind: "entity-list",
       rows: alternatives.map((room) => ({
         label: room.roomName || "教室",
         value: `${room.capacity ? `${room.capacity} 人 · ` : ""}${room.campusName || ""}`,
@@ -244,8 +246,8 @@ function projectRisk(raw) {
     hint: `${rush.from ? rush.from.campusName : ""} → ${rush.to ? rush.to.campusName : ""} · 间隔 ${rush.gapMinutes} 分钟`,
   }));
   const sections = [];
-  if (conflictRows.length) sections.push({ title: "时间冲突", rows: conflictRows });
-  if (rushRows.length) sections.push({ title: "跨校区衔接", rows: rushRows });
+  if (conflictRows.length) sections.push({ title: "时间冲突", kind: "timeline", rows: conflictRows });
+  if (rushRows.length) sections.push({ title: "跨校区衔接", kind: "route", rows: rushRows });
   const hasConflict = summary.hasConflict === true || conflicts.length > 0;
   const summaryText = hasConflict
     ? `发现 ${conflicts.length} 处时间冲突${summary.rushWarningCount ? `、${summary.rushWarningCount} 处跨校区赶场` : ""}。`
@@ -254,6 +256,7 @@ function projectRisk(raw) {
       : "未发现时间冲突或跨校区赶场。";
   sections.push({
     title: "结论",
+    kind: "notice",
     rows: [
       { label: "课程安排", value: hasConflict ? "存在时间冲突" : "课程本身无时间冲突", badge: hasConflict ? "需处理" : "正常" },
       ...(rushRows.length ? [{ label: "跨校区衔接", value: "预留时间较紧", badge: "提醒" }] : []),
@@ -284,7 +287,7 @@ function projectReschedule(raw) {
   const simulated = !(raw.simulation && raw.simulation.mutatedData === true);
   const sections = [];
   if (source) {
-    sections.push({ title: "原安排", rows: [{
+    sections.push({ title: "原安排", kind: "comparison", rows: [{
       label: `${source.weekdayName} ${source.periodText}`,
       value: `${source.courseName} · ${source.campusName} ${source.roomName || ""}`,
       badge: "当前",
@@ -292,7 +295,7 @@ function projectReschedule(raw) {
     }] });
   }
   if (target) {
-    sections.push({ title: "候选安排", rows: [{
+    sections.push({ title: "候选安排", kind: "comparison", rows: [{
       label: `${target.weekdayName} ${target.periodText}`,
       value: summary.feasible ? "可行：教师与班级时间无冲突" : summary.reason || "不可行",
       badge: summary.feasible ? "可行" : "不可行",
@@ -310,7 +313,7 @@ function projectReschedule(raw) {
     label,
     value: mode === "conflict" ? (check.conflict ? "存在冲突" : "无冲突") : (check.ok ? "满足" : "不满足"),
   }));
-  if (checkRows.length) sections.push({ title: "可行性检查", rows: checkRows });
+  if (checkRows.length) sections.push({ title: "可行性检查", kind: "notice", rows: checkRows });
   const title = source ? `调课模拟 · ${source.courseName}` : "调课模拟";
   const summaryText = summary.feasible
     ? `可以调至 ${target ? `${target.weekdayName} ${target.periodText}` : "目标时段"}${simulated ? "（模拟，未执行）" : ""}。`
@@ -360,6 +363,7 @@ function projectRanking(raw) {
     context: windowLabel,
     sections: [{
       title: "其他排名",
+      kind: "ranking",
       rows,
       ...(items.length > 4 ? { note: `还有 ${items.length - 4} 个排名结果` } : {}),
     }],
@@ -408,11 +412,12 @@ function projectOverview(raw) {
       label: `第${week.week}周`,
       value: (week.perWeekday || []).map((count, index) => `${["一", "二", "三", "四", "五"][index]}${count}`).join(" · "),
     }));
-    sections.push({ title: "各周课程量（周一至周五）", rows });
+    sections.push({ title: "各周课程量（周一至周五）", kind: "metric", rows });
   }
   if (teachers.length) {
     sections.push({
       title: "教师负载 Top 3",
+      kind: "ranking",
       rows: teachers.slice(0, 2).map((teacher) => ({
         label: `第${teacher.rank}名`,
         value: `${teacher.name} · ${teacher.lessonCount} 次课程`,
@@ -425,7 +430,7 @@ function projectOverview(raw) {
   if (risks.conflictCount != null) riskRows.push({ label: "时间冲突", value: `${risks.conflictCount} 处`, badge: risks.conflictCount > 0 ? "关注" : "正常" });
   if (risks.rushCount != null) riskRows.push({ label: "跨校区赶场", value: `${risks.rushCount} 次`, badge: risks.rushCount > 0 ? "关注" : "正常" });
   if (risks.continuousCount != null) riskRows.push({ label: "连续课风险", value: `${risks.continuousCount} 次`, badge: risks.continuousCount > 0 ? "关注" : "正常" });
-  if (riskRows.length) sections.push({ title: "教学风险", note: risks.rushFocus || undefined, rows: riskRows });
+  if (riskRows.length) sections.push({ title: "教学风险", kind: "notice", note: risks.rushFocus || undefined, rows: riskRows });
   const summary = item.summary || raw.summary || "校园教学态势已核验。";
   return finishEnvelope(raw, {
     variant: "overview",
@@ -502,7 +507,7 @@ function projectMessage(raw) {
     subtitle: slotText(raw) || undefined,
     verified,
     summary: verified ? `共 ${items.length} 条结果。` : "暂时无法完成查询，请稍后重试。",
-    sections: rows.length ? [{ title: "结果列表", rows }] : [],
+    sections: rows.length ? [{ title: "结果列表", kind: "prose", rows }] : [],
     displayMeta: {},
   });
 }

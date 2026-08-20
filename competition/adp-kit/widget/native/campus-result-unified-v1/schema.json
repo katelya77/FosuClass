@@ -16,6 +16,7 @@
         "type": "object",
         "properties": {
           "title": { "type": "string" },
+          "kind": { "type": "string", "enum": ["metric", "timeline", "route", "recommendation", "ranking", "comparison", "entity-list", "notice", "prose"] },
           "note": { "type": "string" },
           "rows": {
             "type": "array",

@@ -1,8 +1,11 @@
 # Real Widget Export Compatibility Diff
 
 Oracle: `C:\Users\Katelya\Downloads\小序-校园智序结果卡.widget`
-SHA-256: `074d4b99d46f618e71ae08d4ac6718900a0cdd71c9d1944ba7ddb77a6c8a50d5`
-Widget ID: `978b004b2f054e8bbd5438159c7329ff`
+SHA-256: `93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252`
+Widget ID: `601418106a374b2eb7de54c65a3de7e0`
+
+This is the latest post-reimport Tencent export oracle. The previous ID
+`978b004b2f054e8bbd5438159c7329ff` is historical only and must not be treated as Console truth.
 
 ## Frozen platform structure
 
@@ -21,3 +24,4 @@ Widget ID: `978b004b2f054e8bbd5438159c7329ff`
 - Audit understands nested Tencent Zod exports and the empty outer-template convention.
 - View uses only components and props observed in the real export.
 - Final import candidate retains the real name and ID; no identifier was invented.
+- v8 adds only optional `section.kind`; all 15 root fields remain unchanged and v7 payloads fall back to the legacy variant renderer.

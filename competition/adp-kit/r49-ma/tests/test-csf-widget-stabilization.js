@@ -159,7 +159,7 @@ test("W9. 用户可见 Widget 名不含研发版本号；v7 契约绑定真实 T
   assert.ok(WIDGET_CONTRACT.name && typeof WIDGET_CONTRACT.name === "string", "contract.json 必须声明用户可见 name");
   assert.ok(!/R\d{2,}/.test(WIDGET_CONTRACT.name), `name 不得含研发版本号：${WIDGET_CONTRACT.name}`);
   assert.ok(!WIDGET_CONTRACT.name.includes("-R"), `name 不得含 -R 版本后缀：${WIDGET_CONTRACT.name}`);
-  assert.strictEqual(WIDGET_CONTRACT.schema, "fosuclass-adp-widget-contract/v7");
+  assert.strictEqual(WIDGET_CONTRACT.schema, "fosuclass-adp-widget-contract/v8");
   assert.match(WIDGET_CONTRACT.widgetId, /^[0-9a-f]{32}$/);
   assert.strictEqual(WIDGET_CONTRACT.status, "REAL_TENCENT_EXPORT_BOUND_FINAL_CANDIDATE");
 });

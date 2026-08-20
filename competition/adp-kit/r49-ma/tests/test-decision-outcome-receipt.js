@@ -81,6 +81,7 @@ test("DO1. 四类结果复用现有 result-card，variant / sections / action �
     assert.strictEqual(result.viewModel.variant, variant);
     assert.strictEqual(result.viewModel.layoutMode, "result-card");
     assert.deepStrictEqual(result.viewModel.sections.map((s) => s.title), ["推荐", "理由", "备选"]);
+    assert.deepStrictEqual(result.viewModel.sections.map((s) => s.kind), ["recommendation", "notice", "entity-list"]);
     assert.strictEqual(result.viewModel.actions.length, 1);
     const action = result.viewModel.actions[0];
     assert.strictEqual(action.type, "sys.chat");

@@ -10,6 +10,7 @@
   "sections": [
     {
       "title": "课程列表",
+      "kind": "timeline",
       "rows": [
         {
           "label": "周一 第5-6节",

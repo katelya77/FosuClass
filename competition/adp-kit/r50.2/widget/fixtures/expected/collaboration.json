@@ -8,25 +8,18 @@
   "sections": [
     {
       "title": "推荐方案",
+      "kind": "recommendation",
       "rows": [
         {
           "label": "周三 第7-8节",
-          "value": "教师001 · 教师002",
+          "value": "2 节共同空闲",
           "badge": "首选"
         }
       ]
     },
     {
-      "title": "参与",
-      "rows": [
-        {
-          "label": "参与人员",
-          "value": "教师001 · 教师002"
-        }
-      ]
-    },
-    {
       "title": "首选空间",
+      "kind": "recommendation",
       "rows": [
         {
           "label": "A3-101",
@@ -37,6 +30,7 @@
     },
     {
       "title": "为什么推荐",
+      "kind": "notice",
       "rows": [
         {
           "label": "共同空闲",
@@ -52,6 +46,7 @@
     },
     {
       "title": "备选空间",
+      "kind": "entity-list",
       "rows": [
         {
           "label": "A3-102",

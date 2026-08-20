@@ -10,6 +10,7 @@
   "sections": [
     {
       "title": "其他排名",
+      "kind": "ranking",
       "rows": [
         {
           "label": "第2名",

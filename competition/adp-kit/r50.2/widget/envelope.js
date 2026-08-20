@@ -20,6 +20,7 @@ const SCHEMA = JSON.parse(
 
 const VARIANTS = new Set(SCHEMA.properties.variant.enum);
 const STATUSES = new Set(SCHEMA.properties.status.enum);
+const SECTION_KINDS = new Set(SCHEMA.properties.sections.items.properties.kind.enum);
 // Agent-facing Envelope 不含 version：研发版本号由确定性投影层注入，模型不生成版本号。
 // 若出现 version，仅接受固定 "1.0"。
 const REQUIRED = ["variant", "status", "title", "verified", "summary"];
@@ -150,9 +151,21 @@ function validateEnvelope(obj) {
       if (!section || typeof section !== "object" || !section.title || !Array.isArray(section.rows)) {
         errors.push(`sections[${index}] 必须含 title 与 rows 数组`);
       } else {
+        const sectionKeys = new Set(["title", "kind", "note", "rows"]);
+        for (const key of Object.keys(section)) {
+          if (!sectionKeys.has(key)) errors.push(`sections[${index}] 含未知字段 ${key}`);
+        }
+        if (section.kind !== undefined && !SECTION_KINDS.has(section.kind)) {
+          errors.push(`sections[${index}].kind 非法：${JSON.stringify(section.kind)}`);
+        }
         for (const [rowIndex, row] of section.rows.entries()) {
           if (!row || !row.label || !row.value) {
             errors.push(`sections[${index}].rows[${rowIndex}] 必须含 label 与 value`);
+            continue;
+          }
+          const rowKeys = new Set(["label", "value", "badge", "hint"]);
+          for (const key of Object.keys(row)) {
+            if (!rowKeys.has(key)) errors.push(`sections[${index}].rows[${rowIndex}] 含未知字段 ${key}`);
           }
         }
       }
@@ -255,6 +268,7 @@ module.exports = {
   SCHEMA,
   VARIANTS,
   STATUSES,
+  SECTION_KINDS,
   REQUIRED,
   STATUS_OF_VARIANT,
   isClean,
