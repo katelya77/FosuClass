@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-20T14:19:36.272Z",
+  "generatedAt": "2026-08-20T14:35:29.025Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -115,8 +115,8 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/decision/public-copy.js",
-      "bytes": 4046,
-      "sha256": "80159dda1e08fd0dbf3bb17f7a65e52c3441ed55de0929b203e838c209892fe9"
+      "bytes": 4045,
+      "sha256": "907421bcf64f0b3f7f7a85b9c77a73847bc322ce04cfde1ac5192c690d2afd1b"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/decision/ranking.js",
@@ -735,8 +735,8 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/schema.zod.txt",
-      "bytes": 1796,
-      "sha256": "9bef0bb2f79d40ca2394db2e299cddd671c8b8ba3dc22e4b35f44693f0221237"
+      "bytes": 1795,
+      "sha256": "16f2344eba853b61a8537ef4d953c28595ba4512713f83cb387ae48a308328d4"
     },
     {
       "path": "widget/native/campus-result-unified-v1/template.txt",
