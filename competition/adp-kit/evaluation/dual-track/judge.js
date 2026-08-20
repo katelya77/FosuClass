@@ -320,25 +320,40 @@ function widgetActionMatches(viewModel, action) {
 
 function viewModelMatchesBundle(bundle) {
   const viewModel = bundle && bundle.viewModel;
-  if (!isObject(viewModel) || viewModel.verified !== (bundle.verified === true)) return false;
+  const receipt = bundle && bundle.receipt;
+  if (!isObject(viewModel) || !isObject(receipt) || viewModel.verified !== (bundle.verified === true)) return false;
   const expectedVariant = bundle.verified === true ? DECISION_VARIANTS[bundle.goalFamily] : "error";
   if (viewModel.variant !== expectedVariant || !widgetActionMatches(viewModel, bundle.nextAction)) return false;
   const recommendationRows = sectionRows(viewModel, "推荐");
+  const reasonRows = sectionRows(viewModel, "理由");
   const alternativeRows = sectionRows(viewModel, "备选");
-  if (recommendationRows === null || alternativeRows === null) return false;
-  if (bundle.verified === true && (!recommendationRows.present || !alternativeRows.present)) return false;
+  if (recommendationRows === null || reasonRows === null || alternativeRows === null) return false;
+  if (bundle.verified === true && (!recommendationRows.present || !reasonRows.present || !alternativeRows.present)) return false;
+  const receiptReasons = receipt.recommendation && Array.isArray(receipt.recommendation.reasons)
+    ? receipt.recommendation.reasons
+    : [];
+  const expectedReasonRows = receiptReasons.map((reason, index) => ({ label: `理由${index + 1}`, value: reason }));
+  const expectedAlternativeRows = (Array.isArray(receipt.alternatives) ? receipt.alternatives : []).map((choice, index) => ({
+    label: `备选${index + 1}`,
+    value: choice.label,
+    ...(Array.isArray(choice.reasons) && choice.reasons.length ? { hint: choice.reasons.join("；") } : {}),
+  }));
+  if (!sameJson(reasonRows.rows, expectedReasonRows) || !sameJson(alternativeRows.rows, expectedAlternativeRows)) {
+    return false;
+  }
   if (bundle.decision === "recommend") {
     const label = bundle.recommendation && bundle.recommendation.candidate && bundle.recommendation.candidate.label;
-    const alternativeLabels = (Array.isArray(bundle.alternatives) ? bundle.alternatives : [])
-      .map((choice) => choice && choice.candidate && choice.candidate.label);
     return typeof label === "string"
       && viewModel.summary === `推荐：${label}`
-      && recommendationRows.rows.length === 1
-      && recommendationRows.rows[0]
-      && recommendationRows.rows[0].value === label
-      && sameJson(alternativeRows.rows.map((row) => row && row.value), alternativeLabels);
+      && sameJson(recommendationRows.rows, [{ label: "推荐方案", value: label }]);
   }
-  return recommendationRows.rows.length === 0 && alternativeRows.rows.length === 0;
+  const expectedSummary = bundle.verified === true
+    ? "暂无可行候选。"
+    : "缺少已核验事实，暂不能生成决策结果。";
+  return viewModel.summary === expectedSummary
+    && recommendationRows.rows.length === 0
+    && reasonRows.rows.length === 0
+    && alternativeRows.rows.length === 0;
 }
 
 function decisionIsNonContradictory(bundle) {

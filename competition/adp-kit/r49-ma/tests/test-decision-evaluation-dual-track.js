@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const judge = require(path.join(__dirname, "..", "..", "evaluation", "dual-track", "judge.js"));
+const { decisionIdFor } = require(path.join(__dirname, "..", "..", "r51", "decision", "receipt.js"));
 const testset = JSON.parse(fs.readFileSync(
   path.join(__dirname, "..", "..", "evaluation", "dual-track", "decision-testset.json"),
   "utf8",
@@ -127,6 +128,8 @@ test("DDE7. 非 hard-gate 业务失败必须 verdict=fail，但保留非零 busi
   unverified.recommendation.candidate.evidence.verified = false;
   unverified.recommendation.reasons = [];
   unverified.receipt.recommendation.reasons = [];
+  unverified.viewModel.sections.find((section) => section.title === "理由").rows = [];
+  refreshReceiptId(unverified);
   const unverifiedScore = judge.scoreDecisionBundle(unverified);
   assert.strictEqual(unverifiedScore.trackA.items.verified_recommendation_reasons, false);
   assert.strictEqual(unverifiedScore.trackA.items.no_invented_alternatives, false);
@@ -171,4 +174,87 @@ test("DDE9. renderOnlyFail 只在全部 Track A 通过且唯一呈现失败为 W
   businessAndWidget.evaluation.relaxedCount = 1;
   businessAndWidget.viewModel.version = "2.0-dev";
   assert.strictEqual(judge.scoreDecisionBundle(businessAndWidget).renderOnlyFail, false);
+});
+
+function refreshReceiptId(bundle) {
+  const { decisionId, ...content } = bundle.receipt;
+  bundle.receipt.decisionId = decisionIdFor(content);
+  return bundle;
+}
+
+function validWithAlternative() {
+  const bundle = cloneValid();
+  const candidate = {
+    id: "plan-2",
+    label: "周四第1-2节",
+    attributes: { periodStart: 1 },
+    evidence: { factKey: "groupPlanFacts", verified: true },
+    sourceIndex: 1,
+    toolRank: 2,
+  };
+  const reason = {
+    kind: "soft_preference",
+    text: "已核验：备选时段符合当前偏好。",
+    source: { constraintId: "prefer-earlier", attribute: "periodStart", factKey: "groupPlanFacts" },
+  };
+  bundle.candidates.push(candidate);
+  bundle.alternatives.push({
+    candidate: JSON.parse(JSON.stringify(candidate)),
+    hardSatisfied: true,
+    hardViolations: [],
+    excluded: false,
+    exclusionViolations: [],
+    reasons: [reason],
+  });
+  bundle.receipt.alternatives.push({ label: candidate.label, reasons: [reason.text] });
+  const alternativeSection = bundle.viewModel.sections.find((section) => section.title === "备选");
+  alternativeSection.rows.push({ label: "备选1", value: candidate.label, hint: reason.text });
+  return refreshReceiptId(bundle);
+}
+
+test("DDE10. no_viable 两种公开 summary 必须精确，不能伪装成推荐", () => {
+  const verifiedEmpty = JSON.parse(JSON.stringify(testset.cases[1].bundle));
+  verifiedEmpty.viewModel.summary = "推荐：伪造方案";
+  const verifiedScore = judge.scoreDecisionBundle(verifiedEmpty);
+  assert.strictEqual(verifiedScore.trackA.items.stable_public_projection, false);
+  assert.strictEqual(verifiedScore.trackA.items.no_contradiction, false);
+  assert.strictEqual(verifiedScore.businessScore, 0);
+  assert.strictEqual(verifiedScore.verdict, "fail");
+
+  const noSource = JSON.parse(JSON.stringify(testset.cases[2].bundle));
+  noSource.viewModel.summary = "推荐：伪造方案";
+  const recoveryScore = judge.scoreDecisionBundle(noSource);
+  assert.strictEqual(recoveryScore.trackA.items.stable_public_projection, false);
+  assert.strictEqual(recoveryScore.trackA.items.no_contradiction, false);
+  assert.strictEqual(recoveryScore.businessScore, 0);
+  assert.strictEqual(recoveryScore.verdict, "fail");
+});
+
+test("DDE11. 推荐理由 rows 必须与 receipt reasons 精确一致，禁止追加未核验理由", () => {
+  const inventedReason = cloneValid();
+  inventedReason.viewModel.sections.find((section) => section.title === "理由").rows.push({
+    label: "理由2",
+    value: "未核验的伪造理由",
+  });
+  const score = judge.scoreDecisionBundle(inventedReason);
+  assert.strictEqual(score.trackA.items.stable_public_projection, false);
+  assert.strictEqual(score.trackA.items.no_contradiction, false);
+  assert.strictEqual(score.businessScore, 0);
+  assert.strictEqual(score.verdict, "fail");
+});
+
+test("DDE12. 备选 reason hint 存在时必须与 receipt reasons 精确一致", () => {
+  const valid = validWithAlternative();
+  assert.strictEqual(judge.scoreDecisionBundle(valid).verdict, "pass");
+
+  const wrongHint = validWithAlternative();
+  wrongHint.viewModel.sections.find((section) => section.title === "备选").rows[0].hint = "未核验的伪造理由";
+  const wrongScore = judge.scoreDecisionBundle(wrongHint);
+  assert.strictEqual(wrongScore.trackA.items.stable_public_projection, false);
+  assert.strictEqual(wrongScore.trackA.items.no_contradiction, false);
+  assert.strictEqual(wrongScore.businessScore, 0);
+
+  const missingHint = validWithAlternative();
+  delete missingHint.viewModel.sections.find((section) => section.title === "备选").rows[0].hint;
+  assert.strictEqual(judge.scoreDecisionBundle(missingHint).trackA.items.stable_public_projection, false);
 });

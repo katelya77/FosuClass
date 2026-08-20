@@ -44,6 +44,13 @@
 - DDE9：`renderOnlyFail` 只在 Track A 全通过且 Widget renderability 为唯一呈现失败时成立。
 - 当前验证命令覆盖 DDE1–DDE9，9/9 GREEN。
 
+### Fix round 2 增量基线（2026-08-20）
+
+- DDE10：verified empty 与 unverified recovery 的伪推荐 summary 均被 contradiction hard gate 拦截。
+- DDE11：推荐「理由」区追加未核验文案被拦截。
+- DDE12：备选 reason hint 错配或缺失被拦截；正确 hint 仍通过。
+- 当前验证命令覆盖 DDE1–DDE12，12/12 GREEN。
+
 ## 后续
 - 真实评测时：每个业务用例同时产出（a）确定性事实断言结果（b）序列化 Widget 输出，
   分别进 A 轨与 B 轨；记录真实 Provider 环境与凭据条件，不用 mock 冒充。

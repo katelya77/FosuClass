@@ -61,3 +61,10 @@ presentation-only failure、safety leak、contradiction）。
   唯一失败项为 `widget_renderable`。
 - 已选 candidate 必须与候选集 canonical 对象结构一致且 evidence verified；receipt 必须通过稳定
   内容哈希校验；Widget 的 variant、summary、推荐/备选行顺序及 next action 必须精确对应 bundle。
+
+### Public semantic projection 收紧（fix round 2）
+
+- summary 按结果态精确固定：recommend 为 `推荐：{label}`，verified empty 为 `暂无可行候选。`，
+  unverified recovery 为 `缺少已核验事实，暂不能生成决策结果。`。
+- 「理由」rows 必须与 receipt recommendation reasons 完全一致；备选 rows 的 label/value 及可选
+  reason hint 必须与 receipt alternatives 完全一致，禁止追加未核验公开文案。
