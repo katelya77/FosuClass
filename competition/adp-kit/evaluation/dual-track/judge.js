@@ -22,6 +22,29 @@ const TRACK_B_ITEMS = Object.freeze([
 
 const HARD_GATES = Object.freeze(["safety", "no_contradiction"]);
 
+const DECISION_TRACK_A_ITEMS = Object.freeze([
+  "eligibility_shape",
+  "verified_recommendation_reasons",
+  "hard_constraints_preserved",
+  "no_invented_alternatives",
+  "stable_public_projection",
+  "no_contradiction",
+  "recovery_on_failure",
+  "safety",
+]);
+
+const DECISION_GOAL_FAMILIES = Object.freeze([
+  "collaboration_planning",
+  "reschedule_simulation",
+  "teaching_assurance",
+  "campus_operations_insight",
+]);
+
+const DECISION_STATES = Object.freeze(["recommend", "no_viable_option"]);
+
+const CREDENTIAL_PATTERN = /(密码|口令|cookie|session|authorization\s*:|bearer\s+|api[_ -]?key|secret[-_: ]|\btoken\b|x-fosu-session)/i;
+const PUBLIC_LEAK_PATTERN = /(queryid|datahash|dataversion|sourcetool|toolname|rankcontext|evidence|resultref|computedat|authority|requiresconfirm|internalurl|system prompt|推理过程|authorization\s*:|bearer\s+|\btoken\b|cookie|password|https?:\/\/)/i;
+
 function safeJsonParse(serialized) {
   if (typeof serialized !== "string") return { ok: false };
   const trimmed = serialized.trim();
@@ -135,11 +158,216 @@ function scoreResponse(serialized, expected) {
   };
 }
 
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function publicReasonTexts(choice) {
+  return (Array.isArray(choice && choice.reasons) ? choice.reasons : [])
+    .map((reason) => typeof reason === "string" ? reason : reason && reason.text)
+    .filter((reason) => typeof reason === "string" && reason.length > 0);
+}
+
+function publicChoiceOf(choice) {
+  const label = choice && choice.candidate && choice.candidate.label;
+  return typeof label === "string" && label.length > 0
+    ? { label, reasons: publicReasonTexts(choice) }
+    : null;
+}
+
+function publicActionOf(action) {
+  const label = action && action.label;
+  const query = action && action.payload && action.payload.query;
+  return typeof label === "string" && label.length > 0 && typeof query === "string" && query.length > 0
+    ? { label, query }
+    : null;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function reasonEvidenceIsValid(choice) {
+  if (!choice) return true;
+  const candidate = choice.candidate;
+  const evidence = candidate && candidate.evidence;
+  const reasons = Array.isArray(choice.reasons) ? choice.reasons : null;
+  if (!reasons) return false;
+  if (!evidence || evidence.verified !== true) return reasons.length === 0;
+  return reasons.every((reason) => isObject(reason)
+    && typeof reason.text === "string"
+    && reason.text.length > 0
+    && isObject(reason.source)
+    && typeof reason.source.factKey === "string"
+    && reason.source.factKey === evidence.factKey);
+}
+
+function selectedHardStateIsValid(choice) {
+  if (!choice) return true;
+  return choice.hardSatisfied !== false
+    && choice.excluded !== true
+    && (!Array.isArray(choice.hardViolations) || choice.hardViolations.length === 0)
+    && (!Array.isArray(choice.exclusionViolations) || choice.exclusionViolations.length === 0);
+}
+
+function decisionShapeIsValid(bundle) {
+  return isObject(bundle)
+    && bundle.eligible === true
+    && bundle.bundleType === "DecisionBundle"
+    && DECISION_GOAL_FAMILIES.includes(bundle.goalFamily)
+    && DECISION_STATES.includes(bundle.decision)
+    && Array.isArray(bundle.candidates)
+    && isObject(bundle.evaluation)
+    && Array.isArray(bundle.evaluation.items)
+    && Array.isArray(bundle.alternatives);
+}
+
+function verifiedRecommendationReasonsAreValid(bundle) {
+  const recommendation = bundle && bundle.recommendation;
+  const alternatives = Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [];
+  if (bundle && bundle.decision === "recommend") {
+    if (bundle.verified !== true || !recommendation) return false;
+  } else if (recommendation !== null || alternatives.length !== 0) {
+    return false;
+  }
+  return reasonEvidenceIsValid(recommendation) && alternatives.every(reasonEvidenceIsValid);
+}
+
+function hardConstraintsArePreserved(bundle) {
+  const evaluation = bundle && bundle.evaluation;
+  if (!evaluation || evaluation.relaxedCount !== 0) return false;
+  const selected = [bundle.recommendation, ...(Array.isArray(bundle.alternatives) ? bundle.alternatives : [])];
+  if (!selected.every(selectedHardStateIsValid)) return false;
+  return evaluation.items.every((item) => !item || item.feasible !== true || selectedHardStateIsValid(item));
+}
+
+function choicesComeFromCandidates(bundle) {
+  const ids = new Set((Array.isArray(bundle && bundle.candidates) ? bundle.candidates : [])
+    .map((candidate) => candidate && candidate.id)
+    .filter((id) => typeof id === "string" && id.length > 0));
+  const selected = [bundle && bundle.recommendation, ...(Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [])]
+    .filter(Boolean);
+  const selectedIds = selected.map((choice) => choice && choice.candidate && choice.candidate.id);
+  if (bundle && bundle.decision === "no_viable_option") {
+    return bundle.recommendation === null && selected.length === 0;
+  }
+  return selectedIds.length > 0
+    && selectedIds.every((id) => typeof id === "string" && ids.has(id))
+    && new Set(selectedIds).size === selectedIds.length;
+}
+
+function receiptMatchesBundle(bundle) {
+  const receipt = bundle && bundle.receipt;
+  if (!isObject(receipt)
+    || receipt.receiptVersion !== "1.0"
+    || !/^decision-[a-f0-9]{64}$/.test(String(receipt.decisionId || ""))
+    || receipt.verified !== (bundle.verified === true)
+    || receipt.decision !== bundle.decision
+    || !Array.isArray(receipt.alternatives)) return false;
+  const recommendation = publicChoiceOf(bundle.recommendation);
+  const alternatives = (Array.isArray(bundle.alternatives) ? bundle.alternatives : []).map(publicChoiceOf);
+  return sameJson(receipt.recommendation, recommendation)
+    && sameJson(receipt.alternatives, alternatives)
+    && sameJson(receipt.nextAction, publicActionOf(bundle.nextAction));
+}
+
+function viewModelMatchesBundle(bundle) {
+  const viewModel = bundle && bundle.viewModel;
+  if (!isObject(viewModel) || viewModel.verified !== (bundle.verified === true)) return false;
+  const serialized = JSON.stringify(viewModel);
+  if (bundle.decision === "recommend") {
+    const label = bundle.recommendation && bundle.recommendation.candidate && bundle.recommendation.candidate.label;
+    return typeof label === "string" && serialized.includes(label);
+  }
+  const recommendationRows = (Array.isArray(viewModel.sections) ? viewModel.sections : [])
+    .filter((section) => section && section.title === "推荐")
+    .flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
+  return recommendationRows.length === 0;
+}
+
+function decisionIsNonContradictory(bundle) {
+  if (!decisionShapeIsValid(bundle)) return false;
+  const recommendation = bundle.recommendation;
+  const alternatives = Array.isArray(bundle.alternatives) ? bundle.alternatives : [];
+  const stateConsistent = bundle.decision === "recommend"
+    ? bundle.verified === true && Boolean(recommendation)
+    : recommendation === null && alternatives.length === 0;
+  return stateConsistent && receiptMatchesBundle(bundle) && viewModelMatchesBundle(bundle);
+}
+
+function recoveryIsControlled(bundle) {
+  if (!bundle) return false;
+  if (bundle.decision === "recommend") return true;
+  if (bundle.recommendation !== null || !Array.isArray(bundle.alternatives) || bundle.alternatives.length !== 0) return false;
+  if (bundle.verified === true) return true;
+  const viewModel = bundle.viewModel;
+  return Boolean(viewModel
+    && (viewModel.status === "error" || viewModel.status === "recoverable_error")
+    && viewModel.displayMeta
+    && viewModel.displayMeta.recoverable === true);
+}
+
+function decisionSafetyIsValid(bundle) {
+  return !CREDENTIAL_PATTERN.test(JSON.stringify(bundle || {}));
+}
+
+function publicProjectionHasNoInternalLeak(bundle) {
+  return !PUBLIC_LEAK_PATTERN.test(JSON.stringify({
+    receipt: bundle && bundle.receipt,
+    viewModel: bundle && bundle.viewModel,
+  }));
+}
+
+function scoreDecisionTrackA(bundle) {
+  const items = {
+    eligibility_shape: decisionShapeIsValid(bundle),
+    verified_recommendation_reasons: verifiedRecommendationReasonsAreValid(bundle),
+    hard_constraints_preserved: hardConstraintsArePreserved(bundle),
+    no_invented_alternatives: choicesComeFromCandidates(bundle),
+    stable_public_projection: receiptMatchesBundle(bundle),
+    no_contradiction: decisionIsNonContradictory(bundle),
+    recovery_on_failure: recoveryIsControlled(bundle),
+    safety: decisionSafetyIsValid(bundle),
+  };
+  const score = DECISION_TRACK_A_ITEMS.reduce((total, key) => total + (items[key] ? 1 : 0), 0);
+  const gateFailed = HARD_GATES.some((key) => !items[key]);
+  return { items, score, pass: !gateFailed };
+}
+
+function scoreDecisionTrackB(bundle) {
+  const viewModel = bundle && bundle.viewModel;
+  const serialized = JSON.stringify(viewModel || {});
+  const base = scoreTrackB(serialized, viewModel, { ok: isObject(viewModel), value: viewModel });
+  const items = { ...base.items, no_internal_leak: publicProjectionHasNoInternalLeak(bundle) };
+  const score = TRACK_B_ITEMS.reduce((total, key) => total + (items[key] ? 1 : 0), 0);
+  return { ...base, items, score, pass: score >= 4 };
+}
+
+// DecisionBundle 双轨评分只读取调用方提供的结构化 bundle / receipt / viewModel；
+// 不调用 Provider、CampusTools、网络或运行时 Controller，也不修改输入。
+function scoreDecisionBundle(bundle) {
+  const trackA = scoreDecisionTrackA(bundle);
+  const trackB = scoreDecisionTrackB(bundle);
+  const renderOnlyFail = !trackB.items.widget_renderable
+    && trackA.items.eligibility_shape
+    && trackA.items.no_contradiction;
+  return {
+    trackA,
+    trackB,
+    renderOnlyFail,
+    businessScore: trackA.pass ? trackA.score : 0,
+    verdict: trackA.pass && trackB.pass ? "pass" : trackA.pass ? "pass_with_presentation_issues" : "fail",
+  };
+}
+
 module.exports = {
   TRACK_A_ITEMS,
   TRACK_B_ITEMS,
   HARD_GATES,
+  DECISION_TRACK_A_ITEMS,
+  DECISION_GOAL_FAMILIES,
   safeJsonParse,
   checkWidgetContract,
   scoreResponse,
+  scoreDecisionBundle,
 };

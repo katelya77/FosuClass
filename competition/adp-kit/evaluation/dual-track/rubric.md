@@ -32,3 +32,22 @@ ADP 评测中「结果对但卡片渲染失败」与「结果错但界面漂亮�
 - `../golden-*` 与 `eval-golden.js` 继续作为事实断言基准；
 - 双轨是本仓库的**呈现侧补充口径**，用于区分「结果问题」与「呈现问题」。
 - 用例集：`widget-contract-testset.json`；基线：`baseline-report.md`。
+
+## DecisionBundle 扩展
+
+`scoreDecisionBundle(bundle)` 沿用同一 Track A / Track B 分离与 hard gate 规则。调用方提供
+结构化 `DecisionBundle` 以及其 `receipt` / `viewModel` 投影；裁判器只读评分，不调用 Provider、
+CampusTools、Controller 或网络。
+
+Decision Track A（0–8）额外核对：
+- eligible goalFamily / `DecisionBundle` / decision 形状；
+- recommendation 与 reasons 的 verified evidence 绑定；
+- `evaluation.relaxedCount === 0`，已选项无 hard / exclusion 违反；
+- 推荐与备选均来自候选集，`no_viable_option` 不含虚构选择；
+- PublicDecisionReceipt 与业务结果稳定一致，Widget 投影不自相矛盾；
+- verified empty 与 no-source recoverable 均受控恢复。
+
+Track B 仍为既有五项：结构化、可读、Widget 可渲染、后续动作、零内部泄漏。
+`safety` / `no_contradiction` 仍是业务 hard gate；Widget-only failure 仍不得清零 Track A。
+Decision 用例集：`decision-testset.json`（valid recommend、verified empty、no-source recoverable、
+presentation-only failure、safety leak、contradiction）。

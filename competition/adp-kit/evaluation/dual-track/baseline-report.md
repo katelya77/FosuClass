@@ -26,6 +26,15 @@
 - 生产评测口径：`evaluation/scoring-rubric.md`（单轨 0/1 十项）继续作为业务口径；
   dual-track 补充「结果 vs 呈现」区分。
 
+## DecisionBundle 扩展基线（2026-08-20）
+
+- 用例集：`evaluation/dual-track/decision-testset.json`（6 例）。
+- 合法 recommend、verified empty、no-source recoverable：3/3 双轨通过。
+- presentation-only failure：Track A 8/8、businessScore 8，Track B 单独失败。
+- safety leak / contradiction：2/2 被既有 hard gate 拦截，businessScore 0。
+- 纯函数确定性与不修改输入：通过。
+- 验证命令：`node --test r49-ma/tests/test-decision-evaluation-dual-track.js`（DDE1–DDE6，GREEN）。
+
 ## 后续
 - 真实评测时：每个业务用例同时产出（a）确定性事实断言结果（b）序列化 Widget 输出，
   分别进 A 轨与 B 轨；记录真实 Provider 环境与凭据条件，不用 mock 冒充。

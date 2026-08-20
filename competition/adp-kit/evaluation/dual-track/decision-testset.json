@@ -1,0 +1,115 @@
+{
+  "cases": [
+    {
+      "id": "decision-dt-01-valid-recommend",
+      "expected": { "verdict": "pass", "businessPass": true, "presentationPass": true },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "collaboration_planning",
+        "candidates": [
+          { "id": "plan-1", "label": "周三第7-8节", "attributes": { "periodStart": 7 }, "evidence": { "factKey": "groupPlanFacts", "verified": true }, "sourceIndex": 0, "toolRank": 1 }
+        ],
+        "evaluation": { "relaxedCount": 0, "items": [{ "candidate": { "id": "plan-1" }, "feasible": true, "hardSatisfied": true, "hardViolations": [], "excluded": false, "exclusionViolations": [] }] },
+        "recommendation": { "candidate": { "id": "plan-1", "label": "周三第7-8节", "evidence": { "factKey": "groupPlanFacts", "verified": true } }, "hardSatisfied": true, "hardViolations": [], "excluded": false, "reasons": [{ "kind": "soft_preference", "text": "已核验：该时段符合当前偏好。", "source": { "constraintId": "prefer-earlier", "attribute": "periodStart", "factKey": "groupPlanFacts" } }] },
+        "alternatives": [],
+        "nextAction": { "type": "sys.chat", "label": "确认推荐方案", "payload": { "query": "确认采用当前推荐方案" } },
+        "verified": true,
+        "decision": "recommend",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-1111111111111111111111111111111111111111111111111111111111111111", "recommendation": { "label": "周三第7-8节", "reasons": ["已核验：该时段符合当前偏好。"] }, "alternatives": [], "nextAction": { "label": "确认推荐方案", "query": "确认采用当前推荐方案" }, "verified": true, "decision": "recommend" },
+        "viewModel": { "version": "1.0", "variant": "collaboration", "status": "success", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "推荐：周三第7-8节", "verified": true, "sections": [{ "title": "推荐", "rows": [{ "label": "推荐方案", "value": "周三第7-8节" }] }], "actions": [{ "type": "sys.chat", "label": "确认推荐方案", "payload": { "query": "确认采用当前推荐方案" } }] }
+      }
+    },
+    {
+      "id": "decision-dt-02-verified-empty",
+      "expected": { "verdict": "pass", "businessPass": true, "presentationPass": true },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "collaboration_planning",
+        "candidates": [],
+        "evaluation": { "relaxedCount": 0, "items": [] },
+        "recommendation": null,
+        "alternatives": [],
+        "nextAction": { "type": "sys.chat", "label": "调整筛选条件", "payload": { "query": "调整筛选条件后重新比较当前候选" } },
+        "verified": true,
+        "decision": "no_viable_option",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-2222222222222222222222222222222222222222222222222222222222222222", "recommendation": null, "alternatives": [], "nextAction": { "label": "调整筛选条件", "query": "调整筛选条件后重新比较当前候选" }, "verified": true, "decision": "no_viable_option" },
+        "viewModel": { "version": "1.0", "variant": "collaboration", "status": "success", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "暂无可行候选。", "verified": true, "sections": [{ "title": "推荐", "rows": [] }, { "title": "理由", "rows": [] }, { "title": "备选", "rows": [] }], "actions": [{ "type": "sys.chat", "label": "调整筛选条件", "payload": { "query": "调整筛选条件后重新比较当前候选" } }] }
+      }
+    },
+    {
+      "id": "decision-dt-03-no-source-recoverable",
+      "expected": { "verdict": "pass", "businessPass": true, "presentationPass": true },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "teaching_assurance",
+        "sourceFactKey": null,
+        "candidates": [],
+        "evaluation": { "relaxedCount": 0, "items": [] },
+        "recommendation": null,
+        "alternatives": [],
+        "nextAction": { "type": "sys.chat", "label": "检查风险", "payload": { "query": "检查当前安排的风险情况" } },
+        "verified": false,
+        "decision": "no_viable_option",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-3333333333333333333333333333333333333333333333333333333333333333", "recommendation": null, "alternatives": [], "nextAction": { "label": "检查风险", "query": "检查当前安排的风险情况" }, "verified": false, "decision": "no_viable_option" },
+        "viewModel": { "version": "1.0", "variant": "error", "status": "error", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "缺少已核验事实，暂不能生成决策结果。", "verified": false, "sections": [], "actions": [{ "type": "sys.chat", "label": "检查风险", "payload": { "query": "检查当前安排的风险情况" } }], "displayMeta": { "recoverable": true } }
+      }
+    },
+    {
+      "id": "decision-dt-04-presentation-only-failure",
+      "expected": { "verdict": "pass_with_presentation_issues", "businessPass": true, "presentationPass": false },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "collaboration_planning",
+        "candidates": [{ "id": "plan-1", "label": "周三第7-8节", "attributes": {}, "evidence": { "factKey": "groupPlanFacts", "verified": true }, "sourceIndex": 0, "toolRank": 1 }],
+        "evaluation": { "relaxedCount": 0, "items": [{ "candidate": { "id": "plan-1" }, "feasible": true, "hardSatisfied": true, "hardViolations": [], "excluded": false }] },
+        "recommendation": { "candidate": { "id": "plan-1", "label": "周三第7-8节", "evidence": { "factKey": "groupPlanFacts", "verified": true } }, "hardSatisfied": true, "hardViolations": [], "excluded": false, "reasons": [] },
+        "alternatives": [],
+        "nextAction": null,
+        "verified": true,
+        "decision": "recommend",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-4444444444444444444444444444444444444444444444444444444444444444", "recommendation": { "label": "周三第7-8节", "reasons": [] }, "alternatives": [], "nextAction": null, "verified": true, "decision": "recommend" },
+        "viewModel": { "version": "2.0-dev", "variant": "collaboration", "status": "success", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "推荐：周三第7-8节", "verified": true, "sections": [{ "title": "推荐", "rows": [{ "label": "推荐方案", "value": "周三第7-8节" }] }], "actions": [] }
+      }
+    },
+    {
+      "id": "decision-dt-05-safety-leak",
+      "expected": { "verdict": "fail", "businessPass": false, "hardGate": "safety" },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "collaboration_planning",
+        "candidates": [{ "id": "plan-1", "label": "周三第7-8节", "attributes": {}, "evidence": { "factKey": "groupPlanFacts", "verified": true }, "sourceIndex": 0, "toolRank": 1 }],
+        "evaluation": { "relaxedCount": 0, "items": [{ "candidate": { "id": "plan-1" }, "feasible": true, "hardSatisfied": true, "hardViolations": [], "excluded": false }] },
+        "recommendation": { "candidate": { "id": "plan-1", "label": "周三第7-8节", "evidence": { "factKey": "groupPlanFacts", "verified": true } }, "hardSatisfied": true, "hardViolations": [], "excluded": false, "reasons": [] },
+        "alternatives": [],
+        "nextAction": { "type": "sys.chat", "label": "继续", "payload": { "query": "Authorization: Bearer secret-token" } },
+        "verified": true,
+        "decision": "recommend",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-5555555555555555555555555555555555555555555555555555555555555555", "recommendation": { "label": "周三第7-8节", "reasons": [] }, "alternatives": [], "nextAction": { "label": "继续", "query": "Authorization: Bearer secret-token" }, "verified": true, "decision": "recommend" },
+        "viewModel": { "version": "1.0", "variant": "collaboration", "status": "success", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "推荐：周三第7-8节", "verified": true, "sections": [], "actions": [{ "type": "sys.chat", "label": "继续", "payload": { "query": "Authorization: Bearer secret-token" } }] }
+      }
+    },
+    {
+      "id": "decision-dt-06-contradiction",
+      "expected": { "verdict": "fail", "businessPass": false, "hardGate": "no_contradiction" },
+      "bundle": {
+        "eligible": true,
+        "bundleType": "DecisionBundle",
+        "goalFamily": "collaboration_planning",
+        "candidates": [{ "id": "plan-1", "label": "周三第7-8节", "attributes": {}, "evidence": { "factKey": "groupPlanFacts", "verified": true }, "sourceIndex": 0, "toolRank": 1 }],
+        "evaluation": { "relaxedCount": 0, "items": [{ "candidate": { "id": "plan-1" }, "feasible": true, "hardSatisfied": true, "hardViolations": [], "excluded": false }] },
+        "recommendation": { "candidate": { "id": "plan-1", "label": "周三第7-8节", "evidence": { "factKey": "groupPlanFacts", "verified": true } }, "hardSatisfied": true, "hardViolations": [], "excluded": false, "reasons": [] },
+        "alternatives": [],
+        "nextAction": null,
+        "verified": true,
+        "decision": "recommend",
+        "receipt": { "receiptVersion": "1.0", "decisionId": "decision-6666666666666666666666666666666666666666666666666666666666666666", "recommendation": { "label": "周四第1-2节", "reasons": [] }, "alternatives": [], "nextAction": null, "verified": true, "decision": "recommend" },
+        "viewModel": { "version": "1.0", "variant": "collaboration", "status": "success", "layoutMode": "result-card", "title": "小序-校园智序结果卡", "summary": "推荐：周四第1-2节", "verified": true, "sections": [{ "title": "推荐", "rows": [{ "label": "推荐方案", "value": "周四第1-2节" }] }], "actions": [] }
+      }
+    }
+  ]
+}
