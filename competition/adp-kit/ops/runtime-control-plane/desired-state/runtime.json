@@ -1,0 +1,21 @@
+{
+  "widget": {
+    "name": "小序-校园智序结果卡"
+  },
+  "multimodal": {
+    "mainOfficialVisionToolRequired": true,
+    "childOfficialVisionToolRequired": false,
+    "visionObservationSource": "competition/adp-kit/r51/vision/contract.js"
+  },
+  "cloudBase": {
+    "functionAllowlist": ["campusflowAdpTools"]
+  },
+  "invariants": {
+    "agentCount": 4,
+    "campusToolCount": 13,
+    "bindingCount": 14,
+    "mainCampusToolCount": 0,
+    "createReleaseAllowed": false,
+    "publishAllowed": false
+  }
+}

@@ -37,6 +37,12 @@
     "security:public": "python tools/public-ready-scan.py",
     "security:public:head": "python tools/public-ready-scan.py --head-only --no-ignored",
     "adp:compile": "npm --prefix competition/adp-kit run adp:compile",
+    "adp:snapshot": "node competition/adp-kit/ops/runtime-control-plane/cli.js snapshot",
+    "adp:diff": "node competition/adp-kit/ops/runtime-control-plane/cli.js diff",
+    "adp:apply": "node competition/adp-kit/ops/runtime-control-plane/cli.js apply",
+    "adp:deploy:cloudbase": "node competition/adp-kit/ops/runtime-control-plane/cli.js deploy-cloudbase",
+    "adp:audit:plugin": "node competition/adp-kit/ops/runtime-control-plane/cli.js audit-plugin",
+    "adp:preflight": "node competition/adp-kit/ops/runtime-control-plane/cli.js preflight",
     "adp:bind-runtime": "python competition/adp-kit/widget/native/bind_runtime_environment.py",
     "adp:build-r4": "python competition/adp-kit/widget/native/build_r4_closure_pack.py",
     "test:current-schedule": "node tools/test-current-schedule-refresh.js && node tools/test-schedule-view-current-target-action.js",
@@ -742,6 +748,8 @@
     "tough-cookie": "^6.0.1"
   },
   "devDependencies": {
-    "acorn": "^8.16.0"
+    "acorn": "^8.16.0",
+    "adm-zip": "^0.5.10",
+    "yaml": "^1.10.3"
   }
 }

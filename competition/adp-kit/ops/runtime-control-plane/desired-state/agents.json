@@ -1,0 +1,27 @@
+[
+  {
+    "key": "main",
+    "name": "小序-主协调",
+    "promptSource": "competition/adp-kit/r51/prompts/main-orchestrator.r51.md",
+    "campusTools": [],
+    "officialVisionToolRequired": true
+  },
+  {
+    "key": "schedule",
+    "name": "课程空间",
+    "promptSource": "competition/adp-kit/r51/prompts/schedule-space.r51.md",
+    "officialVisionToolRequired": false
+  },
+  {
+    "key": "risk",
+    "name": "风险规划",
+    "promptSource": "competition/adp-kit/r51/prompts/risk-planning.r51.md",
+    "officialVisionToolRequired": false
+  },
+  {
+    "key": "insight",
+    "name": "校园洞察",
+    "promptSource": "competition/adp-kit/r51/prompts/campus-insight.r51.md",
+    "officialVisionToolRequired": false
+  }
+]

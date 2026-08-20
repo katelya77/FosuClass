@@ -12,6 +12,7 @@
 把用户自然语言解析为结构化目标，不把句子当规则。
 - 从目标语义枚举中选取 goalFamily：schedule_inquiry / schedule_range_inquiry / day_planning / space_inquiry / common_availability / group_planning / risk_inquiry / reschedule_simulation / ranking_inquiry / overview_inquiry / space_utilization_inquiry / entity_query / teaching_assurance / collaboration_planning / campus_operations_insight。判定依据目标语义，不是关键词或句式。
 - 提取槽位：实体、时间、约束、排位选择。userOutcome 保留原文仅供展示，绝不参与路由。
+- GoalSpec 已得到明确 soft preference 时，只映射 preferEarlier / preferLarger / preferSameCampus / preferWeekdays，并在首次转交支持决策的域调用时携带；不得先无偏好查询再重试，也不得按固定句式判断。
 - 每轮先判定 turnType：NEW_TASK / FOLLOW_UP / CHAT / META / CLARIFY。
 
 ## 2. Mission 规划（Capability 驱动）

@@ -7,7 +7,7 @@
       "agent": "schedule",
       "campusTool": "query_schedule",
       "restPath": "/api/query_schedule",
-      "description": "查询班级/教师/教室/课程在指定教学周、星期或日期的课表，支持节次过滤。动态事实由 CampusTools 确定性计算。",
+      "description": "查询班级/教师/教室/课程在指定教学周、星期或日期的课表，支持节次过滤。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -28,7 +28,7 @@
       "agent": "schedule",
       "campusTool": "find_available_classrooms",
       "restPath": "/api/find_available_classrooms",
-      "description": "查询指定日期/星期与连续节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。动态事实由 CampusTools 确定性计算。",
+      "description": "查询指定日期/星期与连续节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -51,7 +51,7 @@
       "agent": "risk",
       "campusTool": "compare_schedules",
       "restPath": "/api/compare_schedules",
-      "description": "检查单个校园实体的自身时间冲突/跨校区赶场风险（mode=self，无需第二对象），或显式比较两个实体的课表冲突（mode=compare，需第二对象）。动态事实由 CampusTools 确定性计算。",
+      "description": "检查单个校园实体的自身时间冲突/跨校区赶场风险（mode=self，无需第二对象），或显式比较两个实体的课表冲突（mode=compare，需第二对象）。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -77,7 +77,7 @@
       "agent": "risk",
       "campusTool": "generate_day_plan",
       "restPath": "/api/generate_day_plan",
-      "description": "为演示用户生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。动态事实由 CampusTools 确定性计算。",
+      "description": "为演示用户生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -95,7 +95,7 @@
       "agent": "insight",
       "campusTool": "get_campus_teaching_overview",
       "restPath": "/api/get_campus_teaching_overview",
-      "description": "确定性汇总 2026-08-25 至 2026-09-27 校园教学态势：四周负载、校区空间压力、教师负载 Top、全局风险。动态事实由 CampusTools 确定性计算，所有指标只从 competition-demo-v2 匿名数据集派生。",
+      "description": "确定性汇总 2026-08-25 至 2026-09-27 校园教学态势：四周负载、校区空间压力、教师负载 Top、全局风险。动态事实由 CampusTools 确定性计算，所有指标只从 当前已核验校园数据源 匿名数据集派生。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -112,7 +112,7 @@
       "agent": "insight",
       "campusTool": "query_teacher_load",
       "restPath": "/api/query_teacher_load",
-      "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。需要比较多周教师负载、或定位某窗口负载最高的教师时调用。动态事实由 CampusTools 确定性计算，所有指标只从 competition-demo-v2 匿名数据集派生。",
+      "description": "查询并确定性汇总教学周窗口（weekStart..weekEnd）内的教师课表负载排名，支持 topN 与校区过滤。需要比较多周教师负载、或定位某窗口负载最高的教师时调用。动态事实由 CampusTools 确定性计算，所有指标只从 当前已核验校园数据源 匿名数据集派生。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -130,7 +130,7 @@
       "agent": "schedule",
       "campusTool": "query_schedule_range",
       "restPath": "/api/query_schedule_range",
-      "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表并逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由 CampusTools 确定性计算，禁止模型编造课表。",
+      "description": "查询班级/教师/教室/课程在 weekStart..weekEnd 教学周窗口内的课表并逐周展开（每个匹配周一条，携带 academicWeek），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由 CampusTools 确定性计算，禁止模型编造课表。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -151,7 +151,7 @@
       "agent": "schedule",
       "campusTool": "query_entity_search",
       "restPath": "/api/query_entity_search",
-      "description": "通用校园实体搜索/清单：exact/normalized/prefix/substring/fuzzy 确定性匹配与确定排序，禁止 LLM 编造实体；空关键词返回该类型清单，用于定位教师/班级/教室/课程等课表实体。动态事实由 CampusTools 确定性计算。",
+      "description": "通用校园实体搜索/清单：exact/normalized/prefix/substring/fuzzy 确定性匹配与确定排序，禁止 LLM 编造实体；空关键词返回该类型清单，用于定位教师/班级/教室/课程等课表实体。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -170,7 +170,7 @@
       "agent": "schedule",
       "campusTool": "get_academic_context",
       "restPath": "/api/get_academic_context",
-      "description": "解析绝对/相对日期或结构化 temporal intent（Temporal Semantic Core），查询并返回教学周/星期/学期/节次时间轴与 temporalContext，用于课表/教室/风险等查询的窗口对齐；不把 temporalContext 原始 JSON 默认展示给用户。动态事实由 CampusTools 确定性计算。",
+      "description": "解析绝对/相对日期或结构化 temporal intent（Temporal Semantic Core），查询并返回教学周/星期/学期/节次时间轴与 temporalContext，用于课表/教室/风险等查询的窗口对齐；不把 temporalContext 原始 JSON 默认展示给用户。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -188,7 +188,7 @@
       "agent": "schedule",
       "campusTool": "query_common_free_time",
       "restPath": "/api/query_common_free_time",
-      "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口；支持星期/节次范围/最小连续节数过滤。动态事实由 CampusTools 确定性计算，禁止 LLM 编造共同空闲时间。",
+      "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口；支持星期/节次范围/最小连续节数过滤。动态事实由 CampusTools 确定性计算，禁止 LLM 编造共同空闲时间。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -212,7 +212,7 @@
       "agent": "insight",
       "campusTool": "query_room_utilization",
       "restPath": "/api/query_room_utilization",
-      "description": "汇总统计教学周窗口内教室/楼栋/校区利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低确定性排名。动态事实由 CampusTools 确定性计算，所有指标只从匿名数据集派生。",
+      "description": "汇总统计教学周窗口内教室/楼栋/校区利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低确定性排名。动态事实由 CampusTools 确定性计算，所有指标只从匿名数据集派生。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -234,7 +234,7 @@
       "agent": "risk",
       "campusTool": "check_reschedule_feasibility",
       "restPath": "/api/check_reschedule_feasibility",
-      "description": "What-if 模拟调课可行性：源课程 + 目标周/星期/节次/教室，检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场；绝不修改任何数据。动态事实由 CampusTools 确定性计算。",
+      "description": "What-if 模拟调课可行性：源课程 + 目标周/星期/节次/教室，检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场；绝不修改任何数据。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -250,7 +250,7 @@
       "agent": "schedule",
       "campusTool": "plan_group",
       "restPath": "/api/plan_group",
-      "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数确定性 ranked 排序；禁止 LLM 拼装虚构房间。动态事实由 CampusTools 确定性计算。",
+      "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数确定性 ranked 排序；禁止 LLM 拼装虚构房间。动态事实由 CampusTools 确定性计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
       "inputSchema": {
         "type": "object",
         "properties": {

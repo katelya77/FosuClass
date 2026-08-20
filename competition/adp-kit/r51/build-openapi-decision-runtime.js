@@ -156,10 +156,26 @@ function operationById(spec, operationId) {
   return null;
 }
 
+function stableToolDescription(description) {
+  let output = String(description || "")
+    .replace(/competition-demo-v\d+(?:\.json)?/gi, "当前已核验校园数据源")
+    .replace(/动态事实由(?:确定性 )?CampusTools(?: 服务)?(?:确定性)?计算/g, "动态事实由当前已核验校园数据源与确定性 CampusTools 服务计算")
+    .replace(/所有指标只从当前已核验校园数据源匿名数据集派生/g, "所有指标只从当前已核验校园数据源派生")
+    .trim();
+  if (!output.includes("当前已核验校园数据源")) output += " 动态事实仅来自当前已核验校园数据源。";
+  if (!output.includes("确定性 CampusTools 服务")) output += " 结果由确定性 CampusTools 服务计算。";
+  return output.replace(/\s+/g, " ");
+}
+
 function augment(spec) {
   const output = JSON.parse(JSON.stringify(spec));
   output.info.version = "1.6.0";
   Object.assign(output.components.schemas, DECISION_SCHEMAS);
+  for (const pathItem of Object.values(output.paths || {})) {
+    for (const operation of Object.values(pathItem || {})) {
+      if (operation && operation.operationId) operation.description = stableToolDescription(operation.description);
+    }
+  }
   for (const [operationId, [inputName, responseName]] of Object.entries(ACTIVATED)) {
     const operation = operationById(output, operationId);
     if (!operation) continue;
@@ -192,4 +208,4 @@ for (const file of FILES) {
 if (failed) process.exit(1);
 if (CHECK) console.log(`[pass] Decision Runtime OpenAPI consistent (${Object.keys(ACTIVATED).length} existing operations, 0 new tools)`);
 
-module.exports = { ACTIVATED, DECISION_SCHEMAS, augment };
+module.exports = { ACTIVATED, DECISION_SCHEMAS, augment, stableToolDescription };

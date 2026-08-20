@@ -33,7 +33,7 @@
         ],
         "summary": "查询课表（教师/班级/教室/课程）",
         "operationId": "campus_schedule_query",
-        "description": "按实体类型与名称查询指定教学周、星期或日期的课表，支持节次过滤。entityType 仅允许 class/teacher/room/course；entityName 支持口语别名（如 T09 归一化为 教师009）。必须传入 entityType 与 entityName，否则返回 MISSING_PARAM。动态事实由确定性 CampusTools 计算，禁止模型编造课表。",
+        "description": "按实体类型与名称查询指定教学周、星期或日期的课表，支持节次过滤。entityType 仅允许 class/teacher/room/course；entityName 支持口语别名（如 T09 归一化为 教师009）。必须传入 entityType 与 entityName，否则返回 MISSING_PARAM。动态事实由确定性 CampusTools 计算，禁止模型编造课表。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -65,7 +65,7 @@
         ],
         "summary": "查询空教室",
         "operationId": "campus_classroom_search",
-        "description": "查询指定日期/星期与节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。需提供 date 或 week+weekday 以确定具体星期；periodStart/periodEnd 必填（1-10 节）。空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记。动态事实由确定性 CampusTools 计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "查询指定日期/星期与节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。需提供 date 或 week+weekday 以确定具体星期；periodStart/periodEnd 必填（1-10 节）。空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记。动态事实由确定性 CampusTools 计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -97,7 +97,7 @@
         ],
         "summary": "风险检查：self（单对象）或 compare（双对象）",
         "operationId": "campus_risk_check",
-        "description": "检查单个校园实体自身的时间冲突/跨校区赶场风险，或显式比较两个实体的课表冲突。mode 缺省或为 self 时只需 entityType/entityName，服务端确定性复制 second=first，绝不允许模型生成或要求用户提供第二对象；mode=compare 才要求 secondEntityType/secondEntityName。结果含 summary.selfCompare 与 summary.conflictCount。动态事实由确定性 CampusTools 计算。",
+        "description": "检查单个校园实体自身的时间冲突/跨校区赶场风险，或显式比较两个实体的课表冲突。mode 缺省或为 self 时只需 entityType/entityName，服务端确定性复制 second=first，绝不允许模型生成或要求用户提供第二对象；mode=compare 才要求 secondEntityType/secondEntityName。结果含 summary.selfCompare 与 summary.conflictCount。动态事实由确定性 CampusTools 计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -129,7 +129,7 @@
         ],
         "summary": "生成演示用户某日计划",
         "operationId": "campus_day_plan",
-        "description": "为当前比赛演示用户（demoUsers[0].id = user-demo-001）生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。date 必填；visitorId 可选——未传时服务端只允许确定性使用当前数据源的 demoUsers[0].id，禁止模型猜测或硬编码历史 ID。动态事实由确定性 CampusTools 计算。",
+        "description": "为当前比赛演示用户（demoUsers[0].id = user-demo-001）生成指定日期的校园计划：课程、空闲空档、自习教室建议与跨校区提醒。date 必填；visitorId 可选——未传时服务端只允许确定性使用当前数据源的 demoUsers[0].id，禁止模型猜测或硬编码历史 ID。动态事实由确定性 CampusTools 计算。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -161,7 +161,7 @@
         ],
         "summary": "校园教学态势（固定窗口）",
         "operationId": "campus_overview",
-        "description": "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：四周负载、校区空间压力、教师负载 Top、全局风险。请求体可为空 {}；所有指标只从当前 competition-demo 匿名数据集派生，禁止模型伪造 TopN 或任何校园事实。",
+        "description": "确定性汇总 2026-08-25 至 2026-09-27 的校园教学态势：四周负载、校区空间压力、教师负载 Top、全局风险。请求体可为空 {}；所有指标只从当前 competition-demo 匿名数据集派生，禁止模型伪造 TopN 或任何校园事实。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": false,
           "content": {
@@ -193,7 +193,7 @@
         ],
         "summary": "教师课表负载排名（教学周窗口）",
         "operationId": "campus_teacher_load_query",
-        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 当前已核验校园数据源 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -225,7 +225,7 @@
         ],
         "summary": "多教学周课表展开（教师/班级/教室/课程）",
         "operationId": "campus_schedule_range_query",
-        "description": "按实体类型与名称查询 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek 与具体日期），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由确定性 CampusTools 计算，禁止模型编造课表。",
+        "description": "按实体类型与名称查询 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek 与具体日期），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由确定性 CampusTools 计算，禁止模型编造课表。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -257,7 +257,7 @@
         ],
         "summary": "校园实体搜索/清单（教师/班级/教室/课程/校区/学院）",
         "operationId": "campus_entity_search",
-        "description": "通用校园实体搜索与清单：支持 exact/normalized_exact/prefix/substring/fuzzy 确定性匹配（matchType 由服务端判定）与确定排序，禁止模型编造实体；不传关键词返回该类型清单。支持 campus/college 过滤与 limit 上限（1..100，默认 20）。",
+        "description": "通用校园实体搜索与清单：支持 exact/normalized_exact/prefix/substring/fuzzy 确定性匹配（matchType 由服务端判定）与确定排序，禁止模型编造实体；不传关键词返回该类型清单。支持 campus/college 过滤与 limit 上限（1..100，默认 20）。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -289,7 +289,7 @@
         ],
         "summary": "教学周/学期/节次时间上下文（Temporal Semantic Core）",
         "operationId": "campus_academic_context",
-        "description": "封装 Temporal Semantic Core：解析绝对/相对日期与结构化 temporal intent（absolute/relative_day/relative_weekday/academic_week/academic_week_weekday/week_range/future_weeks/recent_weeks/next_week/prev_week/current），确定性输出教学周、星期、学期与节次时间轴并暴露 temporalContext；日期与周次由确定性服务计算，禁止模型猜测。",
+        "description": "封装 Temporal Semantic Core：解析绝对/相对日期与结构化 temporal intent（absolute/relative_day/relative_weekday/academic_week/academic_week_weekday/week_range/future_weeks/recent_weeks/next_week/prev_week/current），确定性输出教学周、星期、学期与节次时间轴并暴露 temporalContext；日期与周次由确定性服务计算，禁止模型猜测。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -321,7 +321,7 @@
         ],
         "summary": "多实体共同空闲窗口（2..6 教师/班级）",
         "operationId": "campus_common_free_time_query",
-        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -353,7 +353,7 @@
         ],
         "summary": "教室/楼栋/校区利用率排名（Ranking Core）",
         "operationId": "campus_room_utilization_query",
-        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -385,7 +385,7 @@
         ],
         "summary": "调课 What-if 模拟可行性（绝不修改数据）",
         "operationId": "campus_reschedule_feasibility",
-        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -417,7 +417,7 @@
         ],
         "summary": "群体计划候选（共同空闲 + 空教室 ranked）",
         "operationId": "campus_group_plan",
-        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {

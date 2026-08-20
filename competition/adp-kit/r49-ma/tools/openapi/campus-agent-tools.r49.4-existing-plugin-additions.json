@@ -23,7 +23,7 @@
         ],
         "summary": "教师课表负载排名（教学周窗口）",
         "operationId": "campus_teacher_load_query",
-        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 当前已核验校园数据源 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -55,7 +55,7 @@
         ],
         "summary": "多教学周课表展开（教师/班级/教室/课程）",
         "operationId": "campus_schedule_range_query",
-        "description": "按实体类型与名称查询 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek 与具体日期），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由确定性 CampusTools 计算，禁止模型编造课表。",
+        "description": "按实体类型与名称查询 weekStart..weekEnd 教学周窗口内的课表，逐周展开（每个匹配周一条，携带 academicWeek 与具体日期），支持星期与节次过滤。需要跨多个教学周（如 1..4 周）查看时调用本工具；只看单周请用 campus_schedule_query。动态事实由确定性 CampusTools 计算，禁止模型编造课表。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {

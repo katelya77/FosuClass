@@ -21,6 +21,7 @@
 - 非法参数在调用前自行纠正或返回 INVALID_PARAM，**不先发一次错误请求再重试**。
 - 动态槽位变化（周 / 周范围 / 星期 / 日期 / 节次 / 校区 / 楼栋 / 容量 / 实体）→ 必须重新调用工具；不得拿上一轮结果截取回答。
 - 可选字段空缺不澄清、不补默认；0 值语义按契约视为未指定。
+- Main 已传入结构化 soft preference 时，只取 preferEarlier / preferLarger / preferSameCampus / preferWeekdays，并在首次支持 Decision 的工具调用中作为 decisionPreferences 携带；不得先做一次无偏好查询再重试。
 
 ## 结果契约
 - 回传 Main：业务结果 + evidence（dataVersion / 核验标记）。状态：SUCCESS / NEED_CLARIFICATION / NO_RESULT / ERROR。

@@ -33,7 +33,7 @@
         ],
         "summary": "校园实体搜索/清单（教师/班级/教室/课程/校区/学院）",
         "operationId": "campus_entity_search",
-        "description": "通用校园实体搜索与清单：支持 exact/normalized_exact/prefix/substring/fuzzy 确定性匹配（matchType 由服务端判定）与确定排序，禁止模型编造实体；不传关键词返回该类型清单。支持 campus/college 过滤与 limit 上限（1..100，默认 20）。",
+        "description": "通用校园实体搜索与清单：支持 exact/normalized_exact/prefix/substring/fuzzy 确定性匹配（matchType 由服务端判定）与确定排序，禁止模型编造实体；不传关键词返回该类型清单。支持 campus/college 过滤与 limit 上限（1..100，默认 20）。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -65,7 +65,7 @@
         ],
         "summary": "教学周/学期/节次时间上下文（Temporal Semantic Core）",
         "operationId": "campus_academic_context",
-        "description": "封装 Temporal Semantic Core：解析绝对/相对日期与结构化 temporal intent（absolute/relative_day/relative_weekday/academic_week/academic_week_weekday/week_range/future_weeks/recent_weeks/next_week/prev_week/current），确定性输出教学周、星期、学期与节次时间轴并暴露 temporalContext；日期与周次由确定性服务计算，禁止模型猜测。",
+        "description": "封装 Temporal Semantic Core：解析绝对/相对日期与结构化 temporal intent（absolute/relative_day/relative_weekday/academic_week/academic_week_weekday/week_range/future_weeks/recent_weeks/next_week/prev_week/current），确定性输出教学周、星期、学期与节次时间轴并暴露 temporalContext；日期与周次由确定性服务计算，禁止模型猜测。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -97,7 +97,7 @@
         ],
         "summary": "多实体共同空闲窗口（2..6 教师/班级）",
         "operationId": "campus_common_free_time_query",
-        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -129,7 +129,7 @@
         ],
         "summary": "教室/楼栋/校区利用率排名（Ranking Core）",
         "operationId": "campus_room_utilization_query",
-        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -161,7 +161,7 @@
         ],
         "summary": "调课 What-if 模拟可行性（绝不修改数据）",
         "operationId": "campus_reschedule_feasibility",
-        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {
@@ -193,7 +193,7 @@
         ],
         "summary": "群体计划候选（共同空闲 + 空教室 ranked）",
         "operationId": "campus_group_plan",
-        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
+        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
         "requestBody": {
           "required": true,
           "content": {

@@ -1,0 +1,7 @@
+{
+  "name": "校园智序 · 小序",
+  "publishAllowed": false,
+  "expectedAgentCount": 4,
+  "modelPolicy": "preserve_platform_recommended_unless_explicit",
+  "legacyWorkflowPolicy": "inactive_if_observable"
+}

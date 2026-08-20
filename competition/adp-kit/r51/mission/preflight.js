@@ -63,12 +63,44 @@ function normalizeEntityType(value) {
 }
 
 // 在 Tool 调用前完成校验与规范化。失败时不发起任何请求（fail-closed）。
-function preflightToolCall(toolName, params) {
+const DECISION_CAPABLE_TOOLS = new Set([
+  "campus_classroom_search",
+  "campus_teacher_load_query",
+  "campus_common_free_time_query",
+  "campus_room_utilization_query",
+  "campus_reschedule_feasibility",
+  "campus_group_plan",
+]);
+
+function mapDecisionPreferences(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const output = {};
+  for (const key of ["preferEarlier", "preferLarger", "preferSameCampus"]) {
+    if (typeof source[key] === "boolean") output[key] = source[key];
+  }
+  if (Array.isArray(source.preferWeekdays)) {
+    const weekdays = [...new Set(source.preferWeekdays.filter((value) => Number.isInteger(value) && value >= 1 && value <= 7))].sort((a, b) => a - b);
+    if (weekdays.length) output.preferWeekdays = weekdays;
+  }
+  return output;
+}
+
+function softPreferencesFromGoalSpec(goalSpec) {
+  if (!goalSpec || typeof goalSpec !== "object") return {};
+  const constraints = goalSpec.constraints || {};
+  return mapDecisionPreferences(constraints.soft || goalSpec.softPreferences || goalSpec.decisionPreferences);
+}
+
+function preflightToolCall(toolName, params, context = {}) {
   const contracts = loadOperationContracts();
   const contract = contracts[toolName];
   if (!contract) return { ok: false, error: "UNKNOWN_TOOL", field: null, params: params || {} };
 
   const out = Object.assign({}, params || {});
+  if (DECISION_CAPABLE_TOOLS.has(toolName) && (context.callIndex === undefined || context.callIndex === 0)) {
+    const preferences = softPreferencesFromGoalSpec(context.goalSpec);
+    if (Object.keys(preferences).length > 0) out.decisionPreferences = preferences;
+  }
   for (const [name, meta] of Object.entries(contract.params)) {
     if (!meta.enum) continue;
     const value = out[name];
@@ -94,5 +126,8 @@ module.exports = {
   enumValuesForField,
   resolveAlias,
   normalizeEntityType,
+  DECISION_CAPABLE_TOOLS,
+  mapDecisionPreferences,
   preflightToolCall,
+  softPreferencesFromGoalSpec,
 };

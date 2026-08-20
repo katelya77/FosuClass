@@ -4,6 +4,9 @@
 local.secrets*
 .local/
 .local/cloudbase-releases/
+competition/adp-kit/ops/runtime-control-plane/desired-state/config.local.json
+competition/adp-kit/ops/runtime-control-plane/snapshots/*.local.json
+competition/adp-kit/ops/runtime-control-plane/snapshots/rollback-*.json
 *.secret
 *.log
 *.har
