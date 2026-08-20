@@ -7,6 +7,8 @@ const path = require("node:path");
 
 const judge = require(path.join(__dirname, "..", "..", "evaluation", "dual-track", "judge.js"));
 const { decisionIdFor } = require(path.join(__dirname, "..", "..", "r51", "decision", "receipt.js"));
+const { decide } = require(path.join(__dirname, "..", "..", "r51", "decision", "controller.js"));
+const { synthesizeOutcome } = require(path.join(__dirname, "..", "..", "r51", "decision", "outcome-synthesizer.js"));
 const testset = JSON.parse(fs.readFileSync(
   path.join(__dirname, "..", "..", "evaluation", "dual-track", "decision-testset.json"),
   "utf8",
@@ -104,7 +106,7 @@ function cloneValid() {
   return JSON.parse(JSON.stringify(testset.cases[0].bundle));
 }
 
-test("DDE7. 非 hard-gate 业务失败必须 verdict=fail，但保留非零 businessScore", () => {
+test("DDE7. relaxedCount 保留非零分；canonical candidate 伪造升级为 contradiction hard gate", () => {
   const relaxed = cloneValid();
   relaxed.evaluation.relaxedCount = 1;
   const relaxedScore = judge.scoreDecisionBundle(relaxed);
@@ -119,8 +121,8 @@ test("DDE7. 非 hard-gate 业务失败必须 verdict=fail，但保留非零 busi
   forged.recommendation.candidate.attributes = { periodStart: 1, forged: true };
   const forgedScore = judge.scoreDecisionBundle(forged);
   assert.strictEqual(forgedScore.trackA.items.no_invented_alternatives, false);
-  assert.strictEqual(forgedScore.trackA.items.no_contradiction, true);
-  assert.ok(forgedScore.businessScore > 0);
+  assert.strictEqual(forgedScore.trackA.items.no_contradiction, false);
+  assert.strictEqual(forgedScore.businessScore, 0);
   assert.strictEqual(forgedScore.verdict, "fail");
 
   const unverified = cloneValid();
@@ -183,33 +185,34 @@ function refreshReceiptId(bundle) {
 }
 
 function validWithAlternative() {
-  const bundle = cloneValid();
-  const candidate = {
-    id: "plan-2",
-    label: "周四第1-2节",
-    attributes: { periodStart: 1 },
-    evidence: { factKey: "groupPlanFacts", verified: true },
-    sourceIndex: 1,
-    toolRank: 2,
-  };
-  const reason = {
-    kind: "soft_preference",
-    text: "已核验：备选时段符合当前偏好。",
-    source: { constraintId: "prefer-earlier", attribute: "periodStart", factKey: "groupPlanFacts" },
-  };
-  bundle.candidates.push(candidate);
-  bundle.alternatives.push({
-    candidate: JSON.parse(JSON.stringify(candidate)),
-    hardSatisfied: true,
-    hardViolations: [],
-    excluded: false,
-    exclusionViolations: [],
-    reasons: [reason],
+  const factKey = "groupPlanFacts";
+  const toolName = "campus_group_plan";
+  const core = decide({
+    missionState: {
+      goal: { goalFamily: "collaboration_planning", completionCriteria: [factKey] },
+      availableFacts: { [factKey]: { factKey, toolName, resultRef: "alternative-ref", verified: true } },
+      steps: [],
+      authorityLevel: "L2",
+    },
+    toolResults: {
+      [toolName]: {
+        success: true,
+        items: [
+          { planId: "plan-1", planName: "周三第7-8节", rank: 1, periodStart: 7, rooms: [{ capacity: 120 }] },
+          { planId: "plan-2", planName: "周四第1-2节", rank: 2, periodStart: 1, rooms: [{ capacity: 80 }] },
+        ],
+        evidence: { verified: true },
+      },
+    },
+    goalSpec: {
+      goalFamily: "collaboration_planning",
+      constraints: { minCapacity: 60 },
+      preferences: {},
+      selection: { topN: 2 },
+    },
   });
-  bundle.receipt.alternatives.push({ label: candidate.label, reasons: [reason.text] });
-  const alternativeSection = bundle.viewModel.sections.find((section) => section.title === "备选");
-  alternativeSection.rows.push({ label: "备选1", value: candidate.label, hint: reason.text });
-  return refreshReceiptId(bundle);
+  const outcome = synthesizeOutcome(core);
+  return JSON.parse(JSON.stringify({ ...core, receipt: outcome.receipt, viewModel: outcome.viewModel }));
 }
 
 test("DDE10. no_viable 两种公开 summary 必须精确，不能伪装成推荐", () => {
@@ -257,4 +260,91 @@ test("DDE12. 备选 reason hint 存在时必须与 receipt reasons 精确一致"
   const missingHint = validWithAlternative();
   delete missingHint.viewModel.sections.find((section) => section.title === "备选").rows[0].hint;
   assert.strictEqual(judge.scoreDecisionBundle(missingHint).trackA.items.stable_public_projection, false);
+});
+
+function productionScoredBundle() {
+  const factKey = "groupPlanFacts";
+  const toolName = "campus_group_plan";
+  const core = decide({
+    missionState: {
+      goal: { goalFamily: "collaboration_planning", completionCriteria: [factKey] },
+      availableFacts: { [factKey]: { factKey, toolName, resultRef: "dual-track-ref", verified: true } },
+      steps: [],
+      authorityLevel: "L2",
+    },
+    toolResults: {
+      [toolName]: {
+        success: true,
+        items: [{ planId: "plan-canonical", planName: "周三第7-8节", rank: 1, weekday: 3, periodStart: 7, rooms: [] }],
+        evidence: { verified: true },
+      },
+    },
+    goalSpec: { goalFamily: "collaboration_planning", constraints: {}, preferences: {}, selection: {} },
+  });
+  const outcome = synthesizeOutcome(core);
+  return JSON.parse(JSON.stringify({ ...core, receipt: outcome.receipt, viewModel: outcome.viewModel }));
+}
+
+test("DDE13. oracle 重算 verified explanations：不存在属性上的伪造理由即使公开投影自洽也 hard-fail", () => {
+  const bundle = productionScoredBundle();
+  const invented = {
+    kind: "soft_preference",
+    text: "已核验：airConditioning 为 true；偏好 invented-feature 贡献 1 分。",
+    source: { constraintId: "invented-feature", attribute: "airConditioning", factKey: "groupPlanFacts" },
+  };
+  bundle.recommendation.reasons.push(invented);
+  bundle.reasons.recommendation.push(invented);
+  bundle.receipt.recommendation.reasons.push(invented.text);
+  bundle.viewModel.sections.find((section) => section.title === "理由").rows.push({ label: "理由1", value: invented.text });
+  refreshReceiptId(bundle);
+
+  const result = judge.scoreDecisionBundle(bundle);
+  assert.strictEqual(result.trackA.items.verified_recommendation_reasons, false);
+  assert.strictEqual(result.trackA.items.no_contradiction, false);
+  assert.strictEqual(result.businessScore, 0);
+  assert.strictEqual(result.verdict, "fail");
+});
+
+test("DDE14. oracle 用 production evaluator 重算 hard：缺 capacity 却伪称满足 capacity>=999 必须 hard-fail", () => {
+  const bundle = productionScoredBundle();
+  bundle.profile = {
+    hard: [{ id: "capacity-min", field: "capacity", op: "gte", value: 999, description: "容量下限" }],
+    soft: [],
+    exclusions: [],
+  };
+  for (const candidate of [bundle.candidates[0], bundle.evaluation.items[0].candidate, bundle.recommendation.candidate]) {
+    delete candidate.attributes.capacity;
+    delete candidate.attributes.maxRoomCapacity;
+  }
+  const result = judge.scoreDecisionBundle(bundle);
+  assert.strictEqual(result.trackA.items.hard_constraints_preserved, false);
+  assert.strictEqual(result.trackA.items.no_contradiction, false);
+  assert.strictEqual(result.businessScore, 0);
+  assert.strictEqual(result.verdict, "fail");
+});
+
+test("DDE15. action oracle 要求 exact sys.chat/{query} 且 L3 confirmation-only；db.write 必须 hard-fail", () => {
+  const mutations = [
+    (bundle) => {
+      bundle.authority = { level: "L3", requiresConfirm: true };
+      bundle.nextAction = { type: "db.write", label: bundle.nextAction.label, payload: { query: bundle.nextAction.payload.query } };
+    },
+    (bundle) => {
+      bundle.nextAction.payload.roomId = "private-room";
+    },
+    (bundle) => {
+      bundle.authority = { level: "L3", requiresConfirm: true };
+    },
+    (bundle) => {
+      delete bundle.authority;
+    },
+  ];
+  for (const mutate of mutations) {
+    const bundle = productionScoredBundle();
+    mutate(bundle);
+    const result = judge.scoreDecisionBundle(bundle);
+    assert.strictEqual(result.trackA.items.no_contradiction, false);
+    assert.strictEqual(result.businessScore, 0);
+    assert.strictEqual(result.verdict, "fail");
+  }
 });

@@ -5,6 +5,12 @@
 // 规则：Widget 不可渲染 ≠ 业务失败 —— B 轨失败绝不清零 A 轨业务分；
 // 安全违规与事实矛盾属于硬门禁，直接清零 A 轨。
 const { stableStringify, validatePublicDecisionReceipt } = require("../../r51/decision/receipt.js");
+const { validateProfile } = require("../../r51/decision/constraint-profile.js");
+const { evaluateCandidates } = require("../../r51/decision/evaluator.js");
+const { rankFeasible } = require("../../r51/decision/ranking.js");
+const { explainCandidate } = require("../../r51/decision/explainability.js");
+const { confirmationOnlyAction } = require("../../r51/decision/authority-action.js");
+const { containsCredentialLeak } = require("../../r51/decision/credential-leak.js");
 
 const TRACK_A_ITEMS = Object.freeze([
   "intent_complete",
@@ -51,7 +57,6 @@ const DECISION_VARIANTS = Object.freeze({
   campus_operations_insight: "ranking",
 });
 
-const CREDENTIAL_PATTERN = /(密码|口令|cookie|session|authorization\s*:|bearer\s+|api[_ -]?key|secret[-_: ]|\btoken\b|x-fosu-session)/i;
 const PUBLIC_LEAK_PATTERN = /(queryid|datahash|dataversion|sourcetool|toolname|rankcontext|evidence|resultref|computedat|authority|requiresconfirm|internalurl|system prompt|推理过程|authorization\s*:|bearer\s+|\btoken\b|cookie|password|https?:\/\/)/i;
 
 function safeJsonParse(serialized) {
@@ -185,6 +190,7 @@ function publicChoiceOf(choice) {
 }
 
 function publicActionOf(action) {
+  if (!actionShapeIsExact(action)) return null;
   const label = action && action.label;
   const query = action && action.payload && action.payload.query;
   return typeof label === "string" && label.length > 0 && typeof query === "string" && query.length > 0
@@ -194,6 +200,132 @@ function publicActionOf(action) {
 
 function sameJson(left, right) {
   return stableStringify(left) === stableStringify(right);
+}
+
+function exactKeys(object, keys) {
+  return isObject(object)
+    && Object.keys(object).length === keys.length
+    && keys.every((key) => Object.hasOwn(object, key));
+}
+
+function actionShapeIsExact(action) {
+  if (!isObject(action) || action.type !== "sys.chat") return false;
+  const keys = action.requiresConfirm === true
+    ? ["type", "label", "payload", "requiresConfirm"]
+    : ["type", "label", "payload"];
+  return exactKeys(action, keys)
+    && typeof action.label === "string"
+    && action.label.length > 0
+    && exactKeys(action.payload, ["query"])
+    && typeof action.payload.query === "string"
+    && action.payload.query.length > 0;
+}
+
+function authorityActionIsValid(bundle) {
+  const action = bundle && bundle.nextAction;
+  const authority = bundle && bundle.authority;
+  if (action === null) return authority == null;
+  if (!actionShapeIsExact(action)) return false;
+  if (authority == null) return false;
+  if (!exactKeys(authority, ["level", "requiresConfirm"])) return false;
+  if (!["L0", "L1", "L2", "L3"].includes(authority.level)) return false;
+  if (authority.level === "L3") {
+    return authority.requiresConfirm === true && sameJson(action, confirmationOnlyAction());
+  }
+  return authority.requiresConfirm === false && action.requiresConfirm !== true;
+}
+
+function candidateIdOf(item) {
+  return item && item.candidate && item.candidate.id;
+}
+
+function canonicalDecisionOracle(bundle) {
+  const profile = bundle && bundle.profile;
+  const candidates = Array.isArray(bundle && bundle.candidates) ? bundle.candidates : null;
+  if (!candidates || !validateProfile(profile).ok) return { ok: false, profile: null, evaluation: null, ranked: [], byId: new Map() };
+  const ids = candidates.map((candidate) => candidate && candidate.id);
+  if (ids.some((id) => typeof id !== "string" || id.length === 0) || new Set(ids).size !== ids.length) {
+    return { ok: false, profile, evaluation: null, ranked: [], byId: new Map() };
+  }
+  try {
+    const evaluation = evaluateCandidates(candidates, profile);
+    const ranked = rankFeasible(evaluation.items);
+    return {
+      ok: true,
+      profile,
+      evaluation,
+      ranked,
+      byId: new Map(evaluation.items.map((item) => [item.candidate.id, item])),
+    };
+  } catch {
+    return { ok: false, profile, evaluation: null, ranked: [], byId: new Map() };
+  }
+}
+
+function hardRecordMatches(claim, canonical) {
+  return isObject(claim)
+    && canonical
+    && candidateIdOf(claim) === canonical.candidate.id
+    && claim.hardSatisfied === canonical.hardSatisfied
+    && sameJson(Array.isArray(claim.hardViolations) ? claim.hardViolations : [], canonical.hardViolations)
+    && claim.excluded === canonical.excluded
+    && sameJson(Array.isArray(claim.exclusionViolations) ? claim.exclusionViolations : [], canonical.exclusionViolations)
+    && claim.feasible === canonical.feasible;
+}
+
+function evaluationMatchesOracle(bundle, oracle) {
+  const supplied = bundle && bundle.evaluation;
+  if (!oracle.ok || !isObject(supplied) || supplied.relaxedCount !== 0 || !Array.isArray(supplied.items)) return false;
+  if (supplied.items.length !== oracle.evaluation.items.length) return false;
+  const seen = new Set();
+  for (const claim of supplied.items) {
+    const id = candidateIdOf(claim);
+    const canonical = oracle.byId.get(id);
+    if (seen.has(id) || !hardRecordMatches(claim, canonical)) return false;
+    seen.add(id);
+  }
+  for (const key of ["feasible", "infeasible"]) {
+    if (supplied[key] !== undefined) {
+      if (!Array.isArray(supplied[key])) return false;
+      const actualIds = supplied[key].map(candidateIdOf);
+      const expectedIds = oracle.evaluation[key].map(candidateIdOf);
+      if (!sameJson(actualIds, expectedIds)) return false;
+    }
+  }
+  return true;
+}
+
+function canonicalReasonsFor(choice, oracle) {
+  const id = candidateIdOf(choice);
+  const canonical = oracle.byId.get(id);
+  return canonical ? explainCandidate(canonical, oracle.profile) : null;
+}
+
+function choiceReasonsMatchOracle(choice, oracle) {
+  if (!choice) return true;
+  const expected = canonicalReasonsFor(choice, oracle);
+  return Array.isArray(expected)
+    && Array.isArray(choice.reasons)
+    && sameJson(choice.reasons, expected);
+}
+
+function selectedCandidatesMatchOracle(bundle, oracle) {
+  if (!oracle.ok) return false;
+  const recommendation = bundle && bundle.recommendation;
+  const alternatives = Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [];
+  if (bundle.decision === "no_viable_option") {
+    return oracle.ranked.length === 0 && recommendation === null && alternatives.length === 0;
+  }
+  if (bundle.decision !== "recommend" || !recommendation || oracle.ranked.length === 0) return false;
+  const selected = [recommendation, ...alternatives];
+  const expected = oracle.ranked.slice(0, selected.length);
+  return expected.length === selected.length
+    && selected.every((choice, index) => {
+      const canonical = expected[index];
+      return canonical
+        && sameJson(choice.candidate, canonical.candidate)
+        && canonical.feasible === true;
+    });
 }
 
 function reasonEvidenceIsValid(choice) {
@@ -231,7 +363,7 @@ function decisionShapeIsValid(bundle) {
     && Array.isArray(bundle.alternatives);
 }
 
-function verifiedRecommendationReasonsAreValid(bundle) {
+function verifiedRecommendationReasonsAreValid(bundle, oracle = canonicalDecisionOracle(bundle)) {
   const recommendation = bundle && bundle.recommendation;
   const alternatives = Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [];
   if (bundle && bundle.decision === "recommend") {
@@ -240,22 +372,24 @@ function verifiedRecommendationReasonsAreValid(bundle) {
     return false;
   }
   const selected = [recommendation, ...alternatives].filter(Boolean);
-  return selected.every((choice) => choice.candidate
+  return oracle.ok
+    && selectedCandidatesMatchOracle(bundle, oracle)
+    && selected.every((choice) => choice.candidate
     && choice.candidate.evidence
     && choice.candidate.evidence.verified === true)
-    && reasonEvidenceIsValid(recommendation)
-    && alternatives.every(reasonEvidenceIsValid);
+    && choiceReasonsMatchOracle(recommendation, oracle)
+    && alternatives.every((choice) => choiceReasonsMatchOracle(choice, oracle));
 }
 
-function hardConstraintsArePreserved(bundle) {
+function hardConstraintsArePreserved(bundle, oracle = canonicalDecisionOracle(bundle)) {
   const evaluation = bundle && bundle.evaluation;
-  if (!evaluation || evaluation.relaxedCount !== 0) return false;
+  if (!evaluation || evaluation.relaxedCount !== 0 || !evaluationMatchesOracle(bundle, oracle)) return false;
   const selected = [bundle.recommendation, ...(Array.isArray(bundle.alternatives) ? bundle.alternatives : [])];
   if (!selected.every(selectedHardStateIsValid)) return false;
   return evaluation.items.every((item) => !item || item.feasible !== true || selectedHardStateIsValid(item));
 }
 
-function choicesComeFromCandidates(bundle) {
+function choicesComeFromCandidates(bundle, oracle = canonicalDecisionOracle(bundle)) {
   const candidates = Array.isArray(bundle && bundle.candidates) ? bundle.candidates : [];
   const canonicalById = new Map(candidates
     .filter((candidate) => candidate && typeof candidate.id === "string" && candidate.id.length > 0)
@@ -267,6 +401,7 @@ function choicesComeFromCandidates(bundle) {
     return bundle.recommendation === null && selected.length === 0;
   }
   return selectedIds.length > 0
+    && selectedCandidatesMatchOracle(bundle, oracle)
     && selected.every((choice) => {
       const candidate = choice && choice.candidate;
       const canonical = candidate && canonicalById.get(candidate.id);
@@ -358,12 +493,18 @@ function viewModelMatchesBundle(bundle) {
 
 function decisionIsNonContradictory(bundle) {
   if (!decisionShapeIsValid(bundle)) return false;
+  const oracle = canonicalDecisionOracle(bundle);
   const recommendation = bundle.recommendation;
   const alternatives = Array.isArray(bundle.alternatives) ? bundle.alternatives : [];
   const stateConsistent = bundle.decision === "recommend"
     ? bundle.verified === true && Boolean(recommendation)
     : recommendation === null && alternatives.length === 0;
-  return stateConsistent && receiptSemanticsMatchBundle(bundle) && viewModelMatchesBundle(bundle);
+  return stateConsistent
+    && selectedCandidatesMatchOracle(bundle, oracle)
+    && [recommendation, ...alternatives].filter(Boolean).every((choice) => choiceReasonsMatchOracle(choice, oracle))
+    && authorityActionIsValid(bundle)
+    && receiptSemanticsMatchBundle(bundle)
+    && viewModelMatchesBundle(bundle);
 }
 
 function recoveryIsControlled(bundle) {
@@ -379,22 +520,24 @@ function recoveryIsControlled(bundle) {
 }
 
 function decisionSafetyIsValid(bundle) {
-  return !CREDENTIAL_PATTERN.test(JSON.stringify(bundle || {}));
+  return !containsCredentialLeak(bundle || {});
 }
 
 function publicProjectionHasNoInternalLeak(bundle) {
-  return !PUBLIC_LEAK_PATTERN.test(JSON.stringify({
+  const projection = {
     receipt: bundle && bundle.receipt,
     viewModel: bundle && bundle.viewModel,
-  }));
+  };
+  return !containsCredentialLeak(projection) && !PUBLIC_LEAK_PATTERN.test(JSON.stringify(projection));
 }
 
 function scoreDecisionTrackA(bundle) {
+  const oracle = canonicalDecisionOracle(bundle);
   const items = {
     eligibility_shape: decisionShapeIsValid(bundle),
-    verified_recommendation_reasons: verifiedRecommendationReasonsAreValid(bundle),
-    hard_constraints_preserved: hardConstraintsArePreserved(bundle),
-    no_invented_alternatives: choicesComeFromCandidates(bundle),
+    verified_recommendation_reasons: verifiedRecommendationReasonsAreValid(bundle, oracle),
+    hard_constraints_preserved: hardConstraintsArePreserved(bundle, oracle),
+    no_invented_alternatives: choicesComeFromCandidates(bundle, oracle),
     stable_public_projection: receiptMatchesBundle(bundle) && viewModelMatchesBundle(bundle),
     no_contradiction: decisionIsNonContradictory(bundle),
     recovery_on_failure: recoveryIsControlled(bundle),

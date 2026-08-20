@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-20T07:48:21.020Z",
+  "generatedAt": "2026-08-20T08:44:12.917Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -95,13 +95,13 @@
     },
     {
       "path": "evaluation/dual-track/decision-testset.json",
-      "bytes": 11061,
-      "sha256": "a1a42f08d63fffae5981bafd6adfa4bb27910fce1ca1076d3b1e08958d26fd7a"
+      "bytes": 11499,
+      "sha256": "173bd51c66d2b9406d87a45578bed8f7904fcf91b62063e89ae9c96c012444cb"
     },
     {
       "path": "evaluation/dual-track/judge.js",
-      "bytes": 19194,
-      "sha256": "a5938861d609f1b6c6cea5dd011620ff145b55a5173c4b0f8a1a166272992b6a"
+      "bytes": 25383,
+      "sha256": "32f155d603aded01905a1e1cfa560697aeea1d1e64051e4fd5ab4d78ec11dcaa"
     },
     {
       "path": "evaluation/dual-track/rubric.md",
