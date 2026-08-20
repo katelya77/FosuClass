@@ -174,3 +174,12 @@ test("DIO-A11 forged fingerprint 必须被 judge 自行重算后拒绝", () => {
   bundle.intrinsicConstraintFingerprint = `sha256:${"0".repeat(64)}`;
   expectOracleReject(bundle, "forged fingerprint");
 });
+
+test("DIO-A12 改写 goalFamily 不能绕过 verified reschedule fact 触发的 intrinsic constraint", () => {
+  const bundle = productionBundle(false);
+  bundle.goalFamily = "collaboration_planning";
+  bundle.profile = { hard: [], soft: [], exclusions: [] };
+  bundle.intrinsicConstraintFingerprint = intrinsicConstraintFingerprint([]);
+  reproject(bundle);
+  expectOracleReject(bundle, "goal family relabel bypass");
+});

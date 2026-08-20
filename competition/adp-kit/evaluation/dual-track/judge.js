@@ -13,6 +13,16 @@ const { confirmationOnlyAction } = require("../../r51/decision/authority-action.
 const { containsCredentialLeak } = require("../../r51/decision/credential-leak.js");
 const { verifyAuthoritativeIntrinsicProfile } = require("../../r51/decision/intrinsic-constraints.js");
 
+const GOAL_FAMILIES_BY_FACT = Object.freeze({
+  groupPlanFacts: ["collaboration_planning"],
+  availabilityFacts: ["collaboration_planning"],
+  spaceFacts: ["collaboration_planning", "teaching_assurance"],
+  riskFacts: ["teaching_assurance"],
+  rankingFacts: ["campus_operations_insight"],
+  spaceUtilFacts: ["campus_operations_insight"],
+  rescheduleSimFacts: ["reschedule_simulation"],
+});
+
 const TRACK_A_ITEMS = Object.freeze([
   "intent_complete",
   "facts_verified",
@@ -240,15 +250,34 @@ function candidateIdOf(item) {
   return item && item.candidate && item.candidate.id;
 }
 
+function authoritativeContextFromVerifiedFacts(bundle, candidates) {
+  const sourceFactKey = bundle && bundle.sourceFactKey;
+  if (sourceFactKey == null) {
+    return candidates.length === 0 ? { ok: true, goalFamily: bundle && bundle.goalFamily } : { ok: false, goalFamily: null };
+  }
+  const allowedFamilies = GOAL_FAMILIES_BY_FACT[sourceFactKey];
+  if (!allowedFamilies || !allowedFamilies.includes(bundle && bundle.goalFamily)) return { ok: false, goalFamily: null };
+  const provenanceMatches = candidates.every((candidate) => candidate
+    && candidate.evidence
+    && candidate.evidence.verified === true
+    && candidate.evidence.factKey === sourceFactKey);
+  if (!provenanceMatches) return { ok: false, goalFamily: null };
+  // rescheduleSimFacts is itself the trusted intrinsic trigger.  The profile
+  // and its claimed fingerprint never decide whether feasibility is required.
+  const goalFamily = sourceFactKey === "rescheduleSimFacts" ? "reschedule_simulation" : bundle.goalFamily;
+  return { ok: true, goalFamily };
+}
+
 function canonicalDecisionOracle(bundle) {
   const profile = bundle && bundle.profile;
   const candidates = Array.isArray(bundle && bundle.candidates) ? bundle.candidates : null;
+  const context = candidates ? authoritativeContextFromVerifiedFacts(bundle, candidates) : { ok: false, goalFamily: null };
   const intrinsic = verifyAuthoritativeIntrinsicProfile(
     profile,
-    { goalFamily: bundle && bundle.goalFamily },
+    { goalFamily: context.goalFamily },
     bundle && bundle.intrinsicConstraintFingerprint,
   );
-  if (!candidates || !validateProfile(profile).ok || !intrinsic.ok) {
+  if (!candidates || !context.ok || !validateProfile(profile).ok || !intrinsic.ok) {
     return { ok: false, profile: null, evaluation: null, ranked: [], byId: new Map(), intrinsic };
   }
   const ids = candidates.map((candidate) => candidate && candidate.id);

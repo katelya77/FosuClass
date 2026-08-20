@@ -135,8 +135,8 @@ test("DDE7. relaxedCount 保留非零分；canonical candidate 伪造升级为 c
   const unverifiedScore = judge.scoreDecisionBundle(unverified);
   assert.strictEqual(unverifiedScore.trackA.items.verified_recommendation_reasons, false);
   assert.strictEqual(unverifiedScore.trackA.items.no_invented_alternatives, false);
-  assert.strictEqual(unverifiedScore.trackA.items.no_contradiction, true);
-  assert.ok(unverifiedScore.businessScore > 0);
+  assert.strictEqual(unverifiedScore.trackA.items.no_contradiction, false, "verified source provenance 损坏属于事实矛盾 hard gate");
+  assert.strictEqual(unverifiedScore.businessScore, 0);
   assert.strictEqual(unverifiedScore.verdict, "fail");
 });
 
