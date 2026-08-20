@@ -1,7 +1,7 @@
 "use strict";
 // Campus Decision Intelligence —— 候选提取（2026-08-19）
 // 只从 verified facts / toolResults 提取候选，绝不凭空造候选。
-// 规范化候选：{ id, label, attributes, toolRank, evidence:{factKey,toolName,verified}, sourceIndex }
+// 规范化候选：{ id, label, attributes, toolRank, evidence:{factKey,toolName,verified,resultRef}, sourceIndex }
 
 function asNum(v) {
   const n = Number(v);
@@ -14,7 +14,12 @@ function makeCandidate(id, label, attributes, meta, sourceIndex, toolRank = null
     label: String(label == null ? "" : label),
     attributes: attributes || {},
     toolRank,
-    evidence: { factKey: meta.factKey, toolName: meta.toolName, verified: meta.verified === true },
+    evidence: {
+      factKey: meta.factKey,
+      toolName: meta.toolName,
+      verified: meta.verified === true,
+      resultRef: meta.resultRef == null ? null : meta.resultRef,
+    },
     sourceIndex,
   };
 }
@@ -162,11 +167,15 @@ const FACT_ADAPTORS = Object.freeze({
 function candidatesForFact(factKey, toolResults, opts = {}) {
   const def = FACT_ADAPTORS[factKey];
   if (!def) return [];
-  const toolName = opts.toolName || def.tool;
+  const factMeta = opts.fact && typeof opts.fact === "object"
+    ? opts.fact
+    : (opts.meta && typeof opts.meta === "object" ? opts.meta : {});
+  const toolName = opts.toolName || factMeta.toolName || def.tool;
   const raw = toolResults && toolResults[toolName];
   if (!raw || !Array.isArray(raw.items)) return [];
   if (!verifiedOf(raw)) return [];
-  return def.adapt(raw, { factKey, toolName, verified: true });
+  const resultRef = opts.resultRef !== undefined ? opts.resultRef : factMeta.resultRef;
+  return def.adapt(raw, { factKey, toolName, verified: true, resultRef: resultRef == null ? null : resultRef });
 }
 
 module.exports = {

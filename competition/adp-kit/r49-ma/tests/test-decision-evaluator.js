@@ -39,16 +39,25 @@ test("EV2. fromSpace 提取 capacity/campus/building 属性", () => {
   assert.strictEqual(cs[0].attributes.building, "A1");
 });
 
-test("EV3. candidatesForFact 按 factKey 选择适配器并校验 verified", () => {
+test("EV3. candidatesForFact 按 factKey 选择适配器并校验 verified，保留 Mission resultRef", () => {
   const toolResults = {
     campus_classroom_search: {
       items: [{ roomId: "r-9", roomName: "B2-202", building: "B2", campusName: "校区B", capacity: 90, type: "普通教室" }],
       evidence: { verified: true },
     },
   };
-  const cs = candidatesForFact("spaceFacts", toolResults);
+  const cs = candidatesForFact("spaceFacts", toolResults, { meta: { resultRef: "mission-space-1" } });
   assert.strictEqual(cs.length, 1);
   assert.strictEqual(cs[0].evidence.verified, true);
+  assert.strictEqual(cs[0].evidence.resultRef, "mission-space-1");
+});
+
+test("EV3a. 缺失 Mission resultRef 时候选 evidence 显式为 null", () => {
+  const cs = fromSpace({
+    items: [{ roomId: "r-no-ref", roomName: "A1-102", capacity: 90 }],
+    evidence: { verified: true },
+  }, { factKey: "spaceFacts", toolName: "campus_classroom_search", verified: true });
+  assert.strictEqual(cs[0].evidence.resultRef, null);
 });
 
 test("EV3b. 未核验 toolResults 不进入 Decision Core，绝不将其作为候选", () => {
