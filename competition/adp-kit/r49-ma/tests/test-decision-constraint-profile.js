@@ -89,3 +89,24 @@ test("CP7. minCapacity 仅接受有限数或规范数值字符串，拒绝 Numbe
   assert.strictEqual(canonical.hard[0].value, 80);
   assert.strictEqual(validateProfile(canonical).ok, true);
 });
+
+test("CP8. 非空字符串 excludeBuilding 规范化为单元素 hard exclusion，绝不消失", () => {
+  const mapped = profileFromGoalSpec({ constraints: { excludeBuilding: "A2" }, preferences: {} });
+  assert.deepStrictEqual(mapped.hard, [{
+    id: "exclude-building",
+    field: "building",
+    op: "nin",
+    value: ["A2"],
+    description: "排除楼栋",
+  }]);
+  assert.strictEqual(validateProfile(mapped).ok, true);
+});
+
+test("CP9. 已提供但 malformed 的 excludeBuilding 必须保留为非法 profile 并 fail-closed", () => {
+  for (const excludeBuilding of [42, true, {}, " ", [null], [{}], ["A2", ""]]) {
+    const mapped = profileFromGoalSpec({ constraints: { excludeBuilding }, preferences: {} });
+    assert.strictEqual(mapped.hard.length, 1, `${JSON.stringify(excludeBuilding)} 不得静默丢弃`);
+    assert.strictEqual(mapped.hard[0].id, "exclude-building");
+    assert.strictEqual(validateProfile(mapped).ok, false, `${JSON.stringify(excludeBuilding)} 必须 fail-closed`);
+  }
+});

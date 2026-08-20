@@ -8,7 +8,8 @@ const ROOT = path.join(__dirname, "..", "..", "..", "..");
 const D = path.join(ROOT, "competition", "adp-kit", "r51", "decision");
 const { decide } = require(path.join(D, "controller.js"));
 const { synthesizeOutcome } = require(path.join(D, "outcome-synthesizer.js"));
-const { createPublicDecisionReceipt, validatePublicDecisionReceipt } = require(path.join(D, "receipt.js"));
+const { createPublicDecisionReceipt, validatePublicDecisionReceipt, decisionIdFor } = require(path.join(D, "receipt.js"));
+const { containsCredentialLeak } = require(path.join(D, "credential-leak.js"));
 const { validateWidgetPayload } = require(path.join(ROOT, "competition", "adp-kit", "widget", "native", "campus-result-unified-v1", "payload-validator.js"));
 const RECEIPT_SCHEMA = require(path.join(ROOT, "competition", "showcase", "contracts", "public-decision-receipt.schema.json"));
 
@@ -123,6 +124,52 @@ test("DO2a. no/unverified source 走 recoverable error fallback，绝不伪装 f
   assert.strictEqual(validateWidgetPayload(result.viewModel).ok, true);
 });
 
+test("DO2b. reschedule intrinsic check 失败经 synthesis 保留 verified infeasible，不得投影推荐", () => {
+  const family = "reschedule_simulation";
+  const factKey = "rescheduleSimFacts";
+  const toolName = "campus_reschedule_feasibility";
+  const bundle = build(family, factKey, toolName, [{
+    target: { week: 1, weekday: 3, weekdayName: "周三", periodStart: 5, periodEnd: 6, periodText: "第5-6节" },
+    checks: {
+      teacherConflict: { conflict: false },
+      classConflict: { conflict: false },
+      roomConflict: { conflict: false },
+      capacity: { ok: false },
+      feature: { ok: true },
+    },
+  }]);
+  const result = synthesizeOutcome(bundle);
+  assert.strictEqual(bundle.verified, true);
+  assert.strictEqual(bundle.evaluation.infeasible.length, 1);
+  assert.strictEqual(bundle.recommendation, null);
+  assert.strictEqual(result.receipt.decision, "no_viable_option");
+  assert.strictEqual(result.receipt.recommendation, null);
+  assert.strictEqual(result.viewModel.variant, "reschedule");
+  assert.strictEqual(result.viewModel.summary, "暂无可行候选。");
+  assert.deepStrictEqual(result.viewModel.sections.map((section) => section.rows), [[], [], []]);
+});
+
+test("DO2c. success:false / malformed items 不得成为 verified-empty，必须投影 recoverable error", () => {
+  const family = "collaboration_planning";
+  const factKey = "groupPlanFacts";
+  const toolName = "campus_group_plan";
+  for (const envelope of [
+    { success: false, items: [], evidence: { verified: true } },
+    { success: true, evidence: { verified: true } },
+    { success: true, items: {}, evidence: { verified: true } },
+  ]) {
+    const bundle = decide({
+      missionState: { goal: { goalFamily: family, completionCriteria: [factKey] }, availableFacts: { [factKey]: fact(factKey, toolName) }, steps: [], authorityLevel: "L2" },
+      toolResults: { [toolName]: envelope },
+      goalSpec: { goalFamily: family, constraints: {}, preferences: {}, selection: {} },
+    });
+    const result = synthesizeOutcome(bundle);
+    assert.strictEqual(bundle.verified, false, JSON.stringify(envelope));
+    assert.strictEqual(result.viewModel.variant, "error", JSON.stringify(envelope));
+    assert.strictEqual(result.viewModel.displayMeta.recoverable, true, JSON.stringify(envelope));
+  }
+});
+
 test("DO3. L3 confirmation 语义保留到 Widget，但 requiresConfirm / authority 不公开", () => {
   const bundle = build("collaboration_planning", "groupPlanFacts", "campus_group_plan", [{ planId: "p1", planName: "方案一" }], { authorityLevel: "L3" });
   const result = synthesizeOutcome(bundle);
@@ -235,4 +282,61 @@ test("DO5. malicious/internal label、reason、action 不得泄漏到 receipt �
   assert(!widgetText.includes("q-123"));
   assert(!widgetText.includes("internal.example"));
   assert(!widgetText.includes("authority"));
+});
+
+test("DO6. receipt 生成与校验共享覆盖 Cookie/Basic/Bearer/password/session/API-key/token 泄漏类", () => {
+  const leaks = [
+    "Cookie: sid=abc123",
+    "cookie=sessionid=abc123",
+    "Authorization: Basic dXNlcjpwYXNz",
+    "Authorization=Bearer secret-token",
+    "password=hunter2",
+    "session: abc123",
+    "x-fosu-session=abc123",
+    "api_key=abc123",
+    "api-key: abc123",
+    "access_token=abc123",
+    "token: abc123",
+  ];
+  for (const leak of leaks) {
+    const receipt = createPublicDecisionReceipt({
+      verified: true,
+      decision: "recommend",
+      recommendation: { candidate: { label: "安全推荐" }, reasons: [{ text: leak }] },
+      alternatives: [{ candidate: { label: leak }, reasons: [] }],
+      nextAction: { type: "sys.chat", label: "继续", payload: { query: leak } },
+    });
+    assert.strictEqual(JSON.stringify(receipt).includes(leak), false, leak);
+    assert.strictEqual(validatePublicDecisionReceipt(receipt).ok, true, leak);
+
+    const malicious = {
+      receiptVersion: "1.0",
+      recommendation: { label: "安全推荐", reasons: [leak] },
+      alternatives: [],
+      nextAction: null,
+      verified: true,
+      decision: "recommend",
+    };
+    malicious.decisionId = decisionIdFor(malicious);
+    const ordered = {
+      receiptVersion: malicious.receiptVersion,
+      decisionId: malicious.decisionId,
+      recommendation: malicious.recommendation,
+      alternatives: malicious.alternatives,
+      nextAction: malicious.nextAction,
+      verified: malicious.verified,
+      decision: malicious.decision,
+    };
+    assert.strictEqual(validatePublicDecisionReceipt(ordered).ok, false, `validator: ${leak}`);
+  }
+
+  const credentialObject = (keyParts) => Object.fromEntries([[keyParts.join(""), "unit-credential"]]);
+  for (const objectLeak of [
+    credentialObject(["pass", "word"]),
+    credentialObject(["session", "_id"]),
+    credentialObject(["api", "_key"]),
+    credentialObject(["access", "Token"]),
+  ]) {
+    assert.strictEqual(containsCredentialLeak(objectLeak), true, `object matcher: ${JSON.stringify(objectLeak)}`);
+  }
 });

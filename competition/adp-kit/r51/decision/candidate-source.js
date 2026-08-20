@@ -4,8 +4,16 @@
 // 规范化候选：{ id, label, attributes, toolRank, evidence:{factKey,toolName,verified,resultRef}, sourceIndex }
 
 function asNum(v) {
+  if (v === undefined || v === null || v === "" || typeof v === "boolean") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function maxKnownCapacity(rooms) {
+  const values = (Array.isArray(rooms) ? rooms : [])
+    .map((room) => asNum(room && room.capacity))
+    .filter(Number.isFinite);
+  return values.length ? Math.max(...values) : null;
 }
 
 function makeCandidate(id, label, attributes, meta, sourceIndex, toolRank = null) {
@@ -37,6 +45,15 @@ function verifiedOf(raw, meta = {}) {
 
 function verifiedItems(raw, meta) {
   return verifiedOf(raw, meta) ? itemsOf(raw) : [];
+}
+
+function canonicalEnvelopeIsVerified(raw, definition) {
+  const collection = definition && definition.collection;
+  return Boolean(raw
+    && raw.success === true
+    && verifiedOf(raw) === true
+    && (!collection || (Array.isArray(raw[collection])
+      && raw[collection].every((item) => item && typeof item === "object" && !Array.isArray(item)))));
 }
 
 // 排名工具（教师负载 / 教室利用率）：items[].rank → toolRank（保留工具已有排名）
@@ -81,7 +98,7 @@ function fromAvailability(raw, meta) {
   const verified = verifiedOf(raw, meta);
   return verifiedItems(raw, meta).map((item, index) => {
     const rooms = Array.isArray(item.rooms) ? item.rooms : [];
-    const maxRoomCapacity = rooms.reduce((max, r) => Math.max(max, asNum(r.capacity) || 0), 0);
+    const maxRoomCapacity = maxKnownCapacity(rooms);
     const attributes = {
       week: asNum(item.week),
       weekday: asNum(item.weekday),
@@ -91,6 +108,7 @@ function fromAvailability(raw, meta) {
       freePeriodCount: asNum(item.freePeriodCount),
       roomCount: asNum(item.roomCount),
       maxRoomCapacity,
+      capacity: maxRoomCapacity,
     };
     const label = `${item.weekdayName || ""} ${item.periodText || ""}`.trim() || `slot-${index}`;
     return makeCandidate(`slot-${attributes.week ?? index}-${attributes.weekday ?? index}-${attributes.periodStart ?? index}-${attributes.periodEnd ?? index}`, label, attributes, { ...meta, verified }, index);
@@ -102,7 +120,7 @@ function fromGroupPlan(raw, meta) {
   const verified = verifiedOf(raw, meta);
   return verifiedItems(raw, meta).map((item, index) => {
     const rooms = Array.isArray(item.rooms) ? item.rooms : [];
-    const maxRoomCapacity = rooms.reduce((max, room) => Math.max(max, asNum(room.capacity) || 0), 0);
+    const maxRoomCapacity = maxKnownCapacity(rooms);
     const attributes = {
       weekday: asNum(item.weekday),
       weekdayName: item.weekdayName,
@@ -111,6 +129,7 @@ function fromGroupPlan(raw, meta) {
       freePeriodCount: asNum(item.freePeriodCount),
       roomCount: asNum(item.roomCount),
       maxRoomCapacity,
+      capacity: maxRoomCapacity,
       rooms,
     };
     const id = item.planId || item.id || `plan-${item.week ?? ""}-${attributes.weekday ?? index}-${attributes.periodStart ?? index}-${attributes.periodEnd ?? index}`;
@@ -134,8 +153,8 @@ function fromReschedule(raw, meta) {
     const checksPresent = conflictChecks.every((check) => check && typeof check.conflict === "boolean")
       && capabilityChecks.every((check) => check && typeof check.ok === "boolean");
     const feasible = checksPresent
-      ? conflictCount === 0 && capabilityChecks.every((check) => check.ok === true)
-      : raw && raw.summary && raw.summary.feasible === true;
+      && conflictCount === 0
+      && capabilityChecks.every((check) => check.ok === true);
     const warningCount = Array.isArray(item.warnings)
       ? item.warnings.length
       : (asNum(raw && raw.summary && raw.summary.warningCount) || 0);
@@ -155,14 +174,14 @@ function fromReschedule(raw, meta) {
 }
 
 const FACT_ADAPTORS = Object.freeze({
-  rankingFacts: { tool: "campus_teacher_load_query", adapt: fromRanking },
-  spaceUtilFacts: { tool: "campus_room_utilization_query", adapt: fromRanking },
-  availabilityFacts: { tool: "campus_common_free_time_query", adapt: fromAvailability },
-  spaceFacts: { tool: "campus_classroom_search", adapt: fromSpace },
-  groupPlanFacts: { tool: "campus_group_plan", adapt: fromGroupPlan },
-  rescheduleSimFacts: { tool: "campus_reschedule_feasibility", adapt: fromReschedule },
+  rankingFacts: { tool: "campus_teacher_load_query", collection: "items", adapt: fromRanking },
+  spaceUtilFacts: { tool: "campus_room_utilization_query", collection: "items", adapt: fromRanking },
+  availabilityFacts: { tool: "campus_common_free_time_query", collection: "items", adapt: fromAvailability },
+  spaceFacts: { tool: "campus_classroom_search", collection: "items", adapt: fromSpace },
+  groupPlanFacts: { tool: "campus_group_plan", collection: "items", adapt: fromGroupPlan },
+  rescheduleSimFacts: { tool: "campus_reschedule_feasibility", collection: "items", adapt: fromReschedule },
   // 风险事实是 eligible source，但当前没有规范化候选 adapter；Controller 只能核验为空，不能造候选。
-  riskFacts: { tool: "campus_risk_check", adapt: null },
+  riskFacts: { tool: "campus_risk_check", collection: "items", adapt: null },
 });
 
 // 按 factKey 选择适配器并从 toolResults 提取候选；无事实/无 items → []。
@@ -174,8 +193,7 @@ function candidatesForFact(factKey, toolResults, opts = {}) {
     : (opts.meta && typeof opts.meta === "object" ? opts.meta : {});
   const toolName = opts.toolName || factMeta.toolName || def.tool;
   const raw = toolResults && toolResults[toolName];
-  if (!raw || !Array.isArray(raw.items)) return [];
-  if (!verifiedOf(raw)) return [];
+  if (!canonicalEnvelopeIsVerified(raw, def)) return [];
   const resultRef = opts.resultRef !== undefined ? opts.resultRef : factMeta.resultRef;
   return def.adapt(raw, { factKey, toolName, verified: true, resultRef: resultRef == null ? null : resultRef });
 }
@@ -185,6 +203,8 @@ module.exports = {
   itemsOf,
   verifiedOf,
   verifiedItems,
+  canonicalEnvelopeIsVerified,
+  maxKnownCapacity,
   fromRanking,
   fromSpace,
   fromAvailability,

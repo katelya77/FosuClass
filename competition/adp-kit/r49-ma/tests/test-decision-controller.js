@@ -160,3 +160,92 @@ test("DC6. 非法 profile fail closed；hard 违反 0 次放宽", () => {
   assert.strictEqual(hard.recommendation, null);
   assert.deepStrictEqual(hard.alternatives, []);
 });
+
+test("DC7. reschedule canonical checks 是不可放宽系统约束；失败/缺失/partial 均留在 infeasible", () => {
+  const family = "reschedule_simulation";
+  const toolName = "campus_reschedule_feasibility";
+  const target = { week: 1, weekday: 3, weekdayName: "周三", periodStart: 5, periodEnd: 6, periodText: "第5-6节" };
+  const safeChecks = {
+    teacherConflict: { conflict: false },
+    classConflict: { conflict: false },
+    roomConflict: { conflict: false },
+    capacity: { ok: true },
+    feature: { ok: true },
+  };
+  const cases = [
+    ["conflict", { ...safeChecks, teacherConflict: { conflict: true } }],
+    ["capacity", { ...safeChecks, capacity: { ok: false } }],
+    ["feature", { ...safeChecks, feature: { ok: false } }],
+    ["missing", {}],
+    ["partial", { ...safeChecks, feature: {} }],
+  ];
+  for (const [name, checks] of cases) {
+    const result = decide({
+      missionState: mission(family, { rescheduleSimFacts: fact("rescheduleSimFacts", toolName) }),
+      toolResults: { [toolName]: { ...raw([{ target, checks }]), summary: { feasible: true } } },
+      goalSpec: goal(family),
+    });
+    assert.ok(result.profile.hard.some((entry) => entry.id === "system-reschedule-feasible" && entry.field === "feasible" && entry.op === "eq" && entry.value === true), name);
+    assert.strictEqual(result.recommendation, null, name);
+    assert.deepStrictEqual(result.alternatives, [], name);
+    assert.strictEqual(result.decision, "no_viable_option", name);
+    assert.strictEqual(result.evaluation.feasible.length, 0, name);
+    assert.strictEqual(result.evaluation.infeasible.length, 1, name);
+    assert.strictEqual(result.evaluation.infeasible[0].candidate.attributes.feasible, false, name);
+    assert.strictEqual(result.evaluation.infeasible[0].hardViolations[0].id, "system-reschedule-feasible", name);
+  }
+});
+
+test("DC8. canonical envelope 失败或 items 缺失/畸形走 unverified recoverable source path", () => {
+  const family = "collaboration_planning";
+  const toolName = "campus_group_plan";
+  const ms = mission(family, { groupPlanFacts: fact("groupPlanFacts", toolName) });
+  const invalid = [
+    { success: false, items: [], evidence: { verified: true } },
+    { items: [], evidence: { verified: true } },
+    { success: true, evidence: { verified: true } },
+    { success: true, items: {}, evidence: { verified: true } },
+  ];
+  for (const envelope of invalid) {
+    const result = decide({ missionState: ms, toolResults: { [toolName]: envelope }, goalSpec: goal(family) });
+    assert.strictEqual(result.verified, false, JSON.stringify(envelope));
+    assert.strictEqual(result.sourceFactKey, null, JSON.stringify(envelope));
+    assert.strictEqual(result.decision, "no_viable_option", JSON.stringify(envelope));
+  }
+});
+
+test("DC9. scalar excludeBuilding 生效且 excluded building 永远不能被推荐；malformed profile 拒绝", () => {
+  const family = "teaching_assurance";
+  const toolName = "campus_classroom_search";
+  const ms = mission(family, { spaceFacts: fact("spaceFacts", toolName) });
+  const toolResults = { [toolName]: raw([
+    { roomId: "a2", roomName: "A2-101", building: "A2", capacity: 120 },
+    { roomId: "a1", roomName: "A1-101", building: "A1", capacity: 80 },
+  ]) };
+  const excluded = decide({ missionState: ms, toolResults, goalSpec: goal(family, { constraints: { needSpace: true, excludeBuilding: "A2" }, preferences: { preferLarger: true } }) });
+  assert.strictEqual(excluded.recommendation.candidate.id, "a1");
+  assert.deepStrictEqual(excluded.evaluation.infeasible.map((item) => item.candidate.id), ["a2"]);
+
+  const malformed = decide({ missionState: ms, toolResults, goalSpec: goal(family, { constraints: { needSpace: true, excludeBuilding: 42 } }) });
+  assert.strictEqual(malformed.ok, false);
+  assert.strictEqual(malformed.failureReason, "invalid_profile");
+  assert.strictEqual(malformed.recommendation, null);
+});
+
+test("DC10. group-plan canonical capacity 同时驱动 minCapacity hard 与 preferLarger soft", () => {
+  const family = "collaboration_planning";
+  const toolName = "campus_group_plan";
+  const result = decide({
+    missionState: mission(family, { groupPlanFacts: fact("groupPlanFacts", toolName) }),
+    toolResults: { [toolName]: raw([
+      { planId: "small", planName: "小容量方案", rank: 1, weekday: 1, periodStart: 1, rooms: [{ capacity: 60 }] },
+      { planId: "large", planName: "大容量方案", rank: 2, weekday: 3, periodStart: 7, rooms: [{ capacity: 80 }, { capacity: 120 }] },
+      { planId: "unknown", planName: "容量未知方案", rank: 3, weekday: 2, periodStart: 3, rooms: [{}] },
+    ]) },
+    goalSpec: goal(family, { constraints: { minCapacity: 80 }, preferences: { preferLarger: true } }),
+  });
+  assert.strictEqual(result.recommendation.candidate.id, "large");
+  assert.strictEqual(result.recommendation.candidate.attributes.capacity, 120);
+  assert.deepStrictEqual(result.evaluation.infeasible.map((item) => item.candidate.id), ["small", "unknown"]);
+  assert.ok(result.recommendation.reasons.some((reason) => reason.source.attribute === "capacity"));
+});

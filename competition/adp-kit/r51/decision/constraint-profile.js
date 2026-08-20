@@ -16,6 +16,12 @@ function isFiniteNumber(v) {
   return typeof v === "number" && Number.isFinite(v);
 }
 
+function isConstraintScalar(v) {
+  return (typeof v === "string" && v.length > 0)
+    || isFiniteNumber(v)
+    || typeof v === "boolean";
+}
+
 function validateEntry(entry, kind) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return `${kind} 条目必须是对象`;
   if (!isNonEmptyString(entry.id)) return `${kind} 条目缺少 id`;
@@ -26,13 +32,13 @@ function validateEntry(entry, kind) {
     if ((entry.op === "gte" || entry.op === "lte") && !isFiniteNumber(entry.value)) {
       return `hard ${entry.id} op=${entry.op} value 必须为有限数`;
     }
-    if ((entry.op === "in" || entry.op === "nin") && (!Array.isArray(entry.value) || entry.value.length === 0)) {
+    if ((entry.op === "in" || entry.op === "nin") && (!Array.isArray(entry.value) || entry.value.length === 0 || !entry.value.every(isConstraintScalar))) {
       return `hard ${entry.id} op=${entry.op} value 必须为非空数组`;
     }
   } else if (kind === "exclusions") {
     if (!EXCLUSION_OPS.includes(entry.op)) return `exclusions ${entry.id} 非法 op：${entry.op}`;
     if (entry.value === undefined) return `exclusions ${entry.id} 缺少 value`;
-    if (entry.op === "in" && (!Array.isArray(entry.value) || entry.value.length === 0)) {
+    if (entry.op === "in" && (!Array.isArray(entry.value) || entry.value.length === 0 || !entry.value.every(isConstraintScalar))) {
       return `exclusions ${entry.id} op=in value 必须为非空数组`;
     }
   } else if (kind === "soft") {
@@ -120,8 +126,20 @@ function profileFromGoalSpec(goalSpec) {
   if (isPresent(c.minCapacity)) addNumericHard("capacity-min", "capacity", "gte", c.minCapacity, "容量下限");
   if (isPresent(c.campus)) addHard("campus-eq", "campus", "eq", String(c.campus), "校区要求");
   if (isPresent(c.building)) addHard("building-eq", "building", "eq", String(c.building), "楼栋要求");
-  if (Array.isArray(c.excludeBuilding) && c.excludeBuilding.length) {
-    addHard("exclude-building", "building", "nin", c.excludeBuilding.map(String), "排除楼栋");
+  if (Array.isArray(c.excludeBuilding)) {
+    if (c.excludeBuilding.length) {
+      const canonical = c.excludeBuilding.every((value) => typeof value === "string" && value.length > 0 && value.trim() === value)
+        ? c.excludeBuilding.slice()
+        : c.excludeBuilding;
+      addHard("exclude-building", "building", "nin", canonical, "排除楼栋");
+    }
+  } else if (isPresent(c.excludeBuilding)) {
+    const canonical = typeof c.excludeBuilding === "string"
+      && c.excludeBuilding.length > 0
+      && c.excludeBuilding.trim() === c.excludeBuilding
+      ? [c.excludeBuilding]
+      : c.excludeBuilding;
+    addHard("exclude-building", "building", "nin", canonical, "排除楼栋");
   }
 
   if (p.preferEarlier === true) soft.push({ id: "prefer-earlier", field: "periodStart", weight: 1, direction: "asc", description: "更早时段优先" });

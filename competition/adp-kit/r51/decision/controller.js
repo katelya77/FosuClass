@@ -2,7 +2,7 @@
 // Campus Decision Intelligence —— Mission Decision Controller（2026-08-20）
 // 唯一路由键为结构化 goalFamily；本模块不接受、读取或解释原始 query。
 const { profileFromGoalSpec, validateProfile } = require("./constraint-profile.js");
-const { FACT_ADAPTORS, candidatesForFact, verifiedOf } = require("./candidate-source.js");
+const { FACT_ADAPTORS, candidatesForFact, canonicalEnvelopeIsVerified } = require("./candidate-source.js");
 const { evaluateCandidates } = require("./evaluator.js");
 const { rankFeasible } = require("./ranking.js");
 const { selectDecision } = require("./alternatives.js");
@@ -55,7 +55,7 @@ function verifiedSource(factKey, missionState, toolResults) {
   if (fact.toolName != null && fact.toolName !== def.tool) return null;
   const toolName = def.tool;
   const raw = toolResults && toolResults[toolName];
-  if (!raw || verifiedOf(raw) !== true) return null;
+  if (!canonicalEnvelopeIsVerified(raw, def)) return null;
   return {
     factKey,
     fact,
@@ -80,6 +80,12 @@ function selectCandidateSource(goalFamily, missionState, toolResults, goalSpec) 
   for (const factKey of sourcePriority(goalFamily, goalSpec)) {
     // 优先级链中任一已声明来源 provenance 损坏时整体 fail closed，禁止降级绕过污染记录。
     if (hasProvenanceMismatch(factKey, missionState)) return null;
+    const fact = missionState && missionState.availableFacts && missionState.availableFacts[factKey];
+    const def = FACT_ADAPTORS[factKey];
+    const raw = def && toolResults && toolResults[def.tool];
+    // Mission 已声明 verified 的 canonical fact 若信封损坏/缺失，整体走 recoverable error；
+    // 不能把它当作 verified-empty，也不能绕到低优先级来源掩盖损坏。
+    if (fact && fact.verified === true && !canonicalEnvelopeIsVerified(raw, def)) return null;
     const source = verifiedSource(factKey, missionState, toolResults);
     if (!source) continue;
     if (source.candidates.length > 0) return source;
@@ -120,11 +126,25 @@ function enrich(item, profile) {
   return item ? { ...item, reasons: explainCandidate(item, profile) } : null;
 }
 
+function profileForDecision(goalFamily, goalSpec) {
+  const profile = profileFromGoalSpec(goalSpec || {});
+  if (goalFamily === "reschedule_simulation") {
+    profile.hard.push({
+      id: "system-reschedule-feasible",
+      field: "feasible",
+      op: "eq",
+      value: true,
+      description: "规范调课检查必须完整且全部通过",
+    });
+  }
+  return profile;
+}
+
 function decide({ missionState, toolResults, goalSpec } = {}) {
   const goalFamily = structuredGoalFamily(missionState, goalSpec);
   if (!isDecisionEligible(goalFamily)) return { eligible: false };
 
-  const profile = profileFromGoalSpec(goalSpec || {});
+  const profile = profileForDecision(goalFamily, goalSpec || {});
   const profileCheck = validateProfile(profile);
   if (!profileCheck.ok) return failedBundle(goalFamily, profile, profileCheck.errors);
 
@@ -185,5 +205,6 @@ module.exports = {
   verifiedSource,
   hasProvenanceMismatch,
   selectCandidateSource,
+  profileForDecision,
   decide,
 };

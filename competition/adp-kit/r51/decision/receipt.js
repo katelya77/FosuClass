@@ -1,6 +1,7 @@
 "use strict";
 // Campus Decision Intelligence —— 脱敏公开 PublicDecisionReceipt（2026-08-20）
 const crypto = require("crypto");
+const { containsCredentialLeak } = require("./credential-leak.js");
 
 const RECEIPT_VERSION = "1.0";
 const EXACT_KEYS = Object.freeze([
@@ -26,7 +27,7 @@ const FORBIDDEN_VALUE_PATTERNS = Object.freeze([
 function safePublicText(value) {
   if (typeof value !== "string") return null;
   const text = value.trim();
-  if (!text || FORBIDDEN_VALUE_PATTERNS.some((pattern) => pattern.test(text))) return null;
+  if (!text || containsCredentialLeak(text) || FORBIDDEN_VALUE_PATTERNS.some((pattern) => pattern.test(text))) return null;
   return text;
 }
 

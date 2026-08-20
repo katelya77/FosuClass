@@ -42,6 +42,7 @@ test("EV2. fromSpace 提取 capacity/campus/building 属性", () => {
 test("EV3. candidatesForFact 按 factKey 选择适配器并校验 verified，保留 Mission resultRef", () => {
   const toolResults = {
     campus_classroom_search: {
+      success: true,
       items: [{ roomId: "r-9", roomName: "B2-202", building: "B2", campusName: "校区B", capacity: 90, type: "普通教室" }],
       evidence: { verified: true },
     },
@@ -83,6 +84,7 @@ test("EV3c. 各 structured adapter 保留事实字段；调课 checks 确定性�
   }, meta);
   assert.strictEqual(groupPlan[0].toolRank, 2);
   assert.strictEqual(groupPlan[0].attributes.maxRoomCapacity, 120);
+  assert.strictEqual(groupPlan[0].attributes.capacity, 120, "group-plan 必须暴露 canonical capacity alias");
 
   const reschedule = fromReschedule({
     items: [{
@@ -100,6 +102,38 @@ test("EV3c. 各 structured adapter 保留事实字段；调课 checks 确定性�
   assert.strictEqual(reschedule[0].attributes.feasible, false);
   assert.strictEqual(reschedule[0].attributes.conflictCount, 2);
   assert.strictEqual(reschedule[0].attributes.warningCount, 1);
+});
+
+test("EV3d. verified 候选要求 canonical success:true + items 数组，非法 envelope 不得伪装 verified-empty", () => {
+  const item = { roomId: "r-unsafe", roomName: "不得采用", capacity: 90 };
+  const invalid = [
+    { success: false, items: [item], evidence: { verified: true } },
+    { items: [item], evidence: { verified: true } },
+    { success: true, evidence: { verified: true } },
+    { success: true, items: {}, evidence: { verified: true } },
+    { success: true, items: [null], evidence: { verified: true } },
+    { success: "true", items: [item], evidence: { verified: true } },
+  ];
+  for (const envelope of invalid) {
+    assert.deepStrictEqual(candidatesForFact("spaceFacts", { campus_classroom_search: envelope }), [], JSON.stringify(envelope));
+  }
+});
+
+test("EV3e. group-plan capacity 取 rooms 中最大已知容量；缺失容量时不得发明 0", () => {
+  const meta = { factKey: "groupPlanFacts", toolName: "campus_group_plan", verified: true };
+  const candidates = fromGroupPlan({
+    items: [
+      { planId: "known", rooms: [{ capacity: 60 }, { capacity: 120 }] },
+      { planId: "unknown", rooms: [{ roomName: "缺容量教室" }] },
+      { planId: "empty", rooms: [] },
+    ],
+  }, meta);
+  assert.strictEqual(candidates[0].attributes.maxRoomCapacity, 120);
+  assert.strictEqual(candidates[0].attributes.capacity, 120);
+  for (const candidate of candidates.slice(1)) {
+    assert.strictEqual(candidate.attributes.maxRoomCapacity, null);
+    assert.strictEqual(candidate.attributes.capacity, null);
+  }
 });
 
 test("EV4. hard gte 过滤低容量候选：违反 → infeasible 且保留违反清单（不静默放宽）", () => {
