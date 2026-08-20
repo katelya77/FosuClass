@@ -2,6 +2,7 @@
 // Campus Decision Intelligence T6 —— structured Decision E2E acceptance matrix（2026-08-20）
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const ADP = path.join(__dirname, "..", "..");
@@ -23,7 +24,7 @@ function raw(items, verified = true) {
   return { success: true, items, evidence: { verified } };
 }
 
-function args({ family, factKey, toolName, items, constraints = {}, preferences = {}, authorityLevel = "L2", verified = true, selection = {} }) {
+function args({ family, factKey, toolName, items, constraints = {}, preferences = {}, authorityLevel = "L2", verified = true, selection = {}, intent }) {
   return {
     missionState: {
       goal: { goalFamily: family, completionCriteria: factKey ? [factKey] : [] },
@@ -32,7 +33,7 @@ function args({ family, factKey, toolName, items, constraints = {}, preferences 
       authorityLevel,
     },
     toolResults: toolName ? { [toolName]: raw(items, verified) } : {},
-    goalSpec: { goalFamily: family, constraints, preferences, selection },
+    goalSpec: { goalFamily: family, constraints, preferences, selection, ...(intent ? { intent } : {}) },
   };
 }
 
@@ -148,6 +149,32 @@ test("DE2E6. L3 仅确认；L0-L2 保持普通 sys.chat 动作", () => {
   });
 });
 
+test("DE2E6a. 实际 decide + synthesize：L2 正常续接，L3 reserve/submit 只保留公开确认语义", () => {
+  const structured = OUTCOME_CASES[0];
+  const l2Bundle = decide(args({ ...structured, authorityLevel: "L2" }));
+  const l2Outcome = synthesizeOutcome(l2Bundle);
+  assert.deepStrictEqual(l2Bundle.authority, { level: "L2", requiresConfirm: false });
+  assert.strictEqual(Object.hasOwn(l2Bundle.nextAction, "requiresConfirm"), false);
+  assert.strictEqual(l2Outcome.receipt.nextAction.label, l2Bundle.nextAction.label);
+  assert.strictEqual(l2Outcome.viewModel.actions[0].label, l2Bundle.nextAction.label);
+
+  for (const intent of ["reserve", "submit"]) {
+    const bundle = decide(args({ ...structured, authorityLevel: "L3", intent }));
+    const outcome = synthesizeOutcome(bundle);
+    assert.deepStrictEqual(bundle.authority, { level: "L3", requiresConfirm: true }, intent);
+    assert.strictEqual(bundle.nextAction.requiresConfirm, true, intent);
+    assert.strictEqual(bundle.nextAction.label, "确认后继续", intent);
+    assert.strictEqual(outcome.receipt.nextAction.label, "确认后继续", intent);
+    assert.strictEqual(outcome.receipt.nextAction.query, "请先确认是否继续此项操作", intent);
+    assert.strictEqual(outcome.viewModel.actions[0].label, "确认后继续", intent);
+    assert.strictEqual(outcome.viewModel.actions[0].payload.query, "请先确认是否继续此项操作", intent);
+    assert.strictEqual(validatePublicDecisionReceipt(outcome.receipt).ok, true, intent);
+    const publicText = JSON.stringify({ receipt: outcome.receipt, viewModel: outcome.viewModel }).toLowerCase();
+    assert.strictEqual(publicText.includes("requiresconfirm"), false, intent);
+    assert.strictEqual(publicText.includes("authority"), false, intent);
+  }
+});
+
 test("DE2E7. 简单课表 eligible:false；四个目标族（含 operations）均返回 DecisionBundle", () => {
   const schedule = decide(args({ family: "schedule_inquiry", items: [] }));
   assert.deepStrictEqual(schedule, { eligible: false });
@@ -177,10 +204,26 @@ test("DE2E8. 四类 outcome 全部通过既有 Widget validator、receipt valida
 
 test("DE2E9. Decision 扩展未引入 Agent / Tool / binding drift", () => {
   assert.deepStrictEqual(Object.keys(bindings.agents), ["main", "schedule", "risk", "insight"]);
+  assert.deepStrictEqual(bindings.agents.main, []);
+  assert.deepStrictEqual(bindings.agents.schedule, [
+    "campus_schedule_query", "campus_schedule_range_query", "campus_classroom_search",
+    "campus_entity_search", "campus_academic_context", "campus_common_free_time_query", "campus_group_plan",
+  ]);
+  assert.deepStrictEqual(bindings.agents.risk, [
+    "campus_risk_check", "campus_day_plan", "campus_academic_context", "campus_reschedule_feasibility",
+  ]);
+  assert.deepStrictEqual(bindings.agents.insight, [
+    "campus_overview", "campus_teacher_load_query", "campus_room_utilization_query",
+  ]);
   const allBindings = Object.values(bindings.agents).flat();
   assert.strictEqual(new Set(allBindings).size, 13);
   assert.strictEqual(allBindings.length, 14);
-  assert.deepStrictEqual(bindings.agents.main, []);
+  const runtimeConfig = fs.readFileSync(path.join(ADP, "r50.1", "R50.1-ADP-RUNTIME-CONFIG.md"), "utf8");
+  const mainRow = runtimeConfig.split(/\r?\n/).find((line) => line.startsWith("| 小序-主协调 |"));
+  assert.ok(mainRow, "missing canonical Main runtime row");
+  const mainAvailableTools = mainRow.split("|").slice(1, -1).map((cell) => cell.trim()).at(-1);
+  assert.strictEqual(mainAvailableTools, "KnowledgeRetrievalAnswer + Agent transfer（不绑定 CampusTools）");
+  assert.strictEqual(/campus_[a-z0-9_]+/.test(mainAvailableTools), false);
   assert.deepStrictEqual(ELIGIBLE_GOAL_FAMILIES, [
     "collaboration_planning", "reschedule_simulation", "teaching_assurance", "campus_operations_insight",
   ]);

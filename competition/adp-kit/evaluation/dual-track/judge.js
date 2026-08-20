@@ -4,6 +4,8 @@
 // Track B = 表达呈现（结构化、可读、可渲染、后续动作、零内部泄漏）
 // 规则：Widget 不可渲染 ≠ 业务失败 —— B 轨失败绝不清零 A 轨业务分；
 // 安全违规与事实矛盾属于硬门禁，直接清零 A 轨。
+const { stableStringify, validatePublicDecisionReceipt } = require("../../r51/decision/receipt.js");
+
 const TRACK_A_ITEMS = Object.freeze([
   "intent_complete",
   "facts_verified",
@@ -41,6 +43,13 @@ const DECISION_GOAL_FAMILIES = Object.freeze([
 ]);
 
 const DECISION_STATES = Object.freeze(["recommend", "no_viable_option"]);
+
+const DECISION_VARIANTS = Object.freeze({
+  collaboration_planning: "collaboration",
+  reschedule_simulation: "reschedule",
+  teaching_assurance: "risk",
+  campus_operations_insight: "ranking",
+});
 
 const CREDENTIAL_PATTERN = /(密码|口令|cookie|session|authorization\s*:|bearer\s+|api[_ -]?key|secret[-_: ]|\btoken\b|x-fosu-session)/i;
 const PUBLIC_LEAK_PATTERN = /(queryid|datahash|dataversion|sourcetool|toolname|rankcontext|evidence|resultref|computedat|authority|requiresconfirm|internalurl|system prompt|推理过程|authorization\s*:|bearer\s+|\btoken\b|cookie|password|https?:\/\/)/i;
@@ -184,7 +193,7 @@ function publicActionOf(action) {
 }
 
 function sameJson(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return stableStringify(left) === stableStringify(right);
 }
 
 function reasonEvidenceIsValid(choice) {
@@ -230,7 +239,12 @@ function verifiedRecommendationReasonsAreValid(bundle) {
   } else if (recommendation !== null || alternatives.length !== 0) {
     return false;
   }
-  return reasonEvidenceIsValid(recommendation) && alternatives.every(reasonEvidenceIsValid);
+  const selected = [recommendation, ...alternatives].filter(Boolean);
+  return selected.every((choice) => choice.candidate
+    && choice.candidate.evidence
+    && choice.candidate.evidence.verified === true)
+    && reasonEvidenceIsValid(recommendation)
+    && alternatives.every(reasonEvidenceIsValid);
 }
 
 function hardConstraintsArePreserved(bundle) {
@@ -242,9 +256,10 @@ function hardConstraintsArePreserved(bundle) {
 }
 
 function choicesComeFromCandidates(bundle) {
-  const ids = new Set((Array.isArray(bundle && bundle.candidates) ? bundle.candidates : [])
-    .map((candidate) => candidate && candidate.id)
-    .filter((id) => typeof id === "string" && id.length > 0));
+  const candidates = Array.isArray(bundle && bundle.candidates) ? bundle.candidates : [];
+  const canonicalById = new Map(candidates
+    .filter((candidate) => candidate && typeof candidate.id === "string" && candidate.id.length > 0)
+    .map((candidate) => [candidate.id, candidate]));
   const selected = [bundle && bundle.recommendation, ...(Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [])]
     .filter(Boolean);
   const selectedIds = selected.map((choice) => choice && choice.candidate && choice.candidate.id);
@@ -252,15 +267,21 @@ function choicesComeFromCandidates(bundle) {
     return bundle.recommendation === null && selected.length === 0;
   }
   return selectedIds.length > 0
-    && selectedIds.every((id) => typeof id === "string" && ids.has(id))
+    && selected.every((choice) => {
+      const candidate = choice && choice.candidate;
+      const canonical = candidate && canonicalById.get(candidate.id);
+      return Boolean(canonical
+        && candidate.evidence
+        && candidate.evidence.verified === true
+        && sameJson(candidate, canonical));
+    })
     && new Set(selectedIds).size === selectedIds.length;
 }
 
-function receiptMatchesBundle(bundle) {
+function receiptSemanticsMatchBundle(bundle) {
   const receipt = bundle && bundle.receipt;
   if (!isObject(receipt)
     || receipt.receiptVersion !== "1.0"
-    || !/^decision-[a-f0-9]{64}$/.test(String(receipt.decisionId || ""))
     || receipt.verified !== (bundle.verified === true)
     || receipt.decision !== bundle.decision
     || !Array.isArray(receipt.alternatives)) return false;
@@ -271,18 +292,53 @@ function receiptMatchesBundle(bundle) {
     && sameJson(receipt.nextAction, publicActionOf(bundle.nextAction));
 }
 
+function receiptMatchesBundle(bundle) {
+  return receiptSemanticsMatchBundle(bundle)
+    && validatePublicDecisionReceipt(bundle.receipt).ok === true;
+}
+
+function sectionRows(viewModel, title) {
+  const matching = (Array.isArray(viewModel && viewModel.sections) ? viewModel.sections : [])
+    .filter((section) => section && section.title === title);
+  if (matching.length > 1) return null;
+  if (matching.length === 0) return { present: false, rows: [] };
+  return Array.isArray(matching[0].rows) ? { present: true, rows: matching[0].rows } : null;
+}
+
+function widgetActionMatches(viewModel, action) {
+  const actions = Array.isArray(viewModel && viewModel.actions) ? viewModel.actions : [];
+  const expected = publicActionOf(action);
+  if (!expected) return actions.length === 0;
+  if (actions.length !== 1) return false;
+  const actual = actions[0];
+  return actual
+    && actual.type === "sys.chat"
+    && actual.label === expected.label
+    && actual.payload
+    && sameJson(actual.payload, { query: expected.query });
+}
+
 function viewModelMatchesBundle(bundle) {
   const viewModel = bundle && bundle.viewModel;
   if (!isObject(viewModel) || viewModel.verified !== (bundle.verified === true)) return false;
-  const serialized = JSON.stringify(viewModel);
+  const expectedVariant = bundle.verified === true ? DECISION_VARIANTS[bundle.goalFamily] : "error";
+  if (viewModel.variant !== expectedVariant || !widgetActionMatches(viewModel, bundle.nextAction)) return false;
+  const recommendationRows = sectionRows(viewModel, "推荐");
+  const alternativeRows = sectionRows(viewModel, "备选");
+  if (recommendationRows === null || alternativeRows === null) return false;
+  if (bundle.verified === true && (!recommendationRows.present || !alternativeRows.present)) return false;
   if (bundle.decision === "recommend") {
     const label = bundle.recommendation && bundle.recommendation.candidate && bundle.recommendation.candidate.label;
-    return typeof label === "string" && serialized.includes(label);
+    const alternativeLabels = (Array.isArray(bundle.alternatives) ? bundle.alternatives : [])
+      .map((choice) => choice && choice.candidate && choice.candidate.label);
+    return typeof label === "string"
+      && viewModel.summary === `推荐：${label}`
+      && recommendationRows.rows.length === 1
+      && recommendationRows.rows[0]
+      && recommendationRows.rows[0].value === label
+      && sameJson(alternativeRows.rows.map((row) => row && row.value), alternativeLabels);
   }
-  const recommendationRows = (Array.isArray(viewModel.sections) ? viewModel.sections : [])
-    .filter((section) => section && section.title === "推荐")
-    .flatMap((section) => Array.isArray(section.rows) ? section.rows : []);
-  return recommendationRows.length === 0;
+  return recommendationRows.rows.length === 0 && alternativeRows.rows.length === 0;
 }
 
 function decisionIsNonContradictory(bundle) {
@@ -292,7 +348,7 @@ function decisionIsNonContradictory(bundle) {
   const stateConsistent = bundle.decision === "recommend"
     ? bundle.verified === true && Boolean(recommendation)
     : recommendation === null && alternatives.length === 0;
-  return stateConsistent && receiptMatchesBundle(bundle) && viewModelMatchesBundle(bundle);
+  return stateConsistent && receiptSemanticsMatchBundle(bundle) && viewModelMatchesBundle(bundle);
 }
 
 function recoveryIsControlled(bundle) {
@@ -324,14 +380,14 @@ function scoreDecisionTrackA(bundle) {
     verified_recommendation_reasons: verifiedRecommendationReasonsAreValid(bundle),
     hard_constraints_preserved: hardConstraintsArePreserved(bundle),
     no_invented_alternatives: choicesComeFromCandidates(bundle),
-    stable_public_projection: receiptMatchesBundle(bundle),
+    stable_public_projection: receiptMatchesBundle(bundle) && viewModelMatchesBundle(bundle),
     no_contradiction: decisionIsNonContradictory(bundle),
     recovery_on_failure: recoveryIsControlled(bundle),
     safety: decisionSafetyIsValid(bundle),
   };
   const score = DECISION_TRACK_A_ITEMS.reduce((total, key) => total + (items[key] ? 1 : 0), 0);
   const gateFailed = HARD_GATES.some((key) => !items[key]);
-  return { items, score, pass: !gateFailed };
+  return { items, score, pass: !gateFailed && DECISION_TRACK_A_ITEMS.every((key) => items[key]) };
 }
 
 function scoreDecisionTrackB(bundle) {
@@ -340,7 +396,7 @@ function scoreDecisionTrackB(bundle) {
   const base = scoreTrackB(serialized, viewModel, { ok: isObject(viewModel), value: viewModel });
   const items = { ...base.items, no_internal_leak: publicProjectionHasNoInternalLeak(bundle) };
   const score = TRACK_B_ITEMS.reduce((total, key) => total + (items[key] ? 1 : 0), 0);
-  return { ...base, items, score, pass: score >= 4 };
+  return { ...base, items, score, pass: TRACK_B_ITEMS.every((key) => items[key]) };
 }
 
 // DecisionBundle 双轨评分只读取调用方提供的结构化 bundle / receipt / viewModel；
@@ -348,15 +404,16 @@ function scoreDecisionTrackB(bundle) {
 function scoreDecisionBundle(bundle) {
   const trackA = scoreDecisionTrackA(bundle);
   const trackB = scoreDecisionTrackB(bundle);
-  const renderOnlyFail = !trackB.items.widget_renderable
-    && trackA.items.eligibility_shape
-    && trackA.items.no_contradiction;
+  const gateFailed = HARD_GATES.some((key) => !trackA.items[key]);
+  const renderOnlyFail = trackA.pass
+    && !trackB.items.widget_renderable
+    && TRACK_B_ITEMS.filter((key) => key !== "widget_renderable").every((key) => trackB.items[key]);
   return {
     trackA,
     trackB,
     renderOnlyFail,
-    businessScore: trackA.pass ? trackA.score : 0,
-    verdict: trackA.pass && trackB.pass ? "pass" : trackA.pass ? "pass_with_presentation_issues" : "fail",
+    businessScore: gateFailed ? 0 : trackA.score,
+    verdict: !trackA.pass ? "fail" : trackB.pass ? "pass" : "pass_with_presentation_issues",
   };
 }
 

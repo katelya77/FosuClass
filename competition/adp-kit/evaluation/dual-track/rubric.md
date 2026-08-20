@@ -51,3 +51,13 @@ Track B 仍为既有五项：结构化、可读、Widget 可渲染、后续动�
 `safety` / `no_contradiction` 仍是业务 hard gate；Widget-only failure 仍不得清零 Track A。
 Decision 用例集：`decision-testset.json`（valid recommend、verified empty、no-source recoverable、
 presentation-only failure、safety leak、contradiction）。
+
+### Decision acceptance 收紧（fix round 1）
+
+- Decision Track A 的 8 项必须全部为 true 才可 `trackA.pass`；常规业务项失败时 verdict 为
+  `fail`，但保留非零 `businessScore` 供诊断。只有 `safety` / `no_contradiction` hard gate
+  失败才把 `businessScore` 清零。
+- Decision Track B 的 5 项必须全部为 true；`renderOnlyFail` 仅表示 Track A 全通过、且 Track B
+  唯一失败项为 `widget_renderable`。
+- 已选 candidate 必须与候选集 canonical 对象结构一致且 evidence verified；receipt 必须通过稳定
+  内容哈希校验；Widget 的 variant、summary、推荐/备选行顺序及 next action 必须精确对应 bundle。

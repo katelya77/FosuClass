@@ -35,6 +35,15 @@
 - 纯函数确定性与不修改输入：通过。
 - 验证命令：`node --test r49-ma/tests/test-decision-evaluation-dual-track.js`（DDE1–DDE6，GREEN）。
 
+### Fix round 1 增量基线（2026-08-20）
+
+- DDE7：`relaxedCount`、同 ID 伪造 candidate、未核验证据空理由均 fail；非 hard-gate 失败保留
+  非零 businessScore。
+- DDE8：receipt 内容哈希/内容不一致、Widget summary 结构矛盾均 fail；字符串出现在其它位置
+  不再蒙混通过。
+- DDE9：`renderOnlyFail` 只在 Track A 全通过且 Widget renderability 为唯一呈现失败时成立。
+- 当前验证命令覆盖 DDE1–DDE9，9/9 GREEN。
+
 ## 后续
 - 真实评测时：每个业务用例同时产出（a）确定性事实断言结果（b）序列化 Widget 输出，
   分别进 A 轨与 B 轨；记录真实 Provider 环境与凭据条件，不用 mock 冒充。
