@@ -2,6 +2,7 @@
 // Campus Decision Intelligence —— 可核验解释（2026-08-19）
 // 理由只使用已核验 candidate.evidence、candidate.attributes 及 evaluator / constraint 记录。
 // 候选未核验时必须返回空数组，绝不以 label 或猜测补充原因。
+const { evalHard } = require("./evaluator.js");
 
 function hasOwn(object, key) {
   return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
@@ -32,7 +33,6 @@ function isVerifiedCandidate(item) {
 }
 
 function hardReasons(item, profile, evidence) {
-  if (item.hardSatisfied !== true) return [];
   const violations = Array.isArray(item.hardViolations) ? item.hardViolations : [];
   const hard = Array.isArray(profile && profile.hard) ? profile.hard : [];
   const attributes = item.candidate.attributes;
@@ -42,6 +42,8 @@ function hardReasons(item, profile, evidence) {
     if (!constraint || typeof constraint.id !== "string" || typeof constraint.field !== "string") continue;
     if (violations.some((violation) => violation && violation.id === constraint.id)) continue;
     if (!hasOwn(attributes, constraint.field)) continue;
+    // 聚合 hardSatisfied 可能来自过期评估；理由必须按当前属性重跑同一条硬约束。
+    if (!evalHard(item.candidate, constraint).ok) continue;
     const value = displayFactValue(attributes[constraint.field]);
     if (value === null) continue;
     out.push({

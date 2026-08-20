@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 const path = require("path");
 
-const { nextBestAction } = require(path.join(__dirname, "..", "..", "r51", "decision", "next-best-action.js"));
+const { nextBestAction, nextCapabilityFor } = require(path.join(__dirname, "..", "..", "r51", "decision", "next-best-action.js"));
 const { authorityAwareAction } = require(path.join(__dirname, "..", "..", "r51", "decision", "authority-action.js"));
 
 function state(overrides = {}) {
@@ -56,6 +56,25 @@ test("D8. 决策已收口时给出确认或精细化偏好动作", () => {
   });
 });
 
+test("D8a. 已完成但缺失或未知 decision 状态时不得默认确认推荐", () => {
+  const complete = state({
+    availableFacts: { availabilityFacts: { verified: true }, spaceFacts: { verified: true } },
+    steps: [{ capability: "SPACE_DISCOVERY", status: "done" }],
+  });
+  assert.strictEqual(nextBestAction({ missionState: complete }), null);
+  assert.strictEqual(nextBestAction({ missionState: complete, decision: { decision: "unknown" } }), null);
+});
+
+test("D8b. scheduleFacts 没有 nextCapabilityId 时不得在 detail/range 间猜测", () => {
+  assert.strictEqual(nextCapabilityFor({ missing: ["scheduleFacts"], nextCapabilityId: null }), null);
+  const rangeMissionWithoutIdentity = state({
+    goal: { completionCriteria: ["scheduleFacts"] },
+    availableFacts: {},
+    steps: [],
+  });
+  assert.strictEqual(nextBestAction({ missionState: rangeMissionWithoutIdentity, decision: { decision: "recommend" } }), null);
+});
+
 test("D9. L0/L1/L2 保持普通 sys.chat 动作", () => {
   const action = { type: "sys.chat", label: "确认推荐方案", payload: { query: "确认采用当前推荐方案" } };
   for (const level of ["L0", "L1", "L2"]) {
@@ -78,4 +97,13 @@ test("D10. L3 只能输出 confirmation-only 动作，且不得自动执行或�
   });
   assert.ok(!JSON.stringify(result).includes("room-internal-17"));
   assert.ok(!JSON.stringify(result).includes("执行预约"));
+});
+
+test("D10a. MissionState 与 L3 写入策略冲突时必须 fail-closed 为确认动作", () => {
+  const result = authorityAwareAction(
+    { type: "sys.chat", label: "继续", payload: { query: "继续当前安排" } },
+    { missionState: state({ authorityLevel: "L2" }), goalSpec: { goalFamily: "space_inquiry", intent: "reserve" } }
+  );
+  assert.strictEqual(result.requiresConfirm, true);
+  assert.strictEqual(result.label, "确认后继续");
 });

@@ -11,8 +11,12 @@ function normalizeChatAction(action) {
 }
 
 function authorityLevelFor({ missionState, goalSpec } = {}) {
-  const level = missionState && missionState.authorityLevel;
-  if (AUTHORITY_LEVELS.includes(level)) return level;
+  const stateLevel = missionState && missionState.authorityLevel;
+  const policySpecified = Boolean(goalSpec && (goalSpec.goalFamily || goalSpec.intent));
+  const policyLevel = policySpecified ? authorizeMission(goalSpec).level : null;
+  if (AUTHORITY_LEVELS.includes(stateLevel) && policyLevel && stateLevel !== policyLevel) return "L3";
+  if (policyLevel) return policyLevel;
+  if (AUTHORITY_LEVELS.includes(stateLevel)) return stateLevel;
   return authorizeMission(goalSpec || {}).level;
 }
 

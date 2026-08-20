@@ -22,7 +22,6 @@ const CAPABILITY_ACTIONS = Object.freeze({
 const FACT_CAPABILITIES = Object.freeze({
   resolvedEntities: "ENTITY_RESOLUTION",
   temporalScopeExplicit: "TEMPORAL_RESOLUTION",
-  scheduleFacts: "SCHEDULE_DETAIL",
   dayPlanFacts: "DAY_PLANNING",
   spaceFacts: "SPACE_DISCOVERY",
   availabilityFacts: "COMMON_AVAILABILITY",
@@ -47,11 +46,13 @@ function nextCapabilityFor(completion) {
 }
 
 function completedAction(decision) {
-  if (decision && decision.tieGroupCount > 0) {
-    return chatAction({ label: "细化偏好", query: "补充偏好后重新比较当前候选" });
-  }
-  if (decision && decision.decision === "no_viable_option") {
+  if (!decision || typeof decision !== "object" || Array.isArray(decision)) return null;
+  if (decision.decision === "no_viable_option") {
     return chatAction({ label: "调整筛选条件", query: "调整筛选条件后重新比较当前候选" });
+  }
+  if (decision.decision !== "recommend") return null;
+  if (typeof decision.tieGroupCount === "number" && Number.isFinite(decision.tieGroupCount) && decision.tieGroupCount > 0) {
+    return chatAction({ label: "细化偏好", query: "补充偏好后重新比较当前候选" });
   }
   return chatAction({ label: "确认推荐方案", query: "确认采用当前推荐方案" });
 }

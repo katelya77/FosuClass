@@ -68,3 +68,21 @@ test("D6. 理由不得借候选标签或未核验信息编造事实", () => {
   assert.ok(!text.includes("最适合"), "不得加入无依据因果结论");
   assert.ok(!text.includes("空调"), "不得补全候选属性中不存在的事实");
 });
+
+test("D6a. profile/evaluation 不一致或属性被修改时不得声称满足 hard 约束", () => {
+  const profileMismatch = evaluated({
+    candidate: { ...evaluated().candidate, attributes: { capacity: 40 } },
+    // 模拟上游聚合字段过期；解释层必须重验准确的 op/value。
+    hardSatisfied: true,
+    hardViolations: [],
+    softContributions: [],
+  });
+  const reasons = explainCandidate(profileMismatch, profile);
+  assert.strictEqual(reasons.some((reason) => reason.kind === "hard_constraint"), false);
+
+  const mutatedAfterEvaluation = evaluated({
+    candidate: { ...evaluated().candidate, attributes: { capacity: 20 } },
+    softContributions: [],
+  });
+  assert.strictEqual(explainCandidate(mutatedAfterEvaluation, profile).some((reason) => reason.kind === "hard_constraint"), false);
+});
