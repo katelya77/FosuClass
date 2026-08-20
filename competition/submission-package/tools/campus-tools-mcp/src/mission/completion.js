@@ -4,7 +4,12 @@
 // 核心原则：只完成部分能力（如仅 COMMON_AVAILABILITY）绝不提前 COMPLETE。
 function evaluateMission(state) {
   const criteria = (state.goal && state.goal.completionCriteria) || [];
-  const missing = criteria.filter((k) => !state.availableFacts[k]);
+  // 只有 verified Tool/Personal Schedule facts 能满足动态 completion criteria。
+  // VisionObservation 即使被恶意放进 availableFacts，也不能完成 Mission。
+  const missing = criteria.filter((k) => {
+    const fact = state.availableFacts[k];
+    return !fact || fact.verified !== true || fact.trust === "unverified_visual_observation";
+  });
 
   if (missing.length === 0) {
     return { status: "complete", missing: [] };

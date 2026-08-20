@@ -22,6 +22,7 @@ const GOAL_FAMILIES = Object.freeze([
 const MISSION_STATUS = Object.freeze(["pending", "in_progress", "needs_clarification", "complete", "failed"]);
 const STEP_STATUS = Object.freeze(["pending", "in_progress", "done", "failed"]);
 const TEMPORAL_KINDS = Object.freeze(["explicit", "inherited", "history"]);
+const { validateVisionObservation } = require("../vision/contract.js");
 
 function validateGoalSpec(spec) {
   const errors = [];
@@ -50,6 +51,17 @@ function validateGoalSpec(spec) {
       }
     }
   }
+  // visionObservations 与 visionAssets 严格分离：前者只能是已规范化、永不 verified 的视觉观察。
+  if (spec.visionObservations != null) {
+    if (!Array.isArray(spec.visionObservations)) {
+      errors.push("visionObservations 必须是数组");
+    } else {
+      for (const observation of spec.visionObservations) {
+        const validation = validateVisionObservation(observation);
+        if (!validation.ok) errors.push(`非法 VisionObservation: ${validation.errors.join(", ")}`);
+      }
+    }
+  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -63,6 +75,10 @@ function baseState(goalSpec) {
       // 多模态预留：展示资产引用透传（复制快照），不参与完成度判定
       visionAssets: Array.isArray(goalSpec.visionAssets)
         ? JSON.parse(JSON.stringify(goalSpec.visionAssets))
+        : [],
+      // 只保存候选输入，绝不写入 availableFacts 或 completion criteria。
+      visionObservations: Array.isArray(goalSpec.visionObservations)
+        ? JSON.parse(JSON.stringify(goalSpec.visionObservations))
         : [],
     },
     steps: [],
@@ -105,12 +121,14 @@ function newMissionState(goalSpec, { kind, prior } = {}) {
 function applyFacts(state, factRecords) {
   for (const rec of factRecords) {
     if (!rec || !rec.factKey) continue;
+    const visualOnly = rec.trust === "unverified_visual_observation";
     state.availableFacts[rec.factKey] = {
       capabilityId: rec.capabilityId,
       factKey: rec.factKey,
       slots: rec.slots || {},
       resultRef: rec.resultRef || null,
-      verified: rec.verified === true,
+      verified: rec.verified === true && !visualOnly,
+      ...(visualOnly ? { trust: "unverified_visual_observation" } : {}),
     };
     if (rec.capabilityId && !state.completedCapabilities.includes(rec.capabilityId)) {
       state.completedCapabilities.push(rec.capabilityId);

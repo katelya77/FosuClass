@@ -318,8 +318,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/mission/completion.js",
-      "bytes": 1221,
-      "sha256": "1da8266196c6c993265fe4a283ae2fcbbd69e0043f78acbdabc007b1d4d888a5"
+      "bytes": 1517,
+      "sha256": "6c0188a6a23b931503a63b5fd27f4f532bcf52e37cb0fc837a9f6ef3ed363b87"
     },
     {
       "path": "tools/campus-tools-mcp/src/ranking-core.js",

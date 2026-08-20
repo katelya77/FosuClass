@@ -159,6 +159,9 @@ function planMission(goalSpec) {
     visionAssets: Array.isArray(goalSpec.visionAssets)
       ? JSON.parse(JSON.stringify(goalSpec.visionAssets))
       : [],
+    visionObservations: Array.isArray(goalSpec.visionObservations)
+      ? JSON.parse(JSON.stringify(goalSpec.visionObservations))
+      : [],
   };
 
   return { steps, completionCriteria: criteria.slice(), unresolved, goal };
