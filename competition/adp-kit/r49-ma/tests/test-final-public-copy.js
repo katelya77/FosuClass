@@ -97,4 +97,3 @@ test("PC6 common public semantics never expose constraint, score or tool ranking
     assert.doesNotMatch(JSON.stringify(result), /constraint|score|toolRank|prefer-/i);
   }
 });
-

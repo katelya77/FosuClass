@@ -36,4 +36,3 @@ Only the following Console actions remain eligible. Do not publish the applicati
 - Run A–P in `FINAL-ACCEPTANCE-MATRIX.md`, including at least one paraphrase per row.
 - Confirm the combined schedule+risk task ends in a risk card and the soft-preference space task makes one business query.
 - Save Preview evidence, but do not create a release and do not publish.
-

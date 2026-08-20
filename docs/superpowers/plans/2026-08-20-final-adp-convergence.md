@@ -118,4 +118,3 @@
 3. Push `feat/campusflow-adp-integration` directly (no blind sync).
 4. Verify PR #49 head equals final HEAD, remains OPEN/UNMERGED and mergeable, and wait for relevant CI results.
 5. Update the final report with exact verified evidence and only genuinely manual Console steps.
-

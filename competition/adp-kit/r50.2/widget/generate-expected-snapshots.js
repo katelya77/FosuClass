@@ -27,4 +27,3 @@ for (const [name, toolName] of CASES) {
   fs.writeFileSync(path.join(OUTPUT, `${name}.json`), `${JSON.stringify(result.envelope, null, 2)}\n`, "utf8");
 }
 process.stdout.write(`R50.2 Widget snapshots generated: ${CASES.length}\n`);
-

@@ -27,4 +27,3 @@ Variants reviewed: schedule-week, schedule-day, space, collaboration, risk, resc
 ## Boundary
 
 These screenshots are deterministic local render evidence for information hierarchy. Tencent ADP Console rendering remains a manual import/Preview check because the ADP read/write API is unavailable in this run. No Console or production publication is claimed.
-

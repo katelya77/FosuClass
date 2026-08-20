@@ -50,4 +50,3 @@ for (const [name, payload] of Object.entries(cases)) {
   fs.writeFileSync(path.join(OUTPUT, `${name}.json`), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 process.stdout.write(`Final Widget payloads generated: ${Object.keys(cases).length}\n`);
-

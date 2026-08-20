@@ -82,4 +82,3 @@ test("FO5 selector is deterministic under completed-capability order changes", (
   const b = selector().selectFinalOutcome({ ...base, completedCapabilities: ["RISK_CHECK", "SCHEDULE_DETAIL"] }, CAP_TO_TOOL);
   assert.deepEqual(a, b);
 });
-

@@ -66,4 +66,3 @@ test("FP4 final prompt desired state preserves Console truth and downgrades unav
   assert.equal(runtime.invariants.bindingCount, 14);
   assert.equal(runtime.invariants.mainCampusToolCount, 0);
 });
-

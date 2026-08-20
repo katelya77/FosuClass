@@ -77,4 +77,3 @@ function selectFinalOutcome(mission, capabilityToolMap = {}) {
 }
 
 module.exports = { FACT_TO_CAPABILITY, FAMILY_PRIORITY, finalFactOrder, selectFinalOutcome };
-

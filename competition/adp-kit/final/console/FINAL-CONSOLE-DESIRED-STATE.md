@@ -36,4 +36,3 @@ Existing visual contracts remain future-ready, but no image capability is requir
 The 20:30 application ZIP is historical structure only. Its old models, empty description, old greeting/questions, workflow names, retrieval switches, and stale data-version metadata are never applied to Console.
 
 ADP API snapshot status for this run: `BLOCKED_UNKNOWN` (read failed without exposing credentials). Therefore this document records user-confirmed truth, not an API-observed claim.
-

@@ -82,4 +82,3 @@ const widgetSchema = z
   .strict();
 
 export default widgetSchema;
-
