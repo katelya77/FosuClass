@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "校园智序 · 小序 — R49.4 Existing-Plugin Additions (ADP Import)",
-    "version": "1.4.0",
+    "version": "1.6.0",
     "description": "面向腾讯云智能 ADP「基于 API」自定义插件**增量升级**的 import-ready OpenAPI：恰 2 个新增 Agent Tool Façade operation（campus_teacher_load_query、campus_schedule_range_query），与全量导入文件（campus-agent-tools.adp-import.json）同一 server、同一契约语义。仅用于在既有 5 工具插件上增量导入（推荐路径）；新建插件请直接全量导入 campus-agent-tools.adp-import.json。动态校园事实全部由确定性服务计算。"
   },
   "servers": [
@@ -23,7 +23,7 @@
         ],
         "summary": "教师课表负载排名（教学周窗口）",
         "operationId": "campus_teacher_load_query",
-        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。",
+        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -108,6 +108,9 @@
           "campus": {
             "type": "string",
             "description": "校区A / 校区B / 校区C（可选）"
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -204,6 +207,9 @@
                 "nullable": true
               }
             }
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -627,6 +633,318 @@
           "academicWeek",
           "date"
         ]
+      },
+      "DecisionPreferenceInput": {
+        "type": "object",
+        "description": "结构化 soft preference；服务端只接受白名单字段并确定性评分",
+        "properties": {
+          "preferEarlier": {
+            "type": "boolean",
+            "description": "更早时段优先"
+          },
+          "preferLarger": {
+            "type": "boolean",
+            "description": "更大容量优先"
+          },
+          "preferSameCampus": {
+            "type": "boolean",
+            "description": "同校区优先（仅在已有规范校区约束时生效）"
+          },
+          "preferWeekdays": {
+            "type": "array",
+            "description": "优先星期集合",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "minItems": 1,
+            "maxItems": 7
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicDecisionChoice": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "label",
+          "reasons"
+        ],
+        "additionalProperties": false
+      },
+      "PublicDecisionAction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sys.chat"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "PublicDecisionReceipt": {
+        "type": "object",
+        "properties": {
+          "receiptVersion": {
+            "type": "string",
+            "enum": [
+              "1.0"
+            ]
+          },
+          "decisionId": {
+            "type": "string",
+            "pattern": "^decision-[a-f0-9]{64}$"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/PublicDecisionChoice",
+            "nullable": true
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "nextAction": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "query"
+            ],
+            "additionalProperties": false
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "recommend",
+              "no_viable_option"
+            ]
+          }
+        },
+        "required": [
+          "receiptVersion",
+          "decisionId",
+          "recommendation",
+          "alternatives",
+          "nextAction",
+          "verified",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionResultCard": {
+        "type": "object",
+        "description": "现有小序校园智序 result-card 的脱敏投影",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "layoutMode": {
+            "type": "string",
+            "enum": [
+              "result-card"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "value"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ]
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionAction"
+            },
+            "maxItems": 3
+          },
+          "displayMeta": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "weekBoardTitle": {
+            "type": "string"
+          },
+          "weekBoardSubtitle": {
+            "type": "string"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "variant",
+          "status",
+          "layoutMode",
+          "title",
+          "summary",
+          "verified",
+          "sections",
+          "actions"
+        ]
+      },
+      "RuntimeDecision": {
+        "type": "object",
+        "description": "服务端基于当前 verified tool candidates 生成的脱敏确定性决策；原 facts/items 保持不变",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "needs_more_facts",
+              "needs_user_choice",
+              "no_feasible_candidate"
+            ]
+          },
+          "preferred": {
+            "$ref": "#/components/schemas/PublicDecisionChoice",
+            "nullable": true
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tradeoffs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "nextActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionAction"
+            },
+            "maxItems": 3
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/PublicDecisionReceipt"
+          },
+          "resultCard": {
+            "$ref": "#/components/schemas/DecisionResultCard"
+          }
+        },
+        "required": [
+          "status",
+          "preferred",
+          "alternatives",
+          "reasons",
+          "tradeoffs",
+          "nextActions",
+          "receipt",
+          "resultCard"
+        ],
+        "additionalProperties": false
       }
     }
   },

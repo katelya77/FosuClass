@@ -13,4 +13,5 @@ module.exports = {
   ...require("./controller.js"),
   ...require("./receipt.js"),
   ...require("./outcome-synthesizer.js"),
+  ...require("./runtime-activation.js"),
 };

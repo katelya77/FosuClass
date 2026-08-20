@@ -145,3 +145,13 @@ Widget 不可渲染仍 ≠ 业务失败：仅呈现失败时保留 A 轨业务�
 不新增 Agent / CampusTool；Main 不绑定 CampusTools；Child → Child 禁止；
 模型不造候选；无证据不造理由；hard 不静默放宽；L3 不自动执行；
 不为测试问句写 if/keyword case；用户界面不显示研发版本号；不改知识库为动态事实源。
+
+## 13. Runtime Activation 与 Oracle Closure（2026-08-20）
+
+`r51/decision/intrinsic-constraints.js` 是 intrinsic system constraints 的唯一真源。Controller 与 dual-track Judge 均调用 `buildAuthoritativeIntrinsicConstraints({ goalFamily })`；bundle profile 不能恢复、删除、降级或覆盖系统约束。canonical intrinsic 集合生成稳定 SHA-256 fingerprint，Controller 记录，Judge 从可信结构化 context 独立重算；缺失、语义改变、重复 ID、冲突重复或 fingerprint 不一致均 fail closed。
+
+Decision Runtime 不新增工具。`mcp/campus-tools-mcp/src/agent-tools.js` 在六个既有多候选 handler（空教室、教师负载、共同空闲、利用率、调课模拟、群体方案）的 verified envelope 返回前调用 `r51/decision/runtime-activation.js`。Decision Engine 在候选仍位于可信服务端 handler 时执行；模型不能提交 raw candidate JSON 并自称 verified。原始 facts/items 原样保留，新增可选脱敏 `decision` 字段；简单课表查询保持直接事实查询。
+
+`decision` 公开字段仅包含 status、preferred、alternatives、reasons、tradeoffs、nextActions、PublicDecisionReceipt 与现有 result-card。不得包含 resultRef、queryId、dataHash、fingerprint、内部 evaluation、Agent/Tool 名称。actions 仅 `sys.chat` + `{ query }`。跨域 Mission 由 Main 使用 Child 返回的 authoritative decision/receipt 协调，不由模型重新排序。
+
+部署边界只有 competition HTTP Function `campusflowAdpTools`；OpenAPI 仍为 13 operations，仅六个既有 operation 增加 `decisionPreferences` 输入和 `decision` 输出。ADP 插件需刷新 schema，Agent/Tool/binding 数量不变，正式 ADP 不发布。

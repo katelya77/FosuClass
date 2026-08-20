@@ -66,11 +66,16 @@ copyDirectory("widget", "widget", (file) => /^(?:index\.html|styles\.css|widget\
 copyDirectory("evaluation", "evaluation", (file) => /^(?:evaluation-dataset\.(?:json|jsonl|csv)|golden-results\.json|golden-cases\.js|golden-oracle\.js|eval-golden\.js|scoring-rubric\.md)$/.test(file));
 
 copyDirectory("mcp/campus-tools-mcp/src", "tools/campus-tools-mcp/src", (file) => /\.(?:js|ts)$/.test(file));
+copyDirectory("r51/decision", "tools/campus-tools-mcp/src/decision", (file) => /\.js$/.test(file) && file !== "index.js");
+copyDirectory("r51/mission", "tools/campus-tools-mcp/src/mission", (file) => /^(?:authority|completion)\.js$/.test(file));
+copyDirectory("r50.2/widget", "tools/campus-tools-mcp/r50.2/widget", (file) => /^(?:campus-result-envelope\.schema\.json|envelope\.js|view-model\.js)$/.test(file));
 copyDirectory("mcp/campus-tools-mcp/test", "tools/campus-tools-mcp/test", (file) => /\.test\.js$/.test(file));
 for (const file of ["package.json", "package-lock.json", "tsconfig.json"]) copy(`mcp/campus-tools-mcp/${file}`, `tools/campus-tools-mcp/${file}`);
 const dockerfile = fs.readFileSync(path.join(ROOT, "mcp", "campus-tools-mcp", "Dockerfile"), "utf8")
   .replace(/adp-kit/g, "submission-package")
-  .replace(/mcp\/campus-tools-mcp/g, "tools/campus-tools-mcp");
+  .replace(/mcp\/campus-tools-mcp/g, "tools/campus-tools-mcp")
+  .replace(/^COPY r51\/(?:decision|mission).*\r?\n/gm, "")
+  .replace(/^COPY r50\.2\/widget.*\r?\n/gm, "");
 write("tools/campus-tools-mcp/Dockerfile", dockerfile);
 
 const oraclePath = path.join(OUTPUT, "evaluation", "golden-oracle.js");

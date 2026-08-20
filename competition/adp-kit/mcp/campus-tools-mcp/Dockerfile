@@ -16,6 +16,9 @@ WORKDIR /app
 # 服务代码
 COPY mcp/campus-tools-mcp/package.json ./
 COPY mcp/campus-tools-mcp/src ./src
+COPY r51/decision ./src/decision
+COPY r51/mission ./src/mission
+COPY r50.2/widget ./r50.2/widget
 
 # 匿名演示数据（data.js 强制守卫：仅允许 competition-demo-* 文件）
 COPY mock-data/competition-demo-v1.json /mock-data/competition-demo-v1.json

@@ -176,6 +176,12 @@ async function waitForHealth() {
     const reschBody = await resch.json();
     assert.equal(reschBody.success, true);
     assert.ok(reschBody.summary && typeof reschBody.summary.feasible === "boolean");
+    assert.ok(reschBody.decision, "live reschedule handler 应附带 authoritative decision");
+    assert.equal(
+      reschBody.decision.status,
+      reschBody.summary.feasible ? "recommended" : "no_feasible_candidate",
+      "调课系统可行性必须控制推荐状态",
+    );
 
     const group = await fetch("http://127.0.0.1:9000/api/campus_group_plan", {
       method: "POST",
@@ -185,6 +191,19 @@ async function waitForHealth() {
     assert.equal(group.status, 200);
     const groupBody = await group.json();
     assert.equal(groupBody.success, true);
+    assert.ok(groupBody.decision && groupBody.decision.receipt && groupBody.decision.resultCard);
+    assert.equal(groupBody.decision.resultCard.layoutMode, "result-card");
+    assert.ok(groupBody.decision.resultCard.actions.every((action) => action.type === "sys.chat"));
+    assert.ok(groupBody.items.some((item) => `${item.weekdayName} ${item.periodText}` === groupBody.decision.preferred.label));
+
+    const simpleSchedule = await fetch("http://127.0.0.1:9000/api/campus_schedule_query", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ entityType: "teacher", entityName: v3.teachers[0].name, week: 1 }),
+    });
+    const simpleScheduleBody = await simpleSchedule.json();
+    assert.equal(simpleScheduleBody.success, true);
+    assert.equal(Object.hasOwn(simpleScheduleBody, "decision"), false, "简单课表查询不得强行进入 Decision");
 
     console.log("[pass] CloudBase HTTP Function 本地冒烟通过（health、401、确定性工具、13 个 Agent Tool Façade / V3 runtime）");
   } finally {

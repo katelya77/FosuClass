@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-20T08:44:12.917Z",
+  "generatedAt": "2026-08-20T09:44:00.809Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -29,14 +29,29 @@
       "sha256": "207895b310a509c4212ad8f58dc1efc17ae44c2c87642dafbccd6a3cef3d2ad0"
     },
     {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/campus-result-envelope.schema.json",
+      "bytes": 5029,
+      "sha256": "a1b0a20c2d1f3243dabe4ecc9b319a7c66011695ce2a49ab3ee1a804de75e241"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/envelope.js",
+      "bytes": 8761,
+      "sha256": "16b333b5280839732781139dea4d9b948383f858f0a59426cfd7736eefd1b695"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/view-model.js",
+      "bytes": 10629,
+      "sha256": "89b8b87a13180a07751efb4fd7a0c050a958a186d40624ffa779dbf92e7bfd35"
+    },
+    {
       "path": "cloudfunctions/campusflowAdpTools/scf_bootstrap",
       "bytes": 52,
       "sha256": "0e6adf53e51220100ca3ff894e3ad102277cdccc186456d30a72c346d13e8cf2"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/agent-tools.js",
-      "bytes": 4961,
-      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/data.js",
@@ -44,9 +59,89 @@
       "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
     },
     {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/alternatives.js",
+      "bytes": 1110,
+      "sha256": "3474cd46bdde21f4ea51bc0e75c22feaa496e0c3be37447657ae388d71a7e475"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/authority-action.js",
+      "bytes": 1683,
+      "sha256": "81417a23222cd80f378674a2f7c97a5ec95d04f16a48ac562b147a39ace513f0"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/candidate-source.js",
+      "bytes": 9090,
+      "sha256": "2bd0ef083aee84539b8e01f73597d9b56be93ec20cc34f3c13e237d7348b96e9"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/constraint-profile.js",
+      "bytes": 7342,
+      "sha256": "24aaad887dd498f8d84746603b6abc0fab7a00f22c3d58c536a8a1a1f8b203a2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/controller.js",
+      "bytes": 8013,
+      "sha256": "773095b5e09963420e76c1201c82ec222d9aae6bb2faa8ea60717fbbac39b1ac"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/credential-leak.js",
+      "bytes": 1226,
+      "sha256": "77971083f56d229ebf23549623f55f003c3d1dbb1d07b20c2135a44921d4ca93"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/evaluator.js",
+      "bytes": 5527,
+      "sha256": "606ef8af5ad2d2b7e107efe6bfd23a81852d16d7624051777ab2fd23fc743294"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/explainability.js",
+      "bytes": 5258,
+      "sha256": "020c0d71a505841bc4112817fe529fef4fee13c4e6b76fcd5c2ab9b7f59013ec"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/intrinsic-constraints.js",
+      "bytes": 4565,
+      "sha256": "d8c2b17ec466bccca793a988682f242eb596ff7ed7c93cbd7b8e61ca15bc44bf"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/next-best-action.js",
+      "bytes": 4032,
+      "sha256": "082b95fc6554d99d27f26e87f524c2c40a2a6fc5abebb4bbb83f41bf459db071"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/outcome-synthesizer.js",
+      "bytes": 3633,
+      "sha256": "b8a2d32994051ad07db859797450fe9774d5be5802787ae4676470e246eb35c4"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/ranking.js",
+      "bytes": 1593,
+      "sha256": "22e8dd1f4092eabfa8f093dc5fb51f9e140b1d597b3aa6e7f46ba0bf07c23551"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/receipt.js",
+      "bytes": 6103,
+      "sha256": "f1a7a38224a4494d7002eb326f146831a91ae4a5b3b3cf1d98ab6009c7428bd4"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/runtime-activation.js",
+      "bytes": 5024,
+      "sha256": "3f62e397bfe28dbb795aa52af239c4d2b9ad5120e3dcb3f5c8949e51e50a632f"
+    },
+    {
       "path": "cloudfunctions/campusflowAdpTools/src/envelope.js",
       "bytes": 1842,
       "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/mission/authority.js",
+      "bytes": 2462,
+      "sha256": "5f44a5eae3128aa2169ea567eba444e8e83c08b18f9088c8e5a430115dba3680"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/mission/completion.js",
+      "bytes": 1221,
+      "sha256": "1da8266196c6c993265fe4a283ae2fcbbd69e0043f78acbdabc007b1d4d888a5"
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/ranking-core.js",
@@ -80,13 +175,13 @@
     },
     {
       "path": "cloudfunctions/sync-campusflow-function.js",
-      "bytes": 2098,
-      "sha256": "a2b4a7f2d2f0e618948d95123500928de92e172fd89f4cfbe63c92a47d048416"
+      "bytes": 3269,
+      "sha256": "dbfdfd306db67ef06e4f978d2ef495935d6422b755e7b48f11560a37ddd72f2f"
     },
     {
       "path": "cloudfunctions/test-http-function.js",
-      "bytes": 8219,
-      "sha256": "2e158dff7f82a0cc283676f9e71d101aae3af774206f2e0014349d03f2bf980a"
+      "bytes": 9448,
+      "sha256": "d27ba65d4794ed061ae1c6ca456650215a892714a8fa199a577b49dffa8a7a94"
     },
     {
       "path": "evaluation/dual-track/baseline-report.md",
@@ -95,13 +190,13 @@
     },
     {
       "path": "evaluation/dual-track/decision-testset.json",
-      "bytes": 11499,
-      "sha256": "173bd51c66d2b9406d87a45578bed8f7904fcf91b62063e89ae9c96c012444cb"
+      "bytes": 12447,
+      "sha256": "0221f403938cad7f8df49124fee044d170ae849269a9f9cb99fa56de3e6fcebf"
     },
     {
       "path": "evaluation/dual-track/judge.js",
-      "bytes": 25383,
-      "sha256": "32f155d603aded01905a1e1cfa560697aeea1d1e64051e4fd5ab4d78ec11dcaa"
+      "bytes": 27275,
+      "sha256": "2a93371828822c4ed8f04639f37cdceb8050a0a956f982a846c56e39bc9fbedc"
     },
     {
       "path": "evaluation/dual-track/rubric.md",
@@ -280,8 +375,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/Dockerfile",
-      "bytes": 899,
-      "sha256": "e45f4b9a925fadcdea131f62f2f5a2e49a5ee923176a2f468c022f300da2f253"
+      "bytes": 996,
+      "sha256": "5b430eb7553e932db74a2a375d41e0623867aece73611683848c3a96fa4324b0"
     },
     {
       "path": "mcp/campus-tools-mcp/package.json",
@@ -295,8 +390,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/agent-tools.js",
-      "bytes": 4961,
-      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
     },
     {
       "path": "mcp/campus-tools-mcp/src/client.ts",

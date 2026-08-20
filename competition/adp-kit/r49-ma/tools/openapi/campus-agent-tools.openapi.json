@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "校园智序 · 小序 — R49-MA Agent Tools",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "description": "面向 Multi-Agent 的 13 个确定性 Agent Tool Façade（/api/campus_*），映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算；本 spec 用于腾讯 ADP 自定义插件/HTTP 工具导入。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。真实 URL 为占位符，部署时替换并配置 Bearer token。"
   },
   "servers": [
@@ -65,7 +65,7 @@
         ],
         "summary": "查询空教室",
         "operationId": "campus_classroom_search",
-        "description": "查询指定日期/星期与节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。需提供 date 或 week+weekday 以确定具体星期；periodStart/periodEnd 必填（1-10 节）。空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记。动态事实由确定性 CampusTools 计算。",
+        "description": "查询指定日期/星期与节次范围内的空闲教室，支持校区、楼栋、最小容量过滤。需提供 date 或 week+weekday 以确定具体星期；periodStart/periodEnd 必填（1-10 节）。空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记。动态事实由确定性 CampusTools 计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -193,7 +193,7 @@
         ],
         "summary": "教师课表负载排名（教学周窗口）",
         "operationId": "campus_teacher_load_query",
-        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。",
+        "description": "按教学周窗口（weekStart..weekEnd，如 1..4 周）确定性聚合教师课表负载并排名，支持 topN 与校区过滤；输出 rank/lessonOccurrences/periodUnits/tiedWithPrevious，并回显 window 与 rankContext。需要比较多周教师负载、或看课表负载最高教师时调用。动态事实由确定性 CampusTools 计算，所有指标只从 competition-demo-v2 匿名数据集派生，禁止模型编造负载。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -321,7 +321,7 @@
         ],
         "summary": "多实体共同空闲窗口（2..6 教师/班级）",
         "operationId": "campus_common_free_time_query",
-        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。",
+        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -353,7 +353,7 @@
         ],
         "summary": "教室/楼栋/校区利用率排名（Ranking Core）",
         "operationId": "campus_room_utilization_query",
-        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。",
+        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -385,7 +385,7 @@
         ],
         "summary": "调课 What-if 模拟可行性（绝不修改数据）",
         "operationId": "campus_reschedule_feasibility",
-        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。",
+        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -417,7 +417,7 @@
         ],
         "summary": "群体计划候选（共同空闲 + 空教室 ranked）",
         "operationId": "campus_group_plan",
-        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。",
+        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -537,6 +537,9 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 10
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -1627,6 +1630,9 @@
           },
           "error": {
             "$ref": "#/components/schemas/ErrorInfo"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -1836,6 +1842,9 @@
           "campus": {
             "type": "string",
             "description": "校区A / 校区B / 校区C（可选）"
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -2031,6 +2040,9 @@
                 "nullable": true
               }
             }
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -2821,6 +2833,9 @@
             "description": "返回上限，默认 50",
             "minimum": 1,
             "maximum": 200
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -3017,6 +3032,9 @@
           },
           "summary": {
             "$ref": "#/components/schemas/CommonFreeTimeSummary"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -3079,6 +3097,9 @@
             "description": "返回前 N 名（可选，默认全部）",
             "minimum": 1,
             "maximum": 100
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -3335,6 +3356,9 @@
                 "description": "教室类型（null 表示未过滤）"
               }
             }
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -3394,6 +3418,9 @@
               "periodStart",
               "periodEnd"
             ]
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -3838,6 +3865,9 @@
               "target",
               "mutatedData"
             ]
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -3938,6 +3968,9 @@
               "type": "string",
               "description": "功能设备名"
             }
+          },
+          "decisionPreferences": {
+            "$ref": "#/components/schemas/DecisionPreferenceInput"
           }
         },
         "required": [
@@ -4185,6 +4218,9 @@
           },
           "summary": {
             "$ref": "#/components/schemas/GroupPlanSummary"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/RuntimeDecision"
           }
         },
         "required": [
@@ -4196,6 +4232,318 @@
           "evidence",
           "error"
         ]
+      },
+      "DecisionPreferenceInput": {
+        "type": "object",
+        "description": "结构化 soft preference；服务端只接受白名单字段并确定性评分",
+        "properties": {
+          "preferEarlier": {
+            "type": "boolean",
+            "description": "更早时段优先"
+          },
+          "preferLarger": {
+            "type": "boolean",
+            "description": "更大容量优先"
+          },
+          "preferSameCampus": {
+            "type": "boolean",
+            "description": "同校区优先（仅在已有规范校区约束时生效）"
+          },
+          "preferWeekdays": {
+            "type": "array",
+            "description": "优先星期集合",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "minItems": 1,
+            "maxItems": 7
+          }
+        },
+        "additionalProperties": false
+      },
+      "PublicDecisionChoice": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "label",
+          "reasons"
+        ],
+        "additionalProperties": false
+      },
+      "PublicDecisionAction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sys.chat"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "PublicDecisionReceipt": {
+        "type": "object",
+        "properties": {
+          "receiptVersion": {
+            "type": "string",
+            "enum": [
+              "1.0"
+            ]
+          },
+          "decisionId": {
+            "type": "string",
+            "pattern": "^decision-[a-f0-9]{64}$"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/PublicDecisionChoice",
+            "nullable": true
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "nextAction": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "query"
+            ],
+            "additionalProperties": false
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "recommend",
+              "no_viable_option"
+            ]
+          }
+        },
+        "required": [
+          "receiptVersion",
+          "decisionId",
+          "recommendation",
+          "alternatives",
+          "nextAction",
+          "verified",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionResultCard": {
+        "type": "object",
+        "description": "现有小序校园智序 result-card 的脱敏投影",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "layoutMode": {
+            "type": "string",
+            "enum": [
+              "result-card"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "value"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "rows"
+              ]
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionAction"
+            },
+            "maxItems": 3
+          },
+          "displayMeta": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "weekBoardTitle": {
+            "type": "string"
+          },
+          "weekBoardSubtitle": {
+            "type": "string"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "variant",
+          "status",
+          "layoutMode",
+          "title",
+          "summary",
+          "verified",
+          "sections",
+          "actions"
+        ]
+      },
+      "RuntimeDecision": {
+        "type": "object",
+        "description": "服务端基于当前 verified tool candidates 生成的脱敏确定性决策；原 facts/items 保持不变",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "needs_more_facts",
+              "needs_user_choice",
+              "no_feasible_candidate"
+            ]
+          },
+          "preferred": {
+            "$ref": "#/components/schemas/PublicDecisionChoice",
+            "nullable": true
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tradeoffs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionChoice"
+            }
+          },
+          "nextActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDecisionAction"
+            },
+            "maxItems": 3
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/PublicDecisionReceipt"
+          },
+          "resultCard": {
+            "$ref": "#/components/schemas/DecisionResultCard"
+          }
+        },
+        "required": [
+          "status",
+          "preferred",
+          "alternatives",
+          "reasons",
+          "tradeoffs",
+          "nextActions",
+          "receipt",
+          "resultCard"
+        ],
+        "additionalProperties": false
       }
     }
   },

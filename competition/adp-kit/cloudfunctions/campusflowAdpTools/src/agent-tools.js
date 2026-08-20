@@ -26,6 +26,17 @@ const { callTool } = require("./tools");
 const { loadDataset } = require("./data");
 const { fail, ERR } = require("./envelope");
 
+function loadDecisionRuntime() {
+  try {
+    // Cloud Function / submission bundle: generated colocated runtime.
+    return require("./decision/runtime-activation.js");
+  } catch (error) {
+    if (!error || error.code !== "MODULE_NOT_FOUND" || !String(error.message).includes("decision/runtime-activation.js")) throw error;
+    // Canonical repository source: keep Decision Core as the SSOT.
+    return require("../../../r51/decision/runtime-activation.js");
+  }
+}
+
 const ADP_CONTRACT_VERSION = "R50.0";
 
 const AGENT_TOOL_MAP = Object.freeze({
@@ -102,14 +113,21 @@ function resolveAgentParams(name, rawParams) {
 /**
  * 调用 Agent Tool（façade）：先转换参数，再调用底层 CampusTools。
  */
-function callAgentTool(name, params) {
+function callAgentTool(name, params, trustedContext) {
   const campusTool = AGENT_TOOL_MAP[name];
   if (!campusTool) {
     return fail(ERR.INVALID_PARAM, `未知 Agent Tool ${name}`, { allowed: AGENT_TOOL_PATHS });
   }
-  const resolved = resolveAgentParams(name, params);
+  const request = { ...(params || {}) };
+  const decisionPreferences = request.decisionPreferences;
+  delete request.decisionPreferences;
+  const resolved = resolveAgentParams(name, request);
   if (resolved.error) return resolved.error;
-  return callTool(campusTool, resolved.params);
+  const raw = callTool(campusTool, resolved.params);
+  if (!raw || raw.success !== true) return raw;
+  const { activateDecisionForTool } = loadDecisionRuntime();
+  const decision = activateDecisionForTool(name, { ...request, decisionPreferences }, raw, trustedContext || {});
+  return decision ? { ...raw, decision } : raw;
 }
 
 module.exports = {

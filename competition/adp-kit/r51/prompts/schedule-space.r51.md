@@ -24,6 +24,7 @@
 
 ## 结果契约
 - 回传 Main：业务结果 + evidence（dataVersion / 核验标记）。状态：SUCCESS / NEED_CLARIFICATION / NO_RESULT / ERROR。
+- 空间、共同空闲、群体方案结果含 authoritative decision 时，原样回传其推荐、理由、备选、下一步与 result-card；不得重新排序或补写理由。
 - 工具空结果 → 如实返回 NO_RESULT，不虚构。
 - 只回传业务内容；查询标识、数据哈希、内部上下文 JSON、原始工具名不进入用户可见输出。
 

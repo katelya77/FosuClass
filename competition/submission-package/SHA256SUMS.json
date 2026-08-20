@@ -202,9 +202,24 @@
       "sha256": "49127719157fe39d1f7b93c77c9b1d7f79ba0aafabc8c7919a4bb142ce0ca4ff"
     },
     {
+      "path": "tools/campus-tools-mcp/r50.2/widget/campus-result-envelope.schema.json",
+      "bytes": 5029,
+      "sha256": "a1b0a20c2d1f3243dabe4ecc9b319a7c66011695ce2a49ab3ee1a804de75e241"
+    },
+    {
+      "path": "tools/campus-tools-mcp/r50.2/widget/envelope.js",
+      "bytes": 8761,
+      "sha256": "16b333b5280839732781139dea4d9b948383f858f0a59426cfd7736eefd1b695"
+    },
+    {
+      "path": "tools/campus-tools-mcp/r50.2/widget/view-model.js",
+      "bytes": 10629,
+      "sha256": "89b8b87a13180a07751efb4fd7a0c050a958a186d40624ffa779dbf92e7bfd35"
+    },
+    {
       "path": "tools/campus-tools-mcp/src/agent-tools.js",
-      "bytes": 4961,
-      "sha256": "2e8a3777772561791f14f3f4c05f48af16acd42961a839696f16cd282d69b58d"
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
     },
     {
       "path": "tools/campus-tools-mcp/src/client.ts",
@@ -222,9 +237,89 @@
       "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
     },
     {
+      "path": "tools/campus-tools-mcp/src/decision/alternatives.js",
+      "bytes": 1110,
+      "sha256": "3474cd46bdde21f4ea51bc0e75c22feaa496e0c3be37447657ae388d71a7e475"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/authority-action.js",
+      "bytes": 1683,
+      "sha256": "81417a23222cd80f378674a2f7c97a5ec95d04f16a48ac562b147a39ace513f0"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/candidate-source.js",
+      "bytes": 9090,
+      "sha256": "2bd0ef083aee84539b8e01f73597d9b56be93ec20cc34f3c13e237d7348b96e9"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/constraint-profile.js",
+      "bytes": 7342,
+      "sha256": "24aaad887dd498f8d84746603b6abc0fab7a00f22c3d58c536a8a1a1f8b203a2"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/controller.js",
+      "bytes": 8013,
+      "sha256": "773095b5e09963420e76c1201c82ec222d9aae6bb2faa8ea60717fbbac39b1ac"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/credential-leak.js",
+      "bytes": 1226,
+      "sha256": "77971083f56d229ebf23549623f55f003c3d1dbb1d07b20c2135a44921d4ca93"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/evaluator.js",
+      "bytes": 5527,
+      "sha256": "606ef8af5ad2d2b7e107efe6bfd23a81852d16d7624051777ab2fd23fc743294"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/explainability.js",
+      "bytes": 5258,
+      "sha256": "020c0d71a505841bc4112817fe529fef4fee13c4e6b76fcd5c2ab9b7f59013ec"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/intrinsic-constraints.js",
+      "bytes": 4565,
+      "sha256": "d8c2b17ec466bccca793a988682f242eb596ff7ed7c93cbd7b8e61ca15bc44bf"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/next-best-action.js",
+      "bytes": 4032,
+      "sha256": "082b95fc6554d99d27f26e87f524c2c40a2a6fc5abebb4bbb83f41bf459db071"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/outcome-synthesizer.js",
+      "bytes": 3633,
+      "sha256": "b8a2d32994051ad07db859797450fe9774d5be5802787ae4676470e246eb35c4"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/ranking.js",
+      "bytes": 1593,
+      "sha256": "22e8dd1f4092eabfa8f093dc5fb51f9e140b1d597b3aa6e7f46ba0bf07c23551"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/receipt.js",
+      "bytes": 6103,
+      "sha256": "f1a7a38224a4494d7002eb326f146831a91ae4a5b3b3cf1d98ab6009c7428bd4"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/runtime-activation.js",
+      "bytes": 5024,
+      "sha256": "3f62e397bfe28dbb795aa52af239c4d2b9ad5120e3dcb3f5c8949e51e50a632f"
+    },
+    {
       "path": "tools/campus-tools-mcp/src/envelope.js",
       "bytes": 1842,
       "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/mission/authority.js",
+      "bytes": 2462,
+      "sha256": "5f44a5eae3128aa2169ea567eba444e8e83c08b18f9088c8e5a430115dba3680"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/mission/completion.js",
+      "bytes": 1221,
+      "sha256": "1da8266196c6c993265fe4a283ae2fcbbd69e0043f78acbdabc007b1d4d888a5"
     },
     {
       "path": "tools/campus-tools-mcp/src/ranking-core.js",

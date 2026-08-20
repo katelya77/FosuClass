@@ -62,3 +62,13 @@ dual-track 资产；已用权威脚本重建并通过一致性门禁。旧版 `t
 soft 可解释差异 / tool rank 保持 / tie 稳定 / L3 只确认 / simple schedule 直接查询 /
 collaboration / reschedule / teaching_assurance 得到 DecisionBundle / Widget 契约全通过 /
 4 Agent / 13 tools / 14 bindings 不漂移。
+
+## Runtime Activation Closure（2026-08-20）
+
+- [x] 线上只读 reachability 审计：激活前 verified handler 无 `decision`，判定 `REPO_ONLY`。
+- [x] RED→GREEN：权威 intrinsic builder、fingerprint、11 类 profile/oracle 篡改攻击回归。
+- [x] RED→GREEN：六个既有 live handler 内执行 Decision Core；D1–D9 console matrix 自动化。
+- [x] 原 facts/items 保留；公开 decision/receipt/result-card 脱敏；L3 confirmation-only。
+- [x] OpenAPI 13 operations 不变；六个 existing operations 增可选 preference/output contract。
+- [x] Cloud Function 与 submission package 由 canonical Decision/Mission/Widget 源确定性同步。
+- [ ] 全量 gates、competition runtime code-only deploy、远端 `LIVE_REACHABLE`、统一 push、PR/CI 验证。

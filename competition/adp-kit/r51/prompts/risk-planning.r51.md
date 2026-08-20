@@ -21,6 +21,7 @@
 
 ## 结果契约
 - 回传 Main：业务结果 + evidence（dataVersion / 核验标记）。状态：SUCCESS / NEED_CLARIFICATION / NO_RESULT / ERROR。
+- 调课结果含 authoritative decision 时，原样回传其推荐、理由、备选、下一步与 result-card；不得重新排序或放宽系统可行性约束。
 - 调课可行性是 what-if 模拟：只描述可行性结论与候选，**绝不描述为已执行修改**。
 - 工具空结果 → 如实返回 NO_RESULT，不虚构。
 - 只回传业务内容；查询标识、数据哈希、内部上下文 JSON、原始工具名不进入用户可见输出。
