@@ -34,3 +34,12 @@
 3. 将 `r51/prompts/main-orchestrator.r51.md` 与三个 Child prompt 的最小规则同步到对应 Agent；bindings 不变，Main 仍为 0 CampusTools。
 4. 继续绑定现有 Widget“小序-校园智序结果卡”，保持 `sys.chat`；不创建 Decision 专用 Widget。
 5. 在预览/调试而非发布环境逐项执行 D1–D9，保存脱敏结果；本轮不点击发布。
+
+## Runtime Reachability Evidence（2026-08-20）
+
+- 激活前：线上 `campus_group_plan` 返回 8 个 verified items，但无 `decision`，结论 `REPO_ONLY`。
+- code-only deploy target：CloudBase 环境 `cloud1-d3g17rpe7566d3d5c` 的既有 HTTP Function `campusflowAdpTools`；未修改函数配置、环境变量或 endpoint。
+- 激活后：同一线上 handler 返回 `decision.status=recommended`，preferred 可在当前 8 个 items 中定位，resultCard.layoutMode=`result-card`，结论 `LIVE_REACHABLE`。
+- 线上负例：冲突调课事实 `summary.feasible=false`，Decision 为 `no_feasible_candidate` 且 preferred=null。
+- 线上兼容：简单课表成功且无 `decision`；health 保持 14 个底层工具 / 13 个 Agent-facing 工具。
+- 线上公开投影扫描：resultRef / queryId / dataHash / fingerprint / evaluation / Agent/Tool 名称命中 0。

@@ -71,4 +71,5 @@ collaboration / reschedule / teaching_assurance 得到 DecisionBundle / Widget �
 - [x] 原 facts/items 保留；公开 decision/receipt/result-card 脱敏；L3 confirmation-only。
 - [x] OpenAPI 13 operations 不变；六个 existing operations 增可选 preference/output contract。
 - [x] Cloud Function 与 submission package 由 canonical Decision/Mission/Widget 源确定性同步。
-- [ ] 全量 gates、competition runtime code-only deploy、远端 `LIVE_REACHABLE`、统一 push、PR/CI 验证。
+- [x] 全量 gates、competition runtime code-only deploy、远端 `LIVE_REACHABLE`。
+- [ ] 统一 push、PR/CI 验证。
