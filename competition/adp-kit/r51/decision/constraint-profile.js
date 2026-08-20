@@ -92,8 +92,11 @@ function isPresent(v) {
 }
 
 function toFiniteNumber(v) {
+  if (isFiniteNumber(v)) return v;
+  // 只接受规范数值字符串；禁止 Number() 将 true、[]、空白等伪装成硬约束值。
+  if (typeof v !== "string" || v.length === 0 || v.trim() !== v) return null;
   const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) && String(n) === v ? n : null;
 }
 
 // goalSpec.constraints / preferences → ConstraintProfile（确定性，不注入默认值）。

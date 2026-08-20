@@ -73,3 +73,19 @@ test("CP6. 已提供但非数值的 minCapacity 保留为非法 hard，评估前
   assert.strictEqual(validation.ok, false);
   assert.match(validation.errors.join("; "), /capacity-min.*有限数/);
 });
+
+test("CP7. minCapacity 仅接受有限数或规范数值字符串，拒绝 Number() 可强转值", () => {
+  const invalidProvided = [true, [], {}, " "];
+  for (const minCapacity of invalidProvided) {
+    const mapped = profileFromGoalSpec({ constraints: { minCapacity }, preferences: {} });
+    assert.strictEqual(mapped.hard.length, 1, `${JSON.stringify(minCapacity)} 不得静默丢弃`);
+    assert.strictEqual(validateProfile(mapped).ok, false, `${JSON.stringify(minCapacity)} 必须 fail-closed`);
+  }
+  for (const minCapacity of ["", null, undefined]) {
+    const mapped = profileFromGoalSpec({ constraints: { minCapacity }, preferences: {} });
+    assert.strictEqual(mapped.hard.length, 0, `${String(minCapacity)} 不得成为数值硬约束`);
+  }
+  const canonical = profileFromGoalSpec({ constraints: { minCapacity: "80" }, preferences: {} });
+  assert.strictEqual(canonical.hard[0].value, 80);
+  assert.strictEqual(validateProfile(canonical).ok, true);
+});
