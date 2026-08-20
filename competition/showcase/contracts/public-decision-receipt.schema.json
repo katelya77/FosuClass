@@ -35,6 +35,32 @@
     "verified": { "type": "boolean" },
     "decision": { "type": "string", "enum": ["recommend", "no_viable_option"] }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "decision": { "const": "recommend" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "verified": { "const": true },
+          "recommendation": { "$ref": "#/$defs/choice" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "decision": { "const": "no_viable_option" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "recommendation": { "type": "null" },
+          "alternatives": { "type": "array", "maxItems": 0 }
+        }
+      }
+    }
+  ],
   "$defs": {
     "choice": {
       "type": "object",

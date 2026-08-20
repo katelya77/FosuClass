@@ -161,12 +161,14 @@ const FACT_ADAPTORS = Object.freeze({
   spaceFacts: { tool: "campus_classroom_search", adapt: fromSpace },
   groupPlanFacts: { tool: "campus_group_plan", adapt: fromGroupPlan },
   rescheduleSimFacts: { tool: "campus_reschedule_feasibility", adapt: fromReschedule },
+  // 风险事实是 eligible source，但当前没有规范化候选 adapter；Controller 只能核验为空，不能造候选。
+  riskFacts: { tool: "campus_risk_check", adapt: null },
 });
 
 // 按 factKey 选择适配器并从 toolResults 提取候选；无事实/无 items → []。
 function candidatesForFact(factKey, toolResults, opts = {}) {
   const def = FACT_ADAPTORS[factKey];
-  if (!def) return [];
+  if (!def || typeof def.adapt !== "function") return [];
   const factMeta = opts.fact && typeof opts.fact === "object"
     ? opts.fact
     : (opts.meta && typeof opts.meta === "object" ? opts.meta : {});

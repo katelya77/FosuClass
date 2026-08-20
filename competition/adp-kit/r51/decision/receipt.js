@@ -67,20 +67,23 @@ function decisionIdFor(content) {
 }
 
 function createPublicDecisionReceipt(bundle) {
-  const recommendation = publicChoice(bundle && bundle.recommendation);
-  const alternatives = (Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [])
+  const verified = bundle && bundle.verified === true;
+  const safeRecommendation = publicChoice(bundle && bundle.recommendation);
+  const safeAlternatives = (Array.isArray(bundle && bundle.alternatives) ? bundle.alternatives : [])
     .map(publicChoice)
     .filter(Boolean);
   const nextAction = publicNextAction(bundle && bundle.nextAction);
-  const decision = bundle && bundle.decision === "recommend" && recommendation
+  const decision = bundle && bundle.decision === "recommend" && verified && safeRecommendation
     ? "recommend"
     : "no_viable_option";
+  const recommendation = decision === "recommend" ? safeRecommendation : null;
+  const alternatives = decision === "recommend" ? safeAlternatives : [];
   const content = {
     receiptVersion: RECEIPT_VERSION,
     recommendation,
     alternatives,
     nextAction,
-    verified: bundle && bundle.verified === true,
+    verified,
     decision,
   };
   return {
@@ -119,6 +122,12 @@ function validatePublicDecisionReceipt(receipt) {
   if (action !== null && !(keysExactly(action, ["label", "query"]) && safePublicText(action.label) === action.label && safePublicText(action.query) === action.query)) errors.push("nextAction 非法");
   if (!receipt || typeof receipt.verified !== "boolean") errors.push("verified 必须是布尔值");
   if (!receipt || !DECISIONS.has(receipt.decision)) errors.push("decision 非法");
+  if (receipt && receipt.decision === "recommend" && (receipt.verified !== true || receipt.recommendation === null)) {
+    errors.push("recommend 必须已核验且含安全 recommendation");
+  }
+  if (receipt && receipt.decision === "no_viable_option" && (receipt.recommendation !== null || !Array.isArray(receipt.alternatives) || receipt.alternatives.length !== 0)) {
+    errors.push("no_viable_option 必须清空 recommendation / alternatives");
+  }
   if (errors.length === 0) {
     const { decisionId, ...content } = receipt;
     if (decisionIdFor(content) !== decisionId) errors.push("decisionId 与公开内容不一致");

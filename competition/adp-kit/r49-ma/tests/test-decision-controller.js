@@ -6,6 +6,7 @@ const path = require("path");
 
 const D = path.join(__dirname, "..", "..", "r51", "decision");
 const { decide, isDecisionEligible } = require(path.join(D, "controller.js"));
+const { FACT_ADAPTORS } = require(path.join(D, "candidate-source.js"));
 
 function mission(goalFamily, facts = {}, overrides = {}) {
   return {
@@ -63,6 +64,55 @@ test("DC3. 候选要求 Mission verified 与原始 tool evidence verified 双门
   assert.strictEqual(decide({ ...base, missionState: mission(family, { groupPlanFacts: { ...f, verified: false } }) }).candidates.length, 0);
   assert.strictEqual(decide({ ...base, missionState: mission(family, { groupPlanFacts: f }), toolResults: { campus_group_plan: raw(items, false) } }).candidates.length, 0);
   assert.strictEqual(decide({ ...base, missionState: mission(family, { groupPlanFacts: f }) }).candidates.length, 1);
+});
+
+test("DC3a. Mission fact provenance 必须绑定 exact factKey 与 FACT_ADAPTORS canonical tool", () => {
+  const family = "collaboration_planning";
+  const canonicalItems = [{ planId: "p1", planName: "方案一", rank: 1 }];
+  const wrongFactKey = decide({
+    missionState: mission(family, { groupPlanFacts: { ...fact("groupPlanFacts", "campus_group_plan"), factKey: "availabilityFacts" } }),
+    toolResults: { campus_group_plan: raw(canonicalItems) },
+    goalSpec: goal(family),
+  });
+  assert.strictEqual(wrongFactKey.verified, false);
+  assert.strictEqual(wrongFactKey.sourceFactKey, null);
+  assert.deepStrictEqual(wrongFactKey.candidates, []);
+
+  const wrongTool = decide({
+    missionState: mission(family, {
+      groupPlanFacts: fact("groupPlanFacts", "campus_common_free_time_query"),
+      availabilityFacts: fact("availabilityFacts", "campus_common_free_time_query"),
+    }),
+    toolResults: {
+      campus_common_free_time_query: raw(canonicalItems),
+      campus_group_plan: raw(canonicalItems),
+    },
+    goalSpec: goal(family),
+  });
+  assert.strictEqual(wrongTool.verified, false, "高优先级 provenance 损坏时必须整体 fail closed，不得降级采用另一来源");
+  assert.strictEqual(wrongTool.sourceFactKey, null);
+  assert.deepStrictEqual(wrongTool.candidates, []);
+});
+
+test("DC3b. riskFacts canonical source 由 FACT_ADAPTORS 固定，且无 adapter 时保持 verified empty", () => {
+  assert.strictEqual(FACT_ADAPTORS.riskFacts.tool, "campus_risk_check");
+  const family = "teaching_assurance";
+  const canonical = decide({
+    missionState: mission(family, { riskFacts: fact("riskFacts", "campus_risk_check") }),
+    toolResults: { campus_risk_check: raw([{ riskId: "internal-risk" }]) },
+    goalSpec: goal(family),
+  });
+  assert.strictEqual(canonical.verified, true);
+  assert.strictEqual(canonical.sourceFactKey, "riskFacts");
+  assert.deepStrictEqual(canonical.candidates, [], "不得从 riskFacts 发明规范化候选");
+
+  const mismatched = decide({
+    missionState: mission(family, { riskFacts: fact("riskFacts", "campus_group_plan") }),
+    toolResults: { campus_group_plan: raw([]), campus_risk_check: raw([]) },
+    goalSpec: goal(family),
+  });
+  assert.strictEqual(mismatched.verified, false);
+  assert.strictEqual(mismatched.sourceFactKey, null);
 });
 
 test("DC4. source priority、工具原 rank 与 topN 均确定性保留", () => {

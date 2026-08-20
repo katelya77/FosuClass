@@ -50,13 +50,10 @@ function verifiedSource(factKey, missionState, toolResults) {
   const fact = missionState && missionState.availableFacts && missionState.availableFacts[factKey];
   if (!fact || fact.verified !== true) return null;
   const def = FACT_ADAPTORS[factKey];
-  if (!def) {
-    // riskFacts 当前没有规范化候选适配器；仍记录双重核验的空来源，绝不从风险文本造候选。
-    const toolName = fact.toolName || (factKey === "riskFacts" ? "campus_risk_check" : null);
-    const raw = toolName && toolResults && toolResults[toolName];
-    return raw && verifiedOf(raw) ? { factKey, fact, toolName, raw, candidates: [] } : null;
-  }
-  const toolName = fact.toolName || def.tool;
+  if (!def) return null;
+  if (fact.factKey != null && fact.factKey !== factKey) return null;
+  if (fact.toolName != null && fact.toolName !== def.tool) return null;
+  const toolName = def.tool;
   const raw = toolResults && toolResults[toolName];
   if (!raw || verifiedOf(raw) !== true) return null;
   return {
@@ -64,13 +61,25 @@ function verifiedSource(factKey, missionState, toolResults) {
     fact,
     toolName,
     raw,
-    candidates: candidatesForFact(factKey, toolResults, { fact, toolName, resultRef: fact.resultRef }),
+    candidates: typeof def.adapt === "function"
+      ? candidatesForFact(factKey, toolResults, { fact, toolName, resultRef: fact.resultRef })
+      : [],
   };
+}
+
+function hasProvenanceMismatch(factKey, missionState) {
+  const fact = missionState && missionState.availableFacts && missionState.availableFacts[factKey];
+  const def = FACT_ADAPTORS[factKey];
+  if (!fact || !def) return false;
+  return (fact.factKey != null && fact.factKey !== factKey)
+    || (fact.toolName != null && fact.toolName !== def.tool);
 }
 
 function selectCandidateSource(goalFamily, missionState, toolResults, goalSpec) {
   let firstVerifiedEmpty = null;
   for (const factKey of sourcePriority(goalFamily, goalSpec)) {
+    // 优先级链中任一已声明来源 provenance 损坏时整体 fail closed，禁止降级绕过污染记录。
+    if (hasProvenanceMismatch(factKey, missionState)) return null;
     const source = verifiedSource(factKey, missionState, toolResults);
     if (!source) continue;
     if (source.candidates.length > 0) return source;
@@ -174,6 +183,7 @@ module.exports = {
   structuredGoalFamily,
   sourcePriority,
   verifiedSource,
+  hasProvenanceMismatch,
   selectCandidateSource,
   decide,
 };
