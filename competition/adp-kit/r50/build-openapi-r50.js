@@ -76,9 +76,9 @@ const NEW_OPS = {
   },
   campus_reschedule_feasibility: {
     tag: "campus_risk",
-    summary: "调课 What-if 模拟可行性（绝不修改数据）",
+    summary: "调课 What-if 模拟可行性（完整确定性链，绝不修改数据）",
     description:
-      "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。",
+      "What-if 模拟调课可行性（完整确定性链，绝不修改数据）：按 sourceLessonId 或 sourceCourseId/sourceCourseName（可附 className/classId 缩窄班级）解析源课程；逐课次检查教师/班级/教室冲突、目标时段空间可用性（未指定教室时确定性查找空闲且满足容量/设备要求的候选教室）、容量、功能设备、连续负荷与跨校区赶场；返回 feasible/partialFeasible/reason/conflictCount 与 warnings；课程多课次时逐条模拟；week 可选，缺省取源课次首个开课周；模拟绝不修改任何数据（simulation.mutatedData=false）。",
     input: "RescheduleFeasibilityInput",
     response: "RescheduleFeasibilityResponse",
   },
@@ -384,18 +384,22 @@ const NEW_SCHEMAS = {
 
   // ---- campus_reschedule_feasibility ----
   RescheduleFeasibilityInput: OBJ(
-    "调课 What-if 模拟输入：sourceLessonId 必填；target 含 week/weekday/periodStart/periodEnd（room 可选）",
+    "调课 What-if 模拟输入：sourceLessonId / sourceCourseId / sourceCourseName 三选一（可附 className/classId 缩窄课程多课次）；target 含 weekday/periodStart/periodEnd（week 可选，缺省取源课次首个开课周；room 可选）",
     {
-      sourceLessonId: S("源课程 lessonId（必填）"),
+      sourceLessonId: S("源课程 lessonId（与 sourceCourseId/sourceCourseName 三选一）"),
+      sourceCourseId: S("源课程 courseId（与 sourceLessonId/sourceCourseName 三选一）"),
+      sourceCourseName: S("源课程名称（与 sourceLessonId/sourceCourseId 三选一；多个候选时返回歧义候选）"),
+      className: S("班级名称（可选，缩窄课程多课次）"),
+      classId: S("班级 id（可选，缩窄课程多课次）"),
       target: OBJ("目标时段/教室", {
-        week: I("目标教学周", { minimum: 1, maximum: 20 }),
+        week: I("目标教学周（可选，缺省取源课次首个开课周）", { minimum: 1, maximum: 20 }),
         weekday: I("目标星期 1..7", { minimum: 1, maximum: 7 }),
         periodStart: I("目标节次起点", { minimum: 1, maximum: 10 }),
         periodEnd: I("目标节次终点", { minimum: 1, maximum: 10 }),
         room: S("目标教室 id 或名称（可选）"),
-      }, ["week", "weekday", "periodStart", "periodEnd"]),
+      }, ["weekday", "periodStart", "periodEnd"]),
     },
-    ["sourceLessonId", "target"],
+    ["target"],
   ),
   RescheduleSourceLesson: OBJ(
     "源课程信息（lessonDisplay 形态）",
@@ -438,6 +442,22 @@ const NEW_SCHEMAS = {
     },
     ["ok", "note"],
   ),
+  RescheduleSpaceAvailability: OBJ(
+    "目标时段空间可用性检查（完整确定性链）",
+    {
+      ok: B("目标时段是否有可用教室"),
+      note: S("说明（可为 null）"),
+      roomCount: I("可用教室数"),
+      suggestedRoom: OBJ("首选候选教室（未指定目标教室时给出）", {
+        id: S("教室 id"),
+        name: S("教室名称"),
+        capacity: I("容量"),
+        campusId: S("校区 id"),
+        campusName: S("校区名称"),
+      }, ["id", "name", "capacity", "campusId", "campusName"]),
+    },
+    ["ok", "note", "roomCount", "suggestedRoom"],
+  ),
   RescheduleWarning: OBJ(
     "调课风险提示",
     {
@@ -473,18 +493,25 @@ const NEW_SCHEMAS = {
         roomConflict: ref("RescheduleConflictCheck"),
         capacity: ref("RescheduleCapabilityCheck"),
         feature: ref("RescheduleCapabilityCheck"),
+        spaceAvailability: ref("RescheduleSpaceAvailability"),
       }, ["teacherConflict", "classConflict", "roomConflict", "capacity", "feature"]),
       warnings: ARR("风险提示列表", ref("RescheduleWarning")),
+      feasible: B("该课次整体是否可行（完整链：冲突/容量/设备/空间）"),
+      reasons: ARR("不可行原因列表（可读中文）", S("原因")),
     },
-    ["sourceLesson", "target", "checks", "warnings"],
+    ["sourceLesson", "target", "checks", "warnings", "feasible", "reasons"],
   ),
   RescheduleSummary: OBJ(
     "调课可行性汇总",
     {
-      feasible: B("是否可行"),
+      feasible: B("是否全部课次可行"),
+      partialFeasible: B("是否存在部分课次可行（多课次）"),
       reason: S("可行性结论说明"),
       conflictCount: I("冲突总数"),
       warningCount: I("风险提示数"),
+      lessonCount: I("参与模拟的课次数"),
+      multiLesson: B("课程是否存在多个课次（多班级）"),
+      classDisambiguated: B("是否已按班级缩窄"),
     },
     ["feasible", "reason", "conflictCount", "warningCount"],
   ),
@@ -501,7 +528,10 @@ const NEW_SCHEMAS = {
       error: ref("ErrorInfo"),
       summary: ref("RescheduleSummary"),
       simulation: OBJ("模拟元信息", {
-        sourceLessonId: S("源课程 lessonId"),
+        sourceLessonId: S("源课程 lessonId（单课次；多课次为 null）"),
+        sourceLessonIds: ARR("源课程 lessonId 列表", S("lessonId")),
+        sourceCourseId: S("源课程 courseId"),
+        sourceCourseName: S("源课程名称"),
         target: OBJ("目标时段解析", {
           week: I("目标教学周"),
           weekday: I("目标星期"),
@@ -519,7 +549,7 @@ const NEW_SCHEMAS = {
           }),
         }),
         mutatedData: B("是否修改数据（恒为 false）"),
-      }, ["sourceLessonId", "target", "mutatedData"]),
+      }, ["sourceLessonId", "sourceLessonIds", "sourceCourseId", "sourceCourseName", "target", "mutatedData"]),
     },
     ["success", "queryId", "dataVersion", "items", "actions", "evidence", "error"],
   ),

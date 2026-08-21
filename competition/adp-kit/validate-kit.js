@@ -12,7 +12,7 @@ const EXPECTED_DISTRIBUTION = {
   "多轮上下文": 10,
   "缺参和歧义": 5,
   "无结果和工具失败": 5,
-  "匿名与提示注入": 5,
+  "匿名与提示注入": 6,
 };
 const WORKFLOW_NAMES = [
   "01-多维课表查询",
@@ -81,8 +81,8 @@ function validateQa() {
 
 function validateEvaluation() {
   const dataset = json("evaluation/evaluation-dataset.json");
-  assert.strictEqual(dataset.count, 80, "评测集必须恰好 80 条");
-  assert.strictEqual(dataset.items.length, 80, "评测 items 必须恰好 80 条");
+  assert.strictEqual(dataset.count, 81, "评测集必须恰好 81 条");
+  assert.strictEqual(dataset.items.length, 81, "评测 items 必须恰好 81 条");
   assert.deepStrictEqual(dataset.distribution, EXPECTED_DISTRIBUTION, "评测类别分布不正确");
   unique(dataset.items.map((item) => item.id), "评测 id");
   dataset.items.forEach((item) => {
@@ -91,7 +91,7 @@ function validateEvaluation() {
     assert.strictEqual(item.expected.anonymousOnly, true, `${item.id} 未启用匿名断言`);
   });
   const jsonlRows = read("evaluation/evaluation-dataset.jsonl").trim().split(/\r?\n/);
-  assert.strictEqual(jsonlRows.length, 80, "JSONL 行数必须为 80");
+  assert.strictEqual(jsonlRows.length, 81, "JSONL 行数必须为 81");
   jsonlRows.forEach((row) => JSON.parse(row));
 }
 
@@ -233,7 +233,7 @@ function run() {
   validateInterfaces();
   validateAnonymousCompetitionAssets();
   const qaCount = json("qa/standard-qa.json").items.length;
-  console.log(`ADP kit validation passed: ${knowledgeCount} docs (taxonomy 真源), ${qaCount} QA, 80 evals, 5 workflows, 7 tools, 6 widget v2 card types + 1 native Hero pilot`);
+  console.log(`ADP kit validation passed: ${knowledgeCount} docs (taxonomy 真源), ${qaCount} QA, 81 evals, 5 workflows, 7 tools, 6 widget v2 card types + 1 native Hero pilot`);
 }
 
 run();

@@ -9,6 +9,16 @@ Only the following Console actions remain eligible. Do not publish the applicati
 - Desired value: the matching file under `competition/adp-kit/final/prompts/`
 - Verify: all four models still show `DeepSeek-V3-0324`; Main still has no CampusTools; Children retain the existing 14 bindings.
 
+## 1a. Verify data-provenance & privacy truth in prompts and copy
+
+- The replaced instructions include the authoritative truth: demo runs on anonymized/desensitized
+  teaching data mapped to the unified campus model; dynamic conclusions come from controlled
+  verification, not model guessing; the demo reads no real accounts/passwords/unauthorized
+  personal data; real deployment would connect via school-authorized sources with permission.
+- Verify the app description / greeting do not claim connection to the school's official
+  timetable system or the ability to read personal courses, and do not mention a real school
+  identity. Source of truth: `knowledge/current/04` and `knowledge/current/05`.
+
 ## 2. Update the existing unified Widget
 
 - Page: Widget development → `小序-校园智序结果卡`

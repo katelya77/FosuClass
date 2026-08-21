@@ -3,8 +3,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 954,
-      "sha256": "dddd95745b30fd0018307482f3959f99f040a96c422f37312e1345a55c12e947"
+      "bytes": 1434,
+      "sha256": "45bca6b4eb03f42763d9d2a22a79b59d66b52f4522a4ceda02e40c0d09792ae4"
     },
     {
       "path": "evaluation/eval-golden.js",
@@ -13,18 +13,18 @@
     },
     {
       "path": "evaluation/evaluation-dataset.csv",
-      "bytes": 10818,
-      "sha256": "beb24fb55aa6fc9d01a24a4386c93613a78e204f15df320be53d77cc63ccd8b2"
+      "bytes": 11231,
+      "sha256": "33a2386ced404713c738b4aa343b7b7513ecc08364f407401ca5caa7a7c99622"
     },
     {
       "path": "evaluation/evaluation-dataset.json",
-      "bytes": 50125,
-      "sha256": "c86f073bca67e7fa8ff4345f22351102c026f79b9d1926f9820ee2192ac232c5"
+      "bytes": 50900,
+      "sha256": "852f2958f97c6308609c5082030e0df651399645c0fec255afb4dfc8e951bc8e"
     },
     {
       "path": "evaluation/evaluation-dataset.jsonl",
-      "bytes": 31308,
-      "sha256": "dbd9bf27a090aa4adf36be98d4077788f0229da20fddfaff3eee9a1419f51297"
+      "bytes": 31915,
+      "sha256": "f5829beb36c2c5aec70801c813327cfbca650d6be22713af46b94d3d420cc65c"
     },
     {
       "path": "evaluation/golden-cases.js",
@@ -38,8 +38,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 28070,
-      "sha256": "2ea419b58d3f2a8f808124f349a8f50f0105ae141c66e413b4ce02dabcef9668"
+      "bytes": 28183,
+      "sha256": "6317757a941aa8d53f14af5ae699385e151c32de6612201d88d23ebf76280651"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -88,8 +88,8 @@
     },
     {
       "path": "knowledge/current/01-定位与能力边界.md",
-      "bytes": 1838,
-      "sha256": "1662780271de7cb44716e83bd90788a3640bc150b760a0b80c6b2e09c4e2a7fb"
+      "bytes": 2914,
+      "sha256": "1b702199bf903e3d7344b6ef0f7690e5c8e5436e508500c9c885f056cb67c6ed"
     },
     {
       "path": "knowledge/current/02-课表与校园实体理解.md",
@@ -103,13 +103,13 @@
     },
     {
       "path": "knowledge/current/04-动态事实与可信度.md",
-      "bytes": 1427,
-      "sha256": "1747f2836ff0f226e6b40f22d5d2b63f93fccd6a3f851f6b7dedde6635a93f28"
+      "bytes": 2085,
+      "sha256": "6042dbd177a96a3ad6e5554a089a912ed54045ea0415147d163d1a9512db4338"
     },
     {
       "path": "knowledge/current/05-隐私安全与授权边界.md",
-      "bytes": 1589,
-      "sha256": "32bcd58a48478483aee0ab76b381f019439670e343c16451a9c3b6c8af99b5e0"
+      "bytes": 2179,
+      "sha256": "f377ac392ca240157d8d9aa00c0956af20f884919581e063a5bc7fe5e4ecfff2"
     },
     {
       "path": "knowledge/current/06-无结果歧义与恢复.md",
@@ -163,8 +163,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 53067,
-      "sha256": "5dc2bf84bd842868359aa1209001723a89abe4c8248da0e5172db7fcc217e16d"
+      "bytes": 54316,
+      "sha256": "faabfa50cd3a9e56a73c8d7f0607f112c805f74bbe2588cfb9b1f8b86775f0c8"
     },
     {
       "path": "package.json",
@@ -228,8 +228,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/contracts.ts",
-      "bytes": 7966,
-      "sha256": "3b55fcba250026510d384a9b61de649fc371fb8ec90fbdf4e6910afd6bd16caf"
+      "bytes": 8287,
+      "sha256": "6779b4cb005a536f76548f5a85784aabd980128eedb8646ff0444c018a5d57e1"
     },
     {
       "path": "tools/campus-tools-mcp/src/data.js",
@@ -248,8 +248,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/candidate-source.js",
-      "bytes": 9090,
-      "sha256": "2bd0ef083aee84539b8e01f73597d9b56be93ec20cc34f3c13e237d7348b96e9"
+      "bytes": 9812,
+      "sha256": "dc3caa2021f505dce37b1411dc6937271aa916c74fcebed4a457894b26bdc52d"
     },
     {
       "path": "tools/campus-tools-mcp/src/decision/constraint-profile.js",
@@ -348,8 +348,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 91195,
-      "sha256": "445dd5e448b6778ba88fd270a4a1f45d9f15333b15c1e25a2ab045b375eeace1"
+      "bytes": 100187,
+      "sha256": "fb0d0cb8f0032258f17dcb9ffb2fb72a21cab45c0ac46c2eca3c89b92eed10fd"
     },
     {
       "path": "tools/campus-tools-mcp/test/data-version-contract.test.js",

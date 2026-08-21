@@ -56,7 +56,7 @@ test("PP2 compound Mission selects terminal Risk card rather than stale Schedule
   assert.equal(result.resultCard.variant, "risk");
 });
 
-test("PP3 invalid Widget payload fails closed to sanitized text", () => {
+test("PP3 invalid Widget payload fails closed to sanitized text derived from the same projection", () => {
   const api = policy();
   assert.ok(api, "FinalPresentationPolicy must exist");
   const invalid = { ...payload("space.json"), internal: { queryId: "secret" } };
@@ -68,8 +68,32 @@ test("PP3 invalid Widget payload fails closed to sanitized text", () => {
   });
   assert.equal(result.mode, "text");
   assert.equal(result.resultCard, null);
-  assert.equal(result.fallbackText, "当前结果暂时无法以卡片展示。");
+  // fail-safe presentation contract：fallback 从同一 verified projection 派生业务内容，
+  // 而不是只输出占位句、裸 JSON、schema 或内部协议。
+  assert.notEqual(result.fallbackText, "当前结果暂时无法以卡片展示。");
+  assert.ok(result.fallbackText.includes(invalid.title), "fallback 必须保留同一 projection 的业务标题");
+  assert.ok(result.fallbackText.includes(invalid.summary), "fallback 必须保留同一 projection 的业务摘要");
   assert.doesNotMatch(result.fallbackText, /queryId|secret|\{|\}/);
+  assert.doesNotMatch(result.fallbackText, /schema|version|protocol/i);
+});
+
+test("PP6 fail-safe presentation contract: bare placeholder, raw JSON and schema-only payloads are rejected to readable text", () => {
+  const api = policy();
+  assert.ok(api, "FinalPresentationPolicy must exist");
+  // 裸 JSON / schema 碎片不是合法 result-card：必须 fail-closed 到可读文本
+  const bareJson = { version: "1.0", variant: "schedule", status: "success", internal: { queryId: "q-1" } };
+  const bare = api.selectFinalPresentation({
+    responseClass: "dynamic_result", resultCard: bareJson, fallbackText: "当前结果暂时无法以卡片展示。",
+    validateResultCard: validateWidgetPayload,
+  });
+  assert.equal(bare.mode, "text");
+  assert.doesNotMatch(bare.fallbackText, /queryId|\{|\}/);
+
+  // 合法 projection（即使 Widget 环境判定不可渲染）也能派生出可读业务文本
+  const valid = payload("reschedule.json");
+  const derived = api.fallbackFromProjection(valid, "占位");
+  assert.ok(derived.includes(valid.title), "合法 projection 派生文本必须保留标题");
+  assert.doesNotMatch(derived, /DecisionBundle|MissionState|sourceLessonId|mutatedData/i);
 });
 
 test("PP4 clarification and L3 confirmation never use the result Widget", () => {
@@ -89,4 +113,22 @@ test("PP5 short static knowledge uses message and ordinary chat may remain text"
   assert.ok(api, "FinalPresentationPolicy must exist");
   assert.equal(api.selectFinalPresentation({ responseClass: "static_knowledge" }).mode, "message");
   assert.equal(api.selectFinalPresentation({ responseClass: "chat" }).mode, "text");
+});
+
+test("PP7 fail-safe presentation contract document is the SSOT and matches the enforced policy", () => {
+  const contractPath = path.join(KIT, "final", "presentation", "PRESENTATION-CONTRACT.md");
+  assert.ok(fs.existsSync(contractPath), "PRESENTATION-CONTRACT.md 必须存在");
+  const text = fs.readFileSync(contractPath, "utf8");
+  const api = policy();
+  for (const required of [
+    "verified result projection 确定性派生",
+    "禁止语言模型重新编造事实",
+    "Widget无法正常展示",
+    "裸 JSON",
+    "内部协议",
+    "displayMeta.simulated",
+  ]) {
+    assert.ok(text.includes(required), `PRESENTATION-CONTRACT.md 必须包含：${required}`);
+  }
+  assert.ok(api.fallbackFromProjection, "policy 必须导出 fallbackFromProjection（同一投影派生）");
 });

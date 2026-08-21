@@ -138,9 +138,11 @@ function fromGroupPlan(raw, meta) {
   });
 }
 
-// 调课可行性：目标时段候选（feasible / conflictCount 折叠）
+// 调课可行性：目标时段候选（feasible / conflictCount 折叠；多课次时按班级区分 label）
 function fromReschedule(raw, meta) {
   const verified = verifiedOf(raw, meta);
+  const summary = raw && raw.summary && typeof raw.summary === "object" ? raw.summary : {};
+  const multiLesson = summary.multiLesson === true;
   return verifiedItems(raw, meta).map((item, index) => {
     const target = item.target || {};
     const checks = item.checks || {};
@@ -149,15 +151,22 @@ function fromReschedule(raw, meta) {
       if (!check || check.conflict !== true) return count;
       return count + (Array.isArray(check.details) && check.details.length ? check.details.length : 1);
     }, 0);
+    // 空间可用性（完整确定性链）：缺失时按既有契约 fail-open（老数据/老 fixture 兼容）
+    const spaceCheck = checks.spaceAvailability || null;
     const capabilityChecks = [checks.capacity, checks.feature];
     const checksPresent = conflictChecks.every((check) => check && typeof check.conflict === "boolean")
       && capabilityChecks.every((check) => check && typeof check.ok === "boolean");
+    const spaceOk = spaceCheck == null || spaceCheck.ok === true;
     const feasible = checksPresent
+      && spaceOk
       && conflictCount === 0
       && capabilityChecks.every((check) => check.ok === true);
     const warningCount = Array.isArray(item.warnings)
       ? item.warnings.length
       : (asNum(raw && raw.summary && raw.summary.warningCount) || 0);
+    const className = multiLesson
+      ? (Array.isArray(item.sourceLesson && item.sourceLesson.classes) && item.sourceLesson.classes[0]) || ""
+      : "";
     const attributes = {
       week: asNum(target.week),
       weekday: asNum(target.weekday),
@@ -168,7 +177,9 @@ function fromReschedule(raw, meta) {
       conflictCount,
       warningCount,
     };
-    const label = `${target.weekdayName || ""} ${target.periodText || ""}`.trim() || `target-${index}`;
+    if (className) attributes.className = className;
+    const baseLabel = `${target.weekdayName || ""} ${target.periodText || ""}`.trim() || `target-${index}`;
+    const label = className ? `${className} ${baseLabel}` : baseLabel;
     return makeCandidate(`target-${attributes.week ?? index}-${attributes.weekday ?? index}-${attributes.periodStart ?? index}-${attributes.periodEnd ?? index}`, label, attributes, { ...meta, verified }, index);
   });
 }

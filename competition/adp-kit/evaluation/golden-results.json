@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "79bda318d7ac926037f264fc382705542be9e3ceef9fe4880e0e7a788d39ec8b",
+  "oracleSourceSha256": "698e7636516c77de87775ea33389016f3d294431f038969ac1c1353ad1877760",
   "caseCount": 33,
   "cases": [
     {
@@ -1160,11 +1160,11 @@
     }
   ],
   "lastOracleReview": {
-    "date": "2026-08-18",
+    "date": "2026-08-21",
     "classification": "A",
     "semanticDrift": 0,
     "changedCases": [],
     "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
-    "note": "R50.1 追加审计：mcp/campus-tools-mcp/src/data.js 仅注释修正（v2→v3 cutover 说明，§1.2 漂移修复），零语义变化；33/33 case 语义输出与 committed expected 逐字节一致，无需重建 golden"
+    "note": "Final Reliability Convergence 审计：r51/decision/candidate-source.js fromReschedule 新增空间可用性（spaceAvailability）核验与多课次班级 label（老 fixture 无该字段时 fail-open，语义不变）；33/33 case 语义输出与 committed expected 逐字节一致，仅 oracleSourceSha256 更新，无需重建 case"
   }
 }

@@ -42,3 +42,16 @@ Existing visual contracts remain future-ready, but no image capability is requir
 The 20:30 application ZIP is historical structure only. Its old models, empty description, old greeting/questions, workflow names, retrieval switches, and stale data-version metadata are never applied to Console.
 
 ADP API snapshot status for this run: `BLOCKED_UNKNOWN` (read failed without exposing credentials). Therefore this document records user-confirmed truth, not an API-observed claim.
+
+## Final reliability contracts (REPO_FINAL, console-side verification)
+
+- Data provenance & privacy truth: prompts and app copy must state the demo uses anonymized/desensitized
+  teaching data mapped to the unified campus model; dynamic conclusions come from controlled verification;
+  no real accounts/passwords/unauthorized personal data are read; no claim of connecting the school's
+  official timetable system or reading personal courses. See `final/console/MANUAL-ADP-ACTIONS.md` §1a.
+- Fail-safe presentation contract: widget renders normally where supported; if a result card cannot
+  render, the readable Chinese text is derived from the same verified projection (never a bare
+  placeholder, bare JSON, schema/version, or internal protocol). See
+  `final/presentation/PRESENTATION-CONTRACT.md`.
+- Final Hero Stability Matrix: 8 groups × ≥3 variants pass all five gates
+  (`r49-ma/tests/test-final-hero-stability.js`).

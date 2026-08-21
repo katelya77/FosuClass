@@ -321,7 +321,7 @@
         ],
         "summary": "多实体共同空闲窗口（2..6 教师/班级）",
         "operationId": "campus_common_free_time_query",
-        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
+        "description": "查询 2..6 个教师/班级在指定教学周（或周区间）内的共同空闲连续节次窗口，支持星期/节次范围/最小连续节数过滤，按 week/weekday/periodStart 确定性排序；只从当前匿名数据集派生，禁止模型编造。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -353,7 +353,7 @@
         ],
         "summary": "教室/楼栋/校区利用率排名（Ranking Core）",
         "operationId": "campus_room_utilization_query",
-        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
+        "description": "统计指定教学周窗口内教室/楼栋/校区的利用率（occupiedPeriodUnits/availablePeriodUnits/utilizationRate/lessonOccurrences），按利用率最高/最低经 Ranking Core 确定性排名（rank/metricRank/tieGroup 语义），支持 campus/building/roomType 过滤与 topN；只从匿名数据集确定性派生。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -383,9 +383,9 @@
         "tags": [
           "campus_risk"
         ],
-        "summary": "调课 What-if 模拟可行性（绝不修改数据）",
+        "summary": "调课 What-if 模拟可行性（完整确定性链，绝不修改数据）",
         "operationId": "campus_reschedule_feasibility",
-        "description": "以源课程 + 目标周/星期/节次/教室做 What-if 模拟：检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场，返回 feasible/reason/conflictCount 与 warnings；模拟绝不修改任何数据（simulation.mutatedData=false）。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
+        "description": "What-if 模拟调课可行性（完整确定性链，绝不修改数据）：按 sourceLessonId 或 sourceCourseId/sourceCourseName（可附 className/classId 缩窄班级）解析源课程；逐课次检查教师/班级/教室冲突、目标时段空间可用性（未指定教室时确定性查找空闲且满足容量/设备要求的候选教室）、容量、功能设备、连续负荷与跨校区赶场；返回 feasible/partialFeasible/reason/conflictCount 与 warnings；课程多课次时逐条模拟；week 可选，缺省取源课次首个开课周；模拟绝不修改任何数据（simulation.mutatedData=false）。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -417,7 +417,7 @@
         ],
         "summary": "群体计划候选（共同空闲 + 空教室 ranked）",
         "operationId": "campus_group_plan",
-        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。",
+        "description": "为 2..6 个教师/班级生成群体计划候选：共同空闲窗口 + 该窗口空教室 + 容量/设备过滤，按候选教室数（roomCount）确定性 ranked 排序；教室一律来自确定性数据源，禁止 LLM 拼装虚构房间。 动态事实仅来自当前已核验校园数据源。 结果由确定性 CampusTools 服务计算。 服务端在 verified candidates 仍位于 handler 内时附加 authoritative decision；调用方不得重新排序后声称已核验。",
         "requestBody": {
           "required": true,
           "content": {
@@ -3373,11 +3373,27 @@
       },
       "RescheduleFeasibilityInput": {
         "type": "object",
-        "description": "调课 What-if 模拟输入：sourceLessonId 必填；target 含 week/weekday/periodStart/periodEnd（room 可选）",
+        "description": "调课 What-if 模拟输入：sourceLessonId / sourceCourseId / sourceCourseName 三选一（可附 className/classId 缩窄课程多课次）；target 含 weekday/periodStart/periodEnd（week 可选，缺省取源课次首个开课周；room 可选）",
         "properties": {
           "sourceLessonId": {
             "type": "string",
-            "description": "源课程 lessonId（必填）"
+            "description": "源课程 lessonId（与 sourceCourseId/sourceCourseName 三选一）"
+          },
+          "sourceCourseId": {
+            "type": "string",
+            "description": "源课程 courseId（与 sourceLessonId/sourceCourseName 三选一）"
+          },
+          "sourceCourseName": {
+            "type": "string",
+            "description": "源课程名称（与 sourceLessonId/sourceCourseId 三选一；多个候选时返回歧义候选）"
+          },
+          "className": {
+            "type": "string",
+            "description": "班级名称（可选，缩窄课程多课次）"
+          },
+          "classId": {
+            "type": "string",
+            "description": "班级 id（可选，缩窄课程多课次）"
           },
           "target": {
             "type": "object",
@@ -3385,7 +3401,7 @@
             "properties": {
               "week": {
                 "type": "integer",
-                "description": "目标教学周",
+                "description": "目标教学周（可选，缺省取源课次首个开课周）",
                 "minimum": 1,
                 "maximum": 20
               },
@@ -3413,7 +3429,6 @@
               }
             },
             "required": [
-              "week",
               "weekday",
               "periodStart",
               "periodEnd"
@@ -3424,7 +3439,6 @@
           }
         },
         "required": [
-          "sourceLessonId",
           "target"
         ]
       },
@@ -3691,6 +3705,9 @@
               },
               "feature": {
                 "$ref": "#/components/schemas/RescheduleCapabilityCheck"
+              },
+              "spaceAvailability": {
+                "$ref": "#/components/schemas/RescheduleSpaceAvailability"
               }
             },
             "required": [
@@ -3707,13 +3724,27 @@
             "items": {
               "$ref": "#/components/schemas/RescheduleWarning"
             }
+          },
+          "feasible": {
+            "type": "boolean",
+            "description": "该课次整体是否可行（完整链：冲突/容量/设备/空间）"
+          },
+          "reasons": {
+            "type": "array",
+            "description": "不可行原因列表（可读中文）",
+            "items": {
+              "type": "string",
+              "description": "原因"
+            }
           }
         },
         "required": [
           "sourceLesson",
           "target",
           "checks",
-          "warnings"
+          "warnings",
+          "feasible",
+          "reasons"
         ]
       },
       "RescheduleSummary": {
@@ -3722,7 +3753,11 @@
         "properties": {
           "feasible": {
             "type": "boolean",
-            "description": "是否可行"
+            "description": "是否全部课次可行"
+          },
+          "partialFeasible": {
+            "type": "boolean",
+            "description": "是否存在部分课次可行（多课次）"
           },
           "reason": {
             "type": "string",
@@ -3735,6 +3770,18 @@
           "warningCount": {
             "type": "integer",
             "description": "风险提示数"
+          },
+          "lessonCount": {
+            "type": "integer",
+            "description": "参与模拟的课次数"
+          },
+          "multiLesson": {
+            "type": "boolean",
+            "description": "课程是否存在多个课次（多班级）"
+          },
+          "classDisambiguated": {
+            "type": "boolean",
+            "description": "是否已按班级缩窄"
           }
         },
         "required": [
@@ -3793,7 +3840,23 @@
             "properties": {
               "sourceLessonId": {
                 "type": "string",
-                "description": "源课程 lessonId"
+                "description": "源课程 lessonId（单课次；多课次为 null）"
+              },
+              "sourceLessonIds": {
+                "type": "array",
+                "description": "源课程 lessonId 列表",
+                "items": {
+                  "type": "string",
+                  "description": "lessonId"
+                }
+              },
+              "sourceCourseId": {
+                "type": "string",
+                "description": "源课程 courseId"
+              },
+              "sourceCourseName": {
+                "type": "string",
+                "description": "源课程名称"
               },
               "target": {
                 "type": "object",
@@ -3862,6 +3925,9 @@
             },
             "required": [
               "sourceLessonId",
+              "sourceLessonIds",
+              "sourceCourseId",
+              "sourceCourseName",
               "target",
               "mutatedData"
             ]
@@ -4544,6 +4610,63 @@
           "resultCard"
         ],
         "additionalProperties": false
+      },
+      "RescheduleSpaceAvailability": {
+        "type": "object",
+        "description": "目标时段空间可用性检查（完整确定性链）",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "目标时段是否有可用教室"
+          },
+          "note": {
+            "type": "string",
+            "description": "说明（可为 null）"
+          },
+          "roomCount": {
+            "type": "integer",
+            "description": "可用教室数"
+          },
+          "suggestedRoom": {
+            "type": "object",
+            "description": "首选候选教室（未指定目标教室时给出）",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "教室 id"
+              },
+              "name": {
+                "type": "string",
+                "description": "教室名称"
+              },
+              "capacity": {
+                "type": "integer",
+                "description": "容量"
+              },
+              "campusId": {
+                "type": "string",
+                "description": "校区 id"
+              },
+              "campusName": {
+                "type": "string",
+                "description": "校区名称"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "capacity",
+              "campusId",
+              "campusName"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "note",
+          "roomCount",
+          "suggestedRoom"
+        ]
       }
     }
   },

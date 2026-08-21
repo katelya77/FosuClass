@@ -237,11 +237,17 @@ export interface QueryRoomUtilizationInput {
   topN?: number;
 }
 
-/** R50.0 调课 What-if：sourceLessonId + target{week,weekday,periodStart,periodEnd,room?}。 */
+/** R50.0 调课 What-if（完整确定性链）：sourceLessonId / sourceCourseId / sourceCourseName 三选一，
+ *  可附 className/classId 缩窄课程多课次；target 含 weekday/periodStart/periodEnd（week 可选，
+ *  缺省取源课次首个开课周；room 可选）。绝不修改任何数据。 */
 export interface CheckRescheduleFeasibilityInput {
-  sourceLessonId: string;
+  sourceLessonId?: string;
+  sourceCourseId?: string;
+  sourceCourseName?: string;
+  className?: string;
+  classId?: string;
   target: {
-    week: number;
+    week?: number;
     weekday: number;
     periodStart: number;
     periodEnd: number;

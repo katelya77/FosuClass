@@ -29,6 +29,10 @@ const DYNAMIC_SLOT_KEYS = Object.freeze([
   "secondEntityType",
   "secondEntityName",
   "sourceLessonId",
+  "sourceCourseId",
+  "sourceCourseName",
+  "className",
+  "classId",
 ]);
 
 function isBlank(v) {
@@ -63,6 +67,10 @@ function slotSnapshotOf(goalSpec) {
     secondEntityType: c.secondEntityType,
     secondEntityName: c.secondEntityName,
     sourceLessonId: c.sourceLessonId,
+    sourceCourseId: c.sourceCourseId,
+    sourceCourseName: c.sourceCourseName,
+    className: c.className,
+    classId: c.classId,
     metric: sel.metric,
   };
 }

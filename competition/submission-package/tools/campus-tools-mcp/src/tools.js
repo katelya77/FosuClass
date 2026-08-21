@@ -1480,31 +1480,99 @@ function queryRoomUtilization(params) {
 }
 
 // ---------------------------------------------------------------------------
-// 工具 12（R50.0）：check_reschedule_feasibility —— 调课 What-if 模拟（绝不改数据）
+// 工具 12（R50.0）：check_reschedule_feasibility —— 调课 What-if 完整确定性链（绝不改数据）
 // ---------------------------------------------------------------------------
+// 完整确定性链（最终收敛要求，2026-08）：
+//   实体解析（sourceLessonId | sourceCourseId | sourceCourseName + className/classId）
+//   → 教师可用性（teacherConflict）
+//   → 受影响班级可用性（classConflict）
+//   → 目标时段空间可用性（spaceAvailability：未指定教室时确定性查找容量/设备/空闲都满足的候选教室；
+//     指定教室时由 roomConflict + capacity + feature 共同覆盖）
+//   → 内在约束（容量 capacity、功能设备 feature、教学周范围）
+//   → 风险（连续负荷 continuous_load、跨校区赶场 cross_campus_rush）
+//   → 可行性汇总（summary.feasible / partialFeasible）+ DecisionBundle（由 decision runtime 附加）+ result-card。
+// 课程存在多个课次（多个班级）时按课次逐条模拟，绝不静默挑一个；绝不修改任何数据。
 function checkRescheduleFeasibility(params) {
   const input = params || {};
   const { data, byId, idx } = loadDataset();
-  const sourceLessonId = input.sourceLessonId;
-  if (!sourceLessonId) return fail(ERR.MISSING_PARAM, "缺少必填参数 sourceLessonId", {});
-  const source = data.lessons.find((les) => les.id === sourceLessonId);
-  if (!source) return fail(ERR.ENTITY_NOT_FOUND, `未找到课程「${sourceLessonId}」`, {});
+  const totalWeeks = data.meta.semester.totalWeeks;
 
+  // ---------- 1. 实体解析（源课次） ----------
+  const lessonIdParam = input.sourceLessonId != null ? String(input.sourceLessonId).trim() : null;
+  let sources = [];
+  let resolvedCourse = null;
+  let disambiguatedByClass = false;
+  if (lessonIdParam) {
+    const les = data.lessons.find((item) => item.id === lessonIdParam);
+    if (!les) return fail(ERR.ENTITY_NOT_FOUND, `未找到课程「${lessonIdParam}」`, {});
+    sources = [les];
+  } else {
+    const courseIdParam = input.sourceCourseId != null ? String(input.sourceCourseId).trim() : null;
+    const courseNameParam = input.sourceCourseName != null ? String(input.sourceCourseName).trim() : null;
+    let course = null;
+    if (courseIdParam) {
+      course = data.courses.find((c) => c.id === courseIdParam) || null;
+    } else if (courseNameParam) {
+      const r = resolveEntity({ type: "course", name: courseNameParam });
+      if (!r.success) return r; // ENTITY_NOT_FOUND / AMBIGUOUS_ENTITY → 上游只澄清完成判断所必需的最少信息
+      course = byId.courses[r.resolvedEntity.id] || null;
+    }
+    if (!course) {
+      return fail(ERR.ENTITY_NOT_FOUND, "未找到课程，请提供课程名称或课程 id", {
+        source: courseIdParam || courseNameParam || null,
+      });
+    }
+    resolvedCourse = { type: "course", id: course.id, name: course.name };
+    sources = data.lessons.filter((les) => les.courseId === course.id);
+    const classIdParam = input.classId != null ? String(input.classId).trim() : null;
+    const classNameParam = input.className != null ? normalizeName(String(input.className).trim()) : null;
+    if (classIdParam || classNameParam) {
+      const before = sources.length;
+      sources = sources.filter((les) => {
+        if (classIdParam && les.classIds.includes(classIdParam)) return true;
+        if (classNameParam) {
+          return les.classIds.some((cid) => {
+            const cls = byId.classes[cid];
+            return cls && cls.name === classNameParam;
+          });
+        }
+        return false;
+      });
+      if (sources.length === 0) {
+        return fail(ERR.ENTITY_NOT_FOUND, `课程「${course.name}」没有匹配该班级的课次`, {
+          className: classNameParam || input.className || null,
+          classId: classIdParam || null,
+          courseLessonCount: before,
+        });
+      }
+      disambiguatedByClass = true;
+    }
+    if (sources.length === 0) {
+      return fail(ERR.ENTITY_NOT_FOUND, `课程「${course.name}」当前没有可模拟的课次`, {});
+    }
+  }
+  const lessonCount = sources.length;
+
+  // ---------- 2. 目标时段解析（week 可选：缺省取源课次首个开课周，确定性不猜测） ----------
   const target = input.target && typeof input.target === "object" ? input.target : {};
-  const week = Number(target.week);
   const weekday = Number(target.weekday);
   const periodStart = Number(target.periodStart);
   const periodEnd = Number(target.periodEnd);
-  if (!Number.isInteger(week) || !Number.isInteger(weekday) || !Number.isInteger(periodStart) || !Number.isInteger(periodEnd)) {
-    return fail(ERR.MISSING_PARAM, "target 需包含 week/weekday/periodStart/periodEnd", { target });
+  if (!Number.isInteger(weekday) || !Number.isInteger(periodStart) || !Number.isInteger(periodEnd)) {
+    return fail(ERR.MISSING_PARAM, "target 需包含 weekday/periodStart/periodEnd（week 可选，缺省取源课次首个开课周）", { target });
   }
-  const totalWeeks = data.meta.semester.totalWeeks;
+  let week = Number(target.week);
+  if (!Number.isInteger(week)) {
+    const firstActive = sources[0] && expandWeeks(sources[0])[0];
+    week = firstActive != null ? firstActive : 1;
+  }
   if (week < 1 || week > totalWeeks) return fail(ERR.OUT_OF_RANGE, `week 需在 1..${totalWeeks}`, { week });
   if (weekday < 1 || weekday > 7) return fail(ERR.INVALID_PARAM, "weekday 需为 1..7", { weekday });
   if (periodStart < 1 || periodEnd > data.meta.periods.length || periodStart > periodEnd) {
     return fail(ERR.INVALID_PARAM, `periodStart/periodEnd 需在 1..${data.meta.periods.length} 且 start<=end`, { periodStart, periodEnd });
   }
 
+  // ---------- 3. 目标教室（可选） ----------
   let targetRoom = null;
   if (target.room != null) {
     const roomParam = String(target.room).trim();
@@ -1516,154 +1584,256 @@ function checkRescheduleFeasibility(params) {
     if (!targetRoom) return fail(ERR.ENTITY_NOT_FOUND, `未找到教室「${target.room}」`, {});
   }
 
-  const overlapCheck = (list) => list.filter((les) => (
-    les.id !== source.id
+  const periodTimes = data.meta.periods;
+  const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+  const overlapCheck = (list, excludeId) => list.filter((les) => (
+    les.id !== excludeId
     && expandWeeks(les).includes(week)
     && les.weekday === weekday
     && periodsOverlap(les.periodStart, les.periodEnd, periodStart, periodEnd)
   ));
 
-  const teacherConflicts = [];
-  for (const tid of source.teacherIds) {
-    for (const les of overlapCheck(idx.teacher.get(tid) || [])) teacherConflicts.push(lessonDisplay(les));
-  }
-  const classConflicts = [];
-  for (const cid of source.classIds) {
-    for (const les of overlapCheck(idx.class.get(cid) || [])) classConflicts.push(lessonDisplay(les));
-  }
-  const roomConflicts = [];
-  if (targetRoom) {
-    for (const les of overlapCheck(idx.room.get(targetRoom.id) || [])) roomConflicts.push(lessonDisplay(les));
-  }
-
-  const course = byId.courses[source.courseId];
-  let capacityOk = true;
-  let capacityNote = null;
-  if (targetRoom && course && course.expectedSize != null) {
-    if (Number(targetRoom.capacity) < Number(course.expectedSize)) {
-      capacityOk = false;
-      capacityNote = `容量不足：需要 ${course.expectedSize} 人，${targetRoom.name} 仅 ${targetRoom.capacity} 人`;
+  // ---------- 4. 目标时段空间可用性（未指定教室：确定性查找候选） ----------
+  // 候选规则：该时段无其他占用、容量 ≥ expectedSize（存在时）、功能 ⊇ requiredFeatures（存在时）；
+  // 排序：同源校区优先 → 容量升序（最小满足）→ 教室名稳定排序。
+  function findSpaceCandidates(source) {
+    const course = byId.courses[source.courseId];
+    const required = Array.isArray(course && course.requiredFeatures) ? course.requiredFeatures : [];
+    const minCapacity = course && course.expectedSize != null ? Number(course.expectedSize) : null;
+    const candidates = [];
+    for (const room of data.rooms) {
+      if (minCapacity != null && Number(room.capacity) < minCapacity) continue;
+      if (required.length && !(Array.isArray(room.features) && required.every((f) => room.features.includes(f)))) continue;
+      const busy = (idx.room.get(room.id) || []).some((les) => (
+        les.id !== source.id
+        && expandWeeks(les).includes(week)
+        && les.weekday === weekday
+        && periodsOverlap(les.periodStart, les.periodEnd, periodStart, periodEnd)
+      ));
+      if (busy) continue;
+      candidates.push(room);
     }
-  } else if (targetRoom && course && course.expectedSize == null) {
-    capacityNote = "数据源未提供课程 expectedSize，容量校验跳过（fail-open）";
+    candidates.sort((a, b) => {
+      const aSame = a.campusId === source.campusId ? 0 : 1;
+      const bSame = b.campusId === source.campusId ? 0 : 1;
+      if (aSame !== bSame) return aSame - bSame;
+      if (Number(a.capacity) !== Number(b.capacity)) return Number(a.capacity) - Number(b.capacity);
+      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    });
+    return candidates;
   }
-  let featureOk = true;
-  let featureNote = null;
-  if (targetRoom && course && Array.isArray(course.requiredFeatures) && course.requiredFeatures.length) {
-    const missing = course.requiredFeatures.filter((f) => !(Array.isArray(targetRoom.features) && targetRoom.features.includes(f)));
-    if (missing.length) {
-      featureOk = false;
-      featureNote = `缺少功能设备：${missing.join("/")}`;
+
+  // ---------- 5. 逐课次完整模拟 ----------
+  const items = sources.map((source) => {
+    const course = byId.courses[source.courseId];
+    const teacherConflicts = [];
+    for (const tid of source.teacherIds) {
+      for (const les of overlapCheck(idx.teacher.get(tid) || [], source.id)) teacherConflicts.push(lessonDisplay(les));
     }
-  } else if (targetRoom && course && !(Array.isArray(course.requiredFeatures) && course.requiredFeatures.length)) {
-    featureNote = "数据源未提供课程 requiredFeatures，功能校验跳过（fail-open）";
-  }
+    const classConflicts = [];
+    for (const cid of source.classIds) {
+      for (const les of overlapCheck(idx.class.get(cid) || [], source.id)) classConflicts.push(lessonDisplay(les));
+    }
+    const roomConflicts = [];
+    if (targetRoom) {
+      for (const les of overlapCheck(idx.room.get(targetRoom.id) || [], source.id)) roomConflicts.push(lessonDisplay(les));
+    }
 
-  const warnings = [];
-  const periodTimes = data.meta.periods;
-  const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+    let capacityOk = true;
+    let capacityNote = null;
+    if (targetRoom && course && course.expectedSize != null) {
+      if (Number(targetRoom.capacity) < Number(course.expectedSize)) {
+        capacityOk = false;
+        capacityNote = `容量不足：需要 ${course.expectedSize} 人，${targetRoom.name} 仅 ${targetRoom.capacity} 人`;
+      }
+    } else if (targetRoom && course && course.expectedSize == null) {
+      capacityNote = "数据源未提供课程 expectedSize，容量校验跳过（fail-open）";
+    }
+    let featureOk = true;
+    let featureNote = null;
+    if (targetRoom && course && Array.isArray(course.requiredFeatures) && course.requiredFeatures.length) {
+      const missing = course.requiredFeatures.filter((f) => !(Array.isArray(targetRoom.features) && targetRoom.features.includes(f)));
+      if (missing.length) {
+        featureOk = false;
+        featureNote = `缺少功能设备：${missing.join("/")}`;
+      }
+    } else if (targetRoom && course && !(Array.isArray(course.requiredFeatures) && course.requiredFeatures.length)) {
+      featureNote = "数据源未提供课程 requiredFeatures，功能校验跳过（fail-open）";
+    }
 
-  // 相邻连续负荷：目标时段并入后，教师在该日最长连续节数
-  const teacherPeriods = new Set();
-  for (const tid of source.teacherIds) {
-    for (const les of idx.teacher.get(tid) || []) {
-      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) {
-        for (let p = les.periodStart; p <= les.periodEnd; p += 1) teacherPeriods.add(p);
+    // 空间可用性
+    let spaceOk = true;
+    let spaceNote = null;
+    let spaceRooms = [];
+    if (targetRoom) {
+      spaceOk = roomConflicts.length === 0 && capacityOk && featureOk;
+      if (roomConflicts.length) spaceNote = "目标教室在该时段已被占用";
+      else if (!capacityOk) spaceNote = "目标教室容量不足";
+      else if (!featureOk) spaceNote = "目标教室功能设备不满足";
+    } else {
+      spaceRooms = findSpaceCandidates(source);
+      if (spaceRooms.length === 0) {
+        spaceOk = false;
+        spaceNote = "该时段没有满足容量/设备要求的空闲教室";
       }
     }
-  }
-  for (let p = periodStart; p <= periodEnd; p += 1) teacherPeriods.add(p);
-  let longestRun = 0;
-  let run = 0;
-  for (let p = 1; p <= data.meta.periods.length + 1; p += 1) {
-    if (teacherPeriods.has(p)) { run += 1; longestRun = Math.max(longestRun, run); } else run = 0;
-  }
-  if (longestRun >= 4) {
-    warnings.push({ type: "continuous_load", level: "warning", text: `调整后教师连续 ${longestRun} 节，可能存在连堂负荷` });
-  }
 
-  // 跨校区赶场：目标教室与源课不同校区时，检查相邻课间隔（V2 无 campusTravelMatrix → 缺省 20 分钟）
-  const adjacentOf = [];
-  for (const tid of source.teacherIds) {
-    for (const les of idx.teacher.get(tid) || []) {
-      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
-    }
-  }
-  for (const cid of source.classIds) {
-    for (const les of idx.class.get(cid) || []) {
-      if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
-    }
-  }
-  const uniqueAdjacent = [...new Map(adjacentOf.map((les) => [les.id, les])).values()];
-  if (targetRoom && source.campusId !== targetRoom.campusId) {
-    const matrix = (data.campusTravelMatrix || {})[source.campusId] || {};
-    const travel = matrix[targetRoom.campusId] || 20;
-    const fromName = byId.campuses[source.campusId] ? byId.campuses[source.campusId].name : source.campusId;
-    const toName = byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : targetRoom.campusId;
-    for (const les of uniqueAdjacent) {
-      const gapBefore = toMinutes(periodTimes[periodStart - 1].start) - toMinutes(periodTimes[les.periodEnd - 1].end);
-      const gapAfter = toMinutes(periodTimes[les.periodStart - 1].start) - toMinutes(periodTimes[periodEnd - 1].end);
-      if (les.periodEnd + 1 === periodStart && gapBefore <= travel) {
-        warnings.push({
-          type: "cross_campus_rush",
-          level: "warning",
-          text: `跨校区赶场：${fromName} → ${toName}，仅 ${gapBefore} 分钟（交通 ${travel} 分钟）`,
-        });
-      }
-      if (periodEnd + 1 === les.periodStart && gapAfter <= travel) {
-        warnings.push({
-          type: "cross_campus_rush",
-          level: "warning",
-          text: `跨校区赶场：${toName} → ${fromName}，仅 ${gapAfter} 分钟（交通 ${travel} 分钟）`,
-        });
+    // 风险：相邻连续负荷
+    const warnings = [];
+    const teacherPeriods = new Set();
+    for (const tid of source.teacherIds) {
+      for (const les of idx.teacher.get(tid) || []) {
+        if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) {
+          for (let p = les.periodStart; p <= les.periodEnd; p += 1) teacherPeriods.add(p);
+        }
       }
     }
+    for (let p = periodStart; p <= periodEnd; p += 1) teacherPeriods.add(p);
+    let longestRun = 0;
+    let run = 0;
+    for (let p = 1; p <= data.meta.periods.length + 1; p += 1) {
+      if (teacherPeriods.has(p)) { run += 1; longestRun = Math.max(longestRun, run); } else run = 0;
+    }
+    if (longestRun >= 4) {
+      warnings.push({ type: "continuous_load", level: "warning", text: `调整后教师连续 ${longestRun} 节，可能存在连堂负荷` });
+    }
+
+    // 风险：跨校区赶场（目标教室与源课不同校区）
+    const adjacentOf = [];
+    for (const tid of source.teacherIds) {
+      for (const les of idx.teacher.get(tid) || []) {
+        if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
+      }
+    }
+    for (const cid of source.classIds) {
+      for (const les of idx.class.get(cid) || []) {
+        if (les.id !== source.id && expandWeeks(les).includes(week) && les.weekday === weekday) adjacentOf.push(les);
+      }
+    }
+    const uniqueAdjacent = [...new Map(adjacentOf.map((les) => [les.id, les])).values()];
+    if (targetRoom && source.campusId !== targetRoom.campusId) {
+      const matrix = (data.campusTravelMatrix || {})[source.campusId] || {};
+      const travel = matrix[targetRoom.campusId] || 20;
+      const fromName = byId.campuses[source.campusId] ? byId.campuses[source.campusId].name : source.campusId;
+      const toName = byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : targetRoom.campusId;
+      for (const les of uniqueAdjacent) {
+        const gapBefore = toMinutes(periodTimes[periodStart - 1].start) - toMinutes(periodTimes[les.periodEnd - 1].end);
+        const gapAfter = toMinutes(periodTimes[les.periodStart - 1].start) - toMinutes(periodTimes[periodEnd - 1].end);
+        if (les.periodEnd + 1 === periodStart && gapBefore <= travel) {
+          warnings.push({
+            type: "cross_campus_rush",
+            level: "warning",
+            text: `跨校区赶场：${fromName} → ${toName}，仅 ${gapBefore} 分钟（交通 ${travel} 分钟）`,
+          });
+        }
+        if (periodEnd + 1 === les.periodStart && gapAfter <= travel) {
+          warnings.push({
+            type: "cross_campus_rush",
+            level: "warning",
+            text: `跨校区赶场：${toName} → ${fromName}，仅 ${gapAfter} 分钟（交通 ${travel} 分钟）`,
+          });
+        }
+      }
+    }
+
+    const hasConflict = teacherConflicts.length > 0 || classConflicts.length > 0 || roomConflicts.length > 0;
+    const feasible = !hasConflict && capacityOk && featureOk && spaceOk;
+    const reasons = [];
+    if (teacherConflicts.length) reasons.push("教师时间冲突");
+    if (classConflicts.length) reasons.push("班级时间冲突");
+    if (roomConflicts.length) reasons.push("教室被占用");
+    if (!capacityOk) reasons.push("容量不足");
+    if (!featureOk) reasons.push("功能设备不匹配");
+    if (!spaceOk) reasons.push("目标时段无可用教室");
+
+    return {
+      sourceLesson: lessonDisplay(source),
+      target: {
+        week,
+        weekday,
+        weekdayName: data.meta.weekdayNames[weekday - 1],
+        date: weekWeekdayToDate(week, weekday),
+        periodStart,
+        periodEnd,
+        periodText: `第${periodStart}-${periodEnd}节`,
+        room: targetRoom ? {
+          id: targetRoom.id,
+          name: targetRoom.name,
+          capacity: targetRoom.capacity,
+          campusId: targetRoom.campusId,
+          campusName: byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : null,
+        } : null,
+      },
+      checks: {
+        teacherConflict: { conflict: teacherConflicts.length > 0, details: teacherConflicts },
+        classConflict: { conflict: classConflicts.length > 0, details: classConflicts },
+        roomConflict: { conflict: roomConflicts.length > 0, details: roomConflicts },
+        capacity: { ok: capacityOk, note: capacityNote },
+        feature: { ok: featureOk, note: featureNote },
+        spaceAvailability: {
+          ok: spaceOk,
+          note: spaceNote,
+          roomCount: targetRoom ? (spaceOk ? 1 : 0) : spaceRooms.length,
+          suggestedRoom: spaceRooms[0] ? {
+            id: spaceRooms[0].id,
+            name: spaceRooms[0].name,
+            capacity: spaceRooms[0].capacity,
+            campusId: spaceRooms[0].campusId,
+            campusName: byId.campuses[spaceRooms[0].campusId] ? byId.campuses[spaceRooms[0].campusId].name : null,
+          } : null,
+        },
+      },
+      warnings,
+      feasible,
+      reasons,
+    };
+  });
+
+  const feasibleCount = items.filter((item) => item.feasible).length;
+  const conflictCount = items.reduce((sum, item) => (
+    sum + item.checks.teacherConflict.details.length
+    + item.checks.classConflict.details.length
+    + item.checks.roomConflict.details.length
+  ), 0);
+  const warningCount = items.reduce((sum, item) => sum + item.warnings.length, 0);
+
+  let summaryReason;
+  if (feasibleCount === items.length) {
+    summaryReason = lessonCount > 1 ? `全部 ${lessonCount} 个课次均可行` : "可行";
+  } else if (feasibleCount === 0) {
+    summaryReason = `不可行：${items.map((item) => item.reasons.join("；") || "存在冲突").join("；") || "存在冲突"}`;
+  } else {
+    summaryReason = `部分可行：${feasibleCount}/${lessonCount} 个课次可行`;
   }
 
-  const hasConflict = teacherConflicts.length > 0 || classConflicts.length > 0 || roomConflicts.length > 0;
-  const feasible = !hasConflict && capacityOk && featureOk;
-  const reasons = [];
-  if (teacherConflicts.length) reasons.push("教师时间冲突");
-  if (classConflicts.length) reasons.push("班级时间冲突");
-  if (roomConflicts.length) reasons.push("教室被占用");
-  if (!capacityOk) reasons.push("容量不足");
-  if (!featureOk) reasons.push("功能设备不匹配");
-
-  const item = {
-    sourceLesson: lessonDisplay(source),
-    target: {
-      week,
-      weekday,
-      weekdayName: data.meta.weekdayNames[weekday - 1],
-      date: weekWeekdayToDate(week, weekday),
-      periodStart,
-      periodEnd,
-      periodText: `第${periodStart}-${periodEnd}节`,
-      room: targetRoom ? {
-        id: targetRoom.id,
-        name: targetRoom.name,
-        capacity: targetRoom.capacity,
-        campusId: targetRoom.campusId,
-        campusName: byId.campuses[targetRoom.campusId] ? byId.campuses[targetRoom.campusId].name : null,
-      } : null,
-    },
-    checks: {
-      teacherConflict: { conflict: teacherConflicts.length > 0, details: teacherConflicts },
-      classConflict: { conflict: classConflicts.length > 0, details: classConflicts },
-      roomConflict: { conflict: roomConflicts.length > 0, details: roomConflicts },
-      capacity: { ok: capacityOk, note: capacityNote },
-      feature: { ok: featureOk, note: featureNote },
-    },
-    warnings,
-  };
-  const env = ok({ items: [item], actions: [] });
+  const env = ok({
+    resolvedEntity: resolvedCourse || (sources[0] ? {
+      type: "course",
+      id: sources[0].courseId,
+      name: (byId.courses[sources[0].courseId] || {}).name || sources[0].courseId,
+    } : null),
+    items,
+    actions: [],
+  });
   env.summary = {
-    feasible,
-    reason: feasible ? "可行" : `不可行：${reasons.join("；") || "存在冲突"}`,
-    conflictCount: teacherConflicts.length + classConflicts.length + roomConflicts.length,
-    warningCount: warnings.length,
+    feasible: feasibleCount === items.length && items.length > 0,
+    partialFeasible: feasibleCount > 0 && feasibleCount < items.length,
+    reason: summaryReason,
+    conflictCount,
+    warningCount,
+    lessonCount,
+    multiLesson: lessonCount > 1,
+    classDisambiguated: disambiguatedByClass,
   };
-  env.simulation = { sourceLessonId, target: item.target, mutatedData: false };
+  env.simulation = {
+    sourceLessonId: sources.length === 1 ? sources[0].id : null,
+    sourceLessonIds: sources.map((s) => s.id),
+    sourceCourseId: resolvedCourse ? resolvedCourse.id : sources[0].courseId,
+    sourceCourseName: resolvedCourse ? resolvedCourse.name : (byId.courses[sources[0].courseId] || {}).name || null,
+    target: items[0].target,
+    mutatedData: false,
+  };
   return env;
 }
 
@@ -2021,24 +2191,28 @@ const TOOL_DEFS = [
   },
   {
     name: "check_reschedule_feasibility",
-    description: "What-if 模拟调课可行性：以源课程 + 目标周/星期/节次/教室检查教师/班级/教室冲突、容量、功能设备、连续负荷与跨校区赶场；绝不修改任何数据。",
+    description: "What-if 模拟调课可行性（完整确定性链，绝不修改数据）：按 sourceLessonId 或 sourceCourseId/sourceCourseName（可附 className/classId 缩窄班级）解析源课程；逐课次检查教师/班级/教室冲突、目标时段空间可用性（未指定教室时确定性查找空闲且满足容量/设备要求的候选教室）、容量、功能设备、连续负荷与跨校区赶场；返回 feasible/partialFeasible/reason/conflictCount 与 warnings；课程多课次时逐条模拟；week 可选，缺省取源课次首个开课周。",
     inputSchema: {
       type: "object",
       properties: {
-        sourceLessonId: { type: "string", description: "源课程 lessonId（必填）" },
+        sourceLessonId: { type: "string", description: "源课程 lessonId（与 sourceCourseId/sourceCourseName 三选一）" },
+        sourceCourseId: { type: "string", description: "源课程 courseId（与 sourceLessonId/sourceCourseName 三选一）" },
+        sourceCourseName: { type: "string", description: "源课程名称（与 sourceLessonId/sourceCourseId 三选一；多个候选时返回歧义候选）" },
+        className: { type: "string", description: "班级名称（可选，用于缩窄课程多课次）" },
+        classId: { type: "string", description: "班级 id（可选，用于缩窄课程多课次）" },
         target: {
           type: "object",
           properties: {
-            week: { type: "integer", minimum: 1, maximum: 20 },
+            week: { type: "integer", minimum: 1, maximum: 20, description: "目标教学周（可选，缺省取源课次首个开课周）" },
             weekday: { type: "integer", minimum: 1, maximum: 7 },
             periodStart: { type: "integer", minimum: 1, maximum: 10 },
             periodEnd: { type: "integer", minimum: 1, maximum: 10 },
             room: { type: "string", description: "目标教室 id 或名称（可选）" },
           },
-          required: ["week", "weekday", "periodStart", "periodEnd"],
+          required: ["weekday", "periodStart", "periodEnd"],
         },
       },
-      required: ["sourceLessonId", "target"],
+      required: ["target"],
     },
     handler: checkRescheduleFeasibility,
   },
