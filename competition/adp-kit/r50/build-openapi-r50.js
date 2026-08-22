@@ -139,7 +139,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("实体搜索结果条目", ref("EntitySearchItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),
@@ -224,7 +224,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("教学周/学期上下文条目", ref("AcademicContextItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),
@@ -287,7 +287,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("共同空闲窗口条目", ref("CommonFreeTimeItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),
@@ -354,7 +354,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("利用率排名条目", ref("RoomUtilizationItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),
@@ -520,7 +520,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("调课模拟结果条目", ref("RescheduleItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),
@@ -621,7 +621,7 @@ const NEW_SCHEMAS = {
     {
       success: B("统一成功标志"),
       queryId: S("查询 ID"),
-      dataVersion: S("数据版本标识", { example: "competition-demo-v2" }),
+      dataVersion: S("数据版本标识", { example: "competition-demo-v3" }),
       resolvedEntity: ref("ResolvedEntity"),
       items: ARR("群体计划候选", ref("GroupPlanItem")),
       actions: ARR("可执行动作（当前为空数组）", ref("Action")),

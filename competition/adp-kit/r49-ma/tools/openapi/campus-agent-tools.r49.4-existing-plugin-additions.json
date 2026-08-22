@@ -130,7 +130,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -324,7 +324,7 @@
         "properties": {
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "dataHash": {
             "type": "string",
@@ -445,7 +445,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"

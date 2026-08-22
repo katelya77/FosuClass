@@ -69,10 +69,10 @@ test("openapi servers 为占位符且整体是合法 JSON", () => {
   assert.ok(spec.components && spec.components.securitySchemes, "openapi 必须声明安全方案");
 });
 
-test("生产数据源未被改写：workflows/application-config.json data_version 保持 competition-demo-v2", () => {
+test("生产数据源未被改写：workflows/application-config.json data_version 保持 competition-demo-v3", () => {
   const cfgPath = path.join(R49, "..", "workflows", "application-config.json");
   const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-  assert.strictEqual(cfg.appVariables.data_version, "competition-demo-v2");
+  assert.strictEqual(cfg.appVariables.data_version, "competition-demo-v3");
   assert.strictEqual(cfg.appVariables.data_mode, "anonymous");
   assert.strictEqual(cfg.mode, "标准模式");
 });

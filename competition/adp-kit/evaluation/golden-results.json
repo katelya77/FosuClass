@@ -3,7 +3,7 @@
   "reviewRequired": true,
   "dataVersion": "competition-demo-v1",
   "dataHash": "sha1:fefef4bf425b",
-  "oracleSourceSha256": "698e7636516c77de87775ea33389016f3d294431f038969ac1c1353ad1877760",
+  "oracleSourceSha256": "1be27ae7e1046b037348273f9f670263ab155017c79ce9b2d63489556d75d3cf",
   "caseCount": 33,
   "cases": [
     {
@@ -1160,11 +1160,11 @@
     }
   ],
   "lastOracleReview": {
-    "date": "2026-08-21",
+    "date": "2026-08-23",
     "classification": "A",
     "semanticDrift": 0,
     "changedCases": [],
     "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
-    "note": "Final Reliability Convergence 审计：r51/decision/candidate-source.js fromReschedule 新增空间可用性（spaceAvailability）核验与多课次班级 label（老 fixture 无该字段时 fail-open，语义不变）；33/33 case 语义输出与 committed expected 逐字节一致，仅 oracleSourceSha256 更新，无需重建 case"
+    "note": "Final Runtime Tool Fix 审计：tools.js 新增 normalizeOptionalString（check_reschedule_feasibility 可选 target.room 空值归一化，空值形态进入自动候选查找，不再误报「未找到教室「」」）并移除 compare_schedules 在 conflicts.length===0 时错误的 evidence.note=EMPTY_RESULT 标记（canonicalExpected 不采集 evidence.note）。33/33 case 语义输出与 committed expected 逐字节一致，仅 oracleSourceSha256 更新，无需重建 case"
   }
 }

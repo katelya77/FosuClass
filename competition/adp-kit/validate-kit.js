@@ -136,7 +136,7 @@ function validateApplication() {
   assert.strictEqual(app.conversation.webSearch, false);
   assert.strictEqual(app.appVariables.environment, "competition");
   assert.strictEqual(app.appVariables.data_mode, "anonymous");
-  assert.strictEqual(app.appVariables.data_version, "competition-demo-v2", "应用数据版本必须为唯一赛事事实源 v2（R49 起 application-config 已声明 v2）");
+  assert.strictEqual(app.appVariables.data_version, "competition-demo-v3", "应用数据版本必须为当前已核验赛事事实源 v3（R50.0 V3 runtime cutover 起 application-config 声明 v3）");
   assert.deepStrictEqual(Object.keys(app.appVariables), [
     "environment", "data_mode", "data_version", "timezone", "default_language", "default_campus",
   ], "应用变量必须保持 6 个已核验项，不添加评测时钟等业务变量");

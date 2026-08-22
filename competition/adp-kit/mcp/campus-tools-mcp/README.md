@@ -15,9 +15,9 @@
 
 | 运行形态 | 默认数据 | 说明 |
 |---|---|---|
-| reusable MCP（本地 `npm start`） | `mock-data/competition-demo-v1.json` | 默认 v1，供 Golden / QA / Widget 样例等评审资产回归锚定；可通过 `CAMPUS_DATA_PATH` 显式指向任意 `competition-demo-*` 文件（如 v2） |
-| CloudBase 比赛 HTTP Function | `competition-demo-v2.json`（强制） | 默认且强制 v2；缺 token 拒绝启动；数据缺失即冷启动失败，**无 v1 / production 回退**；部署包内保留 v1 仅供显式 `CAMPUS_DATA_PATH` 回滚 |
-| R49 Multi-Agent（正式比赛动态事实） | `competition-demo-v2` | 5 个 Agent Tool 的正式动态事实只由 CampusTools → v2 确定性输出 |
+| reusable MCP（本地 `npm start`） | `mock-data/competition-demo-v1.json` | 默认 v1，供 Golden / QA / Widget 样例等评审资产回归锚定；可通过 `CAMPUS_DATA_PATH` 显式指向任意 `competition-demo-*` 文件 |
+| CloudBase 比赛 HTTP Function | `competition-demo-v3.json`（默认且强制） | R50.0 V3 runtime cutover 起默认 v3；缺 token 拒绝启动；数据缺失即冷启动失败，**无 production 回退**；部署包内保留 v2/v1 仅供显式 `CAMPUS_DEMO_DATA_VERSION` / `CAMPUS_DATA_PATH` 回滚 |
+| R49 Multi-Agent（历史回归链） | `competition-demo-v2.json`（测试锚定） | R49-MA 测试链以 v2 数据集做历史回归锚定；线上正式动态事实由 campusflowAdpTools → v3 确定性输出 |
 
 `/health` 返回当前实际加载的 `dataVersion` / `dataHash`，以该值为准，不要凭文档假设数据版本。
 
@@ -39,11 +39,11 @@
 {
   "success": true,
   "queryId": "q-20260805143000-a1b2c3",
-  "dataVersion": "competition-demo-v2",
+  "dataVersion": "competition-demo-v3",
   "resolvedEntity": { "type": "teacher", "id": "teacher-009", "name": "教师009" },
   "items": [],
   "actions": [],
-  "evidence": { "dataVersion": "competition-demo-v2", "dataHash": "sha1:4f3bbbb45d1f", "verified": true },
+  "evidence": { "dataVersion": "competition-demo-v3", "dataHash": "sha1:…（以 /health 实际返回为准）", "verified": true },
   "error": null
 }
 ```

@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-21T18:19:53.249Z",
+  "generatedAt": "2026-08-22T16:30:58.874Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -170,8 +170,8 @@
     },
     {
       "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
-      "bytes": 100187,
-      "sha256": "fb0d0cb8f0032258f17dcb9ffb2fb72a21cab45c0ac46c2eca3c89b92eed10fd"
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
     },
     {
       "path": "cloudfunctions/README.md",
@@ -255,8 +255,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 28183,
-      "sha256": "55dc04556ec44bbb11d54232eb97073e1f0cf43cad54cb674bb0482e77888061"
+      "bytes": 28331,
+      "sha256": "0372350927ef5b7c5a7fd8130ea4b995b823e35db4e481bb5b4585091d4cec0a"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -390,8 +390,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/README.md",
-      "bytes": 6147,
-      "sha256": "c029a5d9236e79ec0cacb0e4590ccdac478eaae972454c4d9bbbfb197ca49429"
+      "bytes": 6277,
+      "sha256": "64cdd5e82000001447a49746faff4964789cd49438e9341e2a96ad7ca0b22316"
     },
     {
       "path": "mcp/campus-tools-mcp/src/agent-tools.js",
@@ -440,8 +440,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/src/tools.js",
-      "bytes": 100187,
-      "sha256": "fb0d0cb8f0032258f17dcb9ffb2fb72a21cab45c0ac46c2eca3c89b92eed10fd"
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
     },
     {
       "path": "mcp/campus-tools-mcp/test/data-version-contract.test.js",
@@ -455,8 +455,8 @@
     },
     {
       "path": "mcp/campus-tools-mcp/test/tools.test.js",
-      "bytes": 28163,
-      "sha256": "d9df2be88b1e0460368468f9b18964d79d60d679f43ee6eb9e8199750c92b51c"
+      "bytes": 35212,
+      "sha256": "e784ef5b0557459c57bb34782845234a718b81812216b7f72492efe96fc9d564"
     },
     {
       "path": "mcp/campus-tools-mcp/tsconfig.json",
@@ -1601,7 +1601,7 @@
     {
       "path": "workflows/application-config.json",
       "bytes": 3910,
-      "sha256": "db677f4fb5dc179b59bb4c9353e8d57b37e792339af4d2ad6b762841612ce483"
+      "sha256": "a34aed8200bc2134ab5b998e238c2dbd3bcab78923bd415ae9e5929eb57cd268"
     },
     {
       "path": "workflows/generate-workflows.js",

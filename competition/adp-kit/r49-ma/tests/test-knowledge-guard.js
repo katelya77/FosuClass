@@ -61,9 +61,9 @@ test("knowledge/08 功能导航已补建，taxonomy 含对应类别", () => {
   assert.ok(/功能导航/.test(text), "taxonomy 缺「功能导航」类别");
 });
 
-test("application-config 数据版本 v2 + 匿名模式（生产数据未被改写）", () => {
+test("application-config 数据版本 v3 + 匿名模式（生产数据未被改写）", () => {
   const cfg = JSON.parse(fs.readFileSync(APP_CONFIG, "utf8"));
-  assert.strictEqual(cfg.appVariables.data_version, "competition-demo-v2");
+  assert.strictEqual(cfg.appVariables.data_version, "competition-demo-v3");
   assert.strictEqual(cfg.appVariables.data_mode, "anonymous");
   assert.strictEqual(cfg.appVariables.environment, "competition");
 });

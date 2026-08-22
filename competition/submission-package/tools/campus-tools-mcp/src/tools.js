@@ -9,7 +9,10 @@
  * 设计约定：
  * - 动态校园事实只来自 competition-demo-* 匿名数据集（默认 v1；部署环境可用 CAMPUS_DATA_PATH 覆盖），不调用任何生成式模型；
  * - 实体歧义返回 AMBIGUOUS_ENTITY + candidates，交由上游（ADP 工作流）追问确认；
- * - 空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记；
+ * - 清单型工具的空结果返回 success=true 且 items=[]，由 evidence.note=EMPTY_RESULT 标记；
+ *   风险核验类工具（compare_schedules 等）的「未发现风险」是已核验确定性结论，
+ *   由 summary.conflictCount / rushWarningCount 表达，不得标记 EMPTY_RESULT；
+ * - 可选标量参数经 normalizeOptionalString 归一化：空值形态表示「未指定」，不解析虚假实体；
  * - 所有时间解析确定性完成：date <-> (week, weekday) 互转，不猜测。
  */
 
@@ -53,6 +56,28 @@ function safeJsonParse(raw) {
   } catch {
     return null;
   }
+}
+
+/**
+ * 可选标量/字符串参数归一化（ADP Optional Parameter Normalization）。
+ *
+ * ADP / OpenAPI 对可选参数可能传入 undefined、null、""、"   "、[]，或把单值包装为
+ * 长度 1 的数组。这些空值形态统一表示「用户未指定」（→ null），而不是「用户指定了
+ * 一个名字为空的实体」；单元素数组解包为其唯一元素；正常标量 trim 后原样返回；
+ * 其余不合理输入（对象、多元素数组等）不得静默制造实体名，一律归一化为 null
+ * （与 safeJsonParse 相同的 fail-open 哲学：进入「未提供该参数」的确定性路径）。
+ */
+function normalizeOptionalString(value) {
+  if (value == null) return null;
+  if (Array.isArray(value)) {
+    return value.length === 1 ? normalizeOptionalString(value[0]) : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 /** 节次连续段展开：[[start,end], ...] 形式的 occupied periods → 空闲连续窗口。 */
@@ -672,7 +697,10 @@ function compareSchedules(params) {
     selfCompare,
     rushWarningCount: dedupedRushWarnings.length,
   };
-  if (conflicts.length === 0) env.evidence.note = "EMPTY_RESULT";
+  // 风险核验语义：conflicts.length===0 只表示「没有时间重叠冲突」，不代表没有业务结果。
+  // conflictCount=0 且 rushWarningCount>0 = 存在赶场风险；两者皆为 0 = 「未发现冲突或
+  // 赶场风险」的已核验确定性结论。业务结果由 summary.conflictCount / hasConflict /
+  // rushWarningCount / rushWarnings 表达，此处不得标记 EMPTY_RESULT。
   return env;
 }
 
@@ -1573,15 +1601,18 @@ function checkRescheduleFeasibility(params) {
   }
 
   // ---------- 3. 目标教室（可选） ----------
+  // room 经 normalizeOptionalString 归一化：undefined/null/""/"   "/[] 一律视为
+  // 「用户未指定教室」→ 进入第 4 步 findSpaceCandidates 自动候选查找；
+  // 有实际值时才做指定教室核验（roomConflict + capacity + feature + spaceAvailability）。
   let targetRoom = null;
-  if (target.room != null) {
-    const roomParam = String(target.room).trim();
+  const roomParam = normalizeOptionalString(target.room);
+  if (roomParam != null) {
     targetRoom = data.rooms.find((r) => r.id === roomParam || r.name === roomParam);
     if (!targetRoom) {
       const r = resolveEntity({ type: "room", name: roomParam });
       if (r.success && r.resolvedEntity) targetRoom = byId.rooms[r.resolvedEntity.id];
     }
-    if (!targetRoom) return fail(ERR.ENTITY_NOT_FOUND, `未找到教室「${target.room}」`, {});
+    if (!targetRoom) return fail(ERR.ENTITY_NOT_FOUND, `未找到教室「${roomParam}」`, {});
   }
 
   const periodTimes = data.meta.periods;
@@ -2249,4 +2280,4 @@ function callTool(name, params) {
   }
 }
 
-module.exports = { TOOL_DEFS, callTool };
+module.exports = { TOOL_DEFS, callTool, normalizeOptionalString };

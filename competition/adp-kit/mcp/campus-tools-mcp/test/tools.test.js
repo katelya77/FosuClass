@@ -336,6 +336,122 @@ test("compare_schedules: 同实体赶场提醒唯一", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ADP 可选参数归一化（normalizeOptionalString）
+// ADP/OpenAPI 对可选字符串参数可能传入 undefined/null/""/"   "/[]，平台也可能把
+// 单值包装成长度 1 的数组。空值形态一律表示「用户未指定」，不得解析成虚假实体名。
+// ---------------------------------------------------------------------------
+test("normalizeOptionalString: 空值形态统一为 null，单值数组解包", () => {
+  const { normalizeOptionalString } = require("../src/tools");
+  for (const empty of [undefined, null, "", "   ", []]) {
+    assert.equal(normalizeOptionalString(empty), null, JSON.stringify(empty));
+  }
+  assert.equal(normalizeOptionalString(["A1-201"]), "A1-201");
+  assert.equal(normalizeOptionalString("A1-201"), "A1-201");
+  assert.equal(normalizeOptionalString(" A1-201 "), "A1-201");
+  assert.equal(normalizeOptionalString(["A1-201", "B1-101"]), null, "多元素数组不是单一实体名");
+  assert.equal(normalizeOptionalString({ name: "A1-201" }), null, "对象不得静默变成实体名");
+});
+
+// ---------------------------------------------------------------------------
+// check_reschedule_feasibility：可选 target.room 的空值语义（ADP 实测回归）
+// 未指定 room → 自动进入 findSpaceCandidates 候选查找；绝不允许出现「未找到教室「」」。
+// ---------------------------------------------------------------------------
+const RESCHEDULE_BASE = { sourceCourseName: "程序设计基础", target: { weekday: 1, periodStart: 3, periodEnd: 4 } };
+
+test("check_reschedule_feasibility: 未指定 room 时自动查找候选教室且不报实体错误", () => {
+  const env = callTool("check_reschedule_feasibility", { ...RESCHEDULE_BASE });
+  assert.equal(env.success, true, `未指定 room 必须成功而非 ${env.error && env.error.code}`);
+  assert.equal(env.error, null);
+  const item = env.items[0];
+  assert.equal(item.target.room, null);
+  const space = item.checks.spaceAvailability;
+  assert.ok(space && Number.isInteger(space.roomCount), "spaceAvailability 必须被执行");
+  if (space.ok) {
+    assert.ok(space.suggestedRoom && space.suggestedRoom.id && space.suggestedRoom.name, "可行时应给出 suggestedRoom");
+  } else {
+    assert.match(String(space.note), /没有满足容量\/设备要求的空闲教室/, "无可行教室时必须给出明确结论");
+  }
+  assert.equal(env.simulation.mutatedData, false, "模拟绝不修改数据");
+});
+
+for (const [label, roomValue] of [["空字符串", ""], ["纯空白", "   "], ["空数组", []]]) {
+  test(`check_reschedule_feasibility: target.room=${JSON.stringify(roomValue)}（${label}）与未指定语义完全一致`, () => {
+    const absent = callTool("check_reschedule_feasibility", { ...RESCHEDULE_BASE });
+    const withEmpty = callTool("check_reschedule_feasibility", { ...RESCHEDULE_BASE, target: { ...RESCHEDULE_BASE.target, room: roomValue } });
+    assert.equal(withEmpty.success, true, `空值 room 不得报 ${withEmpty.error && withEmpty.error.code}`);
+    assert.deepEqual(withEmpty.summary, absent.summary, "summary 必须与未指定 room 一致");
+    assert.deepEqual(withEmpty.items[0].checks.spaceAvailability.roomCount, absent.items[0].checks.spaceAvailability.roomCount);
+    assert.deepEqual(withEmpty.items[0].checks.spaceAvailability.suggestedRoom, absent.items[0].checks.spaceAvailability.suggestedRoom);
+    assert.equal(withEmpty.items[0].target.room, null, "空值 room 不得解析为虚假教室");
+    assert.equal(withEmpty.simulation.mutatedData, false);
+  });
+}
+
+test("check_reschedule_feasibility: 单值数组包装的 room 解包为真实教室路径", () => {
+  const env = callTool("check_reschedule_feasibility", { ...RESCHEDULE_BASE, target: { ...RESCHEDULE_BASE.target, room: ["A1-201"] } });
+  assert.equal(env.success, true);
+  assert.equal(env.items[0].target.room.name, "A1-201", "长度 1 数组应解包为指定教室");
+});
+
+test("check_reschedule_feasibility: 指定教室仍走完整核验路径（空闲 + 冲突三查）", () => {
+  const env = callTool("check_reschedule_feasibility", { ...RESCHEDULE_BASE, target: { ...RESCHEDULE_BASE.target, room: "A1-201" } });
+  assert.equal(env.success, true);
+  const item = env.items[0];
+  assert.equal(item.target.room.name, "A1-201");
+  assert.equal(item.checks.teacherConflict.conflict, false);
+  assert.equal(item.checks.classConflict.conflict, false);
+  assert.equal(item.checks.roomConflict.conflict, false);
+  assert.ok(item.checks.capacity && item.checks.feature, "容量/功能检查必须保留");
+  assert.equal(env.summary.feasible, true);
+  assert.equal(env.simulation.mutatedData, false);
+});
+
+test("check_reschedule_feasibility: 指定被占用教室仍返回教室冲突（不进入自动推荐路径）", () => {
+  // A1-201 在周五 5-6 节被 大学物理B 占用（les-007），指定该教室必须如实报告 roomConflict。
+  const env = callTool("check_reschedule_feasibility", { sourceCourseName: "程序设计基础", target: { weekday: 5, periodStart: 5, periodEnd: 6, room: "A1-201" } });
+  assert.equal(env.success, true);
+  const item = env.items[0];
+  assert.equal(item.target.room.name, "A1-201");
+  assert.equal(item.checks.roomConflict.conflict, true, "被占用教室必须报告 roomConflict");
+  assert.ok(item.checks.roomConflict.details.some((d) => d.lessonId === "les-007"));
+  assert.equal(env.summary.feasible, false);
+});
+
+// ---------------------------------------------------------------------------
+// compare_schedules 风险结果语义：
+// conflictCount=0 只表示「没有时间重叠冲突」，不代表风险核验没有结果；
+// 「未发现风险」本身是已核验的确定性结论，绝不是 EMPTY_RESULT。
+// ---------------------------------------------------------------------------
+test("compare_schedules: 无时间冲突但存在赶场提醒时不允许 EMPTY_RESULT 标记", () => {
+  const env = callTool("compare_schedules", {
+    firstType: "teacher",
+    firstName: "教师003",
+    secondType: "teacher",
+    secondName: "教师003",
+    week: 1,
+  });
+  assert.equal(env.success, true);
+  assert.equal(env.summary.conflictCount, 0);
+  assert.equal(env.summary.hasConflict, false);
+  assert.ok(env.summary.rushWarningCount > 0, "教师003 第1周应存在跨校区赶场提醒");
+  assert.notEqual(env.evidence.note, "EMPTY_RESULT", "存在业务结果时禁止 EMPTY_RESULT");
+});
+
+test("compare_schedules: 无冲突且无赶场仍是成功的已核验结论（非 EMPTY_RESULT）", () => {
+  const env = callTool("compare_schedules", {
+    firstType: "teacher",
+    firstName: "教师004",
+    secondType: "class",
+    secondName: "2025级C班",
+    week: 1,
+  });
+  assert.equal(env.success, true);
+  assert.equal(env.summary.conflictCount, 0);
+  assert.equal(env.summary.rushWarningCount, 0);
+  assert.notEqual(env.evidence.note, "EMPTY_RESULT", "「未发现风险」是确定性核验结论，不是空结果");
+});
+
+// ---------------------------------------------------------------------------
 // generate_day_plan
 // ---------------------------------------------------------------------------
 test("generate_day_plan: 演示用户001 周五（含课程与建议）", () => {

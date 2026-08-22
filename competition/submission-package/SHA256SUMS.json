@@ -38,8 +38,8 @@
     },
     {
       "path": "evaluation/golden-results.json",
-      "bytes": 28183,
-      "sha256": "6317757a941aa8d53f14af5ae699385e151c32de6612201d88d23ebf76280651"
+      "bytes": 28331,
+      "sha256": "93dab9d7b761df2d7ee4ec5be0de321bdc37e65ce831754dbd40a8d9b06af037"
     },
     {
       "path": "evaluation/scoring-rubric.md",
@@ -348,8 +348,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/src/tools.js",
-      "bytes": 100187,
-      "sha256": "fb0d0cb8f0032258f17dcb9ffb2fb72a21cab45c0ac46c2eca3c89b92eed10fd"
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
     },
     {
       "path": "tools/campus-tools-mcp/test/data-version-contract.test.js",
@@ -363,8 +363,8 @@
     },
     {
       "path": "tools/campus-tools-mcp/test/tools.test.js",
-      "bytes": 28163,
-      "sha256": "d9df2be88b1e0460368468f9b18964d79d60d679f43ee6eb9e8199750c92b51c"
+      "bytes": 35212,
+      "sha256": "e784ef5b0557459c57bb34782845234a718b81812216b7f72492efe96fc9d564"
     },
     {
       "path": "tools/campus-tools-mcp/tsconfig.json",
@@ -434,7 +434,7 @@
     {
       "path": "workflows/application-config.json",
       "bytes": 3910,
-      "sha256": "db677f4fb5dc179b59bb4c9353e8d57b37e792339af4d2ad6b762841612ce483"
+      "sha256": "a34aed8200bc2134ab5b998e238c2dbd3bcab78923bd415ae9e5929eb57cd268"
     },
     {
       "path": "workflows/role-instruction.txt",

@@ -3,7 +3,7 @@
   "info": {
     "title": "校园智序 · 小序 — R49-MA Agent Tools (ADP Import)",
     "version": "1.6.0",
-    "description": "面向腾讯云智能 ADP「基于 API」自定义插件导入的 import-ready OpenAPI。13 个确定性 Agent Tool Façade（/api/campus_*）映射到 CampusTools（competition-demo-v2）。动态校园事实全部由确定性服务计算。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。本文件仅声明 bearer/APIKey 鉴权需求，不包含任何 token；实际 token 在 ADP 控制台配置。"
+    "description": "面向腾讯云智能 ADP「基于 API」自定义插件导入的 import-ready OpenAPI。13 个确定性 Agent Tool Façade（/api/campus_*）映射到 CampusTools（当前已核验匿名数据集）。动态校园事实全部由确定性服务计算。每个 operation 均声明与真实运行时一致的成功响应 Schema（query/summary/compared/rushWarnings/items/actions/evidence）。本文件仅声明 bearer/APIKey 鉴权需求，不包含任何 token；实际 token 在 ADP 控制台配置。"
   },
   "servers": [
     {
@@ -659,7 +659,7 @@
         "properties": {
           "visitorId": {
             "type": "string",
-            "description": "演示用户 ID（可选）。唯一真源 = competition-demo-v2.json demoUsers[0].id = user-demo-001；未传时由服务端确定性补齐，禁止模型猜测或硬编码历史 ID"
+            "description": "演示用户 ID（可选）。唯一真源为当前已核验匿名数据集 demoUsers[0].id = user-demo-001；未传时由服务端确定性补齐，禁止模型猜测或硬编码历史 ID"
           },
           "date": {
             "type": "string",
@@ -759,7 +759,7 @@
         "properties": {
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "dataHash": {
             "type": "string",
@@ -1587,7 +1587,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -1636,7 +1636,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -1688,7 +1688,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -1753,7 +1753,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -1807,7 +1807,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -1994,7 +1994,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -2203,7 +2203,7 @@
           },
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -2440,7 +2440,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -2739,7 +2739,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -2996,7 +2996,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -3277,7 +3277,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -3837,7 +3837,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"
@@ -4240,7 +4240,7 @@
           "dataVersion": {
             "type": "string",
             "description": "数据版本标识",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "resolvedEntity": {
             "$ref": "#/components/schemas/ResolvedEntity"

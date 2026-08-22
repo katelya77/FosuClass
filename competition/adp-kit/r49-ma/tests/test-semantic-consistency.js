@@ -110,14 +110,15 @@ test("4. campus_risk_check SELF 有风险：T09 week=1 冲突+赶场均≥1", ()
 
 // ---------------------------------------------------------------------------
 // 5. risk SELF 无风险：教师001 第 1 周无冲突无赶场
+// 「未发现风险」是已核验的确定性结论，由 summary 计数表达，绝不是 EMPTY_RESULT。
 // ---------------------------------------------------------------------------
-test("5. campus_risk_check SELF 无风险：教师001 week=1 为合法 EMPTY_RESULT", () => {
+test("5. campus_risk_check SELF 无风险：教师001 week=1 为成功已核验结论（非 EMPTY_RESULT）", () => {
   const env = riskSelf("teacher", "教师001");
   assert.strictEqual(env.success, true);
   assert.strictEqual(env.summary.conflictCount, 0);
   assert.strictEqual(env.summary.rushWarningCount, 0);
   assert.strictEqual(env.summary.hasConflict, false);
-  assert.strictEqual(env.evidence.note, "EMPTY_RESULT");
+  assert.notStrictEqual(env.evidence.note, "EMPTY_RESULT");
 });
 
 // ---------------------------------------------------------------------------
@@ -308,3 +309,28 @@ test("附加. compare_schedules 底层直调：0 值归一化同样生效", () =
   assert.strictEqual(env.summary.conflictCount, 1);
   assert.strictEqual(env.summary.selfCompare, true);
 });
+
+// ---------------------------------------------------------------------------
+// 13. reschedule 可选 target.room 空值归一化：ADP 平台可能传 ""/"   "/[]，
+//     一律表示「用户未指定教室」→ 自动候选查找，绝不允许「未找到教室「」」。
+// ---------------------------------------------------------------------------
+for (const [label, roomValue] of [["空字符串", ""], ["纯空白", "   "], ["空数组", []]]) {
+  test(`13. campus_reschedule_feasibility target.room=${JSON.stringify(roomValue)}（${label}）与未指定等价`, () => {
+    const absent = callAgentTool("campus_reschedule_feasibility", {
+      sourceLessonId: "lesson-015", target: { week: 1, weekday: 3, periodStart: 1, periodEnd: 2 },
+    });
+    const withEmpty = callAgentTool("campus_reschedule_feasibility", {
+      sourceLessonId: "lesson-015",
+      target: { week: 1, weekday: 3, periodStart: 1, periodEnd: 2, room: roomValue },
+    });
+    assert.strictEqual(absent.success, true, `未指定 room 基线必须成功：${absent.error && absent.error.code}`);
+    assert.strictEqual(withEmpty.success, true, `空值 room 不得报 ${withEmpty.error && withEmpty.error.code}`);
+    assert.strictEqual(withEmpty.items[0].target.room, null, "空值 room 不得解析为虚假教室");
+    assert.deepStrictEqual(
+      withEmpty.items[0].checks.spaceAvailability.suggestedRoom,
+      absent.items[0].checks.spaceAvailability.suggestedRoom,
+      "空值 room 必须与未指定一样进入自动候选查找",
+    );
+    assert.strictEqual(withEmpty.simulation.mutatedData, false);
+  });
+}
