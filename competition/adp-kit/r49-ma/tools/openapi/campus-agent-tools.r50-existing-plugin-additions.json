@@ -1426,7 +1426,7 @@
         "properties": {
           "dataVersion": {
             "type": "string",
-            "example": "competition-demo-v2"
+            "example": "competition-demo-v3"
           },
           "dataHash": {
             "type": "string",
