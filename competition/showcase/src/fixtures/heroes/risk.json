@@ -1,0 +1,226 @@
+{
+  "fixtureVersion": "2.0.0",
+  "sceneId": "hero-risk",
+  "source": "adp-runtime-golden",
+  "dataVersion": "competition-demo-v3",
+  "verified": true,
+  "capturedAt": "2026-08-23T16:59:43+08:00",
+  "provenanceNote": "证据来源：本地确定性 CampusTools（competition/adp-kit/mcp/campus-tools-mcp）对 competition-demo-v3 数据集（sha1:842b7959e808）的调用结果，evidence.verified=true。复现调用：query_schedule_range{teacher,教师025,week 1..4}#q-20260823085943-52cbfe; compare_schedules{教师025 self,week=1..4}#q-20260823085943-556c00 等4次; query_teacher_load{week 1..4,topN10}#q-20260823085943-68b6bb",
+  "payload": {
+    "teacher": {
+      "id": "teacher-025",
+      "name": "教师025"
+    },
+    "courseName": "大学英语",
+    "windowWeeks": [
+      1,
+      4
+    ],
+    "week1Lessons": [
+      {
+        "weekday": 1,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "className": "2024级环境类01班",
+        "campusName": "校区C",
+        "roomName": "C1-101"
+      },
+      {
+        "weekday": 1,
+        "periodStart": 3,
+        "periodEnd": 4,
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "className": "2025级会计类01班",
+        "campusName": "校区B",
+        "roomName": "B1-103"
+      },
+      {
+        "weekday": 1,
+        "periodStart": 5,
+        "periodEnd": 6,
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "className": "2024级历史类01班",
+        "campusName": "校区B",
+        "roomName": "B1-101"
+      },
+      {
+        "weekday": 2,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "className": "2025级中文类01班",
+        "campusName": "校区B",
+        "roomName": "B1-101"
+      },
+      {
+        "weekday": 2,
+        "periodStart": 3,
+        "periodEnd": 4,
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "className": "2025级生命科学类02班",
+        "campusName": "校区C",
+        "roomName": "C1-101"
+      },
+      {
+        "weekday": 2,
+        "periodStart": 5,
+        "periodEnd": 6,
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "className": "2025级体育类01班",
+        "campusName": "校区D",
+        "roomName": "D1-101"
+      },
+      {
+        "weekday": 3,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "className": "2025级计算机类01班",
+        "campusName": "校区A",
+        "roomName": "A1-201"
+      },
+      {
+        "weekday": 3,
+        "periodStart": 5,
+        "periodEnd": 6,
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "className": "2025级经管类01班",
+        "campusName": "校区B",
+        "roomName": "B1-201"
+      },
+      {
+        "weekday": 4,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "className": "2025级教育类01班",
+        "campusName": "校区D",
+        "roomName": "D1-106"
+      },
+      {
+        "weekday": 4,
+        "periodStart": 3,
+        "periodEnd": 4,
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "className": "2025级计算机类02班",
+        "campusName": "校区A",
+        "roomName": "A1-101"
+      },
+      {
+        "weekday": 4,
+        "periodStart": 5,
+        "periodEnd": 6,
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "className": "2024级小学教育类01班",
+        "campusName": "校区D",
+        "roomName": "D1-102"
+      },
+      {
+        "weekday": 5,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "className": "2025级心理类01班",
+        "campusName": "校区D",
+        "roomName": "D1-101"
+      },
+      {
+        "weekday": 5,
+        "periodStart": 3,
+        "periodEnd": 4,
+        "startTime": "10:00",
+        "endTime": "11:40",
+        "className": "2025级软件类01班",
+        "campusName": "校区A",
+        "roomName": "A1-102"
+      },
+      {
+        "weekday": 5,
+        "periodStart": 5,
+        "periodEnd": 6,
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "className": "2025级传播类01班",
+        "campusName": "校区B",
+        "roomName": "B1-102"
+      }
+    ],
+    "perWeekRisk": [
+      {
+        "week": 1,
+        "conflictCount": 0,
+        "rushWarningCount": 4
+      },
+      {
+        "week": 2,
+        "conflictCount": 0,
+        "rushWarningCount": 4
+      },
+      {
+        "week": 3,
+        "conflictCount": 0,
+        "rushWarningCount": 4
+      },
+      {
+        "week": 4,
+        "conflictCount": 0,
+        "rushWarningCount": 4
+      }
+    ],
+    "rushWarnings": [
+      {
+        "weekday": 1,
+        "fromTime": "08:00",
+        "toTime": "10:00",
+        "fromCampus": "校区C",
+        "fromRoom": "C1-101",
+        "toCampus": "校区B",
+        "toRoom": "B1-103",
+        "gapMinutes": 20
+      },
+      {
+        "weekday": 2,
+        "fromTime": "08:00",
+        "toTime": "10:00",
+        "fromCampus": "校区B",
+        "fromRoom": "B1-101",
+        "toCampus": "校区C",
+        "toRoom": "C1-101",
+        "gapMinutes": 20
+      },
+      {
+        "weekday": 4,
+        "fromTime": "08:00",
+        "toTime": "10:00",
+        "fromCampus": "校区D",
+        "fromRoom": "D1-106",
+        "toCampus": "校区A",
+        "toRoom": "A1-101",
+        "gapMinutes": 20
+      },
+      {
+        "weekday": 5,
+        "fromTime": "08:00",
+        "toTime": "10:00",
+        "fromCampus": "校区D",
+        "fromRoom": "D1-101",
+        "toCampus": "校区A",
+        "toRoom": "A1-102",
+        "gapMinutes": 20
+      }
+    ]
+  }
+}

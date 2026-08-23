@@ -1,0 +1,47 @@
+/** Hero 场景统一文案 —— 中文优先，单句 8~18 字；禁止空话套话 */
+
+export const HERO_COPY = {
+  risk: {
+    kicker: "英雄场景 · 风险发现",
+    headline: "课表没有冲突，不代表没有风险",
+    sub: "同一教师 · 未来四周 · 跨校区教学轨",
+    identityRole: "大学英语 · 每周 14 个课次",
+    scheduleLabel: "第 1 周教学时间轨",
+    routeLabel: "跨校区转场",
+    gapUnit: "分钟转场",
+    contrastSafe: "课程冲突 0 处",
+    contrastRisk: "跨校区赶场 4 处",
+    summary: "人眼难察的时空风险，系统逐周标注",
+  },
+  collaboration: {
+    kicker: "英雄场景 · 协同规划",
+    headline: "三张课表，算出一个共同时空",
+    sub: "教师005 × 教师006 × 教师014 · 第 1 周",
+    lanesLabel: "上午时段 · 各自忙碌",
+    intersectionLabel: "唯一共同空闲",
+    funnelAll: "全校可用教室",
+    funnelCap: "容量 ≥ 120 座",
+    verdict: "共同空闲已找到，空间方案已推荐",
+  },
+  reschedule: {
+    kicker: "英雄场景 · 模拟调课",
+    headline: "移动一门课，约束引擎逐项核验",
+    sub: "数据结构 · 2025级计算机类01班",
+    sourceLabel: "原课次",
+    targetGhost: "What-if 目标",
+    verifyTitle: "约束核验",
+    candidatesTitle: "候选空间收敛",
+    decisionFeasible: "可行 · 附带提示",
+    notice: "本次仅进行教学安排可行性模拟，未修改真实课表。",
+  },
+  insight: {
+    kicker: "英雄场景 · 全局洞察",
+    headline: "从全局负载排名，下钻到真实风险",
+    sub: "未来四周 · 全校教师负载",
+    cascadeLabel: "教师负载排行",
+    breadcrumbRoot: "校园态势",
+    breadcrumbMid: "负载 Top1",
+    weeksLabel: "周课次分布（第 1–4 周）",
+    closeLine: "宏观态势可核查，个体风险可追踪",
+  },
+} as const;

@@ -17,6 +17,8 @@ export interface VerifiedFixture<T> {
   dataVersion: string;
   verified: true;
   capturedAt: string;
+  /** 溯源说明：精确到确定性工具调用参数与 queryId，可离线复现 */
+  provenanceNote?: string;
   payload: T;
 }
 

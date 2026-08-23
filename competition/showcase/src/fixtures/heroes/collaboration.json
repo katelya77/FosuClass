@@ -1,0 +1,139 @@
+{
+  "fixtureVersion": "2.0.0",
+  "sceneId": "hero-collaboration",
+  "source": "adp-runtime-golden",
+  "dataVersion": "competition-demo-v3",
+  "verified": true,
+  "capturedAt": "2026-08-23T16:59:43+08:00",
+  "provenanceNote": "证据来源：本地确定性 CampusTools（competition/adp-kit/mcp/campus-tools-mcp）对 competition-demo-v3 数据集（sha1:842b7959e808）的调用结果，evidence.verified=true。复现调用：query_common_free_time{教师005/006/014,week1,weekday4,P1..4}#q-20260823085943-3dc176; plan_group{同实体,minCapacity=120}#q-20260823085943-1ceeb9（minCap 无/100 对照组同目录留存）; find_available_classrooms{校区A,周四P1..4,minCap60}#q-20260823085943-8f4403; query_schedule{三位教师,week1}#lane-*.json",
+  "payload": {
+    "participants": [
+      {
+        "id": "teacher-005",
+        "name": "教师005"
+      },
+      {
+        "id": "teacher-006",
+        "name": "教师006"
+      },
+      {
+        "id": "teacher-014",
+        "name": "教师014"
+      }
+    ],
+    "slot": {
+      "week": 1,
+      "weekday": 4,
+      "weekdayName": "周四",
+      "date": "2026-09-03",
+      "periodStart": 1,
+      "periodEnd": 4,
+      "timeText": "08:00–11:40"
+    },
+    "morningBusy": [
+      {
+        "teacher": "教师005",
+        "blocks": [
+          {
+            "weekday": 2,
+            "periodStart": 3,
+            "periodEnd": 4
+          },
+          {
+            "weekday": 3,
+            "periodStart": 3,
+            "periodEnd": 4
+          }
+        ]
+      },
+      {
+        "teacher": "教师006",
+        "blocks": [
+          {
+            "weekday": 2,
+            "periodStart": 3,
+            "periodEnd": 4
+          }
+        ]
+      },
+      {
+        "teacher": "教师014",
+        "blocks": [
+          {
+            "weekday": 1,
+            "periodStart": 1,
+            "periodEnd": 2
+          },
+          {
+            "weekday": 3,
+            "periodStart": 3,
+            "periodEnd": 4
+          }
+        ]
+      }
+    ],
+    "commonWindows": 1,
+    "funnel": {
+      "allRoomsAvailable": 63,
+      "capacity120Plus": 7
+    },
+    "candidatesCap120": [
+      {
+        "name": "A1-201",
+        "building": "A公共教学楼",
+        "campusName": "校区A",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "A1-202",
+        "building": "A公共教学楼",
+        "campusName": "校区A",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "B1-201",
+        "building": "B公共教学楼",
+        "campusName": "校区B",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "B1-202",
+        "building": "B公共教学楼",
+        "campusName": "校区B",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "C1-202",
+        "building": "C公共教学楼",
+        "campusName": "校区C",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "D1-201",
+        "building": "D公共教学楼",
+        "campusName": "校区D",
+        "capacity": 120,
+        "type": "阶梯"
+      },
+      {
+        "name": "D1-202",
+        "building": "D公共教学楼",
+        "campusName": "校区D",
+        "capacity": 120,
+        "type": "阶梯"
+      }
+    ],
+    "recommendedRoom": {
+      "name": "A1-201",
+      "building": "A公共教学楼",
+      "campusName": "校区A",
+      "capacity": 120,
+      "type": "阶梯教室"
+    }
+  }
+}
