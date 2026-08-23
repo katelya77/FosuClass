@@ -58,7 +58,7 @@ body {
   --spot-x: 50%;
   --spot-y: 44%;
   background:
-    radial-gradient(120% 105% at var(--spot-x) var(--spot-y), #121c2b 0%, var(--bg) 40%, var(--bg-deep) 100%);
+    radial-gradient(120% 105% at var(--spot-x) var(--spot-y), #17222f 0%, var(--bg) 42%, var(--bg-deep) 100%);
   overflow: hidden;
 }
 .stage[data-mode="record"] {
@@ -77,17 +77,18 @@ body {
    Surface 1 `.plane`：弱透明 information plane —— 无边框，靠亮度差与间距分区。
    Surface 2 `.plane-hero`：Hero focus glass —— 只给真正需要强调的内容。 */
 .plane {
-  background: linear-gradient(180deg, rgba(26, 36, 49, 0.5), rgba(16, 24, 35, 0.38));
+  position: relative;
+  background: linear-gradient(180deg, rgba(38, 52, 68, 0.58), rgba(20, 29, 41, 0.44));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(14px) saturate(1.06);
+  backdrop-filter: blur(14px) saturate(1.1);
 }
 .plane-hero {
   position: relative;
-  background: linear-gradient(180deg, rgba(32, 44, 60, 0.66), rgba(18, 27, 39, 0.55));
+  background: linear-gradient(180deg, rgba(42, 56, 74, 0.72), rgba(22, 32, 45, 0.6));
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-glow-brand);
-  backdrop-filter: blur(20px) saturate(1.12);
+  backdrop-filter: blur(20px) saturate(1.16);
 }
 .plane-hero::before {
   content: "";
@@ -101,25 +102,25 @@ body {
 }
 /* 兼容别名：既有 panel 语义继续可用，但默认弱化框线 */
 .panel {
-  background: linear-gradient(180deg, rgba(24, 33, 46, 0.55), rgba(15, 22, 32, 0.45));
-  border: 1px solid rgba(168, 184, 204, 0.12);
+  background: linear-gradient(180deg, rgba(36, 49, 65, 0.6), rgba(20, 29, 41, 0.48));
+  border: 1px solid rgba(190, 206, 226, 0.18);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(14px) saturate(1.05);
+  backdrop-filter: blur(14px) saturate(1.1);
 }
 .panel-raised {
-  background: linear-gradient(180deg, rgba(31, 42, 57, 0.68), rgba(19, 28, 40, 0.58));
-  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(44, 58, 76, 0.74), rgba(24, 34, 47, 0.62));
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
-  backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(16px) saturate(1.12);
 }
 .panel-glass {
-  background: var(--surface-glass);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-elevated) 62%, transparent);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(22px) saturate(1.14);
+  backdrop-filter: blur(22px) saturate(1.18);
 }
 .hairline {
   height: 1px;
@@ -135,18 +136,18 @@ body {
   inset: 0 10% auto 10%;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.26), transparent);
   border-radius: inherit;
   pointer-events: none;
 }
 
 /* ---- 指针景深（Director 交互层；Record Mode 无 --px/--py 变化，恒为 0） ---- */
 .depth-shift {
-  transform: translate3d(calc(var(--px, 0) * 4px), calc(var(--py, 0) * 3px), 0);
+  transform: translate3d(calc(var(--px, 0) * 3px), calc(var(--py, 0) * 2px), 0);
   transition: transform 0.18s var(--ease-out-soft);
 }
 .depth-shift-near {
-  transform: translate3d(calc(var(--px, 0) * 7px), calc(var(--py, 0) * 5px), 0);
+  transform: translate3d(calc(var(--px, 0) * 5px), calc(var(--py, 0) * 3px), 0);
   transition: transform 0.18s var(--ease-out-soft);
 }
 
@@ -221,12 +222,12 @@ body {
   min-height: 32px;
   padding: 4px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background: color-mix(in srgb, var(--surface-elevated) 66%, transparent);
   backdrop-filter: blur(6px);
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  font-size: 14.5px;
+  letter-spacing: 0.03em;
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -247,10 +248,10 @@ button {
   min-height: 30px; /* Phase 2.6 dock 轻量化 */
   min-width: 34px;
   padding: 0 11px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+  color: var(--text);
   font-size: 12.5px;
   cursor: pointer;
   transition:

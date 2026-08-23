@@ -13,49 +13,49 @@
   --surface: #101823;
   --surface-elevated: #18232f;
   --surface-glass: rgba(26, 36, 49, 0.5);
-  --border: rgba(178, 194, 214, 0.24);
-  --border-strong: rgba(188, 205, 226, 0.46);
+  --border: rgba(190, 206, 226, 0.34);
+  --border-strong: rgba(202, 218, 238, 0.58);
 
   /* ---- 文本（中文录屏优先；muted/faint 相位 2.5 各提亮约 15%） ---- */
-  --text: #f2f6fa;
-  --text-muted: #b9c7d8;
-  --text-faint: #8fa2b6;
+  --text: #f7fafc;
+  --text-muted: #ccd8e7;
+  --text-faint: #a7b8cb;
   --text-ink: #0a1220; /* 高对比底板上的深字 */
 
   /* ---- 品牌：青绿（校园自然绿）× 低饱和空间蓝 ---- */
-  --brand: #4fd6a6;
-  --brand-strong: #8aeec9;
-  --brand-dim: rgba(79, 214, 166, 0.16);
-  --brand-dim-strong: rgba(79, 214, 166, 0.28);
-  --brand-secondary: #7fadd6;
-  --brand-secondary-dim: rgba(127, 173, 214, 0.15);
+  --brand: #56e0b0;
+  --brand-strong: #93f4d1;
+  --brand-dim: rgba(86, 224, 176, 0.18);
+  --brand-dim-strong: rgba(86, 224, 176, 0.3);
+  --brand-secondary: #89b5e0;
+  --brand-secondary-dim: rgba(137, 181, 224, 0.17);
 
   /* ---- 语义色：风险 / 危险 / 成功 ---- */
-  --risk: #e5b573;
-  --risk-strong: #f6cd8a;
-  --risk-dim: rgba(229, 181, 115, 0.16);
-  --danger: #dd7b7b;
-  --danger-dim: rgba(221, 123, 123, 0.16);
-  --success: #63cfa0;
-  --success-dim: rgba(99, 207, 160, 0.16);
+  --risk: #edbe7c;
+  --risk-strong: #ffd795;
+  --risk-dim: rgba(237, 190, 124, 0.18);
+  --danger: #e68b8b;
+  --danger-dim: rgba(230, 139, 139, 0.18);
+  --success: #6edcb0;
+  --success-dim: rgba(110, 220, 176, 0.18);
 
   /* ---- 场景氛围色（每个 Scene 的世界底色；Phase 2.6 略提亮） ---- */
-  --atmos-brand: #4fd6a6;
-  --atmos-brand-dim: rgba(79, 214, 166, 0.12);
-  --atmos-cool: #7fadd6;
-  --atmos-cool-dim: rgba(127, 173, 214, 0.12);
-  --atmos-ice: #9cc2e2;
-  --atmos-ice-dim: rgba(156, 194, 226, 0.11);
-  --atmos-warm: #eec694;
-  --atmos-warm-dim: rgba(238, 198, 148, 0.11);
-  --atmos-deep: #4a7fb0;
-  --atmos-deep-dim: rgba(74, 127, 176, 0.14);
+  --atmos-brand: #56e0b0;
+  --atmos-brand-dim: rgba(86, 224, 176, 0.14);
+  --atmos-cool: #89b5e0;
+  --atmos-cool-dim: rgba(137, 181, 224, 0.14);
+  --atmos-ice: #a8cdeb;
+  --atmos-ice-dim: rgba(168, 205, 235, 0.13);
+  --atmos-warm: #f4d0a0;
+  --atmos-warm-dim: rgba(244, 208, 160, 0.13);
+  --atmos-deep: #5a92c6;
+  --atmos-deep-dim: rgba(90, 146, 198, 0.16);
 
   /* ---- 材质发光 ---- */
-  --glow-brand: 0 0 0 1px rgba(79, 214, 166, 0.35), 0 0 26px -4px rgba(79, 214, 166, 0.4);
-  --glow-cool: 0 0 0 1px rgba(127, 173, 214, 0.35), 0 0 26px -4px rgba(127, 173, 214, 0.38);
-  --glow-warm: 0 0 0 1px rgba(238, 198, 148, 0.35), 0 0 26px -4px rgba(238, 198, 148, 0.4);
-  --glow-deep: 0 0 0 1px rgba(74, 127, 176, 0.35), 0 0 30px -4px rgba(74, 127, 176, 0.42);
+  --glow-brand: 0 0 0 1px rgba(86, 224, 176, 0.42), 0 0 34px -4px rgba(86, 224, 176, 0.5);
+  --glow-cool: 0 0 0 1px rgba(137, 181, 224, 0.42), 0 0 34px -4px rgba(137, 181, 224, 0.48);
+  --glow-warm: 0 0 0 1px rgba(244, 208, 160, 0.42), 0 0 34px -4px rgba(244, 208, 160, 0.5);
+  --glow-deep: 0 0 0 1px rgba(90, 146, 198, 0.42), 0 0 38px -4px rgba(90, 146, 198, 0.52);
 
   /* ---- 圆角 ---- */
   --radius-xs: 4px;
@@ -69,9 +69,9 @@
   --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 20px 52px rgba(0, 0, 0, 0.44);
   --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 12px 30px rgba(0, 0, 0, 0.36);
   --shadow-depth: 0 34px 90px rgba(0, 0, 0, 0.52);
-  --shadow-glow-brand: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 34px -6px rgba(79, 214, 166, 0.38);
+  --shadow-glow-brand: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 44px -6px rgba(86, 224, 176, 0.5);
   /* 提起的课次块（Reschedule 视觉高潮用） */
-  --shadow-lift: 0 2px 0 rgba(255, 255, 255, 0.05) inset, 0 26px 60px rgba(0, 0, 0, 0.6), 0 0 40px -8px rgba(79, 214, 166, 0.3);
+  --shadow-lift: 0 2px 0 rgba(255, 255, 255, 0.06) inset, 0 28px 64px rgba(0, 0, 0, 0.62), 0 0 52px -8px rgba(86, 224, 176, 0.42);
 
   /* ---- 间距 / 安全区（1920×1080 母版） ---- */
   --space-0: 2px;

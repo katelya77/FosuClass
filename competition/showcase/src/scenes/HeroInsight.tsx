@@ -80,7 +80,7 @@ export function HeroInsight(): JSX.Element {
         badge={<Badge tone='brand' icon={<TrendingUp size={15} />}>{vm.windowLabel}</Badge>}
       />
 
-      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[1.06fr_1fr] gap-7'>
+      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[0.96fr_1.04fr] gap-7'>
         <motion.div
           className='plane material-topline flex min-h-0 min-w-0 flex-col py-4 pr-5'
           animate={{ opacity: risk ? 0.8 : 1, filter: risk ? 'saturate(0.85)' : 'saturate(1)' }}
@@ -107,17 +107,24 @@ export function HeroInsight(): JSX.Element {
             initial={{ opacity: 0, y: 14, scale: 0.92 }}
             animate={top1 ? { opacity: 1, y: 0, scale: 1 } : {}}
             transition={{ duration: 0.9, ease: EASE_OUT }}
-            className='plane-hero depth-shift-near flex items-center justify-around px-8 py-6'
+            className='plane-hero depth-shift-near flex flex-col justify-around gap-5 px-10 py-8'
             style={{ boxShadow: top1 ? 'var(--shadow-glow-brand)' : 'var(--shadow-panel)' }}
           >
-            <div className='text-center'>
-              <KineticMetric to={vm.top1.lessons} settle={top1} className='t-metric-lg text-ink' />
-              <p className='t-caption mt-1'>课次（第1–4周）</p>
+            <div className='flex items-center justify-between'>
+              <p className='t-caption'>Top 1 · {vm.top1.name}</p>
+              <Badge tone='brand'>负载峰值</Badge>
             </div>
-            <div className='text-center'>
-              <KineticMetric to={vm.top1.periods} settle={top1} className='t-metric-lg text-stream' />
-              <p className='t-caption mt-1'>课时</p>
+            <div className='flex items-center justify-around'>
+              <div className='text-center'>
+                <KineticMetric to={vm.top1.lessons} settle={top1} className='t-metric-lg text-ink' />
+                <p className='t-caption mt-1'>课次（第1–4周）</p>
+              </div>
+              <div className='text-center'>
+                <KineticMetric to={vm.top1.periods} settle={top1} className='t-metric-lg text-stream' />
+                <p className='t-caption mt-1'>课时</p>
+              </div>
             </div>
+            <p className='t-caption text-center'>连续 {vm.drilldownWeeks.length} 周 · 每周 {vm.drilldownWeeks[0]?.lessons ?? 0} 课次</p>
           </motion.div>
 
           {/* 周课次 temporal slab：柱体加高、数值加大 */}

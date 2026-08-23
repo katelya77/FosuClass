@@ -23,7 +23,7 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
       <div className='mb-2.5 grid grid-cols-[112px_repeat(5,1fr)] gap-2'>
         <span />
         {DAYS.map((d) => (
-          <span key={d} className={'text-center text-[16px] tracking-widest ' + (intersection && d === '周四' ? 'font-semibold text-brand-strong' : 'text-mute')}>{d}</span>
+          <span key={d} className={'text-center text-[17px] tracking-widest ' + (intersection && d === '周四' ? 'font-semibold text-brand-strong' : 'text-muted')}>{d}</span>
         ))}
       </div>
       <div className='relative min-h-0 flex-1 rounded-2xl bg-canvas-deep/40 p-4'>
@@ -51,7 +51,7 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
         <div className='relative z-10 grid h-full grid-rows-3 gap-5'>
           {vm.lanes.map((lane, li) => (
             <motion.div key={lane.teacher} initial={{ opacity: 0, y: 14 }} animate={intersection || showBusy ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.2 + li * 0.2, duration: 0.7, ease: EASE_OUT }} className='grid grid-cols-[112px_repeat(5,1fr)] items-stretch gap-2'>
-              <span className='flex items-center justify-end pr-2 text-right text-[17px] text-mute'>{lane.teacher}</span>
+              <span className='flex items-center justify-end pr-2 text-right text-[18px] text-muted'>{lane.teacher}</span>
               {DAYS.map((d, di) => {
                 const busy = lane.busy.find((b) => b.weekday === di + 1);
                 return (
@@ -62,11 +62,11 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
                       transition={{ delay: 0.3 + di * 0.16, duration: 0.55, ease: EASE_OUT }}
                       className='absolute inset-y-1 left-1 right-1 origin-left rounded-lg border border-[rgba(168,184,204,0.14)] bg-[#151f2c] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
                     >
-                      <span className='absolute inset-0 flex items-center justify-center text-[15px] text-mute'>已占用</span>
+                      <span className='absolute inset-0 flex items-center justify-center text-[16px] text-muted'>已占用</span>
                     </motion.div>
                     {/* 共同空闲：周四列这三格被点亮 */}
                     {intersection && d === '周四' && (
-                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className='absolute inset-0 flex items-center justify-center text-[16px] font-semibold text-brand-strong'>
+                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className='absolute inset-0 flex items-center justify-center text-[17px] font-semibold text-brand-strong'>
                         空闲
                       </motion.span>
                     )}
@@ -100,7 +100,12 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
 function RoomResolver({ rooms, recommend }: { rooms: boolean; recommend: boolean }): JSX.Element {
   return (
     <div className='flex min-h-0 min-w-0 flex-col gap-4'>
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={rooms ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.8, ease: EASE_OUT }} className='panel-raised material-topline flex items-center justify-around px-6 py-4'>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={rooms ? { opacity: recommend ? 0.58 : 1, y: 0, filter: recommend ? 'saturate(0.78)' : 'saturate(1)' } : {}}
+        transition={{ duration: 0.8, ease: EASE_OUT }}
+        className='panel-raised material-topline flex items-center justify-around px-6 py-4'
+      >
         <div className='text-center'>
           <KineticMetric to={vm.funnel.allRoomsAvailable} settle={rooms} className='t-metric text-ink' />
           <p className='t-caption mt-0.5'>{C.collaboration.funnelAll}</p>
@@ -114,11 +119,20 @@ function RoomResolver({ rooms, recommend }: { rooms: boolean; recommend: boolean
 
       {/* 候选 chips（≥120 座） */}
       <motion.div initial={{ opacity: 0 }} animate={rooms ? { opacity: 1 } : {}} className='flex flex-wrap gap-2 px-1'>
-        {vm.candidatesCap120.map((r) => (
-          <span key={r.name} className={'chip text-[14px] ' + (r.name === vm.recommended.name ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] text-brand' : '')}>
-            {r.name} · {r.capacity}座
-          </span>
-        ))}
+        {vm.candidatesCap120.map((r) => {
+          const isRecommended = r.name === vm.recommended.name;
+          return (
+            <motion.span
+              key={r.name}
+              initial={{ opacity: 0 }}
+              animate={rooms ? { opacity: recommend && !isRecommended ? 0.4 : 1, filter: recommend && !isRecommended ? 'saturate(0.7)' : 'saturate(1)' } : {}}
+              transition={{ duration: 0.5, ease: EASE_OUT }}
+              className={'chip text-[14px] ' + (isRecommended ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] text-brand' : '')}
+            >
+              {r.name} · {r.capacity}座
+            </motion.span>
+          );
+        })}
       </motion.div>
 
       {/* 推荐主卡：Camera 拉前（唯一 Surface 2） */}
@@ -144,7 +158,7 @@ function RoomResolver({ rooms, recommend }: { rooms: boolean; recommend: boolean
             <p className='t-caption'>容量</p>
             <p className='t-caption font-medium text-brand-strong'>{vm.recommended.capacity} 座 · 容量达标</p>
           </div>
-          <div className='h-2 overflow-hidden rounded-full bg-[rgba(168,184,204,0.14)]'>
+          <div className='h-2.5 overflow-hidden rounded-full bg-[rgba(168,184,204,0.16)]'>
             <motion.div
               className='h-full rounded-full'
               style={{ background: 'linear-gradient(90deg, var(--brand), var(--brand-strong))', boxShadow: '0 0 18px -4px rgba(79,214,166,0.6)' }}
@@ -184,7 +198,7 @@ export function HeroCollaboration(): JSX.Element {
       <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[1.08fr_1fr] gap-7'>
         <motion.div
           className='plane material-topline flex min-h-0 min-w-0 flex-col p-5'
-          animate={{ opacity: recommend ? 0.78 : 1, filter: recommend ? 'saturate(0.82)' : 'saturate(1)' }}
+          animate={{ opacity: recommend ? 0.7 : 1, filter: recommend ? 'saturate(0.78)' : 'saturate(1)' }}
           transition={{ duration: 0.7, ease: EASE_OUT }}
         >
           <p className='t-caption mb-2.5'>{C.collaboration.lanesLabel}</p>

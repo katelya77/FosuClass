@@ -40,20 +40,22 @@ export function HeroRisk(): JSX.Element {
       />
 
       {identity && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className='depth-shift flex items-center gap-5'>
-          <span className='flex size-14 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--brand)_40%,transparent)] bg-[var(--brand-dim)] text-[20px] font-bold tabular-nums text-brand-strong shadow-[var(--glow-brand)]'>25</span>
-          <div>
-            <p className='t-card-title'>{vm.teacherName}</p>
-            <p className='t-caption'>{C.risk.identityRole}</p>
-          </div>
-          <div className='ml-6 flex items-center gap-10'>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className='depth-shift flex w-full items-center justify-between gap-5'>
+          <div className='flex items-center gap-5'>
+            <span className='flex size-16 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--brand)_45%,transparent)] bg-[var(--brand-dim)] text-[22px] font-bold tabular-nums text-brand-strong shadow-[var(--glow-brand)]'>25</span>
             <div>
-              <KineticMetric to={vm.totals.conflictCount} settle={warning} className='t-metric text-ok' />
-              <p className='t-caption mt-0.5'>课程冲突</p>
+              <p className='t-card-title'>{vm.teacherName}</p>
+              <p className='t-caption'>{C.risk.identityRole}</p>
             </div>
-            <div>
+          </div>
+          <div className='flex items-center gap-12'>
+            <div className='text-center'>
+              <KineticMetric to={vm.totals.conflictCount} settle={warning} className='t-metric text-ok' />
+              <p className='t-caption mt-1'>课程冲突</p>
+            </div>
+            <div className='text-center'>
               <KineticMetric to={vm.totals.rushWarningCount} settle={warning} className='t-metric text-riskc' />
-              <p className='t-caption mt-0.5'>跨校区赶场</p>
+              <p className='t-caption mt-1'>跨校区赶场</p>
             </div>
           </div>
         </motion.div>

@@ -30,10 +30,6 @@ export function DirectorDock(): JSX.Element {
     };
   }, []);
 
-  useEffect(() => {
-    if (idleTimer.current) window.clearTimeout(idleTimer.current);
-  }, [s.elapsed]);
-
   return (
     <motion.footer
       data-testid="debug-panel"

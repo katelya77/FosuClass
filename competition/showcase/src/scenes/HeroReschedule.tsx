@@ -37,23 +37,23 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
     <div className='flex h-full flex-col'>
       {/* Day header：左侧预留时间轴 gutter，保证与下方网格列严格对齐 */}
       <div className='mb-2 flex'>
-        <div className='w-12 shrink-0' />
+        <div className='w-16 shrink-0' />
         <div className='grid min-w-0 flex-1 grid-cols-5'>
           {DAYS.map((d) => (
-            <span key={d} className={'text-center text-[14px] tracking-widest ' + (phase === 'snap' && d === '周四' ? 'font-semibold text-brand-strong' : 'text-mute')}>{d}</span>
+            <span key={d} className={'text-center text-[17px] tracking-widest ' + (phase === 'snap' && d === '周四' ? 'font-semibold text-brand-strong' : 'text-mute')}>{d}</span>
           ))}
         </div>
       </div>
 
       <div className='flex min-h-0 flex-1'>
         {/* 时间轴列：为网格注入"课时"语义 */}
-        <div className='relative w-12 shrink-0'>
+        <div className='relative w-16 shrink-0'>
           {PERIOD_ROWS.map((p) => (
             <span
               key={p.label}
               className={
-                'absolute right-2.5 flex items-center justify-end text-[12px] leading-none tracking-wider ' +
-                (phase === 'snap' && p.row === 3 ? 'font-semibold text-brand-strong' : p.row === 2 ? 'text-mute' : 'text-faint')
+                'absolute right-2.5 flex items-center justify-end whitespace-nowrap text-[13px] leading-none tracking-wide ' +
+                (phase === 'snap' && p.row === 3 ? 'font-semibold text-brand-strong' : p.row === 2 ? 'text-muted' : 'text-faint')
               }
               style={{ top: p.row * ROW_H + '%', height: ROW_H + '%' }}
             >
@@ -63,7 +63,14 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
           <div aria-hidden className='absolute bottom-0 right-0 top-0 w-px bg-line' />
         </div>
 
-        <div className='relative ml-2 min-h-0 flex-1 overflow-hidden rounded-2xl border border-[rgba(168,184,204,0.14)] bg-canvas-deep/50'>
+        <div className='relative ml-2 min-h-0 flex-1 overflow-hidden rounded-2xl border border-[rgba(190,206,226,0.22)] bg-canvas-deep/55'>
+          {/* 目标列：snap 后整列微光，让"去哪"一目了然 */}
+          <motion.div
+            aria-hidden
+            className='absolute bottom-0 top-0'
+            style={{ left: 3 * COL_W + '%', width: COL_W + '%', background: 'linear-gradient(90deg, transparent, rgba(86,224,176,0.08), transparent)' }}
+            initial={{ opacity: 0 }} animate={phase === 'snap' ? { opacity: 1 } : { opacity: 0 }} transition={{ duration: 0.8 }}
+          />
           {/* 虚淡列带：空网格呈现为"正在被检索的时空间" */}
           {DAYS.map((_, i) => (
             <div
@@ -108,7 +115,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
                 width: 'calc(' + COL_W + '% - 12px)', height: 'calc(' + ROW_H + '% - 12px)',
               }}
             >
-              <span className='absolute left-2.5 top-1.5 text-[11.5px] tracking-widest text-faint'>已移出</span>
+              <span className='absolute left-2.5 top-1.5 text-[13px] tracking-widest text-faint'>已移出</span>
             </motion.div>
           )}
 
@@ -121,12 +128,12 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             style={{
               left: 'calc(' + dst.left + '% + 6px)', top: 'calc(' + dst.top + '% + 6px)',
               width: 'calc(' + COL_W + '% - 12px)', height: 'calc(' + ROW_H + '% - 12px)',
-              borderColor: 'color-mix(in srgb, var(--brand-secondary) 65%, transparent)',
-              boxShadow: '0 0 34px -6px rgba(127,173,214,0.55)',
+              borderColor: 'color-mix(in srgb, var(--brand-strong) 78%, transparent)',
+              boxShadow: '0 0 44px -6px rgba(147,244,209,0.62)',
             }}
           >
             <motion.span
-              className='absolute inset-0 flex items-center justify-center text-[13px] font-medium tracking-widest text-brand-strong'
+              className='absolute inset-0 flex items-center justify-center text-[15px] font-medium tracking-widest text-brand-strong'
               animate={{ opacity: [0.75, 1, 0.75] }}
               transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
             >
@@ -160,16 +167,16 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
               top: 'calc(' + pos.top + '% + 6px)',
               width: 'calc(' + COL_W + '% - 12px)',
               height: 'calc(' + ROW_H + '% - 12px)',
-              y: phase === 'lift' ? -18 : 0,
-              scale: phase === 'lift' ? 1.08 : 1,
+              y: phase === 'lift' ? -22 : 0,
+              scale: phase === 'lift' ? 1.12 : 1,
               boxShadow: phase === 'lift' ? 'var(--shadow-lift)' : 'var(--shadow-panel)',
               borderColor: phase === 'snap' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'var(--border-strong)',
             }}
             transition={phase === 'lift' ? { ...SPRING.card } : { duration: 0.9, ease: EASE_OUT }}
             style={{ borderLeftColor: 'var(--brand)' }}
           >
-            <motion.p className='truncate text-[16px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
-            <p className='truncate text-[14px] text-mute'>
+            <motion.p className='truncate text-[18px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
+            <p className='truncate text-[15px] text-muted'>
               {phase === 'snap' ? vm.target.periodText + ' · ' + vm.autoResolve.suggested.name : vm.source.periodText + ' · ' + vm.source.roomName}
             </p>
           </motion.div>
@@ -186,7 +193,7 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
     <div className='panel material-topline relative flex min-h-0 flex-col overflow-hidden p-4'>
       <div className='mb-1.5 flex items-center justify-between'>
         <p className='t-caption'>{C.reschedule.verifyTitle}</p>
-        <span className='text-[12.5px] tabular-nums text-faint'>{revealed > 0 ? revealed + ' / ' + vm.constraints.length : ''}</span>
+        <span className='text-[14px] tabular-nums text-muted'>{revealed > 0 ? revealed + ' / ' + vm.constraints.length : ''}</span>
       </div>
       {/* 向下扫描主脉冲 */}
       {revealed > 0 && (
@@ -207,7 +214,7 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
                   : { borderColor: 'rgba(168,184,204,0.3)', color: 'var(--text-faint)', background: 'var(--bg-deep)' }}>
                 {i + 1}
               </span>
-              <span className={'min-w-0 flex-1 truncate text-[15px] ' + (done ? 'text-ink' : current ? 'text-mute' : 'text-faint')}>{row.label}</span>
+              <span className={'min-w-0 flex-1 truncate text-[16px] ' + (done ? 'text-ink' : current ? 'text-muted' : 'text-faint')}>{row.label}</span>
               <span className='flex items-center gap-2'>
                 {!done ? (
                   <motion.span
@@ -216,11 +223,11 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
                     transition={{ duration: 1.4, repeat: current ? Infinity : 0, ease: 'easeInOut' }}
                   >· · ·</motion.span>
                 ) : row.status === 'warn' ? (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[14px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
+                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[15px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
                     <TriangleAlert size={13} /> 提示
                   </motion.span>
                 ) : (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[14px] font-semibold text-ok' style={{ borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', background: 'var(--success-dim)' }}>
+                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[15px] font-semibold text-ok' style={{ borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', background: 'var(--success-dim)' }}>
                     <Check size={13} /> PASS
                   </motion.span>
                 )}
@@ -331,7 +338,7 @@ export function HeroReschedule(): JSX.Element {
           >
             <div>
               <div className='flex items-center gap-2.5'>
-                <p className='text-[19px] font-bold' style={{ color: 'var(--brand-strong)' }}>{C.reschedule.decisionFeasible}</p>
+                <p className='text-[23px] font-bold' style={{ color: 'var(--brand-strong)' }}>{C.reschedule.decisionFeasible}</p>
                 <span className='flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
                   <TriangleAlert size={12.5} /> 连续 4 节提示
                 </span>

@@ -7,13 +7,13 @@ const DAYS = ["周一", "周二", "周三", "周四", "周五"];
 /** Phase 2.6 构图：1720×560（≈3.07 宽高比 ≈ 1728×562 实容器）——满幅无黑边。
  *  上层=周一~周五时间结构 · 中层=跨校区弧线（空间） · 下层=校区节点。
  *  时间差与空间弧线通过锚线连成一个系统，不再像两张分离的图。 */
-const W = 1720, H = 560;
+const W = 1720, H = 620;
 const LEFT = 24, COLW = (W - LEFT * 2) / 5;
-const TILE_TOP = 52, ROW_H = 86, TILE_H = 74;
-const CAMP_Y = 460;
+const TILE_TOP = 56, ROW_H = 94, TILE_H = 80;
+const CAMP_Y = 536;
 const CAMP_XS = [300, 740, 1180, 1620];
 const CAMP_NAMES = ["校区A", "校区B", "校区C", "校区D"];
-const LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(5,8,13,0.85)", strokeWidth: 4, strokeLinejoin: "round" as const };
+const LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(6,10,16,0.92)", strokeWidth: 5, strokeLinejoin: "round" as const };
 
 interface RiskFieldProps {
   vm: RiskViewModel;
@@ -51,8 +51,8 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const x = LEFT + i * COLW;
         return (
           <motion.g key={d} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 + i * 0.1, duration: 0.7 }}>
-            <rect x={x + 7} y={TILE_TOP - 10} width={COLW - 14} height={ROW_H * 3 + 14} rx={20} fill="rgba(22,31,44,0.46)" stroke="rgba(168,184,204,0.12)" />
-            <text x={x + COLW / 2} y={30} textAnchor="middle" fontSize={21} fontWeight={660} fill={i === 4 ? "var(--brand-strong)" : "#D3DEEA"}>{d}</text>
+            <rect x={x + 7} y={TILE_TOP - 12} width={COLW - 14} height={ROW_H * 3 + 16} rx={20} fill="rgba(26,36,50,0.52)" stroke="rgba(190,206,226,0.16)" />
+            <text x={x + COLW / 2} y={32} textAnchor="middle" fontSize={24} fontWeight={680} fill={i === 4 ? "var(--brand-strong)" : "#E4EDF7"}>{d}</text>
           </motion.g>
         );
       })}
@@ -77,7 +77,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
             {showCampus && (
               <motion.line x1={cx} y1={y + TILE_H} x2={campusXOf(b.campusName)} y2={CAMP_Y}
                 stroke={cs.color}
-                strokeOpacity={active ? 0.9 : dim ? 0.16 : 0.4}
+                strokeOpacity={active ? 0.9 : dim ? 0.32 : 0.46}
                 strokeWidth={active ? 2.4 : 1.5}
                 strokeDasharray={active ? "none" : "3 5"}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -90,11 +90,11 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
               stroke={active ? cs.color : cs.color + "66"}
               strokeWidth={active ? 2.4 : 1.1}
               initial={false}
-              animate={{ opacity: dim && !active ? 0.34 : 1, filter: active ? "drop-shadow(0 0 16px rgba(79,214,166,0.4))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
+              animate={{ opacity: dim && !active ? 0.52 : 1, filter: active ? "drop-shadow(0 0 16px rgba(79,214,166,0.4))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
               transition={{ duration: 0.45, ease: EASE_OUT }}
             />
-            <text x={x + 14} y={y + 30} fontSize={19} fontWeight={680} fill="var(--text)" style={{ opacity: dim && !active ? 0.55 : 1 }}>{b.startTime}</text>
-            <text x={x + 14} y={y + 58} fontSize={15.5} fill={active ? "#E2ECF6" : cs.color} style={{ opacity: dim && !active ? 0.6 : 1 }}>{b.campusName} · {b.roomName}</text>
+            <text x={x + 16} y={y + 32} fontSize={22} fontWeight={700} fill="var(--text)" style={{ opacity: dim && !active ? 0.74 : 1 }}>{b.startTime}</text>
+            <text x={x + 16} y={y + 62} fontSize={17} fill={active ? "#ECF4FB" : cs.color} style={{ opacity: dim && !active ? 0.8 : 1 }}>{b.campusName} · {b.roomName}</text>
             {active && (
               <motion.rect
                 x={x - 4} y={y - 4} width={COLW - 20} height={TILE_H + 8} rx={16}
@@ -125,7 +125,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
                 )}
                 <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={22} fill="var(--surface-elevated)" stroke={cs.color} strokeOpacity={hot ? 1 : 0.66} strokeWidth={hot ? 2.6 : 1.7} />
                 <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={6.5} fill={cs.color} />
-                <text x={CAMP_XS[i]} y={CAMP_Y + 46} textAnchor="middle" fontSize={19} fontWeight={600} fill={hot ? "var(--text)" : "var(--text-muted)"} {...LABEL_HALO}>{name}</text>
+                <text x={CAMP_XS[i]} y={CAMP_Y + 50} textAnchor="middle" fontSize={21} fontWeight={620} fill={hot ? "var(--text)" : "var(--text-muted)"} {...LABEL_HALO}>{name}</text>
               </motion.g>
             );
           })}
@@ -140,7 +140,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const x1 = CAMP_XS[fromIdx], x2 = CAMP_XS[toIdx];
         const y1 = CAMP_Y, y2 = CAMP_Y;
         const midX = (x1 + x2) / 2;
-        const arcY = CAMP_Y - 120;
+        const arcY = CAMP_Y - 150;
         const d = `M ${x1} ${y1} Q ${midX} ${arcY} ${x2} ${y2}`;
         return (
           <motion.g key={"rush-" + i}
@@ -159,15 +159,15 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
               <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
             </motion.circle>
             {/* 20′ 时间差徽标（弧顶） */}
-            <circle cx={midX} cy={arcY} r={22} fill="rgba(46,36,20,0.92)" stroke="rgba(246,205,138,0.7)" strokeWidth={1.4} />
-            <text x={midX} y={arcY + 7} textAnchor="middle" fontSize={18} fontWeight={780} fill="var(--risk-strong)">{r.gapMinutes}′</text>
+            <circle cx={midX} cy={arcY} r={26} fill="rgba(48,38,22,0.94)" stroke="rgba(255,215,149,0.78)" strokeWidth={1.6} />
+            <text x={midX} y={arcY + 8} textAnchor="middle" fontSize={21} fontWeight={800} fill="var(--risk-strong)">{r.gapMinutes}′</text>
           </motion.g>
         );
       })}
 
       {/* 4 条线路被抽出标记（底部居中，与校区标签留有净空） */}
       {showRoutes && (
-        <motion.text x={W / 2} y={H - 8} textAnchor="middle" fontSize={19} fontWeight={640} fill="var(--risk-strong)"
+        <motion.text x={W / 2} y={H - 8} textAnchor="middle" fontSize={21} fontWeight={660} fill="var(--risk-strong)"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.7 }} {...LABEL_HALO}>
           跨校区赶场 × {vm.totals.rushWarningCount} · 每段 {vm.rushLinks[0]?.gapMinutes ?? 20} 分钟转场
         </motion.text>
