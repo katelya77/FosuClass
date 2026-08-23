@@ -55,12 +55,12 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
 
   return (
     <div className="relative h-full w-full">
-      <svg viewBox="0 0 980 700" className="h-full w-full" role="img" aria-label="校园教学要素关系图：课程、教师、班级、教室、时间与校区逐渐连接成校园时空场">
+      <svg viewBox="0 0 940 780" className="h-full w-full" role="img" aria-label="校园教学要素关系图：课程、教师、班级、教室、时间与校区逐渐连接成校园时空场">
         <motion.g
           initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
           animate={beats.brand <= 0 ? {} : { x: 40, y: -4, scale: 0.94, opacity: dimAtBrand ? 0.2 : 1 }}
           transition={{ delay: beats.brand, duration: 2.0, ease: EASE_OUT }}
-          style={{ transformOrigin: "470px 350px" }}
+          style={{ transformOrigin: "470px 390px" }}
         >
           {/* 关系线：基底 + 时间脉冲覆层（按叙事相位显影） */}
           {edges.map((e, i) => {
@@ -74,8 +74,8 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
               <g key={key}>
                 <motion.line
                   x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(186,204,224,0.44)"
-                  strokeWidth={1.4}
+                  stroke="rgba(198,216,236,0.6)"
+                  strokeWidth={1.8}
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
                   initial={{ pathLength: 0, opacity: 0 }}
@@ -84,8 +84,8 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
                 />
                 <motion.line
                   x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(138,238,201,0.78)"
-                  strokeWidth={1.9}
+                  stroke="rgba(138,238,201,0.92)"
+                  strokeWidth={2.4}
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
                   className="time-pulse"
@@ -101,15 +101,15 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
           {nodes.filter((n) => n.hub).map((n, i) => (
             <motion.g key={"pulse-" + n.id}>
               <motion.circle
-                cx={n.x} cy={n.y} r={28}
-                fill="none" stroke="#9CC2E2" strokeWidth={1.4}
-                initial={{ opacity: 0, r: 28 }}
-                animate={{ opacity: [0, 0.6, 0], r: [28, 52, 70] }}
+                cx={n.x} cy={n.y} r={34}
+                fill="none" stroke="#9CC2E2" strokeWidth={1.6}
+                initial={{ opacity: 0, r: 34 }}
+                animate={{ opacity: [0, 0.65, 0], r: [34, 62, 84] }}
                 transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.8, ease: "easeOut" }}
               />
               <motion.circle
-                cx={n.x} cy={n.y} r={16}
-                fill="rgba(156,194,226,0.2)"
+                cx={n.x} cy={n.y} r={18}
+                fill="rgba(156,194,226,0.22)"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: [0, 0.9, 0.35], scale: [0, 1.4, 1] }}
                 transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.6, ease: "easeOut" }}
@@ -129,22 +129,22 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
                 style={{ transformOrigin: n.x + "px " + n.y + "px" }}
               >
                 <motion.circle
-                  cx={n.x} cy={n.y} r={36}
+                  cx={n.x} cy={n.y} r={46}
                   fill="none" stroke={meta.color}
-                  strokeOpacity={0.55} strokeWidth={1.1}
+                  strokeOpacity={0.55} strokeWidth={1.2}
                   initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: [0, 0.55, 0], scale: [0.6, 1.65, 2.05] }}
+                  animate={{ opacity: [0, 0.55, 0], scale: [0.6, 1.6, 2.0] }}
                   transition={{ delay: beats.nodes + i * 0.13, duration: 1.4, ease: "easeOut" }}
                 />
                 <motion.g animate={{ y: [0, i % 2 ? -5 : 5, 0] }} transition={{ duration: 7 + (i % 5), repeat: Infinity, ease: "easeInOut" }}>
-                  <circle cx={n.x} cy={n.y} r={36} fill="var(--surface-elevated)" fillOpacity={0.96} stroke={meta.color} strokeOpacity={0.62} strokeWidth={1.5} />
-                  <circle cx={n.x} cy={n.y} r={36} fill="none" stroke={meta.color} strokeOpacity={0.14} strokeWidth={6} />
-                  <svg x={n.x - 14} y={n.y - 14} width={28} height={28}>
-                    <meta.Icon size={28} strokeWidth={1.8} color={meta.color} />
+                  <circle cx={n.x} cy={n.y} r={46} fill="var(--surface-elevated)" fillOpacity={0.96} stroke={meta.color} strokeOpacity={0.68} strokeWidth={1.7} />
+                  <circle cx={n.x} cy={n.y} r={46} fill="none" stroke={meta.color} strokeOpacity={0.15} strokeWidth={7} />
+                  <svg x={n.x - 17} y={n.y - 17} width={34} height={34}>
+                    <meta.Icon size={34} strokeWidth={1.8} color={meta.color} />
                   </svg>
                   <text
-                    x={n.x} y={n.y + 62} textAnchor="middle" fontSize={17} fontWeight={560}
-                    letterSpacing="1.5" fill="#CBD8E6" {...NODE_LABEL_HALO}
+                    x={n.x} y={n.y + 78} textAnchor="middle" fontSize={21} fontWeight={580}
+                    letterSpacing="2" fill="#D6E2EF" {...NODE_LABEL_HALO}
                   >{n.label}</text>
                 </motion.g>
               </motion.g>
@@ -154,9 +154,9 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
       </svg>
 
       {/* 图例 */}
-      <div className="absolute bottom-1 left-1 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="absolute bottom-1 left-1 flex flex-wrap items-center gap-x-6 gap-y-2">
         {(Object.keys(TYPE_META) as GraphNodeType[]).map((t) => (
-          <span key={t} className="flex items-center gap-2 text-[15px] tracking-[0.08em] text-mute">
+          <span key={t} className="flex items-center gap-2 text-[16px] tracking-[0.08em] text-mute">
             <span className="inline-block size-2 rounded-full" style={{ background: TYPE_META[t].color }} />
             {TYPE_META[t].label}
           </span>

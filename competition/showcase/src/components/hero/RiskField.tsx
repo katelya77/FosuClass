@@ -4,14 +4,14 @@ import { campusStyle } from "../../lib/campus";
 import { EASE_OUT } from "../../motion/motionTokens";
 
 const DAYS = ["周一", "周二", "周三", "周四", "周五"];
-/** Phase 2.6 构图：1500×640（≈2.34 宽高比，1920 容器内占宽 ~90%）。
+/** Phase 2.6 构图：1720×560（≈3.07 宽高比 ≈ 1728×562 实容器）——满幅无黑边。
  *  上层=周一~周五时间结构 · 中层=跨校区弧线（空间） · 下层=校区节点。
  *  时间差与空间弧线通过锚线连成一个系统，不再像两张分离的图。 */
-const W = 1500, H = 640;
-const LEFT = 20, COLW = (W - LEFT * 2) / 5;
-const TILE_TOP = 60, ROW_H = 72, TILE_H = 62;
-const CAMP_Y = 530;
-const CAMP_XS = ["校区A", "校区B", "校区C", "校区D"].map((_, i) => LEFT + COLW * (i + 0.5) + 130);
+const W = 1720, H = 560;
+const LEFT = 24, COLW = (W - LEFT * 2) / 5;
+const TILE_TOP = 52, ROW_H = 86, TILE_H = 74;
+const CAMP_Y = 460;
+const CAMP_XS = [300, 740, 1180, 1620];
 const CAMP_NAMES = ["校区A", "校区B", "校区C", "校区D"];
 const LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(5,8,13,0.85)", strokeWidth: 4, strokeLinejoin: "round" as const };
 
@@ -51,8 +51,8 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const x = LEFT + i * COLW;
         return (
           <motion.g key={d} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 + i * 0.1, duration: 0.7 }}>
-            <rect x={x + 6} y={TILE_TOP - 10} width={COLW - 12} height={ROW_H * 3 + 12} rx={18} fill="rgba(20,29,41,0.42)" stroke="rgba(168,184,204,0.1)" />
-            <text x={x + COLW / 2} y={32} textAnchor="middle" fontSize={19} fontWeight={640} fill={i === 4 ? "var(--brand-strong)" : "#C3D0DE"}>{d}</text>
+            <rect x={x + 7} y={TILE_TOP - 10} width={COLW - 14} height={ROW_H * 3 + 14} rx={20} fill="rgba(22,31,44,0.46)" stroke="rgba(168,184,204,0.12)" />
+            <text x={x + COLW / 2} y={30} textAnchor="middle" fontSize={21} fontWeight={660} fill={i === 4 ? "var(--brand-strong)" : "#D3DEEA"}>{d}</text>
           </motion.g>
         );
       })}
@@ -62,7 +62,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const day = b.weekday;
         const arr = byDay.get(day) ?? [];
         const idx = arr.findIndex((x) => x.startTime === b.startTime);
-        const x = LEFT + (day - 1) * COLW + 12;
+        const x = LEFT + (day - 1) * COLW + 14;
         const y = TILE_TOP + idx * ROW_H;
         const cx = x + (COLW - 24) / 2;
         tilePos[b.startTime + b.campusName] = { x: cx, y: y + TILE_H / 2 };
@@ -77,27 +77,27 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
             {showCampus && (
               <motion.line x1={cx} y1={y + TILE_H} x2={campusXOf(b.campusName)} y2={CAMP_Y}
                 stroke={cs.color}
-                strokeOpacity={active ? 0.85 : dim ? 0.1 : 0.26}
-                strokeWidth={active ? 2 : 1.1}
+                strokeOpacity={active ? 0.9 : dim ? 0.16 : 0.4}
+                strokeWidth={active ? 2.4 : 1.5}
                 strokeDasharray={active ? "none" : "3 5"}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 transition={{ delay: (active ? 0.1 : 1.2 + i * 0.05), duration: 0.6 }} />
             )}
             {/* 课程块：路径激活 = 同步高亮（描边 + 亮填充 + 微光） */}
             <motion.rect
-              x={x} y={y} width={COLW - 24} height={TILE_H} rx={12}
+              x={x} y={y} width={COLW - 28} height={TILE_H} rx={14}
               fill={active ? cs.bright : cs.dim}
-              stroke={active ? cs.color : cs.color + "55"}
-              strokeWidth={active ? 2.2 : 1}
+              stroke={active ? cs.color : cs.color + "66"}
+              strokeWidth={active ? 2.4 : 1.1}
               initial={false}
-              animate={{ opacity: dim && !active ? 0.24 : 1, filter: active ? "drop-shadow(0 0 14px rgba(79,214,166,0.35))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
+              animate={{ opacity: dim && !active ? 0.34 : 1, filter: active ? "drop-shadow(0 0 16px rgba(79,214,166,0.4))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
               transition={{ duration: 0.45, ease: EASE_OUT }}
             />
-            <text x={x + 12} y={y + 24} fontSize={16.5} fontWeight={650} fill="var(--text)" style={{ opacity: dim && !active ? 0.4 : 1 }}>{b.startTime}</text>
-            <text x={x + 12} y={y + 47} fontSize={14} fill={active ? "#DCE7F2" : cs.color} style={{ opacity: dim && !active ? 0.45 : 1 }}>{b.campusName} · {b.roomName}</text>
+            <text x={x + 14} y={y + 30} fontSize={19} fontWeight={680} fill="var(--text)" style={{ opacity: dim && !active ? 0.55 : 1 }}>{b.startTime}</text>
+            <text x={x + 14} y={y + 58} fontSize={15.5} fill={active ? "#E2ECF6" : cs.color} style={{ opacity: dim && !active ? 0.6 : 1 }}>{b.campusName} · {b.roomName}</text>
             {active && (
               <motion.rect
-                x={x - 3} y={y - 3} width={COLW - 18} height={TILE_H + 6} rx={14}
+                x={x - 4} y={y - 4} width={COLW - 20} height={TILE_H + 8} rx={16}
                 fill="none" stroke={cs.color} strokeOpacity={0.5} strokeWidth={1}
                 initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: [0, 0.8, 0.35], scale: 1 }}
                 transition={{ duration: 1.4, ease: EASE_OUT }}
@@ -111,7 +111,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
       {/* 校区节点行（空间层） */}
       {showCampus && (
         <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6, duration: 0.8 }}>
-          <line x1={LEFT + 40} y1={CAMP_Y} x2={W - LEFT - 40} y2={CAMP_Y} stroke="rgba(168,190,214,0.22)" strokeDasharray="2 6" />
+          <line x1={LEFT + 40} y1={CAMP_Y} x2={W - LEFT - 40} y2={CAMP_Y} stroke="rgba(168,190,214,0.26)" strokeDasharray="2 6" />
           {CAMP_NAMES.map((name, i) => {
             const cs = campusStyle(name);
             const hot = vm.rushLinks.some((r, ri) => ri < rushVisibleFrom && (r.fromCampus === name || r.toCampus === name));
@@ -119,13 +119,13 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
               <motion.g key={name} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.7 + i * 0.12, duration: 0.7, ease: EASE_OUT }}
                 style={{ transformOrigin: CAMP_XS[i] + "px " + CAMP_Y + "px" }}>
                 {hot && (
-                  <motion.circle cx={CAMP_XS[i]} cy={CAMP_Y} r={20} fill="none" stroke={cs.color} strokeWidth={1.4}
-                    initial={{ opacity: 0, r: 20 }} animate={{ opacity: [0, 0.7, 0.2], r: [20, 34, 42] }}
+                  <motion.circle cx={CAMP_XS[i]} cy={CAMP_Y} r={23} fill="none" stroke={cs.color} strokeWidth={1.6}
+                    initial={{ opacity: 0, r: 23 }} animate={{ opacity: [0, 0.75, 0.2], r: [23, 40, 50] }}
                     transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 0.8 }} />
                 )}
-                <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={19} fill="var(--surface-elevated)" stroke={cs.color} strokeOpacity={hot ? 0.95 : 0.6} strokeWidth={hot ? 2.2 : 1.5} />
-                <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={5.5} fill={cs.color} />
-                <text x={CAMP_XS[i]} y={CAMP_Y + 46} textAnchor="middle" fontSize={17} fontWeight={560} fill={hot ? "var(--text)" : "var(--text-muted)"} {...LABEL_HALO}>{name}</text>
+                <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={22} fill="var(--surface-elevated)" stroke={cs.color} strokeOpacity={hot ? 1 : 0.66} strokeWidth={hot ? 2.6 : 1.7} />
+                <circle cx={CAMP_XS[i]} cy={CAMP_Y} r={6.5} fill={cs.color} />
+                <text x={CAMP_XS[i]} y={CAMP_Y + 46} textAnchor="middle" fontSize={19} fontWeight={600} fill={hot ? "var(--text)" : "var(--text-muted)"} {...LABEL_HALO}>{name}</text>
               </motion.g>
             );
           })}
@@ -140,30 +140,34 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const x1 = CAMP_XS[fromIdx], x2 = CAMP_XS[toIdx];
         const y1 = CAMP_Y, y2 = CAMP_Y;
         const midX = (x1 + x2) / 2;
-        const arcY = CAMP_Y - 108;
+        const arcY = CAMP_Y - 120;
         const d = `M ${x1} ${y1} Q ${midX} ${arcY} ${x2} ${y2}`;
         return (
           <motion.g key={"rush-" + i}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: i * 0.5, duration: 0.7 }}>
-            <motion.path d={d} fill="none" stroke="rgba(246,205,138,0.95)" strokeWidth={2.4}
+            <motion.path d={d} fill="none" stroke="rgba(246,205,138,0.28)" strokeWidth={7}
+              strokeLinecap="round" style={{ filter: "blur(6px)" }}
+              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+              transition={{ delay: i * 0.5, duration: 0.9, ease: EASE_OUT }} />
+            <motion.path d={d} fill="none" stroke="rgba(246,205,138,0.95)" strokeWidth={3}
               strokeLinecap="round"
               initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
               transition={{ delay: i * 0.5, duration: 0.9, ease: EASE_OUT }} />
             {/* 时间脉冲沿弧传播 */}
-            <motion.circle r={4.5} fill="var(--risk-strong)" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.5 }}>
+            <motion.circle r={5.5} fill="var(--risk-strong)" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.5 }}>
               <animateMotion dur="1.4s" repeatCount="indefinite" path={d} />
             </motion.circle>
             {/* 20′ 时间差徽标（弧顶） */}
-            <circle cx={midX} cy={arcY} r={19} fill="var(--risk-dim)" stroke="rgba(246,205,138,0.6)" strokeWidth={1.2} />
-            <text x={midX} y={arcY + 6} textAnchor="middle" fontSize={16} fontWeight={750} fill="var(--risk-strong)">{r.gapMinutes}′</text>
+            <circle cx={midX} cy={arcY} r={22} fill="rgba(46,36,20,0.92)" stroke="rgba(246,205,138,0.7)" strokeWidth={1.4} />
+            <text x={midX} y={arcY + 7} textAnchor="middle" fontSize={18} fontWeight={780} fill="var(--risk-strong)">{r.gapMinutes}′</text>
           </motion.g>
         );
       })}
 
-      {/* 4 条线路被抽出标记（底部居中，不再与列头打架） */}
+      {/* 4 条线路被抽出标记（底部居中，与校区标签留有净空） */}
       {showRoutes && (
-        <motion.text x={W / 2} y={H - 12} textAnchor="middle" fontSize={17} fontWeight={600} fill="var(--risk-strong)"
+        <motion.text x={W / 2} y={H - 8} textAnchor="middle" fontSize={19} fontWeight={640} fill="var(--risk-strong)"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.7 }} {...LABEL_HALO}>
           跨校区赶场 × {vm.totals.rushWarningCount} · 每段 {vm.rushLinks[0]?.gapMinutes ?? 20} 分钟转场
         </motion.text>

@@ -23,7 +23,7 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
       <div className='mb-2.5 grid grid-cols-[112px_repeat(5,1fr)] gap-2'>
         <span />
         {DAYS.map((d) => (
-          <span key={d} className={'text-center text-[15px] tracking-widest ' + (intersection && d === '周四' ? 'font-semibold text-brand-strong' : 'text-mute')}>{d}</span>
+          <span key={d} className={'text-center text-[16px] tracking-widest ' + (intersection && d === '周四' ? 'font-semibold text-brand-strong' : 'text-mute')}>{d}</span>
         ))}
       </div>
       <div className='relative min-h-0 flex-1 rounded-2xl bg-canvas-deep/40 p-4'>
@@ -47,26 +47,26 @@ function LaneScanner({ showBusy, intersection, expanded }: { showBusy: boolean; 
             transition={{ delay: 1.2, duration: 2.4, ease: 'easeInOut' }}
           />
         )}
-        {/* Lanes：紧凑居中，不再纵向摊开 */}
-        <div className='relative z-10 flex h-full flex-col justify-center gap-4'>
+        {/* Lanes：三行撑满整个信息面（不再纵向摊开留空） */}
+        <div className='relative z-10 grid h-full grid-rows-3 gap-5'>
           {vm.lanes.map((lane, li) => (
-            <motion.div key={lane.teacher} initial={{ opacity: 0, y: 14 }} animate={intersection || showBusy ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.2 + li * 0.2, duration: 0.7, ease: EASE_OUT }} className='grid grid-cols-[112px_repeat(5,1fr)] items-center gap-2'>
-              <span className='truncate pr-2 text-right text-[15px] text-mute'>{lane.teacher}</span>
+            <motion.div key={lane.teacher} initial={{ opacity: 0, y: 14 }} animate={intersection || showBusy ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.2 + li * 0.2, duration: 0.7, ease: EASE_OUT }} className='grid grid-cols-[112px_repeat(5,1fr)] items-stretch gap-2'>
+              <span className='flex items-center justify-end pr-2 text-right text-[17px] text-mute'>{lane.teacher}</span>
               {DAYS.map((d, di) => {
                 const busy = lane.busy.find((b) => b.weekday === di + 1);
                 return (
-                  <div key={di} className='relative h-[52px] overflow-hidden rounded-xl border border-[rgba(168,184,204,0.14)] bg-canvas-deep'>
+                  <div key={di} className='relative h-full min-h-[56px] overflow-hidden rounded-xl border border-[rgba(168,184,204,0.16)] bg-canvas-deep'>
                     <motion.div
                       initial={{ scaleX: 0 }}
                       animate={showBusy && busy ? { scaleX: 1 } : { scaleX: 0 }}
                       transition={{ delay: 0.3 + di * 0.16, duration: 0.55, ease: EASE_OUT }}
-                      className='absolute inset-y-1 left-1 right-1 origin-left rounded-lg bg-[#0a0e15] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                      className='absolute inset-y-1 left-1 right-1 origin-left rounded-lg border border-[rgba(168,184,204,0.14)] bg-[#151f2c] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
                     >
-                      <span className='absolute inset-0 flex items-center justify-center text-[13.5px] text-faint'>已占用</span>
+                      <span className='absolute inset-0 flex items-center justify-center text-[15px] text-mute'>已占用</span>
                     </motion.div>
                     {/* 共同空闲：周四列这三格被点亮 */}
                     {intersection && d === '周四' && (
-                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className='absolute inset-0 flex items-center justify-center text-[14px] font-semibold text-brand-strong'>
+                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className='absolute inset-0 flex items-center justify-center text-[16px] font-semibold text-brand-strong'>
                         空闲
                       </motion.span>
                     )}
@@ -115,7 +115,7 @@ function RoomResolver({ rooms, recommend }: { rooms: boolean; recommend: boolean
       {/* 候选 chips（≥120 座） */}
       <motion.div initial={{ opacity: 0 }} animate={rooms ? { opacity: 1 } : {}} className='flex flex-wrap gap-2 px-1'>
         {vm.candidatesCap120.map((r) => (
-          <span key={r.name} className={'chip text-[13px] ' + (r.name === vm.recommended.name ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] text-brand' : '')}>
+          <span key={r.name} className={'chip text-[14px] ' + (r.name === vm.recommended.name ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] text-brand' : '')}>
             {r.name} · {r.capacity}座
           </span>
         ))}
@@ -126,15 +126,33 @@ function RoomResolver({ rooms, recommend }: { rooms: boolean; recommend: boolean
         initial={{ opacity: 0, y: 18, scale: 0.96 }}
         animate={recommend ? { opacity: 1, y: 0, scale: 1 } : {}}
         transition={{ duration: 0.9, ease: EASE_OUT }}
-        className='plane-hero depth-shift-near flex flex-1 flex-col justify-center gap-3 px-8 py-6'
+        className='plane-hero depth-shift-near flex min-h-0 flex-1 flex-col justify-between gap-3 px-8 py-6'
         style={{ boxShadow: recommend ? 'var(--shadow-glow-brand)' : 'var(--shadow-panel)' }}
       >
-        <p className='t-caption'>推荐空间 · rank 1</p>
-        <motion.p className='t-metric-lg' style={{ color: 'var(--brand-strong)' }} initial={{ opacity: 0 }} animate={recommend ? { opacity: 1 } : {}}>{vm.recommended.name}</motion.p>
+        <div>
+          <p className='t-caption'>推荐空间 · rank 1</p>
+          <motion.p className='t-metric-lg' style={{ color: 'var(--brand-strong)' }} initial={{ opacity: 0 }} animate={recommend ? { opacity: 1 } : {}}>{vm.recommended.name}</motion.p>
+        </div>
         <div className='flex flex-wrap gap-2'>
           <Badge tone='brand'>{vm.recommended.campusName}</Badge>
           <Badge>{vm.recommended.building}</Badge>
           <Badge>{vm.recommended.type} · {vm.recommended.capacity} 座</Badge>
+        </div>
+        {/* 容量门槛仪表：120 座 / 需求 ≥120 —— 用事实填空，而非留白 */}
+        <div>
+          <div className='mb-2 flex items-center justify-between'>
+            <p className='t-caption'>容量</p>
+            <p className='t-caption font-medium text-brand-strong'>{vm.recommended.capacity} 座 · 容量达标</p>
+          </div>
+          <div className='h-2 overflow-hidden rounded-full bg-[rgba(168,184,204,0.14)]'>
+            <motion.div
+              className='h-full rounded-full'
+              style={{ background: 'linear-gradient(90deg, var(--brand), var(--brand-strong))', boxShadow: '0 0 18px -4px rgba(79,214,166,0.6)' }}
+              initial={{ width: 0 }}
+              animate={recommend ? { width: '100%' } : {}}
+              transition={{ duration: 0.9, ease: EASE_OUT, delay: 0.25 }}
+            />
+          </div>
         </div>
       </motion.div>
     </div>

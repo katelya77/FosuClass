@@ -134,25 +134,42 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             </motion.span>
           </motion.div>
 
+          {/* 移动轨迹：源槽 → 目标槽 的定向弧（让"空网格"成为一场手术，而非空表格） */}
+          {moving && (
+            <svg aria-hidden className='pointer-events-none absolute inset-0 z-[4] h-full w-full' preserveAspectRatio='none' viewBox='0 0 100 100'>
+              <motion.path
+                d={`M ${src.left + COL_W / 2} ${src.top + ROW_H / 2} Q ${(src.left + dst.left) / 2} ${Math.min(src.top, dst.top) - 12} ${dst.left + COL_W / 2} ${dst.top + ROW_H / 2}`}
+                fill='none' stroke='rgba(138,238,201,0.6)' strokeWidth={2} strokeLinecap='round'
+                strokeDasharray='1.6 1.9' vectorEffect='non-scaling-stroke'
+                initial={{ opacity: 0, pathLength: 0 }} animate={{ opacity: 1, pathLength: 1 }}
+                transition={{ duration: 0.9, ease: EASE_OUT }}
+              />
+              <motion.circle r={0.9} fill='var(--brand-strong)'
+                animate={{ opacity: [0, 1, 0] }} transition={{ duration: 1.5, repeat: Infinity }} style={{ vectorEffect: 'non-scaling-stroke' }}>
+                <animateMotion dur='1.5s' repeatCount='indefinite' path={`M ${src.left + COL_W / 2} ${src.top + ROW_H / 2} Q ${(src.left + dst.left) / 2} ${Math.min(src.top, dst.top) - 12} ${dst.left + COL_W / 2} ${dst.top + ROW_H / 2}`} />
+              </motion.circle>
+            </svg>
+          )}
+
           {/* 移动中的课次块：spring + depth（提起离地 → 落下归位） */}
           <motion.div
-            className='absolute z-10 rounded-xl border-l-2 bg-raised px-3 py-2.5'
+            className='absolute z-10 rounded-xl border-l-2 bg-raised px-3.5 py-3'
             initial={false}
             animate={{
               left: 'calc(' + pos.left + '% + 6px)',
               top: 'calc(' + pos.top + '% + 6px)',
               width: 'calc(' + COL_W + '% - 12px)',
               height: 'calc(' + ROW_H + '% - 12px)',
-              y: phase === 'lift' ? -16 : 0,
-              scale: phase === 'lift' ? 1.07 : 1,
+              y: phase === 'lift' ? -18 : 0,
+              scale: phase === 'lift' ? 1.08 : 1,
               boxShadow: phase === 'lift' ? 'var(--shadow-lift)' : 'var(--shadow-panel)',
-              borderColor: phase === 'snap' ? 'color-mix(in srgb, var(--brand) 60%, transparent)' : 'var(--border-strong)',
+              borderColor: phase === 'snap' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'var(--border-strong)',
             }}
             transition={phase === 'lift' ? { ...SPRING.card } : { duration: 0.9, ease: EASE_OUT }}
             style={{ borderLeftColor: 'var(--brand)' }}
           >
-            <motion.p className='truncate text-[15px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
-            <p className='truncate text-[13px] text-mute'>
+            <motion.p className='truncate text-[16px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
+            <p className='truncate text-[14px] text-mute'>
               {phase === 'snap' ? vm.target.periodText + ' · ' + vm.autoResolve.suggested.name : vm.source.periodText + ' · ' + vm.source.roomName}
             </p>
           </motion.div>
@@ -177,12 +194,19 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
           initial={{ top: 20, opacity: 0 }} animate={{ top: 26 + revealed * 34, opacity: 0.55 }} transition={{ duration: 0.6, ease: EASE_OUT }}
           style={{ background: 'linear-gradient(180deg, transparent, rgba(138,238,201,0.14), transparent)' }} />
       )}
-      <ul className='min-h-0 flex-1 divide-y divide-[rgba(168,184,204,0.1)]'>
+      <ul className='relative min-h-0 flex-1 divide-y divide-[rgba(168,184,204,0.1)] pl-8'>
+        <span aria-hidden className='absolute bottom-3 left-[9px] top-3 w-px bg-[rgba(168,184,204,0.16)]' />
         {vm.constraints.map((row, i) => {
           const done = i < revealed;
           const current = i === revealed;
           return (
-            <li key={row.key} className='flex w-full items-center justify-between gap-3 py-[9px]'>
+            <li key={row.key} className='relative flex w-full items-center justify-between gap-3 py-[9px]'>
+              <span aria-hidden className='absolute -left-8 top-1/2 flex size-[15px] -translate-y-1/2 items-center justify-center rounded-full border text-[9.5px] tabular-nums'
+                style={done
+                  ? { borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', color: 'var(--success)', background: 'var(--success-dim)' }
+                  : { borderColor: 'rgba(168,184,204,0.3)', color: 'var(--text-faint)', background: 'var(--bg-deep)' }}>
+                {i + 1}
+              </span>
               <span className={'min-w-0 flex-1 truncate text-[15px] ' + (done ? 'text-ink' : current ? 'text-mute' : 'text-faint')}>{row.label}</span>
               <span className='flex items-center gap-2'>
                 {!done ? (
@@ -192,11 +216,11 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
                     transition={{ duration: 1.4, repeat: current ? Infinity : 0, ease: 'easeInOut' }}
                   >· · ·</motion.span>
                 ) : row.status === 'warn' ? (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13.5px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
+                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[14px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
                     <TriangleAlert size={13} /> 提示
                   </motion.span>
                 ) : (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13.5px] font-semibold text-ok' style={{ borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', background: 'var(--success-dim)' }}>
+                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[14px] font-semibold text-ok' style={{ borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', background: 'var(--success-dim)' }}>
                     <Check size={13} /> PASS
                   </motion.span>
                 )}
@@ -226,16 +250,16 @@ function CandidateResolver({ stage }: { stage: 'idle' | 'funnel' | 'selected' })
             const survivor = survivors.includes(n);
             const isPick = n === vm.autoResolve.suggested.name;
             const idleDim = stage === 'idle';
-            const hide = stage === 'selected' && !survivor;
+            const dimmed = stage !== 'idle' && !survivor;
             return (
               <motion.span
                 key={n}
-                className='room-token rounded-lg border px-2 py-1 font-mono text-[12px]'
+                className='room-token rounded-lg border px-2 py-1 font-mono text-[12.5px]'
                 initial={{ opacity: 1, scale: 1 }}
                 animate={{
-                  opacity: isPick ? 1 : hide ? 0.12 : idleDim ? 0.4 : 0.92,
-                  scale: isPick && stage === 'selected' ? 1.07 : 1,
-                  borderColor: isPick && stage !== 'idle' ? 'color-mix(in srgb, var(--brand) 60%, transparent)' : 'rgba(168,184,204,0.2)',
+                  opacity: isPick ? 1 : dimmed ? 0.26 : idleDim ? 0.42 : 0.96,
+                  scale: isPick && stage === 'selected' ? 1.1 : 1,
+                  borderColor: isPick && stage !== 'idle' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'rgba(168,184,204,0.2)',
                   color: isPick && stage !== 'idle' ? 'var(--brand-strong)' : idleDim ? 'var(--text-faint)' : 'var(--text-muted)',
                 }}
                 transition={{ duration: 0.5, delay: stage === 'selected' ? i * 0.04 : 0, ease: EASE_OUT }}
@@ -243,14 +267,19 @@ function CandidateResolver({ stage }: { stage: 'idle' | 'funnel' | 'selected' })
             );
           })}
         </div>
-        {/* 自动选定 A1-201：ElectricBorder 高潮 */}
+        {/* 自动选定 A1-201：ElectricBorder 高潮（整幅主角，不再挤压成小卡） */}
         {stage === 'selected' && (
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE_OUT }} className='mt-3 max-w-[340px]'>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE_OUT }} className='mt-3'>
             <ElectricBorder active borderRadius={16} chaos={0.15} speed={1.1}>
-              <div className='rounded-[13px] bg-surface px-5 py-4'>
-                <p className='t-caption mb-0.5'>自动选定 · rank 1</p>
-                <p className='text-[30px] font-bold tabular-nums' style={{ color: 'var(--brand-strong)' }}>{vm.autoResolve.suggested.name}</p>
-                <p className='t-caption'>{vm.autoResolve.suggested.campusName} · {vm.autoResolve.suggested.capacity} 座阶梯</p>
+              <div className='flex items-center justify-between gap-5 rounded-[13px] bg-surface px-6 py-4'>
+                <div>
+                  <p className='t-caption mb-0.5'>自动选定 · rank 1</p>
+                  <p className='text-[36px] font-bold leading-none tabular-nums' style={{ color: 'var(--brand-strong)' }}>{vm.autoResolve.suggested.name}</p>
+                </div>
+                <div className='text-right'>
+                  <p className='t-caption'>{vm.autoResolve.suggested.campusName}</p>
+                  <p className='t-caption'>{vm.autoResolve.suggested.capacity} 座 · 满足容量</p>
+                </div>
               </div>
             </ElectricBorder>
           </motion.div>

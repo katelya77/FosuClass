@@ -36,8 +36,8 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
   return (
     <div className="stage-safe flex">
       <SceneCamera shot={{ scale: camScale }} className="flex w-full">
-        {/* 左：教学时空场 */}
-        <div className="relative flex min-w-0 flex-1 flex-col pr-16">
+        {/* 左：教学时空场（占满除品牌外的全部画布） */}
+        <div className="relative flex min-w-0 flex-1 flex-col pr-10">
           <RiseIn delay={0.4} className="mb-2">
             <div className="flex items-center gap-3">
               <span className="inline-block h-px w-8 bg-[var(--brand)] opacity-80" />
@@ -56,7 +56,7 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.7, ease: EASE_OUT }}
-                  className="pointer-events-none absolute right-0 top-2 max-w-[340px] text-right"
+                  className="pointer-events-none absolute right-0 top-2 max-w-[360px] text-right"
                 >
                   <span className="hairline mb-3 ml-auto block w-16" />
                   <p className="t-body leading-relaxed text-mute">{NARRATION[narrationIndex]}</p>
@@ -78,7 +78,7 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
         </div>
 
         {/* 右：品牌核心（出现时处于绝对视觉中心：聚光 + sharp + 网络已降至 20%） */}
-        <div className="relative flex w-[760px] shrink-0 items-center pl-14">
+        <div className="relative flex w-[680px] shrink-0 items-center pl-12">
           {brandShown && (
             <motion.div
               aria-hidden
@@ -95,7 +95,7 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: BEATS.brand + 1.6, duration: 0.9, ease: EASE_OUT }}
-            className="absolute bottom-2 left-14 flex items-center gap-3"
+            className="absolute bottom-2 left-12 flex items-center gap-3"
           >
             <span className="chip">Multi-Agent</span>
             <span className="chip">CampusTools</span>

@@ -77,7 +77,7 @@ export function HeroRisk(): JSX.Element {
           <p className='t-body text-mute'>{C.risk.summary}</p>
           <div className='mt-2 flex items-center gap-2'>
             {vm.perWeekRisk.map((w) => (
-              <span key={w.week} className='chip text-[13px] tabular-nums'>
+              <span key={w.week} className='chip text-[14px] tabular-nums'>
                 W{w.week} · 冲突{w.conflictCount} / 赶场{w.rushWarningCount}
               </span>
             ))}

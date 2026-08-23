@@ -14,11 +14,14 @@ export function ClosingScene(): JSX.Element {
       {/* 稳定时空场背景：低存在感，安静呼吸 */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.16]"
-        initial={{ opacity: 0 }} animate={{ opacity: 0.16 }} transition={{ duration: 2.2, ease: EASE_OUT }}
+        className="pointer-events-none absolute inset-0 opacity-[0.13]"
+        initial={{ opacity: 0 }} animate={{ opacity: 0.13 }} transition={{ duration: 2.2, ease: EASE_OUT }}
       >
         <CampusTemporalGraph beats={STABLE} />
       </motion.div>
+      {/* 中央净空：让品牌始终处于无干扰的视觉中心（节点/连线不再与标题打架） */}
+      <div aria-hidden className="pointer-events-none absolute inset-0"
+        style={{ background: "radial-gradient(46% 42% at 50% 50%, rgba(6,10,16,0.92), rgba(6,10,16,0.6) 54%, transparent 78%)" }} />
 
       <div className="relative flex flex-col items-center gap-7 text-center">
         <BrandLockup align="center" delay={0.7} />

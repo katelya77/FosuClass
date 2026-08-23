@@ -29,7 +29,7 @@ function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolea
             key={r.teacherId}
             initial={{ opacity: 0, x: -22, scale: 0.92 }}
             animate={entered
-              ? { opacity: extracted && !isTop ? 0.3 : 1, x: 0, scale: depth, filter: extracted && !isTop ? 'saturate(0.55)' : 'saturate(1)' }
+              ? { opacity: extracted && !isTop ? 0.4 : 1, x: 0, scale: depth, filter: extracted && !isTop ? 'saturate(0.72)' : 'saturate(1)' }
               : { opacity: 0, x: -22, scale: 0.92 }}
             transition={extracted
               ? { duration: 0.45, ease: EASE_OUT }
@@ -38,9 +38,9 @@ function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolea
               (isTop && extracted ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] bg-[var(--brand-dim)] shadow-[var(--glow-brand)]' : 'border-[rgba(168,184,204,0.12)] bg-canvas-deep/55')}
             style={{ transformOrigin: 'left center' }}
           >
-            <span className={'w-7 text-right text-[15px] tabular-nums ' + (isTop ? 'font-bold text-brand-strong' : 'text-mute')}>{r.rank}</span>
-            <span className={'w-24 text-[15.5px] ' + (isTop ? 'font-semibold text-ink' : 'text-mute')}>{r.teacherId}</span>
-            <div className='h-[10px] min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(168,184,204,0.14)]'>
+            <span className={'w-7 text-right text-[16px] tabular-nums ' + (isTop ? 'font-bold text-brand-strong' : 'text-mute')}>{r.rank}</span>
+            <span className={'w-24 text-[16px] ' + (isTop ? 'font-semibold text-ink' : 'text-mute')}>{r.teacherId}</span>
+            <div className='h-[12px] min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(168,184,204,0.16)]'>
               <motion.div
                 className='h-full rounded-full'
                 style={{ background: isTop ? 'var(--brand)' : 'color-mix(in srgb, var(--brand-secondary) 62%, transparent)' }}
@@ -49,7 +49,7 @@ function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolea
                 transition={{ delay: 0.3 + i * 0.13, duration: 0.75, ease: EASE_OUT }}
               />
             </div>
-            <span className='w-[100px] text-right text-[14px] tabular-nums text-mute'>{r.lessons}课/{r.periods}课时</span>
+            <span className='w-[112px] text-right text-[15px] tabular-nums text-mute'>{r.lessons}课/{r.periods}课时</span>
             {r.tied ? <span className='chip px-1.5 py-0 text-[12px]'>并列</span> : <span className='w-7' />}
           </motion.div>
         );
@@ -90,22 +90,24 @@ export function HeroInsight(): JSX.Element {
           <RankDepth entered={cascade} extracted={top1} />
         </motion.div>
 
-        {/* 下钻：镜头推进式的证据链 */}
-        <div className='relative flex min-h-0 min-w-0 flex-col gap-4'>
-          <motion.nav initial={{ opacity: 0, y: -6 }} animate={breadcrumb ? { opacity: 1, y: 0 } : {}} className='flex items-center gap-1.5 text-[14.5px]'>
-            <span className='text-faint'>{C.insight.breadcrumbRoot}</span>
-            <ChevronRight size={14} className='text-faint' />
-            <span className='text-mute'>{C.insight.breadcrumbMid}</span>
-            <ChevronRight size={14} className='text-faint' />
-            <span className='font-medium text-brand'>{vm.top1.name}</span>
-          </motion.nav>
+        {/* 下钻：镜头推进式的证据链（内容垂直居中，杜绝 right 象限空缺；未到节拍不占位） */}
+        <div className='relative flex min-h-0 min-w-0 flex-col justify-center gap-4'>
+          {breadcrumb && (
+            <motion.nav initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className='flex items-center gap-1.5 text-[14.5px]'>
+              <span className='text-faint'>{C.insight.breadcrumbRoot}</span>
+              <ChevronRight size={14} className='text-faint' />
+              <span className='text-mute'>{C.insight.breadcrumbMid}</span>
+              <ChevronRight size={14} className='text-faint' />
+              <span className='font-medium text-brand'>{vm.top1.name}</span>
+            </motion.nav>
+          )}
 
           {/* Top1 锚点：56 / 112（Surface 2 hero focus） */}
           <motion.div
             initial={{ opacity: 0, y: 14, scale: 0.92 }}
             animate={top1 ? { opacity: 1, y: 0, scale: 1 } : {}}
             transition={{ duration: 0.9, ease: EASE_OUT }}
-            className='plane-hero depth-shift-near flex items-center justify-around px-6 py-5'
+            className='plane-hero depth-shift-near flex items-center justify-around px-8 py-6'
             style={{ boxShadow: top1 ? 'var(--shadow-glow-brand)' : 'var(--shadow-panel)' }}
           >
             <div className='text-center'>
@@ -119,41 +121,46 @@ export function HeroInsight(): JSX.Element {
           </motion.div>
 
           {/* 周课次 temporal slab：柱体加高、数值加大 */}
-          <motion.div initial={{ opacity: 0 }} animate={schedule ? { opacity: 1 } : {}} className='plane px-5 py-4'>
-            <p className='t-caption mb-3'>{C.insight.weeksLabel}</p>
-            <div className='flex items-end justify-between gap-4'>
-              {vm.drilldownWeeks.map((w, i) => (
-                <div key={w.week} className='flex flex-1 flex-col items-center gap-2'>
-                  <div className='flex w-full items-end justify-center' style={{ height: 84 }}>
-                    <motion.div
-                      className='w-full origin-bottom rounded-t-lg'
-                      style={{
-                        height: 78,
-                        background: 'linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, transparent), color-mix(in srgb, var(--brand) 40%, transparent))',
-                        boxShadow: '0 0 24px -8px rgba(79,214,166,0.5)',
-                      }}
-                      initial={{ scaleY: 0 }}
-                      animate={schedule ? { scaleY: 1 } : {}}
-                      transition={{ delay: i * 0.16, duration: 0.6, ease: EASE_OUT }}
-                    />
+          {schedule && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className='plane px-5 py-4'>
+              <p className='t-caption mb-3'>{C.insight.weeksLabel}</p>
+              <div className='flex items-end justify-between gap-4'>
+                {vm.drilldownWeeks.map((w, i) => (
+                  <div key={w.week} className='flex flex-1 flex-col items-center gap-2'>
+                    <span className='text-[20px] font-bold tabular-nums text-ink'>{w.lessons}</span>
+                    <div className='flex w-full items-end justify-center' style={{ height: 118 }}>
+                      <motion.div
+                        className='w-full origin-bottom rounded-t-lg'
+                        style={{
+                          height: 112,
+                          background: 'linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, transparent), color-mix(in srgb, var(--brand) 40%, transparent))',
+                          boxShadow: '0 0 28px -8px rgba(79,214,166,0.55)',
+                        }}
+                        initial={{ scaleY: 0 }}
+                        animate={schedule ? { scaleY: 1 } : {}}
+                        transition={{ delay: i * 0.16, duration: 0.6, ease: EASE_OUT }}
+                      />
+                    </div>
+                    <span className='text-[15px] tabular-nums text-mute'>W{w.week} · {w.lessons}课</span>
                   </div>
-                  <span className='text-[14px] tabular-nums text-mute'>W{w.week} · {w.lessons}课</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {/* 风险摘要：下钻终点（与 Risk 场景同色语言） */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={risk ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8, ease: EASE_OUT }}
-            className='plane flex items-center justify-between gap-4 px-5 py-4'
-            style={{ borderLeft: '3px solid var(--risk)', boxShadow: 'var(--shadow-panel), 0 0 30px -10px rgba(229,181,115,0.35)' }}>
-            <div>
-              <p className='text-[17px] font-semibold text-ink'>课程冲突 {vm.riskSummary.conflictCount} 处 · 跨校区赶场 {vm.riskSummary.rushWarningCount} 处</p>
-              <p className='t-caption mt-1'>样例：{vm.riskSummary.sampleRoute} · {vm.riskSummary.gapMinutes} 分钟转场</p>
-            </div>
-            <Badge tone='risk'>待治理</Badge>
-          </motion.div>
+          {risk && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: EASE_OUT }}
+              className='plane flex items-center justify-between gap-4 px-5 py-4'
+              style={{ borderLeft: '3px solid var(--risk)', boxShadow: 'var(--shadow-panel), 0 0 30px -10px rgba(229,181,115,0.35)' }}>
+              <div>
+                <p className='text-[17px] font-semibold text-ink'>课程冲突 {vm.riskSummary.conflictCount} 处 · 跨校区赶场 {vm.riskSummary.rushWarningCount} 处</p>
+                <p className='t-caption mt-1'>样例：{vm.riskSummary.sampleRoute} · {vm.riskSummary.gapMinutes} 分钟转场</p>
+              </div>
+              <Badge tone='risk'>待治理</Badge>
+            </motion.div>
+          )}
         </div>
       </div>
 

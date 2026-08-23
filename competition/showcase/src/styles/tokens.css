@@ -13,13 +13,13 @@
   --surface: #101823;
   --surface-elevated: #18232f;
   --surface-glass: rgba(26, 36, 49, 0.5);
-  --border: rgba(168, 184, 204, 0.2);
-  --border-strong: rgba(178, 195, 216, 0.4);
+  --border: rgba(178, 194, 214, 0.24);
+  --border-strong: rgba(188, 205, 226, 0.46);
 
   /* ---- 文本（中文录屏优先；muted/faint 相位 2.5 各提亮约 15%） ---- */
   --text: #f2f6fa;
-  --text-muted: #b3c1d1;
-  --text-faint: #8494a8;
+  --text-muted: #b9c7d8;
+  --text-faint: #8fa2b6;
   --text-ink: #0a1220; /* 高对比底板上的深字 */
 
   /* ---- 品牌：青绿（校园自然绿）× 低饱和空间蓝 ---- */
