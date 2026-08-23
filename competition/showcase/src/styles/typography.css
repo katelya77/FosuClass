@@ -1,49 +1,84 @@
 /* 中文第一视觉语言的排版系统；禁止 break-all */
+
+/* 主标题：更大重量 + 更紧字距 + 轻微负字距 */
 .t-hero {
   font-family: var(--font-sans);
   font-size: var(--fs-hero);
-  line-height: 1.22;
-  font-weight: 650;
-  letter-spacing: 0.03em;
+  line-height: 1.14;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  font-variant-numeric: tabular-nums;
 }
 .t-section {
   font-size: var(--fs-section);
+  line-height: 1.24;
+  font-weight: 650;
+  letter-spacing: -0.006em;
+}
+.t-title {
+  font-size: var(--fs-title);
   line-height: 1.3;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 650;
+  letter-spacing: -0.004em;
 }
 .t-card-title {
   font-size: var(--fs-card);
-  line-height: 1.45;
-  font-weight: 600;
+  line-height: 1.4;
+  font-weight: 620;
 }
 .t-body {
   font-size: var(--fs-body);
-  line-height: 1.85; /* 中文行高放松 */
+  line-height: 1.62; /* 中文行高：1.35~1.55 的说明留一点可读余量 */
   font-weight: 400;
+  letter-spacing: 0.004em;
 }
 .t-caption {
   font-size: var(--fs-caption);
-  line-height: 1.7;
-  letter-spacing: 0.06em;
+  line-height: 1.55;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
 }
 .t-kicker {
-  font-size: 12px;
-  line-height: 1.6;
-  font-weight: 500;
-  letter-spacing: 0.34em; /* 少量英文 kicker 用大字距制造气质 */
+  font-size: var(--fs-kicker);
+  line-height: 1.5;
+  font-weight: 520;
+  letter-spacing: 0.38em; /* 少量英文 kicker 用大字距制造气质 */
   text-transform: uppercase;
+  color: var(--text-faint);
 }
 .t-metric {
   font-size: var(--fs-metric);
-  line-height: 1.1;
-  font-weight: 640;
+  line-height: 1.02;
+  font-weight: 680;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+  letter-spacing: -0.015em;
+}
+.t-metric-lg {
+  font-size: var(--fs-metric-lg);
+  line-height: 0.98;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
 }
 .t-label {
   font-size: var(--fs-caption);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--text-muted);
+}
+/* 数字/数据/ID/时间：仅这些角色用 mono */
+.t-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+/* 大字距英文小标 */
+.t-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 520;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }

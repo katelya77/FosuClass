@@ -1,48 +1,77 @@
 /* ============================================================
    校园智序 · 小序 — Temporal Campus OS 设计 Token
-   唯一颜色/圆角/阴影/动效常量来源；组件内禁止散落 magic value
+   唯一颜色/圆角/阴影/动效/材质常量来源；组件内禁止散落 magic value
    ============================================================ */
 :root {
   color-scheme: dark;
 
-  /* ---- 表面 ---- */
-  --bg: #0b0f14;
-  --bg-deep: #07090d;
-  --surface: #10151c;
-  --surface-elevated: #161c26;
-  --border: rgba(154, 170, 190, 0.16);
-  --border-strong: rgba(154, 170, 190, 0.3);
+  /* ---- 表面与底（更深的底 + 更丰富的内部照亮） ---- */
+  --bg: #0a0e14;
+  --bg-deep: #05070c;
+  --bg-raise: #0e141d;
+  --surface: #0f1620;
+  --surface-elevated: #16202c;
+  --surface-glass: rgba(22, 31, 43, 0.42);
+  --border: rgba(154, 170, 190, 0.15);
+  --border-strong: rgba(160, 178, 200, 0.32);
 
-  /* ---- 文本（中文录屏优先，不用纯白） ---- */
-  --text: #e9eef4;
-  --text-muted: #94a2b2;
-  --text-faint: #5f6d7d;
+  /* ---- 文本（中文录屏优先，不用纯白；正文不低于 14px 母版） ---- */
+  --text: #eaf0f6;
+  --text-muted: #9aa9ba;
+  --text-faint: #68778a;
+  --text-ink: #09101a; /* 高对比底板上的深字 */
 
-  /* ---- 品牌：青绿（校园自然绿）× 低饱和蓝 ---- */
-  --brand: #46c79a;
-  --brand-strong: #6adcb2;
-  --brand-dim: rgba(70, 199, 154, 0.13);
-  --brand-secondary: #6f99c5;
-  --brand-secondary-dim: rgba(111, 153, 197, 0.12);
+  /* ---- 品牌：青绿（校园自然绿）× 低饱和空间蓝 ---- */
+  --brand: #45c99a;
+  --brand-strong: #7ce4bd;
+  --brand-dim: rgba(69, 201, 154, 0.14);
+  --brand-dim-strong: rgba(69, 201, 154, 0.24);
+  --brand-secondary: #6f9dca;
+  --brand-secondary-dim: rgba(111, 157, 202, 0.13);
 
   /* ---- 语义色：风险 / 危险 / 成功 ---- */
-  --risk: #d9a05b;
-  --risk-dim: rgba(217, 160, 91, 0.13);
-  --danger: #ce6a6a;
-  --danger-dim: rgba(206, 106, 106, 0.13);
-  --success: #58be8f;
+  --risk: #dcab68;
+  --risk-strong: #f0c178;
+  --risk-dim: rgba(220, 171, 104, 0.14);
+  --danger: #d06b6b;
+  --danger-dim: rgba(208, 107, 107, 0.14);
+  --success: #5ac493;
+  --success-dim: rgba(90, 196, 147, 0.14);
+
+  /* ---- 场景氛围色（每个 Scene 的世界底色；全部低饱和） ---- */
+  --atmos-brand: #45c99a;
+  --atmos-brand-dim: rgba(69, 201, 154, 0.10);
+  --atmos-cool: #6f9dca;
+  --atmos-cool-dim: rgba(111, 157, 202, 0.10);
+  --atmos-ice: #8fb6d9;
+  --atmos-ice-dim: rgba(143, 182, 217, 0.09);
+  --atmos-warm: #e8bd86;
+  --atmos-warm-dim: rgba(232, 189, 134, 0.09);
+  --atmos-deep: #3f6f9e;
+  --atmos-deep-dim: rgba(63, 111, 158, 0.12);
+
+  /* ---- 材质发光 ---- */
+  --glow-brand: 0 0 0 1px rgba(69, 201, 154, 0.30), 0 0 22px -4px rgba(69, 201, 154, 0.34);
+  --glow-cool: 0 0 0 1px rgba(111, 157, 202, 0.30), 0 0 22px -4px rgba(111, 157, 202, 0.32);
+  --glow-warm: 0 0 0 1px rgba(232, 189, 134, 0.30), 0 0 22px -4px rgba(232, 189, 134, 0.34);
+  --glow-deep: 0 0 0 1px rgba(63, 111, 158, 0.30), 0 0 26px -4px rgba(63, 111, 158, 0.36);
 
   /* ---- 圆角 ---- */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-xs: 4px;
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --radius-2xl: 34px;
 
-  /* ---- 阴影（克制，不发光） ---- */
-  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 14px 44px rgba(0, 0, 0, 0.36);
-  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.28);
+  /* ---- 阴影（克制但立体） ---- */
+  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 20px 52px rgba(0, 0, 0, 0.44);
+  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 12px 30px rgba(0, 0, 0, 0.36);
+  --shadow-depth: 0 34px 90px rgba(0, 0, 0, 0.52);
+  --shadow-glow-brand: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 30px -6px rgba(69, 201, 154, 0.32);
 
   /* ---- 间距 / 安全区（1920×1080 母版） ---- */
+  --space-0: 2px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -50,28 +79,42 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
-  --safe-x: 80px;
-  --safe-y: 56px;
+  --space-8: 64px;
+  --safe-x: 96px;
+  --safe-y: 64px;
 
   /* ---- 字体：系统可靠中文栈，不提交字体文件 ---- */
   --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui,
     -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
 
-  /* ---- 字号（录屏基准 1920×1080） ---- */
-  --fs-hero: clamp(48px, 3.4vw, 68px);
-  --fs-section: clamp(30px, 2.1vw, 42px);
-  --fs-title: 24px;
-  --fs-card: 20px;
+  /* ---- 字号（录屏基准 1920×1080；正文不低于 14px 母版） ---- */
+  --fs-hero: clamp(54px, 4.4vw, 88px);
+  --fs-section: clamp(32px, 2.6vw, 52px);
+  --fs-title: 27px;
+  --fs-card: 21px;
   --fs-body: 17px;
-  --fs-caption: 13.5px;
-  --fs-metric: clamp(34px, 2.6vw, 50px);
+  --fs-caption: 15px;
+  --fs-metric: clamp(38px, 3.4vw, 68px);
+  --fs-metric-lg: clamp(52px, 5vw, 96px);
+  --fs-kicker: 13px;
 
-  /* ---- 动效：稳、慢、可读 ---- */
-  --dur-fast: 180ms;
-  --dur-base: 320ms;
-  --dur-slow: 700ms;
-  --dur-scene: 900ms;
+  /* ---- 动效：全局统一语言（避免每个组件散落 timing） ---- */
+  --dur-fast: 240ms;
+  --dur-standard: 520ms;
+  --dur-scene: 950ms;
+  --dur-cinematic: 1450ms;
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-io: cubic-bezier(0.83, 0, 0.17, 1);
+
+  /* ---- 景深 / 模糊 ---- */
+  --blur-xs: 3px;
+  --blur-sm: 7px;
+  --blur-md: 15px;
+  --blur-lg: 30px;
+
+  /* ---- 焦散 / 材质微光 ---- */
+  --grain-opacity: 0.05;
+  --glow-lift: 8px;
 }

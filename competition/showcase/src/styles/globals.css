@@ -3,6 +3,7 @@
 @theme inline {
   --color-canvas: var(--bg);
   --color-canvas-deep: var(--bg-deep);
+  --color-canvas-raise: var(--bg-raise);
   --color-surface: var(--surface);
   --color-raised: var(--surface-elevated);
   --color-line: var(--border);
@@ -40,7 +41,7 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   word-break: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
 }
 
 ::selection {
@@ -52,7 +53,12 @@ body {
 .stage {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(120% 105% at 50% -8%, #0d1520 0%, var(--bg) 38%, var(--bg-deep) 100%);
+  overflow: hidden;
+}
+.stage[data-mode="record"] {
+  cursor: none;
 }
 .stage-safe {
   position: absolute;
@@ -62,22 +68,98 @@ body {
   bottom: var(--safe-y);
 }
 
-/* ---- 面板原语 ---- */
+/* ---- 材质：玻璃 / 面板 / 景深 ---- */
 .panel {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: linear-gradient(180deg, rgba(22, 31, 43, 0.62), rgba(15, 22, 32, 0.55));
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(14px) saturate(1.05);
 }
 .panel-raised {
-  background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
-  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(28, 38, 52, 0.72), rgba(18, 26, 37, 0.62));
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+.panel-glass {
+  background: var(--surface-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(22px) saturate(1.14);
 }
 .hairline {
   height: 1px;
   background: linear-gradient(90deg, var(--border-strong), transparent);
+}
+/* 顶部高光线：让玻璃/面板有一点材质反光 */
+.material-topline {
+  position: relative;
+}
+.material-topline::before {
+  content: "";
+  position: absolute;
+  inset: 0 10% auto 10%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ---- 场景氛围：让整个画面处在场景自己的世界里 ---- */
+.scene-atmos {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transition: background 1.2s var(--ease-in-out-soft);
+}
+
+/* ---- 网格扫描（轻量 CSS 化 GridScan 意向） ---- */
+.ambient-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(154, 170, 190, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(154, 170, 190, 0.045) 1px, transparent 1px);
+  background-size: 68px 68px;
+  mask-image: radial-gradient(120% 110% at 50% 42%, rgba(0,0,0,0.9), transparent 78%);
+  -webkit-mask-image: radial-gradient(120% 110% at 50% 42%, rgba(0,0,0,0.9), transparent 78%);
+}
+/* 扫描主光带：网格上的空间扫描线 */
+.scan-sweep {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.scan-sweep .scan-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 220px;
+  top: -30%;
+  background: linear-gradient(180deg, transparent, rgba(124, 228, 189, 0.045), rgba(124, 228, 189, 0.12), rgba(124, 228, 189, 0.045), transparent);
+  animation: scanDrift 16s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scanDrift {
+  0% { transform: translateY(-8%); }
+  50% { transform: translateY(52%); }
+  100% { transform: translateY(-8%); }
+}
+
+/* ---- 焦散噪点 ---- */
+.grain {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
 }
 
 /* ---- 徽章 ---- */
@@ -85,13 +167,14 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 3px 12px;
+  min-height: 30px;
+  padding: 4px 13px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-elevated) 60%, transparent);
-  font-size: 12.5px;
-  letter-spacing: 0.05em;
+  background: color-mix(in srgb, var(--surface-elevated) 62%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 13px;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -103,21 +186,21 @@ button {
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 .ctrl-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 44px; /* 可访问性最小高度 */
-  min-width: 44px;
-  padding: 0 14px;
+  min-height: 40px; /* 可访问性最小高度 */
+  min-width: 40px;
+  padding: 0 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13.5px;
   cursor: pointer;
   transition:
     color var(--dur-fast) var(--ease-out-soft),
@@ -135,7 +218,7 @@ button {
   background: var(--brand-dim);
 }
 
-/* 参考线（仅开发模式可开） */
+/* ---- 参考线（仅开发模式可开） ---- */
 .guide-overlay {
   position: absolute;
   inset: 0;
@@ -145,19 +228,16 @@ button {
 .guide-safe-rect {
   position: absolute;
   inset: 0;
-  outline: 1px dashed rgba(111, 153, 197, 0.55);
-  outline-offset: calc(var(--safe-y) * -1) ;
-  outline: none;
-  border-left: 1px dashed rgba(111, 153, 197, 0.5);
-  border-right: 1px dashed rgba(111, 153, 197, 0.5);
-  border-top: 1px dashed rgba(111, 153, 197, 0.5);
-  border-bottom: 1px dashed rgba(111, 153, 197, 0.5);
+  border-left: 1px dashed rgba(111, 157, 202, 0.5);
+  border-right: 1px dashed rgba(111, 157, 202, 0.5);
+  border-top: 1px dashed rgba(111, 157, 202, 0.5);
+  border-bottom: 1px dashed rgba(111, 157, 202, 0.5);
   margin: var(--safe-y) var(--safe-x);
 }
 .guide-center-x,
 .guide-center-y {
   position: absolute;
-  background: rgba(111, 153, 197, 0.25);
+  background: rgba(111, 157, 202, 0.25);
 }
 .guide-center-x {
   left: 50%;
@@ -171,6 +251,7 @@ button {
   right: 0;
   height: 1px;
 }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

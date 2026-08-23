@@ -3,7 +3,7 @@ import { parseShowcaseUrl } from './urlMode';
 
 describe('parseShowcaseUrl', () => {
   it('默认：dev + fixture + 不自动播放', () => {
-    expect(parseShowcaseUrl('')).toEqual({ mode: 'dev', data: 'fixture', autoplay: false });
+    expect(parseShowcaseUrl('')).toMatchObject({ mode: 'dev', data: 'fixture', autoplay: false, quality: 'balanced', recordHud: false });
   });
 
   it('record 默认开启 autoplay', () => {
@@ -49,3 +49,8 @@ describe('parseShowcaseUrl', () => {
     expect(parseShowcaseUrl('?beat=').beat).toBeUndefined();
   });
 });
+
+  it('rate 参数生效；非法值回退 undefined', () => {
+    expect(parseShowcaseUrl('?rate=2.4').rate).toBeCloseTo(2.4);
+    expect(parseShowcaseUrl('?rate=99').rate).toBeUndefined();
+  });

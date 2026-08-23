@@ -3,12 +3,13 @@ import { AnimatePresence } from 'motion/react';
 import { MotionConfig } from 'motion/react';
 import { AmbientBackground } from '../components/visual/AmbientBackground';
 import { SceneTransition } from '../components/director/SceneTransition';
-import { DirectorDebugPanel } from '../components/director/DirectorDebugPanel';
-import { ProgressRail } from '../components/director/ProgressRail';
+import { DirectorDock } from '../components/director/DirectorDock';
+import { SceneRail } from '../components/director/SceneRail';
 import { RecordHUD } from '../components/director/RecordHUD';
 import { parseShowcaseUrl } from '../lib/urlMode';
 import { useDirectorEngine, useKeyboardDirectives } from '../director/useDirector';
 import { useDirectorStore } from '../stores/directorStore';
+import { SCENE_KIND } from '../director/transitionMap';
 import type { SceneId } from '../director/types';
 
 import { OpeningScene } from '../scenes/OpeningScene';
@@ -48,7 +49,7 @@ export interface ShowcaseAppProps {
 
 /**
  * 单页面电影式 Demo Director：AmbientBackground → DirectorStage → Overlays。
- * URL 契约：?mode=record &data=fixture|live &autoplay=1 &scene=… &t=…
+ * URL 契约：?mode=record &data=fixture|live &autoplay=1 &scene=… &t=… &quality=… &recordHud=1
  */
 export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
   const modes = useMemo(
@@ -61,9 +62,12 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
     s.setRecordMode(modes.mode === 'record');
     s.setDataMode(modes.data);
     s.setAutoplay(modes.autoplay);
+    s.setQuality(modes.quality);
+    s.setRecordHud(modes.recordHud);
+    s.setLoop(modes.preview === 'visual');
+    if (modes.rate !== undefined) s.setRate(modes.rate);
     if (modes.scene) s.goToScene(modes.scene, { play: false });
     if (modes.t !== undefined) s.seek(modes.t);
-    // ?beat= 深链：定位到场景级节拍（隐含其所属场景）
     if (modes.beat) s.seekToBeat(modes.beat);
     if (modes.autoplay) s.play();
   }, [modes]);
@@ -74,19 +78,18 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
   const scene = useDirectorStore((s) => s.currentScene);
   const guidesVisible = useDirectorStore((s) => s.guidesVisible);
   const recordPreview = useDirectorStore((s) => s.recordPreview);
-  const dataMode = useDirectorStore((s) => s.dataMode);
   // 录制模式（或开发态的录制预览）隐藏一切开发控制
   const cleanStage = modes.mode === 'record' || recordPreview;
 
   return (
     <MotionConfig reducedMotion='user'>
-      <main className='stage' data-mode={cleanStage ? 'record' : 'dev'} data-data={dataMode}>
+      <main className='stage' data-mode={cleanStage ? 'record' : 'dev'} data-data={modes.data}>
         <AmbientBackground />
 
-        {/* Director Stage：场景交叉溶解 */}
+        {/* Director Stage：场景镜头转场 */}
         <div className='absolute inset-0 z-10'>
-          <AnimatePresence initial={false}>
-            <SceneTransition key={scene}>
+          <AnimatePresence initial={false} mode="popLayout">
+            <SceneTransition key={scene} kind={SCENE_KIND[scene]}>
               <ActiveScene scene={scene} recordMode={cleanStage} />
             </SceneTransition>
           </AnimatePresence>
@@ -100,9 +103,9 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
           </div>
         )}
 
-        {!cleanStage && <ProgressRail />}
+        {!cleanStage && <SceneRail />}
         <RecordHUD />
-        {!cleanStage && <DirectorDebugPanel />}
+        {!cleanStage && <DirectorDock />}
       </main>
     </MotionConfig>
   );

@@ -1,109 +1,59 @@
 import { useEffect, useRef } from "react";
+import { useDirectorStore } from "../../stores/directorStore";
+import type { SceneId } from "../../director/types";
+
+/** 每个 Scene 的世界底色：让画面始终"活着"，但 opacity 极低、绝不抢业务信息 */
+const ATMOS: Record<SceneId, { base: string; secondary: string; warm?: string }> = {
+  opening: { base: "rgba(69,201,154,0.10)", secondary: "rgba(143,182,217,0.08)" },
+  architecture: { base: "rgba(111,157,202,0.11)", secondary: "rgba(63,111,158,0.10)" },
+  "hero-risk": { base: "rgba(111,157,202,0.11)", secondary: "rgba(143,182,217,0.09)", warm: "rgba(232,189,134,0.11)" },
+  "hero-collaboration": { base: "rgba(69,201,154,0.10)", secondary: "rgba(111,157,202,0.10)" },
+  "hero-reschedule": { base: "rgba(69,201,154,0.11)", secondary: "rgba(143,182,217,0.10)", warm: "rgba(232,189,134,0.07)" },
+  "hero-insight": { base: "rgba(63,111,158,0.12)", secondary: "rgba(143,182,217,0.10)" },
+  reliability: { base: "rgba(111,157,202,0.11)", secondary: "rgba(69,201,154,0.08)" },
+  closing: { base: "rgba(69,201,154,0.10)", secondary: "rgba(143,182,217,0.07)" },
+};
+
+function readQuality(): "cinematic" | "balanced" {
+  const q = new URLSearchParams(window.location.search).get("quality");
+  return q === "cinematic" || q === "cinematic+record" ? "cinematic" : "balanced";
+}
 
 /**
- * 全局唯一的环境背景：单 Canvas 点阵（Dot Grid 方向，React Bits 同类视觉的轻量自绘）
- * + 两团极低透明度的品牌色 radial 光晕 + 暗角。
- * 性能预算：1 个 Canvas / 无 WebGL / 无 blur filter；reduced-motion 时只画一帧。
+ * AmbientBackground —— 全局唯一环境背景（Phase 2.5 重做）。
+ * 由"黑布"升级为：网格层 + 场景氛围光场（慢速漂移） + 扫描光带 + 暗角 + 焦散噪点。
+ * 预算：纯 CSS 合成（radial/linear）、无全屏 Canvas/WebGL、无 per-frame JS。
+ * 读 ?quality=cinematic 时开启扫描光带；balanced 降低网格密度。
  */
 export function AmbientBackground(): JSX.Element {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const scene = useDirectorStore((s) => s.currentScene);
+  const a = ATMOS[scene] ?? ATMOS.opening;
+  const cinematic = readQuality();
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let raf = 0;
-    let running = true;
-
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const resize = () => {
-      canvas.width = Math.floor(canvas.clientWidth * dpr);
-      canvas.height = Math.floor(canvas.clientHeight * dpr);
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const GAP = 34 * dpr;
-    const drawFrame = (t: number) => {
-      const { width: w, height: h } = canvas;
-      ctx.clearRect(0, 0, w, h);
-      const driftX = reduced ? 0 : Math.sin(t * 0.00006) * 8 * dpr;
-      const driftY = reduced ? 0 : Math.cos(t * 0.00005) * 6 * dpr;
-      ctx.fillStyle = "#93A1B1";
-      const startY = ((driftY % GAP) + GAP) % GAP;
-      const startX = ((driftX % GAP) + GAP) % GAP;
-      for (let y = startY; y < h; y += GAP) {
-        for (let x = startX; x < w; x += GAP) {
-          const wave = Math.sin(x * 0.006 + y * 0.004 + t * 0.0004);
-          ctx.globalAlpha = reduced ? 0.07 : 0.05 + wave * 0.018;
-          ctx.fillRect(x, y, 1.3 * dpr, 1.3 * dpr);
-        }
-      }
-      ctx.globalAlpha = 1;
-    };
-
-    const loop = (t: number) => {
-      if (!running) return;
-      drawFrame(t);
-      raf = requestAnimationFrame(loop);
-    };
-
-    if (reduced) {
-      drawFrame(0);
-    } else {
-      raf = requestAnimationFrame(loop);
-      const onVis = () => {
-        if (document.hidden) {
-          running = false;
-          cancelAnimationFrame(raf);
-        } else if (!running) {
-          running = true;
-          raf = requestAnimationFrame(loop);
-        }
-      };
-      document.addEventListener("visibilitychange", onVis);
-      return () => {
-        running = false;
-        cancelAnimationFrame(raf);
-        document.removeEventListener("visibilitychange", onVis);
-        window.removeEventListener("resize", resize);
-      };
-    }
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-    };
-  }, []);
+    const grid = gridRef.current;
+    if (grid) grid.style.opacity = cinematic ? "1" : "0.55";
+  }, [cinematic]);
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      <canvas ref={ref} className="absolute inset-0 h-full w-full" />
-      {/* 品牌色光晕：青绿左上 × 低饱和蓝右下，透明度压到「几乎察觉不到但确实存在」 */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(1150px 720px at 12% 6%, rgba(70,199,154,0.075), transparent 62%)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(1300px 800px at 88% 96%, rgba(111,153,197,0.07), transparent 60%)",
-        }}
-      />
-      {/* 暗角 */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(145% 125% at 50% 42%, transparent 52%, rgba(7,9,13,0.6) 100%)",
-        }}
-      />
+      <div ref={gridRef} className="ambient-grid absolute inset-0 transition-opacity duration-700" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="orb-drift absolute" style={{ width:"68vmax",height:"68vmax",left:"-18%",top:"-22%",background:"radial-gradient(circle at 42% 42%, rgba(69,201,154,0.16), transparent 62%)",animation:"driftA 26s cubic-bezier(0.45,0,0.55,1) infinite" }} />
+        <div className="orb-drift absolute" style={{ width:"74vmax",height:"74vmax",right:"-24%",bottom:"-26%",background:"radial-gradient(circle at 58% 58%, rgba(111,157,202,0.15), transparent 62%)",animation:"driftB 32s cubic-bezier(0.45,0,0.55,1) infinite" }} />
+        {a.warm && (
+          <div className="orb-drift absolute" style={{ width:"56vmax",height:"56vmax",right:"-10%",top:"-14%",background:"radial-gradient(circle at 50% 50%, " + a.warm + ", transparent 62%)",animation:"driftC 30s cubic-bezier(0.45,0,0.55,1) infinite" }} />
+        )}
+        <div className="absolute inset-0" style={{ background:"radial-gradient(120% 105% at 50% -8%, " + a.base + ", transparent 60%)" }} />
+      </div>
+      {cinematic && (
+        <div className="scan-sweep absolute inset-0">
+          <div className="scan-bar" />
+        </div>
+      )}
+      <div className="absolute inset-0" style={{ background:"radial-gradient(150% 132% at 50% 44%, transparent 54%, rgba(5,7,12,0.66) 100%)" }} />
+      <div className="grain absolute inset-0" />
     </div>
   );
 }

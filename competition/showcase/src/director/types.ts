@@ -29,6 +29,8 @@ export interface SceneMeta {
 
 export type DataMode = "fixture" | "live";
 export type ShowcaseMode = "dev" | "record";
+/** 画质：cinematic=全效果（录屏）；balanced=降密度（调试） */
+export type QualityMode = "cinematic" | "balanced";
 
 export interface UrlModes {
   mode: ShowcaseMode;
@@ -37,4 +39,12 @@ export interface UrlModes {
   scene?: SceneId;
   /** 起始秒（截图/调试用） */
   t?: number;
+  /** 画质 */
+  quality: QualityMode;
+  /** 录制指示器（REC/时间）；默认 0 完全纯净 */
+  recordHud: boolean;
+  /** 视觉预览路由 */
+  preview?: "visual";
+  /** 播放速率（预览/录制用） */
+  rate?: number;
 }

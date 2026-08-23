@@ -7,11 +7,11 @@ import {
   prevScene as prevSceneOf,
 } from "../director/timeline";
 import { resolveBeat } from "../director/heroes/registry";
-import type { DataMode, SceneId } from "../director/types";
+import type { DataMode, QualityMode, SceneId } from "../director/types";
 
 /**
  * Director 状态机 —— 单一事实源。
- * playing / paused / playbackRate / recordMode / autoplay 全部集中于此，
+ * playing / paused / playbackRate / recordMode / autoplay / quality 全部集中于此，
  * 组件只订阅所需切片，避免整树 60fps 重渲染。
  */
 export interface DirectorState {
@@ -24,6 +24,8 @@ export interface DirectorState {
   recordMode: boolean;
   autoplay: boolean;
   dataMode: DataMode;
+  quality: QualityMode;
+  recordHud: boolean;
   guidesVisible: boolean;
   /** 开发态预览录制画面（mode=record 的视觉等价物） */
   recordPreview: boolean;
@@ -43,6 +45,8 @@ export interface DirectorState {
   setRecordMode(on: boolean): void;
   setAutoplay(on: boolean): void;
   setDataMode(mode: DataMode): void;
+  setQuality(q: QualityMode): void;
+  setRecordHud(on: boolean): void;
   toggleGuides(): void;
   toggleRecordPreview(): void;
   setLoop(on: boolean): void;
@@ -59,6 +63,8 @@ export const useDirectorStore = create<DirectorState>((set, get) => ({
   recordMode: false,
   autoplay: false,
   dataMode: "fixture",
+  quality: "balanced",
+  recordHud: false,
   guidesVisible: false,
   recordPreview: false,
   loop: false,
@@ -72,7 +78,6 @@ export const useDirectorStore = create<DirectorState>((set, get) => ({
   restart: () => set({ elapsed: 0, currentScene: "opening", playing: true, paused: false }),
   nextScene: () => get().goToScene(nextSceneOf(get().currentScene), { play: get().playing }),
   prevScene: () => {
-    // 场景内已播 >2s 时先回到本场景开头，符合剪辑直觉
     const { currentScene, elapsed } = get();
     const start = getSceneStart(currentScene);
     if (elapsed - start > 2) {
@@ -101,6 +106,8 @@ export const useDirectorStore = create<DirectorState>((set, get) => ({
   setRecordMode: (on) => set({ recordMode: on }),
   setAutoplay: (on) => set({ autoplay: on }),
   setDataMode: (mode) => set({ dataMode: mode }),
+  setQuality: (q) => set({ quality: q }),
+  setRecordHud: (on) => set({ recordHud: on }),
   toggleGuides: () => set((s) => ({ guidesVisible: !s.guidesVisible })),
   toggleRecordPreview: () => set((s) => ({ recordPreview: !s.recordPreview })),
   setLoop: (on) => set({ loop: on }),

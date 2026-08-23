@@ -49,7 +49,7 @@ describe('Record Mode（任务 §19 / §26-F）', () => {
 
   it('scene 参数直接跳转指定场景（hero-insight 标题可见）', () => {
     render(<ShowcaseApp search='?autoplay=0&scene=hero-insight' />);
-    expect(screen.getByText('从全局负载排名，下钻到真实风险')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '从全局负载排名，下钻到真实风险' })).toBeTruthy();
   });
 
   it('?beat= 深链定位到节拍时刻（resched.decision 判定横幅可见）', () => {

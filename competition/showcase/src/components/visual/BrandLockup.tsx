@@ -37,7 +37,7 @@ export function BrandLockup({ delay = 0, align = "left", className }: BrandLocku
         variants={riseV(delay, 1)}
         initial="hidden"
         animate="show"
-        className={cn("t-hero", align === "center" && "text-center")}
+        className={cn("t-hero whitespace-nowrap", align === "center" && "text-center")}
       >
         校园智序<span className="mx-3 font-light text-brand">·</span>小序
       </motion.h1>
