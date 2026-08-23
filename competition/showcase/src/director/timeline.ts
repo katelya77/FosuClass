@@ -1,17 +1,18 @@
 import type { SceneId, SceneMeta, TimelineEvent } from "./types";
+import { HERO_TIMELINES } from "./heroes/registry";
 
 /**
- * Director Timeline — Phase 1 只编排到「骨架节奏」。
- * Opening 拥有完整节拍；其余场景使用 shell 节拍，架构允许 Phase 2 无损扩展。
+ * Director Timeline —— Phase 2：四个 Hero 由场景级 Timeline（src/director/heroes/*）
+ * 提供正式节拍；Opening 拥有完整节拍；其余为 shell 节拍。Phase 3 在此合成 4:45 总轴。
  */
 
 export const SCENES: SceneMeta[] = [
   { id: "opening", label: "开场 · 时空关系", duration: 24 },
   { id: "architecture", label: "架构 · 多智能体", duration: 16 },
-  { id: "hero-risk", label: "英雄 · 风险发现", duration: 14 },
-  { id: "hero-collaboration", label: "英雄 · 协作共创", duration: 14 },
-  { id: "hero-reschedule", label: "英雄 · 调课推演", duration: 16 },
-  { id: "hero-insight", label: "英雄 · 全局洞察", duration: 14 },
+  { id: "hero-risk", label: "英雄 · 风险发现", duration: 24 },
+  { id: "hero-collaboration", label: "英雄 · 协同规划", duration: 23 },
+  { id: "hero-reschedule", label: "英雄 · 模拟调课", duration: 30 },
+  { id: "hero-insight", label: "英雄 · 全局洞察", duration: 26 },
   { id: "reliability", label: "可靠性 · 真机证据", duration: 14 },
   { id: "closing", label: "收束 · 品牌落版", duration: 12 },
 ];
@@ -26,7 +27,7 @@ export const OPENING_BEATS: TimelineEvent[] = [
   { at: 18.0, scene: "opening", action: "hold" },
 ];
 
-/** Shell 场景的通用节拍（Phase 2 替换为各自真实节拍） */
+/** Shell 场景的通用节拍 */
 const SHELL_BEATS: Array<{ at: number; action: string }> = [
   { at: 0.0, action: "enter" },
   { at: 2.0, action: "scaffold" },
@@ -35,20 +36,24 @@ const SHELL_BEATS: Array<{ at: number; action: string }> = [
 
 function beatsFor(scene: SceneId): TimelineEvent[] {
   if (scene === "opening") return OPENING_BEATS;
+  const hero = HERO_TIMELINES[scene];
+  if (hero) {
+    return hero.beats.map((b) => ({ at: b.at, scene, action: b.id }));
+  }
   return SHELL_BEATS.map((b) => ({ ...b, scene }));
 }
 
-/** 整片程序级事件表：每个场景的 enter 事件按累计起点生成 */
+/** 整片程序级事件表 */
 export const PROGRAM_EVENTS: TimelineEvent[] = (() => {
   const events: TimelineEvent[] = [];
   let cursor = 0;
   for (const scene of SCENES) {
     events.push({ at: Number(cursor.toFixed(3)), scene: scene.id, action: "enter" });
-    events.push(...beatsFor(scene.id).filter((b) => b.action !== "enter").map((b) => ({
-      at: Number((cursor + b.at).toFixed(3)),
-      scene: b.scene,
-      action: b.action,
-    })));
+    events.push(
+      ...beatsFor(scene.id)
+        .filter((b) => b.action !== "enter")
+        .map((b) => ({ at: Number((cursor + b.at).toFixed(3)), scene: b.scene, action: b.action })),
+    );
     cursor += scene.duration;
   }
   return events.sort((a, b) => a.at - b.at);
@@ -67,7 +72,6 @@ export function getSceneStart(id: SceneId): number {
 
 export interface ScenePosition {
   scene: SceneId;
-  /** 场景内局部时间（秒） */
   local: number;
 }
 

@@ -6,6 +6,7 @@ import {
   nextScene as nextSceneOf,
   prevScene as prevSceneOf,
 } from "../director/timeline";
+import { resolveBeat } from "../director/heroes/registry";
 import type { DataMode, SceneId } from "../director/types";
 
 /**
@@ -36,6 +37,8 @@ export interface DirectorState {
   prevScene(): void;
   goToScene(id: SceneId, opts?: { play?: boolean }): void;
   seek(sec: number): void;
+  /** ?beat= 深链：跳到场景级节拍；未知 beat 返回 false（现场不白屏） */
+  seekToBeat(beatId: string): boolean;
   setRate(rate: number): void;
   setRecordMode(on: boolean): void;
   setAutoplay(on: boolean): void;
@@ -87,6 +90,13 @@ export const useDirectorStore = create<DirectorState>((set, get) => ({
     const t = Math.min(Math.max(sec, 0), TOTAL_DURATION);
     set({ elapsed: t, currentScene: getSceneAt(t).scene });
   },
+  seekToBeat: (beatId) => {
+    const hit = resolveBeat(beatId);
+    if (!hit) return false;
+    const t = Math.min(getSceneStart(hit.scene) + hit.at + 0.01, TOTAL_DURATION - 0.05);
+    set({ elapsed: t, currentScene: getSceneAt(t).scene });
+    return true;
+  },
   setRate: (rate) => set({ playbackRate: Math.min(Math.max(rate, 0.25), 3) }),
   setRecordMode: (on) => set({ recordMode: on }),
   setAutoplay: (on) => set({ autoplay: on }),
@@ -116,4 +126,14 @@ export const useDirectorStore = create<DirectorState>((set, get) => ({
  *  （元素级平滑由 Motion 的独立 transition 负责，节拍时钟只做「到点触发」） */
 export function quantizeBeat(localSeconds: number): number {
   return Math.floor(Math.max(localSeconds, 0) * 10) / 10;
+}
+
+/** Hero 场景时钟：返回场景内量化秒数；配合各 heroTimeline 的 beats 做门控 */
+export function useHeroClock(sceneId: SceneId): number {
+  return useDirectorStore((s) => quantizeBeat(s.elapsed - getSceneStart(sceneId)));
+}
+
+/** 节拍门控：local >= at 即到达 */
+export function reached(localClock: number, at: number): boolean {
+  return localClock >= at;
 }

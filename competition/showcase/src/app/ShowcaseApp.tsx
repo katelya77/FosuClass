@@ -63,6 +63,8 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
     s.setAutoplay(modes.autoplay);
     if (modes.scene) s.goToScene(modes.scene, { play: false });
     if (modes.t !== undefined) s.seek(modes.t);
+    // ?beat= 深链：定位到场景级节拍（隐含其所属场景）
+    if (modes.beat) s.seekToBeat(modes.beat);
     if (modes.autoplay) s.play();
   }, [modes]);
 
