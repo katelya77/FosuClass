@@ -1,60 +1,61 @@
 /* ============================================================
    校园智序 · 小序 — Temporal Campus OS 设计 Token
    唯一颜色/圆角/阴影/动效/材质常量来源；组件内禁止散落 magic value
+   Phase 2.6：前景/背景分离度整体上调 —— 背景仍深，主体必须清楚。
    ============================================================ */
 :root {
   color-scheme: dark;
 
-  /* ---- 表面与底（更深的底 + 更丰富的内部照亮） ---- */
+  /* ---- 表面与底（深底 + 内部照亮；主体亮度全部上调） ---- */
   --bg: #0a0e14;
   --bg-deep: #05070c;
-  --bg-raise: #0e141d;
-  --surface: #0f1620;
-  --surface-elevated: #16202c;
-  --surface-glass: rgba(22, 31, 43, 0.42);
-  --border: rgba(154, 170, 190, 0.15);
-  --border-strong: rgba(160, 178, 200, 0.32);
+  --bg-raise: #0f151e;
+  --surface: #101823;
+  --surface-elevated: #18232f;
+  --surface-glass: rgba(26, 36, 49, 0.5);
+  --border: rgba(168, 184, 204, 0.2);
+  --border-strong: rgba(178, 195, 216, 0.4);
 
-  /* ---- 文本（中文录屏优先，不用纯白；正文不低于 14px 母版） ---- */
-  --text: #eaf0f6;
-  --text-muted: #9aa9ba;
-  --text-faint: #68778a;
-  --text-ink: #09101a; /* 高对比底板上的深字 */
+  /* ---- 文本（中文录屏优先；muted/faint 相位 2.5 各提亮约 15%） ---- */
+  --text: #f2f6fa;
+  --text-muted: #b3c1d1;
+  --text-faint: #8494a8;
+  --text-ink: #0a1220; /* 高对比底板上的深字 */
 
   /* ---- 品牌：青绿（校园自然绿）× 低饱和空间蓝 ---- */
-  --brand: #45c99a;
-  --brand-strong: #7ce4bd;
-  --brand-dim: rgba(69, 201, 154, 0.14);
-  --brand-dim-strong: rgba(69, 201, 154, 0.24);
-  --brand-secondary: #6f9dca;
-  --brand-secondary-dim: rgba(111, 157, 202, 0.13);
+  --brand: #4fd6a6;
+  --brand-strong: #8aeec9;
+  --brand-dim: rgba(79, 214, 166, 0.16);
+  --brand-dim-strong: rgba(79, 214, 166, 0.28);
+  --brand-secondary: #7fadd6;
+  --brand-secondary-dim: rgba(127, 173, 214, 0.15);
 
   /* ---- 语义色：风险 / 危险 / 成功 ---- */
-  --risk: #dcab68;
-  --risk-strong: #f0c178;
-  --risk-dim: rgba(220, 171, 104, 0.14);
-  --danger: #d06b6b;
-  --danger-dim: rgba(208, 107, 107, 0.14);
-  --success: #5ac493;
-  --success-dim: rgba(90, 196, 147, 0.14);
+  --risk: #e5b573;
+  --risk-strong: #f6cd8a;
+  --risk-dim: rgba(229, 181, 115, 0.16);
+  --danger: #dd7b7b;
+  --danger-dim: rgba(221, 123, 123, 0.16);
+  --success: #63cfa0;
+  --success-dim: rgba(99, 207, 160, 0.16);
 
-  /* ---- 场景氛围色（每个 Scene 的世界底色；全部低饱和） ---- */
-  --atmos-brand: #45c99a;
-  --atmos-brand-dim: rgba(69, 201, 154, 0.10);
-  --atmos-cool: #6f9dca;
-  --atmos-cool-dim: rgba(111, 157, 202, 0.10);
-  --atmos-ice: #8fb6d9;
-  --atmos-ice-dim: rgba(143, 182, 217, 0.09);
-  --atmos-warm: #e8bd86;
-  --atmos-warm-dim: rgba(232, 189, 134, 0.09);
-  --atmos-deep: #3f6f9e;
-  --atmos-deep-dim: rgba(63, 111, 158, 0.12);
+  /* ---- 场景氛围色（每个 Scene 的世界底色；Phase 2.6 略提亮） ---- */
+  --atmos-brand: #4fd6a6;
+  --atmos-brand-dim: rgba(79, 214, 166, 0.12);
+  --atmos-cool: #7fadd6;
+  --atmos-cool-dim: rgba(127, 173, 214, 0.12);
+  --atmos-ice: #9cc2e2;
+  --atmos-ice-dim: rgba(156, 194, 226, 0.11);
+  --atmos-warm: #eec694;
+  --atmos-warm-dim: rgba(238, 198, 148, 0.11);
+  --atmos-deep: #4a7fb0;
+  --atmos-deep-dim: rgba(74, 127, 176, 0.14);
 
   /* ---- 材质发光 ---- */
-  --glow-brand: 0 0 0 1px rgba(69, 201, 154, 0.30), 0 0 22px -4px rgba(69, 201, 154, 0.34);
-  --glow-cool: 0 0 0 1px rgba(111, 157, 202, 0.30), 0 0 22px -4px rgba(111, 157, 202, 0.32);
-  --glow-warm: 0 0 0 1px rgba(232, 189, 134, 0.30), 0 0 22px -4px rgba(232, 189, 134, 0.34);
-  --glow-deep: 0 0 0 1px rgba(63, 111, 158, 0.30), 0 0 26px -4px rgba(63, 111, 158, 0.36);
+  --glow-brand: 0 0 0 1px rgba(79, 214, 166, 0.35), 0 0 26px -4px rgba(79, 214, 166, 0.4);
+  --glow-cool: 0 0 0 1px rgba(127, 173, 214, 0.35), 0 0 26px -4px rgba(127, 173, 214, 0.38);
+  --glow-warm: 0 0 0 1px rgba(238, 198, 148, 0.35), 0 0 26px -4px rgba(238, 198, 148, 0.4);
+  --glow-deep: 0 0 0 1px rgba(74, 127, 176, 0.35), 0 0 30px -4px rgba(74, 127, 176, 0.42);
 
   /* ---- 圆角 ---- */
   --radius-xs: 4px;
@@ -65,10 +66,12 @@
   --radius-2xl: 34px;
 
   /* ---- 阴影（克制但立体） ---- */
-  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 20px 52px rgba(0, 0, 0, 0.44);
-  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 12px 30px rgba(0, 0, 0, 0.36);
+  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 20px 52px rgba(0, 0, 0, 0.44);
+  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 12px 30px rgba(0, 0, 0, 0.36);
   --shadow-depth: 0 34px 90px rgba(0, 0, 0, 0.52);
-  --shadow-glow-brand: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 30px -6px rgba(69, 201, 154, 0.32);
+  --shadow-glow-brand: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 34px -6px rgba(79, 214, 166, 0.38);
+  /* 提起的课次块（Reschedule 视觉高潮用） */
+  --shadow-lift: 0 2px 0 rgba(255, 255, 255, 0.05) inset, 0 26px 60px rgba(0, 0, 0, 0.6), 0 0 40px -8px rgba(79, 214, 166, 0.3);
 
   /* ---- 间距 / 安全区（1920×1080 母版） ---- */
   --space-0: 2px;
@@ -81,23 +84,24 @@
   --space-7: 48px;
   --space-8: 64px;
   --safe-x: 96px;
-  --safe-y: 64px;
+  --safe-y: 60px;
 
   /* ---- 字体：系统可靠中文栈，不提交字体文件 ---- */
   --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui,
     -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
 
-  /* ---- 字号（录屏基准 1920×1080；正文不低于 14px 母版） ---- */
+  /* ---- 字号（录屏基准 1920×1080；关键标题 42~64，Hero 数字 52~80，正文 ≥16） ---- */
   --fs-hero: clamp(54px, 4.4vw, 88px);
-  --fs-section: clamp(32px, 2.6vw, 52px);
-  --fs-title: 27px;
-  --fs-card: 21px;
+  --fs-headline: clamp(42px, 2.95vw, 58px); /* Hero 场景主标题带 */
+  --fs-section: clamp(34px, 2.5vw, 50px);
+  --fs-title: 28px;
+  --fs-card: 22px;
   --fs-body: 17px;
-  --fs-caption: 15px;
-  --fs-metric: clamp(38px, 3.4vw, 68px);
-  --fs-metric-lg: clamp(52px, 5vw, 96px);
-  --fs-kicker: 13px;
+  --fs-caption: 16px;
+  --fs-metric: clamp(44px, 3.6vw, 72px);
+  --fs-metric-lg: clamp(56px, 4.6vw, 84px);
+  --fs-kicker: 14px;
 
   /* ---- 动效：全局统一语言（避免每个组件散落 timing） ---- */
   --dur-fast: 240ms;
@@ -108,13 +112,13 @@
   --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-io: cubic-bezier(0.83, 0, 0.17, 1);
 
-  /* ---- 景深 / 模糊 ---- */
+  /* ---- 景深 / 模糊（只允许用于过渡态；稳定态 blur=0） ---- */
   --blur-xs: 3px;
   --blur-sm: 7px;
   --blur-md: 15px;
   --blur-lg: 30px;
 
   /* ---- 焦散 / 材质微光 ---- */
-  --grain-opacity: 0.05;
+  --grain-opacity: 0.045;
   --glow-lift: 8px;
 }

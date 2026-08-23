@@ -11,11 +11,11 @@ function stubReduced(matches: boolean): void {
 
 afterEach(() => cleanup());
 
-describe('KineticMetric（确定性指标动画，修复 CountUp 中间态）', () => {
-  it('settle=false 时显示扫描态（绝不显示稳定业务值）', () => {
+describe('KineticMetric（确定性指标动画，Phase 2.6 digit-mask settle）', () => {
+  it('settle=false 时显示遮罩扫描态（绝不显示稳定业务值）', () => {
     stubReduced(true);
     const { container } = render(<KineticMetric to={63} settle={false} />);
-    expect(screen.getByText('—')).toBeTruthy();
+    expect(screen.getByText('· · ·')).toBeTruthy();
     expect(container.querySelector('.kinetic-num')?.className).toContain('kinetic-scan');
   });
 
@@ -35,7 +35,7 @@ describe('KineticMetric（确定性指标动画，修复 CountUp 中间态）', 
   it('settle=false 时单位不出现（仍在计算）', () => {
     stubReduced(true);
     render(<KineticMetric to={120} settle={false} unit="座" />);
-    expect(screen.getByText('—')).toBeTruthy();
+    expect(screen.getByText('· · ·')).toBeTruthy();
     expect(screen.queryByText('座')).toBeNull();
   });
 });

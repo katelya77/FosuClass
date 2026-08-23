@@ -40,14 +40,14 @@ export function DirectorDock(): JSX.Element {
       onPointerMove={poke}
       onPointerEnter={poke}
       aria-label="导演控制台"
-      animate={{ opacity: idle ? 0.34 : 1 }}
-      transition={{ duration: DUR.fast / 1000, ease: EASE_OUT }}
+      animate={{ opacity: idle ? 0.35 : 1 }}
+      transition={{ duration: DUR.fast, ease: EASE_OUT }}
       className={cn(
-        "absolute inset-x-[var(--safe-x)] bottom-5 z-40 flex items-center gap-2 px-3.5 py-2.5",
-        "panel-glass material-topline rounded-2xl",
+        "absolute inset-x-[var(--safe-x)] bottom-3.5 z-40 flex items-center gap-1.5 px-2.5 py-1.5",
+        "panel-glass material-topline rounded-xl",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <button className="ctrl-btn" onClick={s.toggle} aria-label={s.playing ? '暂停' : '播放'}>
           {s.playing ? '暂停' : '播放'}
         </button>
@@ -75,9 +75,9 @@ export function DirectorDock(): JSX.Element {
         value={Math.min(s.elapsed, TOTAL_DURATION)}
         onChange={(e) => s.seek(Number(e.target.value))}
         aria-label="时间轴"
-        className="h-10 min-w-0 flex-1 accent-[var(--brand)]"
+        className="h-7 min-w-0 flex-1 accent-[var(--brand)]"
       />
-      <span className="t-mono w-24 text-right text-[12.5px] text-mute">
+      <span className="t-mono w-20 text-right text-[12px] text-mute">
         {s.elapsed.toFixed(1)}s
       </span>
 

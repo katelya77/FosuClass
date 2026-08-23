@@ -49,12 +49,16 @@ body {
   color: var(--text);
 }
 
-/* ---- 舞台与安全区 ---- */
+/* ---- 舞台与安全区（--spot-* 由 usePointerField 驱动；Record Mode 恒为中心） ---- */
 .stage {
   position: fixed;
   inset: 0;
+  --px: 0;
+  --py: 0;
+  --spot-x: 50%;
+  --spot-y: 44%;
   background:
-    radial-gradient(120% 105% at 50% -8%, #0d1520 0%, var(--bg) 38%, var(--bg-deep) 100%);
+    radial-gradient(120% 105% at var(--spot-x) var(--spot-y), #101927 0%, var(--bg) 40%, var(--bg-deep) 100%);
   overflow: hidden;
 }
 .stage[data-mode="record"] {
@@ -68,17 +72,44 @@ body {
   bottom: var(--safe-y);
 }
 
-/* ---- 材质：玻璃 / 面板 / 景深 ---- */
+/* ---- 材质层级（Phase 2.6 三层纪律） ----
+   Surface 0：纯场景，无 Card（默认）。
+   Surface 1 `.plane`：弱透明 information plane —— 无边框，靠亮度差与间距分区。
+   Surface 2 `.plane-hero`：Hero focus glass —— 只给真正需要强调的内容。 */
+.plane {
+  background: linear-gradient(180deg, rgba(26, 36, 49, 0.5), rgba(16, 24, 35, 0.38));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(14px) saturate(1.06);
+}
+.plane-hero {
+  position: relative;
+  background: linear-gradient(180deg, rgba(32, 44, 60, 0.66), rgba(18, 27, 39, 0.55));
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glow-brand);
+  backdrop-filter: blur(20px) saturate(1.12);
+}
+.plane-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 12% auto 12%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+/* 兼容别名：既有 panel 语义继续可用，但默认弱化框线 */
 .panel {
-  background: linear-gradient(180deg, rgba(22, 31, 43, 0.62), rgba(15, 22, 32, 0.55));
-  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(24, 33, 46, 0.55), rgba(15, 22, 32, 0.45));
+  border: 1px solid rgba(168, 184, 204, 0.12);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(14px) saturate(1.05);
 }
 .panel-raised {
-  background: linear-gradient(180deg, rgba(28, 38, 52, 0.72), rgba(18, 26, 37, 0.62));
-  border: 1px solid var(--border-strong);
+  background: linear-gradient(180deg, rgba(31, 42, 57, 0.68), rgba(19, 28, 40, 0.58));
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
   backdrop-filter: blur(16px) saturate(1.08);
@@ -104,9 +135,29 @@ body {
   inset: 0 10% auto 10%;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
   border-radius: inherit;
   pointer-events: none;
+}
+
+/* ---- 指针景深（Director 交互层；Record Mode 无 --px/--py 变化，恒为 0） ---- */
+.depth-shift {
+  transform: translate3d(calc(var(--px, 0) * 4px), calc(var(--py, 0) * 3px), 0);
+  transition: transform 0.18s var(--ease-out-soft);
+}
+.depth-shift-near {
+  transform: translate3d(calc(var(--px, 0) * 7px), calc(var(--py, 0) * 5px), 0);
+  transition: transform 0.18s var(--ease-out-soft);
+}
+
+/* ---- Record Mode 环境生命感：focus breathing（0.45% 内，静帧不可见、视频有呼吸） ---- */
+@keyframes focusBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.0045); }
+}
+.stage[data-mode="record"] .breathe-in-record {
+  animation: focusBreathe 11s var(--ease-in-out-soft) infinite;
+  will-change: transform;
 }
 
 /* ---- 场景氛围：让整个画面处在场景自己的世界里 ---- */
@@ -124,8 +175,8 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(154, 170, 190, 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(154, 170, 190, 0.045) 1px, transparent 1px);
+    linear-gradient(to right, rgba(168, 190, 214, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(168, 190, 214, 0.06) 1px, transparent 1px);
   background-size: 68px 68px;
   mask-image: radial-gradient(120% 110% at 50% 42%, rgba(0,0,0,0.9), transparent 78%);
   -webkit-mask-image: radial-gradient(120% 110% at 50% 42%, rgba(0,0,0,0.9), transparent 78%);
@@ -143,7 +194,7 @@ body {
   right: 0;
   height: 220px;
   top: -30%;
-  background: linear-gradient(180deg, transparent, rgba(124, 228, 189, 0.045), rgba(124, 228, 189, 0.12), rgba(124, 228, 189, 0.045), transparent);
+  background: linear-gradient(180deg, transparent, rgba(138, 238, 201, 0.05), rgba(138, 238, 201, 0.13), rgba(138, 238, 201, 0.05), transparent);
   animation: scanDrift 16s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 @keyframes scanDrift {
@@ -167,13 +218,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 4px 13px;
+  min-height: 32px;
+  padding: 4px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-elevated) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 66%, transparent);
   backdrop-filter: blur(6px);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   white-space: nowrap;
@@ -193,14 +244,14 @@ button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 40px; /* 可访问性最小高度 */
-  min-width: 40px;
-  padding: 0 13px;
+  min-height: 30px; /* Phase 2.6 dock 轻量化 */
+  min-width: 34px;
+  padding: 0 11px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
   color: var(--text-muted);
-  font-size: 13.5px;
+  font-size: 12.5px;
   cursor: pointer;
   transition:
     color var(--dur-fast) var(--ease-out-soft),
@@ -228,16 +279,16 @@ button {
 .guide-safe-rect {
   position: absolute;
   inset: 0;
-  border-left: 1px dashed rgba(111, 157, 202, 0.5);
-  border-right: 1px dashed rgba(111, 157, 202, 0.5);
-  border-top: 1px dashed rgba(111, 157, 202, 0.5);
-  border-bottom: 1px dashed rgba(111, 157, 202, 0.5);
+  border-left: 1px dashed rgba(127, 173, 214, 0.5);
+  border-right: 1px dashed rgba(127, 173, 214, 0.5);
+  border-top: 1px dashed rgba(127, 173, 214, 0.5);
+  border-bottom: 1px dashed rgba(127, 173, 214, 0.5);
   margin: var(--safe-y) var(--safe-x);
 }
 .guide-center-x,
 .guide-center-y {
   position: absolute;
-  background: rgba(111, 157, 202, 0.25);
+  background: rgba(127, 173, 214, 0.25);
 }
 .guide-center-x {
   left: 50%;

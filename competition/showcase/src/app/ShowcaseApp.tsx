@@ -8,6 +8,7 @@ import { SceneRail } from '../components/director/SceneRail';
 import { RecordHUD } from '../components/director/RecordHUD';
 import { parseShowcaseUrl } from '../lib/urlMode';
 import { useDirectorEngine, useKeyboardDirectives } from '../director/useDirector';
+import { usePointerField } from '../director/usePointerField';
 import { useDirectorStore } from '../stores/directorStore';
 import { SCENE_KIND } from '../director/transitionMap';
 import type { SceneId } from '../director/types';
@@ -74,6 +75,8 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
 
   useDirectorEngine();
   useKeyboardDirectives(modes.mode);
+  // Director 交互层：指针光场只在 dev/preview 启用；Record Mode 零监听（录屏不依赖鼠标）
+  usePointerField(modes.mode !== 'record');
 
   const scene = useDirectorStore((s) => s.currentScene);
   const guidesVisible = useDirectorStore((s) => s.guidesVisible);
@@ -86,11 +89,13 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
       <main className='stage' data-mode={cleanStage ? 'record' : 'dev'} data-data={modes.data}>
         <AmbientBackground />
 
-        {/* Director Stage：场景镜头转场 */}
+        {/* Director Stage：场景镜头转场；Record Mode 下内容层带 focus breathing（环境生命感） */}
         <div className='absolute inset-0 z-10'>
           <AnimatePresence initial={false} mode="popLayout">
             <SceneTransition key={scene} kind={SCENE_KIND[scene]}>
-              <ActiveScene scene={scene} recordMode={cleanStage} />
+              <div className='breathe-in-record h-full w-full'>
+                <ActiveScene scene={scene} recordMode={cleanStage} />
+              </div>
             </SceneTransition>
           </AnimatePresence>
         </div>

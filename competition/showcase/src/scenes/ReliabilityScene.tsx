@@ -75,11 +75,11 @@ export function ReliabilityScene(): JSX.Element {
           </div>
         </div>
 
-        {/* 右：真机 ADP Live Frame */}
+        {/* 右：真机 ADP Live Frame（blur 只属于展开过渡本身） */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.72, filter: "blur(12px)" }}
+          initial={{ opacity: 0, scale: 0.78, filter: "blur(8px)" }}
           animate={expand ? { opacity: 1, scale: 1, filter: "blur(0px)" } : {}}
-          transition={{ duration: 1.3, ease: EASE_OUT }}
+          transition={{ duration: 1.2, ease: EASE_OUT }}
           className="relative flex min-h-0 flex-col overflow-hidden rounded-3xl"
           style={{ boxShadow: expand ? "var(--shadow-depth)" : undefined }}
         >
