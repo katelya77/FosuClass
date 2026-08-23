@@ -1,0 +1,49 @@
+/* 中文第一视觉语言的排版系统；禁止 break-all */
+.t-hero {
+  font-family: var(--font-sans);
+  font-size: var(--fs-hero);
+  line-height: 1.22;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+.t-section {
+  font-size: var(--fs-section);
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.t-card-title {
+  font-size: var(--fs-card);
+  line-height: 1.45;
+  font-weight: 600;
+}
+.t-body {
+  font-size: var(--fs-body);
+  line-height: 1.85; /* 中文行高放松 */
+  font-weight: 400;
+}
+.t-caption {
+  font-size: var(--fs-caption);
+  line-height: 1.7;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.t-kicker {
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 500;
+  letter-spacing: 0.34em; /* 少量英文 kicker 用大字距制造气质 */
+  text-transform: uppercase;
+}
+.t-metric {
+  font-size: var(--fs-metric);
+  line-height: 1.1;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.t-label {
+  font-size: var(--fs-caption);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}

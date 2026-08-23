@@ -1,0 +1,77 @@
+/* ============================================================
+   校园智序 · 小序 — Temporal Campus OS 设计 Token
+   唯一颜色/圆角/阴影/动效常量来源；组件内禁止散落 magic value
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* ---- 表面 ---- */
+  --bg: #0b0f14;
+  --bg-deep: #07090d;
+  --surface: #10151c;
+  --surface-elevated: #161c26;
+  --border: rgba(154, 170, 190, 0.16);
+  --border-strong: rgba(154, 170, 190, 0.3);
+
+  /* ---- 文本（中文录屏优先，不用纯白） ---- */
+  --text: #e9eef4;
+  --text-muted: #94a2b2;
+  --text-faint: #5f6d7d;
+
+  /* ---- 品牌：青绿（校园自然绿）× 低饱和蓝 ---- */
+  --brand: #46c79a;
+  --brand-strong: #6adcb2;
+  --brand-dim: rgba(70, 199, 154, 0.13);
+  --brand-secondary: #6f99c5;
+  --brand-secondary-dim: rgba(111, 153, 197, 0.12);
+
+  /* ---- 语义色：风险 / 危险 / 成功 ---- */
+  --risk: #d9a05b;
+  --risk-dim: rgba(217, 160, 91, 0.13);
+  --danger: #ce6a6a;
+  --danger-dim: rgba(206, 106, 106, 0.13);
+  --success: #58be8f;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* ---- 阴影（克制，不发光） ---- */
+  --shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 14px 44px rgba(0, 0, 0, 0.36);
+  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  /* ---- 间距 / 安全区（1920×1080 母版） ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --safe-x: 80px;
+  --safe-y: 56px;
+
+  /* ---- 字体：系统可靠中文栈，不提交字体文件 ---- */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* ---- 字号（录屏基准 1920×1080） ---- */
+  --fs-hero: clamp(48px, 3.4vw, 68px);
+  --fs-section: clamp(30px, 2.1vw, 42px);
+  --fs-title: 24px;
+  --fs-card: 20px;
+  --fs-body: 17px;
+  --fs-caption: 13.5px;
+  --fs-metric: clamp(34px, 2.6vw, 50px);
+
+  /* ---- 动效：稳、慢、可读 ---- */
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 700ms;
+  --dur-scene: 900ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}

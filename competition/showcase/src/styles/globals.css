@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-canvas-deep: var(--bg-deep);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-elevated);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-mute: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-stream: var(--brand-secondary);
+  --color-riskc: var(--risk);
+  --color-dangerc: var(--danger);
+  --color-ok: var(--success);
+  --font-sans: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* 录屏母版：永不出现滚动条 */
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+::selection {
+  background: var(--brand-dim);
+  color: var(--text);
+}
+
+/* ---- 舞台与安全区 ---- */
+.stage {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+}
+.stage-safe {
+  position: absolute;
+  left: var(--safe-x);
+  right: var(--safe-x);
+  top: var(--safe-y);
+  bottom: var(--safe-y);
+}
+
+/* ---- 面板原语 ---- */
+.panel {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+.panel-raised {
+  background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+}
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-strong), transparent);
+}
+
+/* ---- 徽章 ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-elevated) 60%, transparent);
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- 可访问性 ---- */
+button {
+  font-family: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px; /* 可访问性最小高度 */
+  min-width: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out-soft),
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background var(--dur-fast) var(--ease-out-soft);
+}
+.ctrl-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.ctrl-btn[aria-pressed="true"],
+.ctrl-btn[data-active="true"] {
+  color: var(--brand-strong);
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: var(--brand-dim);
+}
+
+/* 参考线（仅开发模式可开） */
+.guide-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+.guide-safe-rect {
+  position: absolute;
+  inset: 0;
+  outline: 1px dashed rgba(111, 153, 197, 0.55);
+  outline-offset: calc(var(--safe-y) * -1) ;
+  outline: none;
+  border-left: 1px dashed rgba(111, 153, 197, 0.5);
+  border-right: 1px dashed rgba(111, 153, 197, 0.5);
+  border-top: 1px dashed rgba(111, 153, 197, 0.5);
+  border-bottom: 1px dashed rgba(111, 153, 197, 0.5);
+  margin: var(--safe-y) var(--safe-x);
+}
+.guide-center-x,
+.guide-center-y {
+  position: absolute;
+  background: rgba(111, 153, 197, 0.25);
+}
+.guide-center-x {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.guide-center-y {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
