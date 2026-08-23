@@ -1,4 +1,4 @@
-# RECORDING MODE — 录屏操作手册
+# RECORDING MODE — 录屏操作手册（Phase 2 更新）
 
 ## 录制入口
 
@@ -7,7 +7,7 @@ http://127.0.0.1:4173/?mode=record&data=fixture&autoplay=1
 ```
 
 record 模式：隐藏调试面板 / 进度轨 / 参考线 / 鼠标依赖控件；无滚动条；
-仅保留左下角数据徽标（fixture=「占位示意数据 · 非真实运行结果」，live=「腾讯云 ADP 实时运行」）。
+仅保留**右下角**数据徽标（fixture=「已核验演示快照 · competition-demo-v3」，live=「腾讯 ADP · 实时运行」）。
 
 ## URL 参数
 
@@ -16,8 +16,20 @@ record 模式：隐藏调试面板 / 进度轨 / 参考线 / 鼠标依赖控件�
 | `mode=record` | 录制模式（`preview` 为别名） |
 | `data=fixture\|live` | 数据来源徽标与语义 |
 | `autoplay=1\|0` | 自动播放；record 默认 1 |
-| `scene=…` | 跳转场景（opening/architecture/hero-risk/…/closing） |
-| `t=12.5` | 起始秒（截图/补拍定位） |
+| `scene=…` | 跳转场景；支持短名 **risk / collaboration / reschedule / insight** 与全名 hero-* |
+| `beat=…` | **场景节拍深链**（隐含其场景），如 `risk.routes`、`resched.constraints`、`insight.risk` |
+| `t=12.5` | 起始秒——注意是**整片绝对时间轴**（risk@40 起、collaboration@64、reschedule@87、insight@117） |
+
+## 四英雄节拍深链速查
+
+| 场景 | 节拍 id（?beat=） |
+| --- | --- |
+| risk | risk.identity / risk.schedule / risk.campuses / risk.routes / risk.gap / risk.warning / risk.summary |
+| collaboration | collab.lanes / collab.busy / collab.intersection / collab.expand / collab.rooms / collab.recommend / collab.verdict |
+| reschedule | resched.source / resched.lift / resched.snap / resched.constraints / resched.candidates / resched.select / resched.decision |
+| insight | insight.cascade / insight.top1 / insight.breadcrumb / insight.schedule / insight.risk / insight.close |
+
+补拍示例：`/?mode=record&data=fixture&scene=reschedule&beat=resched.select&autoplay=0`。
 
 ## OBS 工作流
 
@@ -34,13 +46,13 @@ record 模式：隐藏调试面板 / 进度轨 / 参考线 / 鼠标依赖控件�
 - 状态机：loading → embedded / blocked；blocked 时展示「腾讯 ADP 真机演示」外开卡片；
 - HTTPS 页面内嵌 HTTP 地址会被混合内容策略拦截——本地录制请使用 `http://127.0.0.1`。
 
-## 截图自审命令（本机）
+## 截图自审命令（本机，脚本不入库）
 
 ```powershell
-& 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' `
-  --headless=new --disable-gpu --window-size=1920,1080 `
-  --screenshot='shot-1080.png' `
-  'http://127.0.0.1:4173/?mode=record&autoplay=0&t=8.5'
+node qa-review.mjs     # 全场景：重叠/溢出/控制台/紫色像素/fps/关键文案
+node qa-beats.mjs      # 四英雄逐节拍关键帧 + reduced-motion 探针
+node qa-probe.mjs      # 关键帧 DOM 断言（光带对齐/ElectricBorder/戳记数/HUD 位置）
+node qa-multires.mjs   # 1920×1080 / 1600×900 / 1366×768
 ```
 
 验收分辨率：1920×1080（母版）/ 1600×900 / 1366×768。
