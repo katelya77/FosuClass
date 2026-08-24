@@ -177,14 +177,9 @@ export function AdpExperience({
                 当前页面会继续保留案例与引导。点击按钮，在新窗口进入真实小序，直接开始对话。
               </p>
             </div>
-            {mixedContent && (
+            {(mixedContent || cfg.relayActive) && (
               <p className="rounded-full border border-brand/20 bg-brand-tint px-4 py-1.5 text-xs font-medium text-brand-deep">
-                已自动切换：HTTPS 页面不能内嵌当前 HTTP 真机
-              </p>
-            )}
-            {cfg.relayActive && !mixedContent && (
-              <p className="rounded-full border border-brand/20 bg-brand-tint px-4 py-1.5 text-xs font-medium text-brand-deep">
-                HTTPS 安全中继暂不可用，已保留官方外开入口
+                真机连接暂未就绪，已为你保留官方体验入口
               </p>
             )}
             <div className="flex flex-wrap justify-center gap-3">
