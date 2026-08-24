@@ -1,10 +1,11 @@
 import { connect } from "cloudflare:sockets";
 
 const ADP_HOST = "101.42.184.216";
-const ADP_FETCH_HOST = `${ADP_HOST}.nip.io`;
+const ADP_FETCH_HOST = "adp-origin.katelya.top";
 const ADP_PORT = 80;
 const ADP_CHAT_PATH = "/adp/v2/chat";
 const ADP_CHAT_URL = `http://${ADP_FETCH_HOST}${ADP_CHAT_PATH}?language=zh-CN`;
+const UPSTREAM_CONNECT_TIMEOUT_MS = 12_000;
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_MESSAGE_CHARS = 2_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -86,6 +87,20 @@ function findSequence(bytes: Uint8Array, sequence: Uint8Array): number {
     return index;
   }
   return -1;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 async function readResponseHead(reader: ReadableStreamDefaultReader<Uint8Array>) {
@@ -178,7 +193,12 @@ async function streamAdp(body: Uint8Array, requestId: string): Promise<Response>
     { hostname: ADP_FETCH_HOST, port: ADP_PORT },
     { allowHalfOpen: true, secureTransport: "off" },
   );
-  await socket.opened;
+  try {
+    await withTimeout(socket.opened, UPSTREAM_CONNECT_TIMEOUT_MS, "ADP socket connection");
+  } catch (error) {
+    await socket.close().catch(() => undefined);
+    throw error;
+  }
 
   const writer = socket.writable.getWriter();
   const requestHead = [
@@ -201,7 +221,19 @@ async function streamAdp(body: Uint8Array, requestId: string): Promise<Response>
   await writer.close();
 
   const reader = socket.readable.getReader();
-  const { head, initialBody } = await readResponseHead(reader);
+  let headResult: Awaited<ReturnType<typeof readResponseHead>>;
+  try {
+    headResult = await withTimeout(
+      readResponseHead(reader),
+      UPSTREAM_CONNECT_TIMEOUT_MS,
+      "ADP response headers",
+    );
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    await socket.close().catch(() => undefined);
+    throw error;
+  }
+  const { head, initialBody } = headResult;
   const [statusLine, ...headerLines] = head.split("\r\n");
   const statusMatch = /^HTTP\/\d(?:\.\d)?\s+(\d{3})(?:\s+(.*))?$/.exec(statusLine);
   if (!statusMatch) throw new Error("Invalid ADP status line");
@@ -234,17 +266,25 @@ async function streamAdp(body: Uint8Array, requestId: string): Promise<Response>
 }
 
 async function fetchAdp(body: Uint8Array, requestId: string): Promise<Response> {
-  const upstream = await fetch(ADP_CHAT_URL, {
-    method: "POST",
-    headers: {
-      accept: "text/event-stream",
-      "accept-language": "zh-CN,zh;q=0.9",
-      "content-type": "application/json",
-      origin: "http://101.42.184.216",
-      referer: "http://101.42.184.216/webim/",
-    },
-    body,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_CONNECT_TIMEOUT_MS);
+  let upstream: Response;
+  try {
+    upstream = await fetch(ADP_CHAT_URL, {
+      method: "POST",
+      headers: {
+        accept: "text/event-stream",
+        "accept-language": "zh-CN,zh;q=0.9",
+        "content-type": "application/json",
+        origin: `http://${ADP_HOST}`,
+        referer: `http://${ADP_HOST}/webim/`,
+      },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   const headers = new Headers(upstream.headers);
   headers.delete("set-cookie");
   headers.delete("content-length");
