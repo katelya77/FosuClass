@@ -40,4 +40,22 @@ describe("AdpExperience native API mode", () => {
     expect(screen.getByText("campus_teacher_load_query")).toBeTruthy();
     expect(document.querySelector("adp-widget")).not.toBeNull();
   });
+
+  it("keeps the question and shows a concise retry message when ADP is rate limited", async () => {
+    const payload = [
+      { Type: "error", Error: { Code: 400429, Message: "RateLimit-请求速率超限" } },
+      { Type: "response.completed" },
+    ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(payload, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    })));
+
+    render(<AdpExperience />);
+    const originalQuestion = (screen.getByRole("textbox") as HTMLTextAreaElement).value;
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => expect(screen.getByText(/ADP 已返回限流/)).toBeTruthy());
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(originalQuestion);
+  });
 });

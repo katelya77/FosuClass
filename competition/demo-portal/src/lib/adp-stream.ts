@@ -185,9 +185,10 @@ export function reduceAdpExecution(
   facts: AdpEventFacts,
 ): AdpExecutionState {
   const nextReply = facts.replyText || `${state.reply}${facts.replyDelta}`;
+  const nextError = facts.error ?? state.error;
   return {
     ...state,
-    status: facts.error ? "error" : facts.completed ? "completed" : "streaming",
+    status: nextError ? "error" : facts.completed ? "completed" : "streaming",
     eventCount: state.eventCount + 1,
     eventTypes: unique([...state.eventTypes, facts.type]),
     agentNames: unique([...state.agentNames, ...facts.agentNames]),
@@ -197,7 +198,7 @@ export function reduceAdpExecution(
     taskLabels: unique([...state.taskLabels, ...facts.taskLabels]),
     reply: nextReply,
     widget: facts.widget ?? state.widget,
-    error: facts.error ?? state.error,
+    error: nextError,
   };
 }
 
