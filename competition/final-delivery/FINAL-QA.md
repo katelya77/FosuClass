@@ -18,7 +18,8 @@
 - 大赛自部署 ADP 发布入口完成过真实 200 SSE 会话：出现 `小序-主协调`、`小序-校园洞察`，并出现全校概览与教师负载查询两次真实工具调用。
 - 真实返回包含 Widget.View / WidgetId / WidgetRunId；官方 `<adp-widget>` 已在浏览器实际渲染，非本地伪造。
 - 当前发布版本未返回 `IsSubAgent` 字段；诊断页如实显示“字段尚未返回”，不制造状态。
-- 最后一轮复测仍得到 HTTP 200 SSE，但上游事件明确返回 `400429 RateLimit`；页面按真实事件呈现，未把限流包装成成功。此前成功会话与 Widget 截图已保存在 `qa/final-cut/`。
+- 生产 Pages 已切换到固定 DNS-only 上游；部署预览与生产入口连续返回 HTTP 200 SSE，原有直连 IP 的 1003 / 520 / 502 已消除。
+- 冷却后复测仍由 ADP `thinking_model` 返回 `400429 RateLimit`；Console 已核验应用为“运行中”、Multi-Agent 模式、AppKey 为“已启用”，因此剩余阻塞是比赛空间模型配额，而非 Portal、密钥或发布状态。页面保留原问题并提供真实重试提示，不把限流包装成成功。此前成功会话与 Widget 截图已保存在 `qa/final-cut/`。
 
 ## 4173 Final Cut Director
 
@@ -34,8 +35,8 @@
 - AI Competition：通过；其中无密钥提交检查通过。
 - Agent Final Convergence：全部通过。
 - 4173 Showcase：67/67，生产 build 通过。
-- 4174 Judge Portal：13/13，生产 build 通过。
-- Cloudflare Pages Functions：Wrangler 4.125.0 生产函数构建通过。
+- 4174 Judge Portal：14/14，生产 build 通过。
+- Cloudflare Pages Functions：生产函数构建及 Git 自动部署通过。
 - 程序交付验证：4 agents / 13 tools / 14 bindings / 4 verified heroes，PASS。
 - PPT：12 页，PowerPoint 原生打开通过，slides_test 报告 `No overflow detected`。
 - DOCX：20 页，Word 原生打开通过，隐私清理移除 1032 个编辑会话标识并清理核心元数据。
