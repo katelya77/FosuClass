@@ -1,0 +1,141 @@
+{
+  "fixtureVersion": "2.0.0",
+  "sceneId": "hero-reschedule",
+  "source": "adp-runtime-golden",
+  "dataVersion": "competition-demo-v3",
+  "verified": true,
+  "capturedAt": "2026-08-23T17:00:48+08:00",
+  "provenanceNote": "证据来源：本地确定性 CampusTools（competition/adp-kit/mcp/campus-tools-mcp）对 competition-demo-v3 数据集（sha1:842b7959e808）的调用结果，evidence.verified=true。复现调用：check_reschedule_feasibility{lesson-001,target 周四7-8节}#q-20260823090048-2177d1（auto）; check_reschedule_feasibility{target.room=A1-201}（explicit，reschedule-explicit.json）; find_available_classrooms{校区A,周四7-8节}=18间候选（reschedule-candidates-thu-78.json）",
+  "payload": {
+    "courseName": "数据结构",
+    "className": "2025级计算机类01班",
+    "teacherName": "教师003",
+    "source": {
+      "lessonId": "lesson-001",
+      "week": 1,
+      "weekday": 1,
+      "weekdayName": "周一",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "date": "2026-08-31",
+      "roomName": "A1-201",
+      "building": "A公共教学楼",
+      "campusName": "校区A"
+    },
+    "target": {
+      "week": 1,
+      "weekday": 4,
+      "weekdayName": "周四",
+      "periodText": "第7-8节",
+      "date": "2026-09-03"
+    },
+    "auto": {
+      "feasible": true,
+      "warningCount": 1,
+      "spaceAvailabilityRoomCount": 8,
+      "suggestedRoom": {
+        "name": "A1-201",
+        "capacity": 120,
+        "campusName": "校区A"
+      }
+    },
+    "explicit": {
+      "feasible": true,
+      "targetRoomResolved": {
+        "name": "A1-201",
+        "capacity": 120,
+        "campusName": "校区A"
+      }
+    },
+    "checks": {
+      "classConflict": false,
+      "teacherConflict": false,
+      "roomConflict": false,
+      "capacityOk": true,
+      "featureOk": true
+    },
+    "warnings": [
+      {
+        "type": "continuous_load",
+        "level": "warning",
+        "text": "调整后教师连续 4 节，可能存在连堂负荷"
+      }
+    ],
+    "mutatedData": false,
+    "candidateSlotRooms": [
+      {
+        "name": "A1-203",
+        "capacity": 100
+      },
+      {
+        "name": "A1-201",
+        "capacity": 120
+      },
+      {
+        "name": "A1-202",
+        "capacity": 120
+      },
+      {
+        "name": "A2-303",
+        "capacity": 50
+      },
+      {
+        "name": "A2-304",
+        "capacity": 50
+      },
+      {
+        "name": "A2-301",
+        "capacity": 60
+      },
+      {
+        "name": "A2-302",
+        "capacity": 60
+      },
+      {
+        "name": "A1-102",
+        "capacity": 60
+      },
+      {
+        "name": "A1-104",
+        "capacity": 60
+      },
+      {
+        "name": "A1-105",
+        "capacity": 60
+      },
+      {
+        "name": "A1-103",
+        "capacity": 80
+      },
+      {
+        "name": "A1-106",
+        "capacity": 80
+      },
+      {
+        "name": "A4-501",
+        "capacity": 48
+      },
+      {
+        "name": "A4-502",
+        "capacity": 48
+      },
+      {
+        "name": "A4-503",
+        "capacity": 48
+      },
+      {
+        "name": "A3-401",
+        "capacity": 48
+      },
+      {
+        "name": "A3-402",
+        "capacity": 48
+      },
+      {
+        "name": "A3-403",
+        "capacity": 48
+      }
+    ]
+  }
+}

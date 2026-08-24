@@ -12,7 +12,7 @@ const envelopeSchema = {
   properties: {
     success: { type: "boolean" },
     queryId: { type: "string", pattern: "^q-" },
-    dataVersion: { type: "string", enum: ["competition-demo-v1"] },
+    dataVersion: { type: "string", enum: ["competition-demo-v3"] },
     resolvedEntity: { nullable: true, oneOf: [{ $ref: "#/components/schemas/ResolvedEntity" }] },
     items: { type: "array", items: { type: "object", additionalProperties: true } },
     actions: { type: "array", items: { type: "object", additionalProperties: true } },
@@ -26,16 +26,11 @@ const spec = {
   openapi: "3.0.3",
   info: {
     title: "CampusTools 校园确定性工具 API",
-    description: "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v1 匿名数据确定性计算，不调用生成式模型，也绝不回退到 production 数据。",
-    version: "1.2.0",
+    description: "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v3 匿名数据确定性计算，不调用生成式模型，也绝不回退到生产数据。",
+    version: "1.3.0",
   },
   servers: [
-    { url: "http://127.0.0.1:8787", description: "本地测试" },
-    {
-      url: "https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com/campusflow-adp-tools",
-      description: "校园智序独立比赛测试环境（CloudBase HTTP Function）",
-    },
-    { url: "https://{host}", description: "比赛测试环境；导入ADP后填写实际匿名测试域名", variables: { host: { default: "example.invalid" } } },
+    { url: "https://example.invalid", description: "提交材料匿名占位地址；运行时地址由评审环境配置" },
   ],
   tags: [{ name: "CampusTools", description: "只读匿名校园工具" }],
   paths: {
@@ -65,7 +60,7 @@ const spec = {
         type: "object",
         required: ["dataVersion", "dataHash", "source", "computedAt", "verified"],
         properties: {
-          dataVersion: { type: "string", enum: ["competition-demo-v1"] },
+          dataVersion: { type: "string", enum: ["competition-demo-v3"] },
           dataHash: { type: "string", pattern: "^sha1:" },
           source: { type: "string", enum: ["campus-tools-mcp"] },
           computedAt: { type: "string", format: "date-time" },

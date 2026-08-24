@@ -1,0 +1,186 @@
+{
+  "schema": "campus-intelligence-final-truth/v1",
+  "frozenAt": "2026-08-24T00:00:00+08:00",
+  "baseline": {
+    "sourceBranch": "deploy/demo-portal",
+    "sourceCommit": "28e816e",
+    "deliveryBranch": "deliver/competition-final"
+  },
+  "brand": {
+    "product": "校园智序·小序",
+    "tagline": "让复杂的校园教学安排，简单到一句话就能问。",
+    "narrative": [
+      "真实问题",
+      "自然语言任务",
+      "Multi-Agent 理解与分工",
+      "CampusTools 确定性核验",
+      "可核查 Widget",
+      "辅助决策"
+    ],
+    "anonymousAdoptionClaim": "前期产品形态已在真实校园环境落地运行，累计服务用户 1000+。"
+  },
+  "architecture": {
+    "agents": [
+      { "id": "main", "name": "小序·主协调", "role": "理解任务、组织协作、汇总结论", "campusToolBindings": [] },
+      {
+        "id": "schedule",
+        "name": "课程空间",
+        "role": "课表、教室、共同空闲与多人规划",
+        "campusToolBindings": [
+          "campus_schedule_query",
+          "campus_schedule_range_query",
+          "campus_classroom_search",
+          "campus_entity_search",
+          "campus_academic_context",
+          "campus_common_free_time_query",
+          "campus_group_plan"
+        ]
+      },
+      {
+        "id": "risk",
+        "name": "风险规划",
+        "role": "冲突、赶场、日计划与模拟调课",
+        "campusToolBindings": [
+          "campus_risk_check",
+          "campus_day_plan",
+          "campus_academic_context",
+          "campus_reschedule_feasibility"
+        ]
+      },
+      {
+        "id": "insight",
+        "name": "校园洞察",
+        "role": "教学态势、教师负载与空间利用",
+        "campusToolBindings": [
+          "campus_overview",
+          "campus_teacher_load_query",
+          "campus_room_utilization_query"
+        ]
+      }
+    ],
+    "agentCount": 4,
+    "uniqueCampusToolCount": 13,
+    "bindingCount": 14,
+    "sharedTool": "campus_academic_context",
+    "mainCampusToolCount": 0,
+    "transferPattern": "Main → Child → Main",
+    "childToChildTransfer": false
+  },
+  "data": {
+    "version": "competition-demo-v3",
+    "schema": "campus-demo/v3",
+    "hash": "sha1:842b7959e808",
+    "anonymous": true,
+    "counts": {
+      "campuses": 4,
+      "teachingUnits": 6,
+      "classes": 24,
+      "teachers": 40,
+      "courses": 73,
+      "rooms": 85,
+      "lessons": 175
+    },
+    "dynamicFactAuthority": "CampusTools deterministic computation"
+  },
+  "presentation": {
+    "unifiedResultCard": true,
+    "verified": true,
+    "evidence": true,
+    "deterministicTextFallback": true,
+    "failClosed": true,
+    "showcasePort": 4173,
+    "judgePortalPort": 4174
+  },
+  "heroes": [
+    {
+      "id": "risk",
+      "title": "教学风险发现",
+      "prompt": "检查教师025未来四周的教学风险。",
+      "verified": true,
+      "source": "adp-runtime-golden",
+      "facts": {
+        "teacher": "教师025",
+        "weeks": [1, 4],
+        "lessonsPerWeek": 14,
+        "conflictsPerWeek": 0,
+        "rushWarningsPerWeek": 4,
+        "rushGapMinutes": 20
+      }
+    },
+    {
+      "id": "collaboration",
+      "title": "多人协同规划",
+      "prompt": "帮教师005、教师006、教师014找第1周周四上午的共同空闲，并推荐合适教室。",
+      "verified": true,
+      "source": "adp-runtime-golden",
+      "facts": {
+        "participantCount": 3,
+        "week": 1,
+        "weekday": 4,
+        "periods": [1, 4],
+        "allRoomsAvailable": 63,
+        "capacity120Plus": 7,
+        "recommendedRoom": "A1-201",
+        "recommendedCapacity": 120
+      }
+    },
+    {
+      "id": "reschedule",
+      "title": "What-if 模拟调课",
+      "prompt": "把数据结构从第1周周一第5–6节模拟调整到周四第7–8节。",
+      "verified": true,
+      "source": "adp-runtime-golden",
+      "facts": {
+        "course": "数据结构",
+        "sourceWeekday": 1,
+        "sourcePeriods": [5, 6],
+        "targetWeekday": 4,
+        "targetPeriods": [7, 8],
+        "availableRooms": 18,
+        "eligibleRooms": 8,
+        "suggestedRoom": "A1-201",
+        "feasible": true,
+        "warningCount": 1,
+        "warning": "调整后教师连续4节，可能存在连堂负荷",
+        "mutatedData": false
+      }
+    },
+    {
+      "id": "insight",
+      "title": "全局教学洞察",
+      "prompt": "未来四周谁的教学负载最高，并下钻他的真实风险。",
+      "verified": true,
+      "source": "adp-runtime-golden",
+      "facts": {
+        "weeks": [1, 4],
+        "top1": "教师025",
+        "lessons": 56,
+        "periods": 112,
+        "lessonsPerWeek": [14, 14, 14, 14],
+        "conflictCount": 0,
+        "rushWarningCount": 4,
+        "rushGapMinutes": 20
+      }
+    }
+  ],
+  "whatIf": {
+    "readOnly": true,
+    "mutatedData": false,
+    "feasibleAndWarningCanCoexist": true
+  },
+  "deliveryRules": {
+    "externalBrandOnly": "校园智序·小序",
+    "historicalDataVersionsAllowedInFinalFacingArtifacts": false,
+    "realAdpOperationRequiredInVideo": true,
+    "manualConsoleExportsRequired": true,
+    "productionDeploymentAllowed": false
+  },
+  "status": {
+    "repository": "REPO_GOLDEN",
+    "pr49": "OPEN",
+    "runtimeCoreModifiedByFinalDelivery": false,
+    "campusToolSemanticsModifiedByFinalDelivery": false,
+    "bindingsModifiedByFinalDelivery": false,
+    "verifiedFactsModifiedByFinalDelivery": false
+  }
+}
