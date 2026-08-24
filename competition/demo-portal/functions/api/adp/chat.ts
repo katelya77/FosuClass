@@ -1,9 +1,10 @@
 import { connect } from "cloudflare:sockets";
 
 const ADP_HOST = "101.42.184.216";
+const ADP_FETCH_HOST = `${ADP_HOST}.nip.io`;
 const ADP_PORT = 80;
 const ADP_CHAT_PATH = "/adp/v2/chat";
-const ADP_CHAT_URL = `http://${ADP_HOST}${ADP_CHAT_PATH}?language=zh-CN`;
+const ADP_CHAT_URL = `http://${ADP_FETCH_HOST}${ADP_CHAT_PATH}?language=zh-CN`;
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_MESSAGE_CHARS = 2_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
