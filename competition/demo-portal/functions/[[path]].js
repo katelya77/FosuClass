@@ -1,4 +1,7 @@
-const ADP_ORIGIN = "http://101.42.184.216";
+const ADP_PUBLIC_ORIGIN = "http://101.42.184.216";
+// Workers subrequests cannot target an IP literal. This fixed DNS name resolves
+// to the same public ADP address and preserves a URL hostname for fetch().
+const ADP_FETCH_ORIGIN = "http://101.42.184.216.nip.io";
 
 const DIRECT_API_PREFIXES = [
   "/account/",
@@ -50,20 +53,23 @@ function upstreamRequestHeaders(request) {
   headers.delete("cookie");
   headers.delete("host");
   headers.delete("referer");
-  headers.set("origin", ADP_ORIGIN);
+  headers.set("origin", ADP_PUBLIC_ORIGIN);
   return headers;
 }
 
 function rewriteLocation(value, publicOrigin) {
   if (!value) return value;
-  if (value.startsWith(`${ADP_ORIGIN}/adp-chat-client`)) {
-    return value.replace(ADP_ORIGIN, publicOrigin);
+  if (value.startsWith(`${ADP_PUBLIC_ORIGIN}/adp-chat-client`)) {
+    return value.replace(ADP_PUBLIC_ORIGIN, publicOrigin);
   }
-  if (value.startsWith(`${ADP_ORIGIN}/webim`)) {
-    return value.replace(ADP_ORIGIN, publicOrigin);
+  if (value.startsWith(`${ADP_PUBLIC_ORIGIN}/webim`)) {
+    return value.replace(ADP_PUBLIC_ORIGIN, publicOrigin);
   }
-  if (value.startsWith(ADP_ORIGIN)) {
-    return `${publicOrigin}/adp-origin${value.slice(ADP_ORIGIN.length)}`;
+  if (value.startsWith(ADP_PUBLIC_ORIGIN)) {
+    return `${publicOrigin}/adp-origin${value.slice(ADP_PUBLIC_ORIGIN.length)}`;
+  }
+  if (value.startsWith(ADP_FETCH_ORIGIN)) {
+    return `${publicOrigin}/adp-origin${value.slice(ADP_FETCH_ORIGIN.length)}`;
   }
   return value;
 }
@@ -84,7 +90,7 @@ function relayError(status, message) {
 
 async function healthCheck() {
   try {
-    const response = await fetch(`${ADP_ORIGIN}/adp-chat-client/`, {
+    const response = await fetch(`${ADP_FETCH_ORIGIN}/adp-chat-client/`, {
       method: "GET",
       redirect: "manual",
     });
@@ -118,7 +124,7 @@ export async function onRequest({ request }) {
   const upstreamPath = resolveUpstreamPath(requestUrl.pathname);
   if (!upstreamPath) return relayError(404, "该路径不属于公开真机体验范围。");
 
-  const upstreamUrl = new URL(`${ADP_ORIGIN}${upstreamPath}`);
+  const upstreamUrl = new URL(`${ADP_FETCH_ORIGIN}${upstreamPath}`);
   upstreamUrl.search = requestUrl.search;
 
   const init = {
