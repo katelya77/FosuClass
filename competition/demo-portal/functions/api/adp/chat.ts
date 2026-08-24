@@ -175,7 +175,7 @@ function createResponseStream(
 
 async function streamAdp(body: Uint8Array, requestId: string): Promise<Response> {
   const socket = connect(
-    { hostname: ADP_HOST, port: ADP_PORT },
+    { hostname: ADP_FETCH_HOST, port: ADP_PORT },
     { allowHalfOpen: true, secureTransport: "off" },
   );
   await socket.opened;
@@ -183,7 +183,7 @@ async function streamAdp(body: Uint8Array, requestId: string): Promise<Response>
   const writer = socket.writable.getWriter();
   const requestHead = [
     `POST ${ADP_CHAT_PATH}?language=zh-CN HTTP/1.1`,
-    `Host: ${ADP_HOST}`,
+    `Host: ${ADP_FETCH_HOST}`,
     "Accept: text/event-stream",
     "Content-Type: application/json",
     "Accept-Language: zh-CN,zh;q=0.9",
@@ -336,11 +336,11 @@ export async function onRequest({ request, env }: PagesContext): Promise<Respons
 
   try {
     const fetchResponse = await fetchAdp(upstreamBody, requestId);
-    const blockedDirectIpFetch =
-      fetchResponse.status === 403 &&
+    const cloudflareGeneratedFailure =
+      (fetchResponse.status === 403 || fetchResponse.status >= 500) &&
       (fetchResponse.headers.has("cf-ray") ||
         fetchResponse.headers.get("server")?.toLowerCase() === "cloudflare");
-    if (!blockedDirectIpFetch) return fetchResponse;
+    if (!cloudflareGeneratedFailure) return fetchResponse;
 
     await fetchResponse.body?.cancel();
     return await streamAdp(upstreamBody, requestId);
