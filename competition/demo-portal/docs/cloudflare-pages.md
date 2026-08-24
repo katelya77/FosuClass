@@ -24,7 +24,9 @@
 
 ## Secret boundary
 
-当前公开体验 URL 不需要 AppKey。若未来确需调用官方服务端 API，只能在 Cloudflare Dashboard 以 Function Secret 配置，并从 Pages Function 服务端读取；禁止使用 `VITE_*`、HTML、React、Git 或浏览器存储传递 Secret。
+Native ADP API Mode 由 `/api/adp/chat` 的 Pages Function 代理官方 SSE。生产环境必须在 Cloudflare Dashboard 的 Pages Secret 中配置 `ADP_APP_KEY`；本机仅允许写入已被 Git 忽略的 `.dev.vars`。前端只发送消息、会话标识与 Widget Action，不接收也不保存密钥。严禁使用 `VITE_*`、HTML、React、Git、日志或浏览器存储传递 Secret。
+
+当前大赛发布空间的调用入口为举办方自部署的 ADP API。函数默认使用该发布入口；如部署方后续提供新的 HTTPS 入口，只在服务端修改 `ADP_API_URL`，不得写入前端 Bundle。
 
 ## Local verification
 

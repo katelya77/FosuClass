@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 export type Route =
   | { name: "home" }
   | { name: "experience"; caseKey?: string }
+  | { name: "adp-diagnostics" }
   | { name: "capability" }
   | { name: "cases" }
   | { name: "about" };
@@ -13,6 +14,8 @@ export function routeToHash(route: Route): string {
       return "#/";
     case "experience":
       return route.caseKey ? `#/experience/${route.caseKey}` : "#/experience";
+    case "adp-diagnostics":
+      return "#/adp-diagnostics";
     case "capability":
       return "#/capability";
     case "cases":
@@ -28,6 +31,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "experience") {
     return { name: "experience", caseKey: parts[1] };
   }
+  if (parts[0] === "adp-diagnostics") return { name: "adp-diagnostics" };
   if (parts[0] === "capability") return { name: "capability" };
   if (parts[0] === "cases") return { name: "cases" };
   if (parts[0] === "about") return { name: "about" };
