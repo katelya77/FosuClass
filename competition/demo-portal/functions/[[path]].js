@@ -1,4 +1,5 @@
 import { connect } from "cloudflare:sockets";
+import { onRequest as handleNativeAdpChat } from "./api/adp/chat.ts";
 
 const ADP_PUBLIC_ORIGIN = "http://101.42.184.216";
 const ADP_HOST = "101.42.184.216";
@@ -276,8 +277,10 @@ async function healthCheck() {
  * The upstream host is fixed, admin routes are denied, credentials are stripped,
  * and response bodies remain streamed except for the tiny WebIM runtime config.
  */
-export async function onRequest({ request }) {
+export async function onRequest({ request, env }) {
   const requestUrl = new URL(request.url);
+
+  if (requestUrl.pathname === "/api/adp/chat") return handleNativeAdpChat({ request, env });
 
   if (requestUrl.pathname === "/adp-relay-health") return healthCheck();
 

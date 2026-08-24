@@ -8,6 +8,18 @@ export const DEFAULT_ADP_WEBIM_URL = "http://101.42.184.216/webim/#/chat/uxjybB"
 export const ADP_RELAY_CHAT_URL = "/adp-chat-client/#/app/2084871572396491520";
 export const ADP_RELAY_WEBIM_URL = "/webim/#/chat/uxjybB";
 export const ADP_RELAY_HEALTH_URL = "/adp-relay-health";
+export const ADP_CHAT_API_URL = "/api/adp/chat";
+export const ADP_CONVERSATION_STORAGE_KEY = "campusflow.adp.conversation.v1";
+export const ADP_DIAGNOSTICS_STORAGE_KEY = "campusflow.adp.diagnostics.v1";
+
+export function getPersistentConversationId(storage?: Storage): string {
+  const target = storage ?? (typeof window !== "undefined" ? window.localStorage : undefined);
+  const current = target?.getItem(ADP_CONVERSATION_STORAGE_KEY)?.trim();
+  if (current && /^[0-9a-f-]{36}$/i.test(current)) return current;
+  const created = crypto.randomUUID();
+  target?.setItem(ADP_CONVERSATION_STORAGE_KEY, created);
+  return created;
+}
 
 export interface AdpEnvLike {
   VITE_ADP_EMBED_URL?: string;

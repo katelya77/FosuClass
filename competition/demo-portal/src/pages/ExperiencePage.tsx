@@ -14,12 +14,6 @@ interface ExperiencePageProps {
   onNavigate: (route: Route) => void;
 }
 
-function readSearchNumber(key: string, fallback: number): number {
-  const value = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get(key) : null;
-  const parsed = value ? Number.parseInt(value, 10) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): ReactElement {
   const active = getCaseByKey(caseKey) ?? EXPERIENCE_CASES[0];
   const activeBrandId = {
@@ -33,14 +27,6 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
   const prompt = pendingPrompt ?? active.fullPrompt;
 
   const [copied, setCopied] = useState(false);
-  const forceExternal = useMemo(
-    () =>
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("forceExternal") === "1",
-    [],
-  );
-  const timeoutMs = useMemo(() => readSearchNumber("timeout", 5000), []);
-
   useEffect(() => {
     setCopied(false);
   }, [active.key, prompt]);
@@ -82,7 +68,7 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
         })}
         <span className="ml-auto hidden items-center gap-2 text-xs text-mute sm:flex">
           <MousePointerClick size={14} />
-          把左侧问题发到右侧小序真机
+          把左侧问题直接发给真实小序
         </span>
       </div>
 
@@ -91,8 +77,8 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
           <div className="experience-storyline" aria-label="体验流程">
             {[
               ["问题", "你用自然语言提问"],
-              ["查询", "小序理解并查找"],
-              ["验证", "CampusTools 核验"],
+              ["协作", "Multi-Agent 分工"],
+              ["核验", "CampusTools 计算"],
               ["结论", "给出清楚答案"],
             ].map(([label, detail], index) => (
               <div key={label} className="experience-story-step">
@@ -103,8 +89,7 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
           </div>
           <AdpExperience
             className="min-h-[540px] flex-1 lg:min-h-[calc(100vh-13rem)]"
-            forceExternal={forceExternal}
-            timeoutMs={timeoutMs}
+            initialPrompt={prompt}
           />
         </section>
 
@@ -176,7 +161,7 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
               {copied ? "已复制问题" : "复制这段问题"}
             </MagneticButton>
             <p className="px-2 text-center text-[11px] leading-relaxed text-mute">
-              打开右侧小序真机，把问题直接发给小序
+              右侧通过官方 SSE 调用已发布 Multi-Agent
             </p>
           </div>
         </aside>

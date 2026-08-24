@@ -9,6 +9,7 @@ import { Sidebar } from "./components/Sidebar";
 import { DEFAULT_ADP_CHAT_URL } from "./lib/adp";
 import { useHashRoute, useNavigate, type Route } from "./lib/router";
 import { AboutPage } from "./pages/AboutPage";
+import { AdpDiagnosticsPage } from "./pages/AdpDiagnosticsPage";
 import { CapabilityPage } from "./pages/CapabilityPage";
 import { CasesPage } from "./pages/CasesPage";
 import { ExperiencePage } from "./pages/ExperiencePage";
@@ -30,6 +31,8 @@ function PageOutlet({ route, onNavigate, onQuickDemo }: PageOutletProps): ReactE
           onNavigate={onNavigate}
         />
       );
+    case "adp-diagnostics":
+      return <AdpDiagnosticsPage onNavigate={onNavigate} />;
     case "capability":
       return <CapabilityPage onNavigate={onNavigate} />;
     case "cases":
