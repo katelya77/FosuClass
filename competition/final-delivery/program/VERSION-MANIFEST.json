@@ -1,7 +1,7 @@
 {
   "product": "校园智序·小序",
-  "deliveryPhase": "PHASE 3.0 — FINAL TRUTH FREEZE + COMPETITION DELIVERY",
-  "packageVersion": "3.0.0",
+  "deliveryPhase": "PHASE 3.1 — FINAL CUT",
+  "packageVersion": "3.1.0",
   "frozenOn": "2026-08-24",
   "branch": "deliver/competition-final",
   "sourceBranch": "deploy/demo-portal",
@@ -17,6 +17,14 @@
     "collaborationPath": "Main -> Child -> Main",
     "whatIfMutatedData": false,
     "openapiVersion": "1.3.0"
+  },
+  "finalCut": {
+    "judgePortalMode": "native-adp-sse",
+    "widgetRenderer": "official-adp-widget-sdk",
+    "showcaseDirectorSeconds": 163,
+    "videoTargetSeconds": 275,
+    "deckSlides": 12,
+    "designGuidePages": 20
   },
   "scope": {
     "includes": [

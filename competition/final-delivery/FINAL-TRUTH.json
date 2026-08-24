@@ -4,7 +4,8 @@
   "baseline": {
     "sourceBranch": "deploy/demo-portal",
     "sourceCommit": "28e816e",
-    "deliveryBranch": "deliver/competition-final"
+    "deliveryBranch": "deliver/competition-final",
+    "deliveryPhase": "PHASE 3.1 — FINAL CUT"
   },
   "brand": {
     "product": "校园智序·小序",
@@ -89,7 +90,14 @@
     "deterministicTextFallback": true,
     "failClosed": true,
     "showcasePort": 4173,
-    "judgePortalPort": 4174
+    "judgePortalPort": 4174,
+    "judgePortalMode": "native-adp-sse",
+    "widgetRenderer": "official-adp-widget-sdk",
+    "isSubAgentFieldObserved": false,
+    "showcaseDirectorSeconds": 163,
+    "videoTargetSeconds": 275,
+    "deckSlides": 12,
+    "designGuidePages": 20
   },
   "heroes": [
     {

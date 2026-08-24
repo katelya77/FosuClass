@@ -157,3 +157,14 @@
 - `competition/adp-kit/mock-data/competition-demo-v3.json`
 - `competition/showcase/src/fixtures/heroes/*.json`
 - `competition/showcase/docs/PHASE2.8-RELEASE.md`
+
+## 9. PHASE 3.1 FINAL CUT 冻结
+
+- 4174 的主体验是服务端 Native ADP SSE，不再依赖 iframe；官方体验链接只作为 secondary fallback。
+- 浏览器只发送消息、持久 ConversationId 与 Widget Action；密钥不进入 React Bundle、Git、截图或最终材料。
+- 真实成功会话出现过 `小序-主协调`、`小序-校园洞察`、全校概览查询、教师负载查询与官方 Widget 返回。
+- 当前发布版本没有返回 `IsSubAgent`；最终诊断页必须如实显示“字段尚未返回”，不得推测或伪造。
+- Widget 只使用 ADP 返回的 View / WidgetId / WidgetRunId，由官方 `<adp-widget>` 渲染；不得以自制结果卡冒充官方 Widget。
+- 4173 导演片固定为 Opening 10 秒、Architecture 15 秒、四个 Hero 各 28 秒；每幕统一“问题 → 协作 → 核验 → 结论”。
+- 最终答辩固定 12 页，设计说明书固定 20 页；核心证据来自真实 4173 / 4174 运行截图。
+- 最终视频时间轴固定 275 秒（04:35），REAL ADP 段固定为 02:34–03:38。

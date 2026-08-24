@@ -1,47 +1,53 @@
-# 校园智序·小序｜FINAL QA
+# 校园智序·小序｜PHASE 3.1 FINAL CUT QA
 
 > 审核日期：2026-08-24
-> 交付阶段：PHASE 3.0 — FINAL TRUTH FREEZE + COMPETITION DELIVERY
+> 交付阶段：PHASE 3.1 — FINAL CUT
 
 ## 交付完整性
 
-- 设计说明书：20 页 DOCX + PDF，逐页 PNG 预览 20 张。
-- 答辩材料：12 页 PPTX + PDF，逐页 PNG 预览 12 张。
-- 视频材料：脚本、镜头表、口播稿、SRT 字幕齐备；锁定时长 04:45。
-- 口播稿：1019 个汉字；字幕 26 段，序号连续、无重叠，末帧 00:04:45,000。
-- 程序复现包：22 个受清单管理的文件，SHA-256 与字节数全部一致。
-- ZIP：25 个条目，未包含依赖目录、版本历史、archive 或无关源码。
+- 设计说明书：20 页 DOCX + PDF，逐页 PNG 预览 20 张；P15 为真实官方 Widget，P18 为真实 Main → Child → CampusTools → Widget 证据。
+- 答辩材料：12 页 PPTX + PDF，逐页 PNG 预览 12 张；PowerPoint 原生打开与版面溢出检查通过。
+- 视频材料：脚本、镜头表、口播稿、SRT 字幕齐备；锁定时长 `04:35`。
+- 口播稿：1080 个非空白字符；字幕 32 段，序号连续、无重叠，末帧 `00:04:35,000`。
+- 程序复现包：23 个必要文件；ZIP 共 25 个条目，不含依赖目录、版本历史、archive、真实数据或凭据。
 
-## 事实与契约
+## 4174 Native ADP API
 
-- 4 Agent / 13 个面向 Agent 的 CampusTools / 14 个 Child bindings。
-- Main 直接工具绑定为 0；协作路径为 Main → Child → Main。
-- 匿名演示数据固定为当前最终版本，数据摘要为 `sha1:842b7959e808`。
-- 四个 Hero Golden Result 均通过最小复现测试。
-- What-if 结果保持 `mutatedData=false`，不会修改事实数据。
+- 主通路为 Pages Function `/api/adp/chat`，服务端构造 UUID RequestId、持久 ConversationId 与增量多意图请求，并原样透传 SSE。
+- 密钥只存在于本机已忽略的 `.dev.vars` 与 Cloudflare Secret；扫描 2783 个 Git 跟踪文件和 133 个构建/交付文件，密钥值命中为 0。
+- 大赛自部署 ADP 发布入口完成过真实 200 SSE 会话：出现 `小序-主协调`、`小序-校园洞察`，并出现全校概览与教师负载查询两次真实工具调用。
+- 真实返回包含 Widget.View / WidgetId / WidgetRunId；官方 `<adp-widget>` 已在浏览器实际渲染，非本地伪造。
+- 当前发布版本未返回 `IsSubAgent` 字段；诊断页如实显示“字段尚未返回”，不制造状态。
+- 最后一轮复测仍得到 HTTP 200 SSE，但上游事件明确返回 `400429 RateLimit`；页面按真实事件呈现，未把限流包装成成功。此前成功会话与 Widget 截图已保存在 `qa/final-cut/`。
 
-## 匿名与安全
+## 4173 Final Cut Director
 
-- 扫描范围覆盖正文文本、OOXML 内部 XML、PDF 文本与元数据、ZIP 内文件和图片元数据。
-- 身份线索、旧演示数据标识、本机路径、回环地址：0 命中。
-- 邮箱与凭据值模式：0 命中。
-- 对外可见品牌统一为“校园智序·小序”。
-- OpenAPI 仅保留标准鉴权结构与匿名占位地址，不含任何凭据值或私有部署地址。
+- Opening 10 秒、Architecture 15 秒；完整导演片时间线 163 秒。
+- 四个 Hero 均使用“问题 → 协作 → 核验 → 结论”四拍结构；问题先全屏 1.5–2 秒，再缩到左上。
+- 1920×1080、1440×900、1366×768 的 record mode 均无横向或纵向溢出。
+- 四幕冻结值未改变：Risk `0 / 4 / 20 min`；Collaboration `63 → 7 → A1-201`；Reschedule `5 PASS + 1 WARNING / feasible=true / mutatedData=false`；Insight `Top1 / 56 / 112 / 0 / 4`。
 
-## 验证结果
+## 自动验证
 
 - Agent Foundation：42/42 通过。
-- Agent Regression：独立复跑 197/197 通过。首次与另一完整套件并发时，Windows 子进程出现一次瞬态退出；单独复跑后不再复现。
-- AI Competition：通过。
-- Agent Final Convergence：通过。
-- R51：91/91 通过。
-- R50.4 + Final Acceptance：5/5 通过。
-- 当前匿名数据验证器：ALL PASS。
+- Agent Regression：197/197 通过；需 Docker 的 PostgreSQL / Redis 段如实标记 UNVERIFIED，其文件与降级路径验证通过。
+- AI Competition：通过；其中无密钥提交检查通过。
+- Agent Final Convergence：全部通过。
+- 4173 Showcase：67/67，生产 build 通过。
+- 4174 Judge Portal：13/13，生产 build 通过。
+- Cloudflare Pages Functions：Wrangler 4.125.0 生产函数构建通过。
 - 程序交付验证：4 agents / 13 tools / 14 bindings / 4 verified heroes，PASS。
-- 4173 Showcase：67/67，build 通过，浏览器运行无 console error。
-- 4174 Judge Portal：12/12，build 通过，浏览器运行无 console error。
-- PPT 溢出检查：No overflow detected。
-- Git whitespace：`git diff --check` 通过。
+- PPT：12 页，PowerPoint 原生打开通过，slides_test 报告 `No overflow detected`。
+- DOCX：20 页，Word 原生打开通过，隐私清理移除 1032 个编辑会话标识并清理核心元数据。
+- SRT：32 段、时间单调、无重叠、总时长 275 秒，可直接导入剪映 / Premiere。
+
+## 匿名与旧版本扫描
+
+- 扫描范围覆盖最终文本、OOXML 内部 XML、PDF 文本、程序包与构建产物。
+- 身份线索、真实学校/学院、代码托管账号、本机用户路径、回环地址、凭据值：0 命中。
+- `competition-demo-v1` / `competition-demo-v2`：0 命中。
+- 最终材料中旧产品名、旧仓库名与本机工作区名：0 命中。
+- PPT 的图片描述路径已清理；最终对外品牌统一为“校园智序·小序”。
 
 ## 人工补充项
 
@@ -51,4 +57,4 @@
 2. CampusTools 自定义插件导出 ZIP；
 3. 最终 Widget 导出文件。
 
-同时需要把最终在线体验链接与二维码填入答辩第 12 页，并在视频 03:20–04:05 使用真实 ADP 操作录屏替换拍摄占位。
+同时需要把最终公开体验链接与二维码填入答辩第 12 页，并按镜头表录制最终 REAL ADP 三组真实提问画面。
