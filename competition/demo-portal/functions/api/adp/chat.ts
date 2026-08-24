@@ -334,7 +334,15 @@ export async function onRequest({ request, env }: PagesContext): Promise<Respons
   );
 
   try {
-    return await fetchAdp(upstreamBody, requestId);
+    const fetchResponse = await fetchAdp(upstreamBody, requestId);
+    const blockedDirectIpFetch =
+      fetchResponse.status === 403 &&
+      (fetchResponse.headers.has("cf-ray") ||
+        fetchResponse.headers.get("server")?.toLowerCase() === "cloudflare");
+    if (!blockedDirectIpFetch) return fetchResponse;
+
+    await fetchResponse.body?.cancel();
+    return await streamAdp(upstreamBody, requestId);
   } catch (fetchError) {
     try {
       return await streamAdp(upstreamBody, requestId);
