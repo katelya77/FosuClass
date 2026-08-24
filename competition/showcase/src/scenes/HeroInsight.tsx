@@ -35,12 +35,12 @@ function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolea
               ? { duration: 0.45, ease: EASE_OUT }
               : { delay: i * 0.13, duration: 0.65, ease: EASE_OUT }}
             className={'flex items-center gap-3 rounded-xl border px-4 py-[10px] ' +
-              (isTop && extracted ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] bg-[var(--brand-dim)] shadow-[var(--glow-brand)]' : 'border-[rgba(168,184,204,0.12)] bg-canvas-deep/55')}
+              (isTop && extracted ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] bg-[var(--brand-dim)] shadow-[var(--glow-brand)]' : 'border-[rgba(171,105,91,0.12)] bg-canvas-deep/55')}
             style={{ transformOrigin: 'left center' }}
           >
             <span className={'w-7 text-right text-[16px] tabular-nums ' + (isTop ? 'font-bold text-brand-strong' : 'text-mute')}>{r.rank}</span>
             <span className={'w-24 text-[16px] ' + (isTop ? 'font-semibold text-ink' : 'text-mute')}>{r.teacherId}</span>
-            <div className='h-[12px] min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(168,184,204,0.16)]'>
+            <div className='h-[12px] min-w-0 flex-1 overflow-hidden rounded-full bg-[rgba(171,105,91,0.14)]'>
               <motion.div
                 className='h-full rounded-full'
                 style={{ background: isTop ? 'var(--brand)' : 'color-mix(in srgb, var(--brand-secondary) 62%, transparent)' }}

@@ -4,14 +4,14 @@ import type { SceneId } from "../../director/types";
 
 /** 每个 Scene 的世界底色：让画面始终"活着"，但 opacity 极低、绝不抢业务信息 */
 const ATMOS: Record<SceneId, { base: string; secondary: string; warm?: string }> = {
-  opening: { base: "rgba(79,214,166,0.12)", secondary: "rgba(156,194,226,0.09)" },
-  architecture: { base: "rgba(127,173,214,0.12)", secondary: "rgba(74,127,176,0.11)" },
-  "hero-risk": { base: "rgba(127,173,214,0.12)", secondary: "rgba(156,194,226,0.1)", warm: "rgba(238,198,148,0.12)" },
-  "hero-collaboration": { base: "rgba(79,214,166,0.11)", secondary: "rgba(127,173,214,0.11)" },
-  "hero-reschedule": { base: "rgba(79,214,166,0.12)", secondary: "rgba(156,194,226,0.11)", warm: "rgba(238,198,148,0.08)" },
-  "hero-insight": { base: "rgba(74,127,176,0.13)", secondary: "rgba(156,194,226,0.11)" },
-  reliability: { base: "rgba(127,173,214,0.12)", secondary: "rgba(79,214,166,0.09)" },
-  closing: { base: "rgba(79,214,166,0.11)", secondary: "rgba(156,194,226,0.08)" },
+  opening: { base: "rgba(232,91,69,0.15)", secondary: "rgba(222,215,238,0.18)" },
+  architecture: { base: "rgba(165,143,192,0.15)", secondary: "rgba(246,196,193,0.2)" },
+  "hero-risk": { base: "rgba(246,196,193,0.2)", secondary: "rgba(222,215,238,0.16)", warm: "rgba(245,215,200,0.22)" },
+  "hero-collaboration": { base: "rgba(232,91,69,0.12)", secondary: "rgba(165,143,192,0.16)" },
+  "hero-reschedule": { base: "rgba(232,91,69,0.13)", secondary: "rgba(246,196,193,0.18)", warm: "rgba(245,215,200,0.2)" },
+  "hero-insight": { base: "rgba(165,143,192,0.17)", secondary: "rgba(246,196,193,0.16)" },
+  reliability: { base: "rgba(232,91,69,0.13)", secondary: "rgba(165,143,192,0.15)" },
+  closing: { base: "rgba(232,91,69,0.14)", secondary: "rgba(246,196,193,0.16)" },
 };
 
 function readQuality(): "cinematic" | "balanced" {
@@ -42,8 +42,8 @@ export function AmbientBackground(): JSX.Element {
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <div ref={gridRef} className="ambient-grid absolute inset-0 transition-opacity duration-700" />
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="orb-drift depth-shift absolute" style={{ width: "68vmax", height: "68vmax", left: "-18%", top: "-22%", background: "radial-gradient(circle at 42% 42%, rgba(79,214,166,0.19), transparent 62%)", animation: "driftA 26s cubic-bezier(0.45,0,0.55,1) infinite" }} />
-        <div className="orb-drift depth-shift absolute" style={{ width: "74vmax", height: "74vmax", right: "-24%", bottom: "-26%", background: "radial-gradient(circle at 58% 58%, rgba(127,173,214,0.18), transparent 62%)", animation: "driftB 32s cubic-bezier(0.45,0,0.55,1) infinite" }} />
+        <div className="orb-drift depth-shift absolute" style={{ width: "68vmax", height: "68vmax", left: "-18%", top: "-22%", background: "radial-gradient(circle at 42% 42%, rgba(246,196,193,0.46), transparent 62%)", animation: "driftA 26s cubic-bezier(0.45,0,0.55,1) infinite" }} />
+        <div className="orb-drift depth-shift absolute" style={{ width: "74vmax", height: "74vmax", right: "-24%", bottom: "-26%", background: "radial-gradient(circle at 58% 58%, rgba(222,215,238,0.42), transparent 62%)", animation: "driftB 32s cubic-bezier(0.45,0,0.55,1) infinite" }} />
         {a.warm && (
           <div className="orb-drift depth-shift absolute" style={{ width: "56vmax", height: "56vmax", right: "-10%", top: "-14%", background: "radial-gradient(circle at 50% 50%, " + a.warm + ", transparent 62%)", animation: "driftC 30s cubic-bezier(0.45,0,0.55,1) infinite" }} />
         )}
@@ -54,7 +54,7 @@ export function AmbientBackground(): JSX.Element {
           <div className="scan-bar" />
         </div>
       )}
-      <div className="absolute inset-0" style={{ background: "radial-gradient(150% 132% at 50% 44%, transparent 58%, rgba(5,7,12,0.46) 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "radial-gradient(150% 132% at 50% 44%, transparent 58%, rgba(126,72,63,0.18) 100%)" }} />
       <div className="grain absolute inset-0" />
     </div>
   );

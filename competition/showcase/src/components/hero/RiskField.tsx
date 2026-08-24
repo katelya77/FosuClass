@@ -13,7 +13,7 @@ const TILE_TOP = 56, ROW_H = 94, TILE_H = 80;
 const CAMP_Y = 536;
 const CAMP_XS = [300, 740, 1180, 1620];
 const CAMP_NAMES = ["校区A", "校区B", "校区C", "校区D"];
-const LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(6,10,16,0.92)", strokeWidth: 5, strokeLinejoin: "round" as const };
+const LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(255,250,246,0.94)", strokeWidth: 5, strokeLinejoin: "round" as const };
 
 interface RiskFieldProps {
   vm: RiskViewModel;
@@ -51,7 +51,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const x = LEFT + i * COLW;
         return (
           <motion.g key={d} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 + i * 0.1, duration: 0.7 }}>
-            <rect x={x + 7} y={TILE_TOP - 12} width={COLW - 14} height={ROW_H * 3 + 16} rx={20} fill="rgba(26,36,50,0.52)" stroke="rgba(190,206,226,0.16)" />
+            <rect x={x + 7} y={TILE_TOP - 12} width={COLW - 14} height={ROW_H * 3 + 16} rx={20} fill="rgba(255,255,255,0.5)" stroke="rgba(171,105,91,0.16)" />
             <text x={x + COLW / 2} y={32} textAnchor="middle" fontSize={24} fontWeight={680} fill={i === 4 ? "var(--brand-strong)" : "#E4EDF7"}>{d}</text>
           </motion.g>
         );
@@ -90,7 +90,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
               stroke={active ? cs.color : cs.color + "66"}
               strokeWidth={active ? 2.4 : 1.1}
               initial={false}
-              animate={{ opacity: dim && !active ? 0.52 : 1, filter: active ? "drop-shadow(0 0 16px rgba(79,214,166,0.4))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
+              animate={{ opacity: dim && !active ? 0.52 : 1, filter: active ? "drop-shadow(0 10px 18px rgba(232,91,69,0.22))" : "drop-shadow(0 0 0px rgba(0,0,0,0))" }}
               transition={{ duration: 0.45, ease: EASE_OUT }}
             />
             <text x={x + 16} y={y + 32} fontSize={22} fontWeight={700} fill="var(--text)" style={{ opacity: dim && !active ? 0.74 : 1 }}>{b.startTime}</text>

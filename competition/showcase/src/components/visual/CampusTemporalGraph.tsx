@@ -16,9 +16,9 @@ type IconCmp = ComponentType<{ size?: number | string; strokeWidth?: number | st
 const TYPE_META: Record<GraphNodeType, { color: string; label: string; Icon: IconCmp }> = {
   course: { color: "var(--brand)", label: "课程", Icon: BookOpen },
   teacher: { color: "var(--brand-strong)", label: "教师", Icon: UserRound },
-  class: { color: "#BCE0CE", label: "班级", Icon: Users },
+  class: { color: "#BD6D78", label: "班级", Icon: Users },
   room: { color: "var(--brand-secondary)", label: "教室", Icon: DoorOpen },
-  time: { color: "#A8C6E6", label: "时间", Icon: Clock3 },
+  time: { color: "#9E89B9", label: "时间", Icon: Clock3 },
   campus: { color: "var(--brand-secondary)", label: "校区", Icon: MapPin },
 };
 
@@ -38,7 +38,7 @@ const EDGE_PHASES: string[][] = [
   ],
 ];
 
-const NODE_LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(6,10,16,0.94)", strokeWidth: 5, strokeLinejoin: "round" as const };
+const NODE_LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(255,250,246,0.94)", strokeWidth: 5, strokeLinejoin: "round" as const };
 
 /**
  * CampusTemporalGraph —— Opening 的"教学时空场"（Phase 2.6 重做质感）。
@@ -74,7 +74,7 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
               <g key={key}>
                 <motion.line
                   x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(198,216,236,0.78)"
+                  stroke="rgba(181,123,113,0.42)"
                   strokeWidth={2.1}
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
@@ -84,7 +84,7 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
                 />
                 <motion.line
                   x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(147,244,209,0.98)"
+                  stroke="rgba(232,91,69,0.76)"
                   strokeWidth={3}
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
@@ -102,14 +102,14 @@ export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: Graph
             <motion.g key={"pulse-" + n.id}>
               <motion.circle
                 cx={n.x} cy={n.y} r={36}
-                fill="none" stroke="#A8C6E6" strokeWidth={1.9}
+                fill="none" stroke="#A58FC0" strokeWidth={1.9}
                 initial={{ opacity: 0, r: 34 }}
                 animate={{ opacity: [0, 0.65, 0], r: [34, 62, 84] }}
                 transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.8, ease: "easeOut" }}
               />
               <motion.circle
                 cx={n.x} cy={n.y} r={18}
-                fill="rgba(156,194,226,0.22)"
+                fill="rgba(222,215,238,0.44)"
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: [0, 0.9, 0.35], scale: [0, 1.4, 1] }}
                 transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.6, ease: "easeOut" }}

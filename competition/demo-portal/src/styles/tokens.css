@@ -1,0 +1,59 @@
+@import "../../../brand/auroraqua.css";
+
+/* ============================================================
+   校园智序 · 小序  Judge Portal Design Tokens
+   Auroraqua Iced Jelly / Liquid Glass re-themed warm coral.
+   ============================================================ */
+
+:root {
+  /* Brand coral / vermilion */
+  --brand: var(--brand-coral);
+  --brand-strong: var(--brand-coral-strong);
+  --brand-deep: var(--brand-coral-deep);
+  --brand-soft: var(--brand-rose);
+  --brand-tint: rgba(232, 91, 69, 0.13);
+
+  /* Warm campus neutrals */
+  --ink: var(--brand-ink);
+  --body: var(--brand-body);
+  --mute: var(--brand-muted);
+  --surface: var(--brand-warm-white);
+  --rose: var(--brand-rose);
+  --peach: var(--brand-peach);
+  --lavender: var(--brand-lavender);
+
+  /* Glass materials */
+  --line: rgba(232, 205, 195, 0.45);
+  --line-strong: rgba(205, 151, 133, 0.55);
+  --tint: rgba(90, 44, 32, 0.16);
+  --glass-bg: var(--brand-glass);
+  --glass-bg-strong: var(--brand-glass-strong);
+  --glass-border: var(--brand-glass-line);
+  --glass-inner: var(--brand-glass-highlight);
+
+  /* Fluid warm background */
+  --bg-warm: linear-gradient(135deg, #fff8f5 0%, #fcece4 42%, #f6e8f2 100%);
+  --bg-warm-soft: linear-gradient(140deg, #fffaf7 0%, #fdf0e9 55%, #f7eef6 100%);
+}
+
+@theme {
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-soft: var(--brand-soft);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-mute: var(--mute);
+  --color-surface: var(--surface);
+  --color-rose: var(--rose);
+  --color-peach: var(--peach);
+  --color-lavender: var(--lavender);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-tint: var(--tint);
+
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB",
+    "Segoe UI", sans-serif;
+  --font-display: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB",
+    "Segoe UI", sans-serif;
+}

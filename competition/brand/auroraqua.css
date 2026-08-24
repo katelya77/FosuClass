@@ -1,0 +1,43 @@
+/* Shared visual source for the 4173 film and 4174 judge product. */
+:root {
+  --brand-coral: #e85b45;
+  --brand-coral-strong: #c93d2f;
+  --brand-coral-deep: #8d2923;
+  --brand-warm-white: #fffaf6;
+  --brand-warm-canvas: #f8efea;
+  --brand-rose: #f6c4c1;
+  --brand-peach: #f5d7c8;
+  --brand-lavender: #ded7ee;
+  --brand-ink: #2c2220;
+  --brand-body: #6d5b56;
+  --brand-muted: #9a827b;
+
+  --brand-glass: rgba(255, 255, 255, 0.46);
+  --brand-glass-strong: rgba(255, 255, 255, 0.68);
+  --brand-glass-line: rgba(255, 255, 255, 0.76);
+  --brand-glass-line-soft: rgba(171, 105, 91, 0.2);
+  --brand-glass-highlight: rgba(255, 255, 255, 0.9);
+
+  --brand-radius-sm: 14px;
+  --brand-radius-md: 20px;
+  --brand-radius-lg: 28px;
+  --brand-radius-xl: 38px;
+  --brand-radius-pill: 999px;
+
+  --brand-shadow-soft: 0 16px 42px rgba(111, 58, 47, 0.12);
+  --brand-shadow-glass:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.26),
+    0 28px 80px rgba(111, 58, 47, 0.16);
+  --brand-shadow-lift:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 32px 88px rgba(120, 55, 43, 0.2),
+    0 10px 24px rgba(207, 70, 49, 0.12);
+
+  --brand-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --brand-ease-spring: cubic-bezier(0.16, 1.12, 0.36, 1);
+  --brand-ease-cinematic: cubic-bezier(0.83, 0, 0.17, 1);
+  --brand-motion-fast: 220ms;
+  --brand-motion-standard: 520ms;
+  --brand-motion-scene: 960ms;
+}

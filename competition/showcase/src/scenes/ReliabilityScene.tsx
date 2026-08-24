@@ -84,7 +84,7 @@ export function ReliabilityScene(): JSX.Element {
           style={{ boxShadow: expand ? "var(--shadow-depth)" : undefined }}
         >
           {/* Temporal Frame 顶部 */}
-          <div className="flex items-center justify-between gap-4 rounded-t-3xl border-b border-line bg-[#0c1220]/92 px-5 py-3 backdrop-blur">
+          <div className="flex items-center justify-between gap-4 rounded-t-3xl border-b border-line bg-white/76 px-5 py-3 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
               <span className="size-2 shrink-0 rounded-full bg-[var(--success)] animate-pulse" />
               <div className="min-w-0">

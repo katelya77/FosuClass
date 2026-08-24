@@ -21,6 +21,7 @@ import { HeroReschedule } from '../scenes/HeroReschedule';
 import { HeroInsight } from '../scenes/HeroInsight';
 import { ReliabilityScene } from '../scenes/ReliabilityScene';
 import { ClosingScene } from '../scenes/ClosingScene';
+import coordinatorImage from '../../../demo-portal/public/branding/coordinator-agent.png';
 
 function ActiveScene({ scene, recordMode }: { scene: SceneId; recordMode: boolean }): JSX.Element {
   switch (scene) {
@@ -109,8 +110,15 @@ export function ShowcaseApp({ search }: ShowcaseAppProps): JSX.Element {
         )}
 
         {!cleanStage && <SceneRail />}
-        <RecordHUD />
+        {(!cleanStage || modes.recordHud) && <RecordHUD />}
         {!cleanStage && <DirectorDock />}
+
+        <div className='portrait-notice' aria-label='横屏观看提示'>
+          <div className='portrait-notice-icon'><img src={coordinatorImage} alt='' aria-hidden /></div>
+          <p>校园智序 · 小序</p>
+          <h1>请旋转到横屏观看</h1>
+          <span>比赛成片采用 16:9 镜头语言<br />横屏可看见完整教学时空。</span>
+        </div>
       </main>
     </MotionConfig>
   );

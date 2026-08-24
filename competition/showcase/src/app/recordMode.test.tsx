@@ -29,15 +29,17 @@ describe('Record Mode（任务 §19 / §26-F）', () => {
     expect(screen.queryByTestId('debug-panel')).toBeNull();
     expect(screen.queryByRole('navigation', { name: '场景进度' })).toBeNull();
     expect(screen.queryByRole('button', { name: '参考线' })).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('fixture 模式展示已核验快照徽标（Phase 2 口径）', () => {
-    render(<ShowcaseApp search='?mode=record&data=fixture&autoplay=0' />);
+  it('显式 recordHud=1 才展示已核验快照与录制指示', () => {
+    render(<ShowcaseApp search='?mode=record&data=fixture&autoplay=0&recordHud=1' />);
     expect(screen.getByRole('status').textContent).toContain('已核验演示快照 · competition-demo-v3');
+    expect(screen.getByText('REC')).toBeTruthy();
   });
 
-  it('live 模式徽标切换为 ADP 实时', () => {
-    render(<ShowcaseApp search='?mode=record&data=live&autoplay=0' />);
+  it('显式 recordHud 下 live 模式徽标切换为 ADP 实时', () => {
+    render(<ShowcaseApp search='?mode=record&data=live&autoplay=0&recordHud=1' />);
     expect(screen.getByRole('status').textContent).toContain('腾讯 ADP · 实时运行');
   });
 

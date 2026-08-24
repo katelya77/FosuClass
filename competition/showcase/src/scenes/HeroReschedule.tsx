@@ -34,7 +34,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
   const pos = phase === 'snap' ? dst : src;
   const moving = phase !== 'source';
   return (
-    <div className='flex h-full flex-col'>
+    <div className='surgery-board flex h-full flex-col'>
       {/* Day header：左侧预留时间轴 gutter，保证与下方网格列严格对齐 */}
       <div className='mb-2 flex'>
         <div className='w-16 shrink-0' />
@@ -53,7 +53,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
               key={p.label}
               className={
                 'absolute right-2.5 flex items-center justify-end whitespace-nowrap text-[13px] leading-none tracking-wide ' +
-                (phase === 'snap' && p.row === 3 ? 'font-semibold text-brand-strong' : p.row === 2 ? 'text-muted' : 'text-faint')
+                (phase === 'snap' && p.row === 3 ? 'font-semibold text-brand-strong' : p.row === 2 ? 'text-mute' : 'text-faint')
               }
               style={{ top: p.row * ROW_H + '%', height: ROW_H + '%' }}
             >
@@ -63,12 +63,12 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
           <div aria-hidden className='absolute bottom-0 right-0 top-0 w-px bg-line' />
         </div>
 
-        <div className='relative ml-2 min-h-0 flex-1 overflow-hidden rounded-2xl border border-[rgba(190,206,226,0.22)] bg-canvas-deep/55'>
+        <div className='relative ml-2 min-h-0 flex-1 overflow-hidden rounded-2xl border border-[rgba(171,105,91,0.18)] bg-canvas-deep/55'>
           {/* 目标列：snap 后整列微光，让"去哪"一目了然 */}
           <motion.div
             aria-hidden
             className='absolute bottom-0 top-0'
-            style={{ left: 3 * COL_W + '%', width: COL_W + '%', background: 'linear-gradient(90deg, transparent, rgba(86,224,176,0.08), transparent)' }}
+            style={{ left: 3 * COL_W + '%', width: COL_W + '%', background: 'linear-gradient(90deg, transparent, rgba(232,91,69,0.08), transparent)' }}
             initial={{ opacity: 0 }} animate={phase === 'snap' ? { opacity: 1 } : { opacity: 0 }} transition={{ duration: 0.8 }}
           />
           {/* 虚淡列带：空网格呈现为"正在被检索的时空间" */}
@@ -81,16 +81,16 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             />
           ))}
           {[1, 2, 3].map((i) => (
-            <div key={'h' + i} aria-hidden className='absolute left-0 right-0 h-px bg-[rgba(168,184,204,0.12)]' style={{ top: i * ROW_H + '%' }} />
+            <div key={'h' + i} aria-hidden className='absolute left-0 right-0 h-px bg-[rgba(171,105,91,0.1)]' style={{ top: i * ROW_H + '%' }} />
           ))}
           {[1, 2, 3, 4].map((i) => (
-            <div key={'v' + i} aria-hidden className='absolute bottom-0 top-0 w-px bg-[rgba(168,184,204,0.1)]' style={{ left: i * COL_W + '%' }} />
+            <div key={'v' + i} aria-hidden className='absolute bottom-0 top-0 w-px bg-[rgba(171,105,91,0.09)]' style={{ left: i * COL_W + '%' }} />
           ))}
           {/* 目标行：snap 后整行微微点亮（时间结构参与叙事） */}
           <motion.div
             aria-hidden
             className='absolute left-0 right-0'
-            style={{ top: 3 * ROW_H + '%', height: ROW_H + '%', background: 'linear-gradient(180deg, rgba(79,214,166,0.07), rgba(79,214,166,0.02))' }}
+            style={{ top: 3 * ROW_H + '%', height: ROW_H + '%', background: 'linear-gradient(180deg, rgba(232,91,69,0.07), rgba(232,91,69,0.02))' }}
             initial={{ opacity: 0 }} animate={phase === 'snap' ? { opacity: 1 } : { opacity: 0 }} transition={{ duration: 0.7 }}
           />
 
@@ -100,7 +100,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             className='pointer-events-none absolute bottom-0 top-0 w-14'
             animate={{ left: ['-10%', '104%'] }}
             transition={{ duration: 5.6, repeat: Infinity, ease: 'linear' }}
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(138,238,201,0.11), transparent)' }}
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(232,91,69,0.1), transparent)' }}
           />
 
           {/* 原槽空位：课次移出后留下 faint 低亮边框 */}
@@ -129,7 +129,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
               left: 'calc(' + dst.left + '% + 6px)', top: 'calc(' + dst.top + '% + 6px)',
               width: 'calc(' + COL_W + '% - 12px)', height: 'calc(' + ROW_H + '% - 12px)',
               borderColor: 'color-mix(in srgb, var(--brand-strong) 78%, transparent)',
-              boxShadow: '0 0 44px -6px rgba(147,244,209,0.62)',
+              boxShadow: '0 0 44px -6px rgba(232,91,69,0.34)',
             }}
           >
             <motion.span
@@ -146,7 +146,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             <svg aria-hidden className='pointer-events-none absolute inset-0 z-[4] h-full w-full' preserveAspectRatio='none' viewBox='0 0 100 100'>
               <motion.path
                 d={`M ${src.left + COL_W / 2} ${src.top + ROW_H / 2} Q ${(src.left + dst.left) / 2} ${Math.min(src.top, dst.top) - 12} ${dst.left + COL_W / 2} ${dst.top + ROW_H / 2}`}
-                fill='none' stroke='rgba(138,238,201,0.6)' strokeWidth={2} strokeLinecap='round'
+                fill='none' stroke='rgba(232,91,69,0.54)' strokeWidth={2} strokeLinecap='round'
                 strokeDasharray='1.6 1.9' vectorEffect='non-scaling-stroke'
                 initial={{ opacity: 0, pathLength: 0 }} animate={{ opacity: 1, pathLength: 1 }}
                 transition={{ duration: 0.9, ease: EASE_OUT }}
@@ -160,7 +160,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
 
           {/* 移动中的课次块：spring + depth（提起离地 → 落下归位） */}
           <motion.div
-            className='absolute z-10 rounded-xl border-l-2 bg-raised px-3.5 py-3'
+            className='surgery-course-card absolute z-10 rounded-xl border-l-2 bg-raised px-3.5 py-3'
             initial={false}
             animate={{
               left: 'calc(' + pos.left + '% + 6px)',
@@ -176,7 +176,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             style={{ borderLeftColor: 'var(--brand)' }}
           >
             <motion.p className='truncate text-[18px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
-            <p className='truncate text-[15px] text-muted'>
+            <p className='truncate text-[15px] text-mute'>
               {phase === 'snap' ? vm.target.periodText + ' · ' + vm.autoResolve.suggested.name : vm.source.periodText + ' · ' + vm.source.roomName}
             </p>
           </motion.div>
@@ -190,19 +190,19 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
 /** 约束引擎：主脉冲向下传播，逐项 PASS / WARNING（引擎"活着"的感觉） */
 function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
   return (
-    <div className='panel material-topline relative flex min-h-0 flex-col overflow-hidden p-4'>
+    <div className='constraint-scanner panel material-topline relative flex min-h-0 flex-col overflow-hidden p-4'>
       <div className='mb-1.5 flex items-center justify-between'>
         <p className='t-caption'>{C.reschedule.verifyTitle}</p>
-        <span className='text-[14px] tabular-nums text-muted'>{revealed > 0 ? revealed + ' / ' + vm.constraints.length : ''}</span>
+        <span className='text-[14px] tabular-nums text-mute'>{revealed > 0 ? revealed + ' / ' + vm.constraints.length : ''}</span>
       </div>
       {/* 向下扫描主脉冲 */}
       {revealed > 0 && (
         <motion.div aria-hidden className='pointer-events-none absolute left-0 right-0 h-12'
           initial={{ top: 20, opacity: 0 }} animate={{ top: 26 + revealed * 34, opacity: 0.55 }} transition={{ duration: 0.6, ease: EASE_OUT }}
-          style={{ background: 'linear-gradient(180deg, transparent, rgba(138,238,201,0.14), transparent)' }} />
+          style={{ background: 'linear-gradient(180deg, transparent, rgba(232,91,69,0.12), transparent)' }} />
       )}
-      <ul className='relative min-h-0 flex-1 divide-y divide-[rgba(168,184,204,0.1)] pl-8'>
-        <span aria-hidden className='absolute bottom-3 left-[9px] top-3 w-px bg-[rgba(168,184,204,0.16)]' />
+      <ul className='relative min-h-0 flex-1 divide-y divide-[rgba(171,105,91,0.09)] pl-8'>
+        <span aria-hidden className='absolute bottom-3 left-[9px] top-3 w-px bg-[rgba(171,105,91,0.14)]' />
         {vm.constraints.map((row, i) => {
           const done = i < revealed;
           const current = i === revealed;
@@ -211,10 +211,10 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
               <span aria-hidden className='absolute -left-8 top-1/2 flex size-[15px] -translate-y-1/2 items-center justify-center rounded-full border text-[9.5px] tabular-nums'
                 style={done
                   ? { borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', color: 'var(--success)', background: 'var(--success-dim)' }
-                  : { borderColor: 'rgba(168,184,204,0.3)', color: 'var(--text-faint)', background: 'var(--bg-deep)' }}>
+                  : { borderColor: 'rgba(171,105,91,0.25)', color: 'var(--text-faint)', background: 'var(--bg-deep)' }}>
                 {i + 1}
               </span>
-              <span className={'min-w-0 flex-1 truncate text-[16px] ' + (done ? 'text-ink' : current ? 'text-muted' : 'text-faint')}>{row.label}</span>
+              <span className={'min-w-0 flex-1 truncate text-[16px] ' + (done ? 'text-ink' : current ? 'text-mute' : 'text-faint')}>{row.label}</span>
               <span className='flex items-center gap-2'>
                 {!done ? (
                   <motion.span
@@ -245,7 +245,7 @@ function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
 function CandidateResolver({ stage }: { stage: 'idle' | 'funnel' | 'selected' }): JSX.Element {
   const survivors = vm.candidateNames.slice(0, vm.autoResolve.spaceRoomCount);
   return (
-    <div className='panel material-topline flex min-h-0 flex-1 flex-col p-4'>
+    <div className='candidate-resolver panel material-topline flex min-h-0 flex-1 flex-col overflow-hidden p-4'>
       <div className='mb-2 flex items-center justify-between'>
         <p className='t-caption'>{C.reschedule.candidatesTitle}</p>
         <span className='chip text-[12.5px] tabular-nums'>{vm.candidateNames.length} 间可用 → 核验后 {vm.autoResolve.spaceRoomCount} 间</span>
@@ -266,7 +266,7 @@ function CandidateResolver({ stage }: { stage: 'idle' | 'funnel' | 'selected' })
                 animate={{
                   opacity: isPick ? 1 : dimmed ? 0.26 : idleDim ? 0.42 : 0.96,
                   scale: isPick && stage === 'selected' ? 1.1 : 1,
-                  borderColor: isPick && stage !== 'idle' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'rgba(168,184,204,0.2)',
+                  borderColor: isPick && stage !== 'idle' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'rgba(171,105,91,0.18)',
                   color: isPick && stage !== 'idle' ? 'var(--brand-strong)' : idleDim ? 'var(--text-faint)' : 'var(--text-muted)',
                 }}
                 transition={{ duration: 0.5, delay: stage === 'selected' ? i * 0.04 : 0, ease: EASE_OUT }}
@@ -320,20 +320,20 @@ export function HeroReschedule(): JSX.Element {
 
       <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[1.14fr_1fr] gap-6'>
         <motion.div
-          className='plane material-topline min-h-0 min-w-0 flex-1 p-4'
+          className='reschedule-board-plane plane material-topline min-h-0 min-w-0 flex-1 p-4'
           animate={{ opacity: decided ? 0.82 : 1 }}
           transition={{ duration: 0.7, ease: EASE_OUT }}
         >
           {sourceOn ? <SurgeryBoard phase={phase} showGhost={phase !== 'source'} /> : <div className='h-full' />}
         </motion.div>
-        <div className='flex min-h-0 min-w-0 flex-col gap-4'>
+        <div className='reschedule-side flex min-h-0 min-w-0 flex-col gap-4'>
           <ConstraintScanner revealed={revealed} />
           <CandidateResolver stage={candStage} />
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={decided ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.8, ease: EASE_OUT }}
-            className='plane-hero flex items-center justify-between gap-4 px-6 py-4'
+            className='reschedule-decision plane-hero flex items-center justify-between gap-4 px-6 py-4'
             style={{ borderLeft: '3px solid var(--success)' }}
           >
             <div>

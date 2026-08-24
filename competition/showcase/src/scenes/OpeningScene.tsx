@@ -80,8 +80,8 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                "radial-gradient(40% 36% at 50% 47%, rgba(5,9,15,0.9), rgba(5,9,15,0.62) 52%, transparent 74%), " +
-                "radial-gradient(52% 48% at 50% 47%, rgba(86,224,176,0.16), transparent 72%)",
+                "radial-gradient(40% 36% at 50% 47%, rgba(255,250,246,0.98), rgba(255,246,241,0.72) 52%, transparent 74%), " +
+                "radial-gradient(52% 48% at 50% 47%, rgba(232,91,69,0.15), transparent 72%)",
             }}
           />
             <div className="absolute inset-0 flex items-center justify-center">

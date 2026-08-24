@@ -13,7 +13,7 @@
 /* ---- 扫描光带：数据/空间扫描 ---- */
 .scan-bar {
   position:absolute; left:0; right:0; height:220px; top:-30%;
-  background:linear-gradient(180deg, transparent, rgba(138,238,201,0.05), rgba(138,238,201,0.13), rgba(138,238,201,0.05), transparent);
+  background:linear-gradient(180deg, transparent, rgba(232,91,69,0.03), rgba(232,91,69,0.1), rgba(232,91,69,0.03), transparent);
   animation:scanDrift 16s cubic-bezier(0.45,0,0.55,1) infinite;
 }
 @keyframes scanDrift { 0%{transform:translateY(-8%)} 50%{transform:translateY(52%)} 100%{transform:translateY(-8%)} }
@@ -21,7 +21,7 @@
 /* ---- KineticMetric：数字结算（scanning 态允许 blur/遮罩，settle 后 sharp） ---- */
 .kinetic-num { display:inline-block; transition:filter 0.28s cubic-bezier(0.22,1,0.36,1), opacity 0.28s cubic-bezier(0.22,1,0.36,1); }
 .kinetic-scan { position:relative; filter:blur(5px) saturate(0.75); opacity:0.55; }
-.kinetic-scan::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(138,238,201,0.4), transparent); animation:kineticShimmer 0.9s linear infinite; mix-blend-mode:overlay; }
+.kinetic-scan::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(232,91,69,0.34), transparent); animation:kineticShimmer 0.9s linear infinite; mix-blend-mode:overlay; }
 @keyframes kineticShimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
 
 /* ---- 时间脉冲：沿路径传播的信息脉冲 ---- */

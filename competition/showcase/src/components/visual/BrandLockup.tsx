@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { cn } from "../../lib/cn";
+import coordinatorImage from "../../../../demo-portal/public/branding/coordinator-agent.png";
 
 interface BrandLockupProps {
   /** 入场基础延迟（秒）——由场景节拍决定 */
@@ -28,6 +29,15 @@ export function BrandLockup({ delay = 0, align = "left", className }: BrandLocku
         variants={riseV(delay, 0)}
         initial="hidden"
         animate="show"
+        className="brand-emblem"
+      >
+        <span className="brand-emblem-shine" aria-hidden />
+        <img src={coordinatorImage} alt="" aria-hidden className="h-full w-full object-contain" />
+      </motion.div>
+      <motion.div
+        variants={riseV(delay, 1)}
+        initial="hidden"
+        animate="show"
         className="flex items-center gap-3"
       >
         <span className="inline-block h-px w-10 bg-[var(--brand)] opacity-80" />
@@ -36,10 +46,10 @@ export function BrandLockup({ delay = 0, align = "left", className }: BrandLocku
 
       <div className="relative">
         <motion.h1
-          variants={riseV(delay, 1)}
+          variants={riseV(delay, 2)}
           initial="hidden"
           animate="show"
-          className={cn("t-hero whitespace-nowrap drop-shadow-[0_4px_28px_rgba(5,10,16,0.85)]", align === "center" && "text-center")}
+          className={cn("t-hero whitespace-nowrap drop-shadow-[0_10px_28px_rgba(133,47,35,0.14)]", align === "center" && "text-center")}
         >
           校园智序<span className="mx-3 font-light text-brand">·</span>小序
         </motion.h1>
@@ -55,7 +65,7 @@ export function BrandLockup({ delay = 0, align = "left", className }: BrandLocku
       </div>
 
       <motion.p
-        variants={riseV(delay, 2)}
+        variants={riseV(delay, 3)}
         initial="hidden"
         animate="show"
         className={cn(
