@@ -1,0 +1,347 @@
+<Card size="md" background="#FFF9F5" status={verified ? '已核验' : '待核验'}>
+  {layoutMode === 'week-board' ? (
+    <Col gap={3}>
+      <Box
+        direction="col"
+        gap={2}
+        padding="16px"
+        background="#FBE5DE"
+        border={{ size: 1, color: '#F4CDC4', style: 'solid' }}
+        radius="xl"
+      >
+        <Row gap={2} align="center" justify="between">
+          <Caption value="课程时间板" color="#B94535" weight="semibold" />
+          <Badge label="已核验" color="success" variant="soft" size="sm" pill={true} />
+        </Row>
+        <Title value={weekBoardTitle} size="md" maxLines={3} />
+        {weekBoardSubtitle ? <Caption value={weekBoardSubtitle} color="#806F6B" /> : null}
+        <Text value={summary} size="sm" weight="semibold" color="#302522" />
+      </Box>
+
+      <Col gap={2}>
+        {days.map((day, dayIndex) => (
+          <Box
+            key={`${day.label}-${dayIndex}`}
+            direction="col"
+            gap={2}
+            padding="11px"
+            background="#FFFDFB"
+            border={{ size: 1, color: '#F0DDD7', style: 'solid' }}
+            radius="lg"
+          >
+            <Row gap={1} align="center" justify="between">
+              <Text value={day.label} size="sm" weight="semibold" color="#302522" />
+              <Badge label={`${day.blocks.length} 段`} color="secondary" variant="soft" size="sm" />
+            </Row>
+            <Col gap={2}>
+              {day.blocks.map((block, blockIndex) => (
+                <Box
+                  key={`${day.label}-${block.time}-${blockIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="10px"
+                  background={blockIndex % 2 === 0 ? '#FFF1EC' : '#F4F0FA'}
+                  border={{
+                    left: {
+                      size: 3,
+                      color: blockIndex % 2 === 0 ? '#D95B47' : '#A58FC0',
+                      style: 'solid',
+                    },
+                  }}
+                  radius="md"
+                >
+                  <Badge label={block.time} color="info" variant="outline" size="sm" />
+                  <Text value={block.title} size="sm" weight="semibold" color="#302522" />
+                  <Caption value={block.location} color="#806F6B" />
+                  {block.meta ? <Caption value={block.meta} color="#806F6B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          </Box>
+        ))}
+      </Col>
+    </Col>
+  ) : (
+    <Col gap={3}>
+      <Box
+        direction="col"
+        gap={2}
+        padding="16px"
+        background={
+          status === 'error'
+            ? '#FCE9E7'
+            : status === 'empty'
+              ? '#F5F0ED'
+              : variant === 'risk'
+                ? '#FFF0E2'
+                : variant === 'ranking'
+                  ? '#F1ECF8'
+                  : variant === 'overview'
+                    ? '#FCE9EC'
+                    : '#FBE5DE'
+        }
+        border={{ size: 1, color: '#F2D4CC', style: 'solid' }}
+        radius="xl"
+      >
+        <Row gap={2} align="center" justify="between">
+          <Caption
+            value={
+              variant === 'risk'
+                ? '教学风险'
+                : variant === 'reschedule'
+                  ? '调课模拟'
+                  : variant === 'ranking'
+                    ? '校园排名'
+                    : variant === 'overview'
+                      ? '教学态势'
+                      : variant === 'space'
+                        ? '空间推荐'
+                        : variant === 'collaboration'
+                          ? '协作方案'
+                          : variant === 'schedule'
+                            ? '当日安排'
+                            : status === 'empty'
+                              ? '暂无结果'
+                              : status === 'error'
+                                ? '需要重试'
+                                : '校园结果'
+            }
+            color={status === 'error' ? '#B94A48' : variant === 'risk' ? '#A86A2D' : '#B94535'}
+            weight="semibold"
+          />
+          <Badge
+            label={status === 'success' ? (displayMeta.simulated ? '模拟' : '已核验') : status === 'empty' ? '暂无' : '可重试'}
+            color={status === 'error' ? 'danger' : displayMeta.simulated || variant === 'risk' ? 'warning' : status === 'empty' ? 'secondary' : 'success'}
+            variant="soft"
+            size="sm"
+            pill={true}
+          />
+        </Row>
+        <Title value={title} size="md" maxLines={3} />
+        {subtitle ? <Caption value={subtitle} color="#806F6B" /> : null}
+        <Text value={summary} size="sm" weight="semibold" color="#302522" />
+        {context ? <Caption value={context} color="#806F6B" /> : null}
+      </Box>
+
+      {displayMeta.tieNote ? (
+        <Box direction="row" gap={2} padding="9px" background="#F1ECF8" radius="md">
+          <Badge label="并列" color="info" variant="soft" size="sm" />
+          <Caption value={displayMeta.tieNote} color="#6E5D78" />
+        </Box>
+      ) : null}
+
+      {sections.map((section, sectionIndex) => (
+        <Col key={`${section.title}-${sectionIndex}`} gap={2}>
+          <Divider />
+          <Col gap={1}>
+            <Text value={section.title} size="sm" weight="semibold" color="#302522" />
+            {section.note ? <Caption value={section.note} color="#806F6B" /> : null}
+          </Col>
+
+          {section.kind === 'metric' || (!section.kind && variant === 'overview') ? (
+            <Row gap={2} wrap="wrap" align="stretch">
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="11px"
+                  width="48%"
+                  minWidth="140px"
+                  background={rowIndex % 2 === 0 ? '#FFF1EC' : '#F4F0FA'}
+                  border={{ size: 1, color: '#F0DDD7', style: 'solid' }}
+                  radius="md"
+                >
+                  <Caption value={row.label} color="#806F6B" />
+                  <Text value={row.value} size="md" weight="semibold" color="#302522" />
+                  {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                </Box>
+              ))}
+            </Row>
+          ) : section.kind === 'timeline' || (!section.kind && variant === 'schedule') ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="start">
+                  <Badge label={row.badge || row.label} color="info" variant="outline" size="sm" />
+                  <Box
+                    direction="col"
+                    gap={1}
+                    padding="10px"
+                    flex={1}
+                    background="#FFFDFB"
+                    border={{ left: { size: 3, color: '#D95B47', style: 'solid' } }}
+                    radius="md"
+                  >
+                    <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                    <Caption value={row.label} color="#806F6B" />
+                    {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                  </Box>
+                </Row>
+              ))}
+            </Col>
+          ) : section.kind === 'route' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="stretch">
+                  <Badge label={`${rowIndex + 1}`} color="warning" variant="soft" size="sm" pill={true} />
+                  <Box
+                    direction="col"
+                    gap={1}
+                    padding="10px"
+                    flex={1}
+                    background="#FFF0E2"
+                    border={{ left: { size: 3, color: '#E28A55', style: 'solid' } }}
+                    radius="md"
+                  >
+                    <Row gap={2} align="center" justify="between">
+                      <Caption value={row.label} color="#8C5A2D" />
+                      {row.badge ? <Badge label={row.badge} color="warning" variant="soft" size="sm" /> : null}
+                    </Row>
+                    <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                    {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                  </Box>
+                </Row>
+              ))}
+            </Col>
+          ) : section.kind === 'recommendation' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="12px"
+                  background={rowIndex === 0 ? '#FBE5DE' : '#FFFDFB'}
+                  border={{ left: { size: 3, color: '#D95B47', style: 'solid' } }}
+                  radius="md"
+                >
+                  <Row gap={2} align="center" justify="between">
+                    <Caption value={row.label} color="#B94535" weight="semibold" />
+                    {row.badge ? <Badge label={row.badge} color="success" variant="soft" size="sm" /> : null}
+                  </Row>
+                  <Text value={row.value} size="md" weight="semibold" color="#302522" />
+                  {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'ranking' ? (
+            <Col gap={1}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="row"
+                  gap={2}
+                  padding="10px"
+                  background={rowIndex === 0 ? '#F1ECF8' : '#FFFDFB'}
+                  border={{ size: 1, color: '#EEE3EE', style: 'solid' }}
+                  radius="md"
+                >
+                  <Badge label={row.label} color="info" variant={rowIndex === 0 ? 'soft' : 'outline'} size="sm" />
+                  <Col gap={1} flex={1}>
+                    <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                    {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                  </Col>
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'comparison' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Box
+                  key={`${section.title}-${row.label}-${rowIndex}`}
+                  direction="col"
+                  gap={1}
+                  padding="10px"
+                  background={row.badge === '不可行' ? '#FCE9E7' : row.badge === '可行' ? '#EBF5EF' : '#F4F0FA'}
+                  border={{
+                    left: {
+                      size: 3,
+                      color: row.badge === '不可行' ? '#B94A48' : row.badge === '可行' ? '#3B8C6E' : '#A58FC0',
+                      style: 'solid',
+                    },
+                  }}
+                  radius="md"
+                >
+                  <Row gap={2} align="center" justify="between">
+                    <Caption value={row.label} color="#806F6B" />
+                    {row.badge ? (
+                      <Badge label={row.badge} color={row.badge === '不可行' ? 'danger' : row.badge === '可行' ? 'success' : 'info'} variant="soft" size="sm" />
+                    ) : null}
+                  </Row>
+                  <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                  {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'notice' ? (
+            <Box direction="col" gap={2} padding="11px" background={variant === 'risk' ? '#FFF0E2' : '#FFF1EC'} radius="md">
+              {section.rows.map((row, rowIndex) => (
+                <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="center" justify="between">
+                  <Col gap={1} flex={1}>
+                    <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                    <Caption value={row.label} color="#806F6B" />
+                    {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                  </Col>
+                  {row.badge ? <Badge label={row.badge} color={variant === 'risk' ? 'warning' : 'success'} variant="soft" size="sm" /> : null}
+                </Row>
+              ))}
+            </Box>
+          ) : section.kind === 'entity-list' ? (
+            <Col gap={1}>
+              {section.rows.map((row, rowIndex) => (
+                <Box key={`${section.title}-${row.label}-${rowIndex}`} direction="row" gap={2} padding="9px" background="#FFFDFB" radius="md">
+                  <Col gap={1} flex={1}>
+                    <Text value={row.label} size="sm" weight="semibold" color="#302522" />
+                    <Caption value={row.value} color="#806F6B" />
+                  </Col>
+                  {row.badge ? <Badge label={row.badge} color="info" variant="outline" size="sm" /> : null}
+                </Box>
+              ))}
+            </Col>
+          ) : section.kind === 'prose' ? (
+            <Col gap={2}>
+              {section.rows.map((row, rowIndex) => (
+                <Box key={`${section.title}-${row.label}-${rowIndex}`} direction="col" gap={1} padding="10px" background="#FFFDFB" radius="md">
+                  <Text value={row.value} size="sm" color="#302522" />
+                  {row.label ? <Caption value={row.label} color="#806F6B" /> : null}
+                  {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                </Box>
+              ))}
+              {section.note && !section.rows.length ? <Text value={section.note} size="sm" color="#302522" /> : null}
+            </Col>
+          ) : (
+            <Box direction="col" gap={2} padding="10px" background="#FFFDFB" border={{ size: 1, color: '#F0DDD7', style: 'solid' }} radius="md">
+              {section.rows.map((row, rowIndex) => (
+                <Col key={`${section.title}-${row.label}-${rowIndex}`} gap={1}>
+                  <Text value={row.value} size="sm" weight="semibold" color="#302522" />
+                  {row.label ? <Caption value={row.label} color="#806F6B" /> : null}
+                  {row.hint ? <Caption value={row.hint} color="#806F6B" /> : null}
+                  {row.badge ? <Caption value={row.badge} color="#806F6B" /> : null}
+                </Col>
+              ))}
+              {section.note && !section.rows.length ? <Text value={section.note} size="sm" color="#302522" /> : null}
+            </Box>
+          )}
+        </Col>
+      ))}
+    </Col>
+  )}
+
+  {actions.length ? (
+    <Col gap={2}>
+      <Divider />
+      <Col gap={2}>
+        {actions.map((action, actionIndex) => (
+          <Button
+            key={action.id}
+            label={action.label}
+            size="sm"
+            block={true}
+            variant={actionIndex === 0 ? 'solid' : 'outline'}
+            onClickAction={{ type: 'sys.chat', payload: { query: action.payload.query } }}
+          />
+        ))}
+      </Col>
+    </Col>
+  ) : null}
+</Card>

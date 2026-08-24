@@ -176,7 +176,7 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
             style={{ borderLeftColor: 'var(--brand)' }}
           >
             <motion.p className='truncate text-[18px] font-semibold text-ink' animate={moving ? { opacity: 1 } : { opacity: 0.92 }}>{vm.courseName}</motion.p>
-            <p className='truncate text-[15px] text-mute'>
+            <p className='whitespace-nowrap text-[13px] text-mute'>
               {phase === 'snap' ? vm.target.periodText + ' · ' + vm.autoResolve.suggested.name : vm.source.periodText + ' · ' + vm.source.roomName}
             </p>
           </motion.div>

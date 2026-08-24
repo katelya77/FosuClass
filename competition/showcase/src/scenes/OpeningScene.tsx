@@ -69,14 +69,14 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: BEATS.brand + 0.15, duration: 1.3, ease: EASE_OUT }}
+            transition={{ delay: 0.15, duration: 1.3, ease: EASE_OUT }}
             className="pointer-events-none absolute inset-0 z-20"
           >
           <motion.div
             aria-hidden
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: BEATS.brand + 0.2, duration: 1.6, ease: EASE_OUT }}
+            transition={{ delay: 0.2, duration: 1.6, ease: EASE_OUT }}
             className="pointer-events-none absolute inset-0"
             style={{
               background:
@@ -91,7 +91,7 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: BEATS.brand + 1.6, duration: 0.9, ease: EASE_OUT }}
+              transition={{ delay: 1.6, duration: 0.9, ease: EASE_OUT }}
               className="absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-3"
             >
               <span className="chip">Multi-Agent</span>
@@ -102,7 +102,7 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
         )}
 
         {!recordMode && (
-          <span className="t-caption absolute right-0 top-0 opacity-70">Competition Showcase · Phase 2.6</span>
+          <span className="t-caption absolute right-0 top-0 opacity-70">Competition Showcase · Phase 2.8</span>
         )}
       </SceneCamera>
     </div>

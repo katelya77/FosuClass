@@ -13,7 +13,8 @@
     "preview": "vite preview --port 4174 --strictPort",
     "test": "vitest run",
     "test:watch": "vitest",
-    "qa:capture": "node qa/capture.mjs"
+    "qa:capture": "node qa/capture.mjs",
+    "qa:final": "node qa/final-capture.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

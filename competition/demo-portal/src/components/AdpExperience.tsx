@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 
-import { AGENT_BRANDS, CHAT_BACKGROUND } from "../data/branding";
+import { CHAT_BACKGROUND } from "../data/branding";
 import { isMixedContentEmbed, resolveAdpConfig, type AdpFrameConfig } from "../lib/adp";
 import { cn } from "../lib/cn";
 import { MagneticButton } from "./MagneticButton";
@@ -19,7 +19,7 @@ interface AdpExperienceProps {
 const STATUS_TEXT: Record<AdpState, string> = {
   loading: "正在连接小序真机…",
   embedded: "实时运行 · 可交互",
-  blocked: "内嵌被浏览器策略阻止",
+  blocked: "安全连接暂不可用",
   external: "外部窗口模式",
 };
 
@@ -43,7 +43,6 @@ export function AdpExperience({
   showHeader = true,
 }: AdpExperienceProps): React.ReactElement {
   const cfg = config ?? resolveAdpConfig();
-  const coordinator = AGENT_BRANDS[0];
   const loadedRef = useRef(false);
 
   const mixedContent =
@@ -54,14 +53,42 @@ export function AdpExperience({
     if (mixedContent) return "blocked";
     return "loading";
   });
+  const [frameReady, setFrameReady] = useState(!cfg.relayActive);
 
   useEffect(() => {
     if (forceExternal || mixedContent) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    if (cfg.relayActive) {
+      setFrameReady(false);
+      fetch(cfg.relayHealthUrl, {
+        method: "HEAD",
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (cancelled) return;
+          if (!response.ok) {
+            setState("blocked");
+            return;
+          }
+          setFrameReady(true);
+        })
+        .catch(() => {
+          if (!cancelled) setState("blocked");
+        });
+    }
+
     const timer = window.setTimeout(() => {
       if (!loadedRef.current) setState("blocked");
     }, timeoutMs);
-    return () => window.clearTimeout(timer);
-  }, [forceExternal, mixedContent, timeoutMs]);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [cfg.relayActive, cfg.relayHealthUrl, forceExternal, mixedContent, timeoutMs]);
 
   const onLoad = () => {
     loadedRef.current = true;
@@ -92,7 +119,7 @@ export function AdpExperience({
           </div>
           <a
             className="glass-button shrink-0 px-3 py-1.5 text-xs"
-            href={cfg.chatUrl}
+            href={cfg.externalChatUrl}
             target="_blank"
             rel="noreferrer noopener"
             aria-label="在新窗口打开小序真机"
@@ -112,7 +139,7 @@ export function AdpExperience({
           style={{ objectPosition: "center 66%" }}
         />
         <span className="absolute inset-0 bg-gradient-to-b from-white/48 via-white/22 to-[#fff7f3]/62" aria-hidden />
-        {renderIframe && (
+        {renderIframe && frameReady && (
           <iframe
             src={cfg.chatUrl}
             title="校园智序 · 小序 真机体验"
@@ -122,14 +149,14 @@ export function AdpExperience({
             )}
             onLoad={onLoad}
             referrerPolicy="no-referrer"
-            allow="clipboard-write"
+            allow="microphone; clipboard-write"
           />
         )}
 
         {state === "loading" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-10 text-center">
             <div className="adp-brand-orb animate-float">
-              <img src={coordinator.image} alt="" aria-hidden className="h-full w-full object-contain" />
+              <img src="/branding/platform-logo.png" alt="" aria-hidden className="h-full w-full object-contain" />
             </div>
             <span className="text-sm font-semibold text-ink">小序正在准备真实对话</span>
             <div className="h-1.5 w-56 overflow-hidden rounded-full bg-white/40">
@@ -142,7 +169,7 @@ export function AdpExperience({
         {state === "blocked" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-8 py-12 text-center">
             <div className="adp-brand-orb">
-              <img src={coordinator.image} alt="" aria-hidden className="h-full w-full object-contain" />
+              <img src="/branding/platform-logo.png" alt="" aria-hidden className="h-full w-full object-contain" />
             </div>
             <div>
               <p className="text-xl font-semibold text-ink">打开小序完整体验</p>
@@ -155,11 +182,16 @@ export function AdpExperience({
                 已自动切换：HTTPS 页面不能内嵌当前 HTTP 真机
               </p>
             )}
+            {cfg.relayActive && !mixedContent && (
+              <p className="rounded-full border border-brand/20 bg-brand-tint px-4 py-1.5 text-xs font-medium text-brand-deep">
+                HTTPS 安全中继暂不可用，已保留官方外开入口
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-3">
-              <MagneticButton href={cfg.chatUrl} target="_blank" variant="brand" className="px-6 py-3 text-sm">
+              <MagneticButton href={cfg.externalChatUrl} target="_blank" variant="brand" className="px-6 py-3 text-sm">
                 打开小序完整体验 <ExternalLink size={16} />
               </MagneticButton>
-              <MagneticButton href={cfg.webimUrl} target="_blank" variant="glass" className="px-5 py-3 text-sm">
+              <MagneticButton href={cfg.externalWebimUrl} target="_blank" variant="glass" className="px-5 py-3 text-sm">
                 打开 WebIM 备用入口 <ExternalLink size={15} />
               </MagneticButton>
             </div>
@@ -169,17 +201,17 @@ export function AdpExperience({
         {state === "external" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-10 text-center">
             <div className="adp-brand-orb">
-              <img src={coordinator.image} alt="" aria-hidden className="h-full w-full object-contain" />
+              <img src="/branding/platform-logo.png" alt="" aria-hidden className="h-full w-full object-contain" />
             </div>
             <p className="text-lg font-semibold text-ink">外部窗口模式</p>
             <p className="max-w-[32em] text-sm text-body">
               本模式不渲染 iframe，适合录制时由 OBS 捕获真实 ADP 窗口。请点击按钮外开真机。
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <MagneticButton href={cfg.chatUrl} target="_blank" variant="brand" className="px-6 py-3 text-sm">
+              <MagneticButton href={cfg.externalChatUrl} target="_blank" variant="brand" className="px-6 py-3 text-sm">
                 打开小序完整体验 <ExternalLink size={16} />
               </MagneticButton>
-              <MagneticButton href={cfg.webimUrl} target="_blank" variant="glass" className="px-5 py-3 text-sm">
+              <MagneticButton href={cfg.externalWebimUrl} target="_blank" variant="glass" className="px-5 py-3 text-sm">
                 WebIM 备用入口 <ExternalLink size={15} />
               </MagneticButton>
             </div>

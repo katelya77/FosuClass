@@ -59,13 +59,13 @@ export function ArchitectureScene(): JSX.Element {
         <SceneCamera shot={{ scale: routing ? 1.015 : 1 }} className="h-full">
           <div className="architecture-film h-full">
             <svg viewBox="0 0 1600 640" preserveAspectRatio="none" className="architecture-lines" aria-hidden>
-              {showMain && route("M 220 320 C 300 320 350 320 425 320", 1.2)}
-              {showAgents && route("M 615 320 C 700 320 735 126 825 126", 2.3)}
-              {showAgents && route("M 615 320 C 700 320 745 320 825 320", 2.55)}
-              {showAgents && route("M 615 320 C 700 320 735 514 825 514", 2.8)}
-              {showTools && route("M 1045 126 C 1150 126 1180 320 1275 320", 4.25)}
-              {showTools && route("M 1045 320 L 1275 320", 4.45)}
-              {showTools && route("M 1045 514 C 1150 514 1180 320 1275 320", 4.65)}
+              {showMain && route("M 220 320 C 300 320 350 320 425 320", 0.05)}
+              {showAgents && route("M 615 320 C 700 320 735 126 825 126", 0.08)}
+              {showAgents && route("M 615 320 C 700 320 745 320 825 320", 0.2)}
+              {showAgents && route("M 615 320 C 700 320 735 514 825 514", 0.32)}
+              {showTools && route("M 1045 126 C 1150 126 1180 320 1275 320", 0.08)}
+              {showTools && route("M 1045 320 L 1275 320", 0.2)}
+              {showTools && route("M 1045 514 C 1150 514 1180 320 1275 320", 0.32)}
               {showTools && (
                 <motion.path
                   d="M 1410 430 C 1340 590 560 600 520 430"
@@ -75,7 +75,7 @@ export function ArchitectureScene(): JSX.Element {
                   strokeDasharray="5 8"
                   initial={{ pathLength: 0, opacity: 0 }}
                   animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ delay: 5.2, duration: 1.5, ease: "easeInOut" }}
+                  transition={{ delay: 0.72, duration: 1.5, ease: "easeInOut" }}
                 />
               )}
               {routing && (

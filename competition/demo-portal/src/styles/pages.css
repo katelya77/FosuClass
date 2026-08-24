@@ -389,6 +389,22 @@
   }
 }
 
+/* iPad / compact desktop：侧栏存在时主内容宽度不足以承载双列 Hero，改为纵向发布会构图。 */
+@media (min-width: 821px) and (max-width: 1279px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .home-agent-stage {
+    order: -1;
+    width: min(46vw, 370px);
+    padding: 2.5rem;
+  }
+  .home-hero-copy {
+    padding-top: 0;
+  }
+}
+
 @media (max-width: 820px) {
   .home-hero {
     grid-template-columns: 1fr;

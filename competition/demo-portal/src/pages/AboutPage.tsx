@@ -41,8 +41,8 @@ export function AboutPage({ onNavigate }: AboutPageProps): ReactElement {
             让复杂的校园教学安排，简单到一句话就能问
           </h1>
           <p className="mt-5 text-pretty text-base leading-relaxed text-body">
-            校园智序 · 小序是一个面向佛山大学师生的校园任务型 Agent。
-            它不替代老师和管理者，而是帮他们把课表、教室、时间、风险这些
+            校园智序 · 小序是一个面向高校教学场景的校园任务型 Agent。
+            它不替代教师和管理者，而是帮他们把课表、教室、时间、风险这些
             很实在的问题，快速整理成清楚可用的信息。
           </p>
           <p className="mt-4 text-pretty text-base leading-relaxed text-body">

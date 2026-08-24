@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "variant": "message",
+  "status": "success",
+  "title": "校园智序 · 结果说明",
+  "subtitle": "统一结果卡",
+  "verified": false,
+  "summary": "课程、空间、风险、协作与教学态势，会在这里以清晰的结果卡呈现。",
+  "context": "",
+  "sections": [
+    {
+      "title": "说明",
+      "kind": "prose",
+      "rows": [
+        {
+          "label": "",
+          "value": "小序会把查询、核验与结论整理成可读的结果；业务事实仍完全来自已核验工具。"
+        }
+      ]
+    }
+  ],
+  "actions": [],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

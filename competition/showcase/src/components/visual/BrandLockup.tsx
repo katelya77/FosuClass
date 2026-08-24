@@ -1,6 +1,5 @@
 import { motion } from "motion/react";
 import { cn } from "../../lib/cn";
-import coordinatorImage from "../../../../demo-portal/public/branding/coordinator-agent.png";
 
 interface BrandLockupProps {
   /** 入场基础延迟（秒）——由场景节拍决定 */
@@ -32,7 +31,7 @@ export function BrandLockup({ delay = 0, align = "left", className }: BrandLocku
         className="brand-emblem"
       >
         <span className="brand-emblem-shine" aria-hidden />
-        <img src={coordinatorImage} alt="" aria-hidden className="h-full w-full object-contain" />
+        <img src="/platform-logo.png" alt="" aria-hidden className="h-full w-full object-contain" />
       </motion.div>
       <motion.div
         variants={riseV(delay, 1)}

@@ -9,7 +9,7 @@ describe("AdpExperience", () => {
   it("shows loading and then degrades to blocked when the frame never loads", async () => {
     render(<AdpExperience timeoutMs={60} />);
     expect(screen.getByText("正在连接小序真机…")).toBeTruthy();
-    await waitFor(() => expect(screen.getByText("内嵌被浏览器策略阻止")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("安全连接暂不可用")).toBeTruthy());
   });
 
   it("renders the external fallback when forced", () => {

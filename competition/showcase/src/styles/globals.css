@@ -230,7 +230,7 @@ body {
   top: 50%;
   width: clamp(230px, 18vw, 320px);
   min-height: clamp(116px, 10vw, 154px);
-  transform: translate(-50%, -50%);
+  translate: -50% -50%;
   border-radius: 32px;
   padding: clamp(15px, 1.4vw, 24px);
   box-shadow: var(--brand-shadow-lift);
@@ -240,7 +240,7 @@ body {
 .arch-agent {
   left: 53%;
   width: clamp(220px, 17vw, 295px);
-  transform: translateX(-50%);
+  translate: -50% 0;
   border-radius: 26px;
   padding: clamp(10px, 1vw, 16px);
   transition: box-shadow var(--dur-standard) var(--ease-out-soft), border-color var(--dur-standard) var(--ease-out-soft);
@@ -254,7 +254,7 @@ body {
   left: 82%;
   top: 50%;
   width: clamp(250px, 18vw, 330px);
-  transform: translate(-50%, -50%);
+  translate: -50% -50%;
   flex-wrap: wrap;
   border-radius: 34px;
   padding: clamp(16px, 1.5vw, 26px);
@@ -282,6 +282,28 @@ body {
 }
 .arch-verdict b { color: rgba(232,91,69,0.42); font-weight: 500; }
 .arch-verdict strong { color: var(--brand-coral-deep); }
+
+@media (max-width: 1100px) {
+  .arch-main {
+    left: 25%;
+    width: 210px;
+    min-height: 104px;
+    padding: 14px;
+  }
+  .arch-agent {
+    left: 53%;
+    width: 205px;
+    padding: 10px;
+  }
+  .arch-tools {
+    left: 80%;
+    width: 220px;
+    padding: 12px;
+  }
+  .arch-image-main { width: 68px; height: 68px; }
+  .arch-image-tools { width: 66px; height: 66px; }
+  .arch-tools em { padding-top: 8px; font-size: 10px; }
+}
 
 .closing-handoff {
   display: flex;

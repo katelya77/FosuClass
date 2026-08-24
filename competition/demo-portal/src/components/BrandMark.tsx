@@ -10,35 +10,35 @@ interface BrandMarkProps {
 }
 
 const SIZE = {
-  sm: { tile: "size-9", text: "text-lg", word: "text-base" },
-  md: { tile: "size-12", text: "text-2xl", word: "text-lg" },
-  lg: { tile: "size-16", text: "text-3xl", word: "text-2xl" },
+  sm: { tile: "size-10", word: "text-base" },
+  md: { tile: "size-12", word: "text-lg" },
+  lg: { tile: "size-16", word: "text-2xl" },
 } as const;
 
-/** 校园智序·小序 品牌锁定：温暖的珊瑚玻璃方块承载一个「小」字。 */
+/** 校园智序·小序 品牌锁定：始终使用平台官方图标，不再以文字代替 Logo。 */
 export function BrandMark({ className, size = "md", showText = true }: BrandMarkProps): ReactElement {
   const s = SIZE[size];
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <motion.div
         layout
-        className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl",
-          s.tile,
-        )}
+        className={cn("relative shrink-0 overflow-hidden rounded-[30%]", s.tile)}
         style={{
-          background: "linear-gradient(138deg, #e96d51 0%, #c44534 100%)",
           boxShadow:
-            "0 10px 28px rgba(184, 57, 39, 0.32), inset 0 1px 0 rgba(255,255,255,0.5)",
+            "0 12px 30px rgba(184, 57, 39, 0.26), inset 0 1px 0 rgba(255,255,255,0.5)",
         }}
       >
-        <span className={cn("font-bold text-[#fff7f3] drop-shadow-sm", s.text)}>小</span>
+        <img
+          src="/branding/platform-logo.png"
+          alt="校园智序 · 小序平台图标"
+          className="h-full w-full object-contain"
+        />
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 rounded-[inherit]"
           style={{
             background:
-              "radial-gradient(circle at 24% 12%, rgba(255,255,255,0.5), transparent 42%), linear-gradient(90deg, rgba(255,255,255,0.22), transparent 60%)",
+              "radial-gradient(circle at 24% 10%, rgba(255,255,255,0.3), transparent 38%), linear-gradient(90deg, rgba(255,255,255,0.12), transparent 58%)",
           }}
         />
       </motion.div>

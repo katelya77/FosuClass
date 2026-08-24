@@ -16,10 +16,24 @@ describe("ADP public embed configuration", () => {
     const config = resolveAdpConfig({
       VITE_ADP_EMBED_URL: "https://adp.example.com/app",
       VITE_ADP_WEBIM_URL: "https://adp.example.com/webim",
-    });
-    expect(config).toEqual({
+    }, "https:");
+    expect(config).toMatchObject({
       chatUrl: "https://adp.example.com/app",
       webimUrl: "https://adp.example.com/webim",
+      externalChatUrl: "https://adp.example.com/app",
+      externalWebimUrl: "https://adp.example.com/webim",
+      relayActive: false,
+    });
+  });
+
+  it("uses the same-origin Pages relay for an HTTPS page with the current HTTP ADP", () => {
+    const config = resolveAdpConfig({}, "https:");
+    expect(config).toMatchObject({
+      chatUrl: "/adp-chat-client/#/app/2084871572396491520",
+      webimUrl: "/webim/#/chat/uxjybB",
+      externalChatUrl: expect.stringMatching(/^http:\/\//),
+      relayActive: true,
+      relayHealthUrl: "/adp-relay-health",
     });
   });
 });
