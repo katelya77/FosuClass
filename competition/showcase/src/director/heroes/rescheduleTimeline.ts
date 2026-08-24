@@ -10,4 +10,4 @@ export const RESCHEDULE_BEATS: BeatDef[] = [
   { id: "resched.select", at: 21.0 },
   { id: "resched.decision", at: 25.0 },
 ];
-export const RESCHEDULE_DURATION = 30;
+export const RESCHEDULE_DURATION = 28;

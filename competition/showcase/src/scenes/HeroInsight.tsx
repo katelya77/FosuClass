@@ -10,6 +10,7 @@ import { HERO_COPY as C } from '../content/heroCopy';
 import { buildInsightViewModel } from '../data/adapters/insightAdapter';
 import { BlurIn } from '../components/visual/TextFx';
 import { EASE_OUT } from '../motion/motionTokens';
+import { HeroNarrative } from '../components/director/HeroNarrative';
 
 const vm = buildInsightViewModel();
 const at = (id: string) => INSIGHT_BEATS.find((b) => b.id === id)!.at;
@@ -71,7 +72,14 @@ export function HeroInsight(): JSX.Element {
   const close = reached(t, at('insight.close'));
 
   return (
-    <div className='stage-safe flex flex-col gap-4'>
+    <div className='stage-safe relative flex flex-col gap-4 pb-[58px] pt-[66px]'>
+      <HeroNarrative
+        t={t}
+        question="未来四周谁最忙？"
+        conclusion="排名负责发现，核验负责判断"
+        verifyAt={at('insight.risk')}
+        conclusionAt={at('insight.close')}
+      />
       <SceneHeader
         size='headline'
         kicker={C.insight.kicker}

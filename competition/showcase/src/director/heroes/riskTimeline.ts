@@ -10,4 +10,4 @@ export const RISK_BEATS: BeatDef[] = [
   { id: "risk.warning", at: 18.2 },
   { id: "risk.summary", at: 21.2 },
 ];
-export const RISK_DURATION = 24;
+export const RISK_DURATION = 28;

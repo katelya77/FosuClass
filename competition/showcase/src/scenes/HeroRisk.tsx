@@ -10,6 +10,7 @@ import { RISK_BEATS } from '../director/heroes/riskTimeline';
 import { HERO_COPY as C } from '../content/heroCopy';
 import { buildRiskViewModel } from '../data/adapters/riskAdapter';
 import { BlurIn } from '../components/visual/TextFx';
+import { HeroNarrative } from '../components/director/HeroNarrative';
 
 const vm = buildRiskViewModel();
 const at = (id: string) => RISK_BEATS.find((b) => b.id === id)!.at;
@@ -30,7 +31,14 @@ export function HeroRisk(): JSX.Element {
   const routesDone = routesShown >= vm.rushLinks.length;
 
   return (
-    <div className='stage-safe flex flex-col gap-4'>
+    <div className='stage-safe relative flex flex-col gap-4 pb-[58px] pt-[66px]'>
+      <HeroNarrative
+        t={t}
+        question="教师025未来四周有没有风险？"
+        conclusion="没有冲突，不代表没有风险"
+        verifyAt={at('risk.routes')}
+        conclusionAt={at('risk.summary')}
+      />
       <SceneHeader
         size='headline'
         kicker={C.risk.kicker}

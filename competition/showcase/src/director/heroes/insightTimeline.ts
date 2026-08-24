@@ -9,4 +9,4 @@ export const INSIGHT_BEATS: BeatDef[] = [
   { id: "insight.risk", at: 18.0 },
   { id: "insight.close", at: 22.4 },
 ];
-export const INSIGHT_DURATION = 26;
+export const INSIGHT_DURATION = 28;

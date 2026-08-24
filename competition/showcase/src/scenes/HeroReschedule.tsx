@@ -9,6 +9,7 @@ import { RESCHEDULE_BEATS } from '../director/heroes/rescheduleTimeline';
 import { HERO_COPY as C } from '../content/heroCopy';
 import { buildRescheduleViewModel } from '../data/adapters/rescheduleAdapter';
 import { EASE_OUT, SPRING } from '../motion/motionTokens';
+import { HeroNarrative } from '../components/director/HeroNarrative';
 
 const vm = buildRescheduleViewModel();
 const at = (id: string) => RESCHEDULE_BEATS.find((b) => b.id === id)!.at;
@@ -309,7 +310,14 @@ export function HeroReschedule(): JSX.Element {
   const decided = reached(t, at('resched.decision'));
 
   return (
-    <div className='stage-safe flex flex-col gap-3.5'>
+    <div className='stage-safe relative flex flex-col gap-3.5 pb-[58px] pt-[66px]'>
+      <HeroNarrative
+        t={t}
+        question="移动到周四7–8节，可行吗？"
+        conclusion="可行，不等于没有提醒"
+        verifyAt={at('resched.constraints')}
+        conclusionAt={26.5}
+      />
       <SceneHeader
         size='headline'
         kicker={C.reschedule.kicker}
@@ -344,6 +352,11 @@ export function HeroReschedule(): JSX.Element {
                 </span>
               </div>
               <p className='t-caption mt-1'>{vm.warningText}</p>
+              <div className='mt-2 flex items-center gap-2'>
+                <Badge tone='stream'>5 PASS + 1 WARNING</Badge>
+                <Badge tone='brand'>feasible=true</Badge>
+                <Badge>mutatedData=false</Badge>
+              </div>
             </div>
             <Badge tone='stream'>未指定教室 · 自动解析</Badge>
           </motion.div>

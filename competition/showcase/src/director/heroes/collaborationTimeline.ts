@@ -10,4 +10,4 @@ export const COLLAB_BEATS: BeatDef[] = [
   { id: "collab.recommend", at: 18.4 },
   { id: "collab.verdict", at: 20.8 },
 ];
-export const COLLAB_DURATION = 23;
+export const COLLAB_DURATION = 28;

@@ -10,6 +10,7 @@ import { HERO_COPY as C } from '../content/heroCopy';
 import { buildCollaborationViewModel } from '../data/adapters/collaborationAdapter';
 import { BlurIn } from '../components/visual/TextFx';
 import { EASE_OUT } from '../motion/motionTokens';
+import { HeroNarrative } from '../components/director/HeroNarrative';
 
 const vm = buildCollaborationViewModel();
 const at = (id: string) => COLLAB_BEATS.find((b) => b.id === id)!.at;
@@ -186,7 +187,14 @@ export function HeroCollaboration(): JSX.Element {
   const verdict = reached(t, at('collab.verdict'));
 
   return (
-    <div className='stage-safe flex flex-col gap-4'>
+    <div className='stage-safe relative flex flex-col gap-4 pb-[58px] pt-[66px]'>
+      <HeroNarrative
+        t={t}
+        question="三位老师什么时候都有空？有没有120座教室？"
+        conclusion="三张课表，算出一个共同教学时空"
+        verifyAt={at('collab.rooms')}
+        conclusionAt={at('collab.verdict')}
+      />
       <SceneHeader
         size='headline'
         kicker={C.collaboration.kicker}
