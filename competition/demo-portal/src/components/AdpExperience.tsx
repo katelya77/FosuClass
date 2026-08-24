@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   Bot,
@@ -112,8 +112,10 @@ export function AdpExperience({
   const [execution, setExecution] = useState<AdpExecutionState>(INITIAL_ADP_EXECUTION);
   const [widgetRendered, setWidgetRendered] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const pendingExecutionRef = useRef<AdpExecutionState | null>(null);
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateExecution = useCallback(
+  const commitExecution = useCallback(
     (next: AdpExecutionState) => {
       setExecution(next);
       saveDiagnostics(buildDiagnostics(next, conversationId, widgetRendered));
@@ -132,6 +134,35 @@ export function AdpExperience({
     [conversationId, widgetRendered],
   );
 
+  const updateExecution = useCallback(
+    (next: AdpExecutionState, immediate = false) => {
+      pendingExecutionRef.current = next;
+      if (immediate) {
+        if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
+        renderTimerRef.current = null;
+        pendingExecutionRef.current = null;
+        commitExecution(next);
+        return;
+      }
+      if (renderTimerRef.current) return;
+      renderTimerRef.current = setTimeout(() => {
+        renderTimerRef.current = null;
+        const pending = pendingExecutionRef.current;
+        pendingExecutionRef.current = null;
+        if (pending) commitExecution(pending);
+      }, 48);
+    },
+    [commitExecution],
+  );
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
+    },
+    [],
+  );
+
   const runRequest = useCallback(
     async (payload: { message?: string; widgetAction?: AdpWidgetAction }) => {
       abortRef.current?.abort();
@@ -145,7 +176,7 @@ export function AdpExperience({
       ]);
 
       let currentState: AdpExecutionState = { ...INITIAL_ADP_EXECUTION, status: "connecting" };
-      updateExecution(currentState);
+      updateExecution(currentState, true);
       try {
         const response = await fetch(ADP_CHAT_API_URL, {
           method: "POST",
@@ -162,7 +193,7 @@ export function AdpExperience({
           status: "streaming",
           requestId: response.headers.get("x-adp-request-id") || undefined,
         };
-        updateExecution(currentState);
+        updateExecution(currentState, true);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -181,7 +212,7 @@ export function AdpExperience({
           currentState = reduceAdpExecution(currentState, parseAdpEvent(event, eventName));
         });
         if (currentState.status !== "error") currentState = { ...currentState, status: "completed" };
-        updateExecution(currentState);
+        updateExecution(currentState, true);
       } catch (error) {
         if (controller.signal.aborted) {
           currentState = { ...currentState, status: "completed" };
@@ -192,7 +223,7 @@ export function AdpExperience({
             error: error instanceof Error ? error.message : "实时对话失败",
           };
         }
-        updateExecution(currentState);
+        updateExecution(currentState, true);
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
       }
