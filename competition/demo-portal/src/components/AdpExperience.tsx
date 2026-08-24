@@ -99,6 +99,16 @@ export function buildDiagnostics(
   };
 }
 
+function userFacingError(message: string): string {
+  if (/400429|rate\s*limit/i.test(message)) {
+    return "当前体验请求较多，ADP 已返回限流；问题已保留，请稍后重试。";
+  }
+  if (/timed out|timeout|暂未响应|adp_upstream/i.test(message)) {
+    return "实时服务连接超时；问题已保留，请稍后重试。";
+  }
+  return "本次实时任务未完成；问题已保留，请稍后重试。";
+}
+
 export function AdpExperience({
   config,
   className,
@@ -212,6 +222,9 @@ export function AdpExperience({
           currentState = reduceAdpExecution(currentState, parseAdpEvent(event, eventName));
         });
         if (currentState.status !== "error") currentState = { ...currentState, status: "completed" };
+        if (currentState.error && payload.message) {
+          setInput((current) => current || payload.message || "");
+        }
         updateExecution(currentState, true);
       } catch (error) {
         if (controller.signal.aborted) {
@@ -222,6 +235,7 @@ export function AdpExperience({
             status: "error",
             error: error instanceof Error ? error.message : "实时对话失败",
           };
+          if (payload.message) setInput((current) => current || payload.message || "");
         }
         updateExecution(currentState, true);
       } finally {
@@ -303,7 +317,7 @@ export function AdpExperience({
                   </div>
                   {turn.answer ? <p>{turn.answer}</p> : isLatest && isRunning ? (
                     <div className="flex items-center gap-2 text-sm text-mute"><LoaderCircle size={15} className="animate-spin" />正在执行真实任务…</div>
-                  ) : isLatest && execution.error ? <p className="text-brand-deep">{execution.error}</p> : null}
+                  ) : isLatest && execution.error ? <p className="text-brand-deep">{userFacingError(execution.error)}</p> : null}
                   {turn.widget && (
                     <div className="native-adp__widget">
                       <div className="native-adp__widget-label"><CheckCircle2 size={14} /> 官方 ADP Widget</div>
