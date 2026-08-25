@@ -40,7 +40,7 @@ export const AGENT_BRANDS: AgentBrand[] = [
     id: "course",
     name: "课程空间 Agent",
     en: "Course Space",
-    role: "教室与调课模拟",
+    role: "课表、教室与协同",
     image: "/branding/course-space-agent.png",
     accent: "#d87c5f",
   },

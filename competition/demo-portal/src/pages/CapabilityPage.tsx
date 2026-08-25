@@ -134,11 +134,11 @@ export function CapabilityPage({ onNavigate }: CapabilityPageProps): ReactElemen
           <div>
             <p className="text-sm font-semibold tracking-[0.2em] text-brand">多 Agent 协作</p>
             <h2 className="mt-2 text-2xl font-bold text-ink sm:text-3xl">
-              一台小序，五位持续协作的伙伴
+              四个 Agent，与一层确定性校园事实
             </h2>
           </div>
           <p className="max-w-xs text-sm leading-relaxed text-body">
-            每个任务由不同智能体分工，再统一到一张可核验的课表事实上。
+            主协调负责理解与汇总，三个领域 Agent 分工，CampusTools 负责核验事实。
           </p>
         </div>
         <AgentBrandStrip className="mt-7" />

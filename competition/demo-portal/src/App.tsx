@@ -53,7 +53,7 @@ export function App(): ReactElement {
   const closeDemo = () => setDemoOpen(false);
 
   return (
-    <div className="relative min-h-screen">
+    <div className="app-shell relative min-h-screen" data-route={route.name}>
       <div className="app-backdrop" aria-hidden />
       <span className="app-blob animate-drift-slow left-[-7rem] top-[-5rem] h-[26rem] w-[26rem] bg-rose/60" />
       <span className="app-blob animate-drift right-[-5rem] top-[16rem] h-[22rem] w-[22rem] bg-lavender/60" />
@@ -63,8 +63,8 @@ export function App(): ReactElement {
         <Sidebar current={route} onNavigate={onNavigate} />
       </div>
 
-      <main className="relative lg:pl-[280px]">
-        <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-white/20 bg-white/18 px-4 py-3 backdrop-blur-xl sm:px-6 lg:justify-end">
+      <main className="app-main relative lg:pl-[280px]">
+        <header className="app-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-white/20 bg-white/18 px-4 py-3 backdrop-blur-xl sm:px-6 lg:justify-end">
           <div className="lg:hidden">
             <BrandMark size="sm" />
           </div>
@@ -88,6 +88,7 @@ export function App(): ReactElement {
         <AnimatePresence mode="wait">
           <motion.div
             key={`${route.name}:${route.name === "experience" ? (route.caseKey ?? "default") : ""}`}
+            className="route-frame"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}

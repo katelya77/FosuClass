@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { App } from "./App";
 
@@ -50,5 +50,36 @@ describe("App routing", () => {
     goTo("#/experience/query");
     expect(await screen.findByText("这次想解决什么")).toBeTruthy();
     expect(screen.getAllByText("查课表").length).toBeGreaterThan(0);
+  });
+
+  it("opens the all-capabilities library and sends a selected question to the composer", async () => {
+    window.location.hash = "#/experience";
+    render(<App />);
+
+    expect(await screen.findByText("从常用查询到跨域决策")).toBeTruthy();
+    expect(screen.getAllByText("全部能力").length).toBeGreaterThan(0);
+    expect(screen.getByText(/教师 \/ 班级 \/ 课程 \/ 教室课表/)).toBeTruthy();
+    expect(screen.getByText("4 Agent")).toBeTruthy();
+    expect(screen.getByText("13 CampusTools")).toBeTruthy();
+
+    const roomQuestion = screen.getByRole("button", { name: "A1-201第1周什么时候有课？" });
+    fireEvent.click(roomQuestion);
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("A1-201第1周什么时候有课？");
+
+    fireEvent.click(screen.getByRole("button", { name: "查课表" }));
+    await waitFor(() => {
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("查看教师025第1周课表，并检查他的跨校区赶场风险。");
+    });
+  });
+
+  it("opens the guided competition demo without replacing the current route", async () => {
+    window.location.hash = "#/cases";
+    render(<App />);
+    const routeBefore = window.location.hash;
+
+    fireEvent.click(await screen.findByRole("button", { name: "比赛演示模式" }));
+    expect(await screen.findByRole("dialog", { name: "比赛演示模式" })).toBeTruthy();
+    expect(screen.getByText("从真实课表里快速找到教师025的未来四周安排")).toBeTruthy();
+    expect(window.location.hash).toBe(routeBefore);
   });
 });
