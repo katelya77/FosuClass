@@ -18,6 +18,18 @@ describe("AdpExperience native API mode", () => {
     expect(screen.getByRole("textbox")).toBeTruthy();
   });
 
+  it("does not prefetch and exposes a clearly labelled verified replay", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AdpExperience />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Verified Replay" }));
+    expect(screen.getAllByText("已核验实录回放").length).toBeGreaterThan(0);
+    expect(screen.getByText(/非实时请求/)).toBeTruthy();
+    expect(screen.getByAltText(/真实成功会话中由官方 ADP Widget SDK/)).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("parses AgentName, tool_call, reply and official Widget from SSE", async () => {
     const widgetView = JSON.stringify({ type: "Card", children: [{ type: "Text", value: "Verified" }] });
     const events = [
@@ -57,5 +69,21 @@ describe("AdpExperience native API mode", () => {
 
     await waitFor(() => expect(screen.getByText(/ADP 已返回限流/)).toBeTruthy());
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(originalQuestion);
+    expect(screen.getByText(/不会自动重试/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /一键查看已核验演示/ })).toBeTruthy();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /一键查看已核验演示/ }));
+    expect(screen.getAllByText("已核验实录回放").length).toBeGreaterThan(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("enforces single-flight when two sends happen in the same turn", async () => {
+    const fetchMock = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AdpExperience />);
+    const send = screen.getByRole("button", { name: "发送" });
+    fireEvent.click(send);
+    fireEvent.click(send);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 });
