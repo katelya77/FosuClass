@@ -252,6 +252,7 @@ export function AdpExperience({
   }, [cooldownUntil]);
 
   const beginRateLimitCooldown = useCallback(() => {
+    setCooldownRemaining(RATE_LIMIT_COOLDOWN_SECONDS);
     setCooldownUntil(Date.now() + RATE_LIMIT_COOLDOWN_SECONDS * 1000);
   }, []);
 
