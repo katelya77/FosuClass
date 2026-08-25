@@ -61,7 +61,7 @@ const STEPS: DemoStep[] = [
   },
 ];
 
-const STEP_DURATION = 4000;
+export const GUIDED_DEMO_STEP_DURATION = 2800;
 
 interface GuidedDemoProps {
   open: boolean;
@@ -77,15 +77,28 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
     if (!open) return;
     setIndex(0);
     setFinished(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || finished) return;
     const timer = window.setTimeout(() => {
       if (index < STEPS.length - 1) {
         setIndex((value) => value + 1);
       } else {
         setFinished(true);
       }
-    }, STEP_DURATION);
+    }, GUIDED_DEMO_STEP_DURATION);
     return () => window.clearTimeout(timer);
-  }, [open, index]);
+  }, [finished, index, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,9 +115,13 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
     onReplay?.();
   };
 
+  const selectStep = (stepIndex: number) => {
+    setIndex(stepIndex);
+    setFinished(false);
+  };
+
   const step = STEPS[index];
   const StepIcon = step.icon;
-  const progress = ((index + (finished ? 1 : 0)) / STEPS.length) * 100;
 
   return (
     <AnimatePresence>
@@ -164,6 +181,7 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
                   exit={{ opacity: 0, x: -46 }}
                   transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                   className="absolute inset-0 flex flex-col items-center justify-center px-7 py-8 text-center sm:px-14"
+                  aria-live="polite"
                 >
                   {!finished ? (
                     <>
@@ -232,8 +250,12 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-1 items-center gap-1.5">
                   {STEPS.map((item, stepIndex) => (
-                    <span
+                    <button
                       key={item.key}
+                      type="button"
+                      onClick={() => selectStep(stepIndex)}
+                      aria-label={`跳到${item.label}`}
+                      aria-current={!finished && stepIndex === index ? "step" : undefined}
                       className={cn(
                         "rounded-full px-2.5 py-1 text-[11px] font-medium transition-all",
                         stepIndex <= index ? "bg-white/55 text-brand-deep" : "text-mute bg-white/20",
@@ -245,7 +267,7 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
                       }
                     >
                       {item.label}
-                    </span>
+                    </button>
                   ))}
                 </div>
                 <span className="shrink-0 text-[11px] font-medium text-mute">
@@ -254,9 +276,11 @@ export function GuidedDemo({ open, onClose, onReplay }: GuidedDemoProps): React.
               </div>
               <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/30">
                 <motion.div
+                  key={`${index}:${finished ? "finished" : "running"}`}
                   className="h-full rounded-full bg-gradient-to-r from-brand-soft to-brand"
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  initial={{ width: `${finished ? 100 : (index / STEPS.length) * 100}%` }}
+                  animate={{ width: `${finished ? 100 : ((index + 1) / STEPS.length) * 100}%` }}
+                  transition={{ duration: finished ? 0.25 : GUIDED_DEMO_STEP_DURATION / 1000, ease: "linear" }}
                 />
               </div>
             </div>

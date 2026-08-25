@@ -317,6 +317,271 @@
   pointer-events: none;
 }
 
+.capability-question-library {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.capability-question-library__intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.52rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.capability-question-library__intro span,
+.capability-question-library__intro strong,
+.capability-question-library__intro small {
+  display: flex;
+  align-items: center;
+}
+
+.capability-question-library__intro span {
+  gap: 0.3rem;
+  color: var(--brand-deep);
+  font-size: 0.58rem;
+  font-weight: 760;
+}
+
+.capability-question-library__intro strong {
+  margin-top: 0.18rem;
+  color: var(--ink);
+  font-size: 0.72rem;
+}
+
+.capability-question-library__intro small {
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  color: var(--mute);
+  font-size: 0.5rem;
+}
+
+.capability-question-library__groups {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.capability-agent-group {
+  padding: 0.42rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.capability-agent-group > header {
+  display: grid;
+  grid-template-columns: 1.45rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.capability-agent-group > header img {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 0.45rem;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 8px rgba(155, 57, 43, 0.15));
+}
+
+.capability-agent-group > header strong,
+.capability-agent-group > header small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-agent-group > header strong { color: var(--ink); font-size: 0.64rem; }
+.capability-agent-group > header small { margin-top: 0.05rem; color: var(--mute); font-size: 0.48rem; }
+.capability-agent-group > header > span {
+  max-width: 7.4rem;
+  overflow: hidden;
+  padding: 0.2rem 0.38rem;
+  border-radius: 999px;
+  background: rgba(222, 97, 71, 0.08);
+  color: var(--brand-deep);
+  font-size: 0.46rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-agent-group__questions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  margin-top: 0.32rem;
+}
+
+.capability-agent-group__questions button {
+  display: grid;
+  grid-template-columns: 0.36rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.18rem 0.28rem;
+  border-radius: 0.48rem;
+  color: var(--body);
+  text-align: left;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.capability-agent-group__questions button:hover,
+.capability-agent-group__questions button.is-selected {
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  transform: translateX(2px);
+}
+
+.capability-agent-group__questions i {
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: rgba(139, 116, 109, 0.38);
+}
+
+.capability-agent-group__questions button.is-golden i {
+  background: var(--brand);
+  box-shadow: 0 0 0 3px rgba(217, 89, 63, 0.08);
+}
+
+.capability-agent-group__questions button > span {
+  overflow: hidden;
+  font-size: 0.53rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-agent-group__questions b {
+  color: var(--brand-deep);
+  font-size: 0.42rem;
+  font-weight: 760;
+}
+
+.capability-question-library__proof {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.75rem;
+  background: rgba(231, 246, 238, 0.7);
+  color: #39725a;
+  font-size: 0.51rem;
+}
+
+.capability-question-library__proof strong { font-weight: 800; }
+
+.capability-question-library__scope {
+  margin-top: 0.35rem;
+  color: var(--mute);
+  font-size: 0.5rem;
+  line-height: 1.35;
+}
+
+/* Desktop judge workspace: one viewport, with scrolling reserved for real conversation output. */
+@media (min-width: 1024px) {
+  .app-shell[data-route="experience"] {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-shell[data-route="experience"] .app-main {
+    display: flex;
+    height: 100dvh;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .app-shell[data-route="experience"] .app-header { flex: 0 0 auto; }
+
+  .app-shell[data-route="experience"] .route-frame {
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .experience-page {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    padding-top: 0.72rem;
+    padding-bottom: 0.72rem;
+  }
+
+  .experience-case-tabs {
+    flex: 0 0 auto;
+    margin-bottom: 0.62rem;
+  }
+
+  .experience-layout {
+    min-height: 0;
+    flex: 1;
+    gap: 0.9rem;
+  }
+
+  .experience-stage-shell {
+    height: 100%;
+    min-height: 0 !important;
+    gap: 0.62rem;
+    overflow: hidden;
+  }
+
+  .experience-stage-shell > .native-adp {
+    height: 100%;
+    min-height: 0 !important;
+  }
+
+  .experience-storyline {
+    flex: 0 0 auto;
+    gap: 0.45rem;
+    padding: 0.42rem;
+    border-radius: 18px;
+  }
+
+  .experience-story-step { gap: 0.48rem; padding: 0.36rem 0.5rem; }
+  .experience-story-step > span { width: 1.55rem; height: 1.55rem; }
+
+  .experience-guide {
+    position: relative;
+    top: auto;
+    align-self: start;
+    max-height: 100%;
+    gap: 0.72rem !important;
+    overflow: hidden;
+    padding: 0.92rem !important;
+  }
+
+  .experience-guide .flow-chip { padding: 0.35rem 0.6rem; }
+  .experience-prompt-card { padding: 0.78rem; }
+  .experience-steps ol { margin-top: 0.55rem; }
+  .experience-steps ol > li { gap: 0.62rem; }
+  .experience-steps ol > li > span:first-child { width: 1.55rem; height: 1.55rem; }
+  .experience-guide-footer { padding-top: 0.68rem; }
+
+  .app-shell[data-route="experience"] .native-adp__conversation {
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+
+  .app-shell[data-route="experience"] .native-adp__empty {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
 .adp-brand-orb {
   position: relative;
   width: 5.2rem;

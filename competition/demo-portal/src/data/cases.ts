@@ -2,19 +2,21 @@ import {
   CalendarCheck,
   LayoutDashboard,
   School,
+  Sparkles,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
-export type CaseKey = "query" | "collaboration" | "reschedule" | "insight";
+export type HeroCaseKey = "query" | "collaboration" | "reschedule" | "insight";
+export type CaseKey = "general" | HeroCaseKey;
 
 export interface ExperienceContext {
   label: string;
   value: string;
 }
 
-export interface ExperienceCase {
-  key: CaseKey;
+export interface ExperienceCase<K extends CaseKey = CaseKey> {
+  key: K;
   title: string;
   eyebrow: string;
   shortPrompt: string;
@@ -26,7 +28,24 @@ export interface ExperienceCase {
   accent: string;
 }
 
-export const EXPERIENCE_CASES: ExperienceCase[] = [
+export const GENERAL_EXPERIENCE: ExperienceCase = {
+  key: "general",
+  title: "全部能力",
+  eyebrow: "总览 · 问问小序",
+  shortPrompt: "不确定从哪开始？直接描述你的教学安排问题。",
+  fullPrompt: "先查教师025第1周课表，再解释他的负载和风险。",
+  taskLabel: "不预设场景，直接说出对象、时间和你想完成的事",
+  steps: ["理解对象与时间", "转交对应领域 Agent", "用 CampusTools 核验并返回 Widget"],
+  context: [
+    { label: "协作", value: "Main → Child → Main" },
+    { label: "能力", value: "4 Agent · 13 CampusTools" },
+    { label: "结果", value: "Verified · Evidence · Widget" },
+  ],
+  icon: Sparkles,
+  accent: "#d9593f",
+};
+
+export const EXPERIENCE_CASES: ExperienceCase<HeroCaseKey>[] = [
   {
     key: "query",
     title: "查课表",
@@ -99,6 +118,8 @@ export const EXPERIENCE_CASES: ExperienceCase[] = [
   },
 ];
 
+export const EXPERIENCE_TABS: ExperienceCase[] = [GENERAL_EXPERIENCE, ...EXPERIENCE_CASES];
+
 export function getCaseByKey(key?: string): ExperienceCase | undefined {
-  return EXPERIENCE_CASES.find((item) => item.key === key);
+  return EXPERIENCE_TABS.find((item) => item.key === key);
 }

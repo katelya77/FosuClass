@@ -188,6 +188,10 @@ export function AdpExperience({
   const pendingExecutionRef = useRef<AdpExecutionState | null>(null);
   const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!abortRef.current) setInput(initialPrompt);
+  }, [initialPrompt]);
+
   const commitExecution = useCallback(
     (next: AdpExecutionState) => {
       setExecution(next);
