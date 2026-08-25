@@ -1,7 +1,7 @@
 {
   "brand": "校园智序·小序",
   "status": "PENDING_FINAL_VIDEO",
-  "generatedAt": "2026-08-25T17:08:53.975689+00:00",
+  "generatedAt": "2026-08-25T17:10:25.059563+00:00",
   "fileCount": 14,
   "files": [
     {
@@ -31,8 +31,8 @@
     },
     {
       "path": "03程序交付/03-最终Widget导出.widget",
-      "size": 42346,
-      "sha256": "841ee08e5c19e1b57c97a1837cba81c1a1c2d4901c9e5e59808b187a9a72667f"
+      "size": 41973,
+      "sha256": "62b42222e8861afd2867f2ed74c701681802463fc4a0306f66ae0b72d5696d29"
     },
     {
       "path": "03程序交付/ARCHITECTURE.md",
