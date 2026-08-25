@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-08-25T16:22:33.716972+00:00",
+  "status": "PASS_WITH_MANUAL_VIDEO_PENDING",
+  "anonymity": {
+    "ok": true,
+    "hits": {
+      "legacy_repository_brand": [],
+      "legacy_product_brand": [],
+      "real_institution": [],
+      "identity_or_machine_path": [],
+      "loopback_or_local_origin": [],
+      "stale_demo_version": []
+    }
+  },
+  "secrets": {
+    "ok": true,
+    "hitFiles": []
+  },
+  "zipIntegrity": {
+    "ok": true,
+    "files": [
+      {
+        "path": "校园智序-小序-程序交付材料.zip",
+        "ok": true,
+        "entries": 23,
+        "badEntry": null
+      },
+      {
+        "path": "校园智序-CampusTools.zip",
+        "ok": true,
+        "entries": 13,
+        "badEntry": null
+      },
+      {
+        "path": "校园智序-小序_v20260825234723_package.zip",
+        "ok": true,
+        "entries": 4,
+        "badEntry": null
+      }
+    ]
+  },
+  "pdfPages": {
+    "ok": true,
+    "files": [
+      {
+        "path": "校园智序-小序-智能体设计说明书.pdf",
+        "pages": 20,
+        "expected": 20,
+        "ok": true
+      },
+      {
+        "path": "校园智序-小序-答辩.pdf",
+        "pages": 12,
+        "expected": 12,
+        "ok": true
+      },
+      {
+        "path": "ONLINE-DEMO-GUIDE.pdf",
+        "pages": 1,
+        "expected": 1,
+        "ok": true
+      }
+    ]
+  },
+  "pptOverflow": {
+    "ok": true,
+    "method": "slides_test.py + 12 rendered previews; refreshed in command log"
+  },
+  "srt": {
+    "ok": true,
+    "blocks": 32,
+    "finalMs": 275000
+  },
+  "manifest": {
+    "ok": true,
+    "status": "PENDING_FINAL_VIDEO",
+    "files": 14
+  },
+  "online": {
+    "ok": true,
+    "status": 200,
+    "url": "https://adp.katelya.top/"
+  },
+  "verifiedReplay": {
+    "ok": true,
+    "evidenceMode": "clearly labelled; no API request; real capture SHA-256 pinned"
+  },
+  "liveAdp": {
+    "widgetOnSuccess": "official adp-widget path covered by unit test and prior real success capture",
+    "rateLimitBehavior": "400429 preserved; no retry; 30s cooldown; explicit replay only"
+  },
+  "videoPresent": false
+}

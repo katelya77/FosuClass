@@ -50,12 +50,8 @@
 - 最终材料中旧产品名、旧仓库名与本机工作区名：0 命中。
 - PPT 的图片描述路径已清理；最终对外品牌统一为“校园智序·小序”。
 
-## 人工补充项
+## PHASE 3.2 补充状态
 
-提交前仍须从腾讯 ADP Console 人工导出并放入 `manual-exports/`：
-
-1. ADP 应用导出 ZIP；
-2. CampusTools 自定义插件导出 ZIP；
-3. 最终 Widget 导出文件。
-
-同时需要把最终公开体验链接与二维码填入答辩第 12 页，并按镜头表录制最终 REAL ADP 三组真实提问画面。
+- ADP 应用导出 ZIP、CampusTools 自定义插件导出 ZIP、最终 Widget 导出文件已经由提交人加入 `manual-exports/`，并进入 Submission QA。
+- 在线入口与二维码已生成在一页 `ONLINE-DEMO-GUIDE.pdf`；答辩第 12 页继续保留二维码位置，不在本轮大改版式。
+- 唯一未完成的人工内容是按 `RECORDING-CHECKLIST.md` 录制并加入 04:35 最终演示视频；缺少成片时自动封包脚本 fail-closed，不生成“正式提交材料.zip”。
