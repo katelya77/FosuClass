@@ -82,7 +82,10 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
         </span>
       </div>
 
-      <div className="experience-layout grid gap-4 lg:grid-cols-[28%_minmax(0,1fr)] lg:gap-5">
+      <div className={cn(
+        "experience-layout grid gap-4 lg:grid-cols-[28%_minmax(0,1fr)] lg:gap-5",
+        isGeneral && "is-general",
+      )}>
         <section className="experience-stage-shell order-1 flex min-h-[540px] flex-col gap-3 lg:order-2 lg:col-start-2 lg:row-start-1">
           <div className="experience-storyline" aria-label="体验流程">
             {[
