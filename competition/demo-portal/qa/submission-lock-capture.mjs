@@ -16,7 +16,7 @@ const browser = await puppeteer.launch({
 });
 
 const issues = [];
-for (const [width, height] of [[1920, 1080], [1440, 900], [1366, 768]]) {
+for (const [width, height] of [[2559, 1418], [1920, 1080], [1440, 900], [1366, 768]]) {
   const page = await browser.newPage();
   const apiCalls = [];
   page.on("request", (request) => {

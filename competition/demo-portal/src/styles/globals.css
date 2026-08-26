@@ -2,8 +2,18 @@ html,
 body,
 #root {
   width: 100%;
+  max-width: 100%;
   min-height: 100%;
+  overflow-x: hidden;
   overflow-x: clip;
+}
+
+.app-shell,
+.app-main,
+.route-frame {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 html {
