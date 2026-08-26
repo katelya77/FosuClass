@@ -376,7 +376,7 @@ export function AdpExperience({
             </div>
             <p className="mt-1 text-[11px] text-mute">密钥仅存在服务端 · 官方 SSE 事件直达</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="native-adp__header-actions flex items-center gap-2">
             <div className="native-adp__mode-switch" aria-label="体验模式">
               <button type="button" className="is-active" aria-pressed="true">Live ADP</button>
               <button type="button" onClick={() => setMode("replay")}>Verified Replay</button>

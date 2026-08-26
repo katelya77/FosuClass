@@ -12,7 +12,7 @@ interface MobileNavProps {
 
 export function MobileNav({ current, onNavigate }: MobileNavProps): ReactElement {
   return (
-    <nav className="liquid-glass fixed inset-x-3 bottom-3 z-40 flex items-center justify-around rounded-[24px] px-1 py-2 lg:hidden">
+    <nav className="mobile-nav liquid-glass fixed z-40 rounded-[24px] px-1 py-2 lg:hidden" aria-label="移动端主导航">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const active = item.activeRoutes.includes(current.name);
@@ -22,7 +22,7 @@ export function MobileNav({ current, onNavigate }: MobileNavProps): ReactElement
             onClick={() => onNavigate(item.route)}
             whileTap={{ scale: 0.9 }}
             className={cn(
-              "flex flex-1 flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-medium transition-colors",
+              "mobile-nav__item flex min-w-0 flex-col items-center gap-1 rounded-2xl py-1.5 text-[10px] font-medium transition-colors",
               active ? "text-brand-deep" : "text-mute",
             )}
           >
@@ -35,7 +35,7 @@ export function MobileNav({ current, onNavigate }: MobileNavProps): ReactElement
             >
               <Icon size={18} className={cn(active ? "text-brand" : "text-current")} />
             </span>
-            <span>{item.label}</span>
+            <span className="mobile-nav__label">{item.label}</span>
           </motion.button>
         );
       })}

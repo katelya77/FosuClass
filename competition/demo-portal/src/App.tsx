@@ -65,10 +65,10 @@ export function App(): ReactElement {
 
       <main className="app-main relative lg:pl-[280px]">
         <header className="app-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-white/20 bg-white/18 px-4 py-3 backdrop-blur-xl sm:px-6 lg:justify-end">
-          <div className="lg:hidden">
+          <div className="app-header__brand lg:hidden">
             <BrandMark size="sm" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="app-header__actions flex items-center gap-2">
             <a
               href={DEFAULT_ADP_CHAT_URL}
               target="_blank"
