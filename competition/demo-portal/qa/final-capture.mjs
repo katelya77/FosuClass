@@ -4,14 +4,17 @@ import puppeteer from "puppeteer-core";
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const BASE = process.env.QA_BASE || "http://127.0.0.1:4174";
+const BROWSER_URL = process.env.QA_CDP_ENDPOINT;
 const OUT = path.join(process.cwd(), "qa", "phase3.4-final");
 fs.mkdirSync(OUT, { recursive: true });
 
-const browser = await puppeteer.launch({
-  executablePath: EDGE,
-  headless: true,
-  args: ["--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1"],
-});
+const browser = BROWSER_URL
+  ? await puppeteer.connect({ browserURL: BROWSER_URL })
+  : await puppeteer.launch({
+      executablePath: EDGE,
+      headless: true,
+      args: ["--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1"],
+    });
 const viewports = [
   [1920, 1080],
   [1600, 900],
@@ -72,7 +75,8 @@ for (const [width, height] of viewports) {
   await page.close();
 }
 
-await browser.close();
+if (BROWSER_URL) browser.disconnect();
+else await browser.close();
 if (issues.length) {
   console.error([...new Set(issues)].join("\n"));
   process.exitCode = 1;
