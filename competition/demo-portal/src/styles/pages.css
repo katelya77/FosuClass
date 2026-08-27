@@ -1243,6 +1243,81 @@
 .diagnostics-evidence strong { display: block; margin-top: 0.3rem; overflow-wrap: anywhere; color: var(--ink); font-size: 0.9rem; }
 .diagnostics-evidence small { margin-top: 0.55rem; line-height: 1.5; }
 
+/* Phase 3.4 clean recording state：只保留问题、真实执行轨、对话与 Widget。 */
+.app-shell[data-record-mode="true"] {
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 215, 203, 0.56), transparent 30%),
+    radial-gradient(circle at 86% 84%, rgba(230, 216, 244, 0.46), transparent 34%),
+    #fff8f5;
+}
+.app-shell[data-record-mode="true"] .app-blob { display: none; }
+.app-main--record { min-height: 100vh; padding: 0; }
+.experience-page--record { height: 100vh; overflow: hidden; }
+.recording-experience-stage { height: calc(100vh - 40px); }
+.recording-question {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.64);
+  box-shadow: inset 0 1px 0 #fff, 0 16px 42px rgba(126,71,56,0.1);
+}
+.recording-question span {
+  flex: 0 0 auto;
+  color: var(--brand-deep);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.recording-question strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: clamp(1rem, 1.35vw, 1.3rem);
+  line-height: 1.45;
+}
+.native-adp--record {
+  border: 1px solid rgba(255,255,255,0.82);
+  background: rgba(255,252,249,0.68);
+  box-shadow: inset 0 1px 0 #fff, 0 28px 72px rgba(117,66,52,0.13);
+}
+.native-adp--record .native-adp__header { padding: 0.8rem 1.1rem; }
+.native-adp--record .native-adp__header p:first-of-type { font-size: 0.92rem; }
+.native-adp--record .native-adp__rail {
+  gap: 0.7rem;
+  padding: 0.8rem 1.1rem;
+  background: rgba(255,255,255,0.34);
+}
+.native-adp--record .native-adp__rail-item { gap: 0.48rem; }
+.native-adp--record .native-adp__rail-item:not(:last-child)::after {
+  left: calc(100% + 0.08rem);
+  width: 0.55rem;
+}
+.native-adp--record .native-adp__rail-item span { width: 1.9rem; height: 1.9rem; }
+.native-adp--record .native-adp__rail-item small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+.native-adp--record .native-adp__conversation { min-height: 0; padding: 1.05rem 1.2rem; }
+.native-adp--record .native-adp__empty { min-height: 11rem; }
+.native-adp--record .native-adp__question { font-size: 0.92rem; }
+.native-adp--record .native-adp__answer { max-width: min(92%, 64rem); }
+.native-adp--record .native-adp__answer > p { font-size: 0.92rem; }
+.native-adp--record .native-adp__widget-label { color: #277c50; font-size: 0.76rem; }
+.native-adp--record .native-adp__composer { padding: 0.75rem 1rem 0.9rem; }
+.native-adp--record .native-adp__input-row textarea { resize: none; font-size: 0.88rem; }
+
+@media (max-height: 800px) {
+  .experience-page--record { padding-top: 14px; padding-bottom: 14px; }
+  .recording-experience-stage { height: calc(100vh - 28px); gap: 10px; }
+  .recording-question { padding-top: 11px; padding-bottom: 11px; }
+  .native-adp--record .native-adp__header { padding-block: 0.65rem; }
+  .native-adp--record .native-adp__rail { padding-block: 0.55rem; }
+  .native-adp--record .native-adp__composer { padding-block: 0.55rem; }
+}
+
 @media (max-width: 720px) {
   .mobile-nav {
     left: max(0.55rem, env(safe-area-inset-left));

@@ -82,4 +82,19 @@ describe("App routing", () => {
     expect(screen.getByText("从真实课表里快速找到教师025的未来四周安排")).toBeTruthy();
     expect(window.location.hash).toBe(routeBefore);
   });
+
+  it("record mode keeps only the clean live experience", async () => {
+    window.location.hash = "#/experience/query";
+    render(<App search="?mode=record" />);
+    expect(await screen.findByText("真实 ADP 运行")).toBeTruthy();
+    expect(screen.getAllByText("用户问题").length).toBeGreaterThan(0);
+    expect(screen.getByText("主协调")).toBeTruthy();
+    expect(screen.getByText("专业 Agent")).toBeTruthy();
+    expect(screen.getByText("CampusTools")).toBeTruthy();
+    expect(screen.getByText("Widget")).toBeTruthy();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByText("Verified Replay")).toBeNull();
+    expect(screen.queryByText("诊断")).toBeNull();
+    expect(screen.queryByText(/Native ADP API/)).toBeNull();
+  });
 });

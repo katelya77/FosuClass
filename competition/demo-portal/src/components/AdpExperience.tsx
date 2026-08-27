@@ -35,6 +35,7 @@ interface AdpExperienceProps {
   className?: string;
   initialPrompt?: string;
   showHeader?: boolean;
+  recordMode?: boolean;
 }
 
 interface ChatTurn {
@@ -174,6 +175,7 @@ export function AdpExperience({
   className,
   initialPrompt = QUICK_PROMPTS[0],
   showHeader = true,
+  recordMode = false,
 }: AdpExperienceProps): React.ReactElement {
   const cfg = config ?? resolveAdpConfig();
   const conversationId = useMemo(() => getPersistentConversationId(), []);
@@ -354,29 +356,29 @@ export function AdpExperience({
   const childAgent = execution.agentNames.find((name) => name !== execution.agentNames[0]);
   const lastTool = execution.toolNames.at(-1);
   const rail = [
-    { label: "用户", active: turns.length > 0, icon: ArrowUp },
-    { label: "小序·主协调", active: execution.agentNames.length > 0, icon: Bot },
-    { label: childAgent || "领域 Agent", active: execution.agentNames.length > 1, icon: Bot },
+    { label: recordMode ? "用户问题" : "用户", active: turns.length > 0, icon: ArrowUp },
+    { label: recordMode ? "主协调" : "小序·主协调", active: execution.agentNames.length > 0, icon: Bot },
+    { label: recordMode ? "专业 Agent" : childAgent || "领域 Agent", active: execution.agentNames.length > 1, icon: Bot },
     { label: "CampusTools", active: execution.toolNames.length > 0, icon: Wrench },
-    { label: "Verified Result", active: Boolean(execution.widget) || execution.status === "completed", icon: ShieldCheck },
+    { label: recordMode ? "Widget" : "已核验结果", active: Boolean(execution.widget) || execution.status === "completed", icon: ShieldCheck },
   ];
 
-  if (mode === "replay") {
+  if (mode === "replay" && !recordMode) {
     return <VerifiedReplay onLive={() => setMode("live")} />;
   }
 
   return (
-    <section className={cn("native-adp liquid-glass flex min-h-0 flex-col overflow-hidden rounded-[28px]", className)}>
+    <section className={cn("native-adp liquid-glass flex min-h-0 flex-col overflow-hidden rounded-[28px]", recordMode && "native-adp--record", className)} data-record-mode={recordMode ? "true" : "false"}>
       {showHeader && (
         <header className="native-adp__header">
           <div>
             <div className="flex items-center gap-2">
               <span className={cn("native-adp__live", isRunning && "animate-pulse")} />
-              <p className="text-sm font-semibold text-ink">Native ADP API · 真实对话</p>
+              <p className="text-sm font-semibold text-ink">{recordMode ? "真实 ADP 运行" : "Native ADP API · 真实对话"}</p>
             </div>
-            <p className="mt-1 text-[11px] text-mute">密钥仅存在服务端 · 官方 SSE 事件直达</p>
+            <p className="mt-1 text-[11px] text-mute">{recordMode ? "问题、协作、工具与结果依次到达" : "密钥仅存在服务端 · 官方 SSE 事件直达"}</p>
           </div>
-          <div className="native-adp__header-actions flex items-center gap-2">
+          {!recordMode && <div className="native-adp__header-actions flex items-center gap-2">
             <div className="native-adp__mode-switch" aria-label="体验模式">
               <button type="button" className="is-active" aria-pressed="true">Live ADP</button>
               <button type="button" onClick={() => setMode("replay")}>Verified Replay</button>
@@ -385,7 +387,7 @@ export function AdpExperience({
             <a className="glass-button px-3 py-1.5 text-xs" href={cfg.externalWebimUrl} target="_blank" rel="noreferrer noopener">
               <ExternalLink size={13} /> 官方体验
             </a>
-          </div>
+          </div>}
         </header>
       )}
 
@@ -401,7 +403,7 @@ export function AdpExperience({
         {turns.length === 0 ? (
           <div className="native-adp__empty">
             <img src="/branding/platform-logo.png" alt="小序" />
-            <div><p>问一句，看到真实 Multi-Agent 怎么做</p><span>生成模型负责理解任务，CampusTools 负责事实。</span></div>
+            <div><p>{recordMode ? "发送问题，观看真实协作过程" : "问一句，看到真实 Multi-Agent 怎么做"}</p><span>生成模型负责理解任务，CampusTools 负责事实。</span></div>
           </div>
         ) : (
           turns.map((turn, index) => {
@@ -413,7 +415,7 @@ export function AdpExperience({
                   <div className="native-adp__answer-meta">
                     <img src="/branding/platform-logo.png" alt="" />
                     <strong>{isLatest ? lastAgent || "小序" : "小序"}</strong>
-                    {isLatest && lastTool && <span>{lastTool.split("/").at(-1)}</span>}
+                    {isLatest && lastTool && !recordMode && <span>{lastTool.split("/").at(-1)}</span>}
                   </div>
                   {turn.answer ? <p>{turn.answer}</p> : isLatest && isRunning ? (
                     <div className="flex items-center gap-2 text-sm text-mute"><LoaderCircle size={15} className="animate-spin" />正在执行真实任务…</div>
@@ -421,13 +423,13 @@ export function AdpExperience({
                     <div className="native-adp__failure">
                       <p className="text-brand-deep">{userFacingError(execution.error)}</p>
                       {rateLimited && (
-                        <button type="button" onClick={() => setMode("replay")}><CirclePlay size={14} />一键查看已核验演示</button>
+                        !recordMode && <button type="button" onClick={() => setMode("replay")}><CirclePlay size={14} />一键查看已核验演示</button>
                       )}
                     </div>
                   ) : null}
                   {turn.widget && (
                     <div className="native-adp__widget">
-                      <div className="native-adp__widget-label"><CheckCircle2 size={14} /> 官方 ADP Widget</div>
+                      <div className="native-adp__widget-label"><CheckCircle2 size={14} /> {recordMode ? "已核验结果" : "官方 ADP Widget"}</div>
                       <AdpWidget widget={turn.widget} disabled={isRunning} onAction={onWidgetAction} onRendered={() => {
                         setWidgetRendered(true);
                         saveDiagnostics(buildDiagnostics(execution, conversationId, true));
@@ -447,9 +449,9 @@ export function AdpExperience({
             <ShieldCheck size={13} /> ADP 限流冷却 {cooldownRemaining}s；不会自动重试，原问题已保留。
           </div>
         )}
-        <div className="native-adp__quick-prompts">
+        {!recordMode && <div className="native-adp__quick-prompts">
           {QUICK_PROMPTS.map((prompt, index) => <button key={prompt} onClick={() => setInput(prompt)} disabled={isRunning}>{index + 1}. {prompt}</button>)}
-        </div>
+        </div>}
         <div className="native-adp__input-row">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); }
