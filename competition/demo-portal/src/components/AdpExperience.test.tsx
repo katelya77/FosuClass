@@ -18,6 +18,16 @@ describe("AdpExperience native API mode", () => {
     expect(screen.getByRole("textbox")).toBeTruthy();
   });
 
+  it("record mode removes replay, diagnostics and API jargon", () => {
+    render(<AdpExperience recordMode />);
+    expect(screen.getByText("真实 ADP 运行")).toBeTruthy();
+    expect(screen.getByText("用户问题")).toBeTruthy();
+    expect(screen.getByText("专业 Agent")).toBeTruthy();
+    expect(screen.queryByText("Verified Replay")).toBeNull();
+    expect(screen.queryByText("诊断")).toBeNull();
+    expect(screen.queryByText(/Native ADP API/)).toBeNull();
+  });
+
   it("does not prefetch and exposes a clearly labelled verified replay", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

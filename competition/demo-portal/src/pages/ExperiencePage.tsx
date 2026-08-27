@@ -13,9 +13,10 @@ import { type Route } from "../lib/router";
 interface ExperiencePageProps {
   caseKey?: string;
   onNavigate: (route: Route) => void;
+  recordMode?: boolean;
 }
 
-export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): ReactElement {
+export function ExperiencePage({ caseKey, onNavigate, recordMode = false }: ExperiencePageProps): ReactElement {
   const active = getCaseByKey(caseKey) ?? GENERAL_EXPERIENCE;
   const isGeneral = active.key === "general";
   const activeBrandId = {
@@ -50,6 +51,20 @@ export function ExperiencePage({ caseKey, onNavigate }: ExperiencePageProps): Re
       setCopied(false);
     }
   };
+
+  if (recordMode) {
+    return (
+      <div className="experience-page experience-page--record mx-auto max-w-[1460px] px-6 py-5" data-qa-portal-recording>
+        <section className="recording-experience-stage flex min-h-0 flex-col gap-4">
+          <div className="recording-question liquid-glass flex items-center gap-5 rounded-[24px] px-6 py-4">
+            <span>用户问题</span>
+            <strong>{prompt}</strong>
+          </div>
+          <AdpExperience className="min-h-0 flex-1" initialPrompt={prompt} recordMode />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="experience-page mx-auto max-w-[1500px] px-4 pb-24 pt-5 sm:px-6 sm:pt-8">
