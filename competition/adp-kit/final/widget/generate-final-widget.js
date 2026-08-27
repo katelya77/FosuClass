@@ -12,10 +12,47 @@ const DEFAULT_SOURCE = "C:\\Users\\Katelya\\Downloads\\小序-校园智序结果
 const OUTPUT = path.join(FINAL_ROOT, "小序-校园智序结果卡.widget");
 const CONSOLE_WIDGET = path.join(KIT, "r50.2", "console-bundle", "widget");
 const EXPECTED_ID = "601418106a374b2eb7de54c65a3de7e0";
-const EXPECTED_SOURCE_SHA256 = "93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252";
+const EXPECTED_SOURCE_SHA256 = "9f0c4aeb6e9c47c90b32879ecbc0ee3bc3e0e97d7d18dafb740b9ca3ecefcda6";
+const PREVIEW_COLOR_MAP = new Map(Object.entries({
+  "#FBFAF7": "#FFFDFC",
+  "#EAF3EE": "#E8F8F0",
+  "#2F6B59": "#159A62",
+  "#FFF0EC": "#FFF0EB",
+  "#DF5E48": "#F0644B",
+  "#B94735": "#D94B36",
+  "#9F3426": "#C83F2A",
+  "#66706B": "#77827D",
+  "#18201D": "#26312D",
+  "#E7EAE7": "#E7EFEA",
+  "#F1F7F3": "#F0FAF5",
+  "#F2F5FA": "#F1F6FF",
+  "#3F6FE5": "#4F7FE8",
+  "#FBF0EF": "#FFF1F1",
+  "#F3F4F2": "#F7F9F8",
+  "#FBF3E8": "#FFF7E3",
+  "#EEF2FB": "#EEF5FF",
+  "#EDF5F1": "#EEFAF4",
+  "#B97828": "#D88A18",
+  "#B94A48": "#D84C4C",
+  "#8A918D": "#A2AAA6",
+  "#4F5954": "#68736E",
+  "#8E3432": "#B23B3B",
+  "#F7F8F5": "#FAFCFB",
+  "#8A5A22": "#A8660D",
+  "#F3F6F4": "#F6FAF8",
+}));
 
 function hash(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function synchronizePreviewColors(value) {
+  if (Array.isArray(value)) return value.map(synchronizePreviewColors);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, synchronizePreviewColors(item)]));
+  }
+  if (typeof value === "string") return PREVIEW_COLOR_MAP.get(value.toUpperCase()) || value;
+  return value;
 }
 
 function main() {
@@ -44,9 +81,10 @@ function main() {
     name: outer.name,
     template: "",
     jsonSchema: schema,
-    // Preserve the platform-generated preview tree as a structural import hint.
+    // Preserve the platform-generated preview tree as a structural import hint,
+    // while keeping its template-only palette aligned with encodedWidget.view.
     // Runtime rendering is governed by encodedWidget.view and current state.
-    outputJsonPreview: outer.outputJsonPreview,
+    outputJsonPreview: synchronizePreviewColors(outer.outputJsonPreview),
     encodedWidget: Buffer.from(JSON.stringify(generatedInner), "utf8").toString("base64"),
   };
   fs.mkdirSync(FINAL_ROOT, { recursive: true });

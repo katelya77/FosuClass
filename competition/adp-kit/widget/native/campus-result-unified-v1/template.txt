@@ -1,16 +1,16 @@
-<Card size="md" background="#FBFAF7" status={verified ? '已核验' : '待核验'}>
+<Card size="md" background="#FFFDFC" status={verified ? '已核验' : '待核验'}>
   {layoutMode === 'week-board' ? (
     <Col gap={3}>
-      <Box direction="col" gap={2} padding="14px" background="#EAF3EE" radius="xl">
+      <Box direction="col" gap={2} padding="14px" background="#E8F8F0" radius="xl">
         <Row gap={2} align="center" justify="between">
-          <Caption value="课程时间板" color="#2F6B59" weight="semibold" />
+          <Caption value="课程时间板" color="#159A62" weight="semibold" />
           <Badge label="已核验" color="success" variant="soft" size="sm" pill={true} />
         </Row>
         <Title value={weekBoardTitle} size="md" />
-        <Caption value={weekBoardSubtitle} color="#66706B" />
-        <Box direction="col" gap={1} padding="11px" background="#FFF0EC" border={{ left: { size: 3, color: '#DF5E48', style: 'solid' } }} radius="md">
-          <Caption value="结论先行" color="#B94735" weight="semibold" />
-          <Text value={summary} size="md" weight="semibold" color="#9F3426" />
+        <Caption value={weekBoardSubtitle} color="#77827D" />
+        <Box direction="col" gap={1} padding="11px" background="#FFF0EB" border={{ left: { size: 3, color: '#F0644B', style: 'solid' } }} radius="md">
+          <Caption value="结论先行" color="#D94B36" weight="semibold" />
+          <Text value={summary} size="md" weight="semibold" color="#C83F2A" />
         </Box>
       </Box>
 
@@ -24,12 +24,12 @@
             width="48%"
             minWidth="148px"
             background="#FFFFFF"
-            border={{ size: 1, color: '#E7EAE7', style: 'solid' }}
+            border={{ size: 1, color: '#E7EFEA', style: 'solid' }}
             radius="lg"
           >
             <Row gap={1} align="center" justify="between">
-              <Text value={day.label} size="sm" weight="semibold" color="#18201D" />
-              <Caption value={`${day.blocks.length} 段`} color="#66706B" />
+              <Text value={day.label} size="sm" weight="semibold" color="#26312D" />
+              <Caption value={`${day.blocks.length} 段`} color="#77827D" />
             </Row>
             <Col gap={2}>
               {day.blocks.map((block, blockIndex) => (
@@ -38,14 +38,14 @@
                   direction="col"
                   gap={1}
                   padding="9px"
-                  background={blockIndex % 2 === 0 ? '#F1F7F3' : '#F2F5FA'}
+                  background={blockIndex % 2 === 0 ? '#F0FAF5' : '#F1F6FF'}
                   radius="md"
-                  border={{ left: { size: 3, color: blockIndex % 2 === 0 ? '#2F6B59' : '#3F6FE5', style: 'solid' } }}
+                  border={{ left: { size: 3, color: blockIndex % 2 === 0 ? '#159A62' : '#4F7FE8', style: 'solid' } }}
                 >
                   <Badge label={block.time} color="info" variant="outline" size="sm" />
-                  <Text value={block.title} size="sm" weight="semibold" color="#18201D" />
-                  <Caption value={block.location} color="#66706B" />
-                  {block.meta ? <Caption value={block.meta} color="#66706B" /> : null}
+                  <Text value={block.title} size="sm" weight="semibold" color="#26312D" />
+                  <Caption value={block.location} color="#77827D" />
+                  {block.meta ? <Caption value={block.meta} color="#77827D" /> : null}
                 </Box>
               ))}
             </Col>
@@ -61,14 +61,14 @@
         padding="14px"
         background={
           status === 'error'
-            ? '#FBF0EF'
+            ? '#FFF1F1'
             : status === 'empty'
-              ? '#F3F4F2'
+              ? '#F7F9F8'
               : variant === 'risk'
-                ? '#FBF3E8'
+                ? '#FFF7E3'
                 : variant === 'ranking'
-                  ? '#EEF2FB'
-                  : '#EDF5F1'
+                  ? '#EEF5FF'
+                  : '#EEFAF4'
         }
         radius="xl"
       >
@@ -95,7 +95,7 @@
                                 ? '需要重试'
                                 : '校园结果'
             }
-            color={variant === 'risk' ? '#B97828' : status === 'error' ? '#B94A48' : '#2F6B59'}
+            color={variant === 'risk' ? '#D88A18' : status === 'error' ? '#D84C4C' : '#159A62'}
             weight="semibold"
           />
           <Row gap={1} align="center">
@@ -110,25 +110,25 @@
           </Row>
         </Row>
         <Title value={title} size="md" />
-        {subtitle ? <Caption value={subtitle} color="#66706B" /> : null}
+        {subtitle ? <Caption value={subtitle} color="#77827D" /> : null}
         <Box
           direction="col"
           gap={1}
           padding="11px"
-          background={status === 'error' ? '#FBF0EF' : status === 'empty' ? '#F3F4F2' : '#FFF0EC'}
-          border={{ left: { size: 3, color: status === 'error' ? '#B94A48' : status === 'empty' ? '#8A918D' : '#DF5E48', style: 'solid' } }}
+          background={status === 'error' ? '#FFF1F1' : status === 'empty' ? '#F7F9F8' : '#FFF0EB'}
+          border={{ left: { size: 3, color: status === 'error' ? '#D84C4C' : status === 'empty' ? '#A2AAA6' : '#F0644B', style: 'solid' } }}
           radius="md"
         >
-          <Caption value="结论先行" color={status === 'error' ? '#B94A48' : status === 'empty' ? '#66706B' : '#B94735'} weight="semibold" />
-          <Text value={summary} size="md" weight="semibold" color={status === 'error' ? '#8E3432' : status === 'empty' ? '#4F5954' : '#9F3426'} />
+          <Caption value="结论先行" color={status === 'error' ? '#D84C4C' : status === 'empty' ? '#77827D' : '#D94B36'} weight="semibold" />
+          <Text value={summary} size="md" weight="semibold" color={status === 'error' ? '#B23B3B' : status === 'empty' ? '#68736E' : '#C83F2A'} />
         </Box>
-        {context ? <Caption value={context} color="#66706B" /> : null}
+        {context ? <Caption value={context} color="#77827D" /> : null}
       </Box>
 
       {displayMeta.tieNote ? (
         <Row gap={2} align="center">
           <Badge label="并列" color="info" variant="soft" size="sm" />
-          <Caption value={displayMeta.tieNote} color="#66706B" />
+          <Caption value={displayMeta.tieNote} color="#77827D" />
         </Row>
       ) : null}
 
@@ -136,8 +136,8 @@
         <Col key={`${section.title}-${sectionIndex}`} gap={2}>
           <Divider />
           <Row gap={2} align="center" justify="between">
-            <Text value={section.title} size="sm" weight="semibold" color="#18201D" />
-            {section.note ? <Caption value={section.note} color="#66706B" /> : null}
+            <Text value={section.title} size="sm" weight="semibold" color="#26312D" />
+            {section.note ? <Caption value={section.note} color="#77827D" /> : null}
           </Row>
           {section.kind === 'metric' || (!section.kind && variant === 'overview') ? (
             <Row gap={2} wrap="wrap" align="stretch">
@@ -150,12 +150,12 @@
                   width="48%"
                   minWidth="140px"
                   background="#FFFFFF"
-                  border={{ size: 1, color: '#E7EAE7', style: 'solid' }}
+                  border={{ size: 1, color: '#E7EFEA', style: 'solid' }}
                   radius="md"
                 >
-                  <Caption value={row.label} color="#66706B" />
-                  <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  <Caption value={row.label} color="#77827D" />
+                  <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                  {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                 </Box>
               ))}
             </Row>
@@ -169,13 +169,13 @@
                     gap={1}
                     padding="9px"
                     flex={1}
-                    background="#F7F8F5"
-                    border={{ left: { size: 3, color: '#2F6B59', style: 'solid' } }}
+                    background="#FAFCFB"
+                    border={{ left: { size: 3, color: '#159A62', style: 'solid' } }}
                     radius="md"
                   >
-                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                    <Caption value={row.label} color="#66706B" />
-                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                    <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                    <Caption value={row.label} color="#77827D" />
+                    {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                   </Box>
                 </Row>
               ))}
@@ -190,16 +190,16 @@
                     gap={1}
                     padding="10px"
                     flex={1}
-                    background="#FBF3E8"
-                    border={{ left: { size: 3, color: '#B97828', style: 'solid' } }}
+                    background="#FFF7E3"
+                    border={{ left: { size: 3, color: '#D88A18', style: 'solid' } }}
                     radius="md"
                   >
                     <Row gap={2} align="center" justify="between">
-                      <Caption value={row.label} color="#8A5A22" />
+                      <Caption value={row.label} color="#A8660D" />
                       {row.badge ? <Badge label={row.badge} color="warning" variant="soft" size="sm" /> : null}
                     </Row>
-                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                    <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                    {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                   </Box>
                 </Row>
               ))}
@@ -212,16 +212,16 @@
                   direction="col"
                   gap={1}
                   padding="12px"
-                  background={rowIndex === 0 ? '#EAF3EE' : '#F7F8F5'}
-                  border={{ left: { size: 3, color: '#2F6B59', style: 'solid' } }}
+                  background={rowIndex === 0 ? '#E8F8F0' : '#FAFCFB'}
+                  border={{ left: { size: 3, color: '#159A62', style: 'solid' } }}
                   radius="md"
                 >
                   <Row gap={2} align="center" justify="between">
-                    <Caption value={row.label} color="#2F6B59" weight="semibold" />
+                    <Caption value={row.label} color="#159A62" weight="semibold" />
                     {row.badge ? <Badge label={row.badge} color="success" variant="soft" size="sm" /> : null}
                   </Row>
-                  <Text value={row.value} size="md" weight="semibold" color="#18201D" />
-                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  <Text value={row.value} size="md" weight="semibold" color="#26312D" />
+                  {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                 </Box>
               ))}
             </Col>
@@ -233,13 +233,13 @@
                   direction="row"
                   gap={2}
                   padding="9px"
-                  background={rowIndex === 0 ? '#EEF2FB' : '#FFFFFF'}
+                  background={rowIndex === 0 ? '#EEF5FF' : '#FFFFFF'}
                   radius="md"
                 >
                   <Badge label={row.label} color="info" variant={rowIndex === 0 ? 'soft' : 'outline'} size="sm" />
                   <Col gap={1} flex={1}>
-                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                    <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                    {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                   </Col>
                 </Box>
               ))}
@@ -252,27 +252,27 @@
                   direction="col"
                   gap={1}
                   padding="10px"
-                  background={row.badge === '不可行' ? '#FBF0EF' : row.badge === '可行' ? '#EAF3EE' : '#F2F5FA'}
-                  border={{ left: { size: 3, color: row.badge === '不可行' ? '#B94A48' : row.badge === '可行' ? '#2F6B59' : '#3F6FE5', style: 'solid' } }}
+                  background={row.badge === '不可行' ? '#FFF1F1' : row.badge === '可行' ? '#E8F8F0' : '#F1F6FF'}
+                  border={{ left: { size: 3, color: row.badge === '不可行' ? '#D84C4C' : row.badge === '可行' ? '#159A62' : '#4F7FE8', style: 'solid' } }}
                   radius="md"
                 >
                   <Row gap={2} align="center" justify="between">
-                    <Caption value={row.label} color="#66706B" />
+                    <Caption value={row.label} color="#77827D" />
                     {row.badge ? <Badge label={row.badge} color={row.badge === '不可行' ? 'danger' : row.badge === '可行' ? 'success' : 'info'} variant="soft" size="sm" /> : null}
                   </Row>
-                  <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                  {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                 </Box>
               ))}
             </Col>
           ) : section.kind === 'notice' ? (
-            <Box direction="col" gap={2} padding="10px" background={variant === 'risk' ? '#FBF3E8' : '#F3F6F4'} radius="md">
+            <Box direction="col" gap={2} padding="10px" background={variant === 'risk' ? '#FFF7E3' : '#F6FAF8'} radius="md">
               {section.rows.map((row, rowIndex) => (
                 <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="center" justify="between">
                   <Col gap={1} flex={1}>
-                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                    <Caption value={row.label} color="#66706B" />
-                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                    <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                    <Caption value={row.label} color="#77827D" />
+                    {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                   </Col>
                   {row.badge ? <Badge label={row.badge} color={variant === 'risk' ? 'warning' : 'success'} variant="soft" size="sm" /> : null}
                 </Row>
@@ -283,8 +283,8 @@
               {section.rows.map((row, rowIndex) => (
                 <Box key={`${section.title}-${row.label}-${rowIndex}`} direction="row" gap={2} padding="8px">
                   <Col gap={1} flex={1}>
-                    <Text value={row.label} size="sm" weight="semibold" color="#18201D" />
-                    <Caption value={row.value} color="#66706B" />
+                    <Text value={row.label} size="sm" weight="semibold" color="#26312D" />
+                    <Caption value={row.value} color="#77827D" />
                   </Col>
                   {row.badge ? <Badge label={row.badge} color="info" variant="outline" size="sm" /> : null}
                 </Box>
@@ -294,21 +294,21 @@
             <Col gap={2}>
               {section.rows.map((row, rowIndex) => (
                 <Col key={`${section.title}-${row.label}-${rowIndex}`} gap={1}>
-                  <Text value={row.value} size="sm" color="#18201D" />
-                  <Caption value={row.label} color="#66706B" />
-                  {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                  <Text value={row.value} size="sm" color="#26312D" />
+                  <Caption value={row.label} color="#77827D" />
+                  {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                 </Col>
               ))}
-              {section.note && !section.rows.length ? <Text value={section.note} size="sm" color="#18201D" /> : null}
+              {section.note && !section.rows.length ? <Text value={section.note} size="sm" color="#26312D" /> : null}
             </Col>
           ) : (
             <Col gap={2}>
               {section.rows.map((row, rowIndex) => (
                 <Row key={`${section.title}-${row.label}-${rowIndex}`} gap={2} align="start">
                   <Col gap={1} flex={1}>
-                    <Text value={row.value} size="sm" weight="semibold" color="#18201D" />
-                    <Caption value={row.label} color="#66706B" />
-                    {row.hint ? <Caption value={row.hint} color="#66706B" /> : null}
+                    <Text value={row.value} size="sm" weight="semibold" color="#26312D" />
+                    <Caption value={row.label} color="#77827D" />
+                    {row.hint ? <Caption value={row.hint} color="#77827D" /> : null}
                   </Col>
                   {row.badge ? (
                     <Badge

@@ -115,7 +115,11 @@ test("contract: layoutMode 规则 —— 整周/周范围课表 → week-board�
       assert.strictEqual(sample.days.length, 0, `${sampleName}: result-card 不应有 days`);
     }
   }
-  assert.strictEqual(defaults.layoutMode, "week-board", "default.json 必须以整周课表作为旗舰预览");
+  assert.strictEqual(defaults.layoutMode, "result-card", "default.json 必须使用不绑定具体教师的通用结果卡预览");
+  assert.strictEqual(defaults.variant, "message", "通用预览必须使用 message 变体");
+  assert.strictEqual(defaults.status, "empty", "通用预览不得伪造已经生成的业务结果");
+  assert.strictEqual(defaults.verified, false, "通用预览不得显示为已核验事实");
+  assert(!/教师\d{3}/.test(JSON.stringify(defaults)), "通用预览不得绑定具体教师");
 });
 
 test("contract: week-board 渲染结构 —— 日板块/课程块/空天折叠/确定性字段", () => {

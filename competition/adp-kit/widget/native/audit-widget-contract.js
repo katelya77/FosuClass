@@ -52,7 +52,10 @@ function auditWidget(widget, contract = null) {
   const tieSchema = outerSchema.properties && outerSchema.properties.displayMeta
     && outerSchema.properties.displayMeta.properties
     && outerSchema.properties.displayMeta.properties.tieGroupCount;
-  const tieSemanticsValid = !tieSchema || (tieSchema.minimum === 1 && /tieGroupCount:\s*z\.number\(\)\.int\(\)\.min\(1\)\.optional\(\)/.test(String(inner.schema || "")));
+  const tieSemanticsValid = !tieSchema || (
+    tieSchema.minimum === 1
+    && /tieGroupCount:\s*z\.number\(\)\.int\(\)\.(?:min|gte)\(1\)/.test(String(inner.schema || ""))
+  );
 
   const checks = {
     encodedWidgetPresent: Boolean(widget.encodedWidget),
