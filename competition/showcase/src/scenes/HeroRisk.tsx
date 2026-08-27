@@ -9,7 +9,6 @@ import { useHeroClock, reached } from '../stores/directorStore';
 import { RISK_BEATS } from '../director/heroes/riskTimeline';
 import { HERO_COPY as C } from '../content/heroCopy';
 import { buildRiskViewModel } from '../data/adapters/riskAdapter';
-import { BlurIn } from '../components/visual/TextFx';
 import { HeroNarrative } from '../components/director/HeroNarrative';
 
 const vm = buildRiskViewModel();
@@ -25,7 +24,7 @@ export function HeroRisk(): JSX.Element {
   const schedule = reached(t, at('risk.schedule'));
   const campuses = reached(t, at('risk.campuses'));
   const routesAt = at('risk.routes');
-  const routesShown = reached(t, routesAt) ? Math.min(vm.rushLinks.length, Math.floor((t - routesAt) * 0.9) + 1) : 0;
+  const routesShown = reached(t, routesAt) ? Math.min(vm.rushLinks.length, Math.floor((t - routesAt) / 1.4) + 1) : 0;
   const warning = reached(t, at('risk.warning'));
   const summary = reached(t, at('risk.summary'));
   const routesDone = routesShown >= vm.rushLinks.length;
@@ -48,7 +47,7 @@ export function HeroRisk(): JSX.Element {
       />
 
       {identity && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className='depth-shift flex w-full items-center justify-between gap-5'>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className='risk-identity depth-shift flex w-full items-center justify-between gap-6'>
           <div className='flex items-center gap-5'>
             <span className='flex size-16 items-center justify-center rounded-2xl border border-[color-mix(in_srgb,var(--brand)_45%,transparent)] bg-[var(--brand-dim)] text-[22px] font-bold tabular-nums text-brand-strong shadow-[var(--glow-brand)]'>25</span>
             <div>
@@ -56,16 +55,31 @@ export function HeroRisk(): JSX.Element {
               <p className='t-caption'>{C.risk.identityRole}</p>
             </div>
           </div>
-          <div className='flex items-center gap-12'>
-            <div className='text-center'>
-              <KineticMetric to={vm.totals.conflictCount} settle={warning} className='t-metric text-ok' />
-              <p className='t-caption mt-1'>课程冲突</p>
-            </div>
-            <div className='text-center'>
-              <KineticMetric to={vm.totals.rushWarningCount} settle={warning} className='t-metric text-riskc' />
-              <p className='t-caption mt-1'>跨校区赶场</p>
-            </div>
-          </div>
+          {summary ? (
+            <motion.div
+              className='risk-result-metrics grid min-w-0 flex-1 grid-cols-3 gap-3'
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.72 }}
+              data-qa-risk-summary
+            >
+              <div className='risk-result-metric'>
+                <KineticMetric to={vm.totals.conflictCount} settle={warning} className='risk-result-number text-ok' />
+                <p>课程冲突</p>
+              </div>
+              <div className='risk-result-metric is-warning'>
+                <KineticMetric to={vm.totals.rushWarningCount} settle={warning} className='risk-result-number text-riskc' />
+                <p>转场预警</p>
+              </div>
+              <div className='risk-result-metric is-window'>
+                <span className='risk-result-number text-brand-strong'>20</span>
+                <span className='risk-result-unit'>min</span>
+                <p>最短转场窗口</p>
+              </div>
+            </motion.div>
+          ) : (
+            <div className='rounded-full border border-line bg-white/45 px-5 py-2 text-[15px] font-semibold text-mute'>未来四周 · 联合检查时间与教学空间</div>
+          )}
         </motion.div>
       )}
 
@@ -82,19 +96,12 @@ export function HeroRisk(): JSX.Element {
         </div>
       </div>
 
-      <BlurIn delay={summary ? 0.2 : 3} className="flex items-end justify-between gap-6">
-        <div>
-          <p className='t-body text-mute'>{C.risk.summary}</p>
-          <div className='mt-2 flex items-center gap-2'>
-            {vm.perWeekRisk.map((w) => (
-              <span key={w.week} className='chip text-[14px] tabular-nums'>
-                W{w.week} · 冲突{w.conflictCount} / 赶场{w.rushWarningCount}
-              </span>
-            ))}
-          </div>
-        </div>
-        <VerifiedSourcePill />
-      </BlurIn>
+      {summary && (
+        <motion.p className='t-body text-mute' initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          {C.risk.summary}
+        </motion.p>
+      )}
+      <VerifiedSourcePill />
     </div>
   );
 }

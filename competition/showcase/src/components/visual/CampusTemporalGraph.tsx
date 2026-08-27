@@ -1,8 +1,7 @@
 import { motion } from "motion/react";
 import { BookOpen, Clock3, DoorOpen, MapPin, UserRound, Users } from "lucide-react";
 import type { ComponentType } from "react";
-import { openingGraphFixture } from "../../fixtures/opening";
-import type { GraphNodeType } from "../../fixtures/opening";
+import { openingGraphFixture, type GraphEdge, type GraphNodeType } from "../../fixtures/opening";
 import { EASE_OUT } from "../../motion/motionTokens";
 
 export interface GraphBeats {
@@ -13,155 +12,136 @@ export interface GraphBeats {
 }
 
 type IconCmp = ComponentType<{ size?: number | string; strokeWidth?: number | string; color?: string }>;
-const TYPE_META: Record<GraphNodeType, { color: string; label: string; Icon: IconCmp }> = {
-  course: { color: "var(--brand)", label: "课程", Icon: BookOpen },
-  teacher: { color: "var(--brand-strong)", label: "教师", Icon: UserRound },
-  class: { color: "#BD6D78", label: "班级", Icon: Users },
-  room: { color: "var(--brand-secondary)", label: "教室", Icon: DoorOpen },
-  time: { color: "#9E89B9", label: "时间", Icon: Clock3 },
-  campus: { color: "var(--brand-secondary)", label: "校区", Icon: MapPin },
+
+const TYPE_META: Record<GraphNodeType, { color: string; Icon: IconCmp }> = {
+  course: { color: "var(--brand)", Icon: BookOpen },
+  teacher: { color: "var(--brand-strong)", Icon: UserRound },
+  class: { color: "#BD6D78", Icon: Users },
+  room: { color: "var(--brand-secondary)", Icon: DoorOpen },
+  time: { color: "#8D78AE", Icon: Clock3 },
+  campus: { color: "#7C6EA4", Icon: MapPin },
 };
 
-/** 连线叙事分组：单条关系 pulse → 第二条 → 局部网络 → 收束到时间/校区。
- *  Phase 2.6：不再 20 条线均匀乱出，而是"理解过程"本身成为动画。 */
-const EDGE_PHASES: string[][] = [
-  ["teacher-1-course-1"],
-  ["teacher-1-course-4"],
-  [
-    "teacher-2-course-2", "teacher-2-course-3",
-    "class-1-course-1", "class-1-course-4", "class-2-course-2", "class-2-course-3",
-  ],
-  [
-    "course-1-room-1", "course-2-room-2", "course-3-room-3", "course-4-room-2",
-    "course-1-time-1", "course-3-time-2", "course-2-time-2", "course-4-time-1",
-    "room-1-campus-1", "room-2-campus-1", "room-3-campus-1", "time-1-campus-1",
-  ],
-];
+const RELATION_META: Record<GraphEdge["kind"], { label: string; order: number; x: number; y: number }> = {
+  teaches: { label: "课程 → 教师", order: 0, x: 310, y: 220 },
+  belongs: { label: "课程 → 班级", order: 1, x: 305, y: 485 },
+  "held-at": { label: "课程 → 教室", order: 2, x: 630, y: 220 },
+  scheduled: { label: "课程 → 时间", order: 3, x: 645, y: 492 },
+  located: { label: "教室 → 校区", order: 4, x: 845, y: 238 },
+};
 
-const NODE_LABEL_HALO = { paintOrder: "stroke" as const, stroke: "rgba(255,250,246,0.94)", strokeWidth: 5, strokeLinejoin: "round" as const };
+const NODE_LABEL_HALO = {
+  paintOrder: "stroke" as const,
+  stroke: "rgba(255,250,246,0.96)",
+  strokeWidth: 7,
+  strokeLinejoin: "round" as const,
+};
+
+function edgePath(edge: GraphEdge): string {
+  switch (edge.kind) {
+    case "teaches": return "M 470 350 Q 330 215 180 145";
+    case "belongs": return "M 470 350 Q 320 485 175 560";
+    case "held-at": return "M 470 350 Q 615 210 748 145";
+    case "scheduled": return "M 470 350 Q 625 492 770 555";
+    case "located": return "M 748 145 Q 850 205 870 350";
+  }
+}
 
 /**
- * CampusTemporalGraph —— Opening 的"教学时空场"（Phase 2.6 重做质感）。
- * 节点更大、标签更清晰（17px + 暗色描边光晕）、关系线更亮；
- * 连线按"单条 → 第二条 → 局部网络 → 收束"的叙事顺序显影；
- * brand 节拍整场降至 0.2 opacity（15~25% 区间），让品牌处于绝对视觉中心。
- * 预算：纯 SVG + CSS dash 动画，无 Canvas/WebGL。
+ * Opening 的教学时空关系解释图。
+ * 只显示六类实体和五条有业务意义的关系；关系按类别逐一建立，
+ * 不使用装饰性网线，不允许线路交叉或节点压住画面边缘。
  */
-export function CampusTemporalGraph({ beats, dimAtBrand = true }: { beats: GraphBeats; dimAtBrand?: boolean }): JSX.Element {
+export function CampusTemporalGraph({ beats, local, dimAtBrand = true }: { beats: GraphBeats; local: number; dimAtBrand?: boolean }): JSX.Element {
   const { nodes, edges } = openingGraphFixture.payload;
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const phaseOf = new Map<string, number>();
-  EDGE_PHASES.forEach((group, phase) => group.forEach((k) => phaseOf.set(k, phase)));
 
   return (
-    <div className="relative h-full w-full">
-      <svg viewBox="0 0 940 780" className="h-full w-full" role="img" aria-label="校园教学要素关系图：课程、教师、班级、教室、时间与校区逐渐连接成校园时空场">
+    <div className="relative h-full w-full" data-qa-opening-graph>
+      <svg
+        viewBox="0 0 940 700"
+        className="h-full w-full"
+        role="img"
+        aria-label="课程、教师、班级、教室、时间与校区从分散实体逐渐形成清晰教学时空关系"
+      >
+        <defs>
+          <marker id="opening-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+            <path d="M 0 0 L 9 4.5 L 0 9 z" fill="rgba(190,78,62,0.72)" />
+          </marker>
+        </defs>
+
         <motion.g
-          initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
-          animate={beats.brand <= 0 ? {} : { x: 0, y: 0, scale: dimAtBrand ? 0.9 : 1, opacity: dimAtBrand ? 0.16 : 1 }}
-          transition={{ delay: beats.brand, duration: 2.0, ease: EASE_OUT }}
-          style={{ transformOrigin: "470px 390px" }}
+          initial={{ scale: 1, opacity: 1 }}
+          animate={{ scale: dimAtBrand ? 0.94 : 1, opacity: dimAtBrand ? 0.12 : 1 }}
+          transition={{ duration: 1.05, ease: EASE_OUT }}
+          style={{ transformOrigin: "470px 350px" }}
         >
-          {/* 关系线：基底 + 时间脉冲覆层（按叙事相位显影） */}
-          {edges.map((e, i) => {
-            const a = byId.get(e.from);
-            const b = byId.get(e.to);
-            if (!a || !b) return null;
-            const key = e.from + "-" + e.to;
-            const phase = phaseOf.get(key) ?? 3;
-            const delay = beats.connections + phase * 0.85 + (i % 4) * 0.09;
+          {edges.map((edge) => {
+            const meta = RELATION_META[edge.kind];
+            const delay = meta.order < 4 ? beats.connections + meta.order * 0.72 : beats.focus;
+            const pathShown = local >= delay;
+            const labelShown = local >= delay + 0.58 && !dimAtBrand;
             return (
-              <g key={key}>
-                <motion.line
-                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(181,123,113,0.42)"
-                  strokeWidth={2.1}
+              <motion.g key={`${edge.from}-${edge.to}`} data-opening-edge={edge.kind} data-opening-visible={pathShown ? "true" : "false"}>
+                <motion.path
+                  d={edgePath(edge)}
+                  fill="none"
+                  stroke="rgba(190,78,62,0.58)"
+                  strokeWidth={2.5}
                   strokeLinecap="round"
+                  markerEnd="url(#opening-arrow)"
                   vectorEffect="non-scaling-stroke"
                   initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ delay, duration: 0.85, ease: "easeInOut" }}
+                  animate={{ pathLength: pathShown ? 1 : 0, opacity: pathShown ? 1 : 0 }}
+                  transition={{ duration: 0.68, ease: EASE_OUT }}
                 />
-                <motion.line
-                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke="rgba(232,91,69,0.76)"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                  className="time-pulse"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: delay + 0.45, duration: 0.7 }}
-                />
-              </g>
+                <motion.g
+                  data-opening-label-visible={labelShown ? "true" : "false"}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: labelShown ? 1 : 0, y: labelShown ? 0 : 5 }}
+                  transition={{ duration: 0.38, ease: EASE_OUT }}
+                >
+                  <rect x={meta.x - 58} y={meta.y - 17} width={116} height={34} rx={17} fill="rgba(255,252,249,0.94)" stroke="rgba(190,78,62,0.18)" />
+                  <text x={meta.x} y={meta.y + 5} textAnchor="middle" fontSize={14} fontWeight={650} fill="var(--brand-strong)">{meta.label}</text>
+                </motion.g>
+              </motion.g>
             );
           })}
 
-          {/* 焦点脉冲：两个时间枢纽（focus 节拍） */}
-          {nodes.filter((n) => n.hub).map((n, i) => (
-            <motion.g key={"pulse-" + n.id}>
-              <motion.circle
-                cx={n.x} cy={n.y} r={36}
-                fill="none" stroke="#A58FC0" strokeWidth={1.9}
-                initial={{ opacity: 0, r: 34 }}
-                animate={{ opacity: [0, 0.65, 0], r: [34, 62, 84] }}
-                transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.8, ease: "easeOut" }}
-              />
-              <motion.circle
-                cx={n.x} cy={n.y} r={18}
-                fill="rgba(222,215,238,0.44)"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: [0, 0.9, 0.35], scale: [0, 1.4, 1] }}
-                transition={{ delay: beats.focus + 0.2 + i * 0.6, duration: 1.6, ease: "easeOut" }}
-              />
-            </motion.g>
-          ))}
-
-          {/* 节点：暗场脉冲出现（更大更亮） */}
-          {nodes.map((n, i) => {
-            const meta = TYPE_META[n.type];
+          {nodes.map((node, index) => {
+            const meta = TYPE_META[node.type];
+            const central = node.type === "course";
+            const shown = local >= beats.nodes + index * 0.16;
             return (
               <motion.g
-                key={n.id}
-                initial={{ opacity: 0, y: n.y + 14, scale: 0.88 }}
-                animate={{ opacity: 1, y: n.y, scale: 1 }}
-                transition={{ delay: beats.nodes + i * 0.13, duration: 0.9, ease: EASE_OUT }}
-                style={{ transformOrigin: n.x + "px " + n.y + "px" }}
+                key={node.id}
+                initial={{ opacity: 0, scale: 0.86 }}
+                animate={{ opacity: shown ? 1 : 0, scale: shown ? 1 : 0.86 }}
+                transition={{ duration: 0.62, ease: EASE_OUT }}
+                style={{ transformOrigin: `${node.x}px ${node.y}px` }}
+                data-opening-node={node.type}
               >
-                <motion.circle
-                  cx={n.x} cy={n.y} r={46}
-                  fill="none" stroke={meta.color}
-                  strokeOpacity={0.55} strokeWidth={1.2}
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: [0, 0.55, 0], scale: [0.6, 1.6, 2.0] }}
-                  transition={{ delay: beats.nodes + i * 0.13, duration: 1.4, ease: "easeOut" }}
-                />
-                <motion.g animate={{ y: [0, i % 2 ? -5 : 5, 0] }} transition={{ duration: 7 + (i % 5), repeat: Infinity, ease: "easeInOut" }}>
-                  <circle cx={n.x} cy={n.y} r={46} fill="var(--surface-elevated)" fillOpacity={0.98} stroke={meta.color} strokeOpacity={0.82} strokeWidth={2} />
-                  <circle cx={n.x} cy={n.y} r={46} fill="none" stroke={meta.color} strokeOpacity={0.22} strokeWidth={8} />
-                  <svg x={n.x - 19} y={n.y - 19} width={38} height={38}>
-                    <meta.Icon size={38} strokeWidth={1.9} color={meta.color} />
-                  </svg>
-                  <text
-                    x={n.x} y={n.y + 82} textAnchor="middle" fontSize={24} fontWeight={620}
-                    letterSpacing="1" fill="#EAF2FB" {...NODE_LABEL_HALO}
-                  >{n.label}</text>
-                </motion.g>
+                <circle cx={node.x} cy={node.y} r={central ? 58 : 48} fill="rgba(255,253,250,0.97)" stroke={meta.color} strokeOpacity={central ? 0.92 : 0.72} strokeWidth={central ? 3 : 2} />
+                <circle cx={node.x} cy={node.y} r={central ? 48 : 39} fill={meta.color} fillOpacity={central ? 0.12 : 0.08} />
+                <svg x={node.x - 19} y={node.y - 19} width={38} height={38}>
+                  <meta.Icon size={38} strokeWidth={2} color={meta.color} />
+                </svg>
+                <text x={node.x} y={node.y + (central ? 92 : 78)} textAnchor="middle" fontSize={central ? 27 : 23} fontWeight={central ? 760 : 650} letterSpacing="1" fill="var(--text)" {...NODE_LABEL_HALO}>
+                  {node.label}
+                </text>
               </motion.g>
             );
           })}
         </motion.g>
       </svg>
 
-      {/* 图例 */}
-      <div className="absolute bottom-1 left-1 flex flex-wrap items-center gap-x-6 gap-y-2">
-        {(Object.keys(TYPE_META) as GraphNodeType[]).map((t) => (
-          <span key={t} className="flex items-center gap-2 text-[17px] tracking-[0.08em] text-mute">
-            <span className="inline-block size-2.5 rounded-full" style={{ background: TYPE_META[t].color }} />
-            {TYPE_META[t].label}
-          </span>
-        ))}
-      </div>
+      <motion.p
+        className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-[15px] font-semibold tracking-[0.16em] text-mute"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: local >= beats.focus + 0.6 && !dimAtBrand ? 1 : 0, y: local >= beats.focus + 0.6 ? 0 : 8 }}
+        transition={{ duration: 0.55, ease: EASE_OUT }}
+      >
+        分散实体 → 教学关系 → 可理解的校园时空
+      </motion.p>
     </div>
   );
 }

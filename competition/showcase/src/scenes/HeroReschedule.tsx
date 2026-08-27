@@ -3,7 +3,6 @@ import { Check, FlaskConical, TriangleAlert } from 'lucide-react';
 import { SceneHeader } from '../components/primitives/SceneHeader';
 import { Badge } from '../components/primitives/Badge';
 import { VerifiedSourcePill } from '../components/visual/VerifiedSourcePill';
-import { ElectricBorder } from '../vendor/react-bits/ElectricBorder';
 import { useHeroClock, reached } from '../stores/directorStore';
 import { RESCHEDULE_BEATS } from '../director/heroes/rescheduleTimeline';
 import { HERO_COPY as C } from '../content/heroCopy';
@@ -188,111 +187,32 @@ function SurgeryBoard({ phase, showGhost }: { phase: Phase; showGhost: boolean }
   );
 }
 
-/** 约束引擎：主脉冲向下传播，逐项 PASS / WARNING（引擎"活着"的感觉） */
+/** 六项硬约束以 2×3 紧凑网格呈现；负荷提醒独立于硬约束结果。 */
 function ConstraintScanner({ revealed }: { revealed: number }): JSX.Element {
   return (
-    <div className='constraint-scanner panel material-topline relative flex min-h-0 flex-col overflow-hidden p-4'>
-      <div className='mb-1.5 flex items-center justify-between'>
-        <p className='t-caption'>{C.reschedule.verifyTitle}</p>
-        <span className='text-[14px] tabular-nums text-mute'>{revealed > 0 ? revealed + ' / ' + vm.constraints.length : ''}</span>
+    <div className='constraint-scanner panel material-topline relative flex flex-col p-4' data-qa-reschedule-constraints>
+      <div className='mb-3 flex items-center justify-between'>
+        <p className='text-[16px] font-semibold text-ink'>{C.reschedule.verifyTitle}</p>
+        <span className='text-[14px] font-semibold tabular-nums text-ok'>{revealed > 0 ? Math.min(revealed, vm.constraints.length) + ' / ' + vm.constraints.length : '准备核验'}</span>
       </div>
-      {/* 向下扫描主脉冲 */}
-      {revealed > 0 && (
-        <motion.div aria-hidden className='pointer-events-none absolute left-0 right-0 h-12'
-          initial={{ top: 20, opacity: 0 }} animate={{ top: 26 + revealed * 34, opacity: 0.55 }} transition={{ duration: 0.6, ease: EASE_OUT }}
-          style={{ background: 'linear-gradient(180deg, transparent, rgba(232,91,69,0.12), transparent)' }} />
-      )}
-      <ul className='relative min-h-0 flex-1 divide-y divide-[rgba(171,105,91,0.09)] pl-8'>
-        <span aria-hidden className='absolute bottom-3 left-[9px] top-3 w-px bg-[rgba(171,105,91,0.14)]' />
+      <ul className='grid grid-cols-2 gap-2.5'>
         {vm.constraints.map((row, i) => {
           const done = i < revealed;
           const current = i === revealed;
           return (
-            <li key={row.key} className='relative flex w-full items-center justify-between gap-3 py-[9px]'>
-              <span aria-hidden className='absolute -left-8 top-1/2 flex size-[15px] -translate-y-1/2 items-center justify-center rounded-full border text-[9.5px] tabular-nums'
-                style={done
-                  ? { borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', color: 'var(--success)', background: 'var(--success-dim)' }
-                  : { borderColor: 'rgba(171,105,91,0.25)', color: 'var(--text-faint)', background: 'var(--bg-deep)' }}>
-                {i + 1}
-              </span>
-              <span className={'min-w-0 flex-1 truncate text-[16px] ' + (done ? 'text-ink' : current ? 'text-mute' : 'text-faint')}>{row.label}</span>
-              <span className='flex items-center gap-2'>
-                {!done ? (
-                  <motion.span
-                    className='text-[12px] tracking-widest text-faint'
-                    animate={current ? { opacity: [0.35, 0.9, 0.35] } : { opacity: 1 }}
-                    transition={{ duration: 1.4, repeat: current ? Infinity : 0, ease: 'easeInOut' }}
-                  >· · ·</motion.span>
-                ) : row.status === 'warn' ? (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[15px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
-                    <TriangleAlert size={13} /> 提示
-                  </motion.span>
-                ) : (
-                  <motion.span initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }} className='flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[15px] font-semibold text-ok' style={{ borderColor: 'color-mix(in srgb, var(--success) 60%, transparent)', background: 'var(--success-dim)' }}>
-                    <Check size={13} /> PASS
-                  </motion.span>
-                )}
-              </span>
+            <li key={row.key} className={'constraint-card flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 ' + (done ? 'is-pass' : current ? 'is-current' : '')} data-qa-text>
+              <span className={'text-[15px] font-semibold ' + (done ? 'text-ink' : current ? 'text-mute' : 'text-faint')}>{row.label}</span>
+              {done ? (
+                <motion.span initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className='flex shrink-0 items-center gap-1 text-[13px] font-bold text-ok'>
+                  <Check size={14} /> PASS
+                </motion.span>
+              ) : (
+                <motion.span className='shrink-0 text-[12px] tracking-widest text-faint' animate={current ? { opacity: [0.35, 0.9, 0.35] } : { opacity: 1 }} transition={{ duration: 1.4, repeat: current ? Infinity : 0 }}>· · ·</motion.span>
+              )}
             </li>
           );
         })}
       </ul>
-      <p className='t-caption mt-1.5'>提示 ≠ 失败：连续授课负荷将随结论一并呈现</p>
-    </div>
-  );
-}
-
-/** 候选收敛：18 室 → 筛选 → A1-201 自动选定（全片唯一 ElectricBorder 高潮） */
-function CandidateResolver({ stage }: { stage: 'idle' | 'funnel' | 'selected' }): JSX.Element {
-  const survivors = vm.candidateNames.slice(0, vm.autoResolve.spaceRoomCount);
-  return (
-    <div className='candidate-resolver panel material-topline flex min-h-0 flex-1 flex-col overflow-hidden p-4'>
-      <div className='mb-2 flex items-center justify-between'>
-        <p className='t-caption'>{C.reschedule.candidatesTitle}</p>
-        <span className='chip text-[12.5px] tabular-nums'>{vm.candidateNames.length} 间可用 → 核验后 {vm.autoResolve.spaceRoomCount} 间</span>
-      </div>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className='relative min-h-0 flex-1'>
-        {/* 18 个 room token 网格：idle 即以低亮度在场（面板永不空置）；funnel 逐个收敛 */}
-        <div className='flex flex-wrap content-start gap-1.5'>
-          {vm.candidateNames.map((n, i) => {
-            const survivor = survivors.includes(n);
-            const isPick = n === vm.autoResolve.suggested.name;
-            const idleDim = stage === 'idle';
-            const dimmed = stage !== 'idle' && !survivor;
-            return (
-              <motion.span
-                key={n}
-                className='room-token rounded-lg border px-2 py-1 font-mono text-[12.5px]'
-                initial={{ opacity: 1, scale: 1 }}
-                animate={{
-                  opacity: isPick ? 1 : dimmed ? 0.26 : idleDim ? 0.42 : 0.96,
-                  scale: isPick && stage === 'selected' ? 1.1 : 1,
-                  borderColor: isPick && stage !== 'idle' ? 'color-mix(in srgb, var(--brand) 65%, transparent)' : 'rgba(171,105,91,0.18)',
-                  color: isPick && stage !== 'idle' ? 'var(--brand-strong)' : idleDim ? 'var(--text-faint)' : 'var(--text-muted)',
-                }}
-                transition={{ duration: 0.5, delay: stage === 'selected' ? i * 0.04 : 0, ease: EASE_OUT }}
-              >{n}</motion.span>
-            );
-          })}
-        </div>
-        {/* 自动选定 A1-201：ElectricBorder 高潮（整幅主角，不再挤压成小卡） */}
-        {stage === 'selected' && (
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE_OUT }} className='mt-3'>
-            <ElectricBorder active borderRadius={16} chaos={0.15} speed={1.1}>
-              <div className='flex items-center justify-between gap-5 rounded-[13px] bg-surface px-6 py-4'>
-                <div>
-                  <p className='t-caption mb-0.5'>自动选定 · rank 1</p>
-                  <p className='text-[36px] font-bold leading-none tabular-nums' style={{ color: 'var(--brand-strong)' }}>{vm.autoResolve.suggested.name}</p>
-                </div>
-                <div className='text-right'>
-                  <p className='t-caption'>{vm.autoResolve.suggested.campusName}</p>
-                  <p className='t-caption'>{vm.autoResolve.suggested.capacity} 座 · 满足容量</p>
-                </div>
-              </div>
-            </ElectricBorder>
-          </motion.div>
-        )}
-      </motion.div>
     </div>
   );
 }
@@ -306,8 +226,8 @@ export function HeroReschedule(): JSX.Element {
   const phase: Phase = !reached(t, at('resched.lift')) ? 'source' : reached(t, at('resched.snap')) ? 'snap' : 'lift';
   const constraintsAt = at('resched.constraints');
   const revealed = reached(t, constraintsAt) ? Math.min(vm.constraints.length, Math.floor((t - constraintsAt) * 1.15) + 1) : 0;
-  const candStage = reached(t, at('resched.select')) ? 'selected' : reached(t, at('resched.candidates')) ? 'funnel' : 'idle';
   const decided = reached(t, at('resched.decision'));
+  const warningReady = revealed >= vm.constraints.length;
 
   return (
     <div className='stage-safe relative flex flex-col gap-3.5 pb-[58px] pt-[66px]'>
@@ -326,7 +246,7 @@ export function HeroReschedule(): JSX.Element {
         badge={<Badge tone='stream' icon={<FlaskConical size={15} />}>模拟调课 · What-if</Badge>}
       />
 
-      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[1.14fr_1fr] gap-6'>
+      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[1.12fr_0.88fr] gap-6'>
         <motion.div
           className='reschedule-board-plane plane material-topline min-h-0 min-w-0 flex-1 p-4'
           animate={{ opacity: decided ? 0.82 : 1 }}
@@ -334,31 +254,35 @@ export function HeroReschedule(): JSX.Element {
         >
           {sourceOn ? <SurgeryBoard phase={phase} showGhost={phase !== 'source'} /> : <div className='h-full' />}
         </motion.div>
-        <div className='reschedule-side flex min-h-0 min-w-0 flex-col gap-4'>
+        <div className='reschedule-side flex min-h-0 min-w-0 flex-col gap-3'>
           <ConstraintScanner revealed={revealed} />
-          <CandidateResolver stage={candStage} />
+          <motion.div
+            className='reschedule-warning flex items-center gap-3 rounded-2xl border px-4 py-3'
+            initial={false}
+            animate={{ opacity: warningReady ? 1 : 0.24 }}
+            style={{ borderColor: 'color-mix(in srgb, var(--risk) 44%, transparent)', background: 'var(--risk-dim)' }}
+            data-qa-reschedule-warning
+          >
+            <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-white/55 text-riskc'><TriangleAlert size={18} /></span>
+            <div className='min-w-0'>
+              <p className='text-[16px] font-bold text-riskc'>连续 4 节提醒</p>
+              <p className='text-[13px] leading-snug text-mute'>调整后教师连续授课负荷需要关注</p>
+            </div>
+          </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={decided ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.8, ease: EASE_OUT }}
-            className='reschedule-decision plane-hero flex items-center justify-between gap-4 px-6 py-4'
+            className='reschedule-decision plane-hero flex min-h-0 flex-1 flex-col items-start justify-center gap-2 px-6 py-4'
             style={{ borderLeft: '3px solid var(--success)' }}
+            data-qa-reschedule-decision
           >
-            <div>
-              <div className='flex items-center gap-2.5'>
-                <p className='text-[23px] font-bold' style={{ color: 'var(--brand-strong)' }}>{C.reschedule.decisionFeasible}</p>
-                <span className='flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold' style={{ borderColor: 'color-mix(in srgb, var(--risk) 60%, transparent)', color: 'var(--risk-strong)', background: 'var(--risk-dim)' }}>
-                  <TriangleAlert size={12.5} /> 连续 4 节提示
-                </span>
-              </div>
-              <p className='t-caption mt-1'>{vm.warningText}</p>
-              <div className='mt-2 flex items-center gap-2'>
-                <Badge tone='stream'>5 PASS + 1 WARNING</Badge>
-                <Badge tone='brand'>feasible=true</Badge>
-                <Badge>mutatedData=false</Badge>
-              </div>
+            <p className='text-[26px] font-bold leading-tight' style={{ color: 'var(--brand-strong)' }}>{C.reschedule.decisionFeasible}</p>
+            <p className='text-[15px] leading-snug text-mute'>满足硬约束，但连续授课负荷需要关注</p>
+            <div className='mt-1 flex w-full items-center justify-between gap-3'>
+              <span className='text-[17px] font-bold text-ink'>可行 ≠ 没有提醒</span>
+              <Badge tone='brand'>6 / 6 PASS</Badge>
             </div>
-            <Badge tone='stream'>未指定教室 · 自动解析</Badge>
           </motion.div>
         </div>
       </div>

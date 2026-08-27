@@ -215,10 +215,10 @@ export function HeroCollaboration(): JSX.Element {
         <RoomResolver rooms={rooms} recommend={recommend} />
       </div>
 
-      <BlurIn delay={verdict ? 0.2 : 6} className="flex items-center justify-between gap-6">
+      <BlurIn delay={verdict ? 0.2 : 6}>
         <p className='t-body text-mute'>{C.collaboration.verdict}</p>
-        <VerifiedSourcePill />
       </BlurIn>
+      <VerifiedSourcePill />
     </div>
   );
 }

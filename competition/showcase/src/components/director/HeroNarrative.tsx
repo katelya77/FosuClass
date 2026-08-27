@@ -56,20 +56,7 @@ export function HeroNarrative({
           </span>
         ))}
       </div>
-
-      <AnimatePresence>
-        {phase === 3 && (
-          <motion.div
-            className="hero-conclusion-stage"
-            initial={{ opacity: 0, y: 28 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: EASE_OUT }}
-          >
-            <span>结论</span>
-            <strong>{conclusion}</strong>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <span className="sr-only" aria-live="polite">{phase === 3 ? `结论：${conclusion}` : ""}</span>
     </>
   );
 }

@@ -1,104 +1,109 @@
 import { motion } from 'motion/react';
-import { FileCheck2, Network, UserRound, Wrench } from 'lucide-react';
+import { ArrowDown, Bot, FileCheck2, Network, UserRound, Wrench } from 'lucide-react';
 import { SceneHeader } from '../components/primitives/SceneHeader';
 import { Badge } from '../components/primitives/Badge';
-import { AdpLiveFrame } from '../components/adp/AdpLiveFrame';
-import { LiveDemoCue } from '../components/adp/LiveDemoCue';
 import { useDirectorStore } from '../stores/directorStore';
 import { getSceneStart } from '../director/timeline';
 import { EASE_OUT } from '../motion/motionTokens';
-import { LIVE_DEMO_PROMPTS } from '../live-demo/prompts';
 
 const CHAIN = [
-  { icon: UserRound, label: "用户意图", sub: "自然语言校园任务", color: "var(--brand-secondary)" },
-  { icon: Network, label: "Multi-Agent", sub: "主编排 → 领域智能体", color: "var(--brand)" },
-  { icon: Wrench, label: "CampusTools", sub: "13 操作 · 确定性事实源", color: "var(--brand-secondary)" },
-  { icon: FileCheck2, label: "Verified Result", sub: "可核查结果 · 回执契约", color: "var(--success)" },
-];
+  { icon: UserRound, label: '用户问题', sub: '一句自然语言校园任务', color: 'var(--brand-secondary)' },
+  { icon: Network, label: '主协调', sub: '理解问题并安排协作', color: 'var(--brand)' },
+  { icon: Bot, label: '专业 Agent', sub: '按领域完成判断与规划', color: 'var(--brand)' },
+  { icon: Wrench, label: 'CampusTools', sub: '调用确定性教学工具', color: 'var(--brand-secondary)' },
+  { icon: FileCheck2, label: '已核验结果', sub: '带着可核查依据返回', color: 'var(--success)' },
+] as const;
+
+const PROOFS = [
+  { name: 'Multi-Agent', value: '4 Agent 协同', color: 'var(--brand)' },
+  { name: 'CampusTools', value: '13 项确定性教学工具', color: 'var(--brand-secondary)' },
+  { name: 'Verified', value: '结果可核验', color: 'var(--success)' },
+] as const;
 
 function useRelLocal(): number {
-  return useDirectorStore((s) => Math.max(0, s.elapsed - getSceneStart("reliability")));
+  return useDirectorStore((state) => Math.max(0, state.elapsed - getSceneStart('reliability')));
 }
 
-/** Reliabitity —— Live Proof Stage：四节点证据链 → Verified Result 扩展成真实 ADP 真机。 */
+/** 4173 只解释真实链路；真机画面在下一镜切到 Judge Portal / ADP Console。 */
 export function ReliabilityScene(): JSX.Element {
   const t = useRelLocal();
-  const showChain = t > 0.3;
-  const expand = t > 4.6; // 结果节点扩展成真机
-  const chainRevealed = Math.min(CHAIN.length, Math.max(0, Math.floor(t / 1.15) + 1));
+  const revealed = Math.min(CHAIN.length, Math.max(0, Math.floor((t - 0.35) / 1.05) + 1));
+  const handoff = t >= 7.2;
 
   return (
-    <div className="stage-safe flex flex-col gap-5">
+    <div className='stage-safe flex flex-col gap-5'>
       <SceneHeader
-        kicker="可靠性"
-        title="真机证据 · 可核查的运行链路"
-        badge={<Badge tone="brand" icon={<Network size={14} />}>Runtime Proof</Badge>}
+        kicker='真实运行链路'
+        title='从用户问题，到已核验结果'
+        badge={<Badge tone='brand' icon={<Network size={14} />}>Multi-Agent</Badge>}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[0.9fr_1.1fr] gap-7">
-        {/* 左：证据链 + 演示 Cue */}
-        <div className="flex min-h-0 flex-col gap-5">
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-2.5">
-            {showChain && (
-              <>
-                {/* 证据链主脉冲 */}
-                <motion.div aria-hidden className="absolute left-[25px] top-4 bottom-4 w-px"
-                  initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 3.4, ease: EASE_OUT }}
-                  style={{ background: "linear-gradient(180deg, transparent, rgba(124,228,189,0.4), transparent)", transformOrigin: "top" }} />
-                {CHAIN.map((c, i) => {
-                  const shown = i < chainRevealed;
-                  return (
-                    <motion.div key={c.label} initial={{ opacity: 0, x: -16 }} animate={shown ? { opacity: 1, x: 0 } : {}} transition={{ delay: i * 1.05, duration: 0.7, ease: EASE_OUT }}
-                      className={'relative flex items-center gap-4 rounded-2xl border px-5 py-3 ' + (i === 3 && expand ? 'border-[color-mix(in_srgb,var(--brand)_50%,transparent)] bg-[var(--brand-dim)] shadow-[var(--glow-brand)]' : 'border-line bg-canvas-deep/50')}>
-                      <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-raised">
-                        <c.icon size={19} color={c.color} />
-                        {shown && i === chainRevealed - 1 && (
-                          <motion.span className="absolute inset-0 rounded-full border" style={{ borderColor: c.color }} initial={{ opacity: 0.8, scale: 1 }} animate={{ opacity: 0, scale: 1.9 }} transition={{ duration: 1.2, repeat: Infinity }} />
-                        )}
-                      </span>
-                      <div>
-                        <p className="t-card-title">{c.label}</p>
-                        <p className="t-caption">{c.sub}</p>
-                      </div>
-                      {i === 3 && expand && (
-                        <motion.span className="ml-auto text-[12px] font-medium text-brand-strong" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>→ 展开真机</motion.span>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-          <div className="panel material-topline p-4">
-            <p className="t-caption mb-2">现场 Demo Cue（键盘 1~6 复制任务）</p>
-            <LiveDemoCue activeKey={t > 7 ? LIVE_DEMO_PROMPTS[1].key : LIVE_DEMO_PROMPTS[0].key} />
-          </div>
-        </div>
-
-        {/* 右：真机 ADP Live Frame（blur 只属于展开过渡本身） */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.78, filter: "blur(8px)" }}
-          animate={expand ? { opacity: 1, scale: 1, filter: "blur(0px)" } : {}}
-          transition={{ duration: 1.2, ease: EASE_OUT }}
-          className="relative flex min-h-0 flex-col overflow-hidden rounded-3xl"
-          style={{ boxShadow: expand ? "var(--shadow-depth)" : undefined }}
-        >
-          {/* Temporal Frame 顶部 */}
-          <div className="flex items-center justify-between gap-4 rounded-t-3xl border-b border-line bg-white/76 px-5 py-3 backdrop-blur">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="size-2 shrink-0 rounded-full bg-[var(--success)] animate-pulse" />
-              <div className="min-w-0">
-                <p className="t-card-title text-[15.5px]">腾讯云智能 ADP · LIVE</p>
-                <p className="t-caption">实时运行 · 已核验演示快照 competition-demo-v3</p>
+      <div className='grid min-h-0 flex-1 grid-cols-[1.08fr_0.92fr] gap-10'>
+        <section className='reliability-chain plane material-topline flex min-h-0 flex-col justify-center px-7 py-5' aria-label='真实运行链路' data-qa-reliability-chain>
+          {CHAIN.map((node, index) => {
+            const shown = index < revealed;
+            const current = index === revealed - 1;
+            const Icon = node.icon;
+            return (
+              <div key={node.label} className='contents'>
+                <motion.div
+                  className='reliability-node flex items-center gap-4 rounded-2xl border px-5 py-3'
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={shown ? { opacity: 1, x: 0 } : { opacity: 0.18, x: 0 }}
+                  transition={{ duration: 0.62, ease: EASE_OUT }}
+                  style={{
+                    borderColor: current ? `color-mix(in srgb, ${node.color} 52%, transparent)` : 'rgba(171,105,91,0.14)',
+                    background: current ? `color-mix(in srgb, ${node.color} 10%, rgba(255,255,255,0.66))` : 'rgba(255,255,255,0.48)',
+                    boxShadow: current ? 'var(--shadow-raised)' : 'none',
+                  }}
+                  data-qa-reliability-node
+                >
+                  <span className='flex size-10 shrink-0 items-center justify-center rounded-full bg-white/75' style={{ color: node.color }}><Icon size={20} /></span>
+                  <div className='min-w-0'>
+                    <p className='text-[18px] font-bold text-ink'>{node.label}</p>
+                    <p className='text-[13px] text-mute'>{node.sub}</p>
+                  </div>
+                  {shown && <span className='ml-auto text-[13px] font-semibold text-ok'>已到达</span>}
+                </motion.div>
+                {index < CHAIN.length - 1 && (
+                  <motion.div className='flex h-5 items-center pl-10 text-mute' animate={{ opacity: index < revealed - 1 ? 0.8 : 0.2 }}>
+                    <ArrowDown size={15} />
+                  </motion.div>
+                )}
               </div>
-            </div>
-            <Badge tone="brand">LIVE</Badge>
-          </div>
-          <AdpLiveFrame className="min-h-0 flex-1 rounded-b-3xl" />
-        </motion.div>
-      </div>
+            );
+          })}
+        </section>
 
-      <p className="t-caption text-center">跨域安全留白：Showcase 不读取/不写入 ADP iframe 内部，仅负责外部镜头</p>
+        <aside className='flex min-h-0 flex-col justify-center gap-4' aria-label='运行证明' data-qa-reliability-proofs>
+          <p className='t-caption mb-1'>评委只需要看懂三件事</p>
+          {PROOFS.map((proof, index) => (
+            <motion.div
+              key={proof.name}
+              className='plane flex items-center gap-5 px-6 py-5'
+              initial={{ opacity: 0, y: 14 }}
+              animate={t >= 1.8 + index * 1.05 ? { opacity: 1, y: 0 } : { opacity: 0.18, y: 0 }}
+              transition={{ duration: 0.65, ease: EASE_OUT }}
+              data-qa-reliability-proof
+            >
+              <span className='h-10 w-1 rounded-full' style={{ background: proof.color }} />
+              <div>
+                <p className='text-[16px] font-bold' style={{ color: proof.color }}>{proof.name}</p>
+                <p className='mt-1 text-[19px] font-semibold text-ink'>{proof.value}</p>
+              </div>
+            </motion.div>
+          ))}
+
+          <motion.div
+            className='mt-2 rounded-2xl border border-[color-mix(in_srgb,var(--brand)_32%,transparent)] bg-white/58 px-6 py-4 text-center'
+            initial={{ opacity: 0, y: 12 }}
+            animate={handoff ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.75, ease: EASE_OUT }}
+          >
+            <p className='text-[17px] font-bold text-brand-strong'>下一镜：真实 ADP 运行</p>
+          </motion.div>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -229,3 +229,20 @@ test("FW10 section.kind is optional for v7 payloads and rejects unknown module k
   invalid.sections[0].kind = "model-selected-layout";
   assert.equal(validateWidgetPayload(invalid).ok, false);
 });
+
+test("FW11 Template keeps long verified titles on their own wrapping row and leads with the conclusion", () => {
+  const template = fs.readFileSync(path.join(UNIFIED, "template.txt"), "utf8");
+  assert.doesNotMatch(template, /ellipsis|textOverflow|whiteSpace|nowrap/i);
+  assert.match(template, /<Title value=\{weekBoardTitle\} size="md" \/>/);
+  assert.match(template, /<Title value=\{title\} size="md" \/>/);
+  assert.match(template, /<Caption value="结论先行"/);
+  assert.match(template, /label=\{status === 'success' \? '已核验'/);
+
+  const payloadDir = path.join(__dirname, "widget-payloads");
+  const risk = JSON.parse(fs.readFileSync(path.join(payloadDir, "risk.json"), "utf8"));
+  const collaboration = JSON.parse(fs.readFileSync(path.join(payloadDir, "collaboration.json"), "utf8"));
+  risk.title = "教师025（负载Top1）未来四周跨校区赶场风险";
+  collaboration.title = "教师005 / 006 / 014 · 第1周周四上午共同空闲";
+  assert.equal(validateWidgetPayload(risk).ok, true);
+  assert.equal(validateWidgetPayload(collaboration).ok, true);
+});

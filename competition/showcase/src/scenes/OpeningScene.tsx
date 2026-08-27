@@ -7,13 +7,13 @@ import { SceneCamera } from "../components/visual/SceneCamera";
 import { RiseIn } from "../components/visual/TextFx";
 import { EASE_OUT } from "../motion/motionTokens";
 
-const BEATS = { nodes: 0.8, connections: 2.2, focus: 4.2, brand: 6.4 };
+const BEATS = { nodes: 0.7, connections: 2.4, focus: 5.4, brand: 7.1 };
 
 /** 叙事字幕：无旁白也能看懂的画面自解释文案（Phase 2.5 三步显影） */
 const NARRATION = [
   "一所校园的学期，始于无数分散的教学时空。",
-  "当这些时间、空间与关系被连接——",
-  "教学运行，开始可以被理解。",
+  "系统逐一建立课程与教师、班级、教室、时间的关系。",
+  "原本分散的信息，被连接并理解。",
 ];
 
 function useOpeningLocal(): number {
@@ -22,8 +22,8 @@ function useOpeningLocal(): number {
 
 /**
  * Opening —— Phase 2.6 质感重做：暗场 → 发现 → 连接 → 聚焦 → 品牌。
- * 0~6.4s：少量要素脉冲 → 单条关系 pulse → 局部网络 → 时空场收束 → 品牌显影；
- * 6.4~10s：品牌保持 + 背景网络降至 20% + 环境呼吸。
+ * 0~7.1s：六类实体 → 四类课程关系逐一建立 → 教室落到校区 → 品牌显影；
+ * 7.1~10s：品牌保持 + 背景关系降至 12% + 环境呼吸。
  * Phase 2.6 纪律：全场景恒定 sharp（blur 只存在于场景转场本身）。
  */
 export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Element {
@@ -36,9 +36,9 @@ export function OpeningScene({ recordMode }: { recordMode: boolean }): JSX.Eleme
   return (
     <div className="stage-safe flex">
       <SceneCamera shot={{ scale: camScale }} className="relative h-full w-full">
-        {/* 教学时空场：占满整个画面，brand 时向中心收拢并降低到 20% */}
+        {/* 教学时空场：六个实体、五条关系；brand 时降低到 12% */}
         <div className="absolute inset-0">
-          <CampusTemporalGraph beats={BEATS} dimAtBrand={brandShown} />
+          <CampusTemporalGraph beats={BEATS} local={local} dimAtBrand={brandShown} />
         </div>
 
         {/* 顶部眉标 + 左侧叙事字幕（brand 出现前） */}

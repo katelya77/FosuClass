@@ -9,11 +9,11 @@ import { HERO_TIMELINES } from "./heroes/registry";
 export const SCENES: SceneMeta[] = [
   { id: "opening", label: "开场 · 时空关系", duration: 10 },
   { id: "architecture", label: "架构 · 多智能体", duration: 15 },
-  { id: "hero-risk", label: "英雄 · 风险发现", duration: 28 },
-  { id: "hero-collaboration", label: "英雄 · 协同规划", duration: 28 },
-  { id: "hero-reschedule", label: "英雄 · 模拟调课", duration: 28 },
-  { id: "hero-insight", label: "英雄 · 全局洞察", duration: 28 },
-  { id: "reliability", label: "可靠性 · 真机证据", duration: 14 },
+  { id: "hero-risk", label: "关键场景 · 风险发现", duration: 28 },
+  { id: "hero-collaboration", label: "关键场景 · 协同规划", duration: 28 },
+  { id: "hero-reschedule", label: "关键场景 · 模拟调课", duration: 28 },
+  { id: "hero-insight", label: "关键场景 · 全局洞察", duration: 28 },
+  { id: "reliability", label: "真实运行链路", duration: 14 },
   { id: "closing", label: "收束 · 品牌落版", duration: 12 },
 ];
 
@@ -21,10 +21,10 @@ export const SCENES: SceneMeta[] = [
 export const OPENING_BEATS: TimelineEvent[] = [
   { at: 0.0, scene: "opening", action: "enter" },
   { at: 0.8, scene: "opening", action: "nodes" },
-  { at: 2.2, scene: "opening", action: "connections" },
-  { at: 4.2, scene: "opening", action: "focus" },
-  { at: 6.4, scene: "opening", action: "brand" },
-  { at: 8.5, scene: "opening", action: "hold" },
+  { at: 2.4, scene: "opening", action: "connections" },
+  { at: 5.4, scene: "opening", action: "focus" },
+  { at: 7.1, scene: "opening", action: "brand" },
+  { at: 8.2, scene: "opening", action: "hold" },
 ];
 
 /** Shell 场景的通用节拍 */

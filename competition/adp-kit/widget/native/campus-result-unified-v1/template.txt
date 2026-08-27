@@ -2,15 +2,16 @@
   {layoutMode === 'week-board' ? (
     <Col gap={3}>
       <Box direction="col" gap={2} padding="14px" background="#EAF3EE" radius="xl">
-        <Row gap={2} align="start" justify="between">
-          <Col gap={1} flex={1}>
-            <Caption value="课程时间板" color="#2F6B59" weight="semibold" />
-            <Title value={weekBoardTitle} size="md" />
-            <Caption value={weekBoardSubtitle} color="#66706B" />
-          </Col>
+        <Row gap={2} align="center" justify="between">
+          <Caption value="课程时间板" color="#2F6B59" weight="semibold" />
           <Badge label="已核验" color="success" variant="soft" size="sm" pill={true} />
         </Row>
-        <Text value={summary} size="sm" weight="semibold" color="#18201D" />
+        <Title value={weekBoardTitle} size="md" />
+        <Caption value={weekBoardSubtitle} color="#66706B" />
+        <Box direction="col" gap={1} padding="11px" background="#FFF0EC" border={{ left: { size: 3, color: '#DF5E48', style: 'solid' } }} radius="md">
+          <Caption value="结论先行" color="#B94735" weight="semibold" />
+          <Text value={summary} size="md" weight="semibold" color="#9F3426" />
+        </Box>
       </Box>
 
       <Row gap={2} wrap="wrap" align="stretch">
@@ -71,45 +72,56 @@
         }
         radius="xl"
       >
-        <Row gap={2} align="start" justify="between">
-          <Col gap={1} flex={1}>
-            <Caption
-              value={
-                variant === 'risk'
-                  ? '教学风险'
-                  : variant === 'reschedule'
-                    ? '调课模拟'
-                    : variant === 'ranking'
-                      ? '校园排名'
-                      : variant === 'overview'
-                        ? '教学态势'
-                        : variant === 'space'
-                          ? '空间推荐'
-                          : variant === 'collaboration'
-                            ? '协作方案'
-                            : variant === 'schedule'
-                              ? '当日安排'
-                              : status === 'empty'
-                                ? '暂无结果'
-                                : status === 'error'
-                                  ? '需要重试'
-                                  : '校园结果'
-              }
-              color={variant === 'risk' ? '#B97828' : status === 'error' ? '#B94A48' : '#2F6B59'}
-              weight="semibold"
-            />
-            <Title value={title} size="md" />
-            {subtitle ? <Caption value={subtitle} color="#66706B" /> : null}
-          </Col>
+        <Row gap={2} align="center" justify="between">
+          <Caption
+            value={
+              variant === 'risk'
+                ? '教学风险'
+                : variant === 'reschedule'
+                  ? '调课模拟'
+                  : variant === 'ranking'
+                    ? '校园排名'
+                    : variant === 'overview'
+                      ? '教学态势'
+                      : variant === 'space'
+                        ? '空间推荐'
+                        : variant === 'collaboration'
+                          ? '协作方案'
+                          : variant === 'schedule'
+                            ? '当日安排'
+                            : status === 'empty'
+                              ? '暂无结果'
+                              : status === 'error'
+                                ? '需要重试'
+                                : '校园结果'
+            }
+            color={variant === 'risk' ? '#B97828' : status === 'error' ? '#B94A48' : '#2F6B59'}
+            weight="semibold"
+          />
+          <Row gap={1} align="center">
+            {displayMeta.simulated ? <Badge label="模拟" color="warning" variant="soft" size="sm" pill={true} /> : null}
           <Badge
-            label={status === 'success' ? displayMeta.simulated ? '模拟' : '已核验' : status === 'empty' ? '暂无' : '可重试'}
-            color={status === 'error' ? 'danger' : displayMeta.simulated || variant === 'risk' ? 'warning' : status === 'empty' ? 'secondary' : 'success'}
+            label={status === 'success' ? '已核验' : status === 'empty' ? '暂无' : '可重试'}
+            color={status === 'error' ? 'danger' : status === 'empty' ? 'secondary' : 'success'}
             variant="soft"
             size="sm"
             pill={true}
           />
+          </Row>
         </Row>
-        <Text value={summary} size="sm" weight="semibold" color="#18201D" />
+        <Title value={title} size="md" />
+        {subtitle ? <Caption value={subtitle} color="#66706B" /> : null}
+        <Box
+          direction="col"
+          gap={1}
+          padding="11px"
+          background={status === 'error' ? '#FBF0EF' : status === 'empty' ? '#F3F4F2' : '#FFF0EC'}
+          border={{ left: { size: 3, color: status === 'error' ? '#B94A48' : status === 'empty' ? '#8A918D' : '#DF5E48', style: 'solid' } }}
+          radius="md"
+        >
+          <Caption value="结论先行" color={status === 'error' ? '#B94A48' : status === 'empty' ? '#66706B' : '#B94735'} weight="semibold" />
+          <Text value={summary} size="md" weight="semibold" color={status === 'error' ? '#8E3432' : status === 'empty' ? '#4F5954' : '#9F3426'} />
+        </Box>
         {context ? <Caption value={context} color="#66706B" /> : null}
       </Box>
 

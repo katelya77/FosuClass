@@ -21,7 +21,7 @@ const MAX = vm.ranking[0].lessons;
  *  blur 只允许存在于 0.45s 的抽取过渡本身。 */
 function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolean }): JSX.Element {
   return (
-    <div className='relative flex min-h-0 flex-1 flex-col justify-center gap-2'>
+    <div className='rank-depth relative flex min-h-0 flex-1 flex-col justify-center gap-[2px]'>
       {vm.ranking.map((r, i) => {
         const isTop = r.rank === 1;
         const depth = extracted ? (isTop ? 1.05 : Math.max(0.94 - i * 0.008, 0.86)) : Math.max(1 - i * 0.016, 0.87);
@@ -30,12 +30,12 @@ function RankDepth({ entered, extracted }: { entered: boolean; extracted: boolea
             key={r.teacherId}
             initial={{ opacity: 0, x: -22, scale: 0.92 }}
             animate={entered
-              ? { opacity: extracted && !isTop ? 0.4 : 1, x: 0, scale: depth, filter: extracted && !isTop ? 'saturate(0.72)' : 'saturate(1)' }
+              ? { opacity: extracted && !isTop ? 0.3 : 1, x: 0, scale: depth, filter: extracted && !isTop ? 'saturate(0.62)' : 'saturate(1)' }
               : { opacity: 0, x: -22, scale: 0.92 }}
             transition={extracted
               ? { duration: 0.45, ease: EASE_OUT }
               : { delay: i * 0.13, duration: 0.65, ease: EASE_OUT }}
-            className={'flex items-center gap-3 rounded-xl border px-4 py-[10px] ' +
+            className={'flex items-center gap-3 rounded-xl border px-4 py-[4px] ' +
               (isTop && extracted ? 'border-[color-mix(in_srgb,var(--brand)_55%,transparent)] bg-[var(--brand-dim)] shadow-[var(--glow-brand)]' : 'border-[rgba(171,105,91,0.12)] bg-canvas-deep/55')}
             style={{ transformOrigin: 'left center' }}
           >
@@ -88,13 +88,12 @@ export function HeroInsight(): JSX.Element {
         badge={<Badge tone='brand' icon={<TrendingUp size={15} />}>{vm.windowLabel}</Badge>}
       />
 
-      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[0.96fr_1.04fr] gap-7'>
+      <div className='grid min-h-0 flex-1 min-w-0 grid-cols-[0.82fr_1.18fr] gap-7'>
         <motion.div
-          className='plane material-topline flex min-h-0 min-w-0 flex-col py-4 pr-5'
-          animate={{ opacity: risk ? 0.8 : 1, filter: risk ? 'saturate(0.85)' : 'saturate(1)' }}
+          className='plane material-topline flex min-h-0 min-w-0 flex-col overflow-hidden py-4 pr-5'
+          animate={{ opacity: top1 ? 0.72 : 1, filter: top1 ? 'saturate(0.72)' : 'saturate(1)' }}
           transition={{ duration: 0.7, ease: EASE_OUT }}
         >
-          <p className='t-caption mb-2.5 px-5'>{C.insight.cascadeLabel}</p>
           <RankDepth entered={cascade} extracted={top1} />
         </motion.div>
 
@@ -115,13 +114,14 @@ export function HeroInsight(): JSX.Element {
             initial={{ opacity: 0, y: 14, scale: 0.92 }}
             animate={top1 ? { opacity: 1, y: 0, scale: 1 } : {}}
             transition={{ duration: 0.9, ease: EASE_OUT }}
-            className='plane-hero depth-shift-near flex flex-col justify-around gap-5 px-10 py-8'
+            className='plane-hero depth-shift-near flex flex-col justify-around gap-3 px-9 py-5'
             style={{ boxShadow: top1 ? 'var(--shadow-glow-brand)' : 'var(--shadow-panel)' }}
           >
             <div className='flex items-center justify-between'>
-              <p className='t-caption'>Top 1 · {vm.top1.name}</p>
+              <p className='t-caption'>从全校排名找到异常对象</p>
               <Badge tone='brand'>负载峰值</Badge>
             </div>
+            <p className='text-[30px] font-bold tracking-tight text-ink'>{vm.top1.name}</p>
             <div className='flex items-center justify-around'>
               <div className='text-center'>
                 <KineticMetric to={vm.top1.lessons} settle={top1} className='t-metric-lg text-ink' />
@@ -136,7 +136,7 @@ export function HeroInsight(): JSX.Element {
           </motion.div>
 
           {/* 周课次 temporal slab：柱体加高、数值加大 */}
-          {schedule && (
+          {schedule && !risk && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className='plane px-5 py-4'>
               <p className='t-caption mb-3'>{C.insight.weeksLabel}</p>
               <div className='flex items-end justify-between gap-4'>
@@ -167,22 +167,30 @@ export function HeroInsight(): JSX.Element {
           {risk && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: EASE_OUT }}
-              className='plane flex items-center justify-between gap-4 px-5 py-4'
-              style={{ borderLeft: '3px solid var(--risk)', boxShadow: 'var(--shadow-panel), 0 0 30px -10px rgba(229,181,115,0.35)' }}>
-              <div>
-                <p className='text-[17px] font-semibold text-ink'>课程冲突 {vm.riskSummary.conflictCount} 处 · 跨校区赶场 {vm.riskSummary.rushWarningCount} 处</p>
-                <p className='t-caption mt-1'>样例：{vm.riskSummary.sampleRoute} · {vm.riskSummary.gapMinutes} 分钟转场</p>
+              className='plane grid grid-cols-[0.78fr_0.78fr_1.5fr] items-center gap-3 px-5 py-4'
+              style={{ borderLeft: '3px solid var(--risk)', boxShadow: 'var(--shadow-panel), 0 0 30px -10px rgba(229,181,115,0.35)' }}
+              data-qa-insight-risk>
+              <div className='text-center'>
+                <p className='text-[32px] font-bold tabular-nums text-ok'>{vm.riskSummary.conflictCount}</p>
+                <p className='text-[13px] text-mute'>课程冲突</p>
               </div>
-              <Badge tone='risk'>待治理</Badge>
+              <div className='text-center'>
+                <p className='text-[32px] font-bold tabular-nums text-riskc'>{vm.riskSummary.rushWarningCount}</p>
+                <p className='text-[13px] text-mute'>转场预警</p>
+              </div>
+              <div className='min-w-0 border-l border-line pl-4'>
+                <p className='text-[15px] font-semibold text-ink'>下钻到具体风险</p>
+                <p className='mt-1 text-[13px] leading-snug text-mute'>{vm.riskSummary.sampleRoute} · {vm.riskSummary.gapMinutes} 分钟转场</p>
+              </div>
             </motion.div>
           )}
         </div>
       </div>
 
-      <BlurIn delay={close ? 0.2 : 6} className="flex items-center justify-between gap-6">
+      <BlurIn delay={close ? 0.2 : 6}>
         <p className='t-body text-mute'>{C.insight.closeLine}</p>
-        <VerifiedSourcePill />
       </BlurIn>
+      <VerifiedSourcePill />
     </div>
   );
 }

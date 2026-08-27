@@ -56,6 +56,6 @@ describe('Record Mode（任务 §19 / §26-F）', () => {
 
   it('?beat= 深链定位到节拍时刻（resched.decision 判定横幅可见）', () => {
     render(<ShowcaseApp search='?autoplay=0&beat=resched.decision' />);
-    expect(screen.getByText('可行 · 附带提示')).toBeTruthy();
+    expect(screen.getByText('可行 · 附带提醒')).toBeTruthy();
   });
 });

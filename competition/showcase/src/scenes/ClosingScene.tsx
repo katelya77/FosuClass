@@ -18,7 +18,7 @@ export function ClosingScene(): JSX.Element {
         className="pointer-events-none absolute inset-0 opacity-[0.13]"
         initial={{ opacity: 0 }} animate={{ opacity: 0.13 }} transition={{ duration: 2.2, ease: EASE_OUT }}
       >
-        <CampusTemporalGraph beats={STABLE} />
+        <CampusTemporalGraph beats={STABLE} local={10} />
       </motion.div>
       {/* 中央净空：让品牌始终处于无干扰的视觉中心（节点/连线不再与标题打架） */}
       <div aria-hidden className="pointer-events-none absolute inset-0"

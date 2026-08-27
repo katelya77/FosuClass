@@ -25,6 +25,15 @@ async function main() {
     const files = fs.readdirSync(HTML).filter((name) => name.endsWith(".html")).sort();
     for (const file of files) {
       await page.goto(pathToFileURL(path.join(HTML, file)).href, { waitUntil: "load" });
+      const geometry = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        titleClientWidth: document.querySelector(".hero h1")?.clientWidth ?? 0,
+        titleScrollWidth: document.querySelector(".hero h1")?.scrollWidth ?? 0,
+      }));
+      if (geometry.scrollWidth > geometry.viewport + 1 || geometry.titleScrollWidth > geometry.titleClientWidth + 1) {
+        throw new Error(`${file}: horizontal or title overflow ${JSON.stringify(geometry)}`);
+      }
       await page.screenshot({ path: path.join(OUTPUT, file.replace(/\.html$/, ".png")), fullPage: true });
     }
     process.stdout.write(`Final Widget visual screenshots captured: ${files.length}\n`);

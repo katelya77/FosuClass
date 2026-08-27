@@ -36,12 +36,12 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
   const tilePos: Record<string, { x: number; y: number }> = {};
   const campusXOf = (name: string) => CAMP_XS[CAMP_NAMES.indexOf(name)] ?? CAMP_XS[0];
   const activePairs = new Set<string>();
-  vm.rushLinks.forEach((r, i) => {
-    if (i < rushVisibleFrom) {
-      activePairs.add(r.weekday + "@" + r.fromTime);
-      activePairs.add(r.weekday + "@" + r.toTime);
-    }
-  });
+  const activeRouteIndex = rushVisibleFrom > 0 ? Math.min(rushVisibleFrom, vm.rushLinks.length) - 1 : -1;
+  const activeRoute = activeRouteIndex >= 0 ? vm.rushLinks[activeRouteIndex] : undefined;
+  if (activeRoute) {
+    activePairs.add(activeRoute.weekday + "@" + activeRoute.fromTime);
+    activePairs.add(activeRoute.weekday + "@" + activeRoute.toTime);
+  }
   const isActive = (weekday: number, startTime: string) => activePairs.has(weekday + "@" + startTime);
 
   return (
@@ -74,14 +74,13 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
             initial={{ opacity: 0, y: y + 8 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: (showBlocks ? 0.5 : 9) + i * 0.07, duration: 0.65, ease: EASE_OUT }}>
             {/* 到校区节点的锚线：路径激活时同步点亮 */}
-            {showCampus && (
+            {showCampus && active && (
               <motion.line x1={cx} y1={y + TILE_H} x2={campusXOf(b.campusName)} y2={CAMP_Y}
                 stroke={cs.color}
-                strokeOpacity={active ? 0.9 : dim ? 0.32 : 0.46}
-                strokeWidth={active ? 2.4 : 1.5}
-                strokeDasharray={active ? "none" : "3 5"}
+                strokeOpacity={0.82}
+                strokeWidth={2.2}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                transition={{ delay: (active ? 0.1 : 1.2 + i * 0.05), duration: 0.6 }} />
+                transition={{ duration: 0.6 }} />
             )}
             {/* 课程块：路径激活 = 同步高亮（描边 + 亮填充 + 微光） */}
             <motion.rect
@@ -114,7 +113,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
           <line x1={LEFT + 40} y1={CAMP_Y} x2={W - LEFT - 40} y2={CAMP_Y} stroke="rgba(168,190,214,0.26)" strokeDasharray="2 6" />
           {CAMP_NAMES.map((name, i) => {
             const cs = campusStyle(name);
-            const hot = vm.rushLinks.some((r, ri) => ri < rushVisibleFrom && (r.fromCampus === name || r.toCampus === name));
+            const hot = Boolean(activeRoute && (activeRoute.fromCampus === name || activeRoute.toCampus === name));
             return (
               <motion.g key={name} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.7 + i * 0.12, duration: 0.7, ease: EASE_OUT }}
                 style={{ transformOrigin: CAMP_XS[i] + "px " + CAMP_Y + "px" }}>
@@ -134,7 +133,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
 
       {/* 跨校区赶场弧：从课程块锚点落到校区节点，再沿空间弧传播时间脉冲 */}
       {vm.rushLinks.map((r, i) => {
-        if (i >= rushVisibleFrom) return null;
+        if (i !== activeRouteIndex) return null;
         const fromIdx = CAMP_NAMES.indexOf(r.fromCampus);
         const toIdx = CAMP_NAMES.indexOf(r.toCampus);
         const x1 = CAMP_XS[fromIdx], x2 = CAMP_XS[toIdx];
@@ -143,7 +142,7 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         const arcY = CAMP_Y - 150;
         const d = `M ${x1} ${y1} Q ${midX} ${arcY} ${x2} ${y2}`;
         return (
-          <motion.g key={"rush-" + i}
+          <motion.g key={"rush-" + i} data-qa-risk-route
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ delay: i * 0.5, duration: 0.7 }}>
             <motion.path d={d} fill="none" stroke="rgba(246,205,138,0.28)" strokeWidth={7}
@@ -165,11 +164,11 @@ export function RiskField({ vm, showBlocks, showCampus, rushVisibleFrom, showRou
         );
       })}
 
-      {/* 4 条线路被抽出标记（底部居中，与校区标签留有净空） */}
+      {/* 总数由已核验汇总给出；画面始终只保留一条可追踪的示例关系。 */}
       {showRoutes && (
         <motion.text x={W / 2} y={H - 8} textAnchor="middle" fontSize={21} fontWeight={660} fill="var(--risk-strong)"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.7 }} {...LABEL_HALO}>
-          跨校区赶场 × {vm.totals.rushWarningCount} · 每段 {vm.rushLinks[0]?.gapMinutes ?? 20} 分钟转场
+          当前示例：{activeRoute?.fromCampus ?? "校区A"} → {activeRoute?.toCampus ?? "校区B"} · {activeRoute?.gapMinutes ?? 20} 分钟转场
         </motion.text>
       )}
     </svg>
