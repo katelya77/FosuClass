@@ -42,6 +42,29 @@ assert.ok(nextCourse.insight.detail.includes("13:10"));
 assert.ok(nextCourse.insight.detail.includes("非精确路线"));
 assert.ok(nextCourse.actions.length <= 3);
 
+const beforeTerm = aiAssistantService.buildProactiveWorkspace({
+  clientLocalTime: "2026-08-28T13:00:00+08:00",
+  todayDate: "2026-08-28",
+  todayWeekday: 5,
+  currentTeachingWeek: 1,
+  termPhase: "before-term",
+  isInTerm: false,
+  termStartDate: "2026-09-07",
+  currentScheduleSummary: {
+    enabled: true,
+    courses: [{
+      courseName: "动物生物化学",
+      classroom: "C7-302",
+      weekday: 5,
+      startSection: 6,
+      endSection: 7,
+      weeks: [1],
+    }],
+  },
+});
+assert.strictEqual(beforeTerm.insight, null, "pre-term dates must not generate weekday-only course hints");
+assert.ok(beforeTerm.actions.length <= 3);
+
 const changed = aiAssistantService.buildProactiveWorkspace({
   scheduleChangePending: true,
   scheduleChangeBaseline: { fingerprint: "v1" },

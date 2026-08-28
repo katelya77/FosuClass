@@ -11,10 +11,10 @@ const result = buildImportTermOptions([
   { term: "2023-2024-2", semesterText: "禁用", status: "disabled", dataAvailable: true, releaseVersion: "r232" },
 ], "2026-2027-1", "");
 
-assert.deepStrictEqual(result.semesterOptions, ["2026-2027-1", "2025-2026-2"]);
+assert.deepStrictEqual(result.semesterOptions, ["2026-2027-1"]);
 assert.strictEqual(result.records.some((item) => item.term === "2027-2028-1"), false);
-assert.strictEqual(result.records.find((item) => item.term === "2025-2026-2").archived, true);
-assert.strictEqual(result.pickerEnabled, true);
+assert.strictEqual(result.records.some((item) => item.term === "2025-2026-2"), false);
+assert.strictEqual(result.pickerEnabled, false);
 
 const single = buildImportTermOptions([
   { term: "2026-2027-1", status: "current", dataAvailable: true, releaseVersion: "r261" },

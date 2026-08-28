@@ -104,8 +104,10 @@ function run() {
     title: "动物解剖学 · 13:30",
     actionMessage: "查看下一节课",
   });
+  assert.strictEqual(floatService.shouldShowProactiveInsight({ kind: "free_day", title: "今天没课" }), false, "routine empty-day hints should stay silent");
   instance.refreshPosition();
   assert.strictEqual(instance.data.hintText, insight.title, "new proactive insight should be visible");
+  assert.strictEqual(floatService.shouldShowProactiveInsight(insight), false, "a shown insight must respect its presentation cooldown");
   calls.navigateTo.length = 0;
   instance.onHintTap();
   assert.strictEqual(instance.data.hintText, "", "tapping the information hint should dismiss it");

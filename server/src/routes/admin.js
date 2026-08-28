@@ -38,6 +38,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
 const termReleaseIndexService = require("../services/termReleaseIndexService");
+const termDeletionService = require("../services/termDeletionService");
 const termReadinessService = require("../services/termReadinessService");
 const semesterActivationTransactionService = require("../services/semesterActivationTransactionService");
 const semesterRepairService = require("../services/semesterRepairService");
@@ -4899,6 +4900,41 @@ router.post("/terms/:term/disable", adminAuth.verifyAdminAccess, (req, res) => {
     return res.json({ success: true, term });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_DISABLE_FAILED", message: error.message });
+  }
+});
+
+router.get("/terms/:term/delete-preview", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(termDeletionService.deleteTerm(req.params.term, { dryRun: true }));
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "TERM_DELETE_PREVIEW_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+router.delete("/terms/:term", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const result = termDeletionService.deleteTerm(req.params.term, {
+      confirm: req.body && req.body.confirm,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    writeAuditLog(
+      req,
+      "delete",
+      "term",
+      req.params.term,
+      `Deleted term ${req.params.term} from live storage; rollback quarantine retained temporarily`
+    );
+    return res.json(result);
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "TERM_DELETE_FAILED",
+      message: error.message,
+    });
   }
 });
 

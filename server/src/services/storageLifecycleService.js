@@ -91,6 +91,7 @@ function getConfig() {
     incompleteUploadRetentionHours: numEnv("FOSU_INCOMPLETE_UPLOAD_RETENTION_HOURS", 24, 1),
     supersededUploadFileRetentionDays: numEnv("FOSU_SUPERSEDED_UPLOAD_FILE_RETENTION_DAYS", 30, 1),
     archiveMetadataRetentionDays: numEnv("FOSU_ARCHIVE_METADATA_RETENTION_DAYS", 90, 1),
+    termDeletionRetentionDays: numEnv("FOSU_TERM_DELETION_RETENTION_DAYS", 7, 1),
     tempRetentionHours: numEnv("FOSU_TEMP_RETENTION_HOURS", 24, 1),
     logRetentionDays: numEnv("FOSU_LOG_RETENTION_DAYS", 30, 1),
     logRotateSizeMb: numEnv("FOSU_LOG_ROTATE_SIZE_MB", 10, 1),
@@ -285,6 +286,7 @@ function collectMaintenanceCandidates(config) {
   const jobSuccessMs = config.jobSuccessRetentionDays * 86400000;
   const jobFailedMs = config.jobFailedRetentionDays * 86400000;
   const stagingMs = config.stagingFileRetentionDays * 86400000;
+  const termDeletionMs = config.termDeletionRetentionDays * 86400000;
 
   listDirEntries(releaseService.RELEASES_DIR).forEach((item) => {
     if (!item.entry.isDirectory()) return;
@@ -314,6 +316,12 @@ function collectMaintenanceCandidates(config) {
   });
 
   candidates.push(...collectUploadMaintenanceCandidates(config));
+
+  listDirEntries(path.join(STORAGE_DIR, "backups", "term-deletions")).forEach((item) => {
+    if (item.entry.isDirectory() && olderThan(item.stat, termDeletionMs)) {
+      candidates.push({ type: "expired-term-deletion-backup", path: item.path, preserveReason: "", bytes: 0 });
+    }
+  });
 
   listDirEntries(jobService.JOBS_DIR).forEach((item) => {
     if (!item.entry.isFile() || !item.name.endsWith(".json")) return;

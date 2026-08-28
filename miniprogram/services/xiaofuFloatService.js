@@ -4,6 +4,16 @@ const HIDDEN_ROUTES_KEY = "FOSU_XIAOFU_FLOAT_HIDDEN_ROUTES";
 const PENDING_CONTEXT_KEY = "FOSU_XIAOFU_FLOAT_PENDING_CONTEXT";
 const PROACTIVE_INSIGHT_KEY = "FOSU_XIAOFU_PROACTIVE_INSIGHT";
 const DISMISSED_INSIGHT_KEY = "FOSU_XIAOFU_DISMISSED_INSIGHT";
+const PROACTIVE_PRESENTATION_KEY = "FOSU_XIAOFU_PROACTIVE_PRESENTATIONS";
+const PRESENTATION_HISTORY_LIMIT = 12;
+const PRESENTATION_COOLDOWNS = Object.freeze({
+  import: 7 * 24 * 60 * 60 * 1000,
+  next_course: 2 * 60 * 60 * 1000,
+  schedule_change: 24 * 60 * 60 * 1000,
+  course_start: 24 * 60 * 60 * 1000,
+  default: 24 * 60 * 60 * 1000,
+});
+const SILENT_INSIGHT_KINDS = Object.freeze(["free_day", "day_finished"]);
 
 const TABBAR_ROUTES = [
   "pages/index/index",
@@ -304,6 +314,35 @@ function isProactiveInsightDismissed(insight, maxAgeMs) {
   return value.fingerprint === proactiveInsightFingerprint(insight);
 }
 
+function getPresentationHistory() {
+  const value = readStorage(PROACTIVE_PRESENTATION_KEY, []);
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
+}
+
+function shouldShowProactiveInsight(insight, nowMs) {
+  if (!insight || !safeText(insight.title, 100)) return false;
+  const kind = safeText(insight.kind, 32);
+  if (SILENT_INSIGHT_KINDS.includes(kind)) return false;
+  if (isProactiveInsightDismissed(insight)) return false;
+  const fingerprint = proactiveInsightFingerprint(insight);
+  const currentTime = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const last = getPresentationHistory().find((item) => item.fingerprint === fingerprint);
+  const lastShownAt = Number(last && last.shownAt || 0);
+  const cooldown = PRESENTATION_COOLDOWNS[kind] || PRESENTATION_COOLDOWNS.default;
+  return !lastShownAt || currentTime - lastShownAt >= cooldown;
+}
+
+function markProactiveInsightShown(insight, nowMs) {
+  const fingerprint = proactiveInsightFingerprint(insight);
+  if (!fingerprint.replace(/\u001f/g, "")) return false;
+  const shownAt = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const history = getPresentationHistory()
+    .filter((item) => item.fingerprint !== fingerprint)
+    .slice(0, PRESENTATION_HISTORY_LIMIT - 1);
+  history.unshift({ fingerprint, kind: safeText(insight.kind, 32), shownAt });
+  return writeStorage(PROACTIVE_PRESENTATION_KEY, history);
+}
+
 function getProactiveInsight(maxAgeMs) {
   const value = readStorage(PROACTIVE_INSIGHT_KEY, null);
   if (!value || typeof value !== "object" || Array.isArray(value) || !safeText(value.title, 100)) return null;
@@ -329,6 +368,7 @@ module.exports = {
   PENDING_CONTEXT_KEY,
   POSITION_KEY,
   PROACTIVE_INSIGHT_KEY,
+  PROACTIVE_PRESENTATION_KEY,
   buildPageContext,
   clearHiddenRoutes,
   consumePendingContext,
@@ -340,6 +380,7 @@ module.exports = {
   isEnabled,
   isProactiveInsightDismissed,
   isRouteHidden,
+  markProactiveInsightShown,
   normalizeRoute,
   proactiveInsightFingerprint,
   savePendingContext,
@@ -347,4 +388,5 @@ module.exports = {
   setEnabled,
   setProactiveInsight,
   setRouteHidden,
+  shouldShowProactiveInsight,
 };

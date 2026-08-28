@@ -165,11 +165,18 @@ Component({
       try {
         const aiAssistantService = require("../../services/aiAssistantService");
         const workspace = aiAssistantService.buildProactiveWorkspace(aiAssistantService.buildClientContext({}));
-        if (workspace && workspace.insight) insight = floatService.setProactiveInsight(workspace.insight);
+        if (workspace) insight = floatService.setProactiveInsight(workspace.insight || null);
       } catch (error) {
         // Keep the latest short-lived, sanitized insight when local context is unavailable.
       }
-      if (insight && floatService.isProactiveInsightDismissed(insight)) insight = null;
+      const fingerprint = insight && floatService.proactiveInsightFingerprint(insight);
+      const keepVisible = Boolean(insight && fingerprint && fingerprint === this._visibleInsightFingerprint);
+      if (insight && !keepVisible && !floatService.shouldShowProactiveInsight(insight)) insight = null;
+      if (insight && !keepVisible) {
+        floatService.markProactiveInsightShown(insight);
+        this._visibleInsightFingerprint = fingerprint;
+      }
+      if (!insight) this._visibleInsightFingerprint = "";
       this._currentInsight = insight;
       this.setData({
         visible: true,
@@ -203,7 +210,11 @@ Component({
           detail: String(event.id || "").slice(0, 80),
           actionUrl: "/pages/today/today",
         });
-        if (!insight || floatService.isProactiveInsightDismissed(insight)) return;
+        const fingerprint = insight && floatService.proactiveInsightFingerprint(insight);
+        const keepVisible = Boolean(insight && fingerprint && fingerprint === this._visibleInsightFingerprint);
+        if (!insight || !keepVisible && !floatService.shouldShowProactiveInsight(insight)) return;
+        if (!keepVisible) floatService.markProactiveInsightShown(insight);
+        this._visibleInsightFingerprint = fingerprint;
         this._currentInsight = insight;
         this.setData({ hintEyebrow: insight.eyebrow, hintText: insight.title });
       }).catch(() => {
@@ -322,6 +333,7 @@ Component({
       };
       floatService.dismissProactiveInsight(insight);
       this._currentInsight = null;
+      this._visibleInsightFingerprint = "";
       this.setData({ hintEyebrow: "", hintText: "" });
     },
 

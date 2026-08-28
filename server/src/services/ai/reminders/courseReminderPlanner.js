@@ -101,6 +101,19 @@ function teachingWeekForOffset(baseWeek, baseWeekday, offset) {
   return Number(baseWeek || 0) + Math.floor((Number(baseWeekday || 1) - 1 + offset) / 7);
 }
 
+function teachingWeekForDate(dateText, termStartDate, totalWeeks) {
+  const date = parseDate(dateText);
+  const start = parseDate(termStartDate);
+  if (!date || !start) return 0;
+  const dateMs = Date.UTC(date.year, date.month - 1, date.day, 12);
+  const startMs = Date.UTC(start.year, start.month - 1, start.day, 12);
+  const dayOffset = Math.floor((dateMs - startMs) / 86400000);
+  if (dayOffset < 0) return 0;
+  const week = Math.floor(dayOffset / 7) + 1;
+  const limit = Math.max(0, Number(totalWeeks || 0) || 0);
+  return limit && week > limit ? 0 : week;
+}
+
 function occurrenceForCourse(course, dateText, week, leadMinutes) {
   const startTime = COURSE_START_TIMES[course.startSection];
   const endTime = COURSE_END_TIMES[course.endSection] || COURSE_END_TIMES[course.startSection] || "";
@@ -138,13 +151,18 @@ function computeNextOccurrence(input = {}) {
     ? Number(input.afterMs)
     : Date.parse(shanghaiIso(referenceDate, "00:00"));
   const targetDate = String(input.targetDate || "");
+  const termStartDate = String(input.termStartDate || "");
+  const totalWeeks = Math.max(0, Number(input.totalWeeks || 0) || 0);
   const candidates = [];
 
-  for (let offset = 0; offset <= 56; offset += 1) {
+  for (let offset = 0; offset <= 370; offset += 1) {
     const date = addDays(referenceDate, offset);
     if (!date || (targetDate && date !== targetDate)) continue;
     const weekday = weekdayForDate(date);
-    const teachingWeek = teachingWeekForOffset(referenceTeachingWeek, referenceWeekday, offset);
+    const teachingWeek = termStartDate
+      ? teachingWeekForDate(date, termStartDate, totalWeeks)
+      : teachingWeekForOffset(referenceTeachingWeek, referenceWeekday, offset);
+    if (teachingWeek < 1) continue;
     courses.forEach((course) => {
       if (course.weekday !== weekday || !activeInWeek(course, teachingWeek)) return;
       const occurrence = occurrenceForCourse(course, date, teachingWeek, leadMinutes);
@@ -202,6 +220,9 @@ function planCourseReminder(message, context = {}) {
   const referenceDate = String(context.todayDate || "");
   const referenceWeekday = Number(context.todayWeekday || weekdayForDate(referenceDate)) || 1;
   const referenceTeachingWeek = Number(context.currentTeachingWeek || 0) || 0;
+  const termStartDate = String(context.termStartDate || "").slice(0, 10);
+  const totalWeeks = Math.max(0, Number(context.totalWeeks || 0) || 0);
+  const weekStart = context.weekStart === "sunday" ? "sunday" : "monday";
   const roomChange = /(?:只有|仅).*(?:换|变更|变化).*教室|教室(?:换|变更|变化).*才/.test(text);
   let scope = roomChange ? "room_change" : "all_courses";
   let targetDate = "";
@@ -230,6 +251,9 @@ function planCourseReminder(message, context = {}) {
     referenceDate,
     referenceWeekday,
     referenceTeachingWeek,
+    termStartDate,
+    totalWeeks,
+    weekStart,
     targetDate,
     courseIndex,
     leadMinutes,
@@ -252,6 +276,9 @@ function planCourseReminder(message, context = {}) {
     referenceDate,
     referenceWeekday,
     referenceTeachingWeek,
+    termStartDate,
+    totalWeeks,
+    weekStart,
     courseTemplates,
     nextOccurrence,
     nextTriggerAt: nextOccurrence && nextOccurrence.triggerAt || "",
@@ -271,5 +298,6 @@ module.exports = {
   planCourseReminder,
   sanitizeCourseTemplate,
   shanghaiIso,
+  teachingWeekForDate,
   weekdayForDate,
 };

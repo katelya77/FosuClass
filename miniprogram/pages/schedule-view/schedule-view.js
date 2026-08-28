@@ -442,6 +442,7 @@ Page({
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
+      normalized: true,
       targetType: this.data.type,
       targetId: meta.detailId || meta.id || meta.classId || this.data.name || "",
       targetName: this.data.name,

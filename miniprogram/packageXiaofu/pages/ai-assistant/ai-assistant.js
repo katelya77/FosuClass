@@ -4888,6 +4888,11 @@ Page({
       todayDate: clientContext && clientContext.todayDate,
       todayWeekday: clientContext && clientContext.todayWeekday,
       currentTeachingWeek: clientContext && clientContext.currentTeachingWeek,
+      termStartDate: clientContext && clientContext.termStartDate,
+      totalWeeks: clientContext && clientContext.totalWeeks,
+      weekStart: clientContext && clientContext.weekStart,
+      termPhase: clientContext && clientContext.termPhase,
+      isInTerm: clientContext && clientContext.isInTerm,
       clientTimestampMs: clientContext && clientContext.clientTimestampMs,
     });
   },

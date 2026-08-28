@@ -219,24 +219,33 @@
 }
 
 .schedule-scroll-x {
-  width: 100%;
+  flex: 1;
+  width: auto;
   min-width: 0;
 }
 
-.schedule-grid {
+.schedule-grid-shell {
   display: flex;
-  min-width: 100%;
+  align-items: flex-start;
+  width: 100%;
   background: #ffffff;
 }
 
-.time-axis {
+.time-axis-layer {
+  position: relative;
+  z-index: 60;
   flex: 0 0 76rpx;
+  width: 76rpx;
+  overflow: hidden;
+  background: #fbfcfe;
+}
+
+.time-axis {
   width: 76rpx;
   border-right: 1rpx solid #edf0f5;
   background: #fbfcfe;
-  position: sticky;
-  left: 0;
-  z-index: 10;
+  position: relative;
+  z-index: 60;
 }
 
 .time-head {

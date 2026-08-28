@@ -9110,6 +9110,9 @@ const adminConsoleHtml = `<!doctype html>
             addAction("归档", "ghost", function() { archiveTerm(term.term); });
             addAction("禁用", "danger", function() { disableTerm(term.term); });
           }
+          if (term.status !== "current") {
+            addAction("彻底删除", "danger", function() { deleteTermPermanently(term.term); });
+          }
           tbody.appendChild(tr);
         });
       }
@@ -9401,6 +9404,42 @@ const adminConsoleHtml = `<!doctype html>
         api("/api/admin/terms/" + encodeURIComponent(term) + "/disable", { method: "POST", body: "{}" })
           .then(function() { showToast("已禁用", "success"); loadTerms(); })
           .catch(function(error) { showToast(error.message || "禁用失败", "error"); });
+      }
+
+      function deleteTermPermanently(term) {
+        return api("/api/admin/terms/" + encodeURIComponent(term) + "/delete-preview")
+          .then(function(preview) {
+            var paths = (preview.existingLivePaths || []).map(function(item) { return "- " + item; });
+            var confirmationText = preview.confirmationText || ("DELETE " + term);
+            var typed = window.prompt([
+              "此操作会从在线课表、学期索引和独占 Release 中移除该学期。",
+              "系统仅保留 7 天回滚隔离区，之后自动清理。",
+              "将移除：",
+              paths.length ? paths.join("\\n") : "- 当前未发现实体目录（仍会清理索引）",
+              "",
+              "请输入 " + confirmationText + " 继续："
+            ].join("\\n"));
+            if (typed !== confirmationText) {
+              showToast("已取消彻底删除", "warning");
+              return null;
+            }
+            return api("/api/admin/terms/" + encodeURIComponent(term), {
+              method: "DELETE",
+              body: JSON.stringify({
+                confirm: typed,
+                idempotencyKey: "term-delete:" + term + ":" + Date.now()
+              })
+            });
+          })
+          .then(function(result) {
+            if (!result) return;
+            showToast("已从在线存储删除，7 天内可按隔离区回滚", "success");
+            loadTerms();
+            loadDashboard();
+          })
+          .catch(function(error) {
+            showToast(error.message || "彻底删除失败", "error");
+          });
       }
 
       function loadConfig() {

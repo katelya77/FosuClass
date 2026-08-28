@@ -67,10 +67,16 @@ function run() {
     assert.strictEqual(beforeTerm.termPhase, "before-term", "2026-08-14 must be classified as before-term");
     assert.strictEqual(beforeTerm.courses.length, 0, "week-1 Friday courses must not render before 2026-09-07");
     assert.strictEqual(beforeTerm.state, "before-term", "Today page needs an explicit pre-term mode");
+    assert.strictEqual(
+      todayReminder.shouldShowTodayStartupReminder(beforeTerm),
+      false,
+      "the startup reminder must stay silent before the term starts"
+    );
 
     const firstFriday = todayReminder.getTodayCoursesData({ now: "2026-09-11T12:00:00+08:00" });
     assert.strictEqual(firstFriday.termPhase, "in-term");
     assert.strictEqual(firstFriday.courses.length, 1, "week-1 Friday course should render after term starts");
+    assert.strictEqual(todayReminder.shouldShowTodayStartupReminder(firstFriday), true);
 
     const holiday = todayReminder.getTodayCoursesData({ now: "2026-09-25T12:00:00+08:00" });
     assert.strictEqual(holiday.termPhase, "in-term");

@@ -26,13 +26,18 @@ function normalizeConfig(payload) {
   if (!config.dataVersion || typeof config.dataVersion !== "object") config.dataVersion = {};
   if (config.termConfig && typeof config.termConfig !== "object") config.termConfig = null;
   if (!Array.isArray(config.availableTerms)) config.availableTerms = [];
+  const rawCurrentRecord = config.availableTerms.find((item) => item && item.status === "current");
+  const activeTerm = config.termConfig && config.termConfig.term
+    || rawCurrentRecord && rawCurrentRecord.term
+    || config.currentSemester
+    || "";
   const authoritativeTerms = config.availableTerms.filter((item) => item && item.term &&
-    ["current", "ready", "archived"].includes(item.status) && item.dataAvailable === true && item.releaseVersion);
+    item.term === activeTerm && item.status === "current" && item.dataAvailable === true && item.releaseVersion);
   config.availableTerms = sanitizeClientTerms(config.availableTerms, authoritativeTerms);
   const currentRecord = config.availableTerms.find((item) => item.status === "current");
-  const activeTerm = config.termConfig && config.termConfig.term || currentRecord && currentRecord.term || "";
+  const canonicalActiveTerm = config.termConfig && config.termConfig.term || currentRecord && currentRecord.term || activeTerm;
   if (config.availableTerms.length > 0) {
-    const selection = resolveSelectedTerm(config.currentSemester, config.availableTerms, activeTerm);
+    const selection = resolveSelectedTerm(config.currentSemester, config.availableTerms, canonicalActiveTerm);
     config.currentSemester = selection.term;
     if (selection.changed) config.termFallbackReason = selection.reason;
   } else if (!config.currentSemester && config.termConfig && config.termConfig.term) {

@@ -1,7 +1,7 @@
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
-const { getTodayCoursesData } = require("../../utils/todayReminder");
+const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
@@ -143,7 +143,6 @@ Page({
       });
       return;
     }
-    this.loadSchedule();
   },
 
   onShow() {
@@ -278,6 +277,12 @@ Page({
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: 90,
       hideInactiveCourses: settings.hideInactiveCourses,
+      normalized: true,
+      targetType: target && target.type || "class",
+      targetId: target && (target.detailId || target.id || target.classId) || settings.classId || "",
+      targetName: target && (target.name || target.className) || settings.className || "",
+      semester: target && (target.term || target.semester) || termConfig.term || "",
+      releaseVersion: target && (target.scheduleVersion || target.releaseVersion) || calendar.releaseVersion || "",
     });
     
     const contentWidth = getContentWidthRpx();
@@ -483,13 +488,17 @@ Page({
       return;
     }
     const now = new Date();
-    const todayDateText = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    const pad = (value) => String(value).padStart(2, "0");
+    const todayDateText = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const lastDate = wx.getStorageSync("lastTodayReminderDate");
     if (lastDate === todayDateText) {
       return;
     }
 
     const todayData = getTodayCoursesData();
+    if (!shouldShowTodayStartupReminder(todayData)) {
+      return;
+    }
     app.globalData.hasShownTodayReminderThisSession = true;
     wx.setStorageSync("lastTodayReminderDate", todayDateText);
 

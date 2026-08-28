@@ -7,7 +7,7 @@ function semanticTermParts(term) {
 
 function buildImportTermOptions(availableTerms, currentSemesterId, fallbackTerm) {
   const records = (Array.isArray(availableTerms) ? availableTerms : [])
-    .filter((item) => item && item.term && ["current", "ready", "archived"].includes(item.status))
+    .filter((item) => item && item.term && item.status === "current")
     .filter((item) => item.dataAvailable === true && Boolean(item.releaseVersion))
     .map((item) => ({
       term: item.term,
@@ -15,7 +15,7 @@ function buildImportTermOptions(availableTerms, currentSemesterId, fallbackTerm)
       status: item.status || "",
       dataAvailable: true,
       importable: true,
-      archived: item.status === "archived",
+      archived: false,
     }));
   const preferred = currentSemesterId || fallbackTerm;
   records.sort((left, right) => {

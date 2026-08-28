@@ -500,6 +500,7 @@ function buildClientContext(extra = {}) {
     semesterText: termConfig.semesterText || "",
     termStartDate: termConfig.termStartDate || "",
     totalWeeks: termConfig.totalWeeks || 19,
+    weekStart: termConfig.weekStart === "sunday" ? "sunday" : "monday",
     termPhase: todayTeachingInfo.termPhase || "unknown",
     isInTerm: todayTeachingInfo.isInTerm !== false,
     currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo,
@@ -1103,6 +1104,17 @@ function buildProactiveWorkspace(clientContext = {}) {
         { id: "changes", label: "查看变化", message: "检测我的课表有没有变化" },
         { id: "conflicts", label: "检查冲突", message: "检查我本周有没有时间冲突或连续赶课" },
         { id: "import", label: "重新导入", url: PERSONAL_SYNC_URL },
+      ],
+    };
+  }
+
+  if (clientContext.isInTerm === false
+    || ["before-term", "after-term"].includes(String(clientContext.termPhase || ""))) {
+    return {
+      insight: null,
+      actions: [
+        { id: "school", label: "查全校课表", message: "查询全校课表" },
+        { id: "calendar", label: "查看校历", url: "/pages/calendar/calendar" },
       ],
     };
   }

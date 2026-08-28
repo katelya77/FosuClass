@@ -759,7 +759,7 @@ function getPublicTerms() {
   const registry = readRegistry();
   const activeTerm = registry && registry.activeTerm || "";
   const visible = listTerms()
-    .filter((item) => ["current", "ready", "archived"].includes(item.status))
+    .filter((item) => item.term === activeTerm && item.status === "current")
     .filter((item) => item.dataAvailable && item.releaseVersion)
     .filter((item) => releaseIsHealthy(getReleaseManifest(item.releaseVersion), item.term));
   return sortVisibleTerms(visible, activeTerm)

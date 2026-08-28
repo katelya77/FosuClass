@@ -1,7 +1,9 @@
 "use strict";
 
 const assert = require("assert");
+const mockEnv = require("./mock-env");
 const { selectVisibleTerms } = require("../shared/termVisibility");
+const appConfigService = require("../miniprogram/services/appConfigService");
 const records = [
   { term: "2025-2026-1", status: "ready", dataAvailable: true, releaseVersion: "r251", termStartDate: "2025-09-08" },
   { term: "2024-2025-2", status: "archived", dataAvailable: false, releaseVersion: "r242", termStartDate: "2025-03-03" },
@@ -24,4 +26,12 @@ const visible = selectVisibleTerms(records, {
 });
 assert.deepStrictEqual(visible.map((item) => item.term), ["2026-2027-1", "2025-2026-2", "2025-2026-1"]);
 assert(visible.every((item) => item.dataAvailable && item.releaseHealthy));
+
+mockEnv.clearStorage();
+const clientConfig = appConfigService.normalizeConfig({
+  currentSemester: "2026-2027-1",
+  termConfig: { term: "2026-2027-1" },
+  availableTerms: records,
+});
+assert.deepStrictEqual(clientConfig.availableTerms.map((item) => item.term), ["2026-2027-1"], "client cache must not restore historical term choices");
 console.log("test-visible-term-filter passed");

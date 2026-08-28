@@ -204,7 +204,7 @@ function testReleaseLifecycle() {
   const appConfig = appConfigService.getPublicAppConfig().data;
   assert.strictEqual(appConfig.currentSemester, "2026-2027-2");
   assert(Array.isArray(appConfig.availableTerms), "app-config should expose availableTerms");
-  assert(appConfig.availableTerms.some((item) => item.term === "2025-2026-2"), "archived term should remain public");
+  assert.deepStrictEqual(appConfig.availableTerms.map((item) => item.term), ["2026-2027-2"], "only the active term should remain public");
 
   const retention = storageLifecycleService.runMaintenance({ dryRun: true });
   const retentionText = JSON.stringify(retention);

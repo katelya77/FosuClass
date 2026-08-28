@@ -114,6 +114,15 @@ function decorateTodayCourses(courses, now) {
   });
 }
 
+function shouldShowTodayStartupReminder(todayData) {
+  const source = todayData && typeof todayData === "object" ? todayData : {};
+  return source.hasSchedule === true
+    && source.isInTerm === true
+    && source.termPhase === "in-term"
+    && Array.isArray(source.courses)
+    && source.courses.length > 0;
+}
+
 function getTodayCoursesData(options = {}) {
   const settings = getSettings();
   const now = options.now ? new Date(options.now) : new Date();
@@ -240,4 +249,5 @@ module.exports = {
   isCourseActiveInCurrentWeek,
   getCurrentBoundSchedule,
   getTodayCoursesData,
+  shouldShowTodayStartupReminder,
 };
