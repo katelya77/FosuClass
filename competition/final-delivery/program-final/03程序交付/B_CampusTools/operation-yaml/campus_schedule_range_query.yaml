@@ -1,0 +1,260 @@
+openapi: 3.0.0
+info:
+  title: 校园智序-CampusTools
+  description: >-
+    校园智序&middot; 小序的确定性教学数据工具集，提供课表、空教室、风险检查、一日规划和校园教学态势查询。所有动态校园事实均来自
+    competition-demo-v3 的确定性计算结果，供 Multi-Agent 专业 Agent 调用。
+  version: 1.0.0
+servers:
+  - url: https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com
+paths:
+  /campusflow-adp-tools/api/campus_schedule_range_query:
+    post:
+      operationId: campus_schedule_range_query
+      summary: 多教学周课表展开（教师/班级/教室/课程）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: ''
+                  queryId:
+                    type: string
+                    description: ''
+                  dataVersion:
+                    type: string
+                    description: ''
+                  resolvedEntity:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: class/teacher/room/course/user 等实体类型
+                      id:
+                        type: string
+                        description: 数据集中实体唯一 ID
+                      name:
+                        type: string
+                        description: 实体显示名（如 教师009）
+                    required: []
+                    description: 解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        lessonId:
+                          type: string
+                          description: ''
+                        courseId:
+                          type: string
+                          description: ''
+                        courseName:
+                          type: string
+                          description: ''
+                        teachers:
+                          type: array
+                          items:
+                            type: string
+                          description: 任课教师名列表
+                        classes:
+                          type: array
+                          items:
+                            type: string
+                          description: 上课班级名列表
+                        roomId:
+                          type: string
+                          description: ''
+                        roomName:
+                          type: string
+                          description: ''
+                        building:
+                          type: string
+                          description: ''
+                        campusId:
+                          type: string
+                          description: ''
+                        campusName:
+                          type: string
+                          description: ''
+                        weekday:
+                          type: integer
+                          description: ''
+                        weekdayName:
+                          type: string
+                          description: 如 周一
+                        periodStart:
+                          type: integer
+                          description: ''
+                        periodEnd:
+                          type: integer
+                          description: ''
+                        periodText:
+                          type: string
+                          description: 如 第3-4节
+                        startTime:
+                          type: string
+                          description: HH:mm
+                        endTime:
+                          type: string
+                          description: HH:mm
+                        weeks:
+                          type: array
+                          items:
+                            type: integer
+                          description: 开课教学周列表
+                        academicWeek:
+                          type: integer
+                          description: 本条所属教学周（窗口展开）
+                        date:
+                          type: string
+                          description: YYYY-MM-DD（本周该星期对应日期）
+                    description: ''
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          description: 动作类型：open_widget / sys.chat
+                        cardType:
+                          type: string
+                          description: >-
+                            open_widget
+                            的卡片类型：schedule/classroom/conflict/day_plan
+                        label:
+                          type: string
+                          description: 动作文案
+                        intent:
+                          type: string
+                          description: sys.chat 的意图标识
+                        query:
+                          type: string
+                          description: sys.chat 的预填查询
+                        week:
+                          type: integer
+                          description: sys.chat 关联的教学周
+                    description: ''
+                  evidence:
+                    type: object
+                    properties:
+                      dataVersion:
+                        type: string
+                        description: ''
+                      dataHash:
+                        type: string
+                        description: ''
+                      source:
+                        type: string
+                        description: 计算来源（固定 campus-tools-mcp）
+                      computedAt:
+                        type: string
+                        description: 计算时间 ISO 字符串
+                      verified:
+                        type: boolean
+                        description: 是否通过确定性校验；失败路径为 false
+                      note:
+                        type: string
+                        description: EMPTY_RESULT 等附加标记
+                      derivation:
+                        type: string
+                        description: overview 的派生过程说明
+                      preparationPeriodLessonCount:
+                        type: integer
+                        description: overview 准备期课程数（固定 0）
+                    required: []
+                    description: 可核查证据：动态事实全部来自当前匿名数据集的确定性计算
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        description: >-
+                          MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND /
+                          AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等
+                      message:
+                        type: string
+                        description: 中文错误说明
+                      details:
+                        type: object
+                        properties: {}
+                        required: []
+                        description: 附加细节（如候选列表）
+                    required: []
+                    description: 确定性错误结构，供 ADP 工作流分支判断
+                  window:
+                    type: object
+                    properties:
+                      weekStart:
+                        type: integer
+                        description: ''
+                      weekEnd:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: 查询教学周窗口
+                  query:
+                    type: object
+                    properties:
+                      entityType:
+                        type: string
+                        description: ''
+                      entityName:
+                        type: string
+                        description: ''
+                      weekStart:
+                        type: integer
+                        description: ''
+                      weekEnd:
+                        type: integer
+                        description: ''
+                      weekday:
+                        type: integer
+                        description: ''
+                      periodStart:
+                        type: integer
+                        description: ''
+                      periodEnd:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: 回显查询条件（可选字段 0 视为未指定）
+          description: 成功的响应
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entityType:
+                  type: string
+                  description: ''
+                entityName:
+                  type: string
+                  description: 实体名称，如 教师009 / 2025级A班 / A1-101
+                weekStart:
+                  type: integer
+                  description: 起始教学周（必填）
+                weekEnd:
+                  type: integer
+                  description: 结束教学周（必填，须 >= weekStart）
+                weekday:
+                  type: integer
+                  description: 星期 1-7（可选）
+                periodStart:
+                  type: integer
+                  description: 起始节次（可选）
+                periodEnd:
+                  type: integer
+                  description: 结束节次（可选）
+              required:
+                - entityType
+                - entityName
+                - weekStart
+                - weekEnd

@@ -1,0 +1,58 @@
+[
+  {
+    "agent": "schedule",
+    "operation": "campus_schedule_query"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_schedule_range_query"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_classroom_search"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_entity_search"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_academic_context"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_common_free_time_query"
+  },
+  {
+    "agent": "schedule",
+    "operation": "campus_group_plan"
+  },
+  {
+    "agent": "risk",
+    "operation": "campus_risk_check"
+  },
+  {
+    "agent": "risk",
+    "operation": "campus_day_plan"
+  },
+  {
+    "agent": "risk",
+    "operation": "campus_academic_context"
+  },
+  {
+    "agent": "risk",
+    "operation": "campus_reschedule_feasibility"
+  },
+  {
+    "agent": "insight",
+    "operation": "campus_overview"
+  },
+  {
+    "agent": "insight",
+    "operation": "campus_teacher_load_query"
+  },
+  {
+    "agent": "insight",
+    "operation": "campus_room_utilization_query"
+  }
+]

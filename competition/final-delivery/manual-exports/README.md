@@ -1,14 +1,16 @@
 # 最终控制台人工导出清单（已接收）
 
-> PHASE 3.2 状态：ADP 应用包、CampusTools 自定义插件包与最终 Widget 导出均已由提交人放入本目录。自动封包脚本将按扩展名和唯一性校验，不依赖下面的示例文件名。
+> FINAL SUBMISSION 状态：2026-08-28 最新 ADP 应用包、CampusTools 自定义插件包与最终 Widget 导出均已接收。自动封包脚本按扩展名和唯一性校验。
 
-> 安全处理：Console 导出的 ADP 应用包曾包含私密运行变量默认值、真实 API 地址及旧品牌/旧数据版本说明。PHASE 3.2 已在不改变 Agent、bindings 与工作流结构的前提下清空私密默认值和地址，并冻结为对外品牌与 competition-demo-v3。导入后必须在 Console 私密变量中重新配置运行地址与凭据。
+> 安全处理：仅对最新人工导出执行交付净化：清空 3 个私密运行变量默认值，移除旧 `competition-demo-v1/v2` 文本并冻结为 `competition-demo-v3`。Agent、bindings、工作流、CampusTools 语义和 Widget 契约未改动。导入后应在 Console 私密变量中重新配置运行地址与凭据，不得写入前端、文档或 Git。
 
 本目录不放自动生成的替代文件。下列三类原始控制台导出已经齐备：
 
 1. ADP 应用导出 ZIP；
 2. CampusTools 自定义插件导出 ZIP；
 3. 最终 Widget 导出文件（保留控制台原始扩展名）。
+
+当前 ADP 应用导出文件：`校园智序-小序_v20260827164200_package.zip`。
 
 ## 加入前检查
 

@@ -18,6 +18,7 @@ LEGACY_REPOSITORY_BRAND = "Fosu" + "Class"
 STALE_V1 = "competition-demo-v" + "1"
 STALE_V2 = "competition-demo-v" + "2"
 PRIVATE_VARIABLES = {"campus_api_base_url", "campus_api_authorization", "campus_api_token"}
+ANONYMOUS_EXPORTER = "匿名导出"
 
 
 def clone_info(info: ZipInfo) -> ZipInfo:
@@ -55,6 +56,11 @@ def transform(name: str, payload: bytes) -> bytes:
     text = text.replace(STALE_V1, "competition-demo-v3")
     text = text.replace(STALE_V2, "competition-demo-v3")
     text = text.replace(LEGACY_REPOSITORY_BRAND, FINAL_BRAND)
+    if lower.endswith("metadata.json"):
+        data = json.loads(text)
+        if isinstance(data.get("ExtraInfo"), dict) and "ExportedBy" in data["ExtraInfo"]:
+            data["ExtraInfo"]["ExportedBy"] = ANONYMOUS_EXPORTER
+        text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
     if lower.endswith("app/app_config/app_variable.json"):
         data = json.loads(text)
         for variable in data.get("Variables", []):
@@ -88,7 +94,10 @@ def run() -> None:
                 raise RuntimeError("private ADP application defaults were not scrubbed")
             if by_name["data_version"].get("VarDefaultValue") != "competition-demo-v3":
                 raise RuntimeError("ADP application data version is not v3")
-    print(f"sanitized={APP_EXPORT.name}; private-defaults=3; data-version=v3; brand={FINAL_BRAND}")
+    print(
+        f"sanitized={APP_EXPORT.name}; private-defaults=3; "
+        f"data-version=v3; exporter=anonymous; brand={FINAL_BRAND}"
+    )
 
 
 if __name__ == "__main__":

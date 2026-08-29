@@ -1,0 +1,460 @@
+openapi: 3.0.0
+info:
+  title: 校园智序-CampusTools
+  description: >-
+    校园智序&middot; 小序的确定性教学数据工具集，提供课表、空教室、风险检查、一日规划和校园教学态势查询。所有动态校园事实均来自
+    competition-demo-v3 的确定性计算结果，供 Multi-Agent 专业 Agent 调用。
+  version: 1.0.0
+servers:
+  - url: https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com
+paths:
+  /campusflow-adp-tools/api/campus_teacher_load_query:
+    post:
+      operationId: campus_teacher_load_query
+      summary: 教师课表负载排名（教学周窗口）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: ''
+                  queryId:
+                    type: string
+                    description: ''
+                  dataVersion:
+                    type: string
+                    description: ''
+                  resolvedEntity:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: class/teacher/room/course/user 等实体类型
+                      id:
+                        type: string
+                        description: 数据集中实体唯一 ID
+                      name:
+                        type: string
+                        description: 实体显示名（如 教师009）
+                    required: []
+                    description: 解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rank:
+                          type: integer
+                          description: 1 起排名（并列时共享排名，tiedWithPrevious 标记）
+                        teacher:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: ''
+                            name:
+                              type: string
+                              description: ''
+                          required: []
+                          description: ''
+                        lessonOccurrences:
+                          type: integer
+                          description: 窗口内 (课次, 教学周) 出现次数
+                        periodUnits:
+                          type: integer
+                          description: 窗口内节次总量
+                        tiedWithPrevious:
+                          type: boolean
+                          description: 与前一名是否存在并列
+                    description: ''
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          description: 动作类型：open_widget / sys.chat
+                        cardType:
+                          type: string
+                          description: >-
+                            open_widget
+                            的卡片类型：schedule/classroom/conflict/day_plan
+                        label:
+                          type: string
+                          description: 动作文案
+                        intent:
+                          type: string
+                          description: sys.chat 的意图标识
+                        query:
+                          type: string
+                          description: sys.chat 的预填查询
+                        week:
+                          type: integer
+                          description: sys.chat 关联的教学周
+                    description: ''
+                  evidence:
+                    type: object
+                    properties:
+                      dataVersion:
+                        type: string
+                        description: ''
+                      dataHash:
+                        type: string
+                        description: ''
+                      source:
+                        type: string
+                        description: 计算来源（固定 campus-tools-mcp）
+                      computedAt:
+                        type: string
+                        description: 计算时间 ISO 字符串
+                      verified:
+                        type: boolean
+                        description: 是否通过确定性校验；失败路径为 false
+                      note:
+                        type: string
+                        description: EMPTY_RESULT 等附加标记
+                      derivation:
+                        type: string
+                        description: overview 的派生过程说明
+                      preparationPeriodLessonCount:
+                        type: integer
+                        description: overview 准备期课程数（固定 0）
+                    required: []
+                    description: 可核查证据：动态事实全部来自当前匿名数据集的确定性计算
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        description: >-
+                          MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND /
+                          AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等
+                      message:
+                        type: string
+                        description: 中文错误说明
+                      details:
+                        type: object
+                        properties: {}
+                        required: []
+                        description: 附加细节（如候选列表）
+                    required: []
+                    description: 确定性错误结构，供 ADP 工作流分支判断
+                  window:
+                    type: object
+                    properties:
+                      weekStart:
+                        type: integer
+                        description: ''
+                      weekEnd:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: 查询教学周窗口
+                  query:
+                    type: object
+                    properties:
+                      weekStart:
+                        type: integer
+                        description: ''
+                      weekEnd:
+                        type: integer
+                        description: ''
+                      topN:
+                        type: integer
+                        description: ''
+                      campus:
+                        type: string
+                        description: ''
+                    required: []
+                    description: ''
+                  rankContext:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                        description: ''
+                      list:
+                        type: string
+                        description: ''
+                      selectedRank:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: 排名上下文（drilldown 语义锚点）
+                  decision:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        description: ''
+                      preferred:
+                        type: object
+                        properties:
+                          label:
+                            type: string
+                            description: ''
+                          reasons:
+                            type: array
+                            items:
+                              type: string
+                            description: ''
+                        required: []
+                        description: ''
+                      alternatives:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                              description: ''
+                            reasons:
+                              type: array
+                              items:
+                                type: string
+                              description: ''
+                        description: ''
+                      reasons:
+                        type: array
+                        items:
+                          type: string
+                        description: ''
+                      tradeoffs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                              description: ''
+                            reasons:
+                              type: array
+                              items:
+                                type: string
+                              description: ''
+                        description: ''
+                      nextActions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: ''
+                            type:
+                              type: string
+                              description: ''
+                            label:
+                              type: string
+                              description: ''
+                            payload:
+                              type: object
+                              properties:
+                                query:
+                                  type: string
+                                  description: ''
+                              required: []
+                              description: ''
+                        description: ''
+                      receipt:
+                        type: object
+                        properties:
+                          receiptVersion:
+                            type: string
+                            description: ''
+                          decisionId:
+                            type: string
+                            description: ''
+                          recommendation:
+                            type: object
+                            properties:
+                              label:
+                                type: string
+                                description: ''
+                              reasons:
+                                type: array
+                                items:
+                                  type: string
+                                description: ''
+                            required: []
+                            description: ''
+                          alternatives:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                label:
+                                  type: string
+                                  description: ''
+                                reasons:
+                                  type: array
+                                  items:
+                                    type: string
+                                  description: ''
+                            description: ''
+                          nextAction:
+                            type: object
+                            properties:
+                              label:
+                                type: string
+                                description: ''
+                              query:
+                                type: string
+                                description: ''
+                            required: []
+                            description: ''
+                          verified:
+                            type: boolean
+                            description: ''
+                          decision:
+                            type: string
+                            description: ''
+                        required: []
+                        description: ''
+                      resultCard:
+                        type: object
+                        properties:
+                          version:
+                            type: string
+                            description: ''
+                          variant:
+                            type: string
+                            description: ''
+                          status:
+                            type: string
+                            description: ''
+                          layoutMode:
+                            type: string
+                            description: ''
+                          title:
+                            type: string
+                            description: ''
+                          subtitle:
+                            type: string
+                            description: ''
+                          summary:
+                            type: string
+                            description: ''
+                          context:
+                            type: string
+                            description: ''
+                          verified:
+                            type: boolean
+                            description: ''
+                          sections:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                title:
+                                  type: string
+                                  description: ''
+                                rows:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      label:
+                                        type: string
+                                        description: ''
+                                      value:
+                                        type: string
+                                        description: ''
+                                      hint:
+                                        type: string
+                                        description: ''
+                                  description: ''
+                            description: ''
+                          actions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  description: ''
+                                type:
+                                  type: string
+                                  description: ''
+                                label:
+                                  type: string
+                                  description: ''
+                                payload:
+                                  type: object
+                                  properties:
+                                    query:
+                                      type: string
+                                      description: ''
+                                  required: []
+                                  description: ''
+                            description: ''
+                          displayMeta:
+                            type: object
+                            properties: {}
+                            required: []
+                            description: ''
+                          weekBoardTitle:
+                            type: string
+                            description: ''
+                          weekBoardSubtitle:
+                            type: string
+                            description: ''
+                          days:
+                            type: array
+                            items:
+                              type: object
+                              properties: {}
+                            description: ''
+                        required: []
+                        description: 现有小序校园智序 result-card 的脱敏投影
+                    required: []
+                    description: >-
+                      服务端基于当前 verified tool candidates 生成的脱敏确定性决策；原 facts/items
+                      保持不变
+          description: 成功的响应
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                weekStart:
+                  type: integer
+                  description: 起始教学周（必填）
+                weekEnd:
+                  type: integer
+                  description: 结束教学周（必填，须 >= weekStart）
+                topN:
+                  type: integer
+                  description: 返回前 N 名（可选）
+                campus:
+                  type: string
+                  description: 校区A / 校区B / 校区C（可选）
+                decisionPreferences:
+                  type: object
+                  properties:
+                    preferEarlier:
+                      type: boolean
+                      description: 更早时段优先
+                    preferLarger:
+                      type: boolean
+                      description: 更大容量优先
+                    preferSameCampus:
+                      type: boolean
+                      description: 同校区优先（仅在已有规范校区约束时生效）
+                    preferWeekdays:
+                      type: array
+                      items:
+                        type: integer
+                      description: 优先星期集合
+                  required: []
+                  description: 结构化 soft preference；服务端只接受白名单字段并确定性评分
+              required:
+                - weekStart
+                - weekEnd

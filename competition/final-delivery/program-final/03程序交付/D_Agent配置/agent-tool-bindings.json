@@ -1,0 +1,31 @@
+{
+  "version": "R50.1.2",
+  "uniqueOperationCount": 13,
+  "bindingCount": 14,
+  "agents": {
+    "main": [],
+    "schedule": [
+      "campus_schedule_query",
+      "campus_schedule_range_query",
+      "campus_classroom_search",
+      "campus_entity_search",
+      "campus_academic_context",
+      "campus_common_free_time_query",
+      "campus_group_plan"
+    ],
+    "risk": [
+      "campus_risk_check",
+      "campus_day_plan",
+      "campus_academic_context",
+      "campus_reschedule_feasibility"
+    ],
+    "insight": [
+      "campus_overview",
+      "campus_teacher_load_query",
+      "campus_room_utilization_query"
+    ]
+  },
+  "sharedTools": {
+    "campus_academic_context": ["schedule", "risk"]
+  }
+}

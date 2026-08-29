@@ -151,7 +151,7 @@ function pillStep(slide, y, label, title, body, accent = C.coral) {
   addText(s, "让复杂的校园教学安排，\n简单到一句话就能问。", 0.76, 2.95, 8.2, 1.18, { fontSize: 24, bold: true, color: C.red, breakLine: true });
   addText(s, "真实问题 → Multi-Agent 分工 → CampusTools 核验 → 可核查 Widget", 0.78, 4.25, 9.0, 0.34, { fontSize: 12.2, color: C.mute });
   const proofs = [
-    { x: 0.75, n: "1000+", t: "前期真实落地" },
+    { x: 0.75, n: "1500+", t: "累计真实用户" },
     { x: 4.35, n: "4×13", t: "Agent × CampusTools" },
     { x: 7.95, n: "Verified", t: "关键结果可核验" },
   ];
@@ -182,8 +182,8 @@ function pillStep(slide, y, label, title, body, accent = C.coral) {
 // 03 — real adoption
 {
   const s = pptx.addSlide("MASTER");
-  header(s, "真实落地", "前期产品形态已累计服务用户 1000+", "真实校园使用反馈，推动作品从“查询工具”演进为可理解、可核验的教学任务智能体", 3);
-  addText(s, "1000+", 0.72, 1.95, 4.0, 1.25, { fontFace: "Aptos Display", fontSize: 64, bold: true, color: C.red });
+  header(s, "真实落地", "已在真实校园教学服务场景投入使用，累计真实用户 1500+", "真实使用反馈，推动作品从“查询工具”演进为可理解、可核验的教学任务智能体", 3);
+  addText(s, "1500+", 0.72, 1.95, 4.0, 1.25, { fontFace: "Aptos Display", fontSize: 64, bold: true, color: C.red });
   addText(s, "真实用户验证", 0.82, 3.18, 3.4, 0.52, { fontSize: 22, bold: true });
   addText(s, "匿名呈现，不展示学校、学院、姓名、学号、邮箱或真实域名。", 0.82, 3.9, 3.25, 1.05, { fontSize: 13.2, color: C.mute, breakLine: true, valign: "top" });
   addScreen(s, path.join(qa, "4174-native-adp-widget-1440x900.png"), 4.55, 1.95, 8.15, 4.66, true);
@@ -342,7 +342,7 @@ heroSlide({
   const s = pptx.addSlide("MASTER");
   header(s, "创新、落地、推广价值", "三条可验证证据，支撑一套可复制的校园任务操作系统", "从真实落地、真实协作到真实核验，作品价值不依赖概念口号", 11);
   const cols = [
-    { x: 0.8, n: "1000+", title: "真落地", body: "前期产品形态\n真实校园验证", color: C.red },
+    { x: 0.8, n: "1500+", title: "真落地", body: "真实校园教学服务\n累计真实用户", color: C.red },
     { x: 4.55, n: "4×13", title: "真协作", body: "4 Agent\n13 CampusTools", color: C.coral },
     { x: 8.3, n: "Verified", title: "真结果", body: "确定性计算\nEvidence / fail-closed", color: C.green },
   ];

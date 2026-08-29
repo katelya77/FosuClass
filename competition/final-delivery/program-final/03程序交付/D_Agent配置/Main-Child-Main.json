@@ -1,0 +1,16 @@
+{
+  "mainDirectToolCount": 0,
+  "route": [
+    "Main",
+    "Child",
+    "Main"
+  ],
+  "childAgents": [
+    "Schedule",
+    "Risk",
+    "Insight"
+  ],
+  "childToChild": false,
+  "sharedContext": "academic_context",
+  "resultProjection": "Verified Widget"
+}
