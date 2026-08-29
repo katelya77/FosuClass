@@ -7,8 +7,28 @@ const agentClientErrorMapper = require("./agentClientErrorMapper");
 const scheduleChangeTracker = require("./scheduleChangeTracker");
 const platform = require("../utils/platform");
 
+const CAPABILITY_CACHE_TTL_MS = 30 * 60 * 1000;
+let capabilityCache = null;
+
 function safeText(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max || 160);
+}
+
+function shanghaiCalendarDate(nowMs) {
+  const timestamp = Number(nowMs);
+  if (!Number.isFinite(timestamp)) return "";
+  return new Date(timestamp + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+function isCurrentInAppEvent(event, nowMs) {
+  const source = event && typeof event === "object" ? event : {};
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const expiresAt = Date.parse(source.expiresAt || "");
+  if (Number.isFinite(expiresAt) && expiresAt <= now) return false;
+  const today = shanghaiCalendarDate(now);
+  const occurrenceDate = safeText(source.occurrence && source.occurrence.date, 10);
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)) return false;
+  return source.kind === "schedule_change" ? occurrenceDate >= today : occurrenceDate === today;
 }
 
 function withEnv(path) {
@@ -39,8 +59,17 @@ async function getCapability() {
   try {
     const response = await http.get(withEnv("/api/ai/agent/reminders/capability"), {}, options());
     if (!response || response.success === false) return mapFailure(response, "REMINDER_CAPABILITY_FAILED");
-    return Object.assign({ success: true }, response);
+    const capability = Object.assign({ success: true }, response);
+    capabilityCache = { value: capability, cachedAt: Date.now() };
+    return capability;
   } catch (error) {
+    if (capabilityCache && Date.now() - capabilityCache.cachedAt <= CAPABILITY_CACHE_TTL_MS) {
+      return Object.assign({}, capabilityCache.value, {
+        success: true,
+        degraded: true,
+        disclosure: "服务通知能力检查暂时失败，已沿用最近一次有效配置；应用内提醒不受影响。",
+      });
+    }
     return mapFailure(error, "REMINDER_CAPABILITY_FAILED");
   }
 }
@@ -68,7 +97,7 @@ async function listInAppEvents(limit) {
     }
     return {
       success: true,
-      items: Array.isArray(response.items) ? response.items : [],
+      items: Array.isArray(response.items) ? response.items.filter((item) => isCurrentInAppEvent(item, Date.now())) : [],
       disclosure: safeText(response.disclosure, 200),
     };
   } catch (error) {
@@ -341,6 +370,7 @@ module.exports = {
   deleteReminder,
   getCapability,
   grantSubscriptionAuthorization,
+  isCurrentInAppEvent,
   listInAppEvents,
   listReminders,
   makeIdempotencyKey,

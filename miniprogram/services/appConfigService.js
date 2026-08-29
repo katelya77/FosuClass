@@ -17,6 +17,7 @@ function normalizeConfig(payload) {
     availableTerms: [],
     dataVersion: {},
     notices: [],
+    dailyKnowledge: null,
     urgentNotice: null,
     banners: [],
     news: [],
@@ -44,6 +45,7 @@ function normalizeConfig(payload) {
     config.currentSemester = config.termConfig.term;
   }
   if (!Array.isArray(config.notices)) config.notices = [];
+  if (!config.dailyKnowledge || typeof config.dailyKnowledge !== "object") config.dailyKnowledge = null;
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];
   if (config.urgentNotice === undefined) config.urgentNotice = null;

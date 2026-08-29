@@ -397,7 +397,6 @@ function browserLaunchCandidates() {
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
-      "--disable-blink-features=AutomationControlled",
     ],
   };
   const candidates = [];
@@ -461,7 +460,9 @@ async function fillAndSubmitCasLogin(page, studentId, password) {
     }
     const username = Array.from(document.querySelectorAll("input#username, input[name='username']")).find(visible);
     const passwordInput = Array.from(document.querySelectorAll("input#password, input[type='password']")).find(visible);
-    const submit = Array.from(document.querySelectorAll("#login_submit")).find(visible);
+    const submit = Array.from(document.querySelectorAll(
+      "#login_submit, button[type='submit'], input[type='submit'], form button"
+    )).find(visible);
     if (!username || !passwordInput || !submit) return false;
     setValue(username, innerStudentId);
     setValue(passwordInput, innerPassword);
@@ -492,7 +493,7 @@ async function loginWithBrowserCas(studentId, password, startedAt) {
       hasTouch: device.hasTouch !== undefined ? device.hasTouch : true,
     }));
     const page = await context.newPage();
-    await page.goto(loginUrl, { waitUntil: "networkidle", timeout });
+    await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout });
     const submitted = await fillAndSubmitCasLogin(page, studentId, localPassword);
     if (!submitted) {
       const error = new Error("LOGIN_PAGE_CHANGED");
@@ -631,7 +632,8 @@ async function loginWithCasHttp(studentId, password, startedAt) {
 
 function shouldUseBrowserLoginFallback(error) {
   const code = String(error && (error.code || error.message) || "");
-  return /APAAS_SESSION_UNVERIFIED|APAAS_AUTHORIZATION_FAILED|APAAS_AUTH_TICKET_MISSING|PLAYWRIGHT_REQUIRED/i.test(code);
+  if (/CAPTCHA_REQUIRED|RISK_CONTROL_REQUIRED|INVALID_CREDENTIALS/i.test(code)) return false;
+  return /APAAS_SESSION_UNVERIFIED|APAAS_AUTHORIZATION_FAILED|APAAS_AUTH_TICKET_MISSING|PLAYWRIGHT_REQUIRED|LOGIN_PAGE_CHANGED|APAAS_TOKEN_MISSING/i.test(code);
 }
 
 async function loginWithCas(studentId, password) {
@@ -1798,6 +1800,8 @@ async function importSchedulePreview(studentId, password, options = {}) {
 }
 
 module.exports = {
+  DEFAULT_BROWSER_UA,
+  browserLaunchCandidates,
   buildImportPreview: normalizeRowsForPreview,
   createApaasClient,
   destroySession,
@@ -1813,6 +1817,7 @@ module.exports = {
   parseEntryFromUrl,
   resolveImportChannels,
   sanitizeCloudbaseRelayErrorMessage,
+  shouldUseBrowserLoginFallback,
   shouldRetryCloudbaseChannel,
   shouldFallbackToOracle,
 };

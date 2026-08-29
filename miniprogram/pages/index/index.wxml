@@ -58,6 +58,14 @@
     <button wx:if="{{homeNotice.closable}}" class="notice-close" catchtap="dismissHomeNotice">×</button>
   </view>
 
+  <view class="daily-knowledge card {{dailyKnowledge.type}}" wx:if="{{dailyKnowledge}}">
+    <view class="daily-knowledge-mark">今日</view>
+    <view class="daily-knowledge-main">
+      <view class="daily-knowledge-title">{{dailyKnowledge.title}}</view>
+      <view class="daily-knowledge-content">{{dailyKnowledge.content}}</view>
+    </view>
+  </view>
+
   <!-- 如果未绑定课表，展示空状态卡片 -->
   <view class="empty-schedule-card card" wx:if="{{!hasBoundTarget}}">
     <empty-state

@@ -1,10 +1,14 @@
 const assert = require("assert");
 
 const {
+  DEFAULT_BROWSER_UA,
+  browserLaunchCandidates,
+  createApaasClient,
   normalizeChannelError,
   normalizeImportChannelStrategy,
   resolveImportChannels,
   sanitizeCloudbaseRelayErrorMessage,
+  shouldUseBrowserLoginFallback,
   shouldRetryCloudbaseChannel,
   shouldFallbackToOracle,
 } = require("../server/src/services/fosuApaasImporter");
@@ -32,6 +36,18 @@ function withConfig(patch, fn) {
 }
 
 function run() {
+  assert.match(DEFAULT_BROWSER_UA, /iPhone.*Mobile/);
+  const client = createApaasClient();
+  const configuredUa = client.defaults.headers.common["User-Agent"] || client.defaults.headers["User-Agent"];
+  assert.match(configuredUa, /iPhone.*Mobile/, "APaaS requests must use the configured mobile UA");
+  browserLaunchCandidates().forEach((candidate) => {
+    assert.ok(!candidate.args.some((arg) => /AutomationControlled/i.test(arg)), "browser fallback must not hide automation");
+  });
+  assert.strictEqual(shouldUseBrowserLoginFallback(errorWithCode("LOGIN_PAGE_CHANGED")), true);
+  assert.strictEqual(shouldUseBrowserLoginFallback(errorWithCode("APAAS_TOKEN_MISSING")), true);
+  assert.strictEqual(shouldUseBrowserLoginFallback(errorWithCode("CAPTCHA_REQUIRED")), false);
+  assert.strictEqual(shouldUseBrowserLoginFallback(errorWithCode("RISK_CONTROL_REQUIRED")), false);
+
   assert.strictEqual(normalizeImportChannelStrategy("cloudbase"), "cloudbase");
   assert.strictEqual(normalizeImportChannelStrategy("oracle"), "oracle");
   assert.strictEqual(normalizeImportChannelStrategy("auto"), "auto");

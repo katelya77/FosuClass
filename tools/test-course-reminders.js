@@ -199,6 +199,7 @@ async function run() {
   const appPlan = Object.assign({}, firstTomorrow, {
     nextTriggerAt: "2026-07-22T03:59:00.000Z",
     nextOccurrence: Object.assign({}, firstTomorrow.nextOccurrence, {
+      date: "2026-07-22",
       startsAt: "2026-07-22T04:20:00.000Z",
     }),
     recurrence: "once",
@@ -228,7 +229,7 @@ async function run() {
   const afterDispatch = service.get({ principal, reminderId: appOnly.reminder.id }).reminder;
   assert.ok(afterDispatch.sendLog.some((item) => item.code === "APP_ONLY_DUE"));
   assert.strictEqual(afterDispatch.status, "expired");
-  const inAppInbox = service.listInAppEvents({ principal });
+  const inAppInbox = service.listInAppEvents({ principal, now: Date.parse("2026-07-22T04:00:00.000Z") });
   assert.strictEqual(inAppInbox.success, true);
   assert.strictEqual(inAppInbox.items.length, 1);
   assert.strictEqual(inAppInbox.items[0].reminderId, appOnly.reminder.id);
@@ -240,7 +241,7 @@ async function run() {
   });
   assert.strictEqual(acknowledged.success, true);
   assert.strictEqual(acknowledged.acknowledged, true);
-  assert.strictEqual(service.listInAppEvents({ principal }).items.length, 0);
+  assert.strictEqual(service.listInAppEvents({ principal, now: Date.parse("2026-07-22T04:00:00.000Z") }).items.length, 0);
 
   // A confirmed room-change rule remains dormant until a verified classroom change arrives.
   const roomConfirmation = service.createConfirmation({

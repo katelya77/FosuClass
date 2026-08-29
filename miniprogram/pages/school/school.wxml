@@ -106,7 +106,7 @@
         <view class="filter-card card">
           <view class="filter-item">
             <text class="filter-label">学期：</text>
-            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+            <picker mode="selector" range="{{semesters}}" range-key="label" disabled="{{semesters.length <= 1}}" bindchange="onSemesterChange">
               <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
             </picker>
           </view>
@@ -312,7 +312,7 @@
         <view class="filter-card card">
           <view class="filter-item">
             <text class="filter-label">学期：</text>
-            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+            <picker mode="selector" range="{{semesters}}" range-key="label" disabled="{{semesters.length <= 1}}" bindchange="onSemesterChange">
               <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
             </picker>
           </view>
@@ -400,7 +400,7 @@
         <view class="filter-card card">
           <view class="filter-item">
             <text class="filter-label">学期：</text>
-            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+            <picker mode="selector" range="{{semesters}}" range-key="label" disabled="{{semesters.length <= 1}}" bindchange="onSemesterChange">
               <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
             </picker>
           </view>
@@ -492,7 +492,7 @@
         <view class="filter-card card">
           <view class="filter-item">
             <text class="filter-label">学期：</text>
-            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+            <picker mode="selector" range="{{semesters}}" range-key="label" disabled="{{semesters.length <= 1}}" bindchange="onSemesterChange">
               <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
             </picker>
           </view>

@@ -107,7 +107,7 @@
                 loading="{{grantingId === item.id}}"
                 disabled="{{grantingId || operatingId}}"
               >补充微信授权</button>
-              <view class="service-notice-pending" wx:else>待后台配置</view>
+              <view class="service-notice-pending" wx:else>{{capability.unavailable ? '连接暂不可用' : '待后台配置'}}</view>
             </view>
             <view class="item-actions" wx:if="{{item.canEdit}}">
               <button class="item-button" data-id="{{item.id}}" data-status="{{item.status}}" bindtap="onToggle" loading="{{operatingId === item.id}}">{{item.statusAction}}</button>

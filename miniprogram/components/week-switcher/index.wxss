@@ -21,8 +21,8 @@
 }
 
 .week-button {
-  flex: 0 0 72rpx;
-  width: 72rpx;
+  flex: 0 0 52rpx;
+  width: 52rpx;
   color: #5a6678;
   font-size: 40rpx;
   font-weight: 600;
@@ -32,10 +32,10 @@
   flex: 1;
   min-width: 0;
   margin: 0 6rpx;
-  padding: 0 16rpx;
+  padding: 0 12rpx;
   background: #ffffff;
   color: #c62828;
-  font-size: 25rpx;
+  font-size: 24rpx;
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
