@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "CampusTools 校园确定性工具 API",
-    "description": "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v1 匿名数据确定性计算，不调用生成式模型，也绝不回退到 production 数据。",
-    "version": "1.2.0"
+    "description": "校园智序 · 小序赛事工具层。所有动态校园事实由 competition-demo-v3 匿名数据确定性计算，不调用生成式模型，也绝不回退到生产数据。",
+    "version": "1.3.0"
   },
   "servers": [
     {
@@ -1690,7 +1690,7 @@
           "dataVersion": {
             "type": "string",
             "enum": [
-              "competition-demo-v1"
+              "competition-demo-v3"
             ]
           },
           "dataHash": {
@@ -1771,7 +1771,7 @@
           "dataVersion": {
             "type": "string",
             "enum": [
-              "competition-demo-v1"
+              "competition-demo-v3"
             ]
           },
           "resolvedEntity": {

@@ -163,8 +163,8 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 54316,
-      "sha256": "faabfa50cd3a9e56a73c8d7f0607f112c805f74bbe2588cfb9b1f8b86775f0c8"
+      "bytes": 54310,
+      "sha256": "02db1ae6663500264ae8e50d84010c50ade721852ebec5e190387ca66824428c"
     },
     {
       "path": "package.json",

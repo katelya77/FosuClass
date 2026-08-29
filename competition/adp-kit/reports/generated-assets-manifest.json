@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-22T16:58:33.423Z",
+  "generatedAt": "2026-08-29T09:01:29.366Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -520,13 +520,13 @@
     },
     {
       "path": "openapi/campus-tools.openapi.json",
-      "bytes": 54622,
-      "sha256": "03a1c4678624417e39d49ba5d9dc8f1419384a8dee449b5eb84a92eba5247acb"
+      "bytes": 54233,
+      "sha256": "b06af81c43e9e23dd1d65cd873840e0ae84b6997c95e8611b2a40d270114504c"
     },
     {
       "path": "openapi/generate-openapi.js",
-      "bytes": 5330,
-      "sha256": "20dfdbf480f35d0fb16e7099bc41708c2f23e6b271908e05315ae4b41238cfc5"
+      "bytes": 5008,
+      "sha256": "64aaef3fe355b56d64f1b72cad1d1c3f5b2dcefee89bbd737b890d3a02f35da9"
     },
     {
       "path": "qa/README.md",
@@ -600,8 +600,8 @@
     },
     {
       "path": "widget/native/audit-widget-contract.js",
-      "bytes": 4278,
-      "sha256": "6bb234c8b526ede0e0cdcbbe6b493ef5c7ac19cc1030139e4e712b2778cc5db1"
+      "bytes": 4284,
+      "sha256": "7bff5e6062200865ad0f73316b0f4a30a09c4f316ee0321a3f04f57f4f461bed"
     },
     {
       "path": "widget/native/bind_runtime_environment.py",
@@ -660,8 +660,8 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/default.json",
-      "bytes": 2202,
-      "sha256": "f208ab3d9ca458ae97d4976c86bae611b4fd794109048c706b4da73efc4b7d31"
+      "bytes": 1602,
+      "sha256": "fe567276e4c2134c18e4f74d8b421d8d922aa0ae72e3364cebd53a3f8c76b50c"
     },
     {
       "path": "widget/native/campus-result-unified-v1/payload-validator.js",
@@ -740,8 +740,8 @@
     },
     {
       "path": "widget/native/campus-result-unified-v1/template.txt",
-      "bytes": 14910,
-      "sha256": "ed7af9bcd5e9aced228a0df312f51d6e04740dd84ded30479bbe3cc071f9850b"
+      "bytes": 16005,
+      "sha256": "d04bc36c54365c61ee43961b8e14010b1c35a190ad24af3d0e30d8c3988cba80"
     },
     {
       "path": "widget/native/classroom-widget-adapter.py",
@@ -1150,8 +1150,8 @@
     },
     {
       "path": "widget/native/test-r50-2b-widget-contract.js",
-      "bytes": 16857,
-      "sha256": "605dfb02e3b3337d5943b44ab8ad578e4a89f5bd0e1b944671a058e3d1b97e48"
+      "bytes": 17264,
+      "sha256": "b38b9d4540c549fc8a6571f6dfcb250e81dc43c94e64510b18c3e031e712fe2e"
     },
     {
       "path": "widget/native/test-real-adp-export-catalog.py",
