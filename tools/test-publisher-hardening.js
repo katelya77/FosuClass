@@ -13,6 +13,7 @@ const {
   PROXY_ENV_NAMES,
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./fosu-sync-client/syncEnv");
 const {
   verifySession,
@@ -128,6 +129,11 @@ async function run() {
   assert.deepStrictEqual(proxy.detectedProxyNames.sort(), ["HTTPS_PROXY", "HTTP_PROXY"].sort());
   assert.strictEqual(proxyEnv.HTTP_PROXY, undefined);
   assert.strictEqual(fakeAxios.defaults.proxy, false);
+  assert.deepStrictEqual(
+    withDirectBrowserArgs(["--ignore-certificate-errors", "--no-proxy-server"]),
+    ["--ignore-certificate-errors", "--no-proxy-server", "--proxy-bypass-list=*"],
+    "campus Playwright must bypass both environment and Windows global proxy settings"
+  );
   for (const host of DIRECT_NO_PROXY_HOSTS) {
     assert(proxyEnv.NO_PROXY.includes(host), `NO_PROXY missing ${host}`);
   }
@@ -155,6 +161,9 @@ async function run() {
   assert.strictEqual(env.FOSU_BASE_URL, "https://process-wins.example");
   assert.strictEqual(env.FOSU_API_BASE, "https://api-from-client-env.example");
   assert.strictEqual(env.PREFERRED_SEMESTER, "2025-2026-2");
+  const clearedEnv = { PREFERRED_SEMESTER: "", SYNC_GRADES: "" };
+  loadSyncClientEnv({ env: clearedEnv, envPath });
+  assert.strictEqual(clearedEnv.PREFERRED_SEMESTER, "", "explicit empty runtime override must block stale .env term reload");
   fs.rmSync(tempRoot, { recursive: true, force: true });
 
   let session = await verifySession({
@@ -208,6 +217,10 @@ async function run() {
   assert(crawlPlan.args.includes("--progress-policy=resume"));
   assert(crawlPlan.args.includes("--grades=2026"));
   assert(crawlPlan.args.includes("--concurrency=8"));
+  assert(crawlPlan.args.includes("--term-start-date=2026-09-07"));
+  assert(crawlPlan.args.includes("--total-weeks=19"));
+  assert(crawlPlan.args.includes("--week-start=monday"));
+  assert(crawlPlan.args.includes("--override-term-config"));
 
   const syncSource = fs.readFileSync(path.join(root, "tools", "fosu-sync-client", "sync.js"), "utf8");
   assert(syncSource.includes("loadSyncClientEnv()"), "sync.js should load explicit client .env");

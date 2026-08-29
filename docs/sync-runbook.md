@@ -12,10 +12,12 @@
 npm run sync:publish
 ```
 
-深度全量模式：
+当 `config/terms/<term>.json` 中 `preferred: true` 的学期领先线上 active 学期时（例如新学期 `2026-2027-1` 已配置但线上仍是 `2025-2026-2`），`sync:publish` 会自动切换到该新学期并升级为 full 全量采集（目录 network-only、强制刷新），无需手工加 `--mode=full --term=...`；需要固定其他学期仍用显式 `--term`。
+
+深度全量模式（手工指定）：
 
 ```powershell
-npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20
+npm run sync:publish -- --mode=full --term=2026-2027-1
 ```
 
 恢复中断任务：

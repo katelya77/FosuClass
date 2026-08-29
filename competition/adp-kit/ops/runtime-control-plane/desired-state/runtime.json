@@ -1,0 +1,38 @@
+{
+  "widget": {
+    "name": "小序-校园智序结果卡",
+    "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+    "contract": "fosuclass-adp-widget-contract/v8",
+    "sourceSha256": "93bbc0b1619ee2bdfbbc7817ad15d3b0ad0a42054a345e35d7ccb290e40ef252"
+  },
+  "multimodal": {
+    "mainOfficialVisionToolRequired": false,
+    "childOfficialVisionToolRequired": false,
+    "visionObservationSource": "competition/adp-kit/r51/vision/contract.js",
+    "status": "future_ready_not_final_demo_dependency"
+  },
+  "cloudBase": {
+    "functionAllowlist": ["campusflowAdpTools"]
+  },
+  "interaction": {
+    "newTurnStartAgent": "main",
+    "newTurnSources": ["keyboard", "sys.chat"],
+    "allowedTransfers": [
+      "main->schedule",
+      "main->risk",
+      "main->insight",
+      "schedule->main",
+      "risk->main",
+      "insight->main"
+    ]
+  },
+  "invariants": {
+    "agentCount": 4,
+    "campusToolCount": 13,
+    "bindingCount": 14,
+    "mainCampusToolCount": 0,
+    "toolDirectResultOutput": false,
+    "createReleaseAllowed": false,
+    "publishAllowed": false
+  }
+}

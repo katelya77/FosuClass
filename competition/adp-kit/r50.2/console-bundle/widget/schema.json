@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "variant": { "type": "string", "enum": ["schedule", "space", "collaboration", "risk", "reschedule", "ranking", "overview", "empty", "error", "message"] },
+    "status": { "type": "string", "enum": ["success", "empty", "error"] },
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "verified": { "type": "boolean" },
+    "summary": { "type": "string" },
+    "context": { "type": "string" },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "kind": { "type": "string", "enum": ["metric", "timeline", "route", "recommendation", "ranking", "comparison", "entity-list", "notice", "prose"] },
+          "note": { "type": "string" },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string" },
+                "value": { "type": "string" },
+                "badge": { "type": "string" },
+                "hint": { "type": "string" }
+              },
+              "required": ["label", "value"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["title", "rows"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "payload": {
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+            "required": ["query"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "type", "label", "payload"],
+        "additionalProperties": false
+      }
+    },
+    "displayMeta": {
+      "type": "object",
+      "properties": {
+        "simulated": { "type": "boolean" },
+        "weekendMarked": { "type": "boolean" },
+        "tieNote": { "type": "string" },
+        "tieGroupCount": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "recoverable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "layoutMode": { "type": "string", "enum": ["result-card", "week-board"] },
+    "weekBoardTitle": { "type": "string" },
+    "weekBoardSubtitle": { "type": "string" },
+    "days": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": { "type": "string" },
+                "title": { "type": "string" },
+                "location": { "type": "string" },
+                "meta": { "type": "string" }
+              },
+              "required": ["time", "title", "location"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["label", "blocks"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["version", "variant", "status", "title", "subtitle", "verified", "summary", "context", "sections", "actions", "displayMeta", "layoutMode", "weekBoardTitle", "weekBoardSubtitle", "days"],
+  "additionalProperties": false
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "statusText": { "type": "string" },
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "name": { "type": "string" },
+          "typeLabel": { "type": "string" },
+          "description": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["key", "name", "typeLabel", "description", "message"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["id", "type", "label", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "subtitle", "statusText", "items", "actions"],
+  "additionalProperties": false
+}

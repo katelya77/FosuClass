@@ -1,3 +1,5 @@
+const assistantBrand = require("../../../config/assistantBrand");
+
 Component({
   properties: {
     visible: { type: Boolean, value: false },
@@ -5,6 +7,9 @@ Component({
     privacyStatusText: { type: String, value: "默认不使用课表摘要" },
     floatEnabled: { type: Boolean, value: true },
     diagnosticsVisible: { type: Boolean, value: false },
+  },
+  data: {
+    assistantBrand,
   },
   methods: {
     onClose() { this.triggerEvent("close"); },

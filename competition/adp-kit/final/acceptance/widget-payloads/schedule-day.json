@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "variant": "schedule",
+  "status": "success",
+  "title": "教师003 · 第1周课表",
+  "subtitle": "教师003 · 第1周",
+  "verified": true,
+  "summary": "第1周共 2 条课程。",
+  "context": "第1周",
+  "sections": [
+    {
+      "title": "课程列表",
+      "kind": "timeline",
+      "rows": [
+        {
+          "label": "周一 第5-6节",
+          "value": "程序设计基础 · 校区A A2-301",
+          "badge": "第5-6节",
+          "hint": "14:00-15:40 · 教师003 · 2025级A班"
+        },
+        {
+          "label": "周一 第7-8节",
+          "value": "数据结构 · 校区A A2-302",
+          "badge": "第7-8节",
+          "hint": "16:00-17:40 · 教师003 · 2025级A班"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "schedule-followup",
+      "type": "sys.chat",
+      "label": "检查这周的风险",
+      "payload": {
+        "query": "检查教师003第1周是否存在时间冲突或跨校区赶场"
+      }
+    },
+    {
+      "id": "schedule-week",
+      "type": "sys.chat",
+      "label": "看下一个教学周",
+      "payload": {
+        "query": "查看教师003第2周的课表"
+      }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

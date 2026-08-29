@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "variant": "overview",
+  "status": "success",
+  "title": "校园教学态势",
+  "verified": true,
+  "summary": "4 个教学周共 126 次课程，校区A 76 次、校区B 50 次；时间冲突 0，跨校区赶场 8 次，连续课风险 24 次。",
+  "sections": [
+    {
+      "title": "各周课程量（周一至周五）",
+      "kind": "metric",
+      "rows": [
+        {
+          "label": "第1周",
+          "value": "一7 · 二6 · 三7 · 四5 · 五6"
+        },
+        {
+          "label": "第2周",
+          "value": "一7 · 二6 · 三7 · 四5 · 五7"
+        }
+      ]
+    },
+    {
+      "title": "教师负载 Top 3",
+      "kind": "ranking",
+      "rows": [
+        {
+          "label": "第1名",
+          "value": "教师002 · 24 次课程",
+          "badge": "第1名",
+          "hint": "48 节次"
+        },
+        {
+          "label": "第2名",
+          "value": "教师003 · 20 次课程",
+          "badge": "第2名",
+          "hint": "40 节次"
+        }
+      ]
+    },
+    {
+      "title": "教学风险",
+      "kind": "notice",
+      "note": "教师003与教师007的跨校区连续课程",
+      "rows": [
+        {
+          "label": "时间冲突",
+          "value": "0 处",
+          "badge": "正常"
+        },
+        {
+          "label": "跨校区赶场",
+          "value": "8 次",
+          "badge": "关注"
+        },
+        {
+          "label": "连续课风险",
+          "value": "24 次",
+          "badge": "关注"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "overview-week",
+      "type": "sys.chat",
+      "label": "查看第1周课表",
+      "payload": {
+        "query": "查看第1周校园课表"
+      }
+    },
+    {
+      "id": "overview-risk",
+      "type": "sys.chat",
+      "label": "检查教学风险",
+      "payload": {
+        "query": "检查第1周校园教学风险"
+      }
+    }
+  ],
+  "displayMeta": {}
+}

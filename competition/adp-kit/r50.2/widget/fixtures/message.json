@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0010",
+  "dataVersion": "competition-demo-v3",
+  "items": [
+    { "type": "teacher", "id": "t-001", "name": "教师001", "note": "程序设计基础 · 高等数学" },
+    { "type": "teacher", "id": "t-002", "name": "教师002", "note": "数据结构 · 操作系统" },
+    { "type": "teacher", "id": "t-003", "name": "教师003", "note": "计算机网络 · 数据库原理" }
+  ],
+  "actions": [],
+  "query": { "keyword": "教师", "limit": 10 },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:09:00.000Z",
+    "verified": true
+  }
+}

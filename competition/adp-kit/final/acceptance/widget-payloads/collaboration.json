@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "variant": "collaboration",
+  "status": "success",
+  "title": "教师001、教师002 · 共同空闲",
+  "subtitle": "",
+  "verified": true,
+  "summary": "推荐 周三 第7-8节，首选 A3-101。",
+  "context": "",
+  "sections": [
+    {
+      "title": "推荐方案",
+      "kind": "recommendation",
+      "rows": [
+        {
+          "label": "周三 第7-8节",
+          "value": "2 节共同空闲",
+          "badge": "首选"
+        }
+      ]
+    },
+    {
+      "title": "首选空间",
+      "kind": "recommendation",
+      "rows": [
+        {
+          "label": "A3-101",
+          "value": "60 人 · 校区A · A3",
+          "badge": "推荐"
+        }
+      ]
+    },
+    {
+      "title": "为什么推荐",
+      "kind": "notice",
+      "rows": [
+        {
+          "label": "共同空闲",
+          "value": "2 位教师均空闲",
+          "badge": "已核验"
+        },
+        {
+          "label": "时段衔接",
+          "value": "时间连续",
+          "hint": "2 节"
+        }
+      ]
+    },
+    {
+      "title": "备选空间",
+      "kind": "entity-list",
+      "rows": [
+        {
+          "label": "A3-102",
+          "value": "60 人 · 校区A"
+        },
+        {
+          "label": "A3-103",
+          "value": "80 人 · 校区A"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "collab-weekday",
+      "type": "sys.chat",
+      "label": "只看工作日",
+      "payload": {
+        "query": "只看工作日的共同空闲时段"
+      }
+    },
+    {
+      "id": "collab-more",
+      "type": "sys.chat",
+      "label": "再找更多时段",
+      "payload": {
+        "query": "多找几个共同空闲时段"
+      }
+    }
+  ],
+  "displayMeta": {
+    "weekendMarked": true
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

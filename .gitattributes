@@ -10,3 +10,10 @@
 *.yaml text eol=lf
 *.md text eol=lf
 cloudfunctions/**/scf_bootstrap text eol=lf
+
+# Submission artifacts are checksummed byte-for-byte; never rewrite their line endings.
+competition/final-delivery/submission/** -text
+competition/final-delivery/manual-exports/*.widget -text
+competition/final-delivery/program-final/** -text -diff
+competition/final-delivery/FINAL-SUBMISSION/** -text -diff
+competition/final-delivery/FINAL-SUBMISSION/02_作品演示视频/*.mp4 filter=lfs diff=lfs merge=lfs -text

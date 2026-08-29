@@ -1,0 +1,20 @@
+{
+  "schema": "fosuclass-adp-widget-contract/r48-v3",
+  "kind": "schedule",
+  "logicalName": "Schedule V3 Ultimate",
+  "suggestedWidgetName": "小序-课表票据-R48-V3",
+  "widgetId": null,
+  "widgetIdPolicy": "FAIL_CLOSED_REAL_TENCENT_EXPORT_ONLY",
+  "activeFallback": "小序-课表票据-V2 / RuntimeSafe V3 (23fbc659efe3482fab588d754e4420a4) 保持不动",
+  "dataVersion": "competition-demo-v1",
+  "waitForUser": false,
+  "viewModes": ["day", "date", "week"],
+  "fields": [
+    "title", "subtitle", "timeText", "statusText", "viewMode", "activeWeekday",
+    "footerText", "summary", "days", "items", "actions"
+  ],
+  "localInteractions": [
+    "ADP 模板内无本地状态：星期切换与课程详情在 H5 预览中为本地交互；ADP 侧以本周概览 chips + 平铺列表降级呈现"
+  ],
+  "actionIntents": ["schedule_week", "schedule_day", "schedule_choose_day", "schedule_risk_check"]
+}

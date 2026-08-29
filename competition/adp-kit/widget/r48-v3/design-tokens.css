@@ -1,0 +1,28 @@
+/* R48 Widget V3 — Campus Operations Pass 设计令牌
+ * 与 design-tokens.json 保持一致；仅用于本地预览 / H5 fallback，不进入 ADP Template。
+ */
+:root {
+  --r48-page: #F7F8F6;
+  --r48-card: #FFFFFF;
+  --r48-card-sunken: #F4F6F3;
+  --r48-ink: #1F2521;
+  --r48-muted: #68726B;
+  --r48-faint: #98A29A;
+  --r48-line: #E4E8E3;
+  --r48-line-strong: #D2DAD1;
+  --r48-brand: #173F35;
+  --r48-brand-soft: #E9F0EB;
+  --r48-accent: #2563EB;
+  --r48-accent-soft: #EBF1FE;
+  --r48-success: #2F7D5C;
+  --r48-success-soft: #E8F3ED;
+  --r48-warning: #8A5A00;
+  --r48-warning-soft: #FBF3DF;
+  --r48-danger: #A54232;
+  --r48-danger-soft: #F9ECE8;
+
+  --r48-radius-card: 14px;
+  --r48-radius-inner: 10px;
+
+  --r48-font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "fosuclass-real-adp-export-catalog/v2",
+  "capturedAt": "2026-08-12T20:00:00+08:00",
+  "pending": [],
+  "widgets": {
+    "Schedule": {"file": "小序-课表票据-V2.widget", "sha256": "9d5635a773ab056c3699b88f1379b67bd886280b06a25c0c2ee736230f2a67c3", "widgetId": "23fbc659efe3482fab588d754e4420a4", "name": "小序-课表票据-V2", "integration": "RUNTIME_SAFE_V3_ACTIVE_RICH_V4_PENDING"},
+    "Classroom": {"file": "小序-空教室票据-V2.widget", "sha256": "7551794881eb3b6675371743f8ba4bcafaed53949d5baa41e65d6fe483f0e43c", "widgetId": "9eb1ec5e1deb416ab5aba320359439a5", "name": "小序-空教室票据-V2", "integration": "FINAL_COMPILER_INTEGRATED"},
+    "Conflict": {"file": "小序-冲突赶场票据-V2.widget", "sha256": "04b3a057fb062877361f9f721e0031b4b4b91ae7ca5e751dd51ea220d89f4b9d", "widgetId": "8d576e5af9b04fdd99804e7fcbff3644", "name": "小序-冲突赶场票据-V2", "integration": "FINAL_COMPILER_INTEGRATED"},
+    "DayPlan": {"file": "小序-今日校园计划-V2.widget", "sha256": "b6401db82ddfd42149a1e2d0eef42cd5d8f352968378e0b4df068e85354b3462", "widgetId": "f4ff76029d8142caa86fb9baac5314bf", "name": "小序-今日校园计划-V2", "integration": "FINAL_COMPILER_INTEGRATED"},
+    "Choice": {"file": "小序-候选确认-V2.widget", "sha256": "9583f7b0133af005b2564b5176c91ef56bd19a3d4543edbb46ef61bb71b8d072", "widgetId": "f540588933a4459cbe78a6fe99aa022c", "name": "小序-候选确认-V2", "integration": "RECOVERY_COMPILER_INTEGRATED"},
+    "Error": {"file": "小序-任务恢复-V2.widget", "sha256": "e89466506a0db0f3855b8f953396a8c5905ec2dc3c1e46935c04ec9b32a918aa", "widgetId": "3161078fd4d54a27bae65f38cd44c537", "name": "小序-任务恢复-V2", "integration": "RECOVERY_COMPILER_INTEGRATED"}
+  },
+  "workflows": {
+    "02": {"file": "export-02-空教室规划.zip", "sha256": "10cee8f0debb82138426c7ca752b21a6ddd2770706fca7fda92ac95fd1ca36ba", "workflowId": "e2bbf07e-f29f-4a91-b6c9-a0f85a4eb124", "integration": "FINAL_COMPILER_INTEGRATED"},
+    "03": {"file": "export-03-课程冲突比较.zip", "sha256": "9ed9d6b05f5d1f8aa93a7c948d6d6491e9e466873db4f7e0d9b858b74eb9b077", "workflowId": "f5930cca-9683-4331-95f0-cca70c98e262", "integration": "FINAL_COMPILER_INTEGRATED"},
+    "04": {"file": "export-04-今日校园计划.zip", "sha256": "d548af2ea02e9d185e0bea0b295a2e6c8847bf41e673eaed640f9009b1177b5e", "workflowId": "6fc356a8-4ebb-4d71-9614-063092fb251a", "integration": "FINAL_COMPILER_INTEGRATED"}
+  },
+  "policy": "IDs and schemas are recorded only from real Tencent ADP exports; no fabricated integration identifiers."
+}

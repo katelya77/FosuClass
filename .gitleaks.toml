@@ -1,0 +1,30 @@
+title = "FosuClass public repository Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Exact deterministic test fixtures mirrored in security/public-allowlist.yml"
+paths = [
+  '''^packages/rag-runtime/src/localEncoder\.js$''',
+  '''^tools/test-agent-config-plane-browser\.js$''',
+  '''^tools/test-agent-context-memory-flow\.js$''',
+  '''^tools/test-agent-durable-execution\.js$''',
+  '''^tools/test-agent-memory-provider-boundary\.js$''',
+  '''^tools/test-agent-p5a-consumer-wiring\.js$''',
+  '''^tools/test-agent-p5a-memory-doc-store\.js$''',
+  '''^tools/test-agent-personal-memory\.js$''',
+  '''^tools/test-agent-platform-admin\.js$''',
+  '''^tools/test-agent-rag-encoder-single-source\.js$''',
+  '''^tools/test-agent-rag-publication\.js$''',
+  '''^tools/test-ai-provider-environment-profiles\.js$''',
+  '''^tools/test-ai-provider-runtime-config-store\.js$''',
+  '''^tools/test-assistant-kb-service\.js$''',
+  '''^tools/test-cloudbase-release-tools\.js$''',
+  '''^tools/test-course-reminder-api\.js$''',
+  '''^tools/test-course-reminder-delivery-fallback\.js$''',
+  '''^tools/test-coze-tool-gateway\.js$''',
+  '''^tools/test-domain-adapter-conformance\.js$''',
+  '''^tools/test-kb-control-plane-v2\.js$''',
+  '''^tools/test-provider-control-plane\.js$'''
+]

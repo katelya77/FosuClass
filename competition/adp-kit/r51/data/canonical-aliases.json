@@ -1,0 +1,21 @@
+{
+  "entityType": {
+    "教师": "teacher",
+    "班级": "class",
+    "教室": "room",
+    "课程": "course"
+  },
+  "groupBy": {
+    "教室": "room",
+    "楼栋": "building",
+    "校区": "campus"
+  },
+  "sort": {
+    "最高": "highest",
+    "最低": "lowest"
+  },
+  "mode": {
+    "自身": "self",
+    "对比": "compare"
+  }
+}

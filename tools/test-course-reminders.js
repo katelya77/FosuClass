@@ -79,6 +79,34 @@ async function run() {
   assert.strictEqual(firstTomorrow.courseIndex, 1);
   assert.strictEqual(firstTomorrow.targetDate, "2026-07-23");
 
+  const preTermPlan = planCourseReminder("以后上课前20分钟提醒我", {
+    timezone: "Asia/Shanghai",
+    todayDate: "2026-08-28",
+    todayWeekday: 5,
+    currentTeachingWeek: 1,
+    termPhase: "before-term",
+    isInTerm: false,
+    termStartDate: "2026-09-07",
+    totalWeeks: 19,
+    clientTimestampMs: Date.parse("2026-08-28T05:00:00.000Z"),
+    currentScheduleSummary: {
+      enabled: true,
+      fingerprint: "schedule-fingerprint-fall-2026",
+      courses: [{
+        courseName: "动物生物化学",
+        classroom: "C7-302",
+        weekday: 5,
+        startSection: 6,
+        endSection: 7,
+        weeks: [1],
+      }],
+    },
+    userPreferences: { defaultReminderLeadMinutes: 20 },
+  });
+  assert.strictEqual(preTermPlan.success, true);
+  assert.strictEqual(preTermPlan.nextOccurrence.date, "2026-09-11", "pre-term reminders must start from the real term calendar");
+  assert.strictEqual(preTermPlan.nextOccurrence.teachingWeek, 1);
+
   const roomChange = planCourseReminder("只有换教室时提醒我", context);
   assert.strictEqual(roomChange.scope, "room_change");
   assert.strictEqual(roomChange.eventDriven, true);

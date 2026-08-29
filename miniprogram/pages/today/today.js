@@ -15,6 +15,8 @@ Page({
     weekdayText: "",
     className: "未选择当前课表",
     currentWeek: 12,
+    todayTitle: "",
+    termPhase: "unknown",
     dataSourceText: "课程数据 · 本地缓存",
     courseCountText: "今日共 0 门课",
     courses: [],
@@ -77,7 +79,7 @@ Page({
       this.loadPageConfig();
     }
     wx.showToast({
-      title: "已根据小佛助手建议打开今日安排",
+      title: "已根据小序建议打开今日安排",
       icon: "none",
     });
   },
@@ -116,7 +118,10 @@ Page({
 
   loadToday() {
     const data = getTodayCoursesData();
-    const { hasSchedule, dateText, weekdayText, className, currentWeek, courses } = data;
+    const { hasSchedule, dateText, weekdayText, className, currentWeek, courses, termPhase, termPhaseText } = data;
+    const todayTitle = termPhase === "in-term"
+      ? `${weekdayText} · 第${currentWeek}周`
+      : `${weekdayText} · ${termPhaseText || "教学周待同步"}`;
 
     const settings = getSettings();
     const { getCourseDataSource } = require("../../utils/course");
@@ -137,6 +142,8 @@ Page({
         weekdayText,
         className: displayClassName || "未选择当前课表",
         currentWeek,
+        todayTitle,
+        termPhase,
         dataSourceText: "未绑定课表",
         courseCountText: "今日共 0 门课",
         courses: [],
@@ -147,17 +154,36 @@ Page({
       return;
     }
 
+    let emptyTitle = "今天没有课程，好好休息";
+    let emptyDesc = "这里会根据当前班级、教学周和星期自动筛选课程。";
+    let courseCountText = `今日共 ${courses.length} 门课`;
+    if (termPhase === "before-term") {
+      emptyTitle = "当前处于开学前";
+      emptyDesc = "课表已保留，开学后会按照教学周历自动显示当天课程。";
+      courseCountText = "尚未开学";
+    } else if (termPhase === "after-term") {
+      emptyTitle = "本学期已结束";
+      emptyDesc = "当前处于寒暑假或学期间隔，课表数据仍会保留。";
+      courseCountText = "假期模式";
+    } else if (termPhase === "unknown") {
+      emptyTitle = "教学周数据待同步";
+      emptyDesc = "已暂停按星期推算课程，避免显示错误的今日课表。";
+      courseCountText = "教学周待同步";
+    }
+
     this.setData({
       dateText,
       weekdayText,
+      todayTitle,
+      termPhase,
       className: displayClassName,
       currentWeek,
       dataSourceText: dataSource.text,
-      courseCountText: `今日共 ${courses.length} 门课`,
+      courseCountText,
       courses,
       nextBuildingCode: this.resolveNextBuildingCode(courses),
-      emptyTitle: "今天没有课程，好好休息",
-      emptyDesc: "这里会根据当前班级、教学周和星期自动筛选课程。"
+      emptyTitle,
+      emptyDesc
     });
   },
 

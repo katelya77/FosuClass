@@ -1,7 +1,7 @@
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
-const { getTodayCoursesData } = require("../../utils/todayReminder");
+const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
@@ -11,9 +11,11 @@ const {
   TOTAL_WEEKS,
   addLocalDays,
   clampWeek,
+  formatDate,
   formatDateLabel,
   formatWeekRange,
   getCurrentTeachingWeek,
+  getTeachingPeriodText,
   getTodayTeachingInfo,
   getVisibleWeekdays,
   getWeekRangeByWeekNo,
@@ -89,11 +91,13 @@ Page({
     appName: BRAND.appName,
     className: "未选择课表",
     scheduleSubtitle: "",
-    semester: "2025-2026学年第二学期",
+    semester: "",
     dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
     syncActionText: "同步课表",
     currentWeek: 12,
+    teachingPeriodText: "教学周待同步",
+    termPhase: "unknown",
     totalWeeks: TOTAL_WEEKS,
     weekRangeText: "",
     weekScopeText: "周一至周五",
@@ -139,7 +143,6 @@ Page({
       });
       return;
     }
-    this.loadSchedule();
   },
 
   onShow() {
@@ -256,9 +259,16 @@ Page({
     const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     const weekdays = baseWeekdays.map((day, index) => {
       const date = addLocalDays(weekInfo.startDate, index);
+      const dateInfo = getTodayTeachingInfo(date, calendarWeeks, termConfig);
       return Object.assign({}, day, {
+        date: formatDate(date),
         dateLabel: formatDateLabel(date),
-        isToday: currentWeek === todayInfo.weekNo && day.weekday === todayInfo.weekday,
+        isToday: currentWeek === todayInfo.rawWeekNo && day.weekday === todayInfo.physicalWeekday,
+        isTeachingDay: dateInfo.isTeachingDay,
+        scheduleWeek: dateInfo.weekNo,
+        scheduleWeekday: dateInfo.weekday,
+        teachingEventType: dateInfo.teachingEventType,
+        teachingEventNote: dateInfo.teachingEventNote,
       });
     });
     
@@ -267,6 +277,12 @@ Page({
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: 90,
       hideInactiveCourses: settings.hideInactiveCourses,
+      normalized: true,
+      targetType: target && target.type || "class",
+      targetId: target && (target.detailId || target.id || target.classId) || settings.classId || "",
+      targetName: target && (target.name || target.className) || settings.className || "",
+      semester: target && (target.term || target.semester) || termConfig.term || "",
+      releaseVersion: target && (target.scheduleVersion || target.releaseVersion) || calendar.releaseVersion || "",
     });
     
     const contentWidth = getContentWidthRpx();
@@ -319,11 +335,13 @@ Page({
     this.setData({
       className: displayClassName,
       scheduleSubtitle,
-      semester: settings.semester,
+      semester: calendar.semesterText || termConfig.semesterText || termConfig.term || "",
       dataSourceText: sourceText,
       lastSyncText,
       syncActionText,
       currentWeek,
+      teachingPeriodText: getTeachingPeriodText(todayInfo, currentWeek),
+      termPhase: todayInfo.termPhase || "unknown",
       totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
@@ -470,13 +488,17 @@ Page({
       return;
     }
     const now = new Date();
-    const todayDateText = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    const pad = (value) => String(value).padStart(2, "0");
+    const todayDateText = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const lastDate = wx.getStorageSync("lastTodayReminderDate");
     if (lastDate === todayDateText) {
       return;
     }
 
     const todayData = getTodayCoursesData();
+    if (!shouldShowTodayStartupReminder(todayData)) {
+      return;
+    }
     app.globalData.hasShownTodayReminderThisSession = true;
     wx.setStorageSync("lastTodayReminderDate", todayDateText);
 

@@ -1,0 +1,75 @@
+{
+  "version": "1.0",
+  "variant": "risk",
+  "status": "success",
+  "title": "教师003 与 教师007 · 教学风险",
+  "subtitle": "",
+  "verified": true,
+  "summary": "发现 1 处时间冲突、1 处跨校区赶场。",
+  "context": "",
+  "sections": [
+    {
+      "title": "时间冲突",
+      "kind": "timeline",
+      "rows": [
+        {
+          "label": "周二 第5-6节",
+          "value": "高等数学 ↔ 线性代数",
+          "badge": "冲突",
+          "hint": "校区A A4-101；校区B B2-101"
+        }
+      ]
+    },
+    {
+      "title": "跨校区衔接",
+      "kind": "route",
+      "rows": [
+        {
+          "label": "周三 · 11:40 → 14:00",
+          "value": "操作系统 → 大学英语",
+          "badge": "赶场",
+          "hint": "校区A → 校区B · 间隔 10 分钟"
+        }
+      ]
+    },
+    {
+      "title": "结论",
+      "kind": "notice",
+      "rows": [
+        {
+          "label": "课程安排",
+          "value": "存在时间冲突",
+          "badge": "需处理"
+        },
+        {
+          "label": "跨校区衔接",
+          "value": "预留时间较紧",
+          "badge": "提醒"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "risk-resolve",
+      "type": "sys.chat",
+      "label": "看看怎么调整",
+      "payload": {
+        "query": "针对冲突给出调课建议"
+      }
+    },
+    {
+      "id": "risk-other-week",
+      "type": "sys.chat",
+      "label": "检查其他周",
+      "payload": {
+        "query": "检查另一个教学周的风险"
+      }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

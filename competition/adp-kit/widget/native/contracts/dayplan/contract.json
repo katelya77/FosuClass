@@ -1,0 +1,20 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "dayplan",
+  "widgetId": "f4ff76029d8142caa86fb9baac5314bf",
+  "widgetName": "小序-今日校园计划-V2",
+  "sourceFile": "小序-今日校园计划-V2.widget",
+  "sourceSha256": "b6401db82ddfd42149a1e2d0eef42cd5d8f352968378e0b4df068e85354b3462",
+  "schemaLanguage": "json-schema",
+  "required": [
+    "title",
+    "subtitle",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "summary",
+    "items",
+    "actions"
+  ],
+  "integration": "FINAL_COMPILER_INTEGRATED"
+}

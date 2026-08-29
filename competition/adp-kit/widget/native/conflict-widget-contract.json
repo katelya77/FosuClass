@@ -1,0 +1,26 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v2",
+  "kind": "conflict",
+  "source": "real Tencent ADP export",
+  "sourceSha256": "04b3a057fb062877361f9f721e0031b4b4b91ae7ca5e751dd51ea220d89f4b9d",
+  "widgetId": "8d576e5af9b04fdd99804e7fcbff3644",
+  "widgetName": "小序-冲突赶场票据-V2",
+  "adapter": "conflict-widget-adapter.py",
+  "fields": [
+    {"name": "title", "jsonType": "string"},
+    {"name": "timeText", "jsonType": "string"},
+    {"name": "queryId", "jsonType": "string"},
+    {"name": "dataVersion", "jsonType": "string"},
+    {"name": "summary", "jsonType": "object"},
+    {"name": "items", "jsonType": "array"},
+    {"name": "rushWarnings", "jsonType": "array"},
+    {"name": "actions", "jsonType": "array"}
+  ],
+  "workflow": {
+    "sourceWorkflowId": "f5930cca-9683-4331-95f0-cca70c98e262",
+    "input": "03 output",
+    "chain": ["课程冲突比较", "Conflict Adapter", "Conflict Widget"],
+    "status": "ADAPTER_CONTRACT_READY_WIDGET_NODE_COMPILER_PENDING"
+  },
+  "safety": "Adapter maps verified Tool output only; it never recalculates overlap or rush warnings."
+}

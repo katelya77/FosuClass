@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "variant": "ranking",
+  "status": "success",
+  "title": "教师负载排行",
+  "subtitle": "第1周 · 由课程数据派生",
+  "verified": true,
+  "summary": "第1名 教师001 · 24 次授课 · 48 课时。",
+  "context": "第1周",
+  "sections": [
+    {
+      "title": "其他排名",
+      "kind": "ranking",
+      "rows": [
+        {
+          "label": "第2名",
+          "value": "教师002 · 24 次授课 · 48 课时",
+          "badge": "并列",
+          "hint": "教师"
+        },
+        {
+          "label": "第3名",
+          "value": "教师003 · 20 次授课 · 40 课时",
+          "hint": "教师"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "ranking-top1",
+      "type": "sys.chat",
+      "label": "查看第1名的课表",
+      "payload": {
+        "query": "查看排名第1的教师的课表"
+      }
+    },
+    {
+      "id": "ranking-more",
+      "type": "sys.chat",
+      "label": "看前5名",
+      "payload": {
+        "query": "查看前5名的排行"
+      }
+    }
+  ],
+  "displayMeta": {
+    "tieGroupCount": 1,
+    "tieNote": "第2名起并列"
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

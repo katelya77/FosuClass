@@ -5,6 +5,7 @@ const path = require("path");
 
 const tempRoot = path.join(os.tmpdir(), `fosu-release-pack-api-${process.pid}-${Date.now()}`);
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
+process.env.NODE_ENV = "production";
 
 const express = require("../server/node_modules/express");
 const fosuRouter = require("../server/src/routes/fosu");
@@ -103,6 +104,17 @@ async function run() {
     assert.strictEqual(classIndex.data.success, true);
     assert.strictEqual(classIndex.data.items.length, 1);
     const detailId = classIndex.data.items[0].id;
+
+    const termMajorsPath = path.join(process.env.FOSU_STORAGE_DIR, "terms", "2025-2026-2", "majors-index.json");
+    assert.strictEqual(fs.existsSync(termMajorsPath), false, "fixture must reproduce a release-only activation without term majors storage");
+
+    const majors = await getJson(baseUrl, "/api/fosu/majors?term=2025-2026-2&collegeCode=04&grade=2025");
+    assert.strictEqual(majors.status, 200);
+    assert.strictEqual(majors.data.success, true, "healthy release class index must be sufficient for major selection");
+    assert.strictEqual(majors.data.term, "2025-2026-2");
+    assert.strictEqual(majors.data.releaseVersion, version);
+    assert.strictEqual(majors.data.dataSource, "release-class-index");
+    assert.deepStrictEqual(majors.data.majors, [{ code: "0401", name: "测试专业" }]);
 
     const detail = await getJson(baseUrl, `/api/fosu/release-pack/detail/class/${encodeURIComponent(detailId)}?term=2025-2026-2&releaseVersion=${encodeURIComponent(version)}`);
     assert.strictEqual(detail.status, 200);

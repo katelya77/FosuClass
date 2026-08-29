@@ -1,0 +1,38 @@
+name: Competition ADP Widget CI
+
+on:
+  pull_request:
+    paths:
+      - "competition/adp-kit/widget/**"
+      - "competition/adp-kit/validate-kit.js"
+      - "competition/adp-kit/mcp/campus-tools-mcp/src/**"
+      - ".github/workflows/competition-adp-widget-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  widget-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Widget adapter contract
+        run: node competition/adp-kit/widget/test-widget-adapter.js
+
+      - name: Generate deterministic Widget samples
+        run: node competition/adp-kit/widget/generate-samples.js
+
+      - name: Validate ADP kit contracts
+        run: node competition/adp-kit/validate-kit.js
+
+      - name: Ensure generated Widget samples are committed
+        run: |
+          git diff --exit-code -- \
+            competition/adp-kit/widget/sample-results.json \
+            competition/adp-kit/widget/sample-results.js

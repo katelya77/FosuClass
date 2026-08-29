@@ -1,0 +1,25 @@
+{
+  "name": "campus-tools-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园智序 · 小序 —— 确定性校园工具服务（MCP Streamable HTTP + SSE 兼容 + REST，只读匿名演示数据 competition-demo-v1）",
+  "main": "src/server.js",
+  "types": "dist/contracts.d.ts",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/tools.test.js test/security.test.js test/data-version-contract.test.js",
+    "check": "node --check src/data.js && node --check src/envelope.js && node --check src/ratelimit.js && node --check src/tools.js && node --check src/server.js && npm run typecheck",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "generate:openapi": "node ../../openapi/generate-openapi.js",
+    "check:openapi": "node ../../openapi/generate-openapi.js --check"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

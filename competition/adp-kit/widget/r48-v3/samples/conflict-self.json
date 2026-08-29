@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "conflict",
+  "success": true,
+  "queryId": "q-r48-conflict-self",
+  "dataVersion": "competition-demo-v1",
+  "title": "教师009 · 课程安排风险检查",
+  "subtitle": "单对象排课风险",
+  "timeText": "第1周 · 周一",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "conflictCount": 0,
+    "rushWarningCount": 1,
+    "selfCompare": true,
+    "firstBusySlots": 3,
+    "secondBusySlots": 3
+  },
+  "items": [],
+  "rushWarnings": [
+    {
+      "entity": "教师009",
+      "date": "2026-08-31",
+      "weekdayName": "周一",
+      "gapMinutes": 20,
+      "from": {
+        "courseName": "操作系统",
+        "periodText": "第3-4节",
+        "campusName": "校区A",
+        "roomName": "A1-201"
+      },
+      "to": {
+        "courseName": "编译原理",
+        "periodText": "第5-6节",
+        "campusName": "校区B",
+        "roomName": "B1-102"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "conflict-self-day",
+      "type": "sys.chat",
+      "label": "查看当天课表",
+      "message": "查询教师009第1周周一的课",
+      "intentHint": "schedule_day",
+      "entityName": "教师009",
+      "week": 1,
+      "weekday": 1
+    },
+    {
+      "id": "conflict-self-week",
+      "type": "sys.chat",
+      "label": "查看整周课表",
+      "message": "查询教师009第1周的课表",
+      "intentHint": "schedule_week",
+      "entityName": "教师009",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "footerText": "数据源：冲突比较工具 · competition-demo-v1"
+}

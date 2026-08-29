@@ -1,0 +1,472 @@
+openapi: 3.0.0
+info:
+  title: 校园智序-CampusTools
+  description: >-
+    校园智序&middot; 小序的确定性教学数据工具集，提供课表、空教室、风险检查、一日规划和校园教学态势查询。所有动态校园事实均来自
+    competition-demo-v3 的确定性计算结果，供 Multi-Agent 专业 Agent 调用。
+  version: 1.0.0
+servers:
+  - url: https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com
+paths:
+  /campusflow-adp-tools/api/campus_overview:
+    post:
+      operationId: campus_overview
+      summary: 校园教学态势（固定窗口）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: ''
+                  queryId:
+                    type: string
+                    description: ''
+                  dataVersion:
+                    type: string
+                    description: ''
+                  resolvedEntity:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: class/teacher/room/course/user 等实体类型
+                      id:
+                        type: string
+                        description: 数据集中实体唯一 ID
+                      name:
+                        type: string
+                        description: 实体显示名（如 教师009）
+                    required: []
+                    description: 解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）
+                  query:
+                    type: object
+                    properties:
+                      week:
+                        type: integer
+                        description: ''
+                      weekday:
+                        type: integer
+                        description: ''
+                      date:
+                        type: string
+                        description: ''
+                      campus:
+                        type: string
+                        description: 空教室查询的校区名
+                      periodStart:
+                        type: integer
+                        description: ''
+                      periodEnd:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: 本次查询的确定性时间/过滤上下文回显
+                  summary:
+                    type: object
+                    properties:
+                      weekCount:
+                        type: integer
+                        description: ''
+                      lessonOccurrences:
+                        type: integer
+                        description: 四周内课次出现总数
+                      teacherCount:
+                        type: integer
+                        description: ''
+                      activeTeacherCount:
+                        type: integer
+                        description: ''
+                      roomCount:
+                        type: integer
+                        description: ''
+                      activeRoomCount:
+                        type: integer
+                        description: ''
+                      campusCount:
+                        type: integer
+                        description: ''
+                    required: []
+                    description: overview 汇总指标（summary 字段）
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        window:
+                          type: object
+                          properties:
+                            windowStart:
+                              type: string
+                              description: ''
+                            teachingStart:
+                              type: string
+                              description: ''
+                            windowEnd:
+                              type: string
+                              description: ''
+                            phase:
+                              type: string
+                              description: ''
+                            preparationPeriod:
+                              type: object
+                              properties:
+                                startDate:
+                                  type: string
+                                  description: ''
+                                endDate:
+                                  type: string
+                                  description: ''
+                                lessonCount:
+                                  type: integer
+                                  description: ''
+                              required: []
+                              description: ''
+                            teachingWeeks:
+                              type: object
+                              properties:
+                                start:
+                                  type: integer
+                                  description: ''
+                                end:
+                                  type: integer
+                                  description: ''
+                                count:
+                                  type: integer
+                                  description: ''
+                              required: []
+                              description: ''
+                          required: []
+                          description: overview 固定分析窗口
+                        summary:
+                          type: object
+                          properties:
+                            weekCount:
+                              type: integer
+                              description: ''
+                            lessonOccurrences:
+                              type: integer
+                              description: 四周内课次出现总数
+                            teacherCount:
+                              type: integer
+                              description: ''
+                            activeTeacherCount:
+                              type: integer
+                              description: ''
+                            roomCount:
+                              type: integer
+                              description: ''
+                            activeRoomCount:
+                              type: integer
+                              description: ''
+                            campusCount:
+                              type: integer
+                              description: ''
+                          required: []
+                          description: overview 汇总指标（summary 字段）
+                        matrix:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              week:
+                                type: integer
+                                description: ''
+                              startDate:
+                                type: string
+                                description: ''
+                              endDate:
+                                type: string
+                                description: ''
+                              days:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    weekday:
+                                      type: integer
+                                      description: ''
+                                    weekdayName:
+                                      type: string
+                                      description: ''
+                                    date:
+                                      type: string
+                                      description: ''
+                                    lessonCount:
+                                      type: integer
+                                      description: ''
+                                description: ''
+                          description: ''
+                        campusResources:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              campusId:
+                                type: string
+                                description: ''
+                              campusName:
+                                type: string
+                                description: ''
+                              roomCount:
+                                type: integer
+                                description: ''
+                              lessonOccurrences:
+                                type: integer
+                                description: ''
+                              occupiedRoomPeriodUnits:
+                                type: integer
+                                description: ''
+                              freeRoomPeriodUnits:
+                                type: integer
+                                description: ''
+                              occupancyRate:
+                                type: number
+                                format: float
+                                description: 0-1 占用率
+                              largeRoomCount:
+                                type: integer
+                                description: ''
+                              largeRoomFreeUnits:
+                                type: integer
+                                description: ''
+                              largeRoomAvailabilityRate:
+                                type: number
+                                format: float
+                                description: ''
+                          description: ''
+                        teacherLoadTop:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              teacherId:
+                                type: string
+                                description: ''
+                              teacherName:
+                                type: string
+                                description: ''
+                              lessonOccurrences:
+                                type: integer
+                                description: ''
+                              periodUnits:
+                                type: integer
+                                description: ''
+                          description: ''
+                        peakSlot:
+                          type: object
+                          properties:
+                            week:
+                              type: integer
+                              description: ''
+                            weekday:
+                              type: integer
+                              description: ''
+                            weekdayName:
+                              type: string
+                              description: ''
+                            date:
+                              type: string
+                              description: ''
+                            period:
+                              type: integer
+                              description: ''
+                            lessonCount:
+                              type: integer
+                              description: ''
+                          required: []
+                          description: 最繁忙时段（overview peakSlot）
+                        risks:
+                          type: object
+                          properties:
+                            conflictCount:
+                              type: integer
+                              description: ''
+                            rushCount:
+                              type: integer
+                              description: ''
+                            continuousLoadCount:
+                              type: integer
+                              description: ''
+                            conflicts:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  week:
+                                    type: integer
+                                    description: ''
+                                  weekday:
+                                    type: integer
+                                    description: ''
+                                  date:
+                                    type: string
+                                    description: ''
+                                  lessonIds:
+                                    type: array
+                                    items:
+                                      type: string
+                                    description: ''
+                                  sharedTeacherCount:
+                                    type: integer
+                                    description: ''
+                                  sharedClassCount:
+                                    type: integer
+                                    description: ''
+                                  sameRoom:
+                                    type: boolean
+                                    description: ''
+                              description: ''
+                            rushWarnings:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  teacherId:
+                                    type: string
+                                    description: ''
+                                  teacherName:
+                                    type: string
+                                    description: ''
+                                  week:
+                                    type: integer
+                                    description: ''
+                                  weekday:
+                                    type: integer
+                                    description: ''
+                                  date:
+                                    type: string
+                                    description: ''
+                                  fromLessonId:
+                                    type: string
+                                    description: ''
+                                  toLessonId:
+                                    type: string
+                                    description: ''
+                                  gapMinutes:
+                                    type: integer
+                                    description: ''
+                              description: ''
+                            continuousLoads:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  teacherId:
+                                    type: string
+                                    description: ''
+                                  teacherName:
+                                    type: string
+                                    description: ''
+                                  week:
+                                    type: integer
+                                    description: ''
+                                  weekday:
+                                    type: integer
+                                    description: ''
+                                  date:
+                                    type: string
+                                    description: ''
+                                  fromLessonId:
+                                    type: string
+                                    description: ''
+                                  toLessonId:
+                                    type: string
+                                    description: ''
+                              description: ''
+                          required: []
+                          description: overview 全局风险汇总（overview items[0].risks）
+                    description: ''
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          description: 动作类型：open_widget / sys.chat
+                        cardType:
+                          type: string
+                          description: >-
+                            open_widget
+                            的卡片类型：schedule/classroom/conflict/day_plan
+                        label:
+                          type: string
+                          description: 动作文案
+                        intent:
+                          type: string
+                          description: sys.chat 的意图标识
+                        query:
+                          type: string
+                          description: sys.chat 的预填查询
+                        week:
+                          type: integer
+                          description: sys.chat 关联的教学周
+                    description: ''
+                  evidence:
+                    type: object
+                    properties:
+                      dataVersion:
+                        type: string
+                        description: ''
+                      dataHash:
+                        type: string
+                        description: ''
+                      source:
+                        type: string
+                        description: 计算来源（固定 campus-tools-mcp）
+                      computedAt:
+                        type: string
+                        description: 计算时间 ISO 字符串
+                      verified:
+                        type: boolean
+                        description: 是否通过确定性校验；失败路径为 false
+                      note:
+                        type: string
+                        description: EMPTY_RESULT 等附加标记
+                      derivation:
+                        type: string
+                        description: overview 的派生过程说明
+                      preparationPeriodLessonCount:
+                        type: integer
+                        description: overview 准备期课程数（固定 0）
+                    required: []
+                    description: 可核查证据：动态事实全部来自当前匿名数据集的确定性计算
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        description: >-
+                          MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND /
+                          AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等
+                      message:
+                        type: string
+                        description: 中文错误说明
+                      details:
+                        type: object
+                        properties: {}
+                        required: []
+                        description: 附加细节（如候选列表）
+                    required: []
+                    description: 确定性错误结构，供 ADP 工作流分支判断
+          description: 成功的响应
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                windowStart:
+                  type: string
+                  description: ''
+                teachingStart:
+                  type: string
+                  description: ''
+                windowEnd:
+                  type: string
+                  description: ''

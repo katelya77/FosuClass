@@ -1,0 +1,58 @@
+<Card size="md" background="#F6F2E8" status={verifiedText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS FLOW / TEACHING OVERVIEW" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={windowText} color="secondary" />
+        <Caption value={phaseText} color="secondary" />
+      </Col>
+      <Badge label={verifiedText} color="success" variant="soft" size="sm" />
+    </Row>
+    <Divider />
+    <Row gap={1} wrap="wrap">
+      <Badge label={weekCountText} color="info" variant="soft" size="sm" />
+      <Badge label={lessonCountText} color="info" variant="soft" size="sm" />
+      <Badge label={teacherCountText} color="secondary" variant="outline" size="sm" />
+      <Badge label={roomCountText} color="secondary" variant="outline" size="sm" />
+      <Badge label={campusCountText} color="secondary" variant="outline" size="sm" />
+    </Row>
+    <Divider />
+    <Caption value="四周教学负载（课程次数）" color="#173F35" />
+    <Row gap={1}><Text value="周次" size="sm" weight="semibold" /><Text value="一" size="sm" /><Text value="二" size="sm" /><Text value="三" size="sm" /><Text value="四" size="sm" /><Text value="五" size="sm" /></Row>
+    <Row gap={1}><Badge label="W1" color="info" variant="soft" size="sm" /><Text value={w1MonText} size="sm" /><Text value={w1TueText} size="sm" /><Text value={w1WedText} size="sm" /><Text value={w1ThuText} size="sm" /><Text value={w1FriText} size="sm" /></Row>
+    <Row gap={1}><Badge label="W2" color="info" variant="soft" size="sm" /><Text value={w2MonText} size="sm" /><Text value={w2TueText} size="sm" /><Text value={w2WedText} size="sm" /><Text value={w2ThuText} size="sm" /><Text value={w2FriText} size="sm" /></Row>
+    <Row gap={1}><Badge label="W3" color="info" variant="soft" size="sm" /><Text value={w3MonText} size="sm" /><Text value={w3TueText} size="sm" /><Text value={w3WedText} size="sm" /><Text value={w3ThuText} size="sm" /><Text value={w3FriText} size="sm" /></Row>
+    <Row gap={1}><Badge label="W4" color="info" variant="soft" size="sm" /><Text value={w4MonText} size="sm" /><Text value={w4TueText} size="sm" /><Text value={w4WedText} size="sm" /><Text value={w4ThuText} size="sm" /><Text value={w4FriText} size="sm" /></Row>
+    <Caption value={peakSlotText} color="secondary" />
+    <Divider />
+    <Caption value="空间资源" color="#173F35" />
+    <Col gap={1}>
+      <Text value={campusALoadText} size="sm" weight="semibold" />
+      <Caption value={campusAFreeText} color="secondary" />
+      <Text value={campusBLoadText} size="sm" weight="semibold" />
+      <Caption value={campusBFreeText} color="secondary" />
+    </Col>
+    <Divider />
+    <Caption value="教师负载 Top 3" color="#173F35" />
+    <Row gap={2}><Badge label="1" color="info" variant="soft" size="sm" /><Text value={teacher0Name} size="sm" weight="semibold" /><Caption value={teacher0LoadText} color="secondary" /></Row>
+    <Row gap={2}><Badge label="2" color="info" variant="soft" size="sm" /><Text value={teacher1Name} size="sm" weight="semibold" /><Caption value={teacher1LoadText} color="secondary" /></Row>
+    <Row gap={2}><Badge label="3" color="info" variant="soft" size="sm" /><Text value={teacher2Name} size="sm" weight="semibold" /><Caption value={teacher2LoadText} color="secondary" /></Row>
+    <Divider />
+    <Caption value="教学风险" color="#173F35" />
+    <Row gap={1} wrap="wrap">
+      <Badge label={conflictCountText} color="success" variant="soft" size="sm" />
+      <Badge label={rushCountText} color="warning" variant="soft" size="sm" />
+      <Badge label={continuousLoadText} color="warning" variant="outline" size="sm" />
+    </Row>
+    <Caption value={riskSummaryText} color="secondary" />
+    <Divider />
+    <Row gap={2} wrap="wrap">
+      <Button label={action0Label} size="sm" variant="solid" onClickAction={{type: "sys.chat", payload: {query: action0Message}}} />
+      <Button label={action1Label} size="sm" variant="outline" onClickAction={{type: "sys.chat", payload: {query: action1Message}}} />
+      <Button label={action2Label} size="sm" variant="outline" onClickAction={{type: "sys.chat", payload: {query: action2Message}}} />
+      <Button label={action3Label} size="sm" variant="outline" onClickAction={{type: "sys.chat", payload: {query: action3Message}}} />
+    </Row>
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

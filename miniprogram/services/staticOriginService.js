@@ -306,11 +306,43 @@ async function requestAcrossOrigins(kind, buildUrl, options = {}) {
   return task;
 }
 
+function runtimePointerTime(pointer) {
+  const cacheEpoch = Number(pointer && pointer.cacheEpoch || 0) || 0;
+  const updatedAt = Date.parse(pointer && pointer.updatedAt || "") || 0;
+  return Math.max(cacheEpoch, updatedAt);
+}
+
+function selectNewestRuntimePointer(pointers) {
+  return (Array.isArray(pointers) ? pointers : [])
+    .filter((pointer) => pointer && typeof pointer === "object" && !Array.isArray(pointer))
+    .sort((left, right) => runtimePointerTime(right) - runtimePointerTime(left))[0] || null;
+}
+
 function fetchRuntimePointer(options = {}) {
   const bucket = Math.floor(now() / 60000);
-  return requestAcrossOrigins("runtime", (origin) => withQuery(joinUrl(origin.runtimeRoot, "active.json"), { bucket }), Object.assign({
+  const origins = getOrigins().filter((origin) => isUsableUrl(origin.runtimeRoot));
+  const buildUrl = (origin) => withQuery(joinUrl(origin.runtimeRoot, "active.json"), { bucket });
+  const baseOptions = Object.assign({
     skipSession: true,
-  }, options));
+  }, options);
+  if (origins.length <= 1 || options.forceOrigin) {
+    return requestAcrossOrigins("runtime", buildUrl, baseOptions);
+  }
+
+  // Runtime pointers are tiny control-plane records. Read every ready origin in
+  // parallel and choose the newest pointer, so a lagging CDN cannot roll the
+  // miniprogram back to the previous active term. Release/index/detail reads
+  // remain primary-first for performance.
+  return Promise.all(origins.map((origin) => requestAcrossOrigins("runtime", buildUrl, Object.assign({}, baseOptions, {
+    forceOrigin: origin.name,
+    dedupe: false,
+  })).then((pointer) => ({ pointer }), (error) => ({ error }))))
+    .then((results) => {
+      const pointer = selectNewestRuntimePointer(results.map((result) => result.pointer));
+      if (pointer) return pointer;
+      const failed = results.find((result) => result.error);
+      throw failed && failed.error || Object.assign(new Error("STATIC_ORIGIN_UNAVAILABLE"), { code: "STATIC_ORIGIN_UNAVAILABLE" });
+    });
 }
 
 function fetchManifest(releaseVersion, options = {}) {
@@ -380,4 +412,5 @@ module.exports = {
   resolveDetailRelativePath,
   resolveEmptyRoomRelativePath,
   resolveIndexRelativePath,
+  selectNewestRuntimePointer,
 };

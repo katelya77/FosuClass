@@ -1,0 +1,13 @@
+{
+  "title": "找到多个匹配，请确认一个",
+  "subtitle": "选择后继续刚才的任务，不需要重新输入",
+  "statusText": "请确认对象",
+  "items": [
+    { "key": "choice-1", "name": "教师003", "typeLabel": "教师", "description": "第1周有 5 次课程", "message": "选择教师003，继续刚才的课表查询" },
+    { "key": "choice-2", "name": "教师009", "typeLabel": "教师", "description": "第1周有 7 次课程", "message": "选择教师009，继续刚才的课表查询" },
+    { "key": "choice-3", "name": "教师030", "typeLabel": "教师", "description": "第1周有 2 次课程", "message": "选择教师030，继续刚才的课表查询" }
+  ],
+  "actions": [
+    { "id": "choice-rephrase", "type": "sys.chat", "label": "重新描述", "message": "我重新描述一下查询对象" }
+  ]
+}

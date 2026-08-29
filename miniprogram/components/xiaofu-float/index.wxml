@@ -1,9 +1,9 @@
 <view
   wx:if="{{visible}}"
   class="xiaofu-float {{moving ? 'moving' : ''}} {{dimmed ? 'dimmed' : ''}}"
-  style="left: {{x}}px; top: {{y}}px; width: {{size}}px; height: {{size}}px;"
+  style="left: 0; top: 0; transform: translate3d({{x}}px, {{y}}px, 0) {{moving ? 'scale(1.03)' : 'scale(1)'}}; width: {{size}}px; height: {{size}}px;"
 >
-  <view class="xiaofu-float-hint {{hintSide}}" wx:if="{{hintText && !moving}}" catchtap="onHintTap" aria-label="收起小佛提示">
+  <view class="xiaofu-float-hint {{hintSide}}" wx:if="{{hintText && !moving}}" catchtap="onHintTap" aria-label="收起小序提示">
     <view class="xiaofu-float-hint-close">×</view>
     <view class="xiaofu-float-hint-eyebrow">{{hintEyebrow}}</view>
     <view class="xiaofu-float-hint-text">{{hintText}}</view>
@@ -18,6 +18,6 @@
     bindlongpress="onLongPress"
   >
     <image class="xiaofu-float-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onLogoError" wx:if="{{logoReady}}" />
-    <text wx:else class="xiaofu-float-text">佛</text>
+    <text wx:else class="xiaofu-float-text">序</text>
   </view>
 </view>

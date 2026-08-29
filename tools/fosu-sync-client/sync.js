@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 const {
   printDiagnosisSummary,
@@ -28,6 +29,7 @@ const {
   printablePlan,
 } = require("../../shared/syncPlan");
 const syncCacheStore = require("../../shared/syncCacheStore");
+const { isFreshNetworkSidecar } = require("../../shared/syncProvenance");
 
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
@@ -440,6 +442,10 @@ async function resolveTermConfig(activeSemester, cliParams = {}) {
     weekStart: explicitWeekStart || "monday",
   }, "cli");
 
+  if (cliConfig && explicit && String(cliParams.syncProfile || cliParams.profile || "") === "new-term") {
+    return cliConfig;
+  }
+
   const registryConfigs = [];
   const bundledRegistryConfig = getBundledTermRegistryConfig(activeSemester);
   if (bundledRegistryConfig && bundledRegistryConfig.termStartDate) registryConfigs.push(bundledRegistryConfig);
@@ -504,7 +510,7 @@ async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
     throw new Error([
       `Missing termStartDate for ${activeSemester}.`,
       "Pass it explicitly before crawling, for example:",
-      `npm run sync:local-campus -- --term=${activeSemester} --term-start-date=2026-09-07 --total-weeks=20 --fresh`,
+      `npm run sync:local-campus -- --term=${activeSemester} --term-start-date=2026-09-07 --total-weeks=19 --fresh`,
     ].join("\n"));
   }
   if (!Number.isInteger(config.totalWeeks) || config.totalWeeks < 1 || config.totalWeeks > 30) {
@@ -1052,15 +1058,48 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   return normalizeReport;
 }
 
+function resolveSnapshotTerm() {
+  const activePlan = getActiveSyncPlan();
+  const planTerm = String(activePlan && activePlan.term || "").trim();
+  const configTerm = String(global.TERM_CONFIG && global.TERM_CONFIG.term || "").trim();
+  const cliTerm = String(global.CLI_PARAMS && (global.CLI_PARAMS.term || global.CLI_PARAMS.semester) || "").trim();
+  const envTerm = String(process.env.PREFERRED_SEMESTER || "").trim();
+  const term = planTerm || configTerm || cliTerm || envTerm || inferPreferredSemester();
+  const authoritativeTerms = [planTerm, configTerm, cliTerm].filter(Boolean);
+  const mismatch = authoritativeTerms.find((item) => item !== term);
+  if (mismatch) {
+    const error = new Error(`SNAPSHOT_TERM_CONTEXT_MISMATCH: resolved=${term}, plan=${planTerm || "-"}, config=${configTerm || "-"}, cli=${cliTerm || "-"}`);
+    error.code = "SNAPSHOT_TERM_CONTEXT_MISMATCH";
+    throw error;
+  }
+  return term;
+}
+
+function assertScheduleTermCoherence(allClassSchedules, activeSemester) {
+  const mismatches = (allClassSchedules || [])
+    .map((item) => String(item && item.semester || "").trim())
+    .filter((term) => term && term !== activeSemester);
+  if (!mismatches.length) return;
+  const error = new Error(`SNAPSHOT_TERM_DATA_MISMATCH: expected=${activeSemester}, actual=${Array.from(new Set(mismatches)).slice(0, 5).join(",")}`);
+  error.code = "SNAPSHOT_TERM_DATA_MISMATCH";
+  error.expectedTerm = activeSemester;
+  error.actualTerms = Array.from(new Set(mismatches));
+  throw error;
+}
+
 function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, options = {}) {
   const version = generateSnapshotVersion();
-  const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  const noScheduleCachePath = path.join(__dirname, ".debug", "no-schedule-majors.json");
+  const activeSemester = resolveSnapshotTerm();
+  const activePlan = getActiveSyncPlan();
+  assertScheduleTermCoherence(allClassSchedules, activeSemester);
+  const noScheduleCachePath = activePlan && activePlan.term
+    ? syncCacheStore.negativePath(__dirname, activePlan.term, "class-schedule", activePlan.runId)
+    : path.join(__dirname, ".debug", "no-schedule-majors.json");
   const noScheduleMajors = readJsonArray(noScheduleCachePath);
   const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
   const updatedSchedules = (allClassSchedules || []).map((item) => {
     const classId = item.classId || md5(`${item.semester}_${item.collegeCode}_${item.grade}_${item.majorCode}_${item.className}`);
-    const withClassId = Object.assign({}, item, { classId });
+    const withClassId = Object.assign({}, item, { classId, semester: item.semester || activeSemester });
     return normalizeScheduleEntryCourses(withClassId, {
       semester: item.semester || activeSemester,
       classId,
@@ -1071,7 +1110,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   });
 
   // 读取本地已有的 resources 缓存用于合并
-  const syncPlan = getActiveSyncPlan();
+  const syncPlan = activePlan;
   const allowOldResourceFallback = Boolean(syncPlan && syncPlan.mergeOldData);
   let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
   const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
@@ -1131,6 +1170,26 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     throw new Error("TERM_CONFIG_NOT_RESOLVED");
   }
   const termStartDate = termConfig.termStartDate;
+  let teachingCalendar = null;
+  try {
+    const termSource = require("../../shared/termConfig").loadTermConfig(activeSemester);
+    if (termSource.teachingCalendar) {
+      teachingCalendar = Object.assign({}, termSource.teachingCalendar, {
+        term: activeSemester,
+        semesterText: termSource.semesterText,
+        termStartDate: termSource.termStartDate,
+        totalWeeks: termSource.totalWeeks,
+        weekStart: termSource.weekStart,
+        termConfig: {
+          term: activeSemester,
+          semesterText: termSource.semesterText,
+          termStartDate: termSource.termStartDate,
+          totalWeeks: termSource.totalWeeks,
+          weekStart: termSource.weekStart,
+        },
+      });
+    }
+  } catch (error) {}
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
   const scopeSources = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {});
@@ -1182,6 +1241,19 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     gradeCount: (catalog.grades || []).length,
     noScheduleMajorCount,
   };
+  const cohortAvailability = require("../../shared/cohortAvailability").assessCohortAvailability({
+    term: activeSemester,
+    catalog: Object.assign({}, catalog, {
+      adminClasses: updatedSchedules.map((item) => ({
+        id: item.classId,
+        classId: item.classId,
+        name: item.className,
+        className: item.className,
+        grade: item.grade,
+      })),
+    }),
+    classSchedules: updatedSchedules,
+  });
 
   // 拼接 scopeSummary 文本
   const summaryParts = [];
@@ -1202,6 +1274,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       releaseVersion: cliParams.version || version,
     }),
     termStartDate,
+    teachingCalendar,
     generatedAt: new Date().toISOString(),
     version,
     semester: activeSemester,
@@ -1225,6 +1298,8 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       usedProgressCache: Boolean(crawlStats.usedProgressCache),
       usedNoScheduleCache: Boolean(crawlStats.usedNoScheduleCache),
       usedClassScheduleCache: Boolean(crawlStats.usedClassScheduleCache || cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      resumedFromRunProgress: Boolean(crawlStats.resumedFromRunProgress),
+      progressCacheRunId: crawlStats.progressCacheRunId || "",
       actualNetworkRequestCount: Number(crawlStats.actualNetworkRequestCount || 0),
       skippedByProgressCount: Number(crawlStats.skippedByProgressCount || 0),
       skippedByNoScheduleCount: Number(crawlStats.skippedByNoScheduleCount || 0),
@@ -1248,6 +1323,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       },
       stageTimings: global.SYNC_STAGE_TIMINGS || {},
       warnings: metaWarnings,
+      cohortAvailability: {
+        releasedGrades: cohortAvailability.releasedGrades,
+        pendingGrades: cohortAvailability.pendingGrades,
+        byGrade: cohortAvailability.byGrade,
+      },
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
     },
@@ -1277,7 +1357,12 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       teacherScheduleCount,
       classroomScheduleCount,
       courseScheduleCount,
-    }, coverageQuality)
+    }, coverageQuality),
+    cohortAvailability: {
+      releasedGrades: cohortAvailability.releasedGrades,
+      pendingGrades: cohortAvailability.pendingGrades,
+      byGrade: cohortAvailability.byGrade,
+    },
   };
 }
 
@@ -1733,9 +1818,13 @@ function readClassSchedulesFromFile() {
   if (preferredTerm) {
     candidates.push(syncCacheStore.scheduleLatestPath(__dirname, preferredTerm, "classSchedules"));
   }
-  candidates.push(path.join(debugDir, "class-schedules-latest.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
+  const activePlan = getActiveSyncPlan();
+  const allowLegacyFallback = !activePlan || activePlan.mergeOldData || activePlan.profile === "upload-staging";
+  if (allowLegacyFallback) {
+    candidates.push(path.join(debugDir, "class-schedules-latest.json"));
+    candidates.push(path.join(debugDir, "last-class-schedules.json"));
+    candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
+  }
 
   for (const filePath of candidates) {
     if (fs.existsSync(filePath)) {
@@ -2008,16 +2097,15 @@ async function handleLocalStagingUpload(params) {
       term: sidecar.term || params.term || "",
       generatedAt: sidecar.generatedAt || sidecar.updatedAt || "",
       canonicalHash: sidecar.canonicalHash || "",
-      itemCount: sidecar.counts && sidecar.counts.classScheduleCount || sidecar.itemCount || 0,
+      itemCount: sidecar.counts && (sidecar.counts.classSchedules || sidecar.counts.classScheduleCount) || sidecar.itemCount || 0,
       crawlMode: sidecar.crawlMode || "",
       actualNetworkRequestCount: sidecar.actualNetworkRequestCount || 0,
       usedClassScheduleCache: Boolean(sidecar.usedClassScheduleCache),
     }, null, 2));
-    const freshNetwork = sidecar.crawlMode === "full-fresh" &&
-      !sidecar.usedClassScheduleCache &&
-      !sidecar.usedProgressCache &&
-      !sidecar.usedNoScheduleCache &&
-      Number(sidecar.actualNetworkRequestCount || 0) > 0;
+    const freshNetwork = isFreshNetworkSidecar(sidecar, {
+      currentRunId: (getActiveSyncPlan() || {}).runId,
+      snapshotMeta: params._snapshot && params._snapshot.meta || {},
+    });
     if (!freshNetwork && !(params["allow-cache-source"] || params.allowCacheSource)) {
       throw new Error("UPLOAD_STAGING_REQUIRES_FRESH_NETWORK_META: pass --allow-cache-source only when intentionally uploading cache/imported data.");
     }
@@ -2246,9 +2334,18 @@ async function ensurePlannedTermIfNeeded(plan) {
   }
 }
 
-async function runClientProbeForRelease(result) {
+function resolveClientProbeTarget(result, expectedTerm) {
   const version = result && (result.releaseVersion || result.version) || "";
-  const term = result && (result.term || result.semester) || "";
+  const term = result && (result.term || result.semester || result.activeTerm) || expectedTerm || "";
+  if (!version) throw new Error("CLIENT_PROBE_RELEASE_VERSION_REQUIRED");
+  if (!term) throw new Error("CLIENT_PROBE_TERM_REQUIRED");
+  return { term, releaseVersion: version };
+}
+
+async function runClientProbeForRelease(result, expectedTerm) {
+  const target = resolveClientProbeTarget(result, expectedTerm);
+  const version = target.releaseVersion;
+  const term = target.term;
   const probe = { term, releaseVersion: version, checkedAt: new Date().toISOString(), checks: [] };
   const urls = [
     ["/static/runtime/active.json", "runtime pointer"],
@@ -2258,12 +2355,29 @@ async function runClientProbeForRelease(result) {
     [version ? `/static/releases/${encodeURIComponent(version)}/index/classroom.json` : "", "classroom index"],
     [version ? `/static/releases/${encodeURIComponent(version)}/index/course.json` : "", "course index"],
     [version ? `/static/releases/${encodeURIComponent(version)}/calendar.json` : "", "calendar"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/bootstrap.json` : "", "bootstrap"],
     [version ? `/static/releases/${encodeURIComponent(version)}/empty-room/index.json` : "", "empty-room"],
   ].filter(([url]) => Boolean(url));
   for (const [pathname, label] of urls) {
     try {
       const response = await axios.get(`${FOSU_API_BASE}${pathname}`, { proxy: false, timeout: 15000 });
-      probe.checks.push({ label, url: pathname, ok: response.status >= 200 && response.status < 300, status: response.status });
+      const payload = response.data || {};
+      const actualVersion = payload.releaseVersion || payload.version || payload.activeReleaseVersion || "";
+      const actualTerm = payload.term || payload.activeTerm || payload.semester || payload.termConfig && payload.termConfig.term || "";
+      const versionMatches = label === "runtime pointer" || label === "manifest" || label === "calendar" || label === "bootstrap"
+        ? actualVersion === version
+        : !actualVersion || actualVersion === version;
+      const termMatches = !actualTerm || actualTerm === term;
+      probe.checks.push({
+        label,
+        url: pathname,
+        ok: response.status >= 200 && response.status < 300 && versionMatches && termMatches,
+        status: response.status,
+        term: actualTerm,
+        releaseVersion: actualVersion,
+        versionMatches,
+        termMatches,
+      });
     } catch (error) {
       probe.checks.push({ label, url: pathname, ok: false, status: error.response && error.response.status || 0, message: error.message });
     }
@@ -2274,15 +2388,32 @@ async function runClientProbeForRelease(result) {
   return probe;
 }
 
+async function activateTermRelease(term, releaseVersion) {
+  if (!term || !releaseVersion) throw new Error("TERM_ACTIVATION_TARGET_REQUIRED");
+  return postAdminJson(`/api/admin/terms/${encodeURIComponent(term)}/activate`, {
+    releaseVersion,
+  }, "activate term release");
+}
+
 async function publishCurrentStaging(plan, snapshot) {
   if (!plan.buildRelease) return null;
   if (!ADMIN_API_TOKEN) throw new Error("ADMIN_API_TOKEN_REQUIRED_FOR_PUBLISH");
-  const result = await postAdminJson("/api/admin/sync/staging/publish", {
+  let result = await postAdminJson("/api/admin/sync/staging/publish", {
     force: Boolean(plan.allowPartial || (global.CLI_PARAMS || {}).force),
     readyOnly: plan.profile === "new-term" && !plan.activate,
     releaseNote: (global.CLI_PARAMS || {}).note || snapshot.releaseNote || "",
   }, "staging publish");
-  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result);
+  if (plan.activate && result.readyOnly === true) {
+    const releaseVersion = result.releaseVersion || result.version || "";
+    const termActivation = await activateTermRelease(plan.term, releaseVersion);
+    result = Object.assign({}, result, {
+      readyOnly: false,
+      activeTerm: plan.term,
+      activeReleaseVersion: releaseVersion,
+      termActivation,
+    });
+  }
+  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result, plan.term);
   return result;
 }
 
@@ -2295,7 +2426,17 @@ async function handlePlannedSync(page, params) {
   if (["daily", "new-term", "crawl-daily"].includes(plan.profile)) {
     process.env.SYNC_CLASS_SCOPE = process.env.SYNC_CLASS_SCOPE || "all";
   }
-  const snapshot = await handleLocalCampusStaging(page, params);
+  const stagingPath = resolveOutputFilePath(params.output);
+  const stagingMetaPath = getSidecarMetaPath(stagingPath);
+  let snapshot = null;
+  if (params.resume && fs.existsSync(stagingPath) && fs.existsSync(stagingMetaPath)) {
+    const existingMeta = JSON.parse(fs.readFileSync(stagingMetaPath, "utf-8"));
+    if (existingMeta.freshRunId === plan.runId && existingMeta.partial !== true) {
+      snapshot = JSON.parse(fs.readFileSync(stagingPath, "utf-8"));
+      console.log(`[resume] Reusing completed staging from current run: ${plan.runId}`);
+    }
+  }
+  if (!snapshot) snapshot = await handleLocalCampusStaging(page, params);
   if (!plan.upload) {
     syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "crawl-report"), {
       success: true,
@@ -2309,7 +2450,10 @@ async function handlePlannedSync(page, params) {
     });
     return snapshot;
   }
-  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, { file: params.output }));
+  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, {
+    file: params.output,
+    _snapshot: snapshot,
+  }));
   const publishResult = await publishCurrentStaging(plan, snapshot);
   const report = {
     success: true,
@@ -3332,13 +3476,12 @@ async function handleResourcesSync(resourceTypes, options = {}) {
  * 初始化已登录的 Playwright 上下文
  */
 async function initBrowserContext() {
-  const launchArgs = [
+  const launchArgs = withDirectBrowserArgs([
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security",
-    "--allow-running-insecure-content",
-    "--no-proxy-server"
-  ];
+    "--allow-running-insecure-content"
+  ]);
 
   let browser;
   // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium
@@ -4611,10 +4754,13 @@ async function syncClassSchedules(page, catalog, majors) {
     }
     if (cache.items && cache.items.length > 0) {
       cachedClassSchedules = cache.items;
-      crawlStats.usedClassScheduleCache = true;
+      const isCurrentRunProgress = cache.filePath === PROGRESS_CLASS_SCHEDULES_PATH;
+      crawlStats.usedClassScheduleCache = !isCurrentRunProgress;
+      crawlStats.resumedFromRunProgress = isCurrentRunProgress;
+      crawlStats.progressCacheRunId = isCurrentRunProgress ? runId : "";
       global.SYNC_CRAWL_STATS = crawlStats;
       global.CLASS_SCHEDULE_CACHE_USAGE = {
-        usedClassScheduleCache: true,
+        usedClassScheduleCache: !isCurrentRunProgress,
         cacheSource: cache.filePath,
         cacheWarning: `本轮有 ${completedProgressCount} 个专业被 progress 跳过，已从历史 classSchedules 缓存恢复 ${cachedClassSchedules.length} 条课表。`,
       };
@@ -5570,6 +5716,10 @@ if (require.main === module) {
     mergeResourcesBySource,
     getResourceTypesFromIncludeScopes,
     resolveTermConfig,
+    resolveClientProbeTarget,
     assertTermConfigBeforeCrawl,
+    resolveSnapshotTerm,
+    assertScheduleTermCoherence,
+    buildSnapshot,
   };
 }

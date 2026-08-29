@@ -1,0 +1,55 @@
+{
+  "operationIds": [
+    "campus_schedule_query",
+    "campus_schedule_range_query",
+    "campus_classroom_search",
+    "campus_risk_check",
+    "campus_day_plan",
+    "campus_overview",
+    "campus_teacher_load_query",
+    "campus_entity_search",
+    "campus_academic_context",
+    "campus_common_free_time_query",
+    "campus_room_utilization_query",
+    "campus_reschedule_feasibility",
+    "campus_group_plan"
+  ],
+  "directResultOutput": {
+    "campus_schedule_query": false,
+    "campus_schedule_range_query": false,
+    "campus_classroom_search": false,
+    "campus_risk_check": false,
+    "campus_day_plan": false,
+    "campus_overview": false,
+    "campus_teacher_load_query": false,
+    "campus_entity_search": false,
+    "campus_academic_context": false,
+    "campus_common_free_time_query": false,
+    "campus_room_utilization_query": false,
+    "campus_reschedule_feasibility": false,
+    "campus_group_plan": false
+  },
+  "bindings": {
+    "main": [],
+    "schedule": [
+      "campus_schedule_query",
+      "campus_schedule_range_query",
+      "campus_classroom_search",
+      "campus_entity_search",
+      "campus_academic_context",
+      "campus_common_free_time_query",
+      "campus_group_plan"
+    ],
+    "risk": [
+      "campus_risk_check",
+      "campus_day_plan",
+      "campus_academic_context",
+      "campus_reschedule_feasibility"
+    ],
+    "insight": [
+      "campus_overview",
+      "campus_teacher_load_query",
+      "campus_room_utilization_query"
+    ]
+  }
+}

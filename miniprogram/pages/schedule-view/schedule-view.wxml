@@ -46,13 +46,8 @@
         <text class="swipe-hint-text" style="font-size: 20rpx; color: #c62828; font-weight: bold;">💡 左右滑动查看周末课表</text>
       </view>
 
-      <scroll-view
-        class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
-        scroll-x="{{scrollX}}"
-        enhanced
-        show-scrollbar="{{false}}"
-      >
-        <view class="schedule-grid" style="width: {{gridWidth}}rpx;">
+      <view class="schedule-grid-shell">
+        <view class="time-axis-layer">
           <view class="time-axis">
             <view class="time-head">节次</view>
             <view
@@ -65,7 +60,14 @@
               <view class="time-text-single">{{item.axisLabel}}</view>
             </view>
           </view>
+        </view>
 
+        <scroll-view
+          class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
+          scroll-x="{{scrollX}}"
+          enhanced
+          show-scrollbar="{{false}}"
+        >
           <view class="day-track" style="width: {{dayTrackWidth}}rpx;">
             <view class="weekday-heads">
               <view
@@ -106,8 +108,8 @@
               </view>
             </view>
           </view>
-        </view>
-      </scroll-view>
+        </scroll-view>
+      </view>
     </view>
 
     <view class="empty-week-wrap" wx:elif="{{allCourses && allCourses.length}}">

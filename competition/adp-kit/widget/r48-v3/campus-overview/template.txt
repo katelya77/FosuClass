@@ -1,0 +1,83 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="OVERVIEW · 校园教学态势" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+        <Caption value={phaseText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={1} wrap="wrap">
+      {metrics.map((metric) => (
+        <Badge key={metric.id} label={`${metric.value} · ${metric.label}`} color="info" variant="soft" size="sm" />
+      ))}
+    </Row>
+
+    <Caption value="周粒度趋势（课程次数）" color="#173F35" />
+    <Row gap={1} wrap="wrap">
+      {weeks.map((week) => (
+        <Badge key={week.label} label={`${week.label} · ${week.count}`} color={week.count > 0 ? 'info' : 'secondary'} variant="outline" size="sm" />
+      ))}
+    </Row>
+
+    <Caption value="校区压力" color="#173F35" />
+    <Col gap={2}>
+      {campuses.map((campus) => (
+        <Col key={campus.campusName} gap={1}>
+          <Text value={campus.loadText} size="sm" weight="semibold" />
+          <Caption value={campus.freeText} color="secondary" />
+        </Col>
+      ))}
+    </Col>
+
+    {top1 ? (
+      <Card size="sm" background="#E9F0EB">
+        <Col gap={1}>
+          <Caption value="负载 TOP1 · 可钻取" color="#173F35" />
+          <Text value={top1.teacherName} size="md" weight="semibold" />
+          <Caption value={`${top1.loadText} · 第${top1.week}周起`} color="secondary" />
+        </Col>
+      </Card>
+    ) : null}
+
+    <Caption value="教师负载 Top 3" color="#173F35" />
+    <Col gap={1}>
+      {topTeachers.map((teacher, teacherIndex) => (
+        <Row key={teacher.teacherName} gap={2} align="center">
+          <Badge label={`${teacherIndex + 1}`} color="secondary" variant="outline" size="sm" />
+          <Text value={teacher.teacherName} size="sm" weight="semibold" />
+          <Caption value={teacher.loadText} color="secondary" />
+        </Row>
+      ))}
+    </Col>
+
+    <Caption value="风险摘要" color="#173F35" />
+    <Row gap={1} wrap="wrap">
+      <Badge label={`时间冲突 ${risks.conflictCount}`} color={risks.conflictCount > 0 ? 'danger' : 'success'} variant="soft" size="sm" />
+      <Badge label={`跨校区赶场 ${risks.rushCount}`} color={risks.rushCount > 0 ? 'warning' : 'success'} variant="soft" size="sm" />
+      <Badge label={`连续课负载 ${risks.continuousLoadCount}`} color={risks.continuousLoadCount > 0 ? 'warning' : 'secondary'} variant="outline" size="sm" />
+    </Row>
+    <Caption value={risks.peakText} color="secondary" />
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

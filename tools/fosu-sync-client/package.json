@@ -24,7 +24,9 @@
     "sync:daily:classrooms": "node sync.js daily:classrooms",
     "sync:daily:courses": "node sync.js daily:courses",
     "sync:scopes": "node sync.js scopes",
-    "sync:new-term": "node sync.js new-term",
+    "sync:current-term": "node current-term.js",
+    "sync:teaching-calendar": "node sync-teaching-calendar.js",
+    "sync:new-term": "node current-term.js --compat=new-term",
     "crawl:daily": "node sync.js crawl:daily",
     "crawl:scopes": "node sync.js crawl:scopes",
     "sync:upload-staging": "node sync.js upload-staging",
@@ -42,6 +44,7 @@
     "axios": "^1.6.8",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
-    "playwright": "^1.43.0"
+    "playwright": "^1.43.0",
+    "xlsx": "^0.18.5"
   }
 }

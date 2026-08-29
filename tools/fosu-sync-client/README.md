@@ -15,7 +15,7 @@ npm run sync:publish
 深度全量：
 
 ```powershell
-npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20
+npm run sync:publish -- --mode=full --term=2026-2027-1
 ```
 
 恢复：

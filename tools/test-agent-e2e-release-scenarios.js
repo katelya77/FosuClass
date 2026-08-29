@@ -71,8 +71,29 @@ async function scenario1() {
   const serverSession = sessionFor(principal);
   const conversationId = `conv-s1-${Date.now()}`;
   const turns = [];
-  for (const message of ["查 25 动医 6 班课表", "那周三呢", "下午呢", "换成第17周"]) {
-    const r = await chat(message, { conversationId, serverSession, memoryMode: "session_state", tag: "s1" });
+  // Seed an already-confirmed entity through a successful, non-fact Turn.
+  // The following schedule requests may legitimately fail closed when a clean
+  // runner has no local release data; the memory contract must not depend on a
+  // developer machine's ignored school-index cache.
+  const seeded = await chat("你好", {
+    conversationId,
+    serverSession,
+    memoryMode: "session_state",
+    tag: "s1-seed",
+    context: { contextSlots: { className: "25动医6班" } },
+  });
+  assert.ok(
+    seeded.workingMemory && String(seeded.workingMemory.className || "").includes("25"),
+    "confirmed class seed persisted"
+  );
+  const messages = ["查 25 动医 6 班课表", "那周三呢", "下午呢", "换成第17周"];
+  for (const message of messages) {
+    const r = await chat(message, {
+      conversationId,
+      serverSession,
+      memoryMode: "session_state",
+      tag: "s1",
+    });
     turns.push({
       message,
       intent: r.intent && r.intent.name,

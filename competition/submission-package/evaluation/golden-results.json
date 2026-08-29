@@ -1,0 +1,1170 @@
+{
+  "schema": "campus-tools-golden/v1",
+  "reviewRequired": true,
+  "dataVersion": "competition-demo-v1",
+  "dataHash": "sha1:fefef4bf425b",
+  "oracleSourceSha256": "613c30d9135fb20bfc181125384899623bf4c1e3b14d5f93f1ed6c691de21449",
+  "caseCount": 33,
+  "cases": [
+    {
+      "id": "schedule-teacher001-week1-mon",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "teacher",
+        "entityName": "教师001",
+        "week": 1,
+        "weekday": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": {
+          "id": "t-001",
+          "name": "教师001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-001",
+          "les-011"
+        ],
+        "courseIds": [
+          "c-01"
+        ],
+        "roomIds": [
+          "r-a1-101",
+          "r-a1-104"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-teacher001-week1-wed",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "teacher",
+        "entityName": "教师001",
+        "week": 1,
+        "weekday": 3
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": {
+          "id": "t-001",
+          "name": "教师001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-002",
+          "les-012"
+        ],
+        "courseIds": [
+          "c-01"
+        ],
+        "roomIds": [
+          "r-a1-101",
+          "r-a1-104"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-class-a-week1-fri-pm",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "class",
+        "entityName": "2025级A班",
+        "week": 1,
+        "weekday": 5,
+        "periodStart": 5,
+        "periodEnd": 8
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": {
+          "id": "cls-2025-a",
+          "name": "2025级A班"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-007"
+        ],
+        "courseIds": [
+          "c-05"
+        ],
+        "roomIds": [
+          "r-a1-201"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-class-b-week1-fri",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "class",
+        "entityName": "2025级B班",
+        "week": 1,
+        "weekday": 5
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": {
+          "id": "cls-2025-b",
+          "name": "2025级B班"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-015",
+          "les-017"
+        ],
+        "courseIds": [
+          "c-05",
+          "c-09"
+        ],
+        "roomIds": [
+          "r-a1-202",
+          "r-a2-302"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-room-a1-101-week1-mon",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "room",
+        "entityName": "A1-101",
+        "week": 1,
+        "weekday": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": {
+          "id": "r-a1-101",
+          "name": "A1-101"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-001"
+        ],
+        "courseIds": [
+          "c-01"
+        ],
+        "roomIds": [
+          "r-a1-101"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-course-math-week1",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "course",
+        "entityName": "高等数学A",
+        "week": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 4,
+        "resolvedEntity": {
+          "id": "c-01",
+          "name": "高等数学A"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-001",
+          "les-002",
+          "les-011",
+          "les-012"
+        ],
+        "courseIds": [
+          "c-01"
+        ],
+        "roomIds": [
+          "r-a1-101",
+          "r-a1-104"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-teacher003-week1-mon",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "teacher",
+        "entityName": "教师003",
+        "week": 1,
+        "weekday": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": {
+          "id": "t-003",
+          "name": "教师003"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-005",
+          "les-024"
+        ],
+        "courseIds": [
+          "c-03",
+          "c-14"
+        ],
+        "roomIds": [
+          "r-a2-301",
+          "r-b1-201"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-class-c-week2-thu",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "class",
+        "entityName": "2025级C班",
+        "week": 2,
+        "weekday": 4
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": {
+          "id": "cls-2025-c",
+          "name": "2025级C班"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-023"
+        ],
+        "courseIds": [
+          "c-13"
+        ],
+        "roomIds": [
+          "r-b1-102"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-course-ideology-week10-empty",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "course",
+        "entityName": "思政通识",
+        "week": 10,
+        "weekday": 5
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": {
+          "id": "c-08",
+          "name": "思政通识"
+        },
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-course-art-week1-empty",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "course",
+        "entityName": "通识选修·艺术鉴赏",
+        "week": 1,
+        "weekday": 5
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": {
+          "id": "c-16",
+          "name": "通识选修·艺术鉴赏"
+        },
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-course-art-week2",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "course",
+        "entityName": "通识选修·艺术鉴赏",
+        "week": 2,
+        "weekday": 5
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": {
+          "id": "c-16",
+          "name": "通识选修·艺术鉴赏"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-031"
+        ],
+        "courseIds": [
+          "c-16"
+        ],
+        "roomIds": [
+          "r-b1-105"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "schedule-room-b1-201-week3-mon",
+      "tool": "query_schedule",
+      "input": {
+        "entityType": "room",
+        "entityName": "B1-201",
+        "week": 3,
+        "weekday": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": {
+          "id": "r-b1-201",
+          "name": "B1-201"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-024"
+        ],
+        "courseIds": [
+          "c-14"
+        ],
+        "roomIds": [
+          "r-b1-201"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-a-week1-mon-1-2",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区A",
+        "week": 1,
+        "weekday": 1,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "capacity": 60
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 8,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-a1-102",
+          "r-a1-103",
+          "r-a1-104",
+          "r-a1-105",
+          "r-a1-106",
+          "r-a1-201",
+          "r-a1-202",
+          "r-a1-203"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-b-week1-wed-7-8",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区B",
+        "week": 1,
+        "weekday": 3,
+        "periodStart": 7,
+        "periodEnd": 8
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 8,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-b1-101",
+          "r-b1-102",
+          "r-b1-103",
+          "r-b1-104",
+          "r-b1-105",
+          "r-b1-106",
+          "r-b1-201",
+          "r-lb-301"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-a-week2-fri-consecutive",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区A",
+        "week": 2,
+        "weekday": 5,
+        "startPeriod": 5,
+        "consecutivePeriods": 2
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 10,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-a1-101",
+          "r-a1-102",
+          "r-a1-103",
+          "r-a1-104",
+          "r-a1-105",
+          "r-a1-106",
+          "r-a1-203",
+          "r-a2-301",
+          "r-a2-302",
+          "r-la-401"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-b-week3-wed-5-8",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区B",
+        "week": 3,
+        "weekday": 3,
+        "periodStart": 5,
+        "periodEnd": 8
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 6,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-b1-101",
+          "r-b1-102",
+          "r-b1-105",
+          "r-b1-106",
+          "r-b1-201",
+          "r-lb-301"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-building-a1-capacity80",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区A",
+        "week": 1,
+        "weekday": 2,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "building": "教学楼A1",
+        "capacity": 80
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 5,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-a1-103",
+          "r-a1-106",
+          "r-a1-201",
+          "r-a1-202",
+          "r-a1-203"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-building-b1-night",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区B",
+        "week": 2,
+        "weekday": 5,
+        "periodStart": 9,
+        "periodEnd": 10,
+        "building": "教学楼B1"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 6,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-b1-101",
+          "r-b1-102",
+          "r-b1-103",
+          "r-b1-104",
+          "r-b1-106",
+          "r-b1-201"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-a-all-day-capacity120",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区A",
+        "week": 1,
+        "weekday": 1,
+        "periodStart": 1,
+        "periodEnd": 10,
+        "capacity": 120
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [
+          "r-a1-201",
+          "r-a1-202"
+        ],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "classroom-campus-b-sunday-capacity200-empty",
+      "tool": "find_available_classrooms",
+      "input": {
+        "campus": "校区B",
+        "week": 1,
+        "weekday": 7,
+        "periodStart": 1,
+        "periodEnd": 2,
+        "capacity": 200
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": null,
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": null,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-class-a-b-week1-fri",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "class",
+        "firstName": "2025级A班",
+        "secondType": "class",
+        "secondName": "2025级B班",
+        "week": 1,
+        "weekday": 5,
+        "periodStart": 5,
+        "periodEnd": 8
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 1,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "cls-2025-a",
+            "name": "2025级A班"
+          },
+          {
+            "id": "cls-2025-b",
+            "name": "2025级B班"
+          }
+        ],
+        "lessonIds": [
+          "les-007",
+          "les-017"
+        ],
+        "courseIds": [
+          "c-05"
+        ],
+        "roomIds": [
+          "r-a1-201",
+          "r-a1-202"
+        ],
+        "conflictCount": 1,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-teacher001-002-week1",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "teacher",
+        "firstName": "教师001",
+        "secondType": "teacher",
+        "secondName": "教师002",
+        "week": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "t-001",
+            "name": "教师001"
+          },
+          {
+            "id": "t-002",
+            "name": "教师002"
+          }
+        ],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": 0,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-teacher003-self-week1-mon",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "teacher",
+        "firstName": "教师003",
+        "secondType": "teacher",
+        "secondName": "教师003",
+        "week": 1,
+        "weekday": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "t-003",
+            "name": "教师003"
+          },
+          {
+            "id": "t-003",
+            "name": "教师003"
+          }
+        ],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": 0,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-class-c-d-week3",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "class",
+        "firstName": "2025级C班",
+        "secondType": "class",
+        "secondName": "2025级D班",
+        "week": 3
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "cls-2025-c",
+            "name": "2025级C班"
+          },
+          {
+            "id": "cls-2025-d",
+            "name": "2025级D班"
+          }
+        ],
+        "lessonIds": [
+          "les-025",
+          "les-026",
+          "les-028",
+          "les-029"
+        ],
+        "courseIds": [
+          "c-02",
+          "c-06",
+          "c-07",
+          "c-12"
+        ],
+        "roomIds": [
+          "r-b1-103",
+          "r-b1-104",
+          "r-gym-b"
+        ],
+        "conflictCount": 2,
+        "lessonCount": null,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-course-math-english-week1",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "course",
+        "firstName": "高等数学A",
+        "secondType": "course",
+        "secondName": "大学英语A",
+        "week": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "c-01",
+            "name": "高等数学A"
+          },
+          {
+            "id": "c-02",
+            "name": "大学英语A"
+          }
+        ],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": 0,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "conflict-room-a1-101-a1-102-week1",
+      "tool": "compare_schedules",
+      "input": {
+        "firstType": "room",
+        "firstName": "A1-101",
+        "secondType": "room",
+        "secondName": "A1-102",
+        "week": 1
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": null,
+        "comparedEntities": [
+          {
+            "id": "r-a1-101",
+            "name": "A1-101"
+          },
+          {
+            "id": "r-a1-102",
+            "name": "A1-102"
+          }
+        ],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": 0,
+        "lessonCount": null,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-mon",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-08-31"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 3,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-001",
+          "les-005"
+        ],
+        "courseIds": [
+          "c-01",
+          "c-03"
+        ],
+        "roomIds": [
+          "r-a1-101",
+          "r-a2-301"
+        ],
+        "conflictCount": null,
+        "lessonCount": 2,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-tue",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-01"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 2,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-003",
+          "les-008"
+        ],
+        "courseIds": [
+          "c-02",
+          "c-06"
+        ],
+        "roomIds": [
+          "r-a1-102",
+          "r-a1-103"
+        ],
+        "conflictCount": null,
+        "lessonCount": 2,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-wed",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-02"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 3,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-002",
+          "les-009"
+        ],
+        "courseIds": [
+          "c-01",
+          "c-07"
+        ],
+        "roomIds": [
+          "r-a1-101",
+          "r-gym-a"
+        ],
+        "conflictCount": null,
+        "lessonCount": 2,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-thu",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-03"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 3,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-004",
+          "les-006"
+        ],
+        "courseIds": [
+          "c-02",
+          "c-04"
+        ],
+        "roomIds": [
+          "r-a1-102",
+          "r-la-401"
+        ],
+        "conflictCount": null,
+        "lessonCount": 2,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-fri",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-04",
+        "preferredCampus": "校区A",
+        "preferredStudyDuration": 2
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 3,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-007",
+          "les-010"
+        ],
+        "courseIds": [
+          "c-05",
+          "c-08"
+        ],
+        "roomIds": [
+          "r-a1-201"
+        ],
+        "conflictCount": null,
+        "lessonCount": 2,
+        "empty": false,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week1-sat-empty",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-05"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 0,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [],
+        "courseIds": [],
+        "roomIds": [],
+        "conflictCount": null,
+        "lessonCount": 0,
+        "empty": true,
+        "verified": true
+      }
+    },
+    {
+      "id": "day-plan-week2-fri-even-elective",
+      "tool": "generate_day_plan",
+      "input": {
+        "visitorId": "visitor-demo-001",
+        "date": "2026-09-11"
+      },
+      "expected": {
+        "dataVersion": "competition-demo-v1",
+        "dataHash": "sha1:fefef4bf425b",
+        "success": true,
+        "itemCount": 5,
+        "resolvedEntity": {
+          "id": "demo-user-001",
+          "name": "演示用户001"
+        },
+        "comparedEntities": [],
+        "lessonIds": [
+          "les-007",
+          "les-010",
+          "les-031"
+        ],
+        "courseIds": [
+          "c-05",
+          "c-08",
+          "c-16"
+        ],
+        "roomIds": [
+          "r-a1-201",
+          "r-b1-105"
+        ],
+        "conflictCount": null,
+        "lessonCount": 3,
+        "empty": false,
+        "verified": true
+      }
+    }
+  ],
+  "lastOracleReview": {
+    "date": "2026-08-23",
+    "classification": "A",
+    "semanticDrift": 0,
+    "changedCases": [],
+    "datasetAnchor": "competition-demo-v1 / sha1:fefef4bf425b（未变）",
+    "note": "Final Runtime Tool Fix 审计：tools.js 新增 normalizeOptionalString（check_reschedule_feasibility 可选 target.room 空值归一化，空值形态进入自动候选查找，不再误报「未找到教室「」」）并移除 compare_schedules 在 conflicts.length===0 时错误的 evidence.note=EMPTY_RESULT 标记（canonicalExpected 不采集 evidence.note）。33/33 case 语义输出与 committed expected 逐字节一致，仅 oracleSourceSha256 更新，无需重建 case"
+  }
+}

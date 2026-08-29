@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "conflict",
+  "success": true,
+  "queryId": "q-r48-conflict-compare",
+  "dataVersion": "competition-demo-v1",
+  "title": "教师003 vs 教师009 · 课程冲突比较",
+  "subtitle": "双对象时间比较",
+  "timeText": "第1周 · 周五",
+  "statusText": "已核验",
+  "filters": [],
+  "summary": {
+    "conflictCount": 1,
+    "rushWarningCount": 1,
+    "selfCompare": false,
+    "firstBusySlots": 2,
+    "secondBusySlots": 3
+  },
+  "items": [
+    {
+      "date": "2026-09-04",
+      "weekdayName": "周五",
+      "periodText": "第5-6节",
+      "first": {
+        "courseName": "高等数学A",
+        "periodText": "第5-6节",
+        "campusName": "校区A",
+        "roomName": "A1-201"
+      },
+      "second": {
+        "courseName": "操作系统",
+        "periodText": "第5-6节",
+        "campusName": "校区A",
+        "roomName": "A1-201"
+      }
+    }
+  ],
+  "rushWarnings": [
+    {
+      "entity": "教师009",
+      "date": "2026-09-04",
+      "weekdayName": "周五",
+      "gapMinutes": 20,
+      "from": {
+        "courseName": "操作系统",
+        "periodText": "第5-6节",
+        "campusName": "校区A",
+        "roomName": "A1-201"
+      },
+      "to": {
+        "courseName": "专业导论",
+        "periodText": "第9-10节",
+        "campusName": "校区B",
+        "roomName": "B1-105"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "conflict-first-schedule",
+      "type": "sys.chat",
+      "label": "查看教师003课表",
+      "message": "查询教师003第1周的课表",
+      "intentHint": "schedule_week",
+      "entityName": "教师003",
+      "week": 1
+    },
+    {
+      "id": "conflict-second-schedule",
+      "type": "sys.chat",
+      "label": "查看教师009课表",
+      "message": "查询教师009第1周的课表",
+      "intentHint": "schedule_week",
+      "entityName": "教师009",
+      "week": 1
+    }
+  ],
+  "interaction": {
+    "waitForUser": false
+  },
+  "evidence": {
+    "verified": true
+  },
+  "error": null,
+  "footerText": "数据源：冲突比较工具 · competition-demo-v1"
+}

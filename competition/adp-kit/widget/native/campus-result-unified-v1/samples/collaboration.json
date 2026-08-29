@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "variant": "collaboration",
+  "status": "success",
+  "title": "教师001、教师002 · 共同空闲",
+  "subtitle": "",
+  "verified": true,
+  "summary": "教师001、教师002共同空闲 2 个时段，含可用教室。",
+  "context": "",
+  "sections": [
+    {
+      "title": "候选时段（含教室）",
+      "rows": [
+        {
+          "label": "周三 第7-8节",
+          "value": "校区A A3-101 · 80座",
+          "badge": "工作日",
+          "hint": "2026-09-02 · 2 节空闲"
+        },
+        {
+          "label": "周六 第3-4节",
+          "value": "校区A A3-104 · 120座",
+          "badge": "周末",
+          "hint": "2026-09-05 · 4 节空闲"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "collab-weekday",
+      "type": "sys.chat",
+      "label": "只看工作日",
+      "payload": { "query": "只看工作日的共同空闲时段" }
+    },
+    {
+      "id": "collab-more",
+      "type": "sys.chat",
+      "label": "再找更多时段",
+      "payload": { "query": "多找几个共同空闲时段" }
+    }
+  ],
+  "displayMeta": {
+    "weekendMarked": true
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

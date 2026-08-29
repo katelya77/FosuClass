@@ -1,0 +1,21 @@
+"use strict";
+
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const pkg = require("../package.json");
+const termConfigSource = fs.readFileSync(path.join(__dirname, "../shared/termConfig.js"), "utf8");
+const syncPlanSource = fs.readFileSync(path.join(__dirname, "../server/src/shared/syncPlan.js"), "utf8");
+const envExample = fs.readFileSync(path.join(__dirname, "fosu-sync-client/.env.example"), "utf8");
+const { DEFAULT_CURRENT_TERM, resolvePreferredTerm } = require("../shared/termConfig");
+const serverWrapper = fs.readFileSync(path.join(__dirname, "../server/scripts/sync-new-term.js"), "utf8");
+assert(pkg.scripts["sync:current-term"], "root must expose the only operator-facing current-term command");
+assert(pkg.scripts.login, "root must expose one login command");
+assert(!serverWrapper.includes("2026-09-01"));
+assert(!serverWrapper.includes("function parseArgs"));
+assert(serverWrapper.includes("current-term"), "legacy wrapper must delegate to current-term entrypoint");
+assert.strictEqual(DEFAULT_CURRENT_TERM, resolvePreferredTerm(), "current term must come from the unique preferred term config");
+assert(!termConfigSource.includes('DEFAULT_CURRENT_TERM = "2026-2027-1"'), "current-term module must not hard-code a semester");
+assert(!syncPlanSource.includes('options.term || "2025-2026-2"'), "operator command rendering must not default to an archived term");
+assert(/PREFERRED_SEMESTER=\s*(?:\r?\n|$)/.test(envExample), ".env.example must not pin an archived term");
+console.log("test-new-term-command-single-source passed");

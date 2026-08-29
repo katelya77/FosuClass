@@ -22,11 +22,11 @@ async function run() {
   page.toggleXiaofuFloat();
   assert.strictEqual(xiaofuFloatService.isEnabled(), false, "more menu toggle should disable the float");
   assert.strictEqual(page.data.xiaofuFloatEnabled, false, "disabled state should clear floatEnabled");
-  assert.strictEqual(page.data.xiaofuFloatToggleText, "小佛浮窗", "label stays product-facing with Switch control");
+  assert.strictEqual(page.data.xiaofuFloatToggleText, "小序浮窗", "label stays product-facing with Switch control");
   page.toggleXiaofuFloat();
   assert.strictEqual(xiaofuFloatService.isEnabled(), true, "more menu toggle should re-enable the float");
   assert.strictEqual(page.data.xiaofuFloatEnabled, true, "enabled state should set floatEnabled");
-  assert.strictEqual(page.data.xiaofuFloatToggleText, "小佛浮窗", "label remains stable with Switch control");
+  assert.strictEqual(page.data.xiaofuFloatToggleText, "小序浮窗", "label remains stable with Switch control");
 
   page.openTaskPanelNow();
   await wait(50);

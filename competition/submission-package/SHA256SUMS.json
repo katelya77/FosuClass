@@ -1,0 +1,450 @@
+{
+  "schema": "campusflow-submission-manifest/v1",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1434,
+      "sha256": "45bca6b4eb03f42763d9d2a22a79b59d66b52f4522a4ceda02e40c0d09792ae4"
+    },
+    {
+      "path": "evaluation/eval-golden.js",
+      "bytes": 1616,
+      "sha256": "c60adbc7f0fadc82d141d69680bea9661dd77f8a3cf8c358e127e7ce895a4379"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.csv",
+      "bytes": 11231,
+      "sha256": "33a2386ced404713c738b4aa343b7b7513ecc08364f407401ca5caa7a7c99622"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.json",
+      "bytes": 50900,
+      "sha256": "852f2958f97c6308609c5082030e0df651399645c0fec255afb4dfc8e951bc8e"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.jsonl",
+      "bytes": 31915,
+      "sha256": "f5829beb36c2c5aec70801c813327cfbca650d6be22713af46b94d3d420cc65c"
+    },
+    {
+      "path": "evaluation/golden-cases.js",
+      "bytes": 4457,
+      "sha256": "4b7351c081e20ae37a802c20b34cfe42a85095dd6fd1d12e35272855b507a35e"
+    },
+    {
+      "path": "evaluation/golden-oracle.js",
+      "bytes": 2748,
+      "sha256": "473a00b2a4e7e45a7d0f8936a8fd00f61626047f4841ca6053cc66b69f67b3c2"
+    },
+    {
+      "path": "evaluation/golden-results.json",
+      "bytes": 28331,
+      "sha256": "93dab9d7b761df2d7ee4ec5be0de321bdc37e65ce831754dbd40a8d9b06af037"
+    },
+    {
+      "path": "evaluation/scoring-rubric.md",
+      "bytes": 481,
+      "sha256": "b69d1fda8516af8d5a1e04e6b5734bccdf934abdc1346c4496c2c5463d649866"
+    },
+    {
+      "path": "knowledge/01-产品能力与使用边界.md",
+      "bytes": 4551,
+      "sha256": "517027c6fdf96086a94620725aa3dd1f304e959833ea5fd9e02f063bfeb0f71d"
+    },
+    {
+      "path": "knowledge/02-课表查询参数与实体识别规则.md",
+      "bytes": 4740,
+      "sha256": "bc26c020ec8047bbb54ebb79e4d5fc6c39b47d6734ffaccfa909a3aa57972495"
+    },
+    {
+      "path": "knowledge/03-教学周日期节次和自然语言时间规则.md",
+      "bytes": 3898,
+      "sha256": "208b2e363c189a028377b3fb3fcfbbbbadab55a9c0a7e924d9a1151b1064916e"
+    },
+    {
+      "path": "knowledge/04-数据版本核验和防幻觉机制.md",
+      "bytes": 4032,
+      "sha256": "faedaf9dab82c14ef7fa24b9f00cae2a0746c22ed102bf3ca17f68ddaf2dd718"
+    },
+    {
+      "path": "knowledge/05-匿名评审隐私与安全规范.md",
+      "bytes": 3554,
+      "sha256": "4e24b689ac077917c8fa12158f1eb9c26fb9423d981d8904729917b1c01eefda"
+    },
+    {
+      "path": "knowledge/06-工具失败空结果和歧义处理.md",
+      "bytes": 3764,
+      "sha256": "0b9ec94fa6eeb44e6dff96724a01b4b8b5ca8e4196d10e069a0d18342747a173"
+    },
+    {
+      "path": "knowledge/07-校园任务智能体常见问题.md",
+      "bytes": 4214,
+      "sha256": "1bf848f537b2da0d97ed8ea1aa6c28a13ea5986118b9511e7cce29ab3f788593"
+    },
+    {
+      "path": "knowledge/08-功能导航与演示问题.md",
+      "bytes": 4686,
+      "sha256": "f78e5759e85d48135c28fa08e9995c477e36d89e661139a482f45af321425671"
+    },
+    {
+      "path": "knowledge/current/01-定位与能力边界.md",
+      "bytes": 2914,
+      "sha256": "1b702199bf903e3d7344b6ef0f7690e5c8e5436e508500c9c885f056cb67c6ed"
+    },
+    {
+      "path": "knowledge/current/02-课表与校园实体理解.md",
+      "bytes": 1441,
+      "sha256": "604306e88a0acb25e453c281a2bf3fefeb4130b4a5a1d7453f61a875471eaba0"
+    },
+    {
+      "path": "knowledge/current/03-教学时间与节次规则.md",
+      "bytes": 1386,
+      "sha256": "fa2919a3e62560274ddb88ed7de1125cf419d2a298546970885765cac4e9b6fe"
+    },
+    {
+      "path": "knowledge/current/04-动态事实与可信度.md",
+      "bytes": 2085,
+      "sha256": "6042dbd177a96a3ad6e5554a089a912ed54045ea0415147d163d1a9512db4338"
+    },
+    {
+      "path": "knowledge/current/05-隐私安全与授权边界.md",
+      "bytes": 2179,
+      "sha256": "f377ac392ca240157d8d9aa00c0956af20f884919581e063a5bc7fe5e4ecfff2"
+    },
+    {
+      "path": "knowledge/current/06-无结果歧义与恢复.md",
+      "bytes": 1311,
+      "sha256": "502334cae39cb56f3c6224adf15abc41467675a4f12dd42067951ab4ac6aeb4e"
+    },
+    {
+      "path": "knowledge/current/07-主动协作原则.md",
+      "bytes": 1273,
+      "sha256": "966c6cb0148186b8d2462258d31a736a24e32793fc0f6ff8398c6ca5c27a977f"
+    },
+    {
+      "path": "knowledge/current/08-功能导航与自然语言使用.md",
+      "bytes": 1658,
+      "sha256": "0b312a23e63537650e1d3abcc4513c07745e021b6151277b7e6ed5a63cb56cae"
+    },
+    {
+      "path": "knowledge/current/09-个人课表导入与同步.md",
+      "bytes": 1577,
+      "sha256": "54fdb3674aa09d504716b38419aeb82fd245d254a2b05cc280d32eff450f5e2f"
+    },
+    {
+      "path": "knowledge/current/10-常见问题.md",
+      "bytes": 1649,
+      "sha256": "a825c4db93c9acd5f7daddf39d7d225935f863841fd1a01a1ed3d952dbe1fb38"
+    },
+    {
+      "path": "knowledge/current/README.md",
+      "bytes": 1625,
+      "sha256": "309e194ea47245c19fe53b400ea204dbfa28880a8eed9b6d9c0dc4324ecc9040"
+    },
+    {
+      "path": "knowledge/current/recall-matrix.md",
+      "bytes": 1896,
+      "sha256": "8f52ae6ddae259a113f0b6131a5b63557567642820703c75346756f227e9fac1"
+    },
+    {
+      "path": "knowledge/legacy/LEGACY.md",
+      "bytes": 1044,
+      "sha256": "ba56b0e98bd1887550a1e2e1c91e7ac767e3e6d5f86ed776f6015f4ffb320e06"
+    },
+    {
+      "path": "mock-data/competition-demo-v1.json",
+      "bytes": 30268,
+      "sha256": "3b580d253830e6ef4dee637c3fc8f9690f0985b0a16fb649bb1957c252e2157b"
+    },
+    {
+      "path": "mock-data/competition-demo-v1.schema.json",
+      "bytes": 6347,
+      "sha256": "a0c41cb78d5807f7f584fc235f7a7ae86982496d03fd31aa4b248bda1a246ca7"
+    },
+    {
+      "path": "openapi/campus-tools.openapi.json",
+      "bytes": 54310,
+      "sha256": "02db1ae6663500264ae8e50d84010c50ade721852ebec5e190387ca66824428c"
+    },
+    {
+      "path": "package.json",
+      "bytes": 407,
+      "sha256": "4ab8af9cfa7e17bc2fb04ebcc63686cbe5308161a28cbd58821d6bab498551b8"
+    },
+    {
+      "path": "qa/README.md",
+      "bytes": 274,
+      "sha256": "7215b61c9a1af426483b2783eba40b745aba4ec379aab4c359f5fe4ed7725560"
+    },
+    {
+      "path": "qa/standard-qa.csv",
+      "bytes": 7364,
+      "sha256": "b482fd912b48f7c770c21adeff0ffe7a53be5bea931871917740ec7cf4822d21"
+    },
+    {
+      "path": "qa/standard-qa.json",
+      "bytes": 11060,
+      "sha256": "78a1b0321ff8576b948703abd0436d17e37d91d46f3762998c422be21ce8caa5"
+    },
+    {
+      "path": "tools/campus-tools-mcp/Dockerfile",
+      "bytes": 927,
+      "sha256": "a3c1d32d67feae1ec0ef8ca5ab7a057ff17315124ade7d349525ed3cc067ca80"
+    },
+    {
+      "path": "tools/campus-tools-mcp/package-lock.json",
+      "bytes": 1535,
+      "sha256": "fcb544c165e88afe8cfd08ce656634a48efd4b511abaeaa2cec5b291c386d9ba"
+    },
+    {
+      "path": "tools/campus-tools-mcp/package.json",
+      "bytes": 989,
+      "sha256": "49127719157fe39d1f7b93c77c9b1d7f79ba0aafabc8c7919a4bb142ce0ca4ff"
+    },
+    {
+      "path": "tools/campus-tools-mcp/r50.2/widget/campus-result-envelope.schema.json",
+      "bytes": 5313,
+      "sha256": "bf06f3185882bf9ddb4c21f38f0a05039fb6056370a64fdcfdb76ceed9fc5a1c"
+    },
+    {
+      "path": "tools/campus-tools-mcp/r50.2/widget/envelope.js",
+      "bytes": 9536,
+      "sha256": "ddabffdd15fa38350e18b671a5642cf9a35d8a5b9d1b296b493ae370706a9f9c"
+    },
+    {
+      "path": "tools/campus-tools-mcp/r50.2/widget/view-model.js",
+      "bytes": 10951,
+      "sha256": "8b05d38744011eccb2501f9c62a93deeaf41c5af4e633fc43a940260e0a3009f"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/agent-tools.js",
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/client.ts",
+      "bytes": 1858,
+      "sha256": "2f983f332fcf9199067ac92d9902eb82b944a44a6d1ddb62a2220a6124f35727"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/contracts.ts",
+      "bytes": 8287,
+      "sha256": "6779b4cb005a536f76548f5a85784aabd980128eedb8646ff0444c018a5d57e1"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/data.js",
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/alternatives.js",
+      "bytes": 1110,
+      "sha256": "3474cd46bdde21f4ea51bc0e75c22feaa496e0c3be37447657ae388d71a7e475"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/authority-action.js",
+      "bytes": 1683,
+      "sha256": "81417a23222cd80f378674a2f7c97a5ec95d04f16a48ac562b147a39ace513f0"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/candidate-source.js",
+      "bytes": 9812,
+      "sha256": "dc3caa2021f505dce37b1411dc6937271aa916c74fcebed4a457894b26bdc52d"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/constraint-profile.js",
+      "bytes": 7342,
+      "sha256": "24aaad887dd498f8d84746603b6abc0fab7a00f22c3d58c536a8a1a1f8b203a2"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/controller.js",
+      "bytes": 8013,
+      "sha256": "773095b5e09963420e76c1201c82ec222d9aae6bb2faa8ea60717fbbac39b1ac"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/credential-leak.js",
+      "bytes": 1226,
+      "sha256": "77971083f56d229ebf23549623f55f003c3d1dbb1d07b20c2135a44921d4ca93"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/evaluator.js",
+      "bytes": 5527,
+      "sha256": "606ef8af5ad2d2b7e107efe6bfd23a81852d16d7624051777ab2fd23fc743294"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/explainability.js",
+      "bytes": 5258,
+      "sha256": "020c0d71a505841bc4112817fe529fef4fee13c4e6b76fcd5c2ab9b7f59013ec"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/intrinsic-constraints.js",
+      "bytes": 4565,
+      "sha256": "d8c2b17ec466bccca793a988682f242eb596ff7ed7c93cbd7b8e61ca15bc44bf"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/next-best-action.js",
+      "bytes": 4032,
+      "sha256": "082b95fc6554d99d27f26e87f524c2c40a2a6fc5abebb4bbb83f41bf459db071"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/outcome-synthesizer.js",
+      "bytes": 3694,
+      "sha256": "7362e27e1d3e3045f4be347f788a4f8e310360c9708cc0c913302ce9c6dac201"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/public-copy.js",
+      "bytes": 4045,
+      "sha256": "907421bcf64f0b3f7f7a85b9c77a73847bc322ce04cfde1ac5192c690d2afd1b"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/ranking.js",
+      "bytes": 1593,
+      "sha256": "22e8dd1f4092eabfa8f093dc5fb51f9e140b1d597b3aa6e7f46ba0bf07c23551"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/receipt.js",
+      "bytes": 6177,
+      "sha256": "31ebe709d22aa9c3886aaa06dfdc368d11b2e6eb6143f8782ee6559e668cc1f8"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/decision/runtime-activation.js",
+      "bytes": 5024,
+      "sha256": "3f62e397bfe28dbb795aa52af239c4d2b9ad5120e3dcb3f5c8949e51e50a632f"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/envelope.js",
+      "bytes": 1842,
+      "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/mission/authority.js",
+      "bytes": 2462,
+      "sha256": "5f44a5eae3128aa2169ea567eba444e8e83c08b18f9088c8e5a430115dba3680"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/mission/completion.js",
+      "bytes": 1517,
+      "sha256": "6c0188a6a23b931503a63b5fd27f4f532bcf52e37cb0fc837a9f6ef3ed363b87"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/ratelimit.js",
+      "bytes": 1071,
+      "sha256": "420b74b8f0bdbc2d8796b19650a52b6e0f6aa64dfdb2a1c0dc79772fe1489150"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/server.js",
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
+    },
+    {
+      "path": "tools/campus-tools-mcp/src/tools.js",
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
+    },
+    {
+      "path": "tools/campus-tools-mcp/test/data-version-contract.test.js",
+      "bytes": 950,
+      "sha256": "c044bbb88de60f5e8f7ba708d2ca8aa119fa5198c376e534aa5932e3173895c5"
+    },
+    {
+      "path": "tools/campus-tools-mcp/test/security.test.js",
+      "bytes": 4489,
+      "sha256": "43db20f2d337c7384c2ef956f67399ec627914449bb28d395e5e136c6d5b1a20"
+    },
+    {
+      "path": "tools/campus-tools-mcp/test/tools.test.js",
+      "bytes": 35212,
+      "sha256": "e784ef5b0557459c57bb34782845234a718b81812216b7f72492efe96fc9d564"
+    },
+    {
+      "path": "tools/campus-tools-mcp/tsconfig.json",
+      "bytes": 362,
+      "sha256": "4945b1864a2570c291382a583e690ca48c5ac33c4d91df0c05d6c9e54b46a4b8"
+    },
+    {
+      "path": "tools/validate-submission-package.js",
+      "bytes": 3943,
+      "sha256": "7b6bd73e78cba852527ae8496a385d14059584b6bca5a944ab1d53f7151d0932"
+    },
+    {
+      "path": "widget/index.html",
+      "bytes": 2321,
+      "sha256": "c70334f4dcb2e24b99cde223f22e1e1ca9a8e0e5d4a7ab92398676152e165158"
+    },
+    {
+      "path": "widget/sample-results.js",
+      "bytes": 11549,
+      "sha256": "ae7d6053df4606bdead5e0f13ffb0cb4c7969146fd48339ece73d09a464da1f0"
+    },
+    {
+      "path": "widget/sample-results.json",
+      "bytes": 11521,
+      "sha256": "72481bc8d29426ce3e6035b82f729dbc87d4e2eba66c4e7b70bd1040ae4bbe4e"
+    },
+    {
+      "path": "widget/styles.css",
+      "bytes": 15018,
+      "sha256": "eea6b20382f75cbcfa2658fcc0520d3ccf1caa9284d8e1d4329a51ca6dcacd11"
+    },
+    {
+      "path": "widget/widget-schema.json",
+      "bytes": 2682,
+      "sha256": "ff6c5805558c53c250e3339e8647519a9cdd5a744f4c008337ce07fd7bd18d55"
+    },
+    {
+      "path": "widget/widget.js",
+      "bytes": 12004,
+      "sha256": "6a029a6b6c69b710828c7e2b99b7bcbca641a7387a70891316ac9df3a0dcd685"
+    },
+    {
+      "path": "widget/校园任务结果卡.md",
+      "bytes": 4155,
+      "sha256": "082cdd8ca56113c0928c737b4c138db6658960d2482ccee2a1e11f286598665e"
+    },
+    {
+      "path": "workflows/01-多维课表查询.md",
+      "bytes": 5037,
+      "sha256": "ca0a10083a0b1cdfd59974f40d0a3c2554959dfe04ec7ced69dacc662f5188df"
+    },
+    {
+      "path": "workflows/02-空教室规划.md",
+      "bytes": 3588,
+      "sha256": "50fd9e2bb478e20158ec8847be61cf3c823e4a14fddff44aa979cd594bba817d"
+    },
+    {
+      "path": "workflows/03-课程冲突比较.md",
+      "bytes": 4186,
+      "sha256": "be5f085221c9b76c081caecf23eafef1f44df6927946f6c706d528f1eb303da5"
+    },
+    {
+      "path": "workflows/04-今日校园计划.md",
+      "bytes": 2942,
+      "sha256": "ac527858cc11f309ef3f24d1a2681ede909810ab853a79019250cc78163f671e"
+    },
+    {
+      "path": "workflows/application-config.json",
+      "bytes": 3910,
+      "sha256": "a34aed8200bc2134ab5b998e238c2dbd3bcab78923bd415ae9e5929eb57cd268"
+    },
+    {
+      "path": "workflows/role-instruction.txt",
+      "bytes": 5518,
+      "sha256": "dd28c440f8316acb313f5b4292582f80ce209de1c74aa5760624b22e54e4a87b"
+    },
+    {
+      "path": "workflows/workflow-specs.json",
+      "bytes": 34522,
+      "sha256": "15d45c3fbbb149f16d0db91e2f514738673bb13e13ef98f10d465b35791a49e0"
+    }
+  ]
+}

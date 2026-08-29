@@ -1,0 +1,54 @@
+/* ============================================================
+   effects.css —— Phase 2.6 视觉系统的动画与材质辅助 keyframes/类
+   全部由 tokens/globals 派生；只放"写不进 globals 的重复动画"。
+   纪律：blur/发光只属于过渡态；稳定态一律 sharp。
+   ============================================================ */
+
+/* ---- 环境光场漂移（Record Mode 的 ambient drift 主体） ---- */
+.orb-drift { will-change: transform; }
+@keyframes driftA { 0%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(3vmax,2vmax,0) scale(1.06)} 100%{transform:translate3d(0,0,0) scale(1)} }
+@keyframes driftB { 0%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-3vmax,-2vmax,0) scale(1.05)} 100%{transform:translate3d(0,0,0) scale(1)} }
+@keyframes driftC { 0%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-2vmax,1.6vmax,0)} 100%{transform:translate3d(0,0,0)} }
+
+/* ---- 扫描光带：数据/空间扫描 ---- */
+.scan-bar {
+  position:absolute; left:0; right:0; height:220px; top:-30%;
+  background:linear-gradient(180deg, transparent, rgba(232,91,69,0.03), rgba(232,91,69,0.1), rgba(232,91,69,0.03), transparent);
+  animation:scanDrift 16s cubic-bezier(0.45,0,0.55,1) infinite;
+}
+@keyframes scanDrift { 0%{transform:translateY(-8%)} 50%{transform:translateY(52%)} 100%{transform:translateY(-8%)} }
+
+/* ---- KineticMetric：数字结算（scanning 态允许 blur/遮罩，settle 后 sharp） ---- */
+.kinetic-num { display:inline-block; transition:filter 0.28s cubic-bezier(0.22,1,0.36,1), opacity 0.28s cubic-bezier(0.22,1,0.36,1); }
+.kinetic-scan { position:relative; filter:blur(5px) saturate(0.75); opacity:0.55; }
+.kinetic-scan::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(232,91,69,0.34), transparent); animation:kineticShimmer 0.9s linear infinite; mix-blend-mode:overlay; }
+@keyframes kineticShimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+/* ---- 时间脉冲：沿路径传播的信息脉冲 ---- */
+.time-pulse { stroke-dasharray: 3 7; animation:timePulse 1.1s linear infinite; }
+@keyframes timePulse { to { stroke-dashoffset: -10; } }
+
+/* ---- 关系线呼吸（Record Mode 数据 pulse 主体） ---- */
+.line-breathe { animation:lineBreathe 4s cubic-bezier(0.45,0,0.55,1) infinite; }
+@keyframes lineBreathe { 0%,100%{opacity:0.3} 50%{opacity:0.62} }
+
+/* ---- 关系线焦点响应：指针靠近核心数据区时的微弱 pulse ---- */
+.rel-focus { animation:relFocus 1.6s cubic-bezier(0.45,0,0.55,1) infinite; }
+@keyframes relFocus { 0%,100%{stroke-opacity:0.55} 50%{stroke-opacity:1} }
+
+/* ---- 卡片浮起（hover/深度） ---- */
+.card-lift { transition:transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s cubic-bezier(0.22,1,0.36,1), border-color 0.4s cubic-bezier(0.22,1,0.36,1); }
+.card-lift:hover { transform:translateY(-3px); }
+
+/* ---- 场景焦点光晕 ---- */
+.focus-halo { position:absolute; pointer-events:none; border-radius:inherit; box-shadow:var(--glow-brand); }
+
+/* ---- 结果锚点高亮 ---- */
+.anchor-pop { animation:anchorPop 0.9s cubic-bezier(0.22,1,0.36,1) both; }
+@keyframes anchorPop { 0%{transform:scale(0.86); opacity:0} 60%{transform:scale(1.05)} 100%{transform:scale(1); opacity:1} }
+
+/* ---- 竞速粒子：room token 收敛 ---- */
+.room-token { transition:transform 0.5s cubic-bezier(0.22,1,0.36,1), opacity 0.5s cubic-bezier(0.22,1,0.36,1), filter 0.5s cubic-bezier(0.22,1,0.36,1); }
+
+/* ---- 方向性转场扫描 ---- */
+.sweep-mask { position:absolute; inset:0; pointer-events:none; }

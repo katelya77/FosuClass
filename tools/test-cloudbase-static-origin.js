@@ -177,6 +177,40 @@ async function testRuntimePointerUsesBucket() {
   assert(!calls.some((url) => /\/api\/fosu\/bootstrap/.test(url)), "runtime pointer must not be confused with Oracle bootstrap API");
 }
 
+async function testRuntimePointerSelectsNewestOrigin() {
+  mockEnv.clearStorage();
+  staticOriginService.__setTestConfig({
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
+  });
+  const oldPointer = Object.assign({}, runtimePointer(previousVersion, "cloud"), {
+    term: "2025-2026-2",
+    activeTerm: "2025-2026-2",
+    cacheEpoch: 10,
+    updatedAt: "2026-08-12T12:11:39.920Z",
+  });
+  const newPointer = Object.assign({}, runtimePointer(nextVersion, "oracle"), {
+    term: "2026-2027-1",
+    activeTerm: "2026-2027-1",
+    cacheEpoch: 20,
+    updatedAt: "2026-08-12T14:25:46.461Z",
+    termConfig: {
+      term: "2026-2027-1",
+      releaseVersion: nextVersion,
+      termStartDate: "2026-09-07",
+      totalWeeks: 20,
+    },
+  });
+  installMock((options) => {
+    const url = new URL(options.url);
+    return url.hostname === "cloud.example.com" ? oldPointer : newPointer;
+  });
+
+  const pointer = await staticOriginService.fetchRuntimePointer({ skipSession: true, timeout: 50, retries: 0 });
+  assert.strictEqual(pointer.staticOrigin, "oracle", "newest runtime pointer must win even when CloudBase responds first");
+  assert.strictEqual(pointer.activeTerm, "2026-2027-1");
+  assert.strictEqual(pointer.releaseVersion, nextVersion);
+}
+
 async function testSourceRelationshipContract() {
   mockEnv.clearStorage();
   staticOriginService.__setTestConfig({
@@ -242,6 +276,7 @@ async function run() {
   await testHostingReadyFalseSkipsCloudbase();
   await testCloudbaseFailureFallsBackToOracle();
   await testRuntimePointerUsesBucket();
+  await testRuntimePointerSelectsNewestOrigin();
   await testSourceRelationshipContract();
   await testLastKnownGoodSurvivesAllNetworkFailures();
   staticOriginService.__resetForTest();

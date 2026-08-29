@@ -1,0 +1,35 @@
+[
+  {
+    "key": "main",
+    "name": "小序-主协调",
+    "promptSource": "competition/adp-kit/final/prompts/main-orchestrator.md",
+    "model": "DeepSeek-V3-0324",
+    "campusTools": [],
+    "transferDescription": "统一接收用户任务，理解意图与多轮上下文，拆解跨领域目标并负责最终收口；按需要协调课程空间、风险规划和校园洞察。",
+    "officialVisionToolRequired": false
+  },
+  {
+    "key": "schedule",
+    "name": "课程空间",
+    "promptSource": "competition/adp-kit/final/prompts/schedule-space.md",
+    "model": "DeepSeek-V3-0324",
+    "transferDescription": "处理教师、班级、教室、课程课表、教学时间、实体识别、空教室、共同空闲与多人空间方案；涉及风险、调课或校园态势时完成本域事实后交回主协调。",
+    "officialVisionToolRequired": false
+  },
+  {
+    "key": "risk",
+    "name": "风险规划",
+    "promptSource": "competition/adp-kit/final/prompts/risk-planning.md",
+    "model": "DeepSeek-V3-0324",
+    "transferDescription": "处理课程冲突、跨校区赶场、连续课程、调课可行性与一日规划；需要新的课表、空间或排名对象时交回主协调补齐。",
+    "officialVisionToolRequired": false
+  },
+  {
+    "key": "insight",
+    "name": "校园洞察",
+    "promptSource": "competition/adp-kit/final/prompts/campus-insight.md",
+    "model": "DeepSeek-V3-0324",
+    "transferDescription": "处理教师负载、空间利用率、TopN、未来教学态势和排名对象选择；用户继续查看课表、空间或风险时交回主协调重新核验。",
+    "officialVisionToolRequired": false
+  }
+]

@@ -122,10 +122,21 @@ function getLatestStaging() {
     latestStateMeta.stagingUploadId ||
     ""
   ).trim();
-  const uploadRecords = stagingUploadService.listUploadRecords({ limit: preferredUploadId ? 200 : 1 }).records || [];
-  const latestUpload = preferredUploadId
-    ? (uploadRecords.find((item) => item.uploadId === preferredUploadId) || uploadRecords[0] || null)
-    : (uploadRecords[0] || null);
+  const stateCanonicalHash = normalizeHash(
+    latestState && (latestState.canonicalHash || latestStateMeta.canonicalHash)
+  );
+  const stateTerm = String(latestState && (latestState.term || latestState.semester) || "").trim();
+  const uploadRecords = stagingUploadService.listUploadRecords({
+    limit: preferredUploadId || stateCanonicalHash ? 200 : 1,
+  }).records || [];
+  const matchingUpload = uploadRecords.find((item) => {
+    if (preferredUploadId && item.uploadId === preferredUploadId) return true;
+    const summary = item && item.summary || {};
+    const itemHash = normalizeHash(item && (item.canonicalHash || summary.canonicalHash));
+    const itemTerm = String(item && (item.term || summary.term) || "").trim();
+    return Boolean(stateCanonicalHash && itemHash === stateCanonicalHash && (!stateTerm || itemTerm === stateTerm));
+  }) || null;
+  const latestUpload = matchingUpload || (!latestState ? uploadRecords[0] || null : null);
   const summary = latestUpload && latestUpload.summary || {};
   const canonicalHash = normalizeHash(
     latestState && (latestState.canonicalHash || latestStateMeta.canonicalHash) ||
@@ -153,6 +164,7 @@ function getLatestStaging() {
     } : null,
     stagingCanonicalHash: canonicalHash,
     fingerprint: null,
+    upload: latestUpload,
     uploadId,
     relayUploadId: latestUpload && latestUpload.relayUploadId || "",
     relayTaskId: latestUpload && (latestUpload.sourceTaskId || latestUpload.relayTaskId) || "",

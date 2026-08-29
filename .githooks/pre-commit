@@ -1,0 +1,2 @@
+#!/bin/sh
+python tools/public-ready-scan.py --head-only --no-ignored --report output/security/pre-commit.json

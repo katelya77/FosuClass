@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "statusText": { "type": "string" },
+    "reasonText": { "type": "string" },
+    "footerText": { "type": "string" },
+    "keptFilters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "value": {}
+        },
+        "required": ["id", "label"],
+        "additionalProperties": true
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["id", "type", "label", "message"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "subtitle", "statusText", "reasonText", "footerText", "keptFilters", "actions"],
+  "additionalProperties": false
+}

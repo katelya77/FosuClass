@@ -104,8 +104,10 @@ function run() {
     title: "动物解剖学 · 13:30",
     actionMessage: "查看下一节课",
   });
+  assert.strictEqual(floatService.shouldShowProactiveInsight({ kind: "free_day", title: "今天没课" }), false, "routine empty-day hints should stay silent");
   instance.refreshPosition();
   assert.strictEqual(instance.data.hintText, insight.title, "new proactive insight should be visible");
+  assert.strictEqual(floatService.shouldShowProactiveInsight(insight), false, "a shown insight must respect its presentation cooldown");
   calls.navigateTo.length = 0;
   instance.onHintTap();
   assert.strictEqual(instance.data.hintText, "", "tapping the information hint should dismiss it");
@@ -149,7 +151,7 @@ function run() {
   instance.onLongPress();
   assert.deepStrictEqual(
     calls.showActionSheet[0] && calls.showActionSheet[0].itemList,
-    ["打开小佛校园助手", "隐藏本页", "关闭浮窗"],
+    ["打开小序", "隐藏本页", "关闭浮窗"],
     "long press menu should expose open, hide and close actions"
   );
 

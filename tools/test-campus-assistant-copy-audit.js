@@ -16,6 +16,7 @@ const files = [
   "docs/xiaofu-agent/unified-model-first-root-cause.md",
   "miniprogram/app.json",
   "miniprogram/sitemap.json",
+  "miniprogram/config/assistantBrand.js",
   "miniprogram/components/xiaofu-float/index.js",
   "miniprogram/data/fosuKnowledgeBase.js",
   "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js",
@@ -48,6 +49,8 @@ const files = [
 const oldVisiblePhrases = [
   "AI校园管家",
   "小佛AI",
+  "小佛助手知识库",
+  "例如：小佛可以做什么",
   "AI 管家",
   "AI管家",
   "AI助手",
@@ -72,21 +75,27 @@ const oldVisiblePhrases = [
 ];
 
 const requiredPhrases = [
-  "小佛助手",
+  "assistantName: '小序'",
+  "systemName: '校园智序'",
+  "competitionName: '校园智序 · 小序'",
+  "subtitle: '校园任务助手'",
+  "legacyNames: ['小佛助手', '小佛AI']",
   // Product experience empty/composer copy (conversation-first)
   "可以直接告诉我你想完成的校园任务",
-  "告诉小佛你想完成什么",
+  "告诉{{assistantBrand.assistantName}}你想完成什么",
   "请勿输入学号、密码",
   "可以查询什么",
   // M5-T3 起本地流水线伪造阶段文案（“正在匹配查询内容/正在查询校园信息”）退役，
   // 离线链路只保留如实的本机处理披露。
   "正在处理本机结果",
-  "小佛浮窗",
+  "assistantBrand.assistantName}浮窗",
   // Provider 控制台保存按钮（CCSwitch 轮次起改为「保存并立即生效」）
   "保存并立即生效",
   // 旧「查询链路状态」区块已演进为 Provider 就绪矩阵
   "Provider 就绪矩阵",
   "新建对话",
+  '"assistant-kb": "小序知识库"',
+  "例如：小序可以做什么",
 ];
 
 // Phase-2 UI files must not keep the old query-centric labels.
@@ -96,6 +105,8 @@ const phase2UiFiles = [
   "miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml",
 ];
 
+const customerFacingMarkupFiles = files.filter((file) => /\.(wxml|json)$/.test(file));
+
 function read(file) {
   return fs.readFileSync(path.join(ROOT, file), "utf8");
 }
@@ -103,9 +114,10 @@ function read(file) {
 function run() {
   const contents = files.map((file) => ({ file, text: read(file) }));
   const combined = contents.map((item) => item.text).join("\n");
+  const visibleContents = contents.filter((item) => item.file !== "miniprogram/config/assistantBrand.js");
 
   oldVisiblePhrases.forEach((phrase) => {
-    const hits = contents.filter((item) => item.text.includes(phrase)).map((item) => item.file);
+    const hits = visibleContents.filter((item) => item.text.includes(phrase)).map((item) => item.file);
     assert.strictEqual(hits.length, 0, `旧对外文案仍存在: ${phrase} in ${hits.join(", ")}`);
   });
 
@@ -118,6 +130,16 @@ function run() {
     assert(!text.includes("查询记录"), `${file} still contains 查询记录`);
     assert(!text.includes("新建查询"), `${file} still contains 新建查询`);
   });
+
+  customerFacingMarkupFiles.forEach((file) => {
+    const text = read(file);
+    assert(!text.includes("小佛助手"), `${file} still exposes 小佛助手`);
+    assert(!text.includes("小佛AI"), `${file} still exposes 小佛AI`);
+  });
+
+  const assistantBrand = require(path.join(ROOT, "miniprogram/config/assistantBrand.js"));
+  assert.strictEqual(assistantBrand.assistantName, "小序");
+  assert.deepStrictEqual(assistantBrand.legacyNames, ["小佛助手", "小佛AI"]);
 
   console.log("campus assistant copy audit passed");
 }

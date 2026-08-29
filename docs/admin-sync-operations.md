@@ -47,7 +47,7 @@ session 已过期，请执行 npm run sync:login 后重试
 
 ```powershell
 npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume
-npm run sync:publish -- --full --term=2026-2027-1 --term-start-date=2026-09-07 --total-weeks=20 --grade=2026
+npm run sync:publish -- --full --term=2026-2027-1 --grade=2026
 ```
 
 - `--incremental` 用于开学初频繁调整，只拉取目录和疑似变化课表，并复用断点进度。

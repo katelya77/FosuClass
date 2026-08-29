@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/r48-v3/campus-widget-v3.schema.json",
+  "title": "校园智序 R48 Widget V3 统一 ViewModel",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "cardType",
+    "success",
+    "title",
+    "timeText",
+    "filters",
+    "summary",
+    "items",
+    "actions",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "campus-widget/v3" },
+    "cardType": {
+      "enum": ["schedule", "classroom", "conflict", "day_plan", "campus_overview", "choice", "recovery"]
+    },
+    "success": { "type": "boolean" },
+    "queryId": { "type": "string" },
+    "dataVersion": { "const": "competition-demo-v1" },
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "timeText": { "type": "string" },
+    "viewMode": { "enum": ["day", "date", "week"] },
+    "activeWeekday": { "type": ["integer", "null"], "minimum": 1, "maximum": 7 },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "value": {}
+        },
+        "additionalProperties": true
+      }
+    },
+    "summary": { "type": "object" },
+    "days": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["weekday", "weekdayName", "date", "count"],
+        "properties": {
+          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
+          "weekdayName": { "type": "string" },
+          "date": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "items": { "type": "array", "items": { "type": "object" } },
+    "rushWarnings": { "type": "array", "items": { "type": "object" } },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "label", "message"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "const": "sys.chat" },
+          "label": { "type": "string" },
+          "message": { "type": "string" },
+          "intentHint": { "type": "string" },
+          "entityType": { "type": "string" },
+          "entityName": { "type": "string" },
+          "week": { "type": ["integer", "null"], "minimum": 1, "maximum": 20 },
+          "weekday": { "type": ["integer", "null"], "minimum": 1, "maximum": 7 },
+          "date": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "required": ["waitForUser"],
+      "properties": { "waitForUser": { "type": "boolean" } },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["verified"],
+      "properties": { "verified": { "type": "boolean" } },
+      "additionalProperties": true
+    },
+    "error": { "anyOf": [{ "type": "object" }, { "type": "null" }] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "success": { "const": true },
+          "cardType": { "enum": ["schedule", "classroom", "conflict", "day_plan", "campus_overview"] }
+        },
+        "required": ["success", "cardType"]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "properties": { "verified": { "const": true } }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

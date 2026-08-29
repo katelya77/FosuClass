@@ -1,0 +1,45 @@
+{
+  "schema": "fosuclass-adp-import-bundle/v1",
+  "compilerVersion": "2.0.0-r2",
+  "generatedAt": "2026-08-12T00:00:00Z",
+  "dataVersion": "competition-demo-v1",
+  "dataHash": "sha1:fefef4bf425b",
+  "sourceSeed": {
+    "mode": "canonical-final-recompile",
+    "sha256": "b5b233d93dc065b01c9708b397a309880c5b9d6fc10b51a6660756054a6cdec5",
+    "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f"
+  },
+  "artifacts": [
+    {
+      "file": "01-Schedule-Final.zip",
+      "workflowId": "2d1197ef-7a1f-5cf5-9c8e-6e0a45e2d63f",
+      "workflowName": "01-多维课表查询-Final",
+      "sha256": "b5b233d93dc065b01c9708b397a309880c5b9d6fc10b51a6660756054a6cdec5",
+      "validation": "PASS"
+    },
+    {
+      "file": "02-Classroom-Final.zip",
+      "workflowId": "e2bbf07e-f29f-4a91-b6c9-a0f85a4eb124",
+      "workflowName": "02-空教室规划-Final",
+      "sha256": "e931038b8efc1b5a3f9d7657de187588099a55fb34eacac81d35ed2bdf3a3f7f",
+      "validation": "PASS"
+    },
+    {
+      "file": "03-Conflict-Final.zip",
+      "workflowId": "f5930cca-9683-4331-95f0-cca70c98e262",
+      "workflowName": "03-课程冲突比较-Final",
+      "sha256": "310c1fe98cf997c07a22df81ef200d7f90e18f049f563cb437bab326b17a1302",
+      "validation": "PASS"
+    },
+    {
+      "file": "04-DayPlan-Final.zip",
+      "workflowId": "6fc356a8-4ebb-4d71-9614-063092fb251a",
+      "workflowName": "04-今日校园计划-Final",
+      "sha256": "17a19c3a6a498a62e9b04d3533b76fbb50c709398ee1f3d4706299f047bb0389",
+      "validation": "PASS"
+    }
+  ],
+  "deferred": [
+    "Schedule Rich V4 awaits a real exported rich Schedule Widget; RuntimeSafe V3 remains active"
+  ]
+}

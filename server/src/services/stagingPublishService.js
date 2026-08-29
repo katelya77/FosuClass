@@ -148,8 +148,8 @@ function validateStagingData(data) {
   return stagingSafetyService.validateStagingData(data);
 }
 
-function buildStagingSafety(data, activeSnapshot) {
-  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
+function buildStagingSafety(data, activeSnapshot, options) {
+  return stagingSafetyService.buildStagingSafety(data, activeSnapshot, options);
 }
 
 function throwPublishError(code, message, extra) {
@@ -290,7 +290,6 @@ function finalizeReleaseActivation(options = {}) {
 
 async function runStagingPublish(input = {}, job) {
   const forcePublish = input.force === true;
-  const readyOnly = input.readyOnly === true;
   const releaseNote = input.releaseNote || "";
   const auditReq = {
     ip: input.ip || "",
@@ -327,7 +326,16 @@ async function runStagingPublish(input = {}, job) {
   }
 
   if (job) job.progress(20, "normalizing data");
-  const safety = buildStagingSafety(stagingData, activeSnapshot);
+  const stagingTerm = stagingData.term || stagingData.semester || "";
+  const publishMode = stagingSafetyService.resolveStagingPublishMode(stagingData, activeSnapshot, {
+    readyOnly: input.readyOnly === true,
+  });
+  const readyOnly = publishMode.readyOnly;
+  const crossTermReadyCandidate = publishMode.crossTermReadyCandidate;
+  const safety = buildStagingSafety(stagingData, activeSnapshot, {
+    currentTerm: publishMode.activeTerm,
+    crossTermReadyCandidate,
+  });
   if (!safety.allowPublish) {
     throwPublishError("STAGING_SAFETY_BLOCKED", "暂存数据未通过发布安全检查。", {
       blockers: safety.blockers,
@@ -346,7 +354,7 @@ async function runStagingPublish(input = {}, job) {
     });
   }
 
-  if (activeSnapshot) {
+  if (activeSnapshot && !crossTermReadyCandidate) {
     const activeClassNames = (activeSnapshot.classSchedules || []).map((item) => item.className).filter(Boolean);
     const activeClassNamesSet = new Set(activeClassNames);
     const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map((item) => item.className).filter(Boolean));
@@ -370,7 +378,6 @@ async function runStagingPublish(input = {}, job) {
   }
 
   const activeTerm = termRegistryService.getActiveTerm();
-  const stagingTerm = stagingData.term || stagingData.semester || "";
   const shouldActivate = Boolean(!readyOnly && activeTerm && activeTerm.term === stagingTerm);
   const publishResult = shouldActivate
     ? await writeReleasePackAndActivate(stagingData, job)

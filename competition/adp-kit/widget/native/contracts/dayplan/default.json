@@ -1,0 +1,81 @@
+{
+  "title": "2026-09-04 · 校园计划",
+  "subtitle": "匿名赛事用户 · 今日任务",
+  "timeText": "2026-09-04 · 周五",
+  "queryId": "q-native-day-plan",
+  "dataVersion": "competition-demo-v1",
+  "summary": {
+    "lessonCount": 2,
+    "gapCount": 1,
+    "studySuggestionCount": 1,
+    "hasCrossCampus": false
+  },
+  "items": [
+    {
+      "type": "lesson",
+      "lessonId": "les-010",
+      "courseName": "思政通识",
+      "periodText": "第1-2节",
+      "startTime": "08:00",
+      "endTime": "09:40",
+      "campusName": "校区A",
+      "roomName": "A1-201",
+      "teachers": [
+        "教师007"
+      ],
+      "suggestion": "",
+      "studyRooms": []
+    },
+    {
+      "type": "gap",
+      "lessonId": "",
+      "courseName": "",
+      "periodText": "第3-4节",
+      "startTime": "10:00",
+      "endTime": "11:40",
+      "campusName": "",
+      "roomName": "",
+      "teachers": [],
+      "suggestion": "空闲时段，可安排自习",
+      "studyRooms": [
+        "A1-101（60人）",
+        "A1-102（60人）"
+      ]
+    },
+    {
+      "type": "lesson",
+      "lessonId": "les-007",
+      "courseName": "大学物理B",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "campusName": "校区A",
+      "roomName": "A1-201",
+      "teachers": [
+        "教师004"
+      ],
+      "suggestion": "",
+      "studyRooms": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "day-plan-next-day",
+      "type": "sys.chat",
+      "label": "看明天",
+      "message": "那明天的安排呢"
+    },
+    {
+      "id": "day-plan-classroom",
+      "type": "sys.chat",
+      "label": "找空教室",
+      "message": "我空闲的时候有哪些空教室适合自习"
+    },
+    {
+      "id": "day-plan-study-2",
+      "type": "sys.chat",
+      "label": "连续自习2节",
+      "message": "那天想连续自习2节"
+    }
+  ]
+}

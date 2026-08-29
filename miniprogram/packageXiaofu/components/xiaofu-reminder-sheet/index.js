@@ -196,6 +196,11 @@ Component({
         todayDate: context && context.todayDate,
         todayWeekday: context && context.todayWeekday,
         currentTeachingWeek: context && context.currentTeachingWeek,
+        termStartDate: context && context.termStartDate,
+        totalWeeks: context && context.totalWeeks,
+        weekStart: context && context.weekStart,
+        termPhase: context && context.termPhase,
+        isInTerm: context && context.isInTerm,
         clientTimestampMs: context && context.clientTimestampMs,
       });
       this.setData({ creating: false });
@@ -265,6 +270,11 @@ Component({
           todayDate: context && context.todayDate,
           todayWeekday: context && context.todayWeekday,
           currentTeachingWeek: context && context.currentTeachingWeek,
+          termStartDate: context && context.termStartDate,
+          totalWeeks: context && context.totalWeeks,
+          weekStart: context && context.weekStart,
+          termPhase: context && context.termPhase,
+          isInTerm: context && context.isInTerm,
           clientTimestampMs: context && context.clientTimestampMs,
         });
         this.setData({ creating: false });

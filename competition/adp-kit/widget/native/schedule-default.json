@@ -1,0 +1,63 @@
+{
+  "title": "教师003 · 课表",
+  "timeText": "第1周 · 周一",
+  "queryId": "q-native-schedule-pilot",
+  "dataVersion": "competition-demo-v1",
+  "summary": {
+    "totalCount": 2,
+    "shownCount": 2,
+    "hiddenCount": 0,
+    "entityType": "teacher",
+    "entityName": "教师003"
+  },
+  "items": [
+    {
+      "lessonId": "les-pilot-001",
+      "courseName": "程序设计基础",
+      "periodText": "第5-6节",
+      "startTime": "14:00",
+      "endTime": "15:40",
+      "date": "2026-08-31",
+      "weekdayName": "周一",
+      "campusName": "校区A",
+      "building": "教学楼A2",
+      "roomName": "A2-301",
+      "teachers": ["教师003"],
+      "classes": ["2025级A班"]
+    },
+    {
+      "lessonId": "les-pilot-002",
+      "courseName": "计算机组成原理",
+      "periodText": "第7-8节",
+      "startTime": "16:00",
+      "endTime": "17:40",
+      "date": "2026-08-31",
+      "weekdayName": "周一",
+      "campusName": "校区B",
+      "building": "教学楼B1",
+      "roomName": "B1-201",
+      "teachers": ["教师003"],
+      "classes": ["2025级C班"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "schedule-week",
+      "type": "sys.chat",
+      "label": "查看整周",
+      "message": "查看教师003的整周课表"
+    },
+    {
+      "id": "schedule-day",
+      "type": "sys.chat",
+      "label": "换一天",
+      "message": "换一天看看教师003的课表"
+    },
+    {
+      "id": "schedule-compare",
+      "type": "sys.chat",
+      "label": "比较冲突",
+      "message": "把教师003和另一个对象比较一下有没有冲突"
+    }
+  ]
+}

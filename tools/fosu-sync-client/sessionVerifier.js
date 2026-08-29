@@ -3,6 +3,7 @@ const path = require("path");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 
 const SESSION_PATH = path.join(__dirname, ".session", "session.json");
@@ -43,13 +44,12 @@ async function launchBrowser(chromium, options = {}) {
     try {
       const config = {
         headless: options.headless !== false,
-        args: [
+        args: withDirectBrowserArgs([
           "--disable-blink-features=AutomationControlled",
           "--ignore-certificate-errors",
           "--disable-web-security",
-          "--allow-running-insecure-content",
-          "--no-proxy-server",
-        ],
+          "--allow-running-insecure-content"
+        ]),
       };
       if (channel) config.channel = channel;
       return await chromium.launch(config);

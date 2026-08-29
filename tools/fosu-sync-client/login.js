@@ -10,6 +10,7 @@ const diagnose = require("./diagnose");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 
 loadSyncClientEnv();
@@ -101,11 +102,11 @@ async function login() {
   }
   console.log(`登录 UA 模式: ${FOSU_LOGIN_UA_MODE}${LOGIN_AUTO ? "，自动登录" : "，手动登录"}`);
 
-  const launchArgs = [
+  const launchArgs = withDirectBrowserArgs([
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security"
-  ];
+  ]);
 
   let browser;
   // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium

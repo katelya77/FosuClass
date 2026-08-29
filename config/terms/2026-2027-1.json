@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "term": "2026-2027-1",
+  "semesterText": "2026-2027学年第一学期",
+  "termStartDate": "2026-09-07",
+  "totalWeeks": 19,
+  "weekStart": "monday",
+  "preferred": true,
+  "teachingCalendar": {
+    "schemaVersion": 2,
+    "term": "2026-2027-1",
+    "semesterText": "2026-2027学年第1学期",
+    "termStartDate": "2026-09-07",
+    "totalWeeks": 19,
+    "weekStart": "monday",
+    "source": "official-teaching-calendar-xls",
+    "sourceStatus": "CALENDAR_SOURCE_COMPLETE",
+    "sourceFile": "2026-2027-1-教学周历.xls",
+    "sourceHash": "7949c39cf84af0a01bd6a03435f1cbde960c3f317bfe4eb32176f1c141c55b8c",
+    "updatedAt": "2026-08-13T09:47:31.331Z",
+    "defaultWeekTitle": "正常教学周",
+    "weeks": [
+      {
+        "weekNo": 1,
+        "startDate": "2026-09-07",
+        "endDate": "2026-09-13",
+        "note": "老生9月6日返校报到（开学第一周各学院（部）灵活安排注册时间），9月7日正式上课。\r\n新生9月13日入学报到，9月14日-30日军训，10月9日正式上课。",
+        "type": "opening",
+        "typeText": "开学教学周",
+        "title": "开学教学周"
+      },
+      {
+        "weekNo": 2,
+        "startDate": "2026-09-14",
+        "endDate": "2026-09-20",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 3,
+        "startDate": "2026-09-21",
+        "endDate": "2026-09-27",
+        "note": "中秋节：9月25日至27日放假，共3天。国庆节补课：9月20日（周日）补10月6日（周二）的课。",
+        "type": "adjustment",
+        "typeText": "节假日调休周",
+        "title": "节假日调休周"
+      },
+      {
+        "weekNo": 4,
+        "startDate": "2026-09-28",
+        "endDate": "2026-10-04",
+        "note": "国庆节：10月1日至7日放假调休，共7天。10月10日（周六）补10月7日（周三）的课。",
+        "type": "adjustment",
+        "typeText": "节假日调休周",
+        "title": "节假日调休周"
+      },
+      {
+        "weekNo": 5,
+        "startDate": "2026-10-05",
+        "endDate": "2026-10-11",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 6,
+        "startDate": "2026-10-12",
+        "endDate": "2026-10-18",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 7,
+        "startDate": "2026-10-19",
+        "endDate": "2026-10-25",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 8,
+        "startDate": "2026-10-26",
+        "endDate": "2026-11-01",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 9,
+        "startDate": "2026-11-02",
+        "endDate": "2026-11-08",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 10,
+        "startDate": "2026-11-09",
+        "endDate": "2026-11-15",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 11,
+        "startDate": "2026-11-16",
+        "endDate": "2026-11-22",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 12,
+        "startDate": "2026-11-23",
+        "endDate": "2026-11-29",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 13,
+        "startDate": "2026-11-30",
+        "endDate": "2026-12-06",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 14,
+        "startDate": "2026-12-07",
+        "endDate": "2026-12-13",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 15,
+        "startDate": "2026-12-14",
+        "endDate": "2026-12-20",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 16,
+        "startDate": "2026-12-21",
+        "endDate": "2026-12-27",
+        "note": "",
+        "type": "teaching",
+        "typeText": "正常教学周",
+        "title": "正常教学周"
+      },
+      {
+        "weekNo": 17,
+        "startDate": "2026-12-28",
+        "endDate": "2027-01-03",
+        "note": "老生机动实践周、新生教学周。元旦放假按国务院安排执行。",
+        "type": "flexible",
+        "typeText": "机动实践周",
+        "title": "机动实践周"
+      },
+      {
+        "weekNo": 18,
+        "startDate": "2027-01-04",
+        "endDate": "2027-01-10",
+        "note": "老生机动实践周、新生教学周。",
+        "type": "flexible",
+        "typeText": "机动实践周",
+        "title": "机动实践周"
+      },
+      {
+        "weekNo": 19,
+        "startDate": "2027-01-11",
+        "endDate": "2027-01-17",
+        "note": "考试周",
+        "type": "exam",
+        "typeText": "考试周",
+        "title": "考试周"
+      }
+    ],
+    "specialDates": [
+      {
+        "date": "2026-09-20",
+        "type": "makeup",
+        "scheduleSourceDate": "2026-10-06",
+        "note": "补10月6日的课",
+        "audience": "all"
+      },
+      {
+        "date": "2026-09-25",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "中秋节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-09-26",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "中秋节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-09-27",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "中秋节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-01",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-02",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-03",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-04",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-05",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-06",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-07",
+        "type": "holiday",
+        "scheduleSourceDate": "",
+        "note": "国庆节放假",
+        "audience": "all"
+      },
+      {
+        "date": "2026-10-10",
+        "type": "makeup",
+        "scheduleSourceDate": "2026-10-07",
+        "note": "补10月7日的课",
+        "audience": "all"
+      }
+    ],
+    "cohortMilestones": [
+      {
+        "audience": "returning-students",
+        "date": "2026-09-06",
+        "type": "registration"
+      },
+      {
+        "audience": "returning-students",
+        "date": "2026-09-07",
+        "type": "classes-start"
+      },
+      {
+        "audience": "new-students",
+        "date": "2026-09-13",
+        "type": "registration"
+      },
+      {
+        "audience": "new-students",
+        "startDate": "2026-09-14",
+        "endDate": "2026-09-30",
+        "type": "military-training"
+      },
+      {
+        "audience": "new-students",
+        "date": "2026-10-09",
+        "type": "classes-start"
+      }
+    ]
+  }
+}

@@ -173,6 +173,28 @@ function getTermReleaseSummary() {
   })).sort((left, right) => String(right.term).localeCompare(String(left.term)));
 }
 
+function removeTerm(term) {
+  const validation = termRegistryService.validateTermId(term);
+  if (!validation.valid) {
+    const error = new Error(validation.error);
+    error.code = validation.error;
+    error.statusCode = 400;
+    throw error;
+  }
+  const index = readIndex();
+  if (index.activeTerm === validation.term) {
+    const error = new Error("CANNOT_DELETE_ACTIVE_TERM");
+    error.code = "CANNOT_DELETE_ACTIVE_TERM";
+    error.statusCode = 409;
+    throw error;
+  }
+  const terms = Object.assign({}, index.terms || {});
+  const removed = terms[validation.term] || null;
+  delete terms[validation.term];
+  writeIndex(Object.assign({}, index, { terms }));
+  return removed;
+}
+
 function clearCache() {
   cache = null;
   cacheMtimeMs = 0;
@@ -188,5 +210,6 @@ module.exports = {
   getTermReleaseSummary,
   listPinnedReleases,
   readIndex,
+  removeTerm,
   writeIndex,
 };

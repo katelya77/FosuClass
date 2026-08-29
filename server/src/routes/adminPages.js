@@ -5897,7 +5897,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="news"><button type="button" title="最新动态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 4h8M8 12h8m-8 4h5"/></svg><span class="nav-label">最新动态</span></button></li>
             <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
             <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
-            <li class="nav-item" data-section="assistant-kb"><button type="button" title="小佛助手知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
+            <li class="nav-item" data-section="assistant-kb"><button type="button" title="小序知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
 
             <li class="nav-group-label" data-nav-group="系统与安全">系统与安全</li>
             <li class="nav-item" data-section="ai-provider"><button type="button" title="查询服务"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 4h.01M15 14h.01M9 17h6"/></svg><span class="nav-label">查询服务</span></button></li>
@@ -7361,7 +7361,7 @@ const adminConsoleHtml = `<!doctype html>
         <div class="provider-console provider-static-landing">
           <div class="provider-hero provider-status-hero">
             <div>
-              <h3>小佛助手 Provider 控制台</h3>
+              <h3>小序 Provider 控制台</h3>
               <p>当前小程序实际使用 = <strong>正式版本地规则</strong></p>
             </div>
           </div>
@@ -8165,6 +8165,7 @@ const adminConsoleHtml = `<!doctype html>
         },
         stagingUploadExpandedGroups: {},
         stagingUploadSelected: {},
+        stagingPublishReadyOnly: false,
         apiInflight: {},
         apiAbortControllers: {},
         lastCloudflareToastAt: 0,
@@ -8938,7 +8939,7 @@ const adminConsoleHtml = `<!doctype html>
           news: "最新动态",
           config: "数据版本",
           "ai-provider": "查询服务",
-          "assistant-kb": "小佛助手知识库",
+          "assistant-kb": "小序知识库",
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
@@ -9108,6 +9109,9 @@ const adminConsoleHtml = `<!doctype html>
           if (term.status !== "current" && term.status !== "disabled") {
             addAction("归档", "ghost", function() { archiveTerm(term.term); });
             addAction("禁用", "danger", function() { disableTerm(term.term); });
+          }
+          if (term.status !== "current") {
+            addAction("彻底删除", "danger", function() { deleteTermPermanently(term.term); });
           }
           tbody.appendChild(tr);
         });
@@ -9400,6 +9404,42 @@ const adminConsoleHtml = `<!doctype html>
         api("/api/admin/terms/" + encodeURIComponent(term) + "/disable", { method: "POST", body: "{}" })
           .then(function() { showToast("已禁用", "success"); loadTerms(); })
           .catch(function(error) { showToast(error.message || "禁用失败", "error"); });
+      }
+
+      function deleteTermPermanently(term) {
+        return api("/api/admin/terms/" + encodeURIComponent(term) + "/delete-preview")
+          .then(function(preview) {
+            var paths = (preview.existingLivePaths || []).map(function(item) { return "- " + item; });
+            var confirmationText = preview.confirmationText || ("DELETE " + term);
+            var typed = window.prompt([
+              "此操作会从在线课表、学期索引和独占 Release 中移除该学期。",
+              "系统仅保留 7 天回滚隔离区，之后自动清理。",
+              "将移除：",
+              paths.length ? paths.join("\\n") : "- 当前未发现实体目录（仍会清理索引）",
+              "",
+              "请输入 " + confirmationText + " 继续："
+            ].join("\\n"));
+            if (typed !== confirmationText) {
+              showToast("已取消彻底删除", "warning");
+              return null;
+            }
+            return api("/api/admin/terms/" + encodeURIComponent(term), {
+              method: "DELETE",
+              body: JSON.stringify({
+                confirm: typed,
+                idempotencyKey: "term-delete:" + term + ":" + Date.now()
+              })
+            });
+          })
+          .then(function(result) {
+            if (!result) return;
+            showToast("已从在线存储删除，7 天内可按隔离区回滚", "success");
+            loadTerms();
+            loadDashboard();
+          })
+          .catch(function(error) {
+            showToast(error.message || "彻底删除失败", "error");
+          });
       }
 
       function loadConfig() {
@@ -11197,9 +11237,10 @@ const adminConsoleHtml = `<!doctype html>
             var publishBtn = document.createElement("button");
             publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
-            publishBtn.textContent = "发布";
+            var readyOnly = Boolean(summary.readyOnly || summary.publishMode === "ready-only");
+            publishBtn.textContent = readyOnly ? "生成待激活版本" : "发布";
             publishBtn.addEventListener("click", function() {
-              publishStaging(publishBtn);
+              publishStaging(publishBtn, readyOnly);
             });
             actions.appendChild(publishBtn);
           }
@@ -11477,8 +11518,9 @@ const adminConsoleHtml = `<!doctype html>
             var publishBtn = document.createElement("button");
             publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
-            publishBtn.textContent = "发布";
-            publishBtn.addEventListener("click", function() { publishStaging(publishBtn); });
+            var readyOnly = Boolean(upload.summary && (upload.summary.readyOnly || upload.summary.publishMode === "ready-only"));
+            publishBtn.textContent = readyOnly ? "生成待激活版本" : "发布";
+            publishBtn.addEventListener("click", function() { publishStaging(publishBtn, readyOnly); });
             actions.appendChild(publishBtn);
           }
           tbody.appendChild(tr);
@@ -11881,9 +11923,7 @@ const adminConsoleHtml = `<!doctype html>
         var publisherArgs = [];
         if (scriptName === "sync:publish:full") {
           publisherArgs = [
-            "--term=" + (term || "请先选择学期"),
-            "--term-start-date=" + (startDate || "请管理员填写YYYY-MM-DD"),
-            "--total-weeks=20"
+            "--term=" + (term || "请先选择学期")
           ];
         }
         var cliArgsStr = scriptName === "sync:upload-staging"
@@ -12884,11 +12924,14 @@ const adminConsoleHtml = `<!doctype html>
                 $("stagingValForceRefresh").textContent = meta.forceRefresh ? "是" : "否";
               }
               var safety = d.safety || {};
+              state.stagingPublishReadyOnly = Boolean(safety.readyOnly || safety.publishMode === "ready-only");
               if ($("stagingValAllowPublish")) {
                 $("stagingValAllowPublish").textContent = safety.allowPublish === false ? "否" : "是";
               }
               if ($("stagingPublishGate")) {
-                $("stagingPublishGate").textContent = safety.allowPublish === false ? "后端已拦截" : (safety.requiresForceConfirm ? "需二次确认" : "可发布");
+                $("stagingPublishGate").textContent = safety.allowPublish === false
+                  ? "后端已拦截"
+                  : (state.stagingPublishReadyOnly ? "可生成待激活版本" : (safety.requiresForceConfirm ? "需二次确认" : "可发布"));
               }
               
               // 3. 填充差异 Diff 趋势
@@ -12943,6 +12986,7 @@ const adminConsoleHtml = `<!doctype html>
               var publishBtn = $("stagingPublishBtn");
               if (publishBtn) {
                 publishBtn.disabled = false;
+                publishBtn.textContent = state.stagingPublishReadyOnly ? "生成待激活版本" : "发布为正式版本";
               }
               
               var warnings = [];
@@ -13025,17 +13069,18 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function publishStaging(sourceButton) {
+      function publishStaging(sourceButton, readyOnlyOverride) {
         var forceConfirm = $("stagingForceConfirm");
         var force = forceConfirm ? forceConfirm.checked : false;
+        var readyOnly = readyOnlyOverride === true || (!sourceButton && state.stagingPublishReadyOnly === true);
         
-        setStatus("正在正式发布课表快照版本...");
+        setStatus(readyOnly ? "正在生成待激活课表版本..." : "正在正式发布课表快照版本...");
         var publishBtn = sourceButton || $("stagingPublishBtn");
-        var restoreButton = setButtonLoading(publishBtn, "发布中...");
+        var restoreButton = setButtonLoading(publishBtn, readyOnly ? "生成中..." : "发布中...");
         
         api("/api/admin/sync/staging/publish/start", {
           method: "POST",
-          body: JSON.stringify({ force: force })
+          body: JSON.stringify({ force: force, readyOnly: readyOnly })
         })
           .then(function(res) {
             var publishJob = res.job || {};
@@ -13045,9 +13090,9 @@ const adminConsoleHtml = `<!doctype html>
                 restoreButton();
                 if (!doneJob || doneJob.status !== "success") return;
                 var result = doneJob.result || {};
-                showToast("Publish complete. Live release data updated.", "success");
+                showToast(result.readyOnly ? "待激活 Release 已生成，线上学期未切换。" : "Publish complete. Live release data updated.", "success");
                 var verifyCmdFromJob = "npm run verify:release-live -- --server=" + location.origin + (result.term || result.semester ? " --term=" + (result.term || result.semester) : "");
-                setStatus("Published. Static pack quick health=" + ((result.quickHealth && result.quickHealth.healthy) ? "OK" : "check required") + ". Verify command: " + verifyCmdFromJob);
+                setStatus((result.readyOnly ? "Ready-only Release prepared. " : "Published. ") + "Static pack quick health=" + ((result.quickHealth && result.quickHealth.healthy) ? "OK" : "check required") + ". Verify command: " + verifyCmdFromJob);
                 if (typeof copyText === "function") {
                   copyText(verifyCmdFromJob);
                 }
@@ -14558,7 +14603,7 @@ const adminConsoleHtml = `<!doctype html>
         var section = $("section-ai-provider");
         if (!section) return;
         section.innerHTML = "<div class='provider-console'>" +
-          "<div class='provider-hero provider-status-hero'><div><h3>小佛助手 Provider 控制台</h3><p>公开发布 = <strong>正式版本地规则</strong>；体验/开发 = <strong>" + escapeHtml(experienceLaneLabel) + "</strong></p></div><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
+          "<div class='provider-hero provider-status-hero'><div><h3>小序 Provider 控制台</h3><p>公开发布 = <strong>正式版本地规则</strong>；体验/开发 = <strong>" + escapeHtml(experienceLaneLabel) + "</strong></p></div><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
           "<div class='provider-mode-grid'>" +
             "<section class='provider-mode-card'>" +
               "<div class='provider-card-head'><div><div class='provider-card-title'>正式版 / 公开发布</div><div class='ai-secret-note'>公开用户默认入口：本地规则 + 已发布知识库 + 已有工具卡片</div></div><span class='badge " + (formalActive ? "success" : "muted") + "'>" + (formalActive ? "当前启用" : "未启用") + "</span></div>" +
@@ -14813,7 +14858,7 @@ const adminConsoleHtml = `<!doctype html>
             ignoreLoadError(loadAiAgentStatus());
             ignoreLoadError(loadAiReadinessMatrix());
             showToast("配置已保存并立即生效。", "success");
-            setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
+            setStatus("小序实际使用：" + aiProviderActualUseLabel());
             var saveAndVerifyEl = $("aiSaveAndVerify");
             if (saveAndVerifyEl && saveAndVerifyEl.checked) {
               if (payload.provider === "coze") testCozeConnection();
@@ -14844,7 +14889,7 @@ const adminConsoleHtml = `<!doctype html>
             if (environment !== "public" && envStatus && isExperienceProvider(envStatus.provider)) state.aiProviderSelectedProvider = envStatus.provider;
             renderAiProviderConfig();
             showToast(environment === "public" ? "已启用正式版本地规则。" : "预设已应用。", "success");
-            setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
+            setStatus("小序实际使用：" + aiProviderActualUseLabel());
           })
           .catch(function(error) { showToast(error.message, "error"); });
       }
@@ -15009,7 +15054,7 @@ const adminConsoleHtml = `<!doctype html>
             return "<tr><td>" + escapeHtml(item.action || "-") + "</td><td>" + escapeHtml(item.targetId || "-") + "</td><td>" + escapeHtml(item.operatorName || item.operatorType || "-") + "</td><td>" + (item.success === false ? "失败" : "成功") + "</td><td>" + escapeHtml(item.createdAt || "-") + "</td></tr>";
           }).join("")
           : "<tr><td colspan='5'>暂无审计记录</td></tr>";
-        wrap.innerHTML = "<div class='kb-hero'><div><h3>小佛助手知识库</h3><p>维护规则问答、文档草稿和发布版本。写入经 Knowledge Control Plane：安全校验、revision 并发、幂等与持久审计。发布/回滚仅后台人工确认；MCP 默认 stdio 且不含 publish/rollback。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
+        wrap.innerHTML = "<div class='kb-hero'><div><h3>小序知识库</h3><p>维护规则问答、文档草稿和发布版本。写入经 Knowledge Control Plane：安全校验、revision 并发、幂等与持久审计。发布/回滚仅后台人工确认；MCP 默认 stdio 且不含 publish/rollback。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
           "<div class='ai-provider-status' style='margin-bottom:12px;'>" +
             renderHealthItem("已发布版本", "<code>" + escapeHtml(cpVersion.version || (kb.published && kb.published.versionId) || "-") + "</code>") +
             renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") +
@@ -15018,7 +15063,7 @@ const adminConsoleHtml = `<!doctype html>
           "</div>" +
           "<div class='kb-tab-panel " + (tab === "rules" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>规则问答</strong><button id='kbRefreshBtn' class='ghost'>刷新</button></div><div class='kb-list-grid'>" + rules.map(renderKbEntryCard).join("") + "</div></div>" + (tab === "rules" ? renderKbEditor("rule") : "") + "</div></div>" +
           "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority/sourceUrl/authorityLevel'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + (tab === "docs" ? renderKbEditor("doc") : "") + "</div></div>" +
-          "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小佛可以做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
+          "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小序可以做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
           "<div class='kb-tab-panel " + (tab === "versions" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>版本发布</h3><div class='ai-provider-status'>" + renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") + renderHealthItem("已发布", "<code>" + escapeHtml(kb.published && kb.published.versionId || "-") + "</code>") + renderHealthItem("备份", "<strong>" + escapeHtml(String(kb.store && kb.store.backupCount || 0)) + "</strong>") + "</div><p class='ai-secret-note'>发布与回滚必须人工确认。MCP 不提供 publish/rollback 工具，也不会在此显示完整 service token。</p><div class='kb-actions-row'><button id='kbPublishBtn' class='primary'>发布草稿</button><button id='kbDiffBtn' class='secondary'>查看 Draft/Published Diff</button><button id='kbRefreshVersionsBtn' class='ghost'>刷新</button></div><div id='kbDiffBox' class='ai-verify-box' style='margin-top:12px;'>" + escapeHtml(state.assistantKbDiffText || "点击上方按钮加载字段级 Diff。") + "</div><div class='table-container'><table><thead><tr><th>版本</th><th>时间</th><th>数量</th><th>操作</th></tr></thead><tbody>" + renderKbBackups() + "</tbody></table></div></div></div>" +
           "<div class='kb-tab-panel " + (tab === "audit" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>最近审计</h3><p class='ai-secret-note'>" + escapeHtml(cp.mcpNote || "MCP 仅草稿读写与校验；发布/回滚仍须后台人工确认。") + "</p><div class='table-container'><table><thead><tr><th>动作</th><th>目标</th><th>操作者</th><th>结果</th><th>时间</th></tr></thead><tbody>" + auditRows + "</tbody></table></div></div></div>";
         bindAssistantKbEvents();

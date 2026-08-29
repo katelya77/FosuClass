@@ -1,0 +1,20 @@
+{
+  "schema": "fosuclass-adp-widget-contract/v3",
+  "kind": "classroom",
+  "widgetId": "9eb1ec5e1deb416ab5aba320359439a5",
+  "widgetName": "小序-空教室票据-V2",
+  "sourceFile": "小序-空教室票据-V2.widget",
+  "sourceSha256": "7551794881eb3b6675371743f8ba4bcafaed53949d5baa41e65d6fe483f0e43c",
+  "schemaLanguage": "json-schema",
+  "required": [
+    "title",
+    "timeText",
+    "queryId",
+    "dataVersion",
+    "filters",
+    "summary",
+    "items",
+    "actions"
+  ],
+  "integration": "FINAL_COMPILER_INTEGRATED"
+}

@@ -1,0 +1,117 @@
+{
+  "fixtureVersion": "2.0.0",
+  "sceneId": "hero-insight",
+  "source": "adp-runtime-golden",
+  "dataVersion": "competition-demo-v3",
+  "verified": true,
+  "capturedAt": "2026-08-23T16:59:43+08:00",
+  "provenanceNote": "证据来源：本地确定性 CampusTools（competition/adp-kit/mcp/campus-tools-mcp）对 competition-demo-v3 数据集（sha1:842b7959e808）的调用结果，evidence.verified=true。复现调用：query_teacher_load{week1..4,topN10}#q-20260823085943-68b6bb; query_schedule_range{教师025,week1..4}（周课次统计）; compare_schedules{教师025 self,week1..4}",
+  "payload": {
+    "windowWeeks": [
+      1,
+      4
+    ],
+    "rankingTop10": [
+      {
+        "rank": 1,
+        "teacherId": "教师025",
+        "lessons": 56,
+        "periods": 112,
+        "tied": false
+      },
+      {
+        "rank": 2,
+        "teacherId": "教师018",
+        "lessons": 44,
+        "periods": 88,
+        "tied": false
+      },
+      {
+        "rank": 3,
+        "teacherId": "教师034",
+        "lessons": 32,
+        "periods": 64,
+        "tied": false
+      },
+      {
+        "rank": 4,
+        "teacherId": "教师039",
+        "lessons": 32,
+        "periods": 64,
+        "tied": true
+      },
+      {
+        "rank": 5,
+        "teacherId": "教师002",
+        "lessons": 20,
+        "periods": 40,
+        "tied": false
+      },
+      {
+        "rank": 6,
+        "teacherId": "教师010",
+        "lessons": 20,
+        "periods": 40,
+        "tied": true
+      },
+      {
+        "rank": 7,
+        "teacherId": "教师020",
+        "lessons": 20,
+        "periods": 40,
+        "tied": true
+      },
+      {
+        "rank": 8,
+        "teacherId": "教师035",
+        "lessons": 20,
+        "periods": 40,
+        "tied": true
+      },
+      {
+        "rank": 9,
+        "teacherId": "教师011",
+        "lessons": 18,
+        "periods": 36,
+        "tied": false
+      },
+      {
+        "rank": 10,
+        "teacherId": "教师016",
+        "lessons": 18,
+        "periods": 36,
+        "tied": true
+      }
+    ],
+    "top1": {
+      "id": "teacher-025",
+      "name": "教师025",
+      "lessons": 56,
+      "periods": 112
+    },
+    "drilldownWeeks": [
+      {
+        "week": 1,
+        "lessons": 14
+      },
+      {
+        "week": 2,
+        "lessons": 14
+      },
+      {
+        "week": 3,
+        "lessons": 14
+      },
+      {
+        "week": 4,
+        "lessons": 14
+      }
+    ],
+    "riskSummary": {
+      "conflictCount": 0,
+      "rushWarningCount": 4,
+      "gapMinutes": 20,
+      "sampleRoute": "校区D D1-106 → 校区A A1-101"
+    }
+  }
+}

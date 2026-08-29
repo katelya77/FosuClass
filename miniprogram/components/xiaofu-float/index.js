@@ -1,6 +1,7 @@
 const floatService = require("../../services/xiaofuFloatService");
 const courseReminderClient = require("../../services/courseReminderClient");
 const securitySessionService = require("../../services/securitySessionService");
+const assistantBrand = require("../../config/assistantBrand");
 
 const FLOAT_SIZE = 58;
 const EDGE_MARGIN = 6;
@@ -164,11 +165,18 @@ Component({
       try {
         const aiAssistantService = require("../../services/aiAssistantService");
         const workspace = aiAssistantService.buildProactiveWorkspace(aiAssistantService.buildClientContext({}));
-        if (workspace && workspace.insight) insight = floatService.setProactiveInsight(workspace.insight);
+        if (workspace) insight = floatService.setProactiveInsight(workspace.insight || null);
       } catch (error) {
         // Keep the latest short-lived, sanitized insight when local context is unavailable.
       }
-      if (insight && floatService.isProactiveInsightDismissed(insight)) insight = null;
+      const fingerprint = insight && floatService.proactiveInsightFingerprint(insight);
+      const keepVisible = Boolean(insight && fingerprint && fingerprint === this._visibleInsightFingerprint);
+      if (insight && !keepVisible && !floatService.shouldShowProactiveInsight(insight)) insight = null;
+      if (insight && !keepVisible) {
+        floatService.markProactiveInsightShown(insight);
+        this._visibleInsightFingerprint = fingerprint;
+      }
+      if (!insight) this._visibleInsightFingerprint = "";
       this._currentInsight = insight;
       this.setData({
         visible: true,
@@ -202,7 +210,11 @@ Component({
           detail: String(event.id || "").slice(0, 80),
           actionUrl: "/pages/today/today",
         });
-        if (!insight || floatService.isProactiveInsightDismissed(insight)) return;
+        const fingerprint = insight && floatService.proactiveInsightFingerprint(insight);
+        const keepVisible = Boolean(insight && fingerprint && fingerprint === this._visibleInsightFingerprint);
+        if (!insight || !keepVisible && !floatService.shouldShowProactiveInsight(insight)) return;
+        if (!keepVisible) floatService.markProactiveInsightShown(insight);
+        this._visibleInsightFingerprint = fingerprint;
         this._currentInsight = insight;
         this.setData({ hintEyebrow: insight.eyebrow, hintText: insight.title });
       }).catch(() => {
@@ -321,13 +333,14 @@ Component({
       };
       floatService.dismissProactiveInsight(insight);
       this._currentInsight = null;
+      this._visibleInsightFingerprint = "";
       this.setData({ hintEyebrow: "", hintText: "" });
     },
 
     onLongPress() {
       this._longPressed = true;
       wx.showActionSheet({
-        itemList: ["打开小佛校园助手", "隐藏本页", "关闭浮窗"],
+        itemList: [`打开${assistantBrand.assistantName}`, "隐藏本页", "关闭浮窗"],
         success: (res) => {
           if (res.tapIndex === 0) {
             this.openAssistant();
@@ -338,7 +351,7 @@ Component({
           } else if (res.tapIndex === 2) {
             floatService.setEnabled(false);
             this.setData({ visible: false });
-            wx.showToast({ title: "可在设置或小佛页面重新开启", icon: "none" });
+            wx.showToast({ title: `可在设置或${assistantBrand.assistantName}页面重新开启`, icon: "none" });
           }
         },
         complete: () => {
@@ -357,7 +370,7 @@ Component({
         fail: () => {
           wx.redirectTo({
             url: "/packageXiaofu/pages/ai-assistant/ai-assistant?from=float",
-            fail: () => wx.showToast({ title: "暂时无法打开小佛校园助手", icon: "none" }),
+            fail: () => wx.showToast({ title: `暂时无法打开${assistantBrand.assistantName}`, icon: "none" }),
           });
         },
       });

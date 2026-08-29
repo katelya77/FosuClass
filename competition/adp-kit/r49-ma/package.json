@@ -1,0 +1,10 @@
+{
+  "name": "r49-ma",
+  "version": "1.0.0",
+  "private": true,
+  "description": "R49-MA Multi-Agent Architecture Migration - 一核三域 · 确定性工具底座。独立测试链，不侵入 adp-kit 顶层 40+ 子脚本。",
+  "scripts": {
+    "test": "node run-tests.js"
+  },
+  "devDependencies": {}
+}

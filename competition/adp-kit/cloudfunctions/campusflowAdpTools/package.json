@@ -1,0 +1,13 @@
+{
+  "name": "campusflow-adp-tools-http-function",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园智序匿名 CampusTools 的 CloudBase HTTP Function 部署包装",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

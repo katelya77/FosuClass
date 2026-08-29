@@ -38,6 +38,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
 const termReleaseIndexService = require("../services/termReleaseIndexService");
+const termDeletionService = require("../services/termDeletionService");
 const termReadinessService = require("../services/termReadinessService");
 const semesterActivationTransactionService = require("../services/semesterActivationTransactionService");
 const semesterRepairService = require("../services/semesterRepairService");
@@ -679,7 +680,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
       answerPreview: String(payload.answer || "").slice(0, 120),
     });
     const deterministicPayload = await runProbe("今天还有课吗？");
-    const projectPayload = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+    const projectPayload = await runProbe("FosuClass 是什么？小序你了解当前项目吗？");
     const previousPolicy = process.env.AI_PROVIDER_POLICY;
     let forcePayload;
     let releaseBlockPayload;
@@ -4534,7 +4535,17 @@ function validateStagingData(data) {
 }
 
 function buildStagingSafety(data, activeSnapshot) {
-  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
+  const publishMode = stagingSafetyService.resolveStagingPublishMode(data, activeSnapshot);
+  return Object.assign(
+    stagingSafetyService.buildStagingSafety(data, activeSnapshot, {
+      currentTerm: publishMode.activeTerm,
+      crossTermReadyCandidate: publishMode.crossTermReadyCandidate,
+    }),
+    {
+      readyOnly: publishMode.readyOnly,
+      publishMode: publishMode.publishMode,
+    }
+  );
 }
 
 /**
@@ -4889,6 +4900,41 @@ router.post("/terms/:term/disable", adminAuth.verifyAdminAccess, (req, res) => {
     return res.json({ success: true, term });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_DISABLE_FAILED", message: error.message });
+  }
+});
+
+router.get("/terms/:term/delete-preview", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(termDeletionService.deleteTerm(req.params.term, { dryRun: true }));
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "TERM_DELETE_PREVIEW_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+router.delete("/terms/:term", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const result = termDeletionService.deleteTerm(req.params.term, {
+      confirm: req.body && req.body.confirm,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    writeAuditLog(
+      req,
+      "delete",
+      "term",
+      req.params.term,
+      `Deleted term ${req.params.term} from live storage; rollback quarantine retained temporarily`
+    );
+    return res.json(result);
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "TERM_DELETE_FAILED",
+      message: error.message,
+    });
   }
 });
 
@@ -5482,21 +5528,22 @@ router.get("/sync/staging/upload/status", adminAuth.verifyAdminAccess, (req, res
  */
 router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const latestUpload = (stagingUploadService.listUploadRecords({ limit: 1 }).records || [])[0] || null;
+    const stagingInfo = releaseLifecycleService.getLatestStaging();
+    const latestUpload = stagingInfo.upload || null;
     if (latestUpload && (latestUpload.summary || latestUpload.canonicalHash)) {
       const summary = latestUpload.summary || {};
       const activeInfo = releaseService.getActiveReleaseInfoFast();
       const activeCanonicalHash = getActiveCanonicalHash();
-      const stagingCanonicalHash = latestUpload.canonicalHash || summary.canonicalHash || "";
+      const stagingCanonicalHash = stagingInfo.stagingCanonicalHash || latestUpload.canonicalHash || summary.canonicalHash || "";
       const sameAsActive = Boolean(activeCanonicalHash && stagingCanonicalHash && activeCanonicalHash === stagingCanonicalHash);
       return res.json({
         success: true,
         lightweight: true,
         data: {
-          term: latestUpload.term || summary.term || "",
-          releaseVersion: latestUpload.releaseVersion || summary.releaseVersion || "",
-          generatedAt: summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
-          meta: { stagingUploadId: latestUpload.uploadId || "" },
+          term: stagingInfo.term || latestUpload.term || summary.term || "",
+          releaseVersion: stagingInfo.releaseVersion || latestUpload.releaseVersion || summary.releaseVersion || "",
+          generatedAt: stagingInfo.generatedAt || summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
+          meta: { stagingUploadId: stagingInfo.uploadId || latestUpload.uploadId || "" },
           canonicalHash: stagingCanonicalHash,
           activeCanonicalHash,
           stagingCanonicalHash,
@@ -5511,6 +5558,8 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
           } : null,
           safety: {
             allowPublish: summary.stagingState !== "publish-blocked",
+            readyOnly: summary.readyOnly === true || summary.publishMode === "ready-only",
+            publishMode: summary.publishMode || "activate-current",
             blockers: summary.blockers || [],
             warnings: summary.warnings || [],
             blockerDetails: summary.blockerDetails || summary.contractComparison && summary.contractComparison.blockers || [],

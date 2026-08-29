@@ -1,0 +1,130 @@
+{
+  "version": "1.0",
+  "variant": "schedule",
+  "status": "success",
+  "title": "教师003 · 第1周课表",
+  "subtitle": "教师003 · 第1周",
+  "verified": true,
+  "summary": "第1周共 5 条课程。",
+  "context": "第1周",
+  "sections": [
+    {
+      "title": "课程列表",
+      "kind": "timeline",
+      "rows": [
+        {
+          "label": "周一 第5-6节",
+          "value": "程序设计基础 · 校区A A2-301",
+          "badge": "第5-6节",
+          "hint": "14:00-15:40 · 教师003 · 2025级A班"
+        },
+        {
+          "label": "周一 第7-8节",
+          "value": "数据结构 · 校区A A2-302",
+          "badge": "第7-8节",
+          "hint": "16:00-17:40 · 教师003 · 2025级A班"
+        },
+        {
+          "label": "周三 第3-4节",
+          "value": "操作系统 · 校区B B1-205",
+          "badge": "第3-4节",
+          "hint": "10:00-11:40 · 教师003 · 2025级B班"
+        },
+        {
+          "label": "周四 第5-6节",
+          "value": "计算机网络 · 校区B B1-206",
+          "badge": "第5-6节",
+          "hint": "14:00-15:40 · 教师003 · 2025级B班"
+        },
+        {
+          "label": "周五 第1-2节",
+          "value": "数据库原理 · 校区A A2-303",
+          "badge": "第1-2节",
+          "hint": "08:00-09:40 · 教师003 · 2025级A班"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "schedule-followup",
+      "type": "sys.chat",
+      "label": "检查这周的风险",
+      "payload": {
+        "query": "检查教师003第1周是否存在时间冲突或跨校区赶场"
+      }
+    },
+    {
+      "id": "schedule-week",
+      "type": "sys.chat",
+      "label": "看下一个教学周",
+      "payload": {
+        "query": "查看教师003第2周的课表"
+      }
+    },
+    {
+      "id": "weekboard-day-detail",
+      "type": "sys.chat",
+      "label": "看周一明细",
+      "payload": {
+        "query": "查看教师003第1周周一的课表明细"
+      }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "week-board",
+  "weekBoardTitle": "教师003 · 第1周课表",
+  "weekBoardSubtitle": "教师003 · 第1周",
+  "days": [
+    {
+      "label": "周一",
+      "blocks": [
+        {
+          "time": "第5-6节",
+          "title": "程序设计基础",
+          "location": "校区A A2-301",
+          "meta": "14:00-15:40 · 教师003 · 2025级A班"
+        },
+        {
+          "time": "第7-8节",
+          "title": "数据结构",
+          "location": "校区A A2-302",
+          "meta": "16:00-17:40 · 教师003 · 2025级A班"
+        }
+      ]
+    },
+    {
+      "label": "周三",
+      "blocks": [
+        {
+          "time": "第3-4节",
+          "title": "操作系统",
+          "location": "校区B B1-205",
+          "meta": "10:00-11:40 · 教师003 · 2025级B班"
+        }
+      ]
+    },
+    {
+      "label": "周四",
+      "blocks": [
+        {
+          "time": "第5-6节",
+          "title": "计算机网络",
+          "location": "校区B B1-206",
+          "meta": "14:00-15:40 · 教师003 · 2025级B班"
+        }
+      ]
+    },
+    {
+      "label": "周五",
+      "blocks": [
+        {
+          "time": "第1-2节",
+          "title": "数据库原理",
+          "location": "校区A A2-303",
+          "meta": "08:00-09:40 · 教师003 · 2025级A班"
+        }
+      ]
+    }
+  ]
+}

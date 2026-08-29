@@ -1152,8 +1152,8 @@ const ACTION_CATALOG = Object.freeze({
     ]
   },
   "clearAgentMemory": {
-    "displayName": "清除小佛记忆",
-    "description": "清除小佛助手记忆（本地/云端/全部），高危不可逆",
+    "displayName": "清除小序记忆",
+    "description": "清除小序记忆（本地/云端/全部），高危不可逆",
     "operation": "write",
     "confirmation": "required",
     "safetyLevel": "high",

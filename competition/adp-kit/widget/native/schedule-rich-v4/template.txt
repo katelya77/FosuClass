@@ -1,0 +1,36 @@
+<Card size="md" background="#F6F2E8" status={{ text: `已核验 · ${dataVersion}` }}>
+  <Col gap={3}>
+    <Title value={title} size="md" />
+    <Caption value={timeText} color="secondary" />
+    <ListView limit={items.length} status={`${summary.totalCount} 条课程`}>
+      {items.map((item, index) => (
+        <ListViewItem key={`${item.date}-${item.periodText}-${index}`} gap="12px" align="start">
+          <Badge label={item.periodText} color="info" variant="outline" size="sm" />
+          <Col gap={1} flex={1}>
+            <Text value={item.courseName} weight="semibold" />
+            <Caption value={`${item.date} · 周${item.weekday} · ${item.timeText}`} color="secondary" />
+            <Caption value={[item.campusName, item.building, item.roomName].filter(Boolean).join(" · ")} color="secondary" />
+            <Caption value={[...item.teachers, ...item.classes].join(" · ")} color="secondary" />
+          </Col>
+        </ListViewItem>
+      ))}
+    </ListView>
+    <Row gap={2} wrap="wrap">
+      {actions.map((action) => (
+        <Button key={action.id} label={action.label} size="sm" onClickAction={{
+          type: "sys.chat",
+          payload: {
+            query: action.query,
+            intent: action.intent,
+            entityType: action.entityType,
+            entityName: action.entityName,
+            week: action.week,
+            weekday: action.weekday,
+            date: action.date,
+          },
+        }} />
+      ))}
+    </Row>
+    <Caption value={`数据版本 ${dataVersion} · 查询编号 ${queryId}`} color="secondary" />
+  </Col>
+</Card>

@@ -423,6 +423,10 @@ function emptyRoomPath() {
   return "empty-room/index.json";
 }
 
+function rootFilePath(name) {
+  return `${name}.json`;
+}
+
 function sourceRoots(source, options = {}) {
   if (source === "cloudbase") {
     const baseUrl = String(options.cloudbaseBaseUrl || cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL || "").trim().replace(/\/+$/g, "");
@@ -509,6 +513,14 @@ async function smokeSource(source, options = {}) {
   const manifest = await fetchSourceStep(`${roots.source} manifest.json`, joinUrl(releaseRoot, "manifest.json"), "manifest.json", releaseVersion);
   steps.push(manifest.item);
 
+  const calendarRelPath = rootFilePath("calendar");
+  const calendar = await fetchSourceStep(`${roots.source} calendar.json`, joinUrl(releaseRoot, calendarRelPath), calendarRelPath, releaseVersion);
+  steps.push(calendar.item);
+
+  const bootstrapRelPath = rootFilePath("bootstrap");
+  const bootstrap = await fetchSourceStep(`${roots.source} bootstrap.json`, joinUrl(releaseRoot, bootstrapRelPath), bootstrapRelPath, releaseVersion);
+  steps.push(bootstrap.item);
+
   for (const type of INDEX_TYPES) {
     const relPath = indexPath(type);
     const index = await fetchSourceStep(`${roots.source} index/${type}`, joinUrl(releaseRoot, relPath), relPath, releaseVersion);
@@ -556,6 +568,8 @@ async function smokeSource(source, options = {}) {
     term: manifest.item.term || pointer.item.term || "",
     pointer: pointer.item,
     manifest: manifest.item,
+    calendar: calendar.item,
+    bootstrap: bootstrap.item,
     indexes: Object.keys(indexes).reduce((acc, type) => {
       acc[type] = indexes[type].item;
       return acc;
@@ -599,6 +613,8 @@ function compareSources(cloudbase, oracle) {
   const comparisons = [
     compareMeta("runtime pointer", cloudbase.pointer, oracle.pointer, ["releaseVersion", "term", "cacheEpoch", "forceRefreshToken"]),
     compareMeta("manifest", cloudbase.manifest, oracle.manifest, ["releaseVersion", "term", "cacheEpoch", "forceRefreshToken", "hash", "size"]),
+    compareMeta("calendar", cloudbase.calendar, oracle.calendar, ["releaseVersion", "term", "hash", "size"]),
+    compareMeta("bootstrap", cloudbase.bootstrap, oracle.bootstrap, ["releaseVersion", "term", "hash", "size"]),
     compareMeta("empty-room", cloudbase.emptyRoom, oracle.emptyRoom, ["releaseVersion", "hash", "size", "count"]),
   ];
   INDEX_TYPES.forEach((type) => {

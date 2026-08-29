@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "variant": "error",
+  "status": "error",
+  "title": "本次查询暂时没有完成",
+  "verified": false,
+  "summary": "没有找到对应的教师/班级/教室，请检查名称或换一种问法。",
+  "sections": [],
+  "actions": [
+    {
+      "id": "error-retry",
+      "type": "sys.chat",
+      "label": "重试",
+      "payload": {
+        "query": "再查一次"
+      }
+    },
+    {
+      "id": "error-rephrase",
+      "type": "sys.chat",
+      "label": "换一种问法",
+      "payload": {
+        "query": "换一种问法查询"
+      }
+    }
+  ],
+  "displayMeta": {
+    "recoverable": true
+  }
+}

@@ -8,7 +8,7 @@ const {
 const { getSettings } = require("./storage");
 const customCourseService = require("../services/customCourseService");
 const teachingCalendarService = require("../services/teachingCalendarService");
-const { clampWeek, getTodayTeachingInfo, getTodayWeekday } = require("./week");
+const { clampWeek, getTermPhaseText, getTodayTeachingInfo, getTodayWeekday } = require("./week");
 const { getCourseWeekStatus } = require("./courseWeekRules");
 
 function isCourseActiveInCurrentWeek(course, currentWeek) {
@@ -22,9 +22,9 @@ function getCurrentBoundSchedule() {
   const calendar = teachingCalendarService.getImmediateActiveCalendar();
   const termConfig = calendar.termConfig || {};
 
-  const classId = settings.classId || target?.classId || "";
-  const className = settings.className || target?.name || target?.className || "";
-  const semester = target?.term || target?.semester || settings.semesterId || settings.semester || termConfig.term;
+  const classId = target && target.classId || settings.classId || "";
+  const className = target && (target.name || target.className) || settings.className || "";
+  const semester = target && (target.term || target.semester) || settings.semesterId || settings.semester || termConfig.term;
   let schedule = null;
   let source = "";
 
@@ -114,9 +114,18 @@ function decorateTodayCourses(courses, now) {
   });
 }
 
-function getTodayCoursesData() {
+function shouldShowTodayStartupReminder(todayData) {
+  const source = todayData && typeof todayData === "object" ? todayData : {};
+  return source.hasSchedule === true
+    && source.isInTerm === true
+    && source.termPhase === "in-term"
+    && Array.isArray(source.courses)
+    && source.courses.length > 0;
+}
+
+function getTodayCoursesData(options = {}) {
   const settings = getSettings();
-  const now = new Date();
+  const now = options.now ? new Date(options.now) : new Date();
   const calendar = teachingCalendarService.getImmediateActiveCalendar();
   const termConfig = calendar.termConfig || {};
   const weeks = calendar.weeks || [];
@@ -125,6 +134,8 @@ function getTodayCoursesData() {
   const currentWeek = settings.manualWeekOverride
     ? clampWeek(settings.currentWeek, termConfig)
     : todayInfo.weekNo;
+  const termPhase = todayInfo.termPhase || "unknown";
+  const termPhaseText = getTermPhaseText(termPhase);
 
   const boundInfo = getCurrentBoundSchedule();
   const { classId, className, semester, schedule, source } = boundInfo;
@@ -139,6 +150,27 @@ function getTodayCoursesData() {
       courses: [],
       totalCount: 0,
       state: "none",
+      termPhase,
+      termPhaseText,
+      isInTerm: termPhase === "in-term",
+    };
+  }
+
+  if (termPhase !== "in-term") {
+    return {
+      hasSchedule: true,
+      dateText: todayInfo.fullDateLabel,
+      weekdayText: todayInfo.weekdayLabel,
+      className: className || "",
+      currentWeek,
+      courses: [],
+      totalCount: 0,
+      state: termPhase,
+      source,
+      termPhase,
+      termPhaseText,
+      isInTerm: false,
+      nextCoursePreview: null,
     };
   }
 
@@ -157,7 +189,7 @@ function getTodayCoursesData() {
   });
   const sourceCourses = dedupeCourses(baseCourses.concat(customCourses));
 
-  const todayRawCourses = sourceCourses.filter((course) => {
+  const todayRawCourses = todayInfo.isTeachingDay === false ? [] : sourceCourses.filter((course) => {
     const inWeek = isCourseActiveInCurrentWeek(course, currentWeek);
     const isToday = Number(course.weekday) === Number(weekday);
     const matchesSemester = !course.semester || course.semester === semester;
@@ -204,6 +236,9 @@ function getTodayCoursesData() {
     totalCount: finalCourses.length,
     state,
     source,
+    termPhase,
+    termPhaseText,
+    isInTerm: true,
     nextCoursePreview: finalCourses.length === 0
       ? getNextCoursePreview(sourceCourses, currentWeek, Number(weekday), termConfig)
       : null,
@@ -214,4 +249,5 @@ module.exports = {
   isCourseActiveInCurrentWeek,
   getCurrentBoundSchedule,
   getTodayCoursesData,
+  shouldShowTodayStartupReminder,
 };

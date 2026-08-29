@@ -1,0 +1,17 @@
+{
+  "root": "competition/adp-kit/knowledge/current/",
+  "documents": [
+    "competition/adp-kit/knowledge/current/01-定位与能力边界.md",
+    "competition/adp-kit/knowledge/current/02-课表与校园实体理解.md",
+    "competition/adp-kit/knowledge/current/03-教学时间与节次规则.md",
+    "competition/adp-kit/knowledge/current/04-动态事实与可信度.md",
+    "competition/adp-kit/knowledge/current/05-隐私安全与授权边界.md",
+    "competition/adp-kit/knowledge/current/06-无结果歧义与恢复.md",
+    "competition/adp-kit/knowledge/current/07-主动协作原则.md",
+    "competition/adp-kit/knowledge/current/08-功能导航与自然语言使用.md",
+    "competition/adp-kit/knowledge/current/09-个人课表导入与同步.md",
+    "competition/adp-kit/knowledge/current/10-常见问题.md",
+    "competition/adp-kit/knowledge/current/README.md",
+    "competition/adp-kit/knowledge/current/recall-matrix.md"
+  ]
+}

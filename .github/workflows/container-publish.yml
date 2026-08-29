@@ -1,12 +1,6 @@
 name: Publish API container (GHCR)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "server/**"
-      - ".github/workflows/container-publish.yml"
-      - ".dockerignore"
   workflow_dispatch:
     inputs:
       also_amd64:

@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "variant": "empty",
+  "status": "empty",
+  "title": "当前条件下没有匹配结果",
+  "verified": true,
+  "summary": "「教师099」当前条件下没有匹配结果。可调整容量、校区或时间后再试。",
+  "context": "第1周",
+  "sections": [],
+  "actions": [
+    {
+      "id": "empty-broaden",
+      "type": "sys.chat",
+      "label": "扩大范围再试",
+      "payload": {
+        "query": "换一个教学周再查课表"
+      }
+    }
+  ],
+  "displayMeta": {}
+}

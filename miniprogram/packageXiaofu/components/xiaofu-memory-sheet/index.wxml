@@ -67,7 +67,7 @@
 
     <view class="memory-preference-section">
       <view class="memory-section-head">
-        <view class="memory-section-title">小佛记得的内容</view>
+        <view class="memory-section-title">小序记得的内容</view>
         <view class="memory-section-meta">展示类别、作用域与更新时间；可修改或单项遗忘</view>
       </view>
       <view class="memory-preference-loading" wx:if="{{preferencesLoading}}">正在读取…</view>

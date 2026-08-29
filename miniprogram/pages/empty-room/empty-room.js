@@ -214,6 +214,8 @@ Page({
     termPhase: "unknown",
     isInTerm: false,
     termStatusText: "",
+    isTeachingDay: true,
+    teachingEventNote: "",
     selectedRoom: null,
     detailVisible: false,
     favoriteBuildings: [],
@@ -266,6 +268,8 @@ Page({
       termPhase: dateInfo.termPhase || "unknown",
       isInTerm: Boolean(dateInfo.isInTerm),
       termStatusText: dateInfo.isInTerm ? "" : this.getTermPhaseText(dateInfo.termPhase),
+      isTeachingDay: dateInfo.isTeachingDay !== false,
+      teachingEventNote: dateInfo.teachingEventNote || "",
       selectedSectionPresetIndex: selectedSectionPresetIndex >= 0 ? selectedSectionPresetIndex : 0,
       sections,
       selectedSectionValues: parseSectionValues(sections),
@@ -446,6 +450,17 @@ Page({
 
   applyLocalSearch(options = {}) {
     const params = this.getQueryParams();
+    if (this.data.isTeachingDay === false) {
+      this.setData({
+        loading: false,
+        dataState: "empty",
+        rooms: [],
+        visibleRoomGroups: [],
+        summaryText: this.data.teachingEventNote || "当日按校历不执行常规教学安排",
+        restoreHint: "请选择其他教学日期",
+      });
+      return Promise.resolve({ success: true, code: "CALENDAR_NO_CLASS", rooms: [] });
+    }
     if (this.data.isInTerm === false && this.data.activeQuickFilter === "now" && !options.allowOutOfTermNow) {
       this.setData({
         loading: false,
@@ -598,6 +613,8 @@ Page({
       termPhase: info.termPhase || "unknown",
       isInTerm: Boolean(info.isInTerm),
       termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
+      isTeachingDay: info.isTeachingDay !== false,
+      teachingEventNote: info.teachingEventNote || "",
       activeQuickFilter: "custom",
     });
   },
@@ -620,6 +637,8 @@ Page({
       termPhase: info.termPhase || "unknown",
       isInTerm: Boolean(info.isInTerm),
       termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
+      isTeachingDay: info.isTeachingDay !== false,
+      teachingEventNote: info.teachingEventNote || "",
       activeQuickFilter: key === "today" ? this.data.activeQuickFilter : "custom",
     });
   },

@@ -1,0 +1,934 @@
+openapi: 3.0.0
+info:
+  title: 校园智序-CampusTools
+  description: >-
+    校园智序&middot; 小序的确定性教学数据工具集，提供课表、空教室、风险检查、一日规划和校园教学态势查询。所有动态校园事实均来自
+    competition-demo-v3 的确定性计算结果，供 Multi-Agent 专业 Agent 调用。
+  version: 1.0.0
+servers:
+  - url: https://cloud1-d3g17rpe7566d3d5c-1442900641.ap-shanghai.app.tcloudbase.com
+paths:
+  /campusflow-adp-tools/api/campus_reschedule_feasibility:
+    post:
+      operationId: campus_reschedule_feasibility
+      summary: 调课 What-if 模拟可行性（完整确定性链，绝不修改数据）
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 统一成功标志
+                  queryId:
+                    type: string
+                    description: 查询 ID
+                  dataVersion:
+                    type: string
+                    description: 数据版本标识
+                  resolvedEntity:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: class/teacher/room/course/user 等实体类型
+                      id:
+                        type: string
+                        description: 数据集中实体唯一 ID
+                      name:
+                        type: string
+                        description: 实体显示名（如 教师009）
+                    required: []
+                    description: 解析后的校园实体（与请求 entityType 对应，day_plan 固定为 user）
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sourceLesson:
+                          type: object
+                          properties:
+                            lessonId:
+                              type: string
+                              description: 课次 id
+                            courseId:
+                              type: string
+                              description: 课程 id
+                            courseName:
+                              type: string
+                              description: 课程名称
+                            teachers:
+                              type: array
+                              items:
+                                type: string
+                              description: 任课教师名称列表
+                            classes:
+                              type: array
+                              items:
+                                type: string
+                              description: 上课班级名称列表
+                            roomId:
+                              type: string
+                              description: 教室 id
+                            roomName:
+                              type: string
+                              description: 教室名称
+                            building:
+                              type: string
+                              description: 楼栋（可为 null）
+                            campusId:
+                              type: string
+                              description: 校区 id
+                            campusName:
+                              type: string
+                              description: 校区名称
+                            weekday:
+                              type: integer
+                              description: 星期 1..7
+                            weekdayName:
+                              type: string
+                              description: 星期名称
+                            periodStart:
+                              type: integer
+                              description: 节次起点
+                            periodEnd:
+                              type: integer
+                              description: 节次终点
+                            periodText:
+                              type: string
+                              description: 如 第3-4节
+                            startTime:
+                              type: string
+                              description: 开始时间 HH:mm
+                            endTime:
+                              type: string
+                              description: 结束时间 HH:mm
+                            weeks:
+                              type: array
+                              items:
+                                type: integer
+                              description: 开课教学周列表
+                          required: []
+                          description: 源课程信息（lessonDisplay 形态）
+                        target:
+                          type: object
+                          properties:
+                            week:
+                              type: integer
+                              description: 目标教学周
+                            weekday:
+                              type: integer
+                              description: 目标星期
+                            weekdayName:
+                              type: string
+                              description: 星期名称
+                            date:
+                              type: string
+                              description: 目标日期 YYYY-MM-DD
+                            periodStart:
+                              type: integer
+                              description: 节次起点
+                            periodEnd:
+                              type: integer
+                              description: 节次终点
+                            periodText:
+                              type: string
+                              description: 如 第3-4节
+                            room:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  description: 教室 id
+                                name:
+                                  type: string
+                                  description: 教室名称
+                                capacity:
+                                  type: integer
+                                  description: 容量
+                                campusId:
+                                  type: string
+                                  description: 校区 id
+                                campusName:
+                                  type: string
+                                  description: 校区名称
+                              required: []
+                              description: 目标教室（未指定为 null）
+                          required: []
+                          description: 目标时段解析
+                        checks:
+                          type: object
+                          properties:
+                            teacherConflict:
+                              type: object
+                              properties:
+                                conflict:
+                                  type: boolean
+                                  description: 是否存在冲突
+                                details:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      lessonId:
+                                        type: string
+                                        description: 课次 id
+                                      courseId:
+                                        type: string
+                                        description: 课程 id
+                                      courseName:
+                                        type: string
+                                        description: 课程名称
+                                      teachers:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 任课教师名称列表
+                                      classes:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 上课班级名称列表
+                                      roomId:
+                                        type: string
+                                        description: 教室 id
+                                      roomName:
+                                        type: string
+                                        description: 教室名称
+                                      building:
+                                        type: string
+                                        description: 楼栋（可为 null）
+                                      campusId:
+                                        type: string
+                                        description: 校区 id
+                                      campusName:
+                                        type: string
+                                        description: 校区名称
+                                      weekday:
+                                        type: integer
+                                        description: 星期 1..7
+                                      weekdayName:
+                                        type: string
+                                        description: 星期名称
+                                      periodStart:
+                                        type: integer
+                                        description: 节次起点
+                                      periodEnd:
+                                        type: integer
+                                        description: 节次终点
+                                      periodText:
+                                        type: string
+                                        description: 如 第3-4节
+                                      startTime:
+                                        type: string
+                                        description: 开始时间 HH:mm
+                                      endTime:
+                                        type: string
+                                        description: 结束时间 HH:mm
+                                      weeks:
+                                        type: array
+                                        items:
+                                          type: integer
+                                        description: 开课教学周列表
+                                  description: 冲突课次明细（lessonDisplay 形态）
+                              required: []
+                              description: 冲突检查结果（teacher/class/room 三类）
+                            classConflict:
+                              type: object
+                              properties:
+                                conflict:
+                                  type: boolean
+                                  description: 是否存在冲突
+                                details:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      lessonId:
+                                        type: string
+                                        description: 课次 id
+                                      courseId:
+                                        type: string
+                                        description: 课程 id
+                                      courseName:
+                                        type: string
+                                        description: 课程名称
+                                      teachers:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 任课教师名称列表
+                                      classes:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 上课班级名称列表
+                                      roomId:
+                                        type: string
+                                        description: 教室 id
+                                      roomName:
+                                        type: string
+                                        description: 教室名称
+                                      building:
+                                        type: string
+                                        description: 楼栋（可为 null）
+                                      campusId:
+                                        type: string
+                                        description: 校区 id
+                                      campusName:
+                                        type: string
+                                        description: 校区名称
+                                      weekday:
+                                        type: integer
+                                        description: 星期 1..7
+                                      weekdayName:
+                                        type: string
+                                        description: 星期名称
+                                      periodStart:
+                                        type: integer
+                                        description: 节次起点
+                                      periodEnd:
+                                        type: integer
+                                        description: 节次终点
+                                      periodText:
+                                        type: string
+                                        description: 如 第3-4节
+                                      startTime:
+                                        type: string
+                                        description: 开始时间 HH:mm
+                                      endTime:
+                                        type: string
+                                        description: 结束时间 HH:mm
+                                      weeks:
+                                        type: array
+                                        items:
+                                          type: integer
+                                        description: 开课教学周列表
+                                  description: 冲突课次明细（lessonDisplay 形态）
+                              required: []
+                              description: 冲突检查结果（teacher/class/room 三类）
+                            roomConflict:
+                              type: object
+                              properties:
+                                conflict:
+                                  type: boolean
+                                  description: 是否存在冲突
+                                details:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      lessonId:
+                                        type: string
+                                        description: 课次 id
+                                      courseId:
+                                        type: string
+                                        description: 课程 id
+                                      courseName:
+                                        type: string
+                                        description: 课程名称
+                                      teachers:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 任课教师名称列表
+                                      classes:
+                                        type: array
+                                        items:
+                                          type: string
+                                        description: 上课班级名称列表
+                                      roomId:
+                                        type: string
+                                        description: 教室 id
+                                      roomName:
+                                        type: string
+                                        description: 教室名称
+                                      building:
+                                        type: string
+                                        description: 楼栋（可为 null）
+                                      campusId:
+                                        type: string
+                                        description: 校区 id
+                                      campusName:
+                                        type: string
+                                        description: 校区名称
+                                      weekday:
+                                        type: integer
+                                        description: 星期 1..7
+                                      weekdayName:
+                                        type: string
+                                        description: 星期名称
+                                      periodStart:
+                                        type: integer
+                                        description: 节次起点
+                                      periodEnd:
+                                        type: integer
+                                        description: 节次终点
+                                      periodText:
+                                        type: string
+                                        description: 如 第3-4节
+                                      startTime:
+                                        type: string
+                                        description: 开始时间 HH:mm
+                                      endTime:
+                                        type: string
+                                        description: 结束时间 HH:mm
+                                      weeks:
+                                        type: array
+                                        items:
+                                          type: integer
+                                        description: 开课教学周列表
+                                  description: 冲突课次明细（lessonDisplay 形态）
+                              required: []
+                              description: 冲突检查结果（teacher/class/room 三类）
+                            capacity:
+                              type: object
+                              properties:
+                                ok:
+                                  type: boolean
+                                  description: 是否通过
+                                note:
+                                  type: string
+                                  description: 检查说明（fail-open 或失败原因，可为 null）
+                              required: []
+                              description: 容量/功能设备检查结果
+                            feature:
+                              type: object
+                              properties:
+                                ok:
+                                  type: boolean
+                                  description: 是否通过
+                                note:
+                                  type: string
+                                  description: 检查说明（fail-open 或失败原因，可为 null）
+                              required: []
+                              description: 容量/功能设备检查结果
+                            spaceAvailability:
+                              type: object
+                              properties:
+                                ok:
+                                  type: boolean
+                                  description: 目标时段是否有可用教室
+                                note:
+                                  type: string
+                                  description: 说明（可为 null）
+                                roomCount:
+                                  type: integer
+                                  description: 可用教室数
+                                suggestedRoom:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      description: 教室 id
+                                    name:
+                                      type: string
+                                      description: 教室名称
+                                    capacity:
+                                      type: integer
+                                      description: 容量
+                                    campusId:
+                                      type: string
+                                      description: 校区 id
+                                    campusName:
+                                      type: string
+                                      description: 校区名称
+                                  required: []
+                                  description: 首选候选教室（未指定目标教室时给出）
+                              required: []
+                              description: 目标时段空间可用性检查（完整确定性链）
+                          required: []
+                          description: 逐项检查
+                        warnings:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                description: 风险类型（continuous_load/cross_campus_rush 等）
+                              level:
+                                type: string
+                                description: 风险级别
+                              text:
+                                type: string
+                                description: 风险说明
+                          description: 风险提示列表
+                        feasible:
+                          type: boolean
+                          description: 该课次整体是否可行（完整链：冲突/容量/设备/空间）
+                        reasons:
+                          type: array
+                          items:
+                            type: string
+                          description: 不可行原因列表（可读中文）
+                    description: 调课模拟结果条目
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          description: 动作类型：open_widget / sys.chat
+                        cardType:
+                          type: string
+                          description: >-
+                            open_widget
+                            的卡片类型：schedule/classroom/conflict/day_plan
+                        label:
+                          type: string
+                          description: 动作文案
+                        intent:
+                          type: string
+                          description: sys.chat 的意图标识
+                        query:
+                          type: string
+                          description: sys.chat 的预填查询
+                        week:
+                          type: integer
+                          description: sys.chat 关联的教学周
+                    description: 可执行动作（当前为空数组）
+                  evidence:
+                    type: object
+                    properties:
+                      dataVersion:
+                        type: string
+                        description: ''
+                      dataHash:
+                        type: string
+                        description: ''
+                      source:
+                        type: string
+                        description: 计算来源（固定 campus-tools-mcp）
+                      computedAt:
+                        type: string
+                        description: 计算时间 ISO 字符串
+                      verified:
+                        type: boolean
+                        description: 是否通过确定性校验；失败路径为 false
+                      note:
+                        type: string
+                        description: EMPTY_RESULT 等附加标记
+                      derivation:
+                        type: string
+                        description: overview 的派生过程说明
+                      preparationPeriodLessonCount:
+                        type: integer
+                        description: overview 准备期课程数（固定 0）
+                    required: []
+                    description: 可核查证据：动态事实全部来自当前匿名数据集的确定性计算
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        description: >-
+                          MISSING_PARAM / INVALID_PARAM / ENTITY_NOT_FOUND /
+                          AMBIGUOUS_ENTITY / OUT_OF_RANGE / INTERNAL 等
+                      message:
+                        type: string
+                        description: 中文错误说明
+                      details:
+                        type: object
+                        properties: {}
+                        required: []
+                        description: 附加细节（如候选列表）
+                    required: []
+                    description: 确定性错误结构，供 ADP 工作流分支判断
+                  summary:
+                    type: object
+                    properties:
+                      feasible:
+                        type: boolean
+                        description: 是否全部课次可行
+                      partialFeasible:
+                        type: boolean
+                        description: 是否存在部分课次可行（多课次）
+                      reason:
+                        type: string
+                        description: 可行性结论说明
+                      conflictCount:
+                        type: integer
+                        description: 冲突总数
+                      warningCount:
+                        type: integer
+                        description: 风险提示数
+                      lessonCount:
+                        type: integer
+                        description: 参与模拟的课次数
+                      multiLesson:
+                        type: boolean
+                        description: 课程是否存在多个课次（多班级）
+                      classDisambiguated:
+                        type: boolean
+                        description: 是否已按班级缩窄
+                    required: []
+                    description: 调课可行性汇总
+                  simulation:
+                    type: object
+                    properties:
+                      sourceLessonId:
+                        type: string
+                        description: 源课程 lessonId（单课次；多课次为 null）
+                      sourceLessonIds:
+                        type: array
+                        items:
+                          type: string
+                        description: 源课程 lessonId 列表
+                      sourceCourseId:
+                        type: string
+                        description: 源课程 courseId
+                      sourceCourseName:
+                        type: string
+                        description: 源课程名称
+                      target:
+                        type: object
+                        properties:
+                          week:
+                            type: integer
+                            description: 目标教学周
+                          weekday:
+                            type: integer
+                            description: 目标星期
+                          weekdayName:
+                            type: string
+                            description: 星期名称
+                          date:
+                            type: string
+                            description: 目标日期
+                          periodStart:
+                            type: integer
+                            description: 节次起点
+                          periodEnd:
+                            type: integer
+                            description: 节次终点
+                          periodText:
+                            type: string
+                            description: 节次文本
+                          room:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                description: 教室 id
+                              name:
+                                type: string
+                                description: 教室名称
+                              capacity:
+                                type: integer
+                                description: 容量
+                              campusId:
+                                type: string
+                                description: 校区 id
+                              campusName:
+                                type: string
+                                description: 校区名称
+                            required: []
+                            description: 目标教室（可为 null）
+                        required: []
+                        description: 目标时段解析
+                      mutatedData:
+                        type: boolean
+                        description: 是否修改数据（恒为 false）
+                    required: []
+                    description: 模拟元信息
+                  decision:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        description: ''
+                      preferred:
+                        type: object
+                        properties:
+                          label:
+                            type: string
+                            description: ''
+                          reasons:
+                            type: array
+                            items:
+                              type: string
+                            description: ''
+                        required: []
+                        description: ''
+                      alternatives:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                              description: ''
+                            reasons:
+                              type: array
+                              items:
+                                type: string
+                              description: ''
+                        description: ''
+                      reasons:
+                        type: array
+                        items:
+                          type: string
+                        description: ''
+                      tradeoffs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                              description: ''
+                            reasons:
+                              type: array
+                              items:
+                                type: string
+                              description: ''
+                        description: ''
+                      nextActions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: ''
+                            type:
+                              type: string
+                              description: ''
+                            label:
+                              type: string
+                              description: ''
+                            payload:
+                              type: object
+                              properties:
+                                query:
+                                  type: string
+                                  description: ''
+                              required: []
+                              description: ''
+                        description: ''
+                      receipt:
+                        type: object
+                        properties:
+                          receiptVersion:
+                            type: string
+                            description: ''
+                          decisionId:
+                            type: string
+                            description: ''
+                          recommendation:
+                            type: object
+                            properties:
+                              label:
+                                type: string
+                                description: ''
+                              reasons:
+                                type: array
+                                items:
+                                  type: string
+                                description: ''
+                            required: []
+                            description: ''
+                          alternatives:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                label:
+                                  type: string
+                                  description: ''
+                                reasons:
+                                  type: array
+                                  items:
+                                    type: string
+                                  description: ''
+                            description: ''
+                          nextAction:
+                            type: object
+                            properties:
+                              label:
+                                type: string
+                                description: ''
+                              query:
+                                type: string
+                                description: ''
+                            required: []
+                            description: ''
+                          verified:
+                            type: boolean
+                            description: ''
+                          decision:
+                            type: string
+                            description: ''
+                        required: []
+                        description: ''
+                      resultCard:
+                        type: object
+                        properties:
+                          version:
+                            type: string
+                            description: ''
+                          variant:
+                            type: string
+                            description: ''
+                          status:
+                            type: string
+                            description: ''
+                          layoutMode:
+                            type: string
+                            description: ''
+                          title:
+                            type: string
+                            description: ''
+                          subtitle:
+                            type: string
+                            description: ''
+                          summary:
+                            type: string
+                            description: ''
+                          context:
+                            type: string
+                            description: ''
+                          verified:
+                            type: boolean
+                            description: ''
+                          sections:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                title:
+                                  type: string
+                                  description: ''
+                                rows:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      label:
+                                        type: string
+                                        description: ''
+                                      value:
+                                        type: string
+                                        description: ''
+                                      hint:
+                                        type: string
+                                        description: ''
+                                  description: ''
+                            description: ''
+                          actions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  description: ''
+                                type:
+                                  type: string
+                                  description: ''
+                                label:
+                                  type: string
+                                  description: ''
+                                payload:
+                                  type: object
+                                  properties:
+                                    query:
+                                      type: string
+                                      description: ''
+                                  required: []
+                                  description: ''
+                            description: ''
+                          displayMeta:
+                            type: object
+                            properties: {}
+                            required: []
+                            description: ''
+                          weekBoardTitle:
+                            type: string
+                            description: ''
+                          weekBoardSubtitle:
+                            type: string
+                            description: ''
+                          days:
+                            type: array
+                            items:
+                              type: object
+                              properties: {}
+                            description: ''
+                        required: []
+                        description: 现有小序校园智序 result-card 的脱敏投影
+                    required: []
+                    description: >-
+                      服务端基于当前 verified tool candidates 生成的脱敏确定性决策；原 facts/items
+                      保持不变
+          description: 成功的响应
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sourceLessonId:
+                  type: string
+                  description: 源课程 lessonId（与 sourceCourseId/sourceCourseName 三选一）
+                sourceCourseId:
+                  type: string
+                  description: 源课程 courseId（与 sourceLessonId/sourceCourseName 三选一）
+                sourceCourseName:
+                  type: string
+                  description: 源课程名称（与 sourceLessonId/sourceCourseId 三选一；多个候选时返回歧义候选）
+                className:
+                  type: string
+                  description: 班级名称（可选，缩窄课程多课次）
+                classId:
+                  type: string
+                  description: 班级 id（可选，缩窄课程多课次）
+                target:
+                  type: object
+                  properties:
+                    week:
+                      type: integer
+                      description: 目标教学周（可选，缺省取源课次首个开课周）
+                    weekday:
+                      type: integer
+                      description: 目标星期 1..7
+                    periodStart:
+                      type: integer
+                      description: 目标节次起点
+                    periodEnd:
+                      type: integer
+                      description: 目标节次终点
+                    room:
+                      type: string
+                      description: 目标教室 id 或名称（可选）
+                  required:
+                    - weekday
+                    - periodStart
+                    - periodEnd
+                  description: 目标时段/教室
+                decisionPreferences:
+                  type: object
+                  properties:
+                    preferEarlier:
+                      type: boolean
+                      description: 更早时段优先
+                    preferLarger:
+                      type: boolean
+                      description: 更大容量优先
+                    preferSameCampus:
+                      type: boolean
+                      description: 同校区优先（仅在已有规范校区约束时生效）
+                    preferWeekdays:
+                      type: array
+                      items:
+                        type: integer
+                      description: 优先星期集合
+                  required: []
+                  description: 结构化 soft preference；服务端只接受白名单字段并确定性评分
+              required:
+                - target

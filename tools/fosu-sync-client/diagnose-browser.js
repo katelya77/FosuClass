@@ -4,6 +4,7 @@ const path = require("path");
 const {
   loadSyncClientEnv,
   prepareDirectNetworkEnvironment,
+  withDirectBrowserArgs,
 } = require("./syncEnv");
 
 loadSyncClientEnv();
@@ -19,11 +20,11 @@ if (!fs.existsSync(DEBUG_DIR)) {
 async function diagnoseBrowser() {
   console.log("=== 开始 Browser 级教务网深度诊断 ===");
   
-  const launchArgs = [
+  const launchArgs = withDirectBrowserArgs([
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security"
-  ];
+  ]);
   
   let browser;
   const channels = ["msedge", "chrome", null];

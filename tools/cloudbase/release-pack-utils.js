@@ -218,6 +218,15 @@ function verifyLocalReleasePack(options = {}) {
     error.code = "CLOUDBASE_RELEASE_VERSION_MISMATCH";
     throw error;
   }
+  ["calendar.json", "bootstrap.json"].forEach((relativePath) => {
+    assertJsonFile(path.join(releaseDir, relativePath), relativePath);
+    const meta = manifest.files && manifest.files[relativePath];
+    if (!meta || !meta.hash || !meta.size) {
+      const error = new Error(`manifest.files missing required root file: ${relativePath}`);
+      error.code = "CLOUDBASE_RELEASE_REQUIRED_FILE_UNTRACKED";
+      throw error;
+    }
+  });
 
   const samples = [];
   INDEX_TYPES.forEach((type) => {
@@ -357,6 +366,8 @@ async function verifyRemoteReleasePack(options = {}) {
   const remoteSamples = [];
   const paths = [
     "manifest.json",
+    "calendar.json",
+    "bootstrap.json",
     "index/class/all.json",
     "index/teacher/all.json",
     "index/classroom/all.json",

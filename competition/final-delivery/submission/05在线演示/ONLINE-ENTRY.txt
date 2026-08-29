@@ -1,0 +1,5 @@
+校园智序·小序｜在线演示
+https://adp.katelya.top/
+
+Live ADP：实时 HTTPS SSE 请求。
+Verified Replay：已核验实录回放，显著标明非实时。

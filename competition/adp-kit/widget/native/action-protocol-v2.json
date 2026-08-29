@@ -1,0 +1,25 @@
+{
+  "schema": "fosuclass-adp-action-protocol/v2",
+  "routingPolicy": "intent-first-query-fallback",
+  "requiredPayloadFields": [
+    "query",
+    "intent",
+    "entityType",
+    "entityName",
+    "week",
+    "weekday"
+  ],
+  "optionalPayloadFields": [
+    "date"
+  ],
+  "intents": {
+    "schedule_day": "01-多维课表查询 DAY",
+    "schedule_week": "01-多维课表查询 WEEK",
+    "schedule_choose_day": "Choice/Select 日期选择",
+    "schedule_risk_check": "03-课程冲突比较"
+  },
+  "machineText": {
+    "schedule_choose_day": "【小序操作:选择课表日期】{entityName}|第{week}周"
+  },
+  "fallbackRule": "query 必须独立携带完整对象与时间，平台仅转发文本时仍可确定路由；DAY/DATE 已有 date 时结构化 payload 必须保留 date。"
+}

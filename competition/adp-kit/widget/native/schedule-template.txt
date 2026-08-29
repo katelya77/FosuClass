@@ -1,0 +1,53 @@
+<Card size="md" background="#F6F2E8" status={{ text: `已核验 · ${dataVersion}` }}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / SCHEDULE" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2}>
+      <Badge label={`${summary.totalCount} 条课程`} color="info" variant="soft" size="sm" />
+      {summary.hiddenCount > 0 ? (
+        <Badge label={`另有 ${summary.hiddenCount} 条`} color="secondary" variant="soft" size="sm" />
+      ) : null}
+    </Row>
+
+    <ListView limit={5} status={`显示前 ${summary.shownCount} 条`}>
+      {items.map((item, index) => (
+        <ListViewItem key={`${item.lessonId || index}`} gap="12px" align="start">
+          <Badge label={item.periodText || "课程"} color="info" variant="outline" size="sm" />
+          <Col gap={1} flex={1}>
+            <Text value={item.courseName || "未命名课程"} size="md" weight="semibold" />
+            <Caption value={[item.campusName, item.building, item.roomName].filter(Boolean).join(" · ") || "地点待确认"} color="secondary" />
+            <Caption value={[item.startTime && item.endTime ? `${item.startTime}-${item.endTime}` : "", (item.teachers || []).join("、")].filter(Boolean).join(" · ")} color="secondary" />
+          </Col>
+        </ListViewItem>
+      ))}
+    </ListView>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={action.id === "schedule-week" ? "solid" : "outline"}
+          onClickAction={{
+            type: "sys.chat",
+            payload: { query: action.message }
+          }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={`数据版本 ${dataVersion} · 查询编号 ${queryId}`} color="secondary" />
+  </Col>
+</Card>

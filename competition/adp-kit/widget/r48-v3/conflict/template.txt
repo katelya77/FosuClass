@@ -1,0 +1,87 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="RISK · 冲突与赶场" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Badge
+        label={`时间冲突 ${summary.conflictCount}`}
+        color={summary.conflictCount > 0 ? 'danger' : 'success'}
+        variant="soft"
+        size="sm"
+      />
+      <Badge
+        label={`赶场风险 ${summary.rushWarningCount}`}
+        color={summary.rushWarningCount > 0 ? 'warning' : 'success'}
+        variant="soft"
+        size="sm"
+      />
+    </Row>
+
+    {items.length === 0 && rushWarnings.length === 0 ? (
+      <Card size="sm" background="#E8F3ED">
+        <Text value="本时段未发现时间冲突或跨校区赶场风险" weight="semibold" />
+      </Card>
+    ) : null}
+
+    {items.length > 0 ? (
+      <Col gap={2}>
+        <Caption value="时间冲突" color="#A54232" />
+        <ListView limit={5} status={`共 ${summary.conflictCount} 处`}>
+          {items.map((item, index) => (
+            <ListViewItem key={`conflict-${index}`} gap="12px" align="start">
+              <Badge label={item.periodText} color="danger" variant="outline" size="sm" />
+              <Col gap={1} flex={1}>
+                <Text value={`${item.first.courseName} ↔ ${item.second.courseName}`} weight="semibold" />
+                <Caption value={`${item.date} · ${item.weekdayName} · ${item.periodText}`} color="#A54232" />
+                <Caption value={`${item.first.campusName} ${item.first.roomName} / ${item.second.campusName} ${item.second.roomName}`} color="secondary" />
+              </Col>
+            </ListViewItem>
+          ))}
+        </ListView>
+      </Col>
+    ) : null}
+
+    {rushWarnings.length > 0 ? (
+      <Col gap={2}>
+        <Caption value="跨校区赶场" color="#8A5A00" />
+        <ListView limit={5} status={`共 ${summary.rushWarningCount} 条`}>
+          {rushWarnings.map((warning, index) => (
+            <ListViewItem key={`rush-${index}`} gap="12px" align="start">
+              <Badge label="赶场" color="warning" variant="soft" size="sm" />
+              <Col gap={1} flex={1}>
+                <Text value={`${warning.from.courseName} → ${warning.to.courseName}`} weight="semibold" />
+                <Caption value={`${warning.date} · ${warning.weekdayName} · 间隔约 ${warning.gapMinutes} 分钟`} color="#8A5A00" />
+                <Caption value={`${warning.from.periodText} ${warning.from.campusName}·${warning.from.roomName} → ${warning.to.periodText} ${warning.to.campusName}·${warning.to.roomName}`} color="secondary" />
+              </Col>
+            </ListViewItem>
+          ))}
+        </ListView>
+      </Col>
+    ) : null}
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

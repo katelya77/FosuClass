@@ -280,7 +280,7 @@ function buildSyncPlan(action, params = {}, env = process.env) {
     activate,
     verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
     allowPartial: boolParam(params, "allow-partial", false),
-    allowDerived: boolParam(params, "allow-derived", false),
+    allowDerived: boolParam(params, "allow-derived", isNewTerm),
     forceRefresh: schedulePolicy === "network-only" && !isUploadOnly && progressPolicy === "ignore",
     ignoreProgress: progressPolicy === "ignore",
     ignoreNoScheduleCache: negativeCachePolicy === "ignore",
@@ -330,6 +330,7 @@ function applyPlanToParams(plan, params = {}) {
   next.resourceSource = plan.profile === "daily-classes" || plan.allowDerived ? "derived" : "direct";
   next.allowDerived = plan.allowDerived;
   next.allowPartial = plan.allowPartial;
+  next.syncProfile = plan.profile;
   next["term-start-date"] = next["term-start-date"] || plan.termConfig.termStartDate;
   next["total-weeks"] = next["total-weeks"] || (plan.termConfig.totalWeeks || "");
   next["week-start"] = next["week-start"] || plan.termConfig.weekStart;
@@ -361,7 +362,7 @@ function printablePlan(plan) {
 }
 
 function renderPowerShellCommand(task, options = {}) {
-  const term = options.term || "2025-2026-2";
+  const term = options.term || "CURRENT_TERM";
   const start = options.termStartDate || options.start || "YYYY-MM-DD";
   const weekCount = Number(options.totalWeeks);
   const weeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "TOTAL_WEEKS";
@@ -412,7 +413,7 @@ function requestScaleDisplay(code) {
 }
 
 function getRecommendedOperations(options = {}) {
-  const term = options.term || "2025-2026-2";
+  const term = options.term || "CURRENT_TERM";
   const termStartDate = options.termStartDate || "YYYY-MM-DD";
   const weekCount = Number(options.totalWeeks);
   const totalWeeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "";

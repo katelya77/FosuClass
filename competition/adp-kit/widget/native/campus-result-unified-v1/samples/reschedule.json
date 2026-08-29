@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "variant": "reschedule",
+  "status": "success",
+  "title": "调课模拟 · 高等数学",
+  "subtitle": "模拟结果 · 未写入课表",
+  "verified": true,
+  "summary": "可以调至 周四 第7-8节（模拟，未执行）。",
+  "context": "调课结果为模拟，未对课表做任何修改",
+  "sections": [
+    {
+      "title": "调课方案",
+      "note": "仅为模拟，如需执行请走正式调课流程",
+      "rows": [
+        {
+          "label": "周二 第5-6节",
+          "value": "高等数学 · 校区A A5-101",
+          "badge": "原时段",
+          "hint": "教师003"
+        },
+        {
+          "label": "调至 周四 第7-8节",
+          "value": "可行：教师与班级时间无冲突",
+          "badge": "模拟",
+          "hint": "教室待指定"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "reschedule-simulate",
+      "type": "sys.chat",
+      "label": "再模拟一个时段",
+      "payload": { "query": "再模拟一个调课时段" }
+    },
+    {
+      "id": "reschedule-execute",
+      "type": "sys.chat",
+      "label": "怎么正式调课",
+      "payload": { "query": "正式调课需要怎么操作" }
+    }
+  ],
+  "displayMeta": {
+    "simulated": true
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

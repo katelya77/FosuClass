@@ -289,6 +289,9 @@ function attachMemory(response, memoryBundle, options = {}) {
     answer: options.answer || response.answer,
     intentName: options.intentName || (response.intent && response.intent.name) || response.intent,
     context: options.context,
+    workingMemory: options.workingMemory
+      || options.context && options.context.workingMemory
+      || null,
     runId: options.runId || response.runId,
     status,
     stepCount: options.stepCount || (Array.isArray(response.steps) ? response.steps.length : 0),

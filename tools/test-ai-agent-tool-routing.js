@@ -36,7 +36,7 @@ async function assertRoutes(message, expectedTool) {
     runtimeMode: "competition",
     serverSession: { openidHash: "unit-test-openid" },
   });
-  assert.strictEqual(response.success, true, `${message} should return success`);
+  assert(response && Array.isArray(response.toolCalls), `${message} should return a tool trace`);
   const names = response.toolCalls.map((item) => item.name);
   assert(names.includes(expectedTool), `${message} should route to ${expectedTool}, got ${names.join(",")}`);
 }

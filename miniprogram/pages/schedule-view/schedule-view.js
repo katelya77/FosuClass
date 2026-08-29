@@ -9,6 +9,7 @@ const {
   TOTAL_WEEKS,
   addLocalDays,
   clampWeek,
+  formatDate,
   formatDateLabel,
   formatWeekRange,
   getCurrentTeachingWeek,
@@ -423,9 +424,16 @@ Page({
     
     const weekdays = baseWeekdays.map((day, index) => {
       const date = addLocalDays(weekInfo.startDate, index);
+      const dateInfo = getTodayTeachingInfo(date, calendar.weeks || [], termConfig);
       return Object.assign({}, day, {
+        date: formatDate(date),
         dateLabel: formatDateLabel(date),
-        isToday: currentWeek === todayInfo.weekNo && day.weekday === todayInfo.weekday,
+        isToday: currentWeek === todayInfo.rawWeekNo && day.weekday === todayInfo.physicalWeekday,
+        isTeachingDay: dateInfo.isTeachingDay,
+        scheduleWeek: dateInfo.weekNo,
+        scheduleWeekday: dateInfo.weekday,
+        teachingEventType: dateInfo.teachingEventType,
+        teachingEventNote: dateInfo.teachingEventNote,
       });
     });
 
@@ -434,6 +442,7 @@ Page({
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
+      normalized: true,
       targetType: this.data.type,
       targetId: meta.detailId || meta.id || meta.classId || this.data.name || "",
       targetName: this.data.name,
@@ -531,7 +540,14 @@ Page({
       source: "schedule-view",
     };
 
-    setCurrentScheduleTarget(target);
+    if (!setCurrentScheduleTarget(target)) {
+      wx.showModal({
+        title: "设置失败",
+        content: "本地课表保存失败，请稍后重试。现有课表不会被清除。",
+        showCancel: false,
+      });
+      return;
+    }
 
     this.setData({
       isCurrentTarget: true,

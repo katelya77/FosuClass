@@ -47,7 +47,10 @@ Page({
       })
       .catch(() => {
         if (seq !== this._calendarSeq) return;
-        const fallback = teachingCalendarService.getBuiltinCalendar("page-network-failed");
+        // Never resurrect an archived built-in semester merely because the
+        // active-term request timed out. Immediate runtime/last-good state is
+        // authoritative; an unknown term stays explicitly unavailable.
+        const fallback = teachingCalendarService.getImmediateActiveCalendar();
         this.renderCalendar(fallback, fallback.termConfig || termConfig, {
           forceCenter: false,
           allowChangedWeekCenter: true,

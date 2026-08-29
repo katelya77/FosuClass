@@ -86,7 +86,17 @@ function attachStagingFingerprint(stagingData, previousHash = "") {
 }
 
 function buildStagingSafety(stagingData, activeSnapshot) {
-  return stagingSafetyService.buildStagingSafety(stagingData, activeSnapshot);
+  const publishMode = stagingSafetyService.resolveStagingPublishMode(stagingData, activeSnapshot);
+  return Object.assign(
+    stagingSafetyService.buildStagingSafety(stagingData, activeSnapshot, {
+      currentTerm: publishMode.activeTerm,
+      crossTermReadyCandidate: publishMode.crossTermReadyCandidate,
+    }),
+    {
+      readyOnly: publishMode.readyOnly,
+      publishMode: publishMode.publishMode,
+    }
+  );
 }
 
 function buildStagingUploadSummary(stagingData, safety, extra = {}) {
@@ -106,6 +116,8 @@ function buildStagingUploadSummary(stagingData, safety, extra = {}) {
     stagingState: safety && safety.allowPublish ? "pending-review" : "publish-blocked",
     releaseState: "not-built",
     runtimeState: "inactive",
+    readyOnly: Boolean(safety && safety.readyOnly),
+    publishMode: safety && safety.publishMode || "activate-current",
   }, extra);
 }
 

@@ -1,0 +1,90 @@
+{
+  "name": "校园智序 · 小序",
+  "description": "校园教学时空决策智能体，支持事实钻取、空间资源决策、教学风险决策、个人行动规划和校园教学态势总览。动态校园事实与统计指标均由确定性工作流提供，赛事环境使用独立匿名数据。",
+  "mode": "标准模式",
+  "models": {
+    "thinking": "youtu-intent-pro",
+    "generation": "youtu-mrc-pro",
+    "temperature": 0.2,
+    "topP": 0.6,
+    "contextTurns": 8,
+    "maxOutputTokens": 2000,
+    "multimodal": "保留当前配置"
+  },
+  "welcome": "你好，我是小序，校园教学时空决策智能体。\n\n我会先判断你是在查看校园教学态势、查课表、找空教室、检查风险还是规划一天，再调用对应的可信工作流返回可核验结果。\n\n你可以试试：\n“从8月25日开始看看未来几周校园教学运行情况”\n“校区A第1周周一有哪些空教室”\n“教师003跨校区赶不赶得上”\n“帮我安排9月4日的一天”",
+  "examples": [
+    "从8月25日开始看看未来几周校园教学运行情况",
+    "校区A第1周周一有哪些空教室",
+    "教师003跨校区赶不赶得上",
+    "帮我安排9月4日的一天"
+  ],
+  "fallback": "这个问题暂时不在小序当前可执行的校园任务范围内。\n\n你可以查询单个班级/教师/教室/课程的安排、寻找空教室、比较课程冲突、规划匿名个人校园日程，或询问教学周和产品规则。如果必要条件不完整，我会继续向你确认。",
+  "conversation": {
+    "streaming": true,
+    "fallbackEnabled": true,
+    "contextRewrite": true,
+    "webSearch": false,
+    "recommendedQuestions": false,
+    "longTermMemory": false
+  },
+  "appVariables": {
+    "environment": "competition",
+    "data_mode": "anonymous",
+    "data_version": "competition-demo-v3",
+    "timezone": "Asia/Shanghai",
+    "default_language": "zh-CN",
+    "default_campus": ""
+  },
+  "apiParameters": [
+    "visitor_id",
+    "session_id",
+    "client_type",
+    "request_trace_id"
+  ],
+  "environmentVariables": [
+    "campus_api_base_url",
+    "campus_api_token"
+  ],
+  "runtimeStatus": "PENDING_USER_RUNTIME_E2E",
+  "activeWorkflows": [
+    "01-多维课表查询-R3",
+    "02-空教室规划-R3",
+    "03-课程冲突比较-R3",
+    "04-今日校园计划-R3",
+    "05-校园教学态势-R1"
+  ],
+  "intentRouting": {
+    "schedule_day": "01-多维课表查询-R3",
+    "schedule_week": "01-多维课表查询-R3",
+    "schedule_choose_day": "01-多维课表查询-R3",
+    "classroom_find": "02-空教室规划-R3",
+    "schedule_risk_check": "03-课程冲突比较-R3",
+    "day_plan": "04-今日校园计划-R3",
+    "campus_overview": "05-校园教学态势-R1"
+  },
+  "routing": {
+    "query_schedule": "01-多维课表查询-R3",
+    "find_available_classrooms": "02-空教室规划-R3",
+    "compare_schedules": "03-课程冲突比较-R3",
+    "generate_day_plan": "04-今日校园计划-R3",
+    "get_campus_teaching_overview": "05-校园教学态势-R1",
+    "stable_knowledge": "校园智序赛事知识",
+    "fallback": "应用兜底"
+  },
+  "excludedFromRouting": [
+    "01-多维课表查询",
+    "02-空教室规划",
+    "03-课程冲突比较",
+    "04-今日校园计划",
+    "01-多维课表查询-Final_9332",
+    "00-节点格式种子-勿启用",
+    "所有旧 RuntimeSafe / Final 中间版本"
+  ],
+  "contextPolicy": {
+    "sameTask": "只继承最近一次已确认且仍属于同一任务的槽位；新值覆盖旧值。",
+    "taskSwitch": "切换工作流类别时清空无关槽位。",
+    "crossWorkflow": "默认不跨工作流继承；只允许用户明确指代式 handoff。",
+    "visitor": "任何用户/API/会话 visitor 输入均不得覆盖 04 固定的 visitor-demo-001。"
+  },
+  "roleInstruction": "以 competition/adp-kit/workflows/role-instruction.txt 为权威源。"
+}

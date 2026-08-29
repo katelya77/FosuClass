@@ -1,47 +1,40 @@
+"use strict";
+
+function semanticTermParts(term) {
+  const match = String(term || "").match(/^(\d{4})-(\d{4})-([12])$/);
+  return match ? [Number(match[1]), Number(match[3])] : [0, 0];
+}
+
 function buildImportTermOptions(availableTerms, currentSemesterId, fallbackTerm) {
   const records = (Array.isArray(availableTerms) ? availableTerms : [])
-    .filter((item) => item && item.term && item.status !== "disabled")
+    .filter((item) => item && item.term && item.status === "current")
+    .filter((item) => item.dataAvailable === true && Boolean(item.releaseVersion))
     .map((item) => ({
       term: item.term,
       label: item.semesterText || item.term,
       status: item.status || "",
-      dataAvailable: item.dataAvailable !== false,
-      importable: item.status !== "planned" && item.dataAvailable !== false,
-      archived: item.status === "archived",
+      dataAvailable: true,
+      importable: true,
+      archived: false,
     }));
-  if (!records.some((item) => item.term === currentSemesterId) && currentSemesterId) {
-    records.unshift({
-      term: currentSemesterId,
-      label: currentSemesterId,
-      status: "current",
-      dataAvailable: true,
-      importable: true,
-      archived: false,
-    });
-  }
-  if (!records.length && fallbackTerm) {
-    records.push({
-      term: fallbackTerm,
-      label: fallbackTerm,
-      status: "current",
-      dataAvailable: true,
-      importable: true,
-      archived: false,
-    });
-  }
+  const preferred = currentSemesterId || fallbackTerm;
+  records.sort((left, right) => {
+    if (left.term === preferred && right.term !== preferred) return -1;
+    if (right.term === preferred && left.term !== preferred) return 1;
+    const a = semanticTermParts(left.term);
+    const b = semanticTermParts(right.term);
+    return b[0] - a[0] || b[1] - a[1];
+  });
   const semesterOptions = records.map((item) => item.term);
-  const semesterOptionLabels = records.map((item) => item.importable ? item.label : `${item.label}（尚未发布）`);
-  const importableCount = records.filter((item) => item.importable).length;
-  const selectedIndex = Math.max(0, records.findIndex((item) => item.term === currentSemesterId));
+  const semesterOptionLabels = records.map((item) => item.label);
+  const selectedIndex = Math.max(0, records.findIndex((item) => item.term === preferred));
   return {
     records,
     semesterOptions,
     semesterOptionLabels,
     selectedIndex,
-    pickerEnabled: importableCount >= 2,
+    pickerEnabled: records.length >= 2,
   };
 }
 
-module.exports = {
-  buildImportTermOptions,
-};
+module.exports = { buildImportTermOptions };

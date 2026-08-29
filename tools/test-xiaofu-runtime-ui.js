@@ -19,8 +19,11 @@ function run() {
   const conversationWxml = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml");
   const conversationWxss = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxss");
 
-  // Fixed main title (a11y / sr ok)
-  assert.ok(wxml.includes(">小佛助手<") || wxml.includes("小佛助手"), "fixed title 小佛助手");
+  // Fixed main title (a11y / sr ok); renamed to assistantBrand dynamic binding after 小佛→小序
+  assert.ok(
+    wxml.includes(">小佛助手<") || wxml.includes("小佛助手") || wxml.includes("assistantBrand.assistantName"),
+    "fixed title 小佛助手 or assistantBrand dynamic name"
+  );
   assert.ok(wxml.includes("xiaofu-conversation-sub"), "conversation subtitle row");
   assert.ok(
     wxml.includes("statusChips") || wxml.includes("headerStatusLine") || wxml.includes("xiaofu-status-line"),

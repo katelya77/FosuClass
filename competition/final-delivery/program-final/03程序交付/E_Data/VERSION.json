@@ -1,0 +1,11 @@
+{
+  "dataVersion": "competition-demo-v3",
+  "dataHash": "sha1:842b7959e808",
+  "campuses": 4,
+  "teachingUnits": 6,
+  "classes": 24,
+  "teachers": 40,
+  "courses": 73,
+  "rooms": 85,
+  "lessons": 175
+}

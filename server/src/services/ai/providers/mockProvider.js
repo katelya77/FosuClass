@@ -877,7 +877,7 @@ function buildLocalRuleReply(rule = {}, message = "", intentName = "") {
       projectKnowledgeService.conversationalFallbackAnswer(message, intentName),
     ], `${message}|${answer}`)
     : answer;
-  const card = rule.card && rule.card.type ? rule.card : makeCard("guide", rule.title || "小佛助手", "", {
+  const card = rule.card && rule.card.type ? rule.card : makeCard("guide", rule.title || "小序", "", {
     badges: ["本地规则", "知识库"],
     items: [],
     actions: rule.action && rule.action.type ? [rule.action] : [],
@@ -898,10 +898,10 @@ function buildGeneric(message = "") {
   return {
     answer: projectKnowledgeService.pickVariant([
       "你可以直接查课、找空教室、查询今日安排、导入个人课表或排查数据加载问题。系统会先调用项目内工具，再把结果整理成卡片。",
-      "我是小佛。想查班级/老师/教室课表、空教室、教学周，或了解个人课表导入，直接说就行。",
+      "我是小序。想查班级/老师/教室课表、空教室、教学周，或了解个人课表导入，直接说就行。",
       "可以继续问校园相关问题。有具体对象时尽量带上班级、老师、教室或课程名。",
     ], message),
-    cards: [makeCard("generic", "小佛可以查询什么", "事实来自课表、空教室和已发布数据工具", {
+    cards: [makeCard("generic", "小序可以查询什么", "事实来自课表、空教室和已发布数据工具", {
       badges: ["工具优先", "不编造事实", "可降级演示"],
       items: [
         { title: "查课", subtitle: "教师、教室、课程、班级索引", value: "全校查询" },

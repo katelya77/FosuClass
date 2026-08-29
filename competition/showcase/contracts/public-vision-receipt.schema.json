@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "public-vision-receipt.schema.json",
+  "title": "PublicVisionReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "observations", "extractedGoal", "verifiedByCampusTools"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["schedule_screenshot", "academic_system_screenshot", "notice_poster", "classroom_notice", "table_image", "generic_image", "multiple_images"]
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assetId", "kind", "summary"],
+        "properties": {
+          "assetId": { "type": "string", "minLength": 1, "pattern": "^(?!https?://)" },
+          "kind": { "type": "string" },
+          "summary": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "extractedGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goalFamily", "entityLabels", "temporalLabels"],
+      "properties": {
+        "goalFamily": { "type": ["string", "null"] },
+        "entityLabels": { "type": "array", "items": { "type": "string" } },
+        "temporalLabels": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "verifiedByCampusTools": { "type": "boolean" },
+    "outcomeTitle": { "type": "string", "minLength": 1 }
+  }
+}

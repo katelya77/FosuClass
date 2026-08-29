@@ -1,0 +1,52 @@
+{
+  "title": "找到多个匹配，请确认一个",
+  "subtitle": "选择后会继续原任务，不需要重新输入",
+  "queryId": "q-native-choice",
+  "dataVersion": "competition-demo-v1",
+  "items": [
+    {
+      "key": "choice-1",
+      "name": "2025级A班",
+      "type": "班级",
+      "description": "班级课表",
+      "action": {
+        "id": "choice-1",
+        "type": "sys.chat",
+        "label": "选择2025级A班",
+        "message": "选择2025级A班，继续刚才的课表查询"
+      }
+    },
+    {
+      "key": "choice-2",
+      "name": "校区A",
+      "type": "校区",
+      "description": "校园空间",
+      "action": {
+        "id": "choice-2",
+        "type": "sys.chat",
+        "label": "选择校区A",
+        "message": "选择校区A，继续刚才的课表查询"
+      }
+    },
+    {
+      "key": "choice-3",
+      "name": "课程A",
+      "type": "课程",
+      "description": "课程对象",
+      "action": {
+        "id": "choice-3",
+        "type": "sys.chat",
+        "label": "选择课程A",
+        "message": "选择课程A，继续刚才的课表查询"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "choice-rephrase",
+      "type": "sys.chat",
+      "label": "重新描述",
+      "message": "我重新描述一下查询对象"
+    }
+  ]
+}

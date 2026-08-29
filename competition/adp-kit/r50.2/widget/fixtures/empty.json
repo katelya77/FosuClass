@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0008",
+  "dataVersion": "competition-demo-v3",
+  "resolvedEntity": { "type": "teacher", "id": "t-099", "name": "教师099" },
+  "items": [],
+  "actions": [{ "type": "broaden_query", "label": "扩大查询范围（整周/换一周）" }],
+  "window": { "weekStart": 1, "weekEnd": 1 },
+  "query": { "weekStart": 1, "weekEnd": 1, "weekday": null, "periodStart": null, "periodEnd": null },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:07:00.000Z",
+    "verified": true,
+    "note": "EMPTY_RESULT"
+  }
+}

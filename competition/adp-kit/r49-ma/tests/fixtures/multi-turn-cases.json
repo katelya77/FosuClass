@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "1.0",
+  "note": "R49-MA 多轮硬回归 fixture。tests/test-fixtures-consistency.js 直接引用本文件做一致性校验；内容对齐 09-MULTI-AGENT-E2E-MATRIX.md。动态事实一律由 CampusTools 确定性计算，禁止模型生成事实字段。",
+  "agentToolNames": [
+    "campus_schedule_query",
+    "campus_classroom_search",
+    "campus_risk_check",
+    "campus_day_plan",
+    "campus_overview",
+    "campus_teacher_load_query",
+    "campus_schedule_range_query",
+    "campus_entity_search",
+    "campus_academic_context",
+    "campus_common_free_time_query",
+    "campus_room_utilization_query",
+    "campus_reschedule_feasibility",
+    "campus_group_plan"
+  ],
+  "hardCases": [
+    {
+      "id": "A",
+      "name": "T09整周课表 → 检查风险(self) → 周三的课",
+      "turns": [
+        { "input": "T09老师第1周整周课表", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "activeEntity": "T09", "week": 1 }, "hard": "动态课表必须调工具" },
+        { "input": "检查一下他的风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "self", "entity": "T09" }, "hard": "self 不得要求第二对象" },
+        { "input": "那看看他周三的课", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "T09", "week": 1, "weekday": 3 }, "hard": "从 risk 切回 schedule，不残留 risk pending" }
+      ]
+    },
+    {
+      "id": "B",
+      "name": "risk compare 澄清态 → 空教室（stale escape）",
+      "turns": [
+        { "input": "比较T09老师第1周和另一位老师的风险", "route": "risk", "tools": [], "state": { "comparisonMode": "compare", "firstEntity": "T09", "week": 1, "pending": "second_entity" }, "hard": "compare intent 缺第二对象 → NEED_CLARIFICATION，由 Main 作为唯一澄清出口询问第二位老师，不调工具" },
+        { "input": "A校区2026-09-03第5-6节有哪些60人以上的空教室？", "route": "classroom", "tools": ["campus_classroom_search"], "state": { "staleContextEscaped": true, "newTask": true }, "dropped": ["second_entity_pending", "comparisonMode", "risk_local_state"], "hard": "Main 判定 NEW_TASK 立即 escape 旧 risk 澄清态 → classroom：不得继续追问第二对象；campus=别名 A校区 走 R49.2.1 解析" }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "安排一天 → 下一天",
+      "turns": [
+        { "input": "帮我安排2026年9月4日的一天", "route": "day_plan", "tools": ["campus_day_plan"], "state": { "activeTime": "2026-09-04", "user": "demo" } },
+        { "input": "下一天呢", "route": "day_plan", "tools": ["campus_day_plan"], "state": { "activeTime": "2026-09-05" }, "hard": "下一天 = date+1 确定性推进，空日显示暂无安排，不进入恢复卡" }
+      ]
+    },
+    {
+      "id": "D",
+      "name": "教师负载Top1 → Top1课表(范围) → 只看第一周 → Top1风险澄清（R49.4 D1~D5）",
+      "turns": [
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null }, "rankContext": { "sourceTool": "campus_teacher_load_query", "sourceDomain": "teacher_load", "list": "teacherLoadTop", "selectedRank": null } }, "hard": "D1：rankingWindow=1..4 → campus_teacher_load_query(1,4)；Top1 取本轮真实排名（排名工具结果 [0]，当前=教师009，不写死）；指标并列（27/54 与 27/54）不得澄清" },
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "D2：Top1=排名工具结果[0] position 语义；指标并列也不得澄清；detailWindow=1..4 继承 rankingWindow → 范围工具逐周展开（每条 academicWeek/date）；绝不继承 overviewWindow.count=4" },
+        { "input": "只看第一周", "route": "schedule", "tools": ["campus_schedule_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 1 }, "academicWeek": 1 } }, "hard": "D3：detailWindow 显式收窄 1..1 → fresh 单周 campus_schedule_query(week=1)，绝不默认 week=1" },
+        { "input": "检查Top1风险", "route": "clarify", "tools": [], "state": { "comparisonMode": "self", "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 1 }, "academicWeek": null }, "pending": "time_window" }, "hard": "D5：多周排名后未给周次/日期 → Main 澄清时间窗口；不得调 campus_risk_check，绝不静默 week=1" }
+      ]
+    },
+    {
+      "id": "E",
+      "name": "比较T03和T09第1周风险（显式双对象）",
+      "turns": [
+        { "input": "比较T03老师和T09老师第1周风险", "route": "risk", "tools": ["campus_risk_check"], "state": { "comparisonMode": "compare", "first": "T03", "second": "T09", "week": 1 }, "hard": "仅明确双对象才要求 second entity" }
+      ]
+    },
+    {
+      "id": "F",
+      "name": "首轮只看周三（无历史保护）",
+      "turns": [
+        { "input": "只看周三", "route": "clarify", "tools": [], "state": { "activeEntity": null }, "hard": "无有效历史必须澄清对象，不得伪造实体" }
+      ]
+    },
+    {
+      "id": "G",
+      "name": "你好/你是谁/你都会什么",
+      "turns": [
+        { "input": "你好", "route": "chat", "tools": [], "hard": "不得调用动态 CampusTools" },
+        { "input": "你是谁", "route": "chat", "tools": [], "hard": "不得调用动态工具" },
+        { "input": "你都会什么", "route": "knowledge", "tools": ["KnowledgeRetrievalAnswer"], "hard": "仅静态知识，不答动态事实" }
+      ]
+    },
+    {
+      "id": "H",
+      "name": "T03第1周有什么课",
+      "turns": [
+        { "input": "T03第1周有什么课", "route": "schedule", "tools": ["campus_schedule_query"], "hard": "动态课表必须调 CampusTools，禁止 Knowledge 直接回答" }
+      ]
+    }
+  ],
+  "rankDrilldown": [
+    {
+      "id": "D2",
+      "name": "Top2 下钻（R49.4 范围语义）",
+      "turns": [
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null }, "rankContext": { "sourceTool": "campus_teacher_load_query", "sourceDomain": "teacher_load", "list": "teacherLoadTop", "selectedRank": null } } },
+        { "input": "看Top2课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top2", "rank": 2, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "hard": "Top2=排名工具结果[1]，不得调用 Top1 实体；detailWindow=1..4 继承 rankingWindow → 范围工具；NO_CLARIFICATION" }
+      ]
+    },
+    {
+      "id": "D3",
+      "name": "并列多对象 → 再单排位（R49.4）",
+      "turns": [
+        { "input": "未来四周教师负载最高的是谁", "route": "insight", "tools": ["campus_teacher_load_query"], "state": { "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": null, "academicWeek": null }, "rankContext": { "sourceTool": "campus_teacher_load_query", "sourceDomain": "teacher_load", "list": "teacherLoadTop", "selectedRank": null } } },
+        { "input": "并列第一都有谁", "route": "insight", "tools": [], "state": { "multiObject": true, "rankContext": { "selectedRank": null } }, "hard": "如实列出并列项，不得压缩为 Top1；不得破坏 rankContext" },
+        { "input": "看Top1课表", "route": "schedule", "tools": ["campus_schedule_range_query"], "state": { "entity": "Top1", "rank": 1, "windowContext": { "rankingWindow": { "weekStart": 1, "weekEnd": 4 }, "detailWindow": { "weekStart": 1, "weekEnd": 4 }, "academicWeek": null } }, "dropped": ["overviewWindow", "overview_local_filters"], "hard": "仍正确落排名工具结果[0]；NO_CLARIFICATION；detailWindow=1..4 → 范围工具" }
+      ]
+    }
+  ],
+  "coreCases": [
+    { "id": 1, "input": "T09第1周整周课表 → 周三呢 → 下一周呢", "route": "schedule→schedule→schedule", "widget": "schedule(week/day)" },
+    { "id": 2, "input": "T09第1周整周课表 → 检查一下他的风险", "route": "schedule→risk(self)", "widget": "conflict" },
+    { "id": 3, "input": "上述之后 → 校区A 2026-09-03 下午有哪些空教室", "route": "→classroom", "widget": "classroom" },
+    { "id": 4, "input": "再 → 未来四周哪个校区最忙", "route": "→overview", "widget": "campus-overview", "hard": "单域 insight，不得下钻个人 schedule/risk" },
+    { "id": 5, "input": "A校区第1周周一第5-6节60人以上 → B校区呢 → 改第7-8节 → 80人以上 → 下一周同一时间", "route": "classroom 5轮 slot 覆盖", "widget": "classroom" },
+    { "id": 6, "input": "帮我安排2026-09-04的一天 → 下一天呢 → 再下一天", "route": "day_plan(09-04→09-05→09-06)", "widget": "day-plan" },
+    { "id": 7, "input": "未来四周教学态势 → 看Top1课表 → 只看第一周 → 那周三呢", "route": "insight→schedule→schedule→schedule", "widget": "campus-overview→schedule(1..4)→schedule(week=1)→schedule(weekday=3)", "hard": "R49.4：风险下钻未给周次 → 澄清；此处链改以「只看第一周」显式收窄" },
+    { "id": 8, "input": "功能示例", "route": "knowledge(meta)", "widget": "-" },
+    { "id": 9, "input": "你能干什么", "route": "knowledge(meta)", "widget": "-" },
+    { "id": 10, "input": "你好", "route": "chat", "widget": "-" },
+    { "id": 11, "input": "只看周三（新会话首轮）", "route": "clarify", "widget": "clarification" },
+    { "id": 12, "input": "比较T03和T09第1周周三课表", "route": "risk(compare)", "widget": "conflict" },
+    { "id": 13, "input": "检查T03第1周周三风险", "route": "risk(self)", "widget": "conflict" }
+  ],
+  "r48Regression": [
+    { "id": "A", "name": "01课表6轮（只看周三/整周/周五/下一周/上一周）", "assert": "实体不丢" },
+    { "id": "B", "name": "02空教室5轮（换校区/改节次/加容量/下一周）", "assert": "只改指定 slot" },
+    { "id": "C", "name": "01→03派生（那有赶场风险吗）", "assert": "继承实体+周次" },
+    { "id": "D", "name": "04日计划3轮（下一天/再下一天）", "assert": "日期推进，无恢复卡" },
+    { "id": "E", "name": "05→01→03（Top1课表→他的风险）", "assert": "Top1 真实继承" },
+    { "id": "F", "name": "无历史保护（只看周三）", "assert": "澄清不伪造" },
+    { "id": "G", "name": "Widget 按钮回归", "assert": "R48 不破坏 R47 已工作按钮链" }
+  ]
+}

@@ -126,11 +126,11 @@ function isHelpQuery(message) {
   return scheduleIntentParser.isScheduleHelpText(value) ||
     /^(怎么|如何|怎样).*(导入|同步|上传).*(个人课表|课表|xls)|导入个人课表/.test(value) ||
     /^(xls|excel|表格|文件).*(导入|同步).*(怎么用|如何用|使用|帮助|教程|说明)|^(xls导入|xls文件导入|excel导入|表格导入|文件导入)(怎么用|如何用|使用说明|帮助|教程)?$/.test(value) ||
-    /^(可以查询什么|你能做什么|你可以做什么|能做什么|能查什么|我能查什么|小佛可以查询什么|小佛可以做什么)$/.test(value) ||
+    /^(可以查询什么|你能做什么|你可以做什么|能做什么|能查什么|我能查什么|小佛可以查询什么|小佛可以做什么|小序可以查询什么|小序可以做什么)$/.test(value) ||
     /^(这个|这款|小程序|app|应用).*(怎么用|如何用|怎么使用|使用方法|使用说明)$/.test(value) ||
     /^(如何问得更准确|怎么问得更准确|问法建议|数据来源说明)$/.test(value) ||
     /^(怎么用|如何使用|如何使用校园查询|校园查询怎么用|使用帮助|帮助|功能|功能说明|功能介绍)$/.test(value) ||
-    /(小佛助手浮窗|小佛浮窗|浮窗).*(开启|关闭|打开|隐藏|怎么用|如何用|设置)|^(开启|关闭|打开|隐藏)小佛助手浮窗$/.test(value) ||
+    /(小佛助手浮窗|小佛浮窗|小序助手浮窗|小序浮窗|浮窗).*(开启|关闭|打开|隐藏|怎么开|如何开|怎么用|如何用|设置)|^(开启|关闭|打开|隐藏)(小佛助手浮窗|小佛浮窗|小序浮窗|小序助手浮窗)$/.test(value) ||
     /^(怎么|如何|怎样).*(查课表|查全校课表|查班级|查老师|查教师|查教室|查课程)/.test(value);
 }
 
@@ -151,7 +151,7 @@ function isIdentityOrPersonaQuery(message) {
   const value = compactText(message);
   if (!value) return false;
   if (/(课表|空教室|教室|老师|教师|天气|导入|同步|班级|课程)/.test(value)) return false;
-  return /(你是谁|你是什么|介绍一下自己|介绍下自己|自我介绍|你叫什么|小佛是谁|你是小佛吗|你是什么助手)/.test(value);
+  return /(你是谁|你是什么|介绍一下自己|介绍下自己|自我介绍|你叫什么|小佛是谁|你是小佛吗|小序是谁|你是小序吗|你是什么助手)/.test(value);
 }
 
 function isPlainSmalltalk(message) {
@@ -257,6 +257,14 @@ function routeMessage(message, clientContext = {}) {
       shouldUseScheduleTool: false,
       cardType: "personal_schedule",
       reason: hasPersonal ? "personal schedule wording with local summary" : "personal schedule wording without imported schedule",
+    });
+  }
+
+  // 历史与当前助手名称的明确身份询问必须保持等价；避免被宽泛校园知识词表截获。
+  if (isIdentityOrPersonaQuery(query)) {
+    return baseRoute(INTENTS.SMALLTALK, {
+      confidence: 0.92,
+      reason: "matched assistant identity/persona wording",
     });
   }
 

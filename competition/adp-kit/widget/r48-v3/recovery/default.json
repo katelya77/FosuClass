@@ -1,0 +1,14 @@
+{
+  "title": "这个日期超出了当前学期可查询范围",
+  "subtitle": "任务恢复 · 事实未核验时不展示推测结果",
+  "statusText": "任务恢复",
+  "reasonText": "只能查询当前学期内的日期与教学周。",
+  "footerText": "未核验状态下不展示任何推测性校园事实",
+  "keptFilters": [
+    { "id": "date", "label": "2027-03-01", "value": "2027-03-01" }
+  ],
+  "actions": [
+    { "id": "recovery-semester-range", "type": "sys.chat", "label": "查看学期范围", "message": "本学期可查询的日期范围是什么" },
+    { "id": "recovery-first-week", "type": "sys.chat", "label": "改到开学第一周", "message": "查询开学第1周的安排" }
+  ]
+}

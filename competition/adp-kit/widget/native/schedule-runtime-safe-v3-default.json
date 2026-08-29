@@ -1,0 +1,23 @@
+{
+  "title": "教师003 · 课表",
+  "timeText": "第1周 · 周一",
+  "statusText": "已核验 · competition-demo-v1",
+  "courseCountText": "2 条课程",
+  "shownCount": 2,
+  "listStatusText": "显示 2 条",
+  "item0PeriodText": "第5-6节",
+  "item0CourseName": "程序设计基础",
+  "item0LocationText": "校区A · 教学楼A2 · A2-301",
+  "item0MetaText": "14:00-15:40 · 教师003 · 2025级A班",
+  "item1PeriodText": "第7-8节",
+  "item1CourseName": "计算机组成原理",
+  "item1LocationText": "校区B · 教学楼B1 · B1-201",
+  "item1MetaText": "16:00-17:40 · 教师003 · 2025级C班",
+  "action0Label": "查看整周",
+  "action0Message": "查看教师003第1周整周课表",
+  "action1Label": "换一天",
+  "action1Message": "换一天看看教师003的课表",
+  "action2Label": "检查风险",
+  "action2Message": "检查教师003第1周周一是否存在时间冲突或跨校区赶场",
+  "footerText": "数据版本 competition-demo-v1 · RuntimeSafe V3"
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.local
+npm-install.log
+# 本地录屏自审截图不入库（保留 .gitkeep）
+public/screenshots/*.png
+public/screenshots/*.jpg
+
+# 本地 QA 自审脚本（含本机浏览器绝对路径，不入库）
+qa-*.mjs
+# Phase 2.5 视觉自审截图与预览视频（交付物不入库，保留本地）
+screenshots/
+artifacts/

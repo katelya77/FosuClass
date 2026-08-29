@@ -1,0 +1,582 @@
+{
+  "version": "1.0",
+  "name": "小序-校园教学态势-RuntimeSafe-V1",
+  "template": "",
+  "jsonSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "windowText": {
+        "type": "string"
+      },
+      "phaseText": {
+        "type": "string"
+      },
+      "verifiedText": {
+        "type": "string"
+      },
+      "weekCountText": {
+        "type": "string"
+      },
+      "lessonCountText": {
+        "type": "string"
+      },
+      "teacherCountText": {
+        "type": "string"
+      },
+      "roomCountText": {
+        "type": "string"
+      },
+      "campusCountText": {
+        "type": "string"
+      },
+      "w1MonText": {
+        "type": "string"
+      },
+      "w1TueText": {
+        "type": "string"
+      },
+      "w1WedText": {
+        "type": "string"
+      },
+      "w1ThuText": {
+        "type": "string"
+      },
+      "w1FriText": {
+        "type": "string"
+      },
+      "w2MonText": {
+        "type": "string"
+      },
+      "w2TueText": {
+        "type": "string"
+      },
+      "w2WedText": {
+        "type": "string"
+      },
+      "w2ThuText": {
+        "type": "string"
+      },
+      "w2FriText": {
+        "type": "string"
+      },
+      "w3MonText": {
+        "type": "string"
+      },
+      "w3TueText": {
+        "type": "string"
+      },
+      "w3WedText": {
+        "type": "string"
+      },
+      "w3ThuText": {
+        "type": "string"
+      },
+      "w3FriText": {
+        "type": "string"
+      },
+      "w4MonText": {
+        "type": "string"
+      },
+      "w4TueText": {
+        "type": "string"
+      },
+      "w4WedText": {
+        "type": "string"
+      },
+      "w4ThuText": {
+        "type": "string"
+      },
+      "w4FriText": {
+        "type": "string"
+      },
+      "campusALoadText": {
+        "type": "string"
+      },
+      "campusAFreeText": {
+        "type": "string"
+      },
+      "campusBLoadText": {
+        "type": "string"
+      },
+      "campusBFreeText": {
+        "type": "string"
+      },
+      "peakSlotText": {
+        "type": "string"
+      },
+      "teacher0Name": {
+        "type": "string"
+      },
+      "teacher0LoadText": {
+        "type": "string"
+      },
+      "teacher1Name": {
+        "type": "string"
+      },
+      "teacher1LoadText": {
+        "type": "string"
+      },
+      "teacher2Name": {
+        "type": "string"
+      },
+      "teacher2LoadText": {
+        "type": "string"
+      },
+      "conflictCountText": {
+        "type": "string"
+      },
+      "rushCountText": {
+        "type": "string"
+      },
+      "continuousLoadText": {
+        "type": "string"
+      },
+      "riskSummaryText": {
+        "type": "string"
+      },
+      "action0Label": {
+        "type": "string"
+      },
+      "action0Message": {
+        "type": "string"
+      },
+      "action1Label": {
+        "type": "string"
+      },
+      "action1Message": {
+        "type": "string"
+      },
+      "action2Label": {
+        "type": "string"
+      },
+      "action2Message": {
+        "type": "string"
+      },
+      "action3Label": {
+        "type": "string"
+      },
+      "action3Message": {
+        "type": "string"
+      },
+      "footerText": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "title",
+      "windowText",
+      "phaseText",
+      "verifiedText",
+      "weekCountText",
+      "lessonCountText",
+      "teacherCountText",
+      "roomCountText",
+      "campusCountText",
+      "w1MonText",
+      "w1TueText",
+      "w1WedText",
+      "w1ThuText",
+      "w1FriText",
+      "w2MonText",
+      "w2TueText",
+      "w2WedText",
+      "w2ThuText",
+      "w2FriText",
+      "w3MonText",
+      "w3TueText",
+      "w3WedText",
+      "w3ThuText",
+      "w3FriText",
+      "w4MonText",
+      "w4TueText",
+      "w4WedText",
+      "w4ThuText",
+      "w4FriText",
+      "campusALoadText",
+      "campusAFreeText",
+      "campusBLoadText",
+      "campusBFreeText",
+      "peakSlotText",
+      "teacher0Name",
+      "teacher0LoadText",
+      "teacher1Name",
+      "teacher1LoadText",
+      "teacher2Name",
+      "teacher2LoadText",
+      "conflictCountText",
+      "rushCountText",
+      "continuousLoadText",
+      "riskSummaryText",
+      "action0Label",
+      "action0Message",
+      "action1Label",
+      "action1Message",
+      "action2Label",
+      "action2Message",
+      "action3Label",
+      "action3Message",
+      "footerText"
+    ],
+    "additionalProperties": false
+  },
+  "outputJsonPreview": {
+    "type": "Card",
+    "size": "md",
+    "background": "#F6F2E8",
+    "status": "已核验 · competition-demo-v1",
+    "children": [
+      {
+        "type": "Col",
+        "gap": 3,
+        "children": [
+          {
+            "type": "Caption",
+            "value": "CAMPUS FLOW / TEACHING OVERVIEW",
+            "color": "#173F35"
+          },
+          {
+            "type": "Title",
+            "value": "小序 · 校园教学态势",
+            "size": "md"
+          },
+          {
+            "type": "Caption",
+            "value": "2026-08-25 ～ 2026-09-27",
+            "color": "secondary"
+          },
+          {
+            "type": "Caption",
+            "value": "08-25～08-30 准备期无教学安排 · 08-31 起进入教学周",
+            "color": "secondary"
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "wrap": "wrap",
+            "children": [
+              {
+                "type": "Badge",
+                "label": "4 个教学周",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Badge",
+                "label": "126 次课程",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Badge",
+                "label": "8 位教师",
+                "color": "secondary",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Badge",
+                "label": "22 间空间",
+                "color": "secondary",
+                "variant": "soft",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Divider"
+          },
+          {
+            "type": "Caption",
+            "value": "四周教学负载（课程次数）",
+            "color": "#173F35"
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "children": [
+              {
+                "type": "Badge",
+                "label": "W1",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "5",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "children": [
+              {
+                "type": "Badge",
+                "label": "W2",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "5",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "children": [
+              {
+                "type": "Badge",
+                "label": "W3",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "5",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "children": [
+              {
+                "type": "Badge",
+                "label": "W4",
+                "color": "info",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "6",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "5",
+                "size": "sm"
+              },
+              {
+                "type": "Text",
+                "value": "7",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Caption",
+            "value": "高峰：第1周周三第5节 · 3 次课程",
+            "color": "secondary"
+          },
+          {
+            "type": "Divider"
+          },
+          {
+            "type": "Text",
+            "value": "校区A · 76 次课程 · 占用率 6.3%",
+            "size": "sm",
+            "weight": "semibold"
+          },
+          {
+            "type": "Caption",
+            "value": "可用教室时段 2248 · ≥60人资源可用率 93.3%",
+            "color": "secondary"
+          },
+          {
+            "type": "Text",
+            "value": "校区B · 50 次课程 · 占用率 6.3%",
+            "size": "sm",
+            "weight": "semibold"
+          },
+          {
+            "type": "Caption",
+            "value": "可用教室时段 1500 · ≥60人资源可用率 93.4%",
+            "color": "secondary"
+          },
+          {
+            "type": "Divider"
+          },
+          {
+            "type": "Row",
+            "gap": 1,
+            "wrap": "wrap",
+            "children": [
+              {
+                "type": "Badge",
+                "label": "时间冲突 0",
+                "color": "success",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Badge",
+                "label": "跨校区赶场 8",
+                "color": "warning",
+                "variant": "soft",
+                "size": "sm"
+              },
+              {
+                "type": "Badge",
+                "label": "连续课风险 24",
+                "color": "warning",
+                "variant": "soft",
+                "size": "sm"
+              }
+            ]
+          },
+          {
+            "type": "Caption",
+            "value": "主要关注教师003与教师007的跨校区连续课程",
+            "color": "secondary"
+          },
+          {
+            "type": "Row",
+            "gap": 2,
+            "wrap": "wrap",
+            "children": [
+              {
+                "type": "Button",
+                "label": "查看第1周",
+                "size": "sm",
+                "variant": "solid",
+                "onClickAction": {
+                  "type": "sys.chat",
+                  "payload": {
+                    "query": "查看第1周校园课表\n【小序ActionV2】query=查看第1周校园课表|intent=schedule_week|week=1"
+                  }
+                }
+              },
+              {
+                "type": "Button",
+                "label": "查空教室",
+                "size": "sm",
+                "variant": "outline",
+                "onClickAction": {
+                  "type": "sys.chat",
+                  "payload": {
+                    "query": "查找第1周校园空教室\n【小序ActionV2】query=查找第1周校园空教室|intent=classroom_find|week=1"
+                  }
+                }
+              },
+              {
+                "type": "Button",
+                "label": "看教师负载",
+                "size": "sm",
+                "variant": "outline",
+                "onClickAction": {
+                  "type": "sys.chat",
+                  "payload": {
+                    "query": "查看教师002第1周的课表\n【小序ActionV2】query=查看教师002第1周的课表|intent=schedule_week|entityType=teacher|entityName=教师002|week=1"
+                  }
+                }
+              },
+              {
+                "type": "Button",
+                "label": "检查风险",
+                "size": "sm",
+                "variant": "outline",
+                "onClickAction": {
+                  "type": "sys.chat",
+                  "payload": {
+                    "query": "检查教师003第1周是否存在时间冲突或跨校区赶场\n【小序ActionV2】query=检查教师003第1周是否存在时间冲突或跨校区赶场|intent=schedule_risk_check|entityType=teacher|entityName=教师003|week=1"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "Caption",
+            "value": "数据版本 competition-demo-v1 · RuntimeSafe V1 · 指标均由 CampusTools 派生",
+            "color": "secondary"
+          }
+        ]
+      }
+    ]
+  },
+  "encodedWidget": "eyJuYW1lIjoi5bCP5bqPLeagoeWbreaVmeWtpuaAgeWKvy1SdW50aW1lU2FmZS1WMSIsImlkIjoiIiwidmlldyI6IjxDYXJkIHNpemU9XCJtZFwiIGJhY2tncm91bmQ9XCIjRjZGMkU4XCIgc3RhdHVzPXt2ZXJpZmllZFRleHR9PlxuICA8Q29sIGdhcD17M30+XG4gICAgPFJvdyBnYXA9ezJ9IGFsaWduPVwic3RhcnRcIj5cbiAgICAgIDxDb2wgZ2FwPXsxfSBmbGV4PXsxfT5cbiAgICAgICAgPENhcHRpb24gdmFsdWU9XCJDQU1QVVMgRkxPVyAvIFRFQUNISU5HIE9WRVJWSUVXXCIgY29sb3I9XCIjMTczRjM1XCIgLz5cbiAgICAgICAgPFRpdGxlIHZhbHVlPXt0aXRsZX0gc2l6ZT1cIm1kXCIgLz5cbiAgICAgICAgPENhcHRpb24gdmFsdWU9e3dpbmRvd1RleHR9IGNvbG9yPVwic2Vjb25kYXJ5XCIgLz5cbiAgICAgICAgPENhcHRpb24gdmFsdWU9e3BoYXNlVGV4dH0gY29sb3I9XCJzZWNvbmRhcnlcIiAvPlxuICAgICAgPC9Db2w+XG4gICAgICA8QmFkZ2UgbGFiZWw9e3ZlcmlmaWVkVGV4dH0gY29sb3I9XCJzdWNjZXNzXCIgdmFyaWFudD1cInNvZnRcIiBzaXplPVwic21cIiAvPlxuICAgIDwvUm93PlxuICAgIDxEaXZpZGVyIC8+XG4gICAgPFJvdyBnYXA9ezF9IHdyYXA9XCJ3cmFwXCI+XG4gICAgICA8QmFkZ2UgbGFiZWw9e3dlZWtDb3VudFRleHR9IGNvbG9yPVwiaW5mb1wiIHZhcmlhbnQ9XCJzb2Z0XCIgc2l6ZT1cInNtXCIgLz5cbiAgICAgIDxCYWRnZSBsYWJlbD17bGVzc29uQ291bnRUZXh0fSBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+XG4gICAgICA8QmFkZ2UgbGFiZWw9e3RlYWNoZXJDb3VudFRleHR9IGNvbG9yPVwic2Vjb25kYXJ5XCIgdmFyaWFudD1cIm91dGxpbmVcIiBzaXplPVwic21cIiAvPlxuICAgICAgPEJhZGdlIGxhYmVsPXtyb29tQ291bnRUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIHZhcmlhbnQ9XCJvdXRsaW5lXCIgc2l6ZT1cInNtXCIgLz5cbiAgICAgIDxCYWRnZSBsYWJlbD17Y2FtcHVzQ291bnRUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIHZhcmlhbnQ9XCJvdXRsaW5lXCIgc2l6ZT1cInNtXCIgLz5cbiAgICA8L1Jvdz5cbiAgICA8RGl2aWRlciAvPlxuICAgIDxDYXB0aW9uIHZhbHVlPVwi5Zub5ZGo5pWZ5a2m6LSf6L2977yI6K++56iL5qyh5pWw77yJXCIgY29sb3I9XCIjMTczRjM1XCIgLz5cbiAgICA8Um93IGdhcD17MX0+PFRleHQgdmFsdWU9XCLlkajmrKFcIiBzaXplPVwic21cIiB3ZWlnaHQ9XCJzZW1pYm9sZFwiIC8+PFRleHQgdmFsdWU9XCLkuIBcIiBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPVwi5LqMXCIgc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT1cIuS4iVwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9XCLlm5tcIiBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPVwi5LqUXCIgc2l6ZT1cInNtXCIgLz48L1Jvdz5cbiAgICA8Um93IGdhcD17MX0+PEJhZGdlIGxhYmVsPVwiVzFcIiBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3cxTW9uVGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzFUdWVUZXh0fSBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3MVdlZFRleHR9IHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3cxVGh1VGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzFGcmlUZXh0fSBzaXplPVwic21cIiAvPjwvUm93PlxuICAgIDxSb3cgZ2FwPXsxfT48QmFkZ2UgbGFiZWw9XCJXMlwiIGNvbG9yPVwiaW5mb1wiIHZhcmlhbnQ9XCJzb2Z0XCIgc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzJNb25UZXh0fSBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3MlR1ZVRleHR9IHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3cyV2VkVGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzJUaHVUZXh0fSBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3MkZyaVRleHR9IHNpemU9XCJzbVwiIC8+PC9Sb3c+XG4gICAgPFJvdyBnYXA9ezF9PjxCYWRnZSBsYWJlbD1cIlczXCIgY29sb3I9XCJpbmZvXCIgdmFyaWFudD1cInNvZnRcIiBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3M01vblRleHR9IHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3czVHVlVGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzNXZWRUZXh0fSBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3M1RodVRleHR9IHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3czRnJpVGV4dH0gc2l6ZT1cInNtXCIgLz48L1Jvdz5cbiAgICA8Um93IGdhcD17MX0+PEJhZGdlIGxhYmVsPVwiVzRcIiBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3c0TW9uVGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzRUdWVUZXh0fSBzaXplPVwic21cIiAvPjxUZXh0IHZhbHVlPXt3NFdlZFRleHR9IHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3c0VGh1VGV4dH0gc2l6ZT1cInNtXCIgLz48VGV4dCB2YWx1ZT17dzRGcmlUZXh0fSBzaXplPVwic21cIiAvPjwvUm93PlxuICAgIDxDYXB0aW9uIHZhbHVlPXtwZWFrU2xvdFRleHR9IGNvbG9yPVwic2Vjb25kYXJ5XCIgLz5cbiAgICA8RGl2aWRlciAvPlxuICAgIDxDYXB0aW9uIHZhbHVlPVwi56m66Ze06LWE5rqQXCIgY29sb3I9XCIjMTczRjM1XCIgLz5cbiAgICA8Q29sIGdhcD17MX0+XG4gICAgICA8VGV4dCB2YWx1ZT17Y2FtcHVzQUxvYWRUZXh0fSBzaXplPVwic21cIiB3ZWlnaHQ9XCJzZW1pYm9sZFwiIC8+XG4gICAgICA8Q2FwdGlvbiB2YWx1ZT17Y2FtcHVzQUZyZWVUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIC8+XG4gICAgICA8VGV4dCB2YWx1ZT17Y2FtcHVzQkxvYWRUZXh0fSBzaXplPVwic21cIiB3ZWlnaHQ9XCJzZW1pYm9sZFwiIC8+XG4gICAgICA8Q2FwdGlvbiB2YWx1ZT17Y2FtcHVzQkZyZWVUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIC8+XG4gICAgPC9Db2w+XG4gICAgPERpdmlkZXIgLz5cbiAgICA8Q2FwdGlvbiB2YWx1ZT1cIuaVmeW4iOi0n+i9vSBUb3AgM1wiIGNvbG9yPVwiIzE3M0YzNVwiIC8+XG4gICAgPFJvdyBnYXA9ezJ9PjxCYWRnZSBsYWJlbD1cIjFcIiBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3RlYWNoZXIwTmFtZX0gc2l6ZT1cInNtXCIgd2VpZ2h0PVwic2VtaWJvbGRcIiAvPjxDYXB0aW9uIHZhbHVlPXt0ZWFjaGVyMExvYWRUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIC8+PC9Sb3c+XG4gICAgPFJvdyBnYXA9ezJ9PjxCYWRnZSBsYWJlbD1cIjJcIiBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3RlYWNoZXIxTmFtZX0gc2l6ZT1cInNtXCIgd2VpZ2h0PVwic2VtaWJvbGRcIiAvPjxDYXB0aW9uIHZhbHVlPXt0ZWFjaGVyMUxvYWRUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIC8+PC9Sb3c+XG4gICAgPFJvdyBnYXA9ezJ9PjxCYWRnZSBsYWJlbD1cIjNcIiBjb2xvcj1cImluZm9cIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+PFRleHQgdmFsdWU9e3RlYWNoZXIyTmFtZX0gc2l6ZT1cInNtXCIgd2VpZ2h0PVwic2VtaWJvbGRcIiAvPjxDYXB0aW9uIHZhbHVlPXt0ZWFjaGVyMkxvYWRUZXh0fSBjb2xvcj1cInNlY29uZGFyeVwiIC8+PC9Sb3c+XG4gICAgPERpdmlkZXIgLz5cbiAgICA8Q2FwdGlvbiB2YWx1ZT1cIuaVmeWtpumjjumZqVwiIGNvbG9yPVwiIzE3M0YzNVwiIC8+XG4gICAgPFJvdyBnYXA9ezF9IHdyYXA9XCJ3cmFwXCI+XG4gICAgICA8QmFkZ2UgbGFiZWw9e2NvbmZsaWN0Q291bnRUZXh0fSBjb2xvcj1cInN1Y2Nlc3NcIiB2YXJpYW50PVwic29mdFwiIHNpemU9XCJzbVwiIC8+XG4gICAgICA8QmFkZ2UgbGFiZWw9e3J1c2hDb3VudFRleHR9IGNvbG9yPVwid2FybmluZ1wiIHZhcmlhbnQ9XCJzb2Z0XCIgc2l6ZT1cInNtXCIgLz5cbiAgICAgIDxCYWRnZSBsYWJlbD17Y29udGludW91c0xvYWRUZXh0fSBjb2xvcj1cIndhcm5pbmdcIiB2YXJpYW50PVwib3V0bGluZVwiIHNpemU9XCJzbVwiIC8+XG4gICAgPC9Sb3c+XG4gICAgPENhcHRpb24gdmFsdWU9e3Jpc2tTdW1tYXJ5VGV4dH0gY29sb3I9XCJzZWNvbmRhcnlcIiAvPlxuICAgIDxEaXZpZGVyIC8+XG4gICAgPFJvdyBnYXA9ezJ9IHdyYXA9XCJ3cmFwXCI+XG4gICAgICA8QnV0dG9uIGxhYmVsPXthY3Rpb24wTGFiZWx9IHNpemU9XCJzbVwiIHZhcmlhbnQ9XCJzb2xpZFwiIG9uQ2xpY2tBY3Rpb249e3t0eXBlOiBcInN5cy5jaGF0XCIsIHBheWxvYWQ6IHtxdWVyeTogYWN0aW9uME1lc3NhZ2V9fX0gLz5cbiAgICAgIDxCdXR0b24gbGFiZWw9e2FjdGlvbjFMYWJlbH0gc2l6ZT1cInNtXCIgdmFyaWFudD1cIm91dGxpbmVcIiBvbkNsaWNrQWN0aW9uPXt7dHlwZTogXCJzeXMuY2hhdFwiLCBwYXlsb2FkOiB7cXVlcnk6IGFjdGlvbjFNZXNzYWdlfX19IC8+XG4gICAgICA8QnV0dG9uIGxhYmVsPXthY3Rpb24yTGFiZWx9IHNpemU9XCJzbVwiIHZhcmlhbnQ9XCJvdXRsaW5lXCIgb25DbGlja0FjdGlvbj17e3R5cGU6IFwic3lzLmNoYXRcIiwgcGF5bG9hZDoge3F1ZXJ5OiBhY3Rpb24yTWVzc2FnZX19fSAvPlxuICAgICAgPEJ1dHRvbiBsYWJlbD17YWN0aW9uM0xhYmVsfSBzaXplPVwic21cIiB2YXJpYW50PVwib3V0bGluZVwiIG9uQ2xpY2tBY3Rpb249e3t0eXBlOiBcInN5cy5jaGF0XCIsIHBheWxvYWQ6IHtxdWVyeTogYWN0aW9uM01lc3NhZ2V9fX0gLz5cbiAgICA8L1Jvdz5cbiAgICA8Q2FwdGlvbiB2YWx1ZT17Zm9vdGVyVGV4dH0gY29sb3I9XCJzZWNvbmRhcnlcIiAvPlxuICA8L0NvbD5cbjwvQ2FyZD5cbiIsImRlZmF1bHRTdGF0ZSI6eyJ0aXRsZSI6IuWwj+W6jyDCtyDmoKHlm63mlZnlrabmgIHlir8iLCJ3aW5kb3dUZXh0IjoiMjAyNi0wOC0yNSDvvZ4gMjAyNi0wOS0yNyIsInBoYXNlVGV4dCI6IjA4LTI1772eMDgtMzAg5YeG5aSH5pyf5peg5pWZ5a2m5a6J5o6SIMK3IDA4LTMxIOi1t+i/m+WFpeaVmeWtpuWRqCIsInZlcmlmaWVkVGV4dCI6IuW3suaguOmqjCDCtyBjb21wZXRpdGlvbi1kZW1vLXYxIiwid2Vla0NvdW50VGV4dCI6IjQg5Liq5pWZ5a2m5ZGoIiwibGVzc29uQ291bnRUZXh0IjoiMTI2IOasoeivvueoiyIsInRlYWNoZXJDb3VudFRleHQiOiI4IOS9jeaVmeW4iCIsInJvb21Db3VudFRleHQiOiIyMiDpl7Tnqbrpl7QiLCJjYW1wdXNDb3VudFRleHQiOiIyIOS4quagoeWMuiIsIncxTW9uVGV4dCI6IjciLCJ3MVR1ZVRleHQiOiI2IiwidzFXZWRUZXh0IjoiNyIsIncxVGh1VGV4dCI6IjUiLCJ3MUZyaVRleHQiOiI2IiwidzJNb25UZXh0IjoiNyIsIncyVHVlVGV4dCI6IjYiLCJ3MldlZFRleHQiOiI3IiwidzJUaHVUZXh0IjoiNSIsIncyRnJpVGV4dCI6IjciLCJ3M01vblRleHQiOiI3IiwidzNUdWVUZXh0IjoiNiIsInczV2VkVGV4dCI6IjciLCJ3M1RodVRleHQiOiI1IiwidzNGcmlUZXh0IjoiNiIsInc0TW9uVGV4dCI6IjciLCJ3NFR1ZVRleHQiOiI2IiwidzRXZWRUZXh0IjoiNyIsInc0VGh1VGV4dCI6IjUiLCJ3NEZyaVRleHQiOiI3IiwiY2FtcHVzQUxvYWRUZXh0Ijoi5qCh5Yy6QSDCtyA3NiDmrKHor77nqIsgwrcg5Y2g55So546HIDYuMyUiLCJjYW1wdXNBRnJlZVRleHQiOiLlj6/nlKjmlZnlrqTml7bmrrUgMjI0OCDCtyDiiaU2MOS6uui1hOa6kOWPr+eUqOeOhyA5My4zJSIsImNhbXB1c0JMb2FkVGV4dCI6IuagoeWMukIgwrcgNTAg5qyh6K++56iLIMK3IOWNoOeUqOeOhyA2LjMlIiwiY2FtcHVzQkZyZWVUZXh0Ijoi5Y+v55So5pWZ5a6k5pe25q61IDE1MDAgwrcg4omlNjDkurrotYTmupDlj6/nlKjnjocgOTMuNCUiLCJwZWFrU2xvdFRleHQiOiLpq5jls7DvvJrnrKwx5ZGo5ZGo5LiJ56ysNeiKgiDCtyAzIOasoeivvueoiyIsInRlYWNoZXIwTmFtZSI6IuaVmeW4iDAwMiIsInRlYWNoZXIwTG9hZFRleHQiOiIyNCDmrKHor77nqIsgwrcgNDgg6IqC5qyhIiwidGVhY2hlcjFOYW1lIjoi5pWZ5biIMDAzIiwidGVhY2hlcjFMb2FkVGV4dCI6IjIwIOasoeivvueoiyDCtyA0MCDoioLmrKEiLCJ0ZWFjaGVyMk5hbWUiOiLmlZnluIgwMDEiLCJ0ZWFjaGVyMkxvYWRUZXh0IjoiMTYg5qyh6K++56iLIMK3IDMyIOiKguasoSIsImNvbmZsaWN0Q291bnRUZXh0Ijoi5pe26Ze05Yay56qBIDAiLCJydXNoQ291bnRUZXh0Ijoi6Leo5qCh5Yy66LW25Zy6IDgiLCJjb250aW51b3VzTG9hZFRleHQiOiLov57nu63or77po47pmakgMjQiLCJyaXNrU3VtbWFyeVRleHQiOiLkuLvopoHlhbPms6jmlZnluIgwMDPkuI7mlZnluIgwMDfnmoTot6jmoKHljLrov57nu63or77nqIsiLCJhY3Rpb24wTGFiZWwiOiLmn6XnnIvnrKwx5ZGoIiwiYWN0aW9uME1lc3NhZ2UiOiLmn6XnnIvnrKwx5ZGo5qCh5Zut6K++6KGoXG7jgJDlsI/luo9BY3Rpb25WMuOAkXF1ZXJ5Peafpeeci+esrDHlkajmoKHlm63or77ooah8aW50ZW50PXNjaGVkdWxlX3dlZWt8d2Vlaz0xIiwiYWN0aW9uMUxhYmVsIjoi5p+l56m65pWZ5a6kIiwiYWN0aW9uMU1lc3NhZ2UiOiLmn6Xmib7nrKwx5ZGo5qCh5Zut56m65pWZ5a6kXG7jgJDlsI/luo9BY3Rpb25WMuOAkXF1ZXJ5PeafpeaJvuesrDHlkajmoKHlm63nqbrmlZnlrqR8aW50ZW50PWNsYXNzcm9vbV9maW5kfHdlZWs9MSIsImFjdGlvbjJMYWJlbCI6Iueci+aVmeW4iOi0n+i9vSIsImFjdGlvbjJNZXNzYWdlIjoi5p+l55yL5pWZ5biIMDAy56ysMeWRqOeahOivvuihqFxu44CQ5bCP5bqPQWN0aW9uVjLjgJFxdWVyeT3mn6XnnIvmlZnluIgwMDLnrKwx5ZGo55qE6K++6KGofGludGVudD1zY2hlZHVsZV93ZWVrfGVudGl0eVR5cGU9dGVhY2hlcnxlbnRpdHlOYW1lPeaVmeW4iDAwMnx3ZWVrPTEiLCJhY3Rpb24zTGFiZWwiOiLmo4Dmn6Xpo47pmakiLCJhY3Rpb24zTWVzc2FnZSI6IuajgOafpeaVmeW4iDAwM+esrDHlkajmmK/lkKblrZjlnKjml7bpl7TlhrLnqoHmiJbot6jmoKHljLrotbblnLpcbuOAkOWwj+W6j0FjdGlvblYy44CRcXVlcnk95qOA5p+l5pWZ5biIMDAz56ysMeWRqOaYr+WQpuWtmOWcqOaXtumXtOWGsueqgeaIlui3qOagoeWMuui1tuWcunxpbnRlbnQ9c2NoZWR1bGVfcmlza19jaGVja3xlbnRpdHlUeXBlPXRlYWNoZXJ8ZW50aXR5TmFtZT3mlZnluIgwMDN8d2Vlaz0xIiwiZm9vdGVyVGV4dCI6IuaVsOaNrueJiOacrCBjb21wZXRpdGlvbi1kZW1vLXYxIMK3IFJ1bnRpbWVTYWZlIFYxIMK3IOaMh+agh+Wdh+eUsSBDYW1wdXNUb29scyDmtL7nlJ8ifSwic3RhdGVzIjpbXSwic2NoZW1hIjoiaW1wb3J0IHsgeiB9IGZyb20gJ3pvZCc7XG5cbmNvbnN0IHdpZGdldFNjaGVtYSA9IHpcbiAgLm9iamVjdCh7XG4gICAgdGl0bGU6IHouc3RyaW5nKCksXG4gICAgd2luZG93VGV4dDogei5zdHJpbmcoKSxcbiAgICBwaGFzZVRleHQ6IHouc3RyaW5nKCksXG4gICAgdmVyaWZpZWRUZXh0OiB6LnN0cmluZygpLFxuICAgIHdlZWtDb3VudFRleHQ6IHouc3RyaW5nKCksXG4gICAgbGVzc29uQ291bnRUZXh0OiB6LnN0cmluZygpLFxuICAgIHRlYWNoZXJDb3VudFRleHQ6IHouc3RyaW5nKCksXG4gICAgcm9vbUNvdW50VGV4dDogei5zdHJpbmcoKSxcbiAgICBjYW1wdXNDb3VudFRleHQ6IHouc3RyaW5nKCksXG4gICAgdzFNb25UZXh0OiB6LnN0cmluZygpLFxuICAgIHcxVHVlVGV4dDogei5zdHJpbmcoKSxcbiAgICB3MVdlZFRleHQ6IHouc3RyaW5nKCksXG4gICAgdzFUaHVUZXh0OiB6LnN0cmluZygpLFxuICAgIHcxRnJpVGV4dDogei5zdHJpbmcoKSxcbiAgICB3Mk1vblRleHQ6IHouc3RyaW5nKCksXG4gICAgdzJUdWVUZXh0OiB6LnN0cmluZygpLFxuICAgIHcyV2VkVGV4dDogei5zdHJpbmcoKSxcbiAgICB3MlRodVRleHQ6IHouc3RyaW5nKCksXG4gICAgdzJGcmlUZXh0OiB6LnN0cmluZygpLFxuICAgIHczTW9uVGV4dDogei5zdHJpbmcoKSxcbiAgICB3M1R1ZVRleHQ6IHouc3RyaW5nKCksXG4gICAgdzNXZWRUZXh0OiB6LnN0cmluZygpLFxuICAgIHczVGh1VGV4dDogei5zdHJpbmcoKSxcbiAgICB3M0ZyaVRleHQ6IHouc3RyaW5nKCksXG4gICAgdzRNb25UZXh0OiB6LnN0cmluZygpLFxuICAgIHc0VHVlVGV4dDogei5zdHJpbmcoKSxcbiAgICB3NFdlZFRleHQ6IHouc3RyaW5nKCksXG4gICAgdzRUaHVUZXh0OiB6LnN0cmluZygpLFxuICAgIHc0RnJpVGV4dDogei5zdHJpbmcoKSxcbiAgICBjYW1wdXNBTG9hZFRleHQ6IHouc3RyaW5nKCksXG4gICAgY2FtcHVzQUZyZWVUZXh0OiB6LnN0cmluZygpLFxuICAgIGNhbXB1c0JMb2FkVGV4dDogei5zdHJpbmcoKSxcbiAgICBjYW1wdXNCRnJlZVRleHQ6IHouc3RyaW5nKCksXG4gICAgcGVha1Nsb3RUZXh0OiB6LnN0cmluZygpLFxuICAgIHRlYWNoZXIwTmFtZTogei5zdHJpbmcoKSxcbiAgICB0ZWFjaGVyMExvYWRUZXh0OiB6LnN0cmluZygpLFxuICAgIHRlYWNoZXIxTmFtZTogei5zdHJpbmcoKSxcbiAgICB0ZWFjaGVyMUxvYWRUZXh0OiB6LnN0cmluZygpLFxuICAgIHRlYWNoZXIyTmFtZTogei5zdHJpbmcoKSxcbiAgICB0ZWFjaGVyMkxvYWRUZXh0OiB6LnN0cmluZygpLFxuICAgIGNvbmZsaWN0Q291bnRUZXh0OiB6LnN0cmluZygpLFxuICAgIHJ1c2hDb3VudFRleHQ6IHouc3RyaW5nKCksXG4gICAgY29udGludW91c0xvYWRUZXh0OiB6LnN0cmluZygpLFxuICAgIHJpc2tTdW1tYXJ5VGV4dDogei5zdHJpbmcoKSxcbiAgICBhY3Rpb24wTGFiZWw6IHouc3RyaW5nKCksXG4gICAgYWN0aW9uME1lc3NhZ2U6IHouc3RyaW5nKCksXG4gICAgYWN0aW9uMUxhYmVsOiB6LnN0cmluZygpLFxuICAgIGFjdGlvbjFNZXNzYWdlOiB6LnN0cmluZygpLFxuICAgIGFjdGlvbjJMYWJlbDogei5zdHJpbmcoKSxcbiAgICBhY3Rpb24yTWVzc2FnZTogei5zdHJpbmcoKSxcbiAgICBhY3Rpb24zTGFiZWw6IHouc3RyaW5nKCksXG4gICAgYWN0aW9uM01lc3NhZ2U6IHouc3RyaW5nKCksXG4gICAgZm9vdGVyVGV4dDogei5zdHJpbmcoKSxcbiAgfSlcbiAgLnN0cmljdCgpO1xuXG5leHBvcnQgZGVmYXVsdCB3aWRnZXRTY2hlbWE7XG4iLCJzY2hlbWFWYWxpZGl0eSI6InZhbGlkIiwidmlld1ZhbGlkaXR5IjoidmFsaWQiLCJkZWZhdWx0U3RhdGVWYWxpZGl0eSI6InZhbGlkIn0="
+}

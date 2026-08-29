@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "variant": "message",
+  "status": "empty",
+  "title": "校园教学任务结果",
+  "subtitle": "课表 · 空间 · 协同 · 风险",
+  "verified": false,
+  "summary": "输入一个校园教学问题，小序会在这里展示经过核验的结果。",
+  "context": "通用预览",
+  "sections": [
+    {
+      "title": "可以从这些问题开始",
+      "kind": "entity-list",
+      "note": "真实答案由 CampusTools 查询后生成",
+      "rows": [
+        {
+          "label": "课表与空间",
+          "value": "查询课程安排、教师、班级、教室与时间"
+        },
+        {
+          "label": "协同与调课",
+          "value": "查找共同空闲，并校验调课约束"
+        },
+        {
+          "label": "风险与洞察",
+          "value": "检查时间冲突、转场压力与教学负载"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "preview-schedule",
+      "type": "sys.chat",
+      "label": "查看我的课表",
+      "payload": {
+        "query": "查看我的本周课表"
+      }
+    },
+    {
+      "id": "preview-space",
+      "type": "sys.chat",
+      "label": "查找空闲教室",
+      "payload": {
+        "query": "查找今天可用的空闲教室"
+      }
+    },
+    {
+      "id": "preview-risk",
+      "type": "sys.chat",
+      "label": "检查教学风险",
+      "payload": {
+        "query": "检查我的本周课表是否存在时间冲突或转场压力"
+      }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

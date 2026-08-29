@@ -251,25 +251,35 @@ async function runChecks() {
   });
 
   await check("set_current_schedule 工具透传 explicitCommand 并做索引校验", () => {
+    const releaseService = require("../server/src/services/releaseService");
     const toolRegistry = require("../server/src/services/ai/toolRegistry");
     assert.strictEqual(typeof toolRegistry.executeTool, "function", "executeTool 导出");
     const run = (input) => toolRegistry.executeTool("set_current_schedule", input, {});
-    // 24动物医学1班 在当前索引中的实证 detailId
-    const base = { detailId: "1045ffd6099deb6284d407539a26f389", name: "24动物医学1班" };
-    const withExplicit = run(Object.assign({}, base, { explicitCommand: true }));
-    assert.ok(withExplicit && typeof withExplicit === "object", "返回对象");
-    assert.strictEqual(withExplicit.success, true, "目标在索引中");
-    assert.strictEqual(withExplicit.explicitCommand, true);
-    assert.strictEqual(withExplicit.actionRequired, "setCurrentSchedule");
-    assert.ok(withExplicit.target && withExplicit.target.detailId, "目标含 detailId");
-    const withoutExplicit = run(Object.assign({}, base));
-    assert.strictEqual(withoutExplicit.explicitCommand, false);
-    const missing = run({ detailId: "", name: "" });
-    assert.strictEqual(missing.success, false);
-    assert.strictEqual(missing.code, "SCHEDULE_TARGET_MISSING");
-    const notFound = run({ detailId: "0000000000000000000000000000dead", name: "不存在班级" });
-    assert.strictEqual(notFound.success, false);
-    assert.strictEqual(notFound.code, "SCHEDULE_TARGET_NOT_FOUND");
+    const originalReadActiveIndex = releaseService.readActiveIndex;
+    const base = { detailId: "fixture-class-24-vet-1", name: "24动物医学1班" };
+    releaseService.readActiveIndex = () => ({
+      success: true,
+      releaseVersion: "fixture-release",
+      items: [{ id: base.detailId, name: base.name, className: base.name, semester: "2025-2026-2" }],
+    });
+    try {
+      const withExplicit = run(Object.assign({}, base, { explicitCommand: true }));
+      assert.ok(withExplicit && typeof withExplicit === "object", "返回对象");
+      assert.strictEqual(withExplicit.success, true, "目标在索引中");
+      assert.strictEqual(withExplicit.explicitCommand, true);
+      assert.strictEqual(withExplicit.actionRequired, "setCurrentSchedule");
+      assert.ok(withExplicit.target && withExplicit.target.detailId, "目标含 detailId");
+      const withoutExplicit = run(Object.assign({}, base));
+      assert.strictEqual(withoutExplicit.explicitCommand, false);
+      const missing = run({ detailId: "", name: "" });
+      assert.strictEqual(missing.success, false);
+      assert.strictEqual(missing.code, "SCHEDULE_TARGET_MISSING");
+      const notFound = run({ detailId: "fixture-class-not-found", name: "不存在班级" });
+      assert.strictEqual(notFound.success, false);
+      assert.strictEqual(notFound.code, "SCHEDULE_TARGET_NOT_FOUND");
+    } finally {
+      releaseService.readActiveIndex = originalReadActiveIndex;
+    }
   });
 }
 

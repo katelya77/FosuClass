@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "competition/adp-kit/r49-ma/data-hub/canonical-schema.json",
+  "title": "Canonical Schedule Event (R49.4)",
+  "description": "机构无关的规范化课表事件。禁止携带学校身份、个人标识、凭据或原始文件字节。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "namespace",
+    "semesterId",
+    "course",
+    "teachers",
+    "classes",
+    "location",
+    "weekday",
+    "periodStart",
+    "periodEnd",
+    "weeks",
+    "source"
+  ],
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "enum": ["anonymous", "synthetic-example", "competition-demo-v2", "competition-demo-v3"]
+    },
+    "semesterId": { "type": "string", "minLength": 1 },
+    "course": {
+      "type": "object",
+      "required": ["name"],
+      "properties": { "name": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "teachers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "classes": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "location": {
+      "type": "object",
+      "required": ["campus", "room"],
+      "properties": {
+        "campus": { "type": "string", "minLength": 1 },
+        "room": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "periodStart": { "type": "integer", "minimum": 1, "maximum": 12 },
+    "periodEnd": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12,
+      "if": { "minimum": 1 },
+      "then": { "minimum": { "$data": "1/periodStart" } }
+    },
+    "weeks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 1, "maximum": 20 }
+    },
+    "source": {
+      "type": "object",
+      "required": ["providerFamily", "sourceType", "importedAt", "confidence"],
+      "properties": {
+        "providerFamily": { "type": "string", "minLength": 1 },
+        "sourceType": { "type": "string", "minLength": 1 },
+        "importedAt": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

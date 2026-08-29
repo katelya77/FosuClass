@@ -1,0 +1,40 @@
+{
+  "cases": [
+    {
+      "id": "dt-01-valid-result-card",
+      "kind": "result-card",
+      "expected": { "mustMatch": "风险" },
+      "serialized": "{\"version\":\"1.0\",\"variant\":\"risk\",\"status\":\"complete\",\"title\":\"课程风险\",\"summary\":\"已核验：发现1处冲突风险\",\"verified\":true,\"sections\":[{\"key\":\"conflict\",\"title\":\"冲突\",\"rows\":[{\"label\":\"周一第3-4节\",\"value\":\"课程A 与 课程B 冲突\"}]}],\"actions\":[{\"type\":\"sys.chat\",\"label\":\"查看详情\",\"payload\":{\"query\":\"看看风险详情\"}}]}"
+    },
+    {
+      "id": "dt-02-valid-week-board",
+      "kind": "week-board",
+      "expected": { "mustMatch": "课" },
+      "serialized": "{\"version\":\"1.0\",\"variant\":\"schedule_week\",\"status\":\"complete\",\"title\":\"第N周课表\",\"summary\":\"已核验：整周课程 5 门\",\"verified\":true,\"days\":[{\"weekday\":1,\"blocks\":[{\"name\":\"课程A\",\"room\":\"教室1\"}]}]}"
+    },
+    {
+      "id": "dt-03-unrenderable-but-complete",
+      "kind": "result-card",
+      "expected": { "mustMatch": "风险" },
+      "serialized": "{\"version\":\"1.2.3-dev\",\"variant\":\"risk\",\"status\":\"complete\",\"title\":\"课程风险\",\"summary\":\"已核验：发现1处冲突风险\",\"verified\":true,\"sections\":[{\"key\":\"conflict\",\"title\":\"冲突\",\"rows\":[{\"label\":\"周一第3-4节\",\"value\":\"课程A 与 课程B 冲突\"}]}]}"
+    },
+    {
+      "id": "dt-04-safety-violation",
+      "kind": "result-card",
+      "expected": { "mustMatch": "风险" },
+      "serialized": "{\"version\":\"1.0\",\"variant\":\"risk\",\"status\":\"complete\",\"title\":\"课程风险\",\"summary\":\"已核验：账号密码 abc123 用于导入\"}"
+    },
+    {
+      "id": "dt-05-factual-contradiction",
+      "kind": "result-card",
+      "expected": { "mustMatch": "风险" },
+      "serialized": "{\"version\":\"1.0\",\"variant\":\"schedule\",\"status\":\"complete\",\"title\":\"课表\",\"summary\":\"已核验：今日无课\"}"
+    },
+    {
+      "id": "dt-06-readable-fallback",
+      "kind": "fallback",
+      "expected": { "mustMatch": "冲突" },
+      "serialized": "无法渲染卡片，结果如下：\n\n课程风险：已核验，发现1处冲突风险\n- 周一第3-4节：课程A 与 课程B 冲突\n\n下一步：可查看详情。"
+    }
+  ]
+}

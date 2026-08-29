@@ -1,0 +1,57 @@
+{
+  "schema": "fosuclass-r48-design-tokens/v1",
+  "name": "Campus Operations Pass",
+  "intent": "校园任务票据 / 现代学务工具：高密度、可扫读、安静的专业感；320-430px 移动优先，无横向滚动。",
+  "color": {
+    "page": "#F7F8F6",
+    "card": "#FFFFFF",
+    "cardSunken": "#F4F6F3",
+    "ink": "#1F2521",
+    "muted": "#68726B",
+    "faint": "#98A29A",
+    "line": "#E4E8E3",
+    "lineStrong": "#D2DAD1",
+    "brand": "#173F35",
+    "brandSoft": "#E9F0EB",
+    "accent": "#2563EB",
+    "accentSoft": "#EBF1FE",
+    "success": "#2F7D5C",
+    "successSoft": "#E8F3ED",
+    "warning": "#8A5A00",
+    "warningSoft": "#FBF3DF",
+    "danger": "#A54232",
+    "dangerSoft": "#F9ECE8"
+  },
+  "adpColorMapping": {
+    "note": "ADP Badge 仅接受语义色名；自定义 hex 仅用于 Caption/Text color 与 Card background。",
+    "accent": "Badge color=\"info\"",
+    "success": "Badge color=\"success\"",
+    "warning": "Badge color=\"warning\"",
+    "danger": "Badge color=\"danger\"",
+    "neutral": "Badge color=\"secondary\"",
+    "brand": "Caption/Text color=\"#173F35\" 或 Badge color=\"success\"",
+    "cardBackground": "#FFFFFF",
+    "sunkenBackground": "#F7F8F6"
+  },
+  "radius": { "card": 14, "inner": 10, "chip": 999 },
+  "spacing": [4, 8, 12, 16, 20, 24],
+  "type": {
+    "stack": "-apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif",
+    "eyebrow": { "size": 10, "weight": 700, "letterSpacing": "0.12em" },
+    "title": { "size": 17, "weight": 700 },
+    "course": { "size": 14, "weight": 600 },
+    "body": { "size": 13, "weight": 400 },
+    "caption": { "size": 12, "weight": 400 },
+    "micro": { "size": 11, "weight": 400 }
+  },
+  "rules": [
+    "页面底 #F7F8F6，卡片近白 #FFFFFF，不发黄",
+    "阴影极轻或无阴影，1px 低对比中性边框",
+    "触控区域 ≥ 40px（ADP Button size=sm 由平台保证，H5 fallback 显式保证）",
+    "风险用琥珀橙，冲突用克制红，均不使用整片底色",
+    "已核验为右上角小 Badge，不做大绿章",
+    "禁止外部 CDN / 字体 / 图标库",
+    "禁止 AI 紫渐变、玻璃拟态、巨型机器人头像",
+    "prefers-reduced-motion 下关闭非必要动画"
+  ]
+}

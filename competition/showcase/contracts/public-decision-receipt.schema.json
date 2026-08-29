@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "public-decision-receipt.schema.json",
+  "title": "PublicDecisionReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receiptVersion",
+    "decisionId",
+    "recommendation",
+    "alternatives",
+    "nextAction",
+    "verified",
+    "decision"
+  ],
+  "properties": {
+    "receiptVersion": { "type": "string", "const": "1.0" },
+    "decisionId": { "type": "string", "pattern": "^decision-[a-f0-9]{64}$" },
+    "recommendation": {
+      "anyOf": [
+        { "$ref": "#/$defs/choice" },
+        { "type": "null" }
+      ]
+    },
+    "alternatives": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/choice" }
+    },
+    "nextAction": {
+      "anyOf": [
+        { "$ref": "#/$defs/nextAction" },
+        { "type": "null" }
+      ]
+    },
+    "verified": { "type": "boolean" },
+    "decision": { "type": "string", "enum": ["recommend", "no_viable_option"] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "decision": { "const": "recommend" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "verified": { "const": true },
+          "recommendation": { "$ref": "#/$defs/choice" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "decision": { "const": "no_viable_option" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "recommendation": { "type": "null" },
+          "alternatives": { "type": "array", "maxItems": 0 }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "reasons"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nextAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "query"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

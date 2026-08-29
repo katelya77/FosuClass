@@ -18,6 +18,67 @@ const CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION = 2;
 const DEFAULT_TERM = "";
 let currentScheduleTargetMemory = null;
 
+function isStorageQuotaError(error) {
+  const message = String(error && (error.errMsg || error.message) || "").toLowerCase();
+  return message.includes("exceed storage") ||
+    message.includes("storage limit") ||
+    message.includes("quota") ||
+    message.includes("data too large");
+}
+
+function isDisposableCacheKey(key) {
+  const text = String(key || "");
+  return text.startsWith("school:") ||
+    text.startsWith("fosu:v") ||
+    text === "FOSU_SCHEDULE_CACHE" ||
+    text === "FOSU_CLASS_SCHEDULE_CACHE" ||
+    text === "schedule_detail_cache" ||
+    text === "school_search_index" ||
+    text === "school_filter_options" ||
+    text === "school_class_list" ||
+    text === "school_teacher_list" ||
+    text === "school_classroom_list" ||
+    text === "school_course_list" ||
+    text === RECENT_SCHEDULES_KEY;
+}
+
+function pruneDisposableCachesForCriticalWrite() {
+  let removed = 0;
+  try {
+    const info = wx.getStorageInfoSync();
+    const keys = info && Array.isArray(info.keys) ? info.keys : [];
+    keys.forEach((key) => {
+      if (!isDisposableCacheKey(key)) return;
+      try {
+        wx.removeStorageSync(key);
+        removed += 1;
+      } catch (error) {
+        // Continue pruning other disposable entries. Authoritative pointers,
+        // settings, personal schedules and the current target are never touched.
+      }
+    });
+  } catch (error) {
+    return 0;
+  }
+  return removed;
+}
+
+function writeCriticalStorage(key, value) {
+  try {
+    wx.setStorageSync(key, value);
+    return true;
+  } catch (error) {
+    if (!isStorageQuotaError(error)) return false;
+    pruneDisposableCachesForCriticalWrite();
+    try {
+      wx.setStorageSync(key, value);
+      return true;
+    } catch (retryError) {
+      return false;
+    }
+  }
+}
+
 const defaultSettings = {
   className: "",
   semesterId: DEFAULT_TERM,
@@ -41,8 +102,70 @@ function getSettings() {
 
 function saveSettings(patch) {
   const next = Object.assign({}, getSettings(), patch || {});
-  wx.setStorageSync(STORAGE_KEY, next);
+  writeCriticalStorage(STORAGE_KEY, next);
   return next;
+}
+
+/**
+ * Reconcile user-visible term state with the authoritative runtime pointer.
+ * The selected schedule identity is intentionally preserved so
+ * currentScheduleService can rebind it against the new release by id/name.
+ */
+function reconcileSettingsWithActiveTerm(activeTerm, context = {}) {
+  const term = String(activeTerm || "").trim();
+  const current = getSettings();
+  const previousTerm = String(current.semesterId || current.semester || "").trim();
+  if (!term) {
+    return { changed: false, previousTerm, term: term || previousTerm, settings: current };
+  }
+
+  try {
+    const bootstrap = wx.getStorageSync(BOOTSTRAP_CACHE_KEY) || {};
+    const bootstrapData = bootstrap.data || bootstrap;
+    const bootstrapTerm = String(
+      bootstrapData.term || bootstrapData.semester || bootstrapData.currentSemester || ""
+    ).trim();
+    if (bootstrapTerm && bootstrapTerm !== term) {
+      wx.removeStorageSync(BOOTSTRAP_CACHE_KEY);
+    }
+    const activeSnapshot = wx.getStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY) || {};
+    const snapshotTerm = String(activeSnapshot.term || activeSnapshot.semester || "").trim();
+    if (snapshotTerm && snapshotTerm !== term) {
+      wx.removeStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY);
+    }
+    const legacyFilter = wx.getStorageSync(SCHOOL_FILTER_CACHE_KEY) || {};
+    const filterTerm = String(legacyFilter.term || legacyFilter.semester || legacyFilter.semesterValue || "").trim();
+    if (filterTerm && filterTerm !== term) {
+      wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+    }
+  } catch (error) {
+    // Storage quota/race must not block pointer activation.
+  }
+
+  if (previousTerm === term) {
+    return { changed: false, previousTerm, term, settings: current };
+  }
+
+  const next = saveSettings({
+    semester: term,
+    semesterId: term,
+  });
+
+  try {
+    // This legacy key is not term/release scoped. A previous-term selection must
+    // never be replayed into the newly activated catalog.
+    wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+  } catch (error) {
+    // Storage quota/race must not block pointer activation.
+  }
+
+  return {
+    changed: true,
+    previousTerm,
+    term,
+    releaseVersion: String(context.releaseVersion || ""),
+    settings: next,
+  };
 }
 
 function resetSettings() {
@@ -184,13 +307,15 @@ function setCurrentScheduleTarget(target) {
   const normalizedTarget = normalizeStoredScheduleTarget(target);
   if (normalizedTarget) {
     const term = normalizedTarget.term || normalizedTarget.semester || DEFAULT_TERM;
-    wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, normalizedTarget);
+    if (!writeCriticalStorage(CURRENT_SCHEDULE_TARGET_KEY, normalizedTarget)) {
+      return false;
+    }
     currentScheduleTargetMemory = normalizedTarget;
     writePersonalScheduleCache(normalizedTarget);
-    wx.setStorageSync("hasInitializedSchedule", true);
-    wx.setStorageSync("currentScheduleId", normalizedTarget.detailId || normalizedTarget.classId || normalizedTarget.name || "");
-    wx.setStorageSync("currentScheduleName", normalizedTarget.name || "");
-    wx.setStorageSync("currentScheduleSource", normalizedTarget.type || "class");
+    writeCriticalStorage("hasInitializedSchedule", true);
+    writeCriticalStorage("currentScheduleId", normalizedTarget.detailId || normalizedTarget.classId || normalizedTarget.name || "");
+    writeCriticalStorage("currentScheduleName", normalizedTarget.name || "");
+    writeCriticalStorage("currentScheduleSource", normalizedTarget.type || "class");
     saveSettings({
       className: normalizedTarget.name,
       semester: term,
@@ -308,6 +433,9 @@ function addRecentSchedule(item) {
 
   const courseCount = Array.isArray(item.courses) ? item.courses.length : (item.courseCount || 0);
   
+  const compactSchedule = Object.assign({}, item.schedule || item);
+  delete compactSchedule.courses;
+  delete compactSchedule.schedule;
   const record = {
     scheduleKey: key,
     id: item.id || item.scheduleId || "",
@@ -326,7 +454,7 @@ function addRecentSchedule(item) {
     updatedAt: item.updatedAtText || item.updatedAt || "",
     viewedAt: new Date().toISOString(),
     courses: Array.isArray(item.courses) ? item.courses : [],
-    schedule: item.schedule || item,
+    schedule: compactSchedule,
     releaseVersion: item.releaseVersion || item.scheduleVersion || "",
   };
 
@@ -540,6 +668,7 @@ module.exports = {
   clearDataCaches,
   clearLocalSelection,
   getSettings,
+  reconcileSettingsWithActiveTerm,
   resetSettings,
   saveSettings,
   getCurrentScheduleTarget,

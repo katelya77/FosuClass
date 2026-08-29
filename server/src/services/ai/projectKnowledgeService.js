@@ -1,7 +1,7 @@
 const knowledgeBaseService = require("./knowledgeBaseService");
 
 const publicAssistantKnowledge = [
-  "你是「小佛」，佛课小表小程序里的校园助手，服务对象是佛山大学师生。",
+  "你是「小序」，佛课小表小程序里的校园助手，服务对象是佛山大学师生。",
   "人设：语气自然、简洁、亲切，像靠谱的学长学姐；不要机械复读固定模板，同一类问题也尽量换种说法。",
   "公开能力：查全校课表（班级/教师/教室/课程）、空教室、教学周与校历、校区天气、校园地图地点、个人课表导入引导、数据是否可用/是否最新的说明。",
   "佛课小表是面向佛山大学的校园课表工具；课程、教室、教师、空教室、教学周等事实必须来自工具结果或用户授权的最小课表摘要，不能编造。",
@@ -75,7 +75,7 @@ function getProjectKnowledgePrompt(mode = "public", query = "") {
 function getProjectCapabilityCards() {
   return [{
     type: "guide",
-    title: "小佛可以帮你做什么",
+    title: "小序可以帮你做什么",
     subtitle: "查课表、空教室、教学周，并提供个人课表导入帮助。",
     badges: ["课表查询", "空教室", "教学周"],
     items: [
@@ -98,11 +98,11 @@ function conversationalFallbackAnswer(message = "", intentName = "conversational
       "没事，需要查课表、空教室或天气时直接说就好。",
     ], compact);
   }
-  if (/你是谁|介绍一下|自我介绍|你叫什么|小佛是谁/.test(compact)) {
+  if (/你是谁|介绍一下|自我介绍|你叫什么|小序是谁|小佛是谁/.test(compact)) {
     return pickVariant([
-      "我是小佛，佛课小表里的校园助手。可以帮你查课表、空教室、教学周和校区天气，也能说明怎么导入个人课表。",
-      "叫我小佛就好。我是佛课小表的校园服务助手，擅长课表与校园事项查询；具体课程事实会以工具数据为准。",
-      "我是小佛助手。不是万能聊天机器人，但查佛大课表、找自习教室、看教学周和校园入口这些，我比较在行。",
+      "我是小序，佛课小表里的校园助手。可以帮你查课表、空教室、教学周和校区天气，也能说明怎么导入个人课表。",
+      "叫我小序就好。我是佛课小表的校园服务助手，擅长课表与校园事项查询；具体课程事实会以工具数据为准。",
+      "我是小序。不是万能聊天机器人，但查佛大课表、找自习教室、看教学周和校园入口这些，我比较在行。",
     ], compact);
   }
   if (intentName === "project_qa") {
@@ -113,13 +113,13 @@ function conversationalFallbackAnswer(message = "", intentName = "conversational
   }
   if (/你好|您好|嗨|哈喽|在吗|早上好|中午好|晚上好|hello|hi/i.test(compact)) {
     return pickVariant([
-      "你好，我是小佛。想查课表、空教室，还是先了解一下我能做什么？",
+      "你好，我是小序。想查课表、空教室，还是先了解一下我能做什么？",
       "嗨，我在。直接说班级、老师、教室，或问今天有没有课就行。",
       "你好呀。课表、天气、空教室和校园入口都可以问我。",
     ], compact);
   }
   return pickVariant([
-    "我是小佛，可以帮你查课程、教师、教室、空教室、教学周，也可以说明个人课表怎么导入。涉及具体课程时，我会以工具返回的数据为准。",
+    "我是小序，可以帮你查课程、教师、教室、空教室、教学周，也可以说明个人课表怎么导入。涉及具体课程时，我会以工具返回的数据为准。",
     "可以继续问校园相关问题。查课表时尽量带上班级、老师、教室或课程名，结果会更准。",
     "收到。如果你在找课表信息，补充对象关键词；如果想了解功能，直接问“你能做什么”也可以。",
   ], compact);
@@ -133,7 +133,7 @@ function generateFallbackResponse(intentName, message = "", environment = "publi
       answer: kb.answer || kb.items.map((item) => item.text).join("\n\n").slice(0, 900),
       cards: [{
         type: "guide",
-        title: kb.ruleMatched ? "小佛助手已命中规则" : "小佛助手知识库",
+        title: kb.ruleMatched ? "小序已命中规则" : "小序知识库",
         subtitle: kb.summary || "",
         badges: [kb.ruleMatched ? "规则问答" : "知识库", "已发布"],
         items: (kb.items || []).slice(0, 3).map((item) => ({

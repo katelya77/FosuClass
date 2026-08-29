@@ -1,0 +1,341 @@
+{
+  "generatedAt": "2026-08-29T12:43:55+08:00",
+  "status": "PASS",
+  "summary": {
+    "passed": 31,
+    "total": 31,
+    "failed": 0
+  },
+  "video": {
+    "durationSeconds": 284.212245,
+    "durationDisplay": "04:44.212",
+    "codec": "h264",
+    "width": 1920,
+    "height": 1080,
+    "sha256": "A48A1B88E4CA73FE571AD750A601C33C546F50C9D7C7709D4CF9F70080B4024C"
+  },
+  "ppt": {
+    "slides": 12,
+    "pdfPages": 12,
+    "minExplicitFontPt": 8.5,
+    "overflow": [],
+    "animations": [
+      {
+        "slide": 1,
+        "timing": 1,
+        "clickGroups": 4,
+        "effects": 7
+      },
+      {
+        "slide": 2,
+        "timing": 1,
+        "clickGroups": 5,
+        "effects": 23
+      },
+      {
+        "slide": 3,
+        "timing": 1,
+        "clickGroups": 8,
+        "effects": 28
+      },
+      {
+        "slide": 4,
+        "timing": 1,
+        "clickGroups": 6,
+        "effects": 36
+      },
+      {
+        "slide": 5,
+        "timing": 1,
+        "clickGroups": 5,
+        "effects": 24
+      },
+      {
+        "slide": 6,
+        "timing": 1,
+        "clickGroups": 4,
+        "effects": 9
+      },
+      {
+        "slide": 7,
+        "timing": 1,
+        "clickGroups": 6,
+        "effects": 15
+      },
+      {
+        "slide": 8,
+        "timing": 1,
+        "clickGroups": 4,
+        "effects": 9
+      },
+      {
+        "slide": 9,
+        "timing": 1,
+        "clickGroups": 4,
+        "effects": 17
+      },
+      {
+        "slide": 10,
+        "timing": 1,
+        "clickGroups": 4,
+        "effects": 16
+      },
+      {
+        "slide": 11,
+        "timing": 1,
+        "clickGroups": 5,
+        "effects": 15
+      },
+      {
+        "slide": 12,
+        "timing": 1,
+        "clickGroups": 6,
+        "effects": 13
+      }
+    ]
+  },
+  "designBook": {
+    "pdfPages": 20,
+    "wordDesktopObservedPages": 20
+  },
+  "manualExports": {
+    "adp": "校园智序-小序_v20260827164200_package.zip",
+    "campusTools": "校园智序-CampusTools.zip",
+    "widget": "小序-校园智序结果卡.widget",
+    "included": true
+  },
+  "portal": {
+    "home": {
+      "url": "https://adp.katelya.top/",
+      "status": 200,
+      "bytes": 860,
+      "loginMarker": false
+    },
+    "experience": {
+      "url": "https://adp.katelya.top/experience",
+      "status": 200,
+      "bytes": 860,
+      "loginMarker": false
+    },
+    "anonymousBrowserTest": true
+  },
+  "qrDecoded": "https://adp.katelya.top/",
+  "adoption1500Pages": {
+    "ppt": [
+      2,
+      11
+    ],
+    "designBook": [
+      4,
+      20
+    ]
+  },
+  "portalScreenshotPages": {
+    "ppt": [
+      11,
+      12
+    ],
+    "designBook": [
+      4,
+      15
+    ]
+  },
+  "scan": {
+    "bannedHits": {
+      "machine_path": [],
+      "localhost": [],
+      "real_school": [],
+      "real_identity": [],
+      "stale_demo": []
+    },
+    "secretHits": []
+  },
+  "checks": [
+    {
+      "name": "最终目录必需文件",
+      "ok": true,
+      "hard": true,
+      "evidence": "13 项；missing=[]"
+    },
+    {
+      "name": "PPTX 可解析",
+      "ok": true,
+      "hard": true,
+      "evidence": "python-pptx 打开；12 页"
+    },
+    {
+      "name": "PPT/PDF 页数一致",
+      "ok": true,
+      "hard": true,
+      "evidence": "PPTX=12, PDF=12"
+    },
+    {
+      "name": "PPT 16:9",
+      "ok": true,
+      "hard": true,
+      "evidence": "ratio=1.777778"
+    },
+    {
+      "name": "PPT 文本框溢出",
+      "ok": true,
+      "hard": true,
+      "evidence": "overflow=[]; min explicit font=8.5pt"
+    },
+    {
+      "name": "PPT 原生逐步放映动画",
+      "ok": true,
+      "hard": true,
+      "evidence": "S1=4组/7效果; S2=5组/23效果; S3=8组/28效果; S4=6组/36效果; S5=5组/24效果; S6=4组/9效果; S7=6组/15效果; S8=4组/9效果; S9=4组/17效果; S10=4组/16效果; S11=5组/15效果; S12=6组/13效果"
+    },
+    {
+      "name": "DOCX 可解析且可编辑",
+      "ok": true,
+      "hard": true,
+      "evidence": "python-docx 打开；paragraphs=139"
+    },
+    {
+      "name": "设计书 PDF 页数",
+      "ok": true,
+      "hard": true,
+      "evidence": "PDF=20 页；Word 实机状态栏已核验 20/20"
+    },
+    {
+      "name": "PPT 逐页预览",
+      "ok": true,
+      "hard": true,
+      "evidence": "12 张 1920×1080；failures=[]"
+    },
+    {
+      "name": "设计书逐页预览",
+      "ok": true,
+      "hard": true,
+      "evidence": "20 张；failures=[]"
+    },
+    {
+      "name": "演示视频存在且小于 5 分钟",
+      "ok": true,
+      "hard": true,
+      "evidence": "04:44.212；h264 1920×1080"
+    },
+    {
+      "name": "视频未重新编码",
+      "ok": true,
+      "hard": true,
+      "evidence": "source/final SHA-256=A48A1B88E4CA73FE571AD750A601C33C546F50C9D7C7709D4CF9F70080B4024C"
+    },
+    {
+      "name": "最终 SHA-256 清单",
+      "ok": true,
+      "hard": true,
+      "evidence": "12 个文件；failures=[]"
+    },
+    {
+      "name": "程序 ZIP 可解压",
+      "ok": true,
+      "hard": true,
+      "evidence": "entries=55; bad=None"
+    },
+    {
+      "name": "程序包 A–F 结构",
+      "ok": true,
+      "hard": true,
+      "evidence": "roots=['ARCHITECTURE.md', 'A_ADP工程', 'B_CampusTools', 'C_Widget', 'D_Agent配置', 'E_Data', 'F_Verification', 'MANIFEST-SHA256.txt', 'README-程序交付与运行说明.md']"
+    },
+    {
+      "name": "ADP/CampusTools 人工导出可解压",
+      "ok": true,
+      "hard": true,
+      "evidence": "[('校园智序-小序_v20260827164200_package.zip', True, 4, None), ('校园智序-CampusTools.zip', True, 13, None)]"
+    },
+    {
+      "name": "Widget 人工导出与数据契约",
+      "ok": true,
+      "hard": true,
+      "evidence": "outer=['encodedWidget', 'jsonSchema', 'name', 'outputJsonPreview', 'template', 'version']; decoded=['defaultState', 'defaultStateValidity', 'id', 'name', 'schema', 'schemaValidity', 'states', 'view', 'viewValidity']"
+    },
+    {
+      "name": "4 Agent / 13 CampusTools / 14 bindings",
+      "ok": true,
+      "hard": true,
+      "evidence": "prompts=4, operation-yaml=13, child-bindings=14, main=[]"
+    },
+    {
+      "name": "程序包内部 SHA-256 清单",
+      "ok": true,
+      "hard": true,
+      "evidence": "54 个文件；failures=[]"
+    },
+    {
+      "name": "四场景最小复现",
+      "ok": true,
+      "hard": true,
+      "evidence": "PASS: 4 Agent / 13 CampusTools / 14 bindings / 4 Golden Result"
+    },
+    {
+      "name": "Judge Portal 首页",
+      "ok": true,
+      "hard": true,
+      "evidence": "{\"url\": \"https://adp.katelya.top/\", \"status\": 200, \"bytes\": 860, \"loginMarker\": false}"
+    },
+    {
+      "name": "Judge Portal Experience",
+      "ok": true,
+      "hard": true,
+      "evidence": "{\"url\": \"https://adp.katelya.top/experience\", \"status\": 200, \"bytes\": 860, \"loginMarker\": false}"
+    },
+    {
+      "name": "页面匿名可访问",
+      "ok": true,
+      "hard": true,
+      "evidence": "HTML 无登录/密码入口；浏览器实测首页、Experience、Verified Widget 均无需账号"
+    },
+    {
+      "name": "二维码解析",
+      "ok": true,
+      "hard": true,
+      "evidence": "decoded=https://adp.katelya.top/"
+    },
+    {
+      "name": "匿名/路径/localhost/旧数据扫描",
+      "ok": true,
+      "hard": true,
+      "evidence": "{\"machine_path\": [], \"localhost\": [], \"real_school\": [], \"real_identity\": [], \"stale_demo\": []}"
+    },
+    {
+      "name": "Secret/AppKey/Token 凭证值扫描",
+      "ok": true,
+      "hard": true,
+      "evidence": "hits=[]"
+    },
+    {
+      "name": "PPT 关键事实覆盖",
+      "ok": true,
+      "hard": true,
+      "evidence": "missing=[]"
+    },
+    {
+      "name": "设计书关键事实覆盖",
+      "ok": true,
+      "hard": true,
+      "evidence": "missing=[]"
+    },
+    {
+      "name": "FINAL-TRUTH 关键事实",
+      "ok": true,
+      "hard": true,
+      "evidence": "15 项冻结事实全部命中"
+    },
+    {
+      "name": "设计书内部版本黑话扫描",
+      "ok": true,
+      "hard": true,
+      "evidence": "hits=[]"
+    },
+    {
+      "name": "1500+ 页面定位",
+      "ok": true,
+      "hard": true,
+      "evidence": "PPT=[2, 11]; DOC=[4, 20]"
+    }
+  ]
+}

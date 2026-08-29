@@ -111,7 +111,7 @@
 | refreshBootstrapData | 刷新基础数据 | read | none | bootstrap_refresh |
 | createCourseReminder | 创建课程提醒 | write | required | reminder_whitelist |
 | deleteReminder | 删除课程提醒 | write | required | reminder_whitelist |
-| clearAgentMemory | 清除小佛记忆 | write | required | agent_memory_scope |
+| clearAgentMemory | 清除小序记忆 | write | required | agent_memory_scope |
 
 ## Card Actions（卡片按钮 → Action Command 映射）
 

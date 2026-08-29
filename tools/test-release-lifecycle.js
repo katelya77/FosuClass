@@ -82,8 +82,11 @@ function cleanup() {
 
 try {
   const activeSnapshot = snapshot("2026-06-05T12-39-28", "25 Lifecycle 1");
-  releaseService.activateReleaseFromSnapshot(activeSnapshot);
-  const activeHash = stagingFingerprint.calculateFingerprint(activeSnapshot).canonicalHash;
+  const activated = releaseService.activateReleaseFromSnapshot(activeSnapshot);
+  // Activation coerces canonical termConfig/coverage before hashing. Lifecycle
+  // fixtures must use the persisted active hash rather than re-hashing the raw
+  // pre-normalization input.
+  const activeHash = activated.active.canonicalHash;
 
   const older = initPendingUpload("older", activeHash, "older-upload-version");
   const latest = initPendingUpload("latest", activeHash, "latest-upload-version");

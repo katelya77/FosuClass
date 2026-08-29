@@ -22,9 +22,76 @@ fs.mkdirSync(scratch, { recursive: true });
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-memory-autonomy-"));
 process.env.NODE_ENV = "test";
 process.env.FOSU_DATA_DIR = tempDir;
+process.env.FOSU_STORAGE_DIR = path.join(tempDir, "storage");
 process.env.FOSU_AGENT_MEMORY_SECRET = "test-memory-autonomy-secret-32b";
 process.env.FOSU_AGENT_REMINDER_SECRET = "test-agent-reminder-secret-32-bytes";
 process.env.AI_RUNTIME_MODE = "public";
+
+function seedDeterministicRelease() {
+  const version = "memory-autonomy-release";
+  const term = "2025-2026-2";
+  const releasesDir = path.join(process.env.FOSU_STORAGE_DIR, "releases");
+  const releaseDir = path.join(releasesDir, version);
+  const indexDir = path.join(releaseDir, "index");
+  const classDetailDir = path.join(releaseDir, "detail", "class");
+  const classId = "class-25-vet-6";
+  const updatedAt = "2026-08-12T00:00:00.000Z";
+  const writeJson = (target, value) => {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  };
+
+  writeJson(path.join(releasesDir, "active.json"), {
+    version,
+    releaseVersion: version,
+    term,
+    semester: term,
+    updatedAt,
+  });
+  writeJson(path.join(releaseDir, "manifest.json"), {
+    schemaVersion: 1,
+    version,
+    releaseVersion: version,
+    term,
+    semester: term,
+    updatedAt,
+    validation: { valid: true },
+    counts: { classSchedules: 1 },
+  });
+  writeJson(path.join(indexDir, "class.json"), [{
+    id: classId,
+    detailId: classId,
+    name: "25动物医学6班",
+    className: "25动物医学6班",
+    grade: "2025",
+    majorName: "动物医学",
+    displayType: "adminClass",
+    courseCount: 1,
+  }]);
+  ["teacher", "classroom", "course"].forEach((kind) => {
+    writeJson(path.join(indexDir, `${kind}.json`), []);
+  });
+  writeJson(path.join(classDetailDir, `${classId}.json`), {
+    id: classId,
+    className: "25动物医学6班",
+    name: "25动物医学6班",
+    term,
+    semester: term,
+    updatedAt,
+    courses: [{
+      id: "memory-course-wed",
+      courseName: "测试课程",
+      className: "25动物医学6班",
+      classroom: "T1-101",
+      weekday: 3,
+      startSection: 6,
+      endSection: 7,
+      weeks: [1, 2, 3, 16, 17],
+    }],
+  });
+}
+
+seedDeterministicRelease();
 
 const { MAX_REPLAN } = require("../server/src/services/ai/planner/planSchema");
 const { shouldReplan } = require("../server/src/services/ai/planner/observationLoop");

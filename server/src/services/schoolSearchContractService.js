@@ -63,7 +63,9 @@ function normalizeRequest(input) {
     collegeName: text(source.collegeName || source.college, 80),
     titleCode: text(source.titleCode || source.title, 40),
     grade: text(source.grade, 24),
-    majorCode: text(source.majorCode, 24),
+    // 教务系统的专业标识既可能是短数字代码，也可能是 32 位 UUID/MD5 形态。
+    // 截断会让班级索引存在但组合筛选永远零命中。
+    majorCode: text(source.majorCode, 80),
     majorName: text(source.majorName, 80),
     campus: text(source.campus || source.campusName, 80),
     limit: numberInRange(source.limit, 30, 1, 100),

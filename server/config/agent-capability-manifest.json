@@ -3880,8 +3880,8 @@
       ]
     },
     "clearAgentMemory": {
-      "displayName": "清除小佛记忆",
-      "description": "清除小佛助手记忆（本地/云端/全部），高危不可逆",
+      "displayName": "清除小序记忆",
+      "description": "清除小序记忆（本地/云端/全部），高危不可逆",
       "operation": "write",
       "confirmation": "required",
       "safetyLevel": "high",
@@ -4007,7 +4007,7 @@
     "teaching_week": "get_teaching_week"
   },
   "miniprogram": {
-    "_comment": "小程序端（小佛助手）能力注册表单一事实源；生成 miniprogram/shared/aiCapabilityRegistry.generated.js，页面禁止手维护平行列表",
+    "_comment": "小程序端（小序）能力注册表单一事实源；生成 miniprogram/shared/aiCapabilityRegistry.generated.js，页面禁止手维护平行列表",
     "capabilityKinds": {
       "DIRECT_TOOL": "direct_tool",
       "SUPPLEMENT_PARAMS": "supplement_params",
@@ -4314,9 +4314,9 @@
         "iconPath": "/assets/icons/ai-tasks/app.svg",
         "label": "开启浮窗",
         "taskGroup": "使用帮助",
-        "taskLabel": "开启小佛助手浮窗",
-        "taskDesc": "恢复右下角可拖拽小佛入口",
-        "message": "开启小佛助手浮窗"
+        "taskLabel": "开启小序浮窗",
+        "taskDesc": "恢复右下角可拖拽小序入口",
+        "message": "开启小序浮窗"
       },
       {
         "id": "termSync",

@@ -1,0 +1,1632 @@
+{
+  "schema": "campusflow-adp-assets/v1",
+  "generatedAt": "2026-08-29T09:01:29.366Z",
+  "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
+  "files": [
+    {
+      "path": "cloudfunctions/campusflowAdpTools/index.js",
+      "bytes": 2079,
+      "sha256": "1793fb3daaf5558279f8d1d92b527f6494d7ca61509ffb79632994be96caf633"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v1.json",
+      "bytes": 30285,
+      "sha256": "5432179536f74f4b5ff561ced552e9247e94eadc861f2b98b214eb3e4cb52286"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v2.json",
+      "bytes": 32157,
+      "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/mock-data/competition-demo-v3.json",
+      "bytes": 152894,
+      "sha256": "292345ebc952a9a2c71c53fe1ca3243660668efc482876385288ffad12b933d2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/package.json",
+      "bytes": 294,
+      "sha256": "207895b310a509c4212ad8f58dc1efc17ae44c2c87642dafbccd6a3cef3d2ad0"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/campus-result-envelope.schema.json",
+      "bytes": 5313,
+      "sha256": "bf06f3185882bf9ddb4c21f38f0a05039fb6056370a64fdcfdb76ceed9fc5a1c"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/envelope.js",
+      "bytes": 9536,
+      "sha256": "ddabffdd15fa38350e18b671a5642cf9a35d8a5b9d1b296b493ae370706a9f9c"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/r50.2/widget/view-model.js",
+      "bytes": 10951,
+      "sha256": "8b05d38744011eccb2501f9c62a93deeaf41c5af4e633fc43a940260e0a3009f"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/scf_bootstrap",
+      "bytes": 52,
+      "sha256": "0e6adf53e51220100ca3ff894e3ad102277cdccc186456d30a72c346d13e8cf2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/agent-tools.js",
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/data.js",
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/alternatives.js",
+      "bytes": 1110,
+      "sha256": "3474cd46bdde21f4ea51bc0e75c22feaa496e0c3be37447657ae388d71a7e475"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/authority-action.js",
+      "bytes": 1683,
+      "sha256": "81417a23222cd80f378674a2f7c97a5ec95d04f16a48ac562b147a39ace513f0"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/candidate-source.js",
+      "bytes": 9812,
+      "sha256": "dc3caa2021f505dce37b1411dc6937271aa916c74fcebed4a457894b26bdc52d"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/constraint-profile.js",
+      "bytes": 7342,
+      "sha256": "24aaad887dd498f8d84746603b6abc0fab7a00f22c3d58c536a8a1a1f8b203a2"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/controller.js",
+      "bytes": 8013,
+      "sha256": "773095b5e09963420e76c1201c82ec222d9aae6bb2faa8ea60717fbbac39b1ac"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/credential-leak.js",
+      "bytes": 1226,
+      "sha256": "77971083f56d229ebf23549623f55f003c3d1dbb1d07b20c2135a44921d4ca93"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/evaluator.js",
+      "bytes": 5527,
+      "sha256": "606ef8af5ad2d2b7e107efe6bfd23a81852d16d7624051777ab2fd23fc743294"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/explainability.js",
+      "bytes": 5258,
+      "sha256": "020c0d71a505841bc4112817fe529fef4fee13c4e6b76fcd5c2ab9b7f59013ec"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/intrinsic-constraints.js",
+      "bytes": 4565,
+      "sha256": "d8c2b17ec466bccca793a988682f242eb596ff7ed7c93cbd7b8e61ca15bc44bf"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/next-best-action.js",
+      "bytes": 4032,
+      "sha256": "082b95fc6554d99d27f26e87f524c2c40a2a6fc5abebb4bbb83f41bf459db071"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/outcome-synthesizer.js",
+      "bytes": 3694,
+      "sha256": "7362e27e1d3e3045f4be347f788a4f8e310360c9708cc0c913302ce9c6dac201"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/public-copy.js",
+      "bytes": 4045,
+      "sha256": "907421bcf64f0b3f7f7a85b9c77a73847bc322ce04cfde1ac5192c690d2afd1b"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/ranking.js",
+      "bytes": 1593,
+      "sha256": "22e8dd1f4092eabfa8f093dc5fb51f9e140b1d597b3aa6e7f46ba0bf07c23551"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/receipt.js",
+      "bytes": 6177,
+      "sha256": "31ebe709d22aa9c3886aaa06dfdc368d11b2e6eb6143f8782ee6559e668cc1f8"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/decision/runtime-activation.js",
+      "bytes": 5024,
+      "sha256": "3f62e397bfe28dbb795aa52af239c4d2b9ad5120e3dcb3f5c8949e51e50a632f"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/envelope.js",
+      "bytes": 1842,
+      "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/mission/authority.js",
+      "bytes": 2462,
+      "sha256": "5f44a5eae3128aa2169ea567eba444e8e83c08b18f9088c8e5a430115dba3680"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/mission/completion.js",
+      "bytes": 1517,
+      "sha256": "6c0188a6a23b931503a63b5fd27f4f532bcf52e37cb0fc837a9f6ef3ed363b87"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/ratelimit.js",
+      "bytes": 1071,
+      "sha256": "420b74b8f0bdbc2d8796b19650a52b6e0f6aa64dfdb2a1c0dc79772fe1489150"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/server.js",
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
+    },
+    {
+      "path": "cloudfunctions/campusflowAdpTools/src/tools.js",
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
+    },
+    {
+      "path": "cloudfunctions/README.md",
+      "bytes": 2052,
+      "sha256": "31e12594344ce83ec79b5893fd5a76c2fe2d8cab24d06bb294a5ea368ef664a6"
+    },
+    {
+      "path": "cloudfunctions/sync-campusflow-function.js",
+      "bytes": 3287,
+      "sha256": "74c35a3cebcc969d300eedab45e88fae408162ae09a0503119c7e2d6826405d9"
+    },
+    {
+      "path": "cloudfunctions/test-http-function.js",
+      "bytes": 9448,
+      "sha256": "d27ba65d4794ed061ae1c6ca456650215a892714a8fa199a577b49dffa8a7a94"
+    },
+    {
+      "path": "evaluation/dual-track/baseline-report.md",
+      "bytes": 3400,
+      "sha256": "fb02314065903a14ccfab250ebc405784a7e1fd34f06a2f4fd76a15673a69f5a"
+    },
+    {
+      "path": "evaluation/dual-track/decision-testset.json",
+      "bytes": 12447,
+      "sha256": "0221f403938cad7f8df49124fee044d170ae849269a9f9cb99fa56de3e6fcebf"
+    },
+    {
+      "path": "evaluation/dual-track/judge.js",
+      "bytes": 26798,
+      "sha256": "08fedc5db0a96202fd6a1cc57cb5fc8e74ab7cf68aede7e5fb2dda087a8b955b"
+    },
+    {
+      "path": "evaluation/dual-track/rubric.md",
+      "bytes": 4487,
+      "sha256": "21f9a1578b184d438dccc07d5b8a6be37ea328e92df60e92e872a7dbccfeefa8"
+    },
+    {
+      "path": "evaluation/dual-track/widget-contract-testset.json",
+      "bytes": 2353,
+      "sha256": "5609a15d39434f188c72e44c21154fbf82497189434948fae7dbe791858e753e"
+    },
+    {
+      "path": "evaluation/eval-dataset-v1.json",
+      "bytes": 16989,
+      "sha256": "f20801aff716f4172b93de080213c43a44168458dc59fe278d84141e614963fe"
+    },
+    {
+      "path": "evaluation/eval-golden.js",
+      "bytes": 1616,
+      "sha256": "c60adbc7f0fadc82d141d69680bea9661dd77f8a3cf8c358e127e7ce895a4379"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.csv",
+      "bytes": 11231,
+      "sha256": "33a2386ced404713c738b4aa343b7b7513ecc08364f407401ca5caa7a7c99622"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.json",
+      "bytes": 50900,
+      "sha256": "852f2958f97c6308609c5082030e0df651399645c0fec255afb4dfc8e951bc8e"
+    },
+    {
+      "path": "evaluation/evaluation-dataset.jsonl",
+      "bytes": 31915,
+      "sha256": "f5829beb36c2c5aec70801c813327cfbca650d6be22713af46b94d3d420cc65c"
+    },
+    {
+      "path": "evaluation/generate-golden-results.js",
+      "bytes": 1275,
+      "sha256": "89a0420c59bf1267b3e6eaa9fdf903e32423a17d88bfcfc205b8c05b47147be1"
+    },
+    {
+      "path": "evaluation/golden-cases.js",
+      "bytes": 4457,
+      "sha256": "4b7351c081e20ae37a802c20b34cfe42a85095dd6fd1d12e35272855b507a35e"
+    },
+    {
+      "path": "evaluation/golden-oracle.js",
+      "bytes": 2740,
+      "sha256": "ccc345fa384b2035c3b5981bda0080efe235895668e1943c07b51450bd6bf368"
+    },
+    {
+      "path": "evaluation/golden-results.json",
+      "bytes": 28331,
+      "sha256": "0372350927ef5b7c5a7fd8130ea4b995b823e35db4e481bb5b4585091d4cec0a"
+    },
+    {
+      "path": "evaluation/scoring-rubric.md",
+      "bytes": 481,
+      "sha256": "b69d1fda8516af8d5a1e04e6b5734bccdf934abdc1346c4496c2c5463d649866"
+    },
+    {
+      "path": "evaluation/sync-evaluation-dataset.js",
+      "bytes": 1517,
+      "sha256": "311a983fa2146068ae4c94f36696224e48b678ae679468691ccc46e2c64ddeb2"
+    },
+    {
+      "path": "knowledge/01-产品能力与使用边界.md",
+      "bytes": 4551,
+      "sha256": "517027c6fdf96086a94620725aa3dd1f304e959833ea5fd9e02f063bfeb0f71d"
+    },
+    {
+      "path": "knowledge/02-课表查询参数与实体识别规则.md",
+      "bytes": 4740,
+      "sha256": "bc26c020ec8047bbb54ebb79e4d5fc6c39b47d6734ffaccfa909a3aa57972495"
+    },
+    {
+      "path": "knowledge/03-教学周日期节次和自然语言时间规则.md",
+      "bytes": 3898,
+      "sha256": "208b2e363c189a028377b3fb3fcfbbbbadab55a9c0a7e924d9a1151b1064916e"
+    },
+    {
+      "path": "knowledge/04-数据版本核验和防幻觉机制.md",
+      "bytes": 4032,
+      "sha256": "faedaf9dab82c14ef7fa24b9f00cae2a0746c22ed102bf3ca17f68ddaf2dd718"
+    },
+    {
+      "path": "knowledge/05-匿名评审隐私与安全规范.md",
+      "bytes": 3554,
+      "sha256": "4e24b689ac077917c8fa12158f1eb9c26fb9423d981d8904729917b1c01eefda"
+    },
+    {
+      "path": "knowledge/06-工具失败空结果和歧义处理.md",
+      "bytes": 3764,
+      "sha256": "0b9ec94fa6eeb44e6dff96724a01b4b8b5ca8e4196d10e069a0d18342747a173"
+    },
+    {
+      "path": "knowledge/07-校园任务智能体常见问题.md",
+      "bytes": 4214,
+      "sha256": "1bf848f537b2da0d97ed8ea1aa6c28a13ea5986118b9511e7cce29ab3f788593"
+    },
+    {
+      "path": "knowledge/08-功能导航与演示问题.md",
+      "bytes": 4686,
+      "sha256": "f78e5759e85d48135c28fa08e9995c477e36d89e661139a482f45af321425671"
+    },
+    {
+      "path": "knowledge/current/01-定位与能力边界.md",
+      "bytes": 2914,
+      "sha256": "1b702199bf903e3d7344b6ef0f7690e5c8e5436e508500c9c885f056cb67c6ed"
+    },
+    {
+      "path": "knowledge/current/02-课表与校园实体理解.md",
+      "bytes": 1441,
+      "sha256": "604306e88a0acb25e453c281a2bf3fefeb4130b4a5a1d7453f61a875471eaba0"
+    },
+    {
+      "path": "knowledge/current/03-教学时间与节次规则.md",
+      "bytes": 1386,
+      "sha256": "fa2919a3e62560274ddb88ed7de1125cf419d2a298546970885765cac4e9b6fe"
+    },
+    {
+      "path": "knowledge/current/04-动态事实与可信度.md",
+      "bytes": 2085,
+      "sha256": "6042dbd177a96a3ad6e5554a089a912ed54045ea0415147d163d1a9512db4338"
+    },
+    {
+      "path": "knowledge/current/05-隐私安全与授权边界.md",
+      "bytes": 2179,
+      "sha256": "f377ac392ca240157d8d9aa00c0956af20f884919581e063a5bc7fe5e4ecfff2"
+    },
+    {
+      "path": "knowledge/current/06-无结果歧义与恢复.md",
+      "bytes": 1311,
+      "sha256": "502334cae39cb56f3c6224adf15abc41467675a4f12dd42067951ab4ac6aeb4e"
+    },
+    {
+      "path": "knowledge/current/07-主动协作原则.md",
+      "bytes": 1273,
+      "sha256": "966c6cb0148186b8d2462258d31a736a24e32793fc0f6ff8398c6ca5c27a977f"
+    },
+    {
+      "path": "knowledge/current/08-功能导航与自然语言使用.md",
+      "bytes": 1658,
+      "sha256": "0b312a23e63537650e1d3abcc4513c07745e021b6151277b7e6ed5a63cb56cae"
+    },
+    {
+      "path": "knowledge/current/09-个人课表导入与同步.md",
+      "bytes": 1577,
+      "sha256": "54fdb3674aa09d504716b38419aeb82fd245d254a2b05cc280d32eff450f5e2f"
+    },
+    {
+      "path": "knowledge/current/10-常见问题.md",
+      "bytes": 1649,
+      "sha256": "a825c4db93c9acd5f7daddf39d7d225935f863841fd1a01a1ed3d952dbe1fb38"
+    },
+    {
+      "path": "knowledge/current/README.md",
+      "bytes": 1625,
+      "sha256": "309e194ea47245c19fe53b400ea204dbfa28880a8eed9b6d9c0dc4324ecc9040"
+    },
+    {
+      "path": "knowledge/current/recall-matrix.md",
+      "bytes": 1896,
+      "sha256": "8f52ae6ddae259a113f0b6131a5b63557567642820703c75346756f227e9fac1"
+    },
+    {
+      "path": "knowledge/legacy/LEGACY.md",
+      "bytes": 1044,
+      "sha256": "ba56b0e98bd1887550a1e2e1c91e7ac767e3e6d5f86ed776f6015f4ffb320e06"
+    },
+    {
+      "path": "knowledge/taxonomy.json",
+      "bytes": 867,
+      "sha256": "92aaf7d1f1adf3378e51d3fb7c0ce620728492f7a419a00489f8a0c287241795"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/Dockerfile",
+      "bytes": 996,
+      "sha256": "5b430eb7553e932db74a2a375d41e0623867aece73611683848c3a96fa4324b0"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/package.json",
+      "bytes": 989,
+      "sha256": "49127719157fe39d1f7b93c77c9b1d7f79ba0aafabc8c7919a4bb142ce0ca4ff"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/README.md",
+      "bytes": 6277,
+      "sha256": "64cdd5e82000001447a49746faff4964789cd49438e9341e2a96ad7ca0b22316"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/agent-tools.js",
+      "bytes": 5859,
+      "sha256": "da855f47a09fc7d8a63ea4ad62c85eabf90144dfa871b48ace6c984d3c30fc7c"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/client.ts",
+      "bytes": 1858,
+      "sha256": "2f983f332fcf9199067ac92d9902eb82b944a44a6d1ddb62a2220a6124f35727"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/contracts.ts",
+      "bytes": 8287,
+      "sha256": "6779b4cb005a536f76548f5a85784aabd980128eedb8646ff0444c018a5d57e1"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/data.js",
+      "bytes": 6030,
+      "sha256": "24e1decad5b6b34d07d80a076c1961664ee8a23676a9f640b0d909321fbc065d"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/envelope.js",
+      "bytes": 1842,
+      "sha256": "3682d7a4a0c2084e7da019be4d1647ca431dbaf3f2e7650a618e1fb7d79bd3c3"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/ranking-core.js",
+      "bytes": 5728,
+      "sha256": "83ba7d15da08ad365d2e7ebb26bdfbef03cd3c593cc0281146f825aa05d21cc0"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/ratelimit.js",
+      "bytes": 1071,
+      "sha256": "420b74b8f0bdbc2d8796b19650a52b6e0f6aa64dfdb2a1c0dc79772fe1489150"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/server.js",
+      "bytes": 12548,
+      "sha256": "29df337bd8ee21da9bc43b6756874e617cf06fc0faff02936664db2f4ea20e01"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/temporal-core.js",
+      "bytes": 12097,
+      "sha256": "33bb8e4c216429b68176d1de9d89dd785348b3409f12e88e1b78b070a4eb745b"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/src/tools.js",
+      "bytes": 102229,
+      "sha256": "8909058868a62b0faef53592ea1e3358702c2b946ac623429b55907e7595bbe6"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/test/data-version-contract.test.js",
+      "bytes": 950,
+      "sha256": "c044bbb88de60f5e8f7ba708d2ca8aa119fa5198c376e534aa5932e3173895c5"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/test/security.test.js",
+      "bytes": 4489,
+      "sha256": "43db20f2d337c7384c2ef956f67399ec627914449bb28d395e5e136c6d5b1a20"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/test/tools.test.js",
+      "bytes": 35212,
+      "sha256": "e784ef5b0557459c57bb34782845234a718b81812216b7f72492efe96fc9d564"
+    },
+    {
+      "path": "mcp/campus-tools-mcp/tsconfig.json",
+      "bytes": 362,
+      "sha256": "4945b1864a2570c291382a583e690ca48c5ac33c4d91df0c05d6c9e54b46a4b8"
+    },
+    {
+      "path": "mock-data/competition-demo-v1.json",
+      "bytes": 30285,
+      "sha256": "5432179536f74f4b5ff561ced552e9247e94eadc861f2b98b214eb3e4cb52286"
+    },
+    {
+      "path": "mock-data/competition-demo-v1.schema.json",
+      "bytes": 6347,
+      "sha256": "a0c41cb78d5807f7f584fc235f7a7ae86982496d03fd31aa4b248bda1a246ca7"
+    },
+    {
+      "path": "mock-data/competition-demo-v2.json",
+      "bytes": 32157,
+      "sha256": "39dd6f4817b42c26edd964ef4a9569dc0662bb91bab3aff84945e25e9878e8e5"
+    },
+    {
+      "path": "mock-data/competition-demo-v3.json",
+      "bytes": 152894,
+      "sha256": "292345ebc952a9a2c71c53fe1ca3243660668efc482876385288ffad12b933d2"
+    },
+    {
+      "path": "mock-data/competition-demo-v3.schema.json",
+      "bytes": 7986,
+      "sha256": "346976b0089e8405d801b9ff7674d576ddef512ead3f810a7c7540ea89bbf91e"
+    },
+    {
+      "path": "mock-data/data-hash.js",
+      "bytes": 564,
+      "sha256": "14bf3243906b53b9d4fc1977355bc6783b662469d9a19186780005e6ae5cfb4a"
+    },
+    {
+      "path": "mock-data/generate-competition-demo-v1.js",
+      "bytes": 19341,
+      "sha256": "a225b5875339cb892becea6403a1d0d0b176893c24a35acb4441294cd54c2bb6"
+    },
+    {
+      "path": "mock-data/generate-competition-demo-v3.js",
+      "bytes": 76081,
+      "sha256": "75eedb9a0062a63354f3a9e38ae0ecd1b30575682e1890f541ed8ced4fceb29c"
+    },
+    {
+      "path": "mock-data/validate-competition-demo-v1.js",
+      "bytes": 9305,
+      "sha256": "9d8c73ac94b9238f8c057bd4338386f8518cfc889fc166cda72e8384934a3c14"
+    },
+    {
+      "path": "mock-data/validate-competition-demo-v2.js",
+      "bytes": 11473,
+      "sha256": "b8006ffe2656550a131bbea212f0f887ac382cd4e33a0929266d2c9f42c1befd"
+    },
+    {
+      "path": "mock-data/validate-competition-demo-v3.js",
+      "bytes": 15795,
+      "sha256": "c89cf315a06146abaa9c64c9373fb0932714bd26e00f0091480e0022c3b68144"
+    },
+    {
+      "path": "openapi/campus-tools.openapi.json",
+      "bytes": 54233,
+      "sha256": "b06af81c43e9e23dd1d65cd873840e0ae84b6997c95e8611b2a40d270114504c"
+    },
+    {
+      "path": "openapi/generate-openapi.js",
+      "bytes": 5008,
+      "sha256": "64aaef3fe355b56d64f1b72cad1d1c3f5b2dcefee89bbd737b890d3a02f35da9"
+    },
+    {
+      "path": "qa/README.md",
+      "bytes": 274,
+      "sha256": "7215b61c9a1af426483b2783eba40b745aba4ec379aab4c359f5fe4ed7725560"
+    },
+    {
+      "path": "qa/standard-qa.csv",
+      "bytes": 7364,
+      "sha256": "b482fd912b48f7c770c21adeff0ffe7a53be5bea931871917740ec7cf4822d21"
+    },
+    {
+      "path": "qa/standard-qa.json",
+      "bytes": 11060,
+      "sha256": "78a1b0321ff8576b948703abd0436d17e37d91d46f3762998c422be21ce8caa5"
+    },
+    {
+      "path": "qa/sync-standard-qa.js",
+      "bytes": 1509,
+      "sha256": "aaa0a25d5c3305af0afb91fcbe510d546bbec3e1be744a4ea77b0841c50de0fc"
+    },
+    {
+      "path": "widget/校园任务结果卡.md",
+      "bytes": 4155,
+      "sha256": "082cdd8ca56113c0928c737b4c138db6658960d2482ccee2a1e11f286598665e"
+    },
+    {
+      "path": "widget/adapter.js",
+      "bytes": 15410,
+      "sha256": "223f7211da0d16663aa42242c0d0f393f72057bdd9715c437f432d2a66102e88"
+    },
+    {
+      "path": "widget/adp-widget-mapping.md",
+      "bytes": 8055,
+      "sha256": "831ec941f84e77f736877ee0bb78f8d63cf6a1000f6eb0802af8f7cb76f76cf5"
+    },
+    {
+      "path": "widget/adp-widget-seed-requirements.md",
+      "bytes": 1920,
+      "sha256": "ff2f1210a91cc1bc21d61434f1d0cdd961b914863b0f981e46d49ad08cccb654"
+    },
+    {
+      "path": "widget/generate-samples.js",
+      "bytes": 4114,
+      "sha256": "cb23a8a145e88baf751baaccbee3f6be76a6d11d10de6292b92195b3c7c3e01a"
+    },
+    {
+      "path": "widget/index.html",
+      "bytes": 2321,
+      "sha256": "c70334f4dcb2e24b99cde223f22e1e1ca9a8e0e5d4a7ab92398676152e165158"
+    },
+    {
+      "path": "widget/local-agent-handoff.md",
+      "bytes": 4048,
+      "sha256": "99ecc4a38bf182ca14828cf4c3e5ea99ae212016477647beeb4ecbeb3d03cee0"
+    },
+    {
+      "path": "widget/native/action-contract.json",
+      "bytes": 7164,
+      "sha256": "86e2b0c9437f70d23a4d019e438c73f9d7d9551350f6adb2c25063b4109f1ace"
+    },
+    {
+      "path": "widget/native/action-protocol-v2.json",
+      "bytes": 790,
+      "sha256": "94d7054bae1c8ac46938964d5021d1cb3e6847ed7348d5a6debaa6fce60d7b1a"
+    },
+    {
+      "path": "widget/native/adp-transport-contract.json",
+      "bytes": 5431,
+      "sha256": "ab27229f26b0a09b31dd5ada8c4db9f3d354d42a0a614688b47cdd847383d404"
+    },
+    {
+      "path": "widget/native/audit-widget-contract.js",
+      "bytes": 4284,
+      "sha256": "7bff5e6062200865ad0f73316b0f4a30a09c4f316ee0321a3f04f57f4f461bed"
+    },
+    {
+      "path": "widget/native/bind_runtime_environment.py",
+      "bytes": 48484,
+      "sha256": "4b951aa1f8d17d963126de5e5bdb1e037bb0ec9d12d9fa79562612bf87e52dc4"
+    },
+    {
+      "path": "widget/native/build_r4_closure_pack.py",
+      "bytes": 22561,
+      "sha256": "0dd376a1cca0957d633a4236924efb9ede4f019365ef9303c1cf300719c971ce"
+    },
+    {
+      "path": "widget/native/build_r5_final_pack.py",
+      "bytes": 18967,
+      "sha256": "67121f9e6dd1cc19ade3846d8dafb69eab9dc338984af9eb64276ca42a4148d0"
+    },
+    {
+      "path": "widget/native/build_runtime_closure_pack.py",
+      "bytes": 7228,
+      "sha256": "197f8fc111c6d91daedd611b71bfc5fd45b940ad998616848efd3dbdfcbec6bf"
+    },
+    {
+      "path": "widget/native/campus_widget_compiler.py",
+      "bytes": 18311,
+      "sha256": "0a94865ae61a8998455c27256005a8b1d3f1ec047806380f8c29205c6824748a"
+    },
+    {
+      "path": "widget/native/campus-overview-v1/adapter.py",
+      "bytes": 7180,
+      "sha256": "fb044a9788b614c1cd788d3986b6bc856765aa4e966756afe1fe985dc0a1b69a"
+    },
+    {
+      "path": "widget/native/campus-overview-v1/contract.json",
+      "bytes": 1785,
+      "sha256": "ebf80c7b4e607e0ed7da26036fcafe48fae03718fa31c877f82a71d685879573"
+    },
+    {
+      "path": "widget/native/campus-overview-v1/default.json",
+      "bytes": 2544,
+      "sha256": "eadbdb57776a341bf30e1d17da4df65f1e74be985e533172b105d803dfc7658b"
+    },
+    {
+      "path": "widget/native/campus-overview-v1/template.txt",
+      "bytes": 4444,
+      "sha256": "a1e20a51af58b50f0b001a879e67f03e8e139fbb6cb2cf7c4d5d10575a893663"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/adapter.py",
+      "bytes": 10335,
+      "sha256": "108035db7fa262bd81d77b19b4794aecb05c4627b626e551c9adf322351ac41a"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/contract.json",
+      "bytes": 3172,
+      "sha256": "e2bd8fd4b2673b63fa9208f21081b98c2aeeeb984457e92161eca7d402313ac5"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/default.json",
+      "bytes": 1602,
+      "sha256": "fe567276e4c2134c18e4f74d8b421d8d922aa0ae72e3364cebd53a3f8c76b50c"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/payload-validator.js",
+      "bytes": 10717,
+      "sha256": "5f730580326c87f5f70b1f5b489f236a0dbe545c83e095c667f05b5ef210671a"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/collaboration.json",
+      "bytes": 1236,
+      "sha256": "ccc289c4aad8e0a082e81ad7e84f7cbce56f3bbbaf45b603cba393d7389bd43d"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/empty.json",
+      "bytes": 569,
+      "sha256": "fe1f13bfaa47a5dbbf8307fca475dcb3af4b7feb94c822a2ec489671a844ac98"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/error.json",
+      "bytes": 731,
+      "sha256": "37f9c3174c6c843b12e77fc8d5e7273e5c76b7a397e506d97b5f75836a46664f"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/message.json",
+      "bytes": 968,
+      "sha256": "011ad034002f85ef4d94770e75462b0f4e6496cbaf53f0083f0bc267d31ac091"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/overview.json",
+      "bytes": 2346,
+      "sha256": "d88859085f386ed5526d10729b38047b05ad663a87a4f4decbf46aea89264c25"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/ranking.json",
+      "bytes": 1376,
+      "sha256": "5d39e529b3157b3d06a3e3b0228cba096d99c3a787f5bcfb5c0c2d82b366221c"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/reschedule.json",
+      "bytes": 1358,
+      "sha256": "1d8eda3687350b299b01eb4fed50e9979b0fdd815ddf002bcc378c1c058a6ce0"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/risk.json",
+      "bytes": 1253,
+      "sha256": "c87fd92010d22997064aacd784d615724e8407c746681ca27c600fd00b4c5b6f"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-day.json",
+      "bytes": 1042,
+      "sha256": "d0c1056fbe846932f499c497cf17c5993df677ecd1a108f0fb59a0b434a510ac"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-range.json",
+      "bytes": 1812,
+      "sha256": "d005b1bb98e922cf3da3efd49a2544ef8b18fded56be32766000dafc627ebfb0"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/schedule-week.json",
+      "bytes": 2201,
+      "sha256": "fb34d52efb5f5f65eafa9b296524853dbd65f65b27fc100f0480361797f602cf"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/samples/space.json",
+      "bytes": 1294,
+      "sha256": "108719bf9098457993e24e388f6318514e8b37633969ba31e1d6f954a14fabb2"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/schema.json",
+      "bytes": 3563,
+      "sha256": "06adb6c9156e2e065101b8000fafc1a099404402b67d59b51c13eea393b145d2"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/schema.zod.txt",
+      "bytes": 1948,
+      "sha256": "9d7e855a3cc2a232b8156d823ea31952837ea7b5aecb338de36c39a9f0f9144c"
+    },
+    {
+      "path": "widget/native/campus-result-unified-v1/template.txt",
+      "bytes": 16005,
+      "sha256": "d04bc36c54365c61ee43961b8e14010b1c35a190ad24af3d0e30d8c3988cba80"
+    },
+    {
+      "path": "widget/native/classroom-widget-adapter.py",
+      "bytes": 3024,
+      "sha256": "b27c53037a68df6df4dc1b45cdd3d7be997fdc5a24b5f2a3ff997fe0405b40a5"
+    },
+    {
+      "path": "widget/native/compile_adp_bundle.py",
+      "bytes": 34442,
+      "sha256": "6dbebf575dd174769314ff3a71aec3e76c3e2dc1939829e382451e06ddb4eae6"
+    },
+    {
+      "path": "widget/native/conflict-widget-adapter.py",
+      "bytes": 3698,
+      "sha256": "090f00b5dac248a2faf712b7a62420ccb439303808099d67dd6f24c902ce4959"
+    },
+    {
+      "path": "widget/native/conflict-widget-contract.json",
+      "bytes": 1094,
+      "sha256": "58394ddf36da16a3e59494938455d28d213e0a44a9bcaca261bac4f82467ca3e"
+    },
+    {
+      "path": "widget/native/contracts/choice/contract.json",
+      "bytes": 493,
+      "sha256": "f0344c64c7bbd8e5ed5b42477d20b5bb549c7c523732bc7ecad3cf69d52010d4"
+    },
+    {
+      "path": "widget/native/contracts/choice/default.json",
+      "bytes": 1306,
+      "sha256": "b42f8f116fd12dce15b8fbb1cf31629fc91e867d84c310394c2eac0a3f155c11"
+    },
+    {
+      "path": "widget/native/contracts/choice/schema.json",
+      "bytes": 2294,
+      "sha256": "7fb92ecab1bd9288e3bc16b824acde4e4de996fedba1184760626fbccbf247df"
+    },
+    {
+      "path": "widget/native/contracts/choice/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/choice/view.txt",
+      "bytes": 1803,
+      "sha256": "60ddd7de37dfae127ec65d62d6321e600f4b57ff0dd7ac90c5a4b2c8a0c89995"
+    },
+    {
+      "path": "widget/native/contracts/classroom/contract.json",
+      "bytes": 529,
+      "sha256": "a0d8c2da3192d193aee8e8f244523240315280b3163f80088ca04a528ab899a9"
+    },
+    {
+      "path": "widget/native/contracts/classroom/default.json",
+      "bytes": 2191,
+      "sha256": "2a9deeb36516d230ef24539fa4e1be8db74313d4196ab5bff89b5b736f80b3fd"
+    },
+    {
+      "path": "widget/native/contracts/classroom/schema.json",
+      "bytes": 2851,
+      "sha256": "ba0fe1cf0017fc643f8d96fab6f721d2dd5322d0e306c4491c3a474a55354f26"
+    },
+    {
+      "path": "widget/native/contracts/classroom/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/classroom/view.txt",
+      "bytes": 3232,
+      "sha256": "a41421437e3c5622193f85cd444c0505138c4cb5aff206174f7f29a270b3d447"
+    },
+    {
+      "path": "widget/native/contracts/conflict/contract.json",
+      "bytes": 539,
+      "sha256": "aba5cbde4a8f0b86c4f49cd2b69e3eb384887dfd7bbebbf933b0d697891ffe49"
+    },
+    {
+      "path": "widget/native/contracts/conflict/default.json",
+      "bytes": 1190,
+      "sha256": "984ac6894d3c1f40a333241d7ed428c930ff0dcfac5da51e7f20a52eb6ab6284"
+    },
+    {
+      "path": "widget/native/contracts/conflict/schema.json",
+      "bytes": 5584,
+      "sha256": "f132d12bb05b25c29cd21e1243235a7e445bd22dcf11d9c34ff9251341333858"
+    },
+    {
+      "path": "widget/native/contracts/conflict/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/conflict/view.txt",
+      "bytes": 4049,
+      "sha256": "90954498095505ba448147431b24740e4020105ce5668bef942e48041b3a4886"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/contract.json",
+      "bytes": 534,
+      "sha256": "daaf2e43bd900ea254741c6db7606d8a8a0e68ca8406c4ca37d5b3c8adc9bce3"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/default.json",
+      "bytes": 1893,
+      "sha256": "2cd6ccf7fcd425a67c556272918eb1c0c749a939403bb766cecca0de2eed59f4"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/schema.json",
+      "bytes": 3157,
+      "sha256": "e3335aa8f38ed9ce2bbf72f273465b20d7924b140cc780048015f2ef940693a5"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/dayplan/view.txt",
+      "bytes": 3512,
+      "sha256": "a8aabe247a4897b40e1f58d73911415e831b663a668f5e4b4d22c5e59af2939f"
+    },
+    {
+      "path": "widget/native/contracts/error/contract.json",
+      "bytes": 492,
+      "sha256": "c3a2523eecf6f0d8af3dafa9a07175d743ddd110d8b8c5609d1c7d3231b605f8"
+    },
+    {
+      "path": "widget/native/contracts/error/default.json",
+      "bytes": 616,
+      "sha256": "060c220b659a12a6427ff6621f8ad26400e3a487f98ead5549c412335bb1ebf7"
+    },
+    {
+      "path": "widget/native/contracts/error/schema.json",
+      "bytes": 1418,
+      "sha256": "8966fe1ecb448e4170b2e664e2dbb8f4e0cd1ca46c4581201a5063a174541867"
+    },
+    {
+      "path": "widget/native/contracts/error/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/error/view.txt",
+      "bytes": 1275,
+      "sha256": "b22ef6ee3d38766a367ed078dda17fa99d72889d5e74a8cf2385e7c80f827a57"
+    },
+    {
+      "path": "widget/native/contracts/schedule/contract.json",
+      "bytes": 865,
+      "sha256": "d94f17e3de1c17f8d59d0a2d8917a183c71ae799cdc1589c602afff77f9a0c73"
+    },
+    {
+      "path": "widget/native/contracts/schedule/default.json",
+      "bytes": 992,
+      "sha256": "a431ec4a71fba69c01d55b1c4767b52e3ceb60663fe653e5fa2030da22d78570"
+    },
+    {
+      "path": "widget/native/contracts/schedule/schema.json",
+      "bytes": 1779,
+      "sha256": "bfa71f603141c1f03eea06d80ee8ae2400113a258c9fa3cfdb57df795ae70db0"
+    },
+    {
+      "path": "widget/native/contracts/schedule/template.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "widget/native/contracts/schedule/view.txt",
+      "bytes": 2316,
+      "sha256": "b2041e5930883d1fe936071da035dbcdda0685760fc49983afa07cd625bc6f21"
+    },
+    {
+      "path": "widget/native/contracts/schedule/zod.txt",
+      "bytes": 763,
+      "sha256": "352b1a553997c2ba40d7375ff0a2c440e7079969d6e9d1d8e797b950036c7967"
+    },
+    {
+      "path": "widget/native/CSF-WIDGET-CONSOLE-UPDATE.md",
+      "bytes": 3932,
+      "sha256": "af6a67bcb7bed7a9e1e42e01540f68d7d3164e56ef62b02ac09e3cfa0ec63318"
+    },
+    {
+      "path": "widget/native/dayplan-widget-adapter.py",
+      "bytes": 3132,
+      "sha256": "4b9ac31a9ccd3ef9d1251bd642ff51d152b421341b3100311d76d0771b6778fa"
+    },
+    {
+      "path": "widget/native/extract-real-widget-contracts.py",
+      "bytes": 6293,
+      "sha256": "ac6e8558aa64dfb16aaf421293f53876fc2b96d0e52e05875478f7177f1cc13b"
+    },
+    {
+      "path": "widget/native/gate-schedule-actions-v1-workflow.py",
+      "bytes": 11428,
+      "sha256": "8ae510826e21144a72a64a6273fc85c0e31ca0c8b735b972155a3dfc740f4e25"
+    },
+    {
+      "path": "widget/native/generate-schedule-actions-v1-workflow.py",
+      "bytes": 11760,
+      "sha256": "7f6ce6bcd3a6ebfe1e92234b1da14fe9ae3f0028facb8be81ee0f05b9075a3cc"
+    },
+    {
+      "path": "widget/native/native-schedule-pilot-runbook.md",
+      "bytes": 4052,
+      "sha256": "60f46cf55f126b63abc3d5fc0c3f71322e5ee55db9a5e3899afe2fc21fefc6f6"
+    },
+    {
+      "path": "widget/native/native-widget-import-bundle-manifest.json",
+      "bytes": 2083,
+      "sha256": "ad89b9d6548e207e8de153d0e802834f1b303b08dfae8360118ffc47dbf7256f"
+    },
+    {
+      "path": "widget/native/native-widget-preview-v2.md",
+      "bytes": 1494,
+      "sha256": "0ba7ca2ee89a93ace11731ff5310ce5ab28c06f534166fa0560e4ad8a9c2c015"
+    },
+    {
+      "path": "widget/native/patch-native-widget-previews.js",
+      "bytes": 10299,
+      "sha256": "1d23c445234aec390d4e81ac73b2399a2479c2cc32c34363016bd8db6390ab9d"
+    },
+    {
+      "path": "widget/native/real-adp-export-catalog.json",
+      "bytes": 2591,
+      "sha256": "75aadad6e23521f0c312151d6b16917058f3ed3737f64c5bff5e4f19e79163be"
+    },
+    {
+      "path": "widget/native/recovery-widget-adapter.py",
+      "bytes": 2757,
+      "sha256": "d0cdc339891cc2b72462f5950242da1b98b90db4a2230c8c521acf26be3ff655"
+    },
+    {
+      "path": "widget/native/runtime-e2e-cases.json",
+      "bytes": 6047,
+      "sha256": "0fb149a1ef9f6f73749b09db49eece917dd1ea6cdf0531c11a9e975af6ca7fe0"
+    },
+    {
+      "path": "widget/native/runtime-integration-runbook.md",
+      "bytes": 8375,
+      "sha256": "1d4b69540c59431a16f9c6327ea16de445b81e291064900ddfc3ad7873042536"
+    },
+    {
+      "path": "widget/native/schedule-date-input-guard.py",
+      "bytes": 307,
+      "sha256": "18582186ab30aa054e7cc16223d88747cc804b5ad46b112e54425044f8ee4f6e"
+    },
+    {
+      "path": "widget/native/schedule-default.json",
+      "bytes": 1598,
+      "sha256": "4d7a3cc5ee3f2b62d482846c94b9b083a9e3043a9ad7f68b7cb67325b53c2716"
+    },
+    {
+      "path": "widget/native/schedule-parameter-extractor-v1.1.txt",
+      "bytes": 1777,
+      "sha256": "a0bd552a79f2e940223a91aaad9f5adc39e80aca6d4b5f35993e7f6a0d06bd15"
+    },
+    {
+      "path": "widget/native/schedule-query-normalizer-v1.1.py",
+      "bytes": 2802,
+      "sha256": "d713e61ffbff90858205b0b8aa2b5d5812ab4078b6ac34acea67eb6fcab13d9a"
+    },
+    {
+      "path": "widget/native/schedule-result-verifier-v2.py",
+      "bytes": 4564,
+      "sha256": "d85acf74ad6dcf5ac68dfbdee9e4850e343ac76a49d247837d0be1c4a46176ef"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/adapter.py",
+      "bytes": 6472,
+      "sha256": "e5172cae97021ed69c4e64d3c7d5d395ee54fb95b6b68e5f9f041a69b55a485e"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/contract.json",
+      "bytes": 992,
+      "sha256": "bcaa070f63577017495753062c4716b64419ba9e13c36c02483756f11c166417"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/default.json",
+      "bytes": 2358,
+      "sha256": "d78c5387486a16a8c3fe0bcb2eb4ccfb7ccf7f2c66fc8ba346c5466c7c7c4c0d"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/samples/day.json",
+      "bytes": 1626,
+      "sha256": "de2370aa06d2ac4b0a08fc32252562be4ba41abd70adf0015e2c598d29542a1f"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/schema.json",
+      "bytes": 2431,
+      "sha256": "0a6fbf8b255ffc5d6fd184382caa39ff025997e137750e552991261845fec77b"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/template.txt",
+      "bytes": 1594,
+      "sha256": "de94d8b6edda3f992316594d77d2ffe60a42be3954d2f95c57e4e265902d25b1"
+    },
+    {
+      "path": "widget/native/schedule-rich-v4/zod.txt",
+      "bytes": 1148,
+      "sha256": "3526bed6cb8c7dc2b804d6502589d10b4c0291d75a93bf761a4804dfe1b58dce"
+    },
+    {
+      "path": "widget/native/schedule-runtime-adapter.py",
+      "bytes": 225,
+      "sha256": "c64ca21be36f6ae97267da2a4dded2f9e1d80fc94d8aa72da4c609840d39063c"
+    },
+    {
+      "path": "widget/native/schedule-runtime-safe-v3-adapter.py",
+      "bytes": 9975,
+      "sha256": "52e6dc92cf51fd9dea1386d7010dfe9023f3774cff88367cabc1bbaa15f473bc"
+    },
+    {
+      "path": "widget/native/schedule-runtime-safe-v3-contract.json",
+      "bytes": 1675,
+      "sha256": "210b8502bc80b7df8e4f8a65d6691cf03f1d126515ed19a7f44e30a6d14df385"
+    },
+    {
+      "path": "widget/native/schedule-runtime-safe-v3-default.json",
+      "bytes": 992,
+      "sha256": "a431ec4a71fba69c01d55b1c4767b52e3ceb60663fe653e5fa2030da22d78570"
+    },
+    {
+      "path": "widget/native/schedule-runtime-safe-v3-schema.json",
+      "bytes": 1376,
+      "sha256": "e99e116f1b59527e91f1d27b927c7d19ec3c3567a0b78130fe2d60c899b410f4"
+    },
+    {
+      "path": "widget/native/schedule-runtime-safe-v3-template.txt",
+      "bytes": 2197,
+      "sha256": "4c7452af210196c4da65d4a6017310e44c2ac3aa3e8f8f0fa0c2955b8d9c1fbd"
+    },
+    {
+      "path": "widget/native/schedule-schema.json",
+      "bytes": 2205,
+      "sha256": "0c514805227a596b24460b37f2d6eb8e97ee142ea6af2af5a7a1207ca927669a"
+    },
+    {
+      "path": "widget/native/schedule-template.txt",
+      "bytes": 2111,
+      "sha256": "4a436811b95df2a741c62dcb6549f3e46cc2aac2cae81f588d5cdc585f68bb2f"
+    },
+    {
+      "path": "widget/native/sync-native-widget-wrapper.js",
+      "bytes": 2048,
+      "sha256": "7b87f891a2d9964ab92226a999cb97c1b44117605f6ff02ed403e0adfcf395a5"
+    },
+    {
+      "path": "widget/native/test_application_convergence_r5.py",
+      "bytes": 10611,
+      "sha256": "c9f0929dcbbc7c15cd058f41249d29d8ceb7fbc8014933f61b61ecd4efafeccd"
+    },
+    {
+      "path": "widget/native/test_campus_overview_r4.py",
+      "bytes": 3914,
+      "sha256": "8a86e1f320659a95b4adc23ad89e107df83cd2953dda5311b9f7b6d9404ab9b0"
+    },
+    {
+      "path": "widget/native/test_runtime_binding_r4.py",
+      "bytes": 7515,
+      "sha256": "3019c5dfa505b55211d5867bbb7dd6bd40f934a79f17c9a396dc38576c6712e0"
+    },
+    {
+      "path": "widget/native/test_widget_semantic_r5.py",
+      "bytes": 3394,
+      "sha256": "a63b083989fafd460cbec7b043d71fa8706001eb9a921ec5309fccff7c4a47fd"
+    },
+    {
+      "path": "widget/native/test-action-contract.js",
+      "bytes": 7278,
+      "sha256": "f1bb7c886f287bedc768aa3f2da9fc1469b315576e008b6fae85ff6cbf79da92"
+    },
+    {
+      "path": "widget/native/test-action-protocol-v2.py",
+      "bytes": 1941,
+      "sha256": "6e9c64ab802761e4a6f17a0686c34bde71c0e1a7644e46acea57041b2fdbbf80"
+    },
+    {
+      "path": "widget/native/test-adp-transport-contract.py",
+      "bytes": 3586,
+      "sha256": "0e96973668057a3d71776bd9e2d18c31eee44142caafa56aad02f3ff8ce6426b"
+    },
+    {
+      "path": "widget/native/test-branch-local-reference-regression.py",
+      "bytes": 2142,
+      "sha256": "e406c76de1fb9c4863debf364a6c038d10d61e314810e1528fe1f2620136505e"
+    },
+    {
+      "path": "widget/native/test-campus-widget-compiler.py",
+      "bytes": 1482,
+      "sha256": "7e42a91ac9675067ec2182b4f70353bba893bd09cae1e8e64a88bdb16f216aef"
+    },
+    {
+      "path": "widget/native/test-conflict-widget-adapter.py",
+      "bytes": 1887,
+      "sha256": "75e7f1dac8f09d6267c7239f0f896c7d134afe5557622df21c6d85fa9d01cfb7"
+    },
+    {
+      "path": "widget/native/test-native-adapters.py",
+      "bytes": 1919,
+      "sha256": "8355e62e600f1e4d951cb5fe3685c44993ea4ed2c2249facd59cda9662e04b7b"
+    },
+    {
+      "path": "widget/native/test-native-import-preview-contract.js",
+      "bytes": 1704,
+      "sha256": "379f31d59d4d1396a37d6e7adbec2a44ad38ce5db41796671fc68696b4956472"
+    },
+    {
+      "path": "widget/native/test-r50-2b-widget-contract.js",
+      "bytes": 17264,
+      "sha256": "b38b9d4540c549fc8a6571f6dfcb250e81dc43c94e64510b18c3e031e712fe2e"
+    },
+    {
+      "path": "widget/native/test-real-adp-export-catalog.py",
+      "bytes": 1548,
+      "sha256": "7999ec94b5de6cf7a7f7026dd7c4dcec86e3c9a5382c01b33f7b75712c6c1f1e"
+    },
+    {
+      "path": "widget/native/test-runtime-closure-pack.py",
+      "bytes": 2139,
+      "sha256": "4ea164c150b180e1df1323a6809c2f84c9964c10359995e0ea1b8cebd926072b"
+    },
+    {
+      "path": "widget/native/test-runtime-e2e-cases.js",
+      "bytes": 2649,
+      "sha256": "e43e63bb557a5e58b2e41ea7d61de5222f80d3f9acc4d0c4e0fc10caa60cadac"
+    },
+    {
+      "path": "widget/native/test-schedule-contractsync.js",
+      "bytes": 2615,
+      "sha256": "47fc14e9f1b34cd75f0fb5b1bf73047044e79e67cc5c27d5d6b02da644686f62"
+    },
+    {
+      "path": "widget/native/test-schedule-rich-v4-adapter.py",
+      "bytes": 3347,
+      "sha256": "e2e8468a60fd1cb5b002f0679409d2b738d4a8ecd2828f02b1c7a3c37d0e9c5c"
+    },
+    {
+      "path": "widget/native/test-schedule-rich-v4-contract.js",
+      "bytes": 2581,
+      "sha256": "eb63f08856ae2f93ce1dbb14b4817cace8b542a2551d3953c604b77ab3cbb48a"
+    },
+    {
+      "path": "widget/native/test-schedule-scoped-adapter.py",
+      "bytes": 2783,
+      "sha256": "6dd965ece3b8803c95abfa5b45977c7dd95404e0acf033144f9c6ac47b920044"
+    },
+    {
+      "path": "widget/native/test-schedule-week-scope-contract.py",
+      "bytes": 3622,
+      "sha256": "552c26612dd62fb8027a77410ff613807591820e8d486107466fbafb47bbabca"
+    },
+    {
+      "path": "widget/native/test-widget-wrapper-sync.js",
+      "bytes": 1882,
+      "sha256": "8098150f4c62b743c3a0f338c5d0755e5aad07b3eec374b9c5af3eb11e0d819b"
+    },
+    {
+      "path": "widget/native/validate-adp-artifact.py",
+      "bytes": 14941,
+      "sha256": "1c9c8f6d83bda2d6fc6323a05dcbce26c7dddf1ca6b0805d267513184f2f8e13"
+    },
+    {
+      "path": "widget/native/validate-campus-widget-artifact.py",
+      "bytes": 8053,
+      "sha256": "78411225a914a4b37bd20e3d666eca0748bc5034c3c05e739499e02282ad15af"
+    },
+    {
+      "path": "widget/native/widget_semantic_view.py",
+      "bytes": 5083,
+      "sha256": "94299be0c44dca8000ac4f509a9b4e51a9ef3421652e647ec1304aceb1ed5cd9"
+    },
+    {
+      "path": "widget/native/widget-node-seed-contract.json",
+      "bytes": 1973,
+      "sha256": "f982f8322c6e6877bc96d6e60eee452925fd8a246fab2712cce1a625a7426d92"
+    },
+    {
+      "path": "widget/native/widget-registry.json",
+      "bytes": 2057,
+      "sha256": "4197368d7fef38d425882a4ecd37b3a367348d2a06e91c48cb4b6781ce6b9797"
+    },
+    {
+      "path": "widget/r48-v3/adapter.js",
+      "bytes": 31722,
+      "sha256": "01d28383981c43a551ddc945d8313d4cb47d24e64c0bd797368584e7fdc2418e"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/contract.json",
+      "bytes": 986,
+      "sha256": "1de42776ef413d0ac0b1012dc703314e47378177c0a19159095aca52fd225ac2"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/default.json",
+      "bytes": 2240,
+      "sha256": "9b47744efcb27468609e43acbc70a8cb53736df55216584c2b9695eb75bb6f29"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/schema.json",
+      "bytes": 3239,
+      "sha256": "ad3629800d9a47f3d4503b93b45cf154cd4d895e35e2d8368155013b3f4b3048"
+    },
+    {
+      "path": "widget/r48-v3/campus-overview/template.txt",
+      "bytes": 3161,
+      "sha256": "9197128d13760fada6b6593b872928c922b36460e271a61cf0f17fc1376843ba"
+    },
+    {
+      "path": "widget/r48-v3/choice/contract.json",
+      "bytes": 806,
+      "sha256": "563f6caf666b6a0ba6ceb440c8742cfaa98779e93f15217cf6966e8ffde9dac7"
+    },
+    {
+      "path": "widget/r48-v3/choice/default.json",
+      "bytes": 838,
+      "sha256": "6b7ac47a0bd898c9bea1e2c9cbd503c487f31a0043c087f9c5d58367aa14a568"
+    },
+    {
+      "path": "widget/r48-v3/choice/schema.json",
+      "bytes": 1231,
+      "sha256": "6e111f02552c8309030fcad097993d1a74751285aaf928d89d30027c5242c8e4"
+    },
+    {
+      "path": "widget/r48-v3/choice/template.txt",
+      "bytes": 1447,
+      "sha256": "2be1975104c1df01eb5ee18d8d55a9b1cbf0a0e85c37af1acbfaeb6232b22404"
+    },
+    {
+      "path": "widget/r48-v3/classroom/contract.json",
+      "bytes": 710,
+      "sha256": "2a80c40cc7cea75c814aa722b0de336314e4021892fb3a2fa5ff4245e4d9c19c"
+    },
+    {
+      "path": "widget/r48-v3/classroom/default.json",
+      "bytes": 1830,
+      "sha256": "c0abbb98c24475569b0e2dd039a0b7a56143c28312910287f9cefa129fb82696"
+    },
+    {
+      "path": "widget/r48-v3/classroom/schema.json",
+      "bytes": 2219,
+      "sha256": "14c0d654d8758ffd48f6b36e6c07ed094e12d76a81c71bb39d06d3c794d24c62"
+    },
+    {
+      "path": "widget/r48-v3/classroom/template.txt",
+      "bytes": 2632,
+      "sha256": "8697322018eb7bef7dd518131a59e6cdb0ed70b4ea203712a543d54e9e63928f"
+    },
+    {
+      "path": "widget/r48-v3/conflict/contract.json",
+      "bytes": 838,
+      "sha256": "9fcb5592a4f95ecd86fe7ef5e8cf815203ab368cfdcb4078cb40d252fd0aa2c3"
+    },
+    {
+      "path": "widget/r48-v3/conflict/default.json",
+      "bytes": 1069,
+      "sha256": "0325d2efef5a0f9e98a1c1a09dabdab715904179dcb6485461984f265b4fced0"
+    },
+    {
+      "path": "widget/r48-v3/conflict/schema.json",
+      "bytes": 3935,
+      "sha256": "31d3b485a83cedfa039414fdc442de1518dab6f4a126b3f068ad5289e10a1a1d"
+    },
+    {
+      "path": "widget/r48-v3/conflict/template.txt",
+      "bytes": 3405,
+      "sha256": "a9fea5f7368018a100acc8589ff621a09907540165282e3bf023fed73e7764d8"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/contract.json",
+      "bytes": 850,
+      "sha256": "67296f57b5ab79306d032a7906b1499d0586773a7a5ec26eb96bdf55cfee5117"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/default.json",
+      "bytes": 2158,
+      "sha256": "04758548262857e9e7706a85b9b4457cb287218e9cceb691f278de535baba292"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/schema.json",
+      "bytes": 2272,
+      "sha256": "5add4cd5f4a0d98435f19a047f22b926f72f08ef5cb79675b3624f4dd3fa0700"
+    },
+    {
+      "path": "widget/r48-v3/day-plan/template.txt",
+      "bytes": 2875,
+      "sha256": "0781b1e25db1e66192c95f895a6e922336b6729e2430cdeb71dfa7b325c3027f"
+    },
+    {
+      "path": "widget/r48-v3/design-tokens.css",
+      "bytes": 820,
+      "sha256": "e2091aea96a63039d97a16df2aa18bac8f9021afb72b8a68094460d98c1e187d"
+    },
+    {
+      "path": "widget/r48-v3/design-tokens.json",
+      "bytes": 2257,
+      "sha256": "2dd5fd0db1df5f249c1eac048dbf98623fcddfd9491d474b9891f0da940ee83d"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-desktop-full.png",
+      "bytes": 1620214,
+      "sha256": "71ccbb07f48a503aa7d32d3712e7a30612dc8ee471c4a787d07fcb4d831df111"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-desktop-top.png",
+      "bytes": 206286,
+      "sha256": "e0b90bb8632c175ba74efcbfcf8b1a5220783511a82fa9cced3faacd406347f4"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-mobile-390.png",
+      "bytes": 160155,
+      "sha256": "116ee87501b1a45834d3b78e97398fff8978895573ff8d43b3523de1bd126588"
+    },
+    {
+      "path": "widget/r48-v3/docs/screenshots/preview-mobile-grid-390.png",
+      "bytes": 160339,
+      "sha256": "e78be094857d349ac0efa836edabcd5c73f71b8a99eae7b6567006837e377b6b"
+    },
+    {
+      "path": "widget/r48-v3/preview/index.html",
+      "bytes": 26619,
+      "sha256": "b20f043fcc23a7820ae8cd2baf8f47b26a7b790589b8767d3d9ae1c1f8ba12dc"
+    },
+    {
+      "path": "widget/r48-v3/R48-WIDGET-V3-ADP-IMPORT-CHECKLIST.md",
+      "bytes": 4999,
+      "sha256": "b7b267954ded1270923610d7ff1aaeee20da850146f3b2d2e106ee26a5f261fb"
+    },
+    {
+      "path": "widget/r48-v3/R48-WIDGET-V3-HANDOFF.md",
+      "bytes": 6480,
+      "sha256": "3ab8009451758552c6870a7cb64e50e272c6cb572b5a90336c467e34a6f10f0e"
+    },
+    {
+      "path": "widget/r48-v3/recovery/contract.json",
+      "bytes": 943,
+      "sha256": "3ba3f9021a0248c6806446367e68b79b8d297f5358710cb30a32f4601a16fa26"
+    },
+    {
+      "path": "widget/r48-v3/recovery/default.json",
+      "bytes": 708,
+      "sha256": "06a2d4d3fff381e760daf2caa4c36da26cb31059a8636bbb6241c036a3afe419"
+    },
+    {
+      "path": "widget/r48-v3/recovery/schema.json",
+      "bytes": 1178,
+      "sha256": "a2a16a226bf90abc86bc0e9c3ff05fdf9cd321b44b6158c2ed40586e59bd99be"
+    },
+    {
+      "path": "widget/r48-v3/recovery/template.txt",
+      "bytes": 1522,
+      "sha256": "fc403f870168cb4875c7a66f023e65b4633f7b80c1f32d6315491590e615b5be"
+    },
+    {
+      "path": "widget/r48-v3/samples/campus-overview.json",
+      "bytes": 3338,
+      "sha256": "d19fe4473c01dcc8577d5d2f430706be2a537f9e59da54e81d7d547b9e9db59e"
+    },
+    {
+      "path": "widget/r48-v3/samples/choice.json",
+      "bytes": 1367,
+      "sha256": "e9e11be251f5adcb65a5f085e62e48b563dd280b6c3d5df14aa53d263c70d9df"
+    },
+    {
+      "path": "widget/r48-v3/samples/classroom-empty.json",
+      "bytes": 1861,
+      "sha256": "aabd89119a2fabc583cdd553767d91554859ed90182cc3cb4f76cf2658a37e22"
+    },
+    {
+      "path": "widget/r48-v3/samples/classroom-normal.json",
+      "bytes": 2605,
+      "sha256": "dc67f689679778bedc47895d157858e2895d002cb6fc45daa3b3b8529e9cbf18"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-compare.json",
+      "bytes": 2117,
+      "sha256": "047b6fb33b3bc0a45f0b27c1cee7abe4817cd80c158c0d9c131460ff22cfbb27"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-safe.json",
+      "bytes": 1235,
+      "sha256": "41c29681348a45c0c3b4effdd2659e28b683b4825081a1dcc5fbb8920e283141"
+    },
+    {
+      "path": "widget/r48-v3/samples/conflict-self.json",
+      "bytes": 1679,
+      "sha256": "25b03df440afe6332d2e01d08a7488aca6667a49773dedf9b8b3da0c52cd3015"
+    },
+    {
+      "path": "widget/r48-v3/samples/day-plan.json",
+      "bytes": 3136,
+      "sha256": "6b1a928343ca9435080d30508918e70d17f4225d6ade805a5f0a416b11f62398"
+    },
+    {
+      "path": "widget/r48-v3/samples/envelopes.json",
+      "bytes": 13737,
+      "sha256": "3baf5b61ad67c9df0c42b39b7aab262ad321c0d8e06b9c343b0d53c42ed1574f"
+    },
+    {
+      "path": "widget/r48-v3/samples/generate-samples.js",
+      "bytes": 1840,
+      "sha256": "049d9839dce0e92f2acfa95e3d6a5040f09cec73096a9a3b90b6f10dd1838734"
+    },
+    {
+      "path": "widget/r48-v3/samples/recovery-range.json",
+      "bytes": 1263,
+      "sha256": "f092090611ec418aa26c6922942d0e9ea022044171b2704601203691b3c08622"
+    },
+    {
+      "path": "widget/r48-v3/samples/recovery-tool.json",
+      "bytes": 1356,
+      "sha256": "0158a7d29113ec743f24e095ce9572e261c880e9013e4c69a13b660345a374a3"
+    },
+    {
+      "path": "widget/r48-v3/samples/samples.js",
+      "bytes": 33507,
+      "sha256": "3c4a27fc18154eefd4785e8a41ca6f16641c1962d377fc8c4f21960e0b1d8590"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-date.json",
+      "bytes": 2736,
+      "sha256": "6d7c765a89666aa0e6140d2812be38d81a04c5a586f111aa3d3ca1bea41a26bb"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-day.json",
+      "bytes": 2743,
+      "sha256": "e3bcd4506d73ee28afedd37f661e92957ca3b4c7d2bbdf2387fdc527385a2a5f"
+    },
+    {
+      "path": "widget/r48-v3/samples/schedule-week.json",
+      "bytes": 5169,
+      "sha256": "1a88afd96927554d9b25e92b62151a1ae480bc81161eea4565822ef0a2ceb5c4"
+    },
+    {
+      "path": "widget/r48-v3/schedule/contract.json",
+      "bytes": 907,
+      "sha256": "8d7013b8c1395f4049b66644e3f1fb94cf2d8ffa99630ad62ecc4a4530b90479"
+    },
+    {
+      "path": "widget/r48-v3/schedule/default.json",
+      "bytes": 1827,
+      "sha256": "2a433d5d36bb92b2210e520b7f6856580b952713a87fcac5b7706c0624da3288"
+    },
+    {
+      "path": "widget/r48-v3/schedule/schema.json",
+      "bytes": 3114,
+      "sha256": "39e948525c0cc951a78ffe98a0e003dc2d77528ebc19363cf05c62344411a1be"
+    },
+    {
+      "path": "widget/r48-v3/schedule/template.txt",
+      "bytes": 2962,
+      "sha256": "fc6028174bec3bc7989f8479126f1806518e3d005b52e160d67aba919a31e036"
+    },
+    {
+      "path": "widget/r48-v3/tests/run-all.js",
+      "bytes": 869,
+      "sha256": "2346f153a03f7727b5f4496077899085c3f84bc13c6347843c836b83c8010fbe"
+    },
+    {
+      "path": "widget/r48-v3/tests/schema-utils.js",
+      "bytes": 4771,
+      "sha256": "19734fea8976166ef2299e5f16aa1140a3eb11722db7bd483b1d09f4e9992494"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-action-contract.js",
+      "bytes": 6756,
+      "sha256": "fa94e47c8f0ec1b23558239f182eca479454958df647911bd15425862187b20f"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-adapter.js",
+      "bytes": 14895,
+      "sha256": "043bf2bd5204cdc44f439380245baecd7b9f4042b8b0c0a6cb78a8feebea5130"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-no-external-deps.js",
+      "bytes": 4429,
+      "sha256": "2695b76efccd414acb68e6d1d85d885d960d534a0ef7647912ebe4967eb3d8e7"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-schema.js",
+      "bytes": 5152,
+      "sha256": "796d74f9d932cbfea842bdf2e0dcd6eb867aca64817880b4a8bf8d6a546b16b0"
+    },
+    {
+      "path": "widget/r48-v3/tests/test-template-syntax.js",
+      "bytes": 5272,
+      "sha256": "dea64b93b2eadc762a9b3571e95b3b10806b2f5f74a154b69aece4045c3c1566"
+    },
+    {
+      "path": "widget/r48-v3/viewmodel-schema.json",
+      "bytes": 3538,
+      "sha256": "ecf339c2c87cc1b004a0a0df3efcc8d0103e65d78f4827954f154f37a9b2399a"
+    },
+    {
+      "path": "widget/README.md",
+      "bytes": 3081,
+      "sha256": "0fed0f3359d1183164208ebac60ae8bbfeccf04f8b7e44ce281e65ac5c3a696a"
+    },
+    {
+      "path": "widget/sample-results.js",
+      "bytes": 11549,
+      "sha256": "ae7d6053df4606bdead5e0f13ffb0cb4c7969146fd48339ece73d09a464da1f0"
+    },
+    {
+      "path": "widget/sample-results.json",
+      "bytes": 11521,
+      "sha256": "72481bc8d29426ce3e6035b82f729dbc87d4e2eba66c4e7b70bd1040ae4bbe4e"
+    },
+    {
+      "path": "widget/serve.js",
+      "bytes": 1093,
+      "sha256": "2b40abf4026ef896de6b3e5b577a64567d9b63399d620bd88a680ecd2ec2cff6"
+    },
+    {
+      "path": "widget/styles.css",
+      "bytes": 15018,
+      "sha256": "eea6b20382f75cbcfa2658fcc0520d3ccf1caa9284d8e1d4329a51ca6dcacd11"
+    },
+    {
+      "path": "widget/test-widget-adapter.js",
+      "bytes": 5455,
+      "sha256": "7712c2098e2f6ce0dd9c3d06ac15b3c63fa709fce3ce4e9b97aa724cc55d3a34"
+    },
+    {
+      "path": "widget/widget-schema.json",
+      "bytes": 2682,
+      "sha256": "ff6c5805558c53c250e3339e8647519a9cdd5a744f4c008337ce07fd7bd18d55"
+    },
+    {
+      "path": "widget/widget.js",
+      "bytes": 12004,
+      "sha256": "6a029a6b6c69b710828c7e2b99b7bcbca641a7387a70891316ac9df3a0dcd685"
+    },
+    {
+      "path": "workflows/01-多维课表查询.md",
+      "bytes": 5037,
+      "sha256": "ca0a10083a0b1cdfd59974f40d0a3c2554959dfe04ec7ced69dacc662f5188df"
+    },
+    {
+      "path": "workflows/02-空教室规划.md",
+      "bytes": 3588,
+      "sha256": "50fd9e2bb478e20158ec8847be61cf3c823e4a14fddff44aa979cd594bba817d"
+    },
+    {
+      "path": "workflows/03-课程冲突比较.md",
+      "bytes": 4186,
+      "sha256": "be5f085221c9b76c081caecf23eafef1f44df6927946f6c706d528f1eb303da5"
+    },
+    {
+      "path": "workflows/04-今日校园计划.md",
+      "bytes": 2942,
+      "sha256": "ac527858cc11f309ef3f24d1a2681ede909810ab853a79019250cc78163f671e"
+    },
+    {
+      "path": "workflows/05-校园教学态势-R1.md",
+      "bytes": 2912,
+      "sha256": "1e398e6ecbb9fb351d58edbf6b1f857516b0005ce75952f2c954e37bddb972cc"
+    },
+    {
+      "path": "workflows/application-config.json",
+      "bytes": 3910,
+      "sha256": "a34aed8200bc2134ab5b998e238c2dbd3bcab78923bd415ae9e5929eb57cd268"
+    },
+    {
+      "path": "workflows/generate-workflows.js",
+      "bytes": 1060,
+      "sha256": "6d4058f83b6f98b2e7b0e23e3741343f42672d76728dd41bd63dbfe5ffb0efb6"
+    },
+    {
+      "path": "workflows/LEGACY-WORKFLOWS.md",
+      "bytes": 2555,
+      "sha256": "b778e8cc04b6a160a5b6fb2432977e02accfb253653a6a4aa3452723121fa976"
+    },
+    {
+      "path": "workflows/role-instruction.txt",
+      "bytes": 5518,
+      "sha256": "dd28c440f8316acb313f5b4292582f80ce209de1c74aa5760624b22e54e4a87b"
+    },
+    {
+      "path": "workflows/workflow-definitions.js",
+      "bytes": 23193,
+      "sha256": "72ebe74bdedbf844bd960823f547f83423abb93bbd745aa4a34bf04318e106c5"
+    },
+    {
+      "path": "workflows/workflow-specs.json",
+      "bytes": 34522,
+      "sha256": "15d45c3fbbb149f16d0db91e2f514738673bb13e13ef98f10d465b35791a49e0"
+    }
+  ]
+}

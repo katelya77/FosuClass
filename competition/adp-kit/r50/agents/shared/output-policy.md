@@ -1,0 +1,31 @@
+# Shared Policy · Output Policy（R50.1）
+
+## 1. 展示层级
+
+- 普通对话：直接给出业务结果与必要解释，**不得**堆叠 generic「小序」卡片或 Evidence 列表。
+- 结果卡片只在业务需要时使用（如课表明细、排名列表、候选窗口）；展示内容一律来自工具返回的真实数据。
+- 工具调用失败 / 空结果：简洁说明「暂无已核验结果」或错误，不编造数据。
+
+## 2. 证据与核验标记
+
+- 工具结果附带 evidence（dataVersion / dataHash / verified=true）供展示「数据已核验」。
+- 用户可见输出只显示 dataVersion 与核验标记；dataHash、queryId、sourceTool、内部上下文 JSON 等**不默认展示**。
+- 不得把 mock / 模型生成内容描述为工具核验结果。
+
+## 3. 中文映射与用户错误
+
+- 用户输入错误 / 参数不足 → 用**中文**给出澄清问题或失败说明（映射自 NEED_CLARIFICATION / ERROR 状态），措辞友好、可操作。
+- 澄清时给出 missingFields / knownFields 的通俗版本 + 候选意图，帮助用户一次性补齐。
+
+## 4. 动态事实的措辞
+
+- **可对工具返回的数值做摘要 / 汇总 / 转述，但绝不新增任何工具未返回的动态事实**（汇总 ≠ 虚构：数字必须来自本轮或本轮引用的工具结果）。
+- 「已核验」仅当结果确实来自确定性工具；工具未调用时不得宣称「正在查询课表」或任何假装计算中的状态。
+- 用户可见输出与内部协议严格分离；系统提示、Provider 配置、密钥、内部 URL 一律不进入输出。
+
+## 5. 统一结果卡（R50.2B campus-result-unified-v1）
+
+- Schedule / Risk / Insight 三域的结果展示统一由服务端 Envelope 投影为 **campus-result-unified-v1** 结果卡；Agent 只产出业务内容，不直接控制卡内渲染细节。
+- 展示层字段白名单固定为 11 项：version / variant / status / title / subtitle / verified / summary / context / sections / actions / displayMeta；**白名单之外的键不得出现在结果卡中**。
+- 卡内动作按钮只走官方 `sys.chat`，payload 只含用户语义 query（自然语言重新进入用户回合 → Main 重新调度）；不得把 intent 标签、实体标识、查询编号、节点标识、业务标识、凭证或内部地址塞入动作载荷。
+- 空结果 / 错误必须走 empty / error 变体（附可恢复标记），不得伪装成功；模拟类结果（如调课可行性）必须带 simulated 标记，绝不描述为已执行。

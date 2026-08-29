@@ -363,7 +363,7 @@ function createFosuTurnPorts(options = {}) {
         runtimeMode: "public",
         requestedRuntimeMode: state.runtimeDecision.requestedMode,
         competitionAuthorized: false,
-        answer: "当前小佛协议版本不兼容，请刷新小程序后再试。",
+        answer: "当前小序协议版本不兼容，请刷新小程序后再试。",
         cards: [],
         suggestions: ["刷新后重试", "查看使用说明"],
         toolCalls: [],
@@ -731,8 +731,8 @@ function createFosuTurnPorts(options = {}) {
       });
       const publicPlain = responseComposer.compose({
         answer: intent.name === "conversational_help"
-          ? "你好，我是小佛。正式版里我可以帮你查课表、空教室、教学周和产品使用说明。"
-          : "小佛目前提供课表、课程查询和使用帮助。",
+          ? "你好，我是小序。正式版里我可以帮你查课表、空教室、教学周和产品使用说明。"
+          : "小序目前提供课表、课程查询和使用帮助。",
         cards: [],
         suggestions: [],
         intentName: intent.name,

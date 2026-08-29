@@ -43,6 +43,18 @@ function buildRelease(version, patch = {}) {
     releaseVersion: version,
     rooms: [{ roomId: "A101" }],
   });
+  files["calendar.json"] = add("calendar.json", Object.assign({
+    success: true,
+    term,
+    releaseVersion: version,
+    weeks: [{ weekNo: 1, startDate: "2026-03-09", endDate: "2026-03-15" }],
+  }, patch["calendar.json"] || {}));
+  files["bootstrap.json"] = add("bootstrap.json", Object.assign({
+    success: true,
+    term,
+    releaseVersion: version,
+    catalog: { colleges: [{ code: "01", name: "test" }] },
+  }, patch["bootstrap.json"] || {}));
   const manifest = {
     success: true,
     schemaVersion: 2,
@@ -168,6 +180,8 @@ async function run() {
     assert.strictEqual(oracleOnly.mode, "oracle-only");
     assert.strictEqual(Object.keys(oracleOnly.oracle.indexes).length, 4);
     assert.strictEqual(Object.keys(oracleOnly.oracle.details).length, 4);
+    assert.strictEqual(oracleOnly.oracle.calendar.ok, true);
+    assert.strictEqual(oracleOnly.oracle.bootstrap.ok, true);
 
     const dual = await liveSmoke.runLiveSmoke({
       oracleBaseUrl: `${started.baseUrl}/oracle`,
@@ -246,6 +260,21 @@ async function run() {
     )), "dual smoke must compare detail hashes");
   } finally {
     await closeServer(badStarted.server);
+  }
+
+  const missingCalendar = buildRelease(version);
+  delete missingCalendar[`/releases/${version}/calendar.json`];
+  const missingCalendarStarted = await startServer({ oracle, cloudbase: missingCalendar });
+  try {
+    const result = await liveSmoke.runLiveSmoke({
+      oracleBaseUrl: `${missingCalendarStarted.baseUrl}/oracle`,
+      cloudbaseBaseUrl: `${missingCalendarStarted.baseUrl}/cloudbase`,
+      timeoutMs: 3000,
+    });
+    assert.strictEqual(result.success, false, "dual smoke must fail when calendar.json is absent from CloudBase");
+    assert(result.cloudbase.steps.some((step) => step.label.endsWith("calendar.json") && step.status === 404));
+  } finally {
+    await closeServer(missingCalendarStarted.server);
   }
   console.log("test-cloudbase-live-smoke passed");
 }

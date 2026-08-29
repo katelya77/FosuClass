@@ -1,0 +1,88 @@
+import { z } from 'zod';
+
+const rowSchema = z
+  .object({
+    label: z.string().default(''),
+    value: z.string().default(''),
+    badge: z.string().optional(),
+    hint: z.string().optional(),
+  })
+  .strict();
+
+const sectionSchema = z
+  .object({
+    title: z.string().default(''),
+    kind: z.string().optional(),
+    note: z.string().optional(),
+    rows: z.array(rowSchema).default([]),
+  })
+  .strict();
+
+const actionSchema = z
+  .object({
+    id: z.string(),
+    type: z.literal('sys.chat'),
+    label: z.string(),
+    payload: z.object({ query: z.string() }).strict(),
+  })
+  .strict();
+
+const blockSchema = z
+  .object({
+    time: z.string().default(''),
+    title: z.string().default(''),
+    location: z.string().default(''),
+    meta: z.string().optional(),
+  })
+  .strict();
+
+const daySchema = z
+  .object({
+    label: z.string().default(''),
+    blocks: z.array(blockSchema).default([]),
+  })
+  .strict();
+
+const widgetSchema = z
+  .object({
+    version: z.literal('1.0').default('1.0'),
+    variant: z
+      .enum([
+        'schedule',
+        'space',
+        'collaboration',
+        'risk',
+        'reschedule',
+        'ranking',
+        'overview',
+        'empty',
+        'error',
+        'message',
+      ])
+      .default('message'),
+    status: z.enum(['success', 'empty', 'error']).default('success'),
+    title: z.string().default('校园智序结果'),
+    subtitle: z.string().default(''),
+    verified: z.boolean().default(false),
+    summary: z.string().default(''),
+    context: z.string().default(''),
+    sections: z.array(sectionSchema).default([]),
+    actions: z.array(actionSchema).max(3).default([]),
+    displayMeta: z
+      .object({
+        simulated: z.boolean().optional(),
+        weekendMarked: z.boolean().optional(),
+        tieNote: z.string().optional(),
+        tieGroupCount: z.number().int().min(1).optional(),
+        recoverable: z.boolean().optional(),
+      })
+      .strict()
+      .default({}),
+    layoutMode: z.enum(['result-card', 'week-board']).default('result-card'),
+    weekBoardTitle: z.string().default(''),
+    weekBoardSubtitle: z.string().default(''),
+    days: z.array(daySchema).default([]),
+  })
+  .strict();
+
+export default widgetSchema;

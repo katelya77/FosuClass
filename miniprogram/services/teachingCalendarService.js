@@ -6,7 +6,7 @@ const { BUILTIN_TERM_CONFIG, getBuiltinTeachingCalendar } = require("../data/bui
 
 const CACHE_PREFIX = "fosu:v6:teaching-calendar";
 const LAST_GOOD_PREFIX = `${CACHE_PREFIX}:last-good`;
-const TERM_CALENDAR_CACHE_SCHEMA = 3;
+const TERM_CALENDAR_CACHE_SCHEMA = 4;
 const FAST_CALENDAR_TIMEOUT_MS = 2500;
 const FAST_POINTER_TIMEOUT_MS = 2000;
 const TYPE_TEXT = {
@@ -31,7 +31,7 @@ function getCacheKey(term, releaseVersion) {
 }
 
 function getLastGoodCacheKey(term) {
-  return `${LAST_GOOD_PREFIX}:${cachePart(term || BUILTIN_TERM_CONFIG.term)}`;
+  return `${LAST_GOOD_PREFIX}:${cachePart(term)}`;
 }
 
 function readCache(term, releaseVersion) {
@@ -224,6 +224,10 @@ function cleanLegacyCalendarCaches() {
 function normalizeCalendar(payload, fallback = {}) {
   const source = payload && payload.data ? payload.data : payload;
   if (!source || source.success === false) return null;
+  const sourceWeeks = Array.isArray(source.weeks) ? source.weeks : [];
+  const inferredTotalWeeks = sourceWeeks.reduce((maximum, week) => {
+    return Math.max(maximum, Number(week && (week.weekNo || week.week) || 0));
+  }, sourceWeeks.length);
   const term = source.term || fallback.term || "";
   const releaseVersion = source.releaseVersion || fallback.releaseVersion || "";
   const defaultWeekTitle = source.defaultWeekTitle || fallback.defaultWeekTitle || "正常教学周";
@@ -238,8 +242,9 @@ function normalizeCalendar(payload, fallback = {}) {
     releaseVersion,
   });
   termConfig.termStartDate = termConfig.termStartDate || fallbackTermConfig.termStartDate || "";
-  termConfig.totalWeeks = Number(termConfig.totalWeeks || fallbackTermConfig.totalWeeks || BUILTIN_TERM_CONFIG.totalWeeks) || BUILTIN_TERM_CONFIG.totalWeeks;
+  termConfig.totalWeeks = Number(termConfig.totalWeeks || fallbackTermConfig.totalWeeks || inferredTotalWeeks || 0) || 0;
   termConfig.weekStart = termConfig.weekStart || fallbackTermConfig.weekStart || "monday";
+  termConfig.specialDates = Array.isArray(source.specialDates) ? source.specialDates.slice() : [];
   const generatedWeeks = getTermCalendarWeeks(termConfig);
   const generatedByWeek = {};
   generatedWeeks.forEach((week) => {
@@ -249,7 +254,7 @@ function normalizeCalendar(payload, fallback = {}) {
       title: fallback.planned ? "教学安排待维护" : defaultWeekTitle,
     }), defaultWeekTitle);
   });
-  (Array.isArray(source.weeks) ? source.weeks : []).forEach((week) => {
+  sourceWeeks.forEach((week) => {
     const normalized = normalizeWeek(week, defaultWeekTitle);
     if (normalized.weekNo) {
       generatedByWeek[normalized.weekNo] = Object.assign({}, generatedByWeek[normalized.weekNo] || {}, normalized);
@@ -263,9 +268,12 @@ function normalizeCalendar(payload, fallback = {}) {
     calendarRevision: source.calendarRevision || fallback.calendarRevision || "",
     semesterText: source.semesterText || fallback.semesterText || "",
     source: source.source || fallback.source || "calendar",
+    sourceStatus: source.sourceStatus || fallback.sourceStatus || "",
     updatedAt: source.updatedAt || "",
     defaultWeekTitle,
     termConfig,
+    specialDates: termConfig.specialDates,
+    cohortMilestones: Array.isArray(source.cohortMilestones) ? source.cohortMilestones.slice() : [],
     weeks: Object.keys(generatedByWeek)
       .map((key) => generatedByWeek[key])
       .sort((left, right) => Number(left.weekNo) - Number(right.weekNo)),
@@ -301,18 +309,24 @@ function getEmptyCalendar(term, releaseVersion, reason) {
     source: "empty",
     fallback: true,
     fallbackReason: reason || "calendar-unavailable",
-    termConfig: Object.assign({}, BUILTIN_TERM_CONFIG, {
+    termConfig: {
       term: term || "",
       releaseVersion: releaseVersion || "",
+      semesterText: "",
       termStartDate: "",
       totalWeeks: 0,
-    }),
+      weekStart: "monday",
+      specialDates: [],
+    },
     weeks: [],
   };
 }
 
 function getLocalFallbackCalendar(term, reason) {
-  const requestedTerm = term || BUILTIN_TERM_CONFIG.term;
+  const requestedTerm = String(term || "").trim();
+  if (!requestedTerm) {
+    return getEmptyCalendar("", "", reason || "active-term-unavailable");
+  }
   const lastGood = readLastGoodCalendar(requestedTerm);
   if (isUsableCalendar(lastGood)) {
     return Object.assign({}, lastGood, {
@@ -330,10 +344,13 @@ function getLocalFallbackCalendar(term, reason) {
 function getImmediateActiveCalendar(options = {}) {
   cleanLegacyCalendarCaches();
   const optionTerm = options.term || "";
-  const local = releasePackService.getLocalActiveRelease(optionTerm || BUILTIN_TERM_CONFIG.term) ||
-    (!optionTerm ? releasePackService.getLocalActiveRelease(BUILTIN_TERM_CONFIG.term) : null);
-  const term = optionTerm || local && local.term || BUILTIN_TERM_CONFIG.term;
-  const releaseVersion = options.releaseVersion || local && local.releaseVersion || "";
+  const runtimePointer = !optionTerm && releasePackService.getCachedRuntimePointer
+    ? releasePackService.getCachedRuntimePointer({})
+    : null;
+  const pointerTerm = runtimePointer && (runtimePointer.activeTerm || runtimePointer.term) || "";
+  const local = releasePackService.getLocalActiveRelease(optionTerm || pointerTerm || "");
+  const term = optionTerm || pointerTerm || local && local.term || "";
+  const releaseVersion = options.releaseVersion || runtimePointer && runtimePointer.releaseVersion || local && local.releaseVersion || "";
   const cached = readCache(term, releaseVersion);
   if (cached && isUsableCalendar(cached.calendar)) {
     return Object.assign({}, cached.calendar, {
@@ -350,7 +367,28 @@ function getImmediateActiveCalendar(options = {}) {
       source: lastGood.source || "last-good-calendar",
     });
   }
-  if ((term || BUILTIN_TERM_CONFIG.term) === BUILTIN_TERM_CONFIG.term) {
+  if (runtimePointer && runtimePointer.termConfig && term === pointerTerm) {
+    const generated = normalizeCalendar({
+      term,
+      releaseVersion,
+      semesterText: runtimePointer.termConfig.semesterText || "",
+      weeks: [],
+      source: "runtime-pointer-date-range",
+    }, {
+      term,
+      releaseVersion,
+      semesterText: runtimePointer.termConfig.semesterText || "",
+      termConfig: runtimePointer.termConfig,
+      planned: true,
+    });
+    if (isUsableCalendar(generated)) {
+      return Object.assign({}, generated, {
+        fallback: true,
+        fallbackReason: "runtime-pointer-calendar-pending",
+      });
+    }
+  }
+  if (term === BUILTIN_TERM_CONFIG.term) {
     return getBuiltinCalendar("immediate-builtin", { source: "builtin-immediate" });
   }
   return getEmptyCalendar(term, releaseVersion, "calendar-unavailable");
@@ -418,7 +456,7 @@ function loadTeachingCalendar(options = {}) {
       if (cached && isUsableCalendar(cached.calendar)) {
         return Object.assign({}, cached.calendar, { fromStorage: true, fallback: true, fallbackReason: reason });
       }
-      if ((term || BUILTIN_TERM_CONFIG.term) === BUILTIN_TERM_CONFIG.term) {
+      if (term === BUILTIN_TERM_CONFIG.term) {
         return getLocalFallbackCalendar(term, reason);
       }
       const generated = normalizeCalendar({
@@ -436,8 +474,9 @@ function loadTeachingCalendar(options = {}) {
 }
 
 function loadActiveTeachingCalendar(options = {}) {
-  const local = releasePackService.getLocalActiveRelease(options.term || "");
-  if (local && local.manifest) {
+  const explicitTerm = options.term || "";
+  const local = releasePackService.getLocalActiveRelease(explicitTerm);
+  if (explicitTerm && local && local.manifest) {
     return loadTeachingCalendar(Object.assign({}, options, {
       term: local.term,
       releaseVersion: local.releaseVersion,
@@ -445,6 +484,7 @@ function loadActiveTeachingCalendar(options = {}) {
     }));
   }
   const fromPointer = () => releasePackService.resolveRuntimePointer({
+    term: explicitTerm,
     timeout: fastTimeout(options.pointerTimeout, FAST_POINTER_TIMEOUT_MS),
     retries: 0,
     skipSession: true,
@@ -461,7 +501,7 @@ function loadActiveTeachingCalendar(options = {}) {
       },
     })));
   const fromActiveManifest = () => releasePackService.getActiveManifest({
-    term: options.term || "",
+    term: explicitTerm,
     timeout: fastTimeout(options.manifestTimeout, FAST_CALENDAR_TIMEOUT_MS),
     retries: 0,
     skipSession: true,
@@ -473,7 +513,11 @@ function loadActiveTeachingCalendar(options = {}) {
   })));
   return fromPointer()
     .catch(() => fromActiveManifest())
-    .catch((error) => getLocalFallbackCalendar(options.term || BUILTIN_TERM_CONFIG.term, error && (error.code || error.message)));
+    .catch((error) => {
+      const cachedPointer = releasePackService.getCachedRuntimePointer && releasePackService.getCachedRuntimePointer({ term: explicitTerm });
+      const fallbackTerm = explicitTerm || cachedPointer && (cachedPointer.activeTerm || cachedPointer.term) || "";
+      return getLocalFallbackCalendar(fallbackTerm, error && (error.code || error.message));
+    });
 }
 
 module.exports = {

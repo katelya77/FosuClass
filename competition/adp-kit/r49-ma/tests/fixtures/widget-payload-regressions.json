@@ -1,0 +1,263 @@
+{
+  "schema": "fosuclass-adp-widget-payload-regressions/v1",
+  "description": "CSF P1 已证实失败模式回归集：来自真实评测导出的 Widget payload 问题。expect=fail 必须 fail-closed 输出可读中文文本 fallback；expect=pass 必须通过同一 schema 校验。",
+  "cases": [
+    {
+      "id": "model-generated-version",
+      "kind": "version 由模型生成研发版本号",
+      "expect": "fail",
+      "mustMatch": ["第1周课表"],
+      "payload": {
+        "version": "1.2.3-dev",
+        "variant": "schedule",
+        "status": "success",
+        "title": "第1周课表",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "共 4 门课程。",
+        "context": "第1教学周",
+        "sections": [],
+        "actions": [],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "week-board-empty-day",
+      "kind": "week-board 携带无课空日（违反过滤 SSOT）",
+      "expect": "fail",
+      "mustMatch": ["课表"],
+      "payload": {
+        "version": "1.0",
+        "variant": "schedule",
+        "status": "success",
+        "title": "第1周课表",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "共 2 门课程。",
+        "context": "第1教学周",
+        "sections": [],
+        "actions": [],
+        "displayMeta": {},
+        "layoutMode": "week-board",
+        "weekBoardTitle": "第1周课表",
+        "weekBoardSubtitle": "教师003",
+        "days": [
+          { "label": "周一", "blocks": [{ "time": "第1-2节", "title": "程序设计基础", "location": "校区A A1-102" }] },
+          { "label": "周二", "blocks": [] }
+        ]
+      }
+    },
+    {
+      "id": "tiegroup-count-zero",
+      "kind": "并列组数 0（公开契约应省略）",
+      "expect": "fail",
+      "mustMatch": ["≥1"],
+      "payload": {
+        "version": "1.0",
+        "variant": "ranking",
+        "status": "success",
+        "title": "教师负载 TopN",
+        "subtitle": "第1周",
+        "verified": true,
+        "summary": "负载最高的是教师001。",
+        "context": "第1教学周",
+        "sections": [{ "title": "排名", "rows": [{ "label": "1", "value": "教师001" }] }],
+        "actions": [],
+        "displayMeta": { "tieGroupCount": 0 },
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "tiegroup-count-absent",
+      "kind": "无并列时不输出 tieGroupCount（缺省合法）",
+      "expect": "pass",
+      "payload": {
+        "version": "1.0",
+        "variant": "ranking",
+        "status": "success",
+        "title": "教师负载 TopN",
+        "subtitle": "第1周",
+        "verified": true,
+        "summary": "负载最高的是教师001。",
+        "context": "第1教学周",
+        "sections": [{ "title": "排名", "rows": [{ "label": "1", "value": "教师001" }] }],
+        "actions": [],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "open-widget-passthrough",
+      "kind": "CampusTools open_widget 动作透传",
+      "expect": "fail",
+      "mustMatch": ["sys.chat"],
+      "payload": {
+        "version": "1.0",
+        "variant": "space",
+        "status": "success",
+        "title": "空教室",
+        "subtitle": "校区A",
+        "verified": true,
+        "summary": "找到 8 间空教室。",
+        "context": "第1教学周 周一",
+        "sections": [],
+        "actions": [{ "id": "a1", "type": "open_widget", "label": "打开教室卡片", "payload": { "widgetId": "wx-001" } }],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "broaden-query-passthrough",
+      "kind": "broaden_query 动作透传",
+      "expect": "fail",
+      "mustMatch": ["sys.chat"],
+      "payload": {
+        "version": "1.0",
+        "variant": "empty",
+        "status": "empty",
+        "title": "暂无已核验结果",
+        "subtitle": "",
+        "verified": true,
+        "summary": "该条件下没有课程记录。",
+        "context": "",
+        "sections": [],
+        "actions": [{ "id": "a1", "type": "broaden_query", "label": "扩大范围", "payload": { "query": "换一个教学周" } }],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "string-payload",
+      "kind": "payload 为纯字符串（应改为 { query }）",
+      "expect": "fail",
+      "mustMatch": ["query"],
+      "payload": {
+        "version": "1.0",
+        "variant": "risk",
+        "status": "success",
+        "title": "课程安排风险检查",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "冲突 0，赶场 1。",
+        "context": "第1教学周 周一",
+        "sections": [],
+        "actions": [{ "id": "a1", "type": "sys.chat", "label": "查看课表", "payload": "查看教师003第1周周一的课" }],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "payload-extra-fields",
+      "kind": "payload 携带 intent/entityType 等内部字段",
+      "expect": "fail",
+      "mustMatch": ["query"],
+      "payload": {
+        "version": "1.0",
+        "variant": "schedule",
+        "status": "success",
+        "title": "第1周课表",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "共 2 门课程。",
+        "context": "第1教学周",
+        "sections": [],
+        "actions": [{ "id": "a1", "type": "sys.chat", "label": "检查风险", "payload": { "query": "检查教师003第1周的风险", "intent": "schedule_risk_check", "entityType": "teacher" } }],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "internal-field-leak",
+      "kind": "内部协议字段泄漏",
+      "expect": "fail",
+      "mustMatch": ["泄漏"],
+      "payload": {
+        "version": "1.0",
+        "variant": "schedule",
+        "status": "success",
+        "title": "第1周课表",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "共 2 门课程。",
+        "context": "第1教学周",
+        "sections": [],
+        "actions": [],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": [],
+        "queryId": "q-20260819-0001"
+      }
+    },
+    {
+      "id": "valid-result-card",
+      "kind": "合法 result-card",
+      "expect": "pass",
+      "payload": {
+        "version": "1.0",
+        "variant": "risk",
+        "status": "success",
+        "title": "课程安排风险检查",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "冲突 0，赶场 1。",
+        "context": "第1教学周 周一",
+        "sections": [{ "title": "风险明细", "rows": [{ "label": "赶场", "value": "程序设计基础 → 计算机组成原理", "hint": "跨校区" }] }],
+        "actions": [{ "id": "a1", "type": "sys.chat", "label": "查看课表", "payload": { "query": "查看教师003第1周周一的课" } }],
+        "displayMeta": {},
+        "layoutMode": "result-card",
+        "weekBoardTitle": "",
+        "weekBoardSubtitle": "",
+        "days": []
+      }
+    },
+    {
+      "id": "valid-week-board",
+      "kind": "合法 week-board（无空日）",
+      "expect": "pass",
+      "payload": {
+        "version": "1.0",
+        "variant": "schedule",
+        "status": "success",
+        "title": "第1周课表",
+        "subtitle": "教师003",
+        "verified": true,
+        "summary": "共 2 门课程。",
+        "context": "第1教学周",
+        "sections": [],
+        "actions": [],
+        "displayMeta": {},
+        "layoutMode": "week-board",
+        "weekBoardTitle": "第1周课表",
+        "weekBoardSubtitle": "教师003",
+        "days": [
+          { "label": "周一", "blocks": [{ "time": "第1-2节", "title": "程序设计基础", "location": "校区A A1-102" }] },
+          { "label": "周三", "blocks": [{ "time": "第7-8节", "title": "计算机组成原理", "location": "校区B B2-201" }] }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "variant": "space",
+  "status": "success",
+  "title": "校区A空教室",
+  "subtitle": "周三 第5-6节",
+  "verified": true,
+  "summary": "找到 3 间符合条件的教室。",
+  "context": "周三 第5-6节",
+  "sections": [
+    {
+      "title": "推荐教室",
+      "kind": "recommendation",
+      "rows": [
+        {
+          "label": "A1-101 · 120人",
+          "value": "多媒体教室 · 校区A A1",
+          "badge": "多媒体教室"
+        }
+      ]
+    },
+    {
+      "title": "其他选择",
+      "kind": "entity-list",
+      "rows": [
+        {
+          "label": "A1-102 · 60人",
+          "value": "普通教室 · 校区A A1",
+          "badge": "普通教室"
+        },
+        {
+          "label": "A2-201 · 80人",
+          "value": "多媒体教室 · 校区A A2",
+          "badge": "多媒体教室"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "space-other-day",
+      "type": "sys.chat",
+      "label": "换一天看看",
+      "payload": {
+        "query": "换一天再查空教室"
+      }
+    },
+    {
+      "id": "space-campus",
+      "type": "sys.chat",
+      "label": "看另一个校区",
+      "payload": {
+        "query": "查看另一个校区的空教室"
+      }
+    }
+  ],
+  "displayMeta": {},
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

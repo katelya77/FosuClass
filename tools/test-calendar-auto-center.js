@@ -1,6 +1,18 @@
 const assert = require("assert");
 const { getBuiltinTeachingCalendar } = require("../miniprogram/data/builtinTeachingCalendar");
 
+const RealDate = Date;
+const FIXED_IN_TERM_NOW = "2026-05-12T12:00:00+08:00";
+global.Date = class FixedDate extends RealDate {
+  constructor(...args) {
+    super(...(args.length ? args : [FIXED_IN_TERM_NOW]));
+  }
+
+  static now() {
+    return new RealDate(FIXED_IN_TERM_NOW).getTime();
+  }
+};
+
 const pages = [];
 const storage = {};
 let requestedSelectors = [];
@@ -52,6 +64,9 @@ function makeWeeks(count) {
 }
 
 page.onShow();
+page.renderCalendar(getBuiltinTeachingCalendar(), getBuiltinTeachingCalendar().termConfig || {}, {
+  forceCenter: true,
+});
 assert(page.data.targetWeekNo > 0, "in-term page should choose a target week");
 assert(requestedSelectors.includes(`#week-${page.data.targetWeekNo}`), "selector should target current week card");
 assert(page.data.scrollTop > 0, "current week should be centered with scrollTop");
@@ -100,4 +115,5 @@ page.renderCalendar({
 }, {}, { forceCenter: true });
 assert.strictEqual(page.data.targetWeekNo, 0, "unknown phase should not auto-scroll");
 
+global.Date = RealDate;
 console.log("test-calendar-auto-center passed");

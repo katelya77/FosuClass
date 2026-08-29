@@ -1,0 +1,126 @@
+@import "../../../brand/auroraqua.css";
+
+/* ============================================================
+   校园智序 · 小序 — Temporal Campus OS 设计 Token
+   唯一颜色/圆角/阴影/动效/材质常量来源；组件内禁止散落 magic value
+   Phase 2.6：前景/背景分离度整体上调 —— 背景仍深，主体必须清楚。
+   ============================================================ */
+:root {
+  color-scheme: light;
+
+  /* ---- 表面与底（深底 + 内部照亮；主体亮度全部上调） ---- */
+  --bg: var(--brand-warm-canvas);
+  --bg-deep: #eaded8;
+  --bg-raise: #fff7f2;
+  --surface: rgba(255, 250, 246, 0.74);
+  --surface-elevated: rgba(255, 255, 255, 0.82);
+  --surface-glass: var(--brand-glass);
+  --border: rgba(171, 105, 91, 0.2);
+  --border-strong: rgba(153, 80, 66, 0.3);
+
+  /* ---- 文本（中文录屏优先；muted/faint 相位 2.5 各提亮约 15%） ---- */
+  --text: var(--brand-ink);
+  --text-muted: var(--brand-body);
+  --text-faint: var(--brand-muted);
+  --text-ink: #fffaf6;
+
+  /* ---- 品牌：青绿（校园自然绿）× 低饱和空间蓝 ---- */
+  --brand: var(--brand-coral);
+  --brand-strong: var(--brand-coral-strong);
+  --brand-dim: rgba(232, 91, 69, 0.13);
+  --brand-dim-strong: rgba(232, 91, 69, 0.23);
+  --brand-secondary: #a58fc0;
+  --brand-secondary-dim: rgba(165, 143, 192, 0.16);
+
+  /* ---- 语义色：风险 / 危险 / 成功 ---- */
+  --risk: #c96e42;
+  --risk-strong: #9f4c2c;
+  --risk-dim: rgba(201, 110, 66, 0.16);
+  --danger: #c8453d;
+  --danger-dim: rgba(200, 69, 61, 0.14);
+  --success: #4f8d75;
+  --success-dim: rgba(79, 141, 117, 0.14);
+
+  /* ---- 场景氛围色（每个 Scene 的世界底色；Phase 2.6 略提亮） ---- */
+  --atmos-brand: var(--brand-coral);
+  --atmos-brand-dim: rgba(232, 91, 69, 0.13);
+  --atmos-cool: #a58fc0;
+  --atmos-cool-dim: rgba(165, 143, 192, 0.14);
+  --atmos-ice: var(--brand-rose);
+  --atmos-ice-dim: rgba(246, 196, 193, 0.2);
+  --atmos-warm: var(--brand-peach);
+  --atmos-warm-dim: rgba(245, 215, 200, 0.24);
+  --atmos-deep: #bd6d78;
+  --atmos-deep-dim: rgba(189, 109, 120, 0.15);
+
+  /* ---- 材质发光 ---- */
+  --glow-brand: 0 0 0 1px rgba(232, 91, 69, 0.26), 0 22px 58px rgba(181, 65, 48, 0.18);
+  --glow-cool: 0 0 0 1px rgba(165, 143, 192, 0.28), 0 22px 58px rgba(130, 106, 160, 0.16);
+  --glow-warm: 0 0 0 1px rgba(201, 110, 66, 0.24), 0 22px 58px rgba(201, 110, 66, 0.16);
+  --glow-deep: 0 0 0 1px rgba(189, 109, 120, 0.24), 0 22px 62px rgba(189, 109, 120, 0.18);
+
+  /* ---- 圆角 ---- */
+  --radius-xs: 8px;
+  --radius-sm: var(--brand-radius-sm);
+  --radius-md: var(--brand-radius-md);
+  --radius-lg: var(--brand-radius-lg);
+  --radius-xl: var(--brand-radius-xl);
+  --radius-2xl: 48px;
+
+  /* ---- 阴影（克制但立体） ---- */
+  --shadow-panel: var(--brand-shadow-glass);
+  --shadow-raised: var(--brand-shadow-soft);
+  --shadow-depth: var(--brand-shadow-lift);
+  --shadow-glow-brand: var(--brand-shadow-lift);
+  /* 提起的课次块（Reschedule 视觉高潮用） */
+  --shadow-lift: var(--brand-shadow-lift);
+
+  /* ---- 间距 / 安全区（1920×1080 母版） ---- */
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --safe-x: 96px;
+  --safe-y: 60px;
+
+  /* ---- 字体：系统可靠中文栈，不提交字体文件 ---- */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+
+  /* ---- 字号（录屏基准 1920×1080；关键标题 42~64，Hero 数字 52~80，正文 ≥16） ---- */
+  --fs-hero: clamp(54px, 4.4vw, 88px);
+  --fs-headline: clamp(42px, 2.95vw, 58px); /* Hero 场景主标题带 */
+  --fs-section: clamp(34px, 2.5vw, 50px);
+  --fs-title: 28px;
+  --fs-card: 22px;
+  --fs-body: 17px;
+  --fs-caption: 16px;
+  --fs-metric: clamp(44px, 3.6vw, 72px);
+  --fs-metric-lg: clamp(56px, 4.6vw, 84px);
+  --fs-kicker: 14px;
+
+  /* ---- 动效：全局统一语言（避免每个组件散落 timing） ---- */
+  --dur-fast: 240ms;
+  --dur-standard: 520ms;
+  --dur-scene: 950ms;
+  --dur-cinematic: 1450ms;
+  --ease-out-soft: var(--brand-ease-out);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-io: var(--brand-ease-cinematic);
+
+  /* ---- 景深 / 模糊（只允许用于过渡态；稳定态 blur=0） ---- */
+  --blur-xs: 3px;
+  --blur-sm: 7px;
+  --blur-md: 15px;
+  --blur-lg: 30px;
+
+  /* ---- 焦散 / 材质微光 ---- */
+  --grain-opacity: 0.025;
+  --glow-lift: 8px;
+}

@@ -1,0 +1,71 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="DAY PLAN · 一天安排" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={timeText} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Badge label={`${summary.lessonCount} 节课程`} color="info" variant="soft" size="sm" />
+      <Badge label={`${summary.gapCount} 个空档`} color="success" variant="soft" size="sm" />
+      {summary.hasCrossCampus ? (
+        <Badge label="有跨校区转场" color="warning" variant="soft" size="sm" />
+      ) : (
+        <Badge label="动线稳定" color="success" variant="soft" size="sm" />
+      )}
+    </Row>
+
+    <ListView limit={8} status="一天时间轴">
+      {items.map((item, index) => (
+        <ListViewItem key={`${item.type}-${item.periodText}-${index}`} gap="12px" align="start">
+          <Badge
+            label={item.type === 'lesson' ? item.periodText : item.type === 'risk' ? '提醒' : item.type === 'study' ? '自习' : '空档'}
+            color={item.type === 'lesson' ? 'info' : item.type === 'risk' ? 'warning' : 'success'}
+            variant={item.type === 'lesson' ? 'outline' : 'soft'}
+            size="sm"
+          />
+          <Col gap={1} flex={1}>
+            {item.type === 'lesson' ? (
+              <Col gap={1}>
+                <Text value={item.courseName} size="md" weight="semibold" />
+                <Caption value={`${item.startTime}-${item.endTime}`} color="#2563EB" />
+                <Caption value={[item.campusName, item.roomName].filter(Boolean).join(' · ')} color="secondary" />
+                <Caption value={(item.teachers || []).join('、')} color="secondary" />
+              </Col>
+            ) : (
+              <Col gap={1}>
+                <Text value={item.suggestion || '空闲时段'} weight="semibold" />
+                <Caption value={`${item.startTime}-${item.endTime} · ${item.periodText}`} color="secondary" />
+                {(item.studyRooms || []).length > 0 ? (
+                  <Caption value={`可自习：${(item.studyRooms || []).join(' / ')}`} color="#173F35" />
+                ) : null}
+              </Col>
+            )}
+          </Col>
+        </ListViewItem>
+      ))}
+    </ListView>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

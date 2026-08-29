@@ -68,9 +68,18 @@ const releaseService = require(path.join(ROOT, "server/src/services/releaseServi
 // set current schedule
 {
   const r = toolRegistry.resolveIntent("将25动物医学3班设为当前课表", {});
+  const classIndex = releaseService.readActiveIndex("class") || {};
+  const hasReadableClassIndex = classIndex.success !== false
+    && Array.isArray(classIndex.items)
+    && classIndex.items.length > 0;
   check(
     "set current schedule intent",
-    r.name === "set_current_schedule" && Boolean(r.slots.detailId) && /动物医学3班/.test(r.slots.name || "")
+    hasReadableClassIndex
+      ? r.name === "set_current_schedule" && Boolean(r.slots.detailId) && /动物医学3班/.test(r.slots.name || "")
+      : r.name === "clarify_missing_slot"
+        && r.slots.goalAction === "set_current_schedule"
+        && r.slots.type === "class",
+    hasReadableClassIndex ? "expected a unique Release-backed class" : "expected a fail-closed class clarification without a Release"
   );
 }
 
@@ -237,9 +246,23 @@ const teacherFixture = [
 // Live pack HTTP path via searchActiveIndex (current release)
 {
   try {
+    const contract = releaseService.searchActiveIndex("teacher", "", {
+      collegeCode: "04",
+      limit: 50,
+      _items: teacherFixture,
+    });
+    check("search contract 04 works", contract && contract.success !== false);
+    check(
+      "search contract 04 items match college",
+      (contract.items || []).every((i) => i.collegeCode === "04" || (i.collegeCodes || []).includes("04"))
+    );
+
     const live = releaseService.searchActiveIndex("teacher", "", { collegeCode: "04", limit: 50 });
-    check("live pack search 04 works", live && live.success !== false);
-    if (live && Array.isArray(live.items) && live.items.length) {
+    const liveAvailable = live && live.success !== false;
+    const liveMissingForCleanCheckout = live
+      && ["NO_ACTIVE_RELEASE", "RELEASE_NOT_FOUND"].includes(live.code || live.reasonCode);
+    check("live pack optional availability", liveAvailable || liveMissingForCleanCheckout);
+    if (liveAvailable && Array.isArray(live.items) && live.items.length) {
       check(
         "live pack 04 items match college",
         live.items.every((i) => i.collegeCode === "04" || (i.collegeCodes || []).includes("04"))
@@ -257,7 +280,7 @@ const teacherFixture = [
       })
     );
   } catch (err) {
-    check("live pack search 04 works", false, err.message);
+    check("live pack optional availability", false, err.message);
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * Long-press / overflow message actions for 小佛助手.
+ * Long-press / overflow message actions for 小序.
  * Keeps action labels and share summary generation free of secrets.
  */
 
@@ -60,7 +60,7 @@ function buildShareSummary(message) {
     ? source.displayCards
     : (Array.isArray(source.cards) ? source.cards : []);
 
-  let title = "小佛助手 · 校园结果";
+  let title = "小序 · 校园结果";
   let lines = [];
 
   if (content) {
@@ -70,11 +70,11 @@ function buildShareSummary(message) {
   const first = cards[0];
   if (first) {
     const type = String(first.type || first.typeClass || "");
-    if (/schedule|course|today/i.test(type)) title = "小佛助手 · 今日课程";
-    else if (/empty|room|classroom/i.test(type)) title = "小佛助手 · 空教室";
-    else if (/weather/i.test(type)) title = "小佛助手 · 校园天气";
-    else if (/week|teaching/i.test(type)) title = "小佛助手 · 教学周";
-    else if (/recommend|study|composite/i.test(type)) title = "小佛助手 · 推荐方案";
+    if (/schedule|course|today/i.test(type)) title = "小序 · 今日课程";
+    else if (/empty|room|classroom/i.test(type)) title = "小序 · 空教室";
+    else if (/weather/i.test(type)) title = "小序 · 校园天气";
+    else if (/week|teaching/i.test(type)) title = "小序 · 教学周";
+    else if (/recommend|study|composite/i.test(type)) title = "小序 · 推荐方案";
 
     if (first.title) lines.push(String(first.title).slice(0, 40));
     if (first.subtitle) lines.push(String(first.subtitle).slice(0, 40));

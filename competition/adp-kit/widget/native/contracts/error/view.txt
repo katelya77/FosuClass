@@ -1,0 +1,46 @@
+<Card size="md" background="#F6F2E8" status="任务未完成">
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="CAMPUS TASK / RECOVERY" color="#A54232" />
+        <Title value={title} size="md" />
+        <Caption value={subtitle} color="secondary" />
+      </Col>
+      <Badge label="待恢复" color="danger" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Card size="sm" background="#FFF0EC">
+      <Col gap={1}>
+        <Text value={error.message} weight="semibold" />
+        <Caption value={`错误类型：${error.code}`} color="secondary" />
+      </Col>
+    </Card>
+
+    <Caption
+      value="小序不会在工具失败时用模型补造动态校园事实。"
+      color="#173F35"
+    />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={action.id === 'error-retry' ? 'solid' : 'outline'}
+          onClickAction={{
+            type: 'sys.chat',
+            payload: { query: action.message },
+          }}
+        />
+      ))}
+    </Row>
+
+    <Caption
+      value={`数据版本 ${dataVersion} · 查询编号 ${queryId}`}
+      color="secondary"
+    />
+  </Col>
+</Card>

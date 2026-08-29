@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "variant": "reschedule",
+  "status": "success",
+  "title": "调课模拟 · 高等数学",
+  "subtitle": "模拟结果 · 未写入课表",
+  "verified": true,
+  "summary": "可以调至 周四 第7-8节（模拟，未执行）。",
+  "context": "调课结果为模拟，未对课表做任何修改",
+  "sections": [
+    {
+      "title": "原安排",
+      "kind": "comparison",
+      "rows": [
+        {
+          "label": "周二 第5-6节",
+          "value": "高等数学 · 校区A A5-101",
+          "badge": "当前",
+          "hint": "教师003"
+        }
+      ]
+    },
+    {
+      "title": "候选安排",
+      "kind": "comparison",
+      "rows": [
+        {
+          "label": "周四 第7-8节",
+          "value": "可行：教师与班级时间无冲突",
+          "badge": "可行",
+          "hint": "教室待指定"
+        }
+      ]
+    },
+    {
+      "title": "可行性检查",
+      "kind": "notice",
+      "rows": [
+        {
+          "label": "教师",
+          "value": "无冲突"
+        },
+        {
+          "label": "班级",
+          "value": "无冲突"
+        },
+        {
+          "label": "教室",
+          "value": "无冲突"
+        },
+        {
+          "label": "容量",
+          "value": "满足"
+        },
+        {
+          "label": "教室属性",
+          "value": "满足"
+        }
+      ],
+      "note": "仅为模拟，未修改课表"
+    }
+  ],
+  "actions": [
+    {
+      "id": "reschedule-simulate",
+      "type": "sys.chat",
+      "label": "再模拟一个时段",
+      "payload": {
+        "query": "再模拟一个调课时段"
+      }
+    },
+    {
+      "id": "reschedule-execute",
+      "type": "sys.chat",
+      "label": "怎么正式调课",
+      "payload": {
+        "query": "正式调课需要怎么操作"
+      }
+    }
+  ],
+  "displayMeta": {
+    "simulated": true
+  },
+  "layoutMode": "result-card",
+  "weekBoardTitle": "",
+  "weekBoardSubtitle": "",
+  "days": []
+}

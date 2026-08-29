@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "campus-widget/v3",
+  "cardType": "recovery",
+  "success": false,
+  "queryId": "q-r48-recovery-tool",
+  "dataVersion": "competition-demo-v1",
+  "title": "校园工具暂时没有返回可核验结果",
+  "subtitle": "任务恢复 · 事实未核验时不展示推测结果",
+  "timeText": "",
+  "statusText": "任务恢复",
+  "filters": [],
+  "summary": {},
+  "items": [],
+  "rushWarnings": [],
+  "actions": [
+    {
+      "id": "recovery-retry",
+      "type": "sys.chat",
+      "label": "重试",
+      "message": "重新执行刚才的查询",
+      "intentHint": "retry"
+    },
+    {
+      "id": "recovery-edit-query",
+      "type": "sys.chat",
+      "label": "修改条件",
+      "message": "我想修改刚才的查询条件",
+      "intentHint": "rephrase"
+    }
+  ],
+  "interaction": {
+    "waitForUser": true
+  },
+  "evidence": {
+    "verified": false
+  },
+  "error": {
+    "code": "TIMEOUT"
+  },
+  "reasonText": "校园工具暂时没有返回可核验结果",
+  "keptFilters": [
+    {
+      "id": "campus",
+      "label": "校区A",
+      "value": "校区A"
+    },
+    {
+      "id": "date",
+      "label": "2026-09-03",
+      "value": "2026-09-03"
+    },
+    {
+      "id": "period",
+      "label": "第7-8节",
+      "value": "第7-8节"
+    }
+  ],
+  "footerText": "未核验状态下不展示任何推测性校园事实"
+}

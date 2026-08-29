@@ -1,0 +1,79 @@
+<Card size="md" background="#FFFFFF" status={statusText}>
+  <Col gap={3}>
+    <Row gap={2} align="start">
+      <Col gap={1} flex={1}>
+        <Caption value="SCHEDULE · 课表" color="#173F35" />
+        <Title value={title} size="md" />
+        <Caption value={`${summary.entityTypeLabel} · ${timeText}`} color="secondary" />
+      </Col>
+      <Badge label="已核验" color="success" variant="soft" size="sm" />
+    </Row>
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      <Badge label={`共 ${summary.totalCount} 节课程`} color="info" variant="soft" size="sm" />
+      {viewMode === 'week' ? (
+        <Badge label={`涉及 ${summary.campusCount} 个校区`} color="secondary" variant="outline" size="sm" />
+      ) : null}
+    </Row>
+
+    {viewMode === 'week' ? (
+      <Row gap={1} wrap="wrap">
+        {days.map((day) => (
+          <Badge
+            key={`day-${day.weekday}`}
+            label={`${day.weekdayName} · ${day.count}`}
+            color={day.count > 0 ? 'info' : 'secondary'}
+            variant={day.weekday === activeWeekday ? 'soft' : 'outline'}
+            size="sm"
+            pill
+          />
+        ))}
+      </Row>
+    ) : null}
+
+    {items.length === 0 ? (
+      <Card size="sm" background="#F7F8F6">
+        <Col gap={1}>
+          <Text value="当前范围没有课程安排" weight="semibold" />
+          <Caption value="可以查看整周，或换一天继续。" color="secondary" />
+        </Col>
+      </Card>
+    ) : (
+      <ListView limit={items.length} status={viewMode === 'week' ? '本周课程' : '当日课程'}>
+        {items.map((item, index) => (
+          <ListViewItem key={`${item.date}-${item.periodText}-${index}`} gap="12px" align="start">
+            <Badge label={item.periodText} color="info" variant="outline" size="sm" />
+            <Col gap={1} flex={1}>
+              <Text value={item.courseName} size="md" weight="semibold" />
+              {viewMode === 'week' ? (
+                <Caption value={`${item.date} · ${item.weekdayName} · ${item.startTime}-${item.endTime}`} color="#2563EB" />
+              ) : (
+                <Caption value={`${item.startTime}-${item.endTime}`} color="#2563EB" />
+              )}
+              <Caption value={[item.campusName, item.building, item.roomName].filter(Boolean).join(' · ')} color="secondary" />
+              <Caption value={[...item.teachers, ...item.classes].filter(Boolean).join(' · ')} color="secondary" />
+            </Col>
+          </ListViewItem>
+        ))}
+      </ListView>
+    )}
+
+    <Divider />
+
+    <Row gap={2} wrap="wrap">
+      {actions.map((action, actionIndex) => (
+        <Button
+          key={action.id}
+          label={action.label}
+          size="sm"
+          variant={actionIndex === 0 ? 'solid' : 'outline'}
+          onClickAction={{ type: 'sys.chat', payload: { query: action.message } }}
+        />
+      ))}
+    </Row>
+
+    <Caption value={footerText} color="secondary" />
+  </Col>
+</Card>

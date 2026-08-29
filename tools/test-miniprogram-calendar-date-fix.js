@@ -93,6 +93,7 @@ function assertNoBadDateText(value, label) {
 }
 
 const week = require("../miniprogram/utils/week");
+const releasePackService = require("../miniprogram/services/releasePackService");
 const teachingCalendarService = require("../miniprogram/services/teachingCalendarService");
 const { getBuiltinTeachingCalendar } = require("../miniprogram/data/builtinTeachingCalendar");
 
@@ -102,7 +103,13 @@ assert.strictEqual(builtin.termConfig.weekStart, "monday");
 assert.strictEqual(builtin.termConfig.totalWeeks, 19);
 assert.strictEqual(builtin.weeks.length, 19);
 
-const calendar = teachingCalendarService.getImmediateActiveCalendar();
+const coldStart = teachingCalendarService.getImmediateActiveCalendar();
+assert.strictEqual(coldStart.term, "", "unknown current term must not resurrect an archived built-in semester");
+assert.strictEqual(coldStart.weeks.length, 0);
+
+// The archived calendar remains available only when the caller explicitly
+// requests that historical term.
+const calendar = teachingCalendarService.getImmediateActiveCalendar({ term: "2025-2026-2" });
 assert.strictEqual(calendar.term, "2025-2026-2");
 assert.strictEqual(calendar.termConfig.termStartDate, "2026-03-09");
 assert.strictEqual(calendar.termConfig.weekStart, "monday");
@@ -170,6 +177,17 @@ assertNoBadDateText({ todayInfo, weekInfo, weekRangeText, weekdayLabels }, "date
 require("../miniprogram/pages/index/index.js");
 require("../miniprogram/pages/settings/settings.js");
 assert.strictEqual(pages.length, 2, "index and settings pages should register");
+
+app.globalData.runtimePointer = {
+  activeTerm: "2025-2026-2",
+  term: "2025-2026-2",
+  releaseVersion: "",
+};
+releasePackService.writeRuntimePointerCache({
+  activeTerm: "2025-2026-2",
+  term: "2025-2026-2",
+  releaseVersion: "archived-test-release",
+});
 
 const indexPage = createPage(pages[0]);
 indexPage.loadSchedule();

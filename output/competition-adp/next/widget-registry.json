@@ -1,0 +1,49 @@
+{
+  "schema": "fosuclass-campus-widget-registry/v1",
+  "source": "real Tencent ADP .widget exports",
+  "dataVersion": "competition-demo-v3",
+  "widgets": {
+    "Schedule": {
+      "name": "小序-课表票据-V2",
+      "widgetId": "23fbc659efe3482fab588d754e4420a4",
+      "sourceSha256": "9d5635a773ab056c3699b88f1379b67bd886280b06a25c0c2ee736230f2a67c3",
+      "contract": "contracts/schedule/contract.json",
+      "integration": "RUNTIME_SAFE_V3_ACTIVE_RICH_V4_PENDING"
+    },
+    "Classroom": {
+      "name": "小序-空教室票据-V2",
+      "widgetId": "9eb1ec5e1deb416ab5aba320359439a5",
+      "sourceSha256": "7551794881eb3b6675371743f8ba4bcafaed53949d5baa41e65d6fe483f0e43c",
+      "contract": "contracts/classroom/contract.json",
+      "integration": "FINAL_COMPILER_INTEGRATED"
+    },
+    "Conflict": {
+      "name": "小序-冲突赶场票据-V2",
+      "widgetId": "8d576e5af9b04fdd99804e7fcbff3644",
+      "sourceSha256": "04b3a057fb062877361f9f721e0031b4b4b91ae7ca5e751dd51ea220d89f4b9d",
+      "contract": "contracts/conflict/contract.json",
+      "integration": "FINAL_COMPILER_INTEGRATED"
+    },
+    "DayPlan": {
+      "name": "小序-今日校园计划-V2",
+      "widgetId": "f4ff76029d8142caa86fb9baac5314bf",
+      "sourceSha256": "b6401db82ddfd42149a1e2d0eef42cd5d8f352968378e0b4df068e85354b3462",
+      "contract": "contracts/dayplan/contract.json",
+      "integration": "FINAL_COMPILER_INTEGRATED"
+    },
+    "Choice": {
+      "name": "小序-候选确认-V2",
+      "widgetId": "f540588933a4459cbe78a6fe99aa022c",
+      "sourceSha256": "9583f7b0133af005b2564b5176c91ef56bd19a3d4543edbb46ef61bb71b8d072",
+      "contract": "contracts/choice/contract.json",
+      "integration": "RECOVERY_COMPILER_INTEGRATED"
+    },
+    "Error": {
+      "name": "小序-任务恢复-V2",
+      "widgetId": "3161078fd4d54a27bae65f38cd44c537",
+      "sourceSha256": "e89466506a0db0f3855b8f953396a8c5905ec2dc3c1e46935c04ec9b32a918aa",
+      "contract": "contracts/error/contract.json",
+      "integration": "RECOVERY_COMPILER_INTEGRATED"
+    }
+  }
+}

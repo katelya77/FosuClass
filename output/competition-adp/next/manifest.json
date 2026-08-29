@@ -1,0 +1,74 @@
+{
+  "schema": "fosuclass-adp-runtime-closure-pack/v1",
+  "generatedAt": "2026-08-14T00:00:00+08:00",
+  "dataVersion": "competition-demo-v1",
+  "localStatus": "PASS",
+  "runtimeStatus": "PENDING_TENCENT_ADP_E2E",
+  "schedule": "RUNTIME_SAFE_V3_ACTIVE_RICH_V4_PENDING",
+  "richV4RealWidgetId": null,
+  "needsUserExport": true,
+  "widgetCount": 6,
+  "runtimeCaseCount": 6,
+  "files": [
+    {
+      "path": "01-Schedule-Final.zip",
+      "sha256": "b5b233d93dc065b01c9708b397a309880c5b9d6fc10b51a6660756054a6cdec5"
+    },
+    {
+      "path": "02-Classroom-Final.zip",
+      "sha256": "e931038b8efc1b5a3f9d7657de187588099a55fb34eacac81d35ed2bdf3a3f7f"
+    },
+    {
+      "path": "03-Conflict-Final.zip",
+      "sha256": "310c1fe98cf997c07a22df81ef200d7f90e18f049f563cb437bab326b17a1302"
+    },
+    {
+      "path": "04-DayPlan-Final.zip",
+      "sha256": "17a19c3a6a498a62e9b04d3533b76fbb50c709398ee1f3d4706299f047bb0389"
+    },
+    {
+      "path": "ADP-RUNTIME-E2E-CHECKLIST.md",
+      "sha256": "9237d0b7deb5f53ad337af8042eb81ce75b588104d6b51bcc12283ac9e9b31ea"
+    },
+    {
+      "path": "NEEDS_USER_RICH_V4_WIDGET_EXPORT.md",
+      "sha256": "cac086f5735deed8abfa0687f4459caba3371ceb5592ecdcd52d0244ed7c181e"
+    },
+    {
+      "path": "ROLLBACK.md",
+      "sha256": "12c6897c4b644e264ef343feac34fecde73e000c40454643990fffdf8f2ce268"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/adapter.py",
+      "sha256": "e5172cae97021ed69c4e64d3c7d5d395ee54fb95b6b68e5f9f041a69b55a485e"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/contract.json",
+      "sha256": "bcaa070f63577017495753062c4716b64419ba9e13c36c02483756f11c166417"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/default.json",
+      "sha256": "d78c5387486a16a8c3fe0bcb2eb4ccfb7ccf7f2c66fc8ba346c5466c7c7c4c0d"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/samples/day.json",
+      "sha256": "de2370aa06d2ac4b0a08fc32252562be4ba41abd70adf0015e2c598d29542a1f"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/schema.json",
+      "sha256": "0a6fbf8b255ffc5d6fd184382caa39ff025997e137750e552991261845fec77b"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/template.txt",
+      "sha256": "de94d8b6edda3f992316594d77d2ffe60a42be3954d2f95c57e4e265902d25b1"
+    },
+    {
+      "path": "Schedule-Rich-V4-Pilot/zod.txt",
+      "sha256": "3526bed6cb8c7dc2b804d6502589d10b4c0291d75a93bf761a4804dfe1b58dce"
+    },
+    {
+      "path": "widget-registry.json",
+      "sha256": "4197368d7fef38d425882a4ecd37b3a367348d2a06e91c48cb4b6781ce6b9797"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "title": "教师003 · 课程安排风险检查",
+  "timeText": "2026-08-31 · 周一",
+  "queryId": "q-native-conflict",
+  "dataVersion": "competition-demo-v1",
+  "summary": {
+    "conflictCount": 0,
+    "hasConflict": false,
+    "firstBusySlots": 2,
+    "secondBusySlots": 2,
+    "selfCompare": true,
+    "rushWarningCount": 1
+  },
+  "items": [],
+  "rushWarnings": [
+    {
+      "entity": "教师003",
+      "weekday": 1,
+      "weekdayName": "周一",
+      "from": {
+        "courseName": "程序设计基础",
+        "periodText": "第5-6节",
+        "campusName": "校区A",
+        "roomName": "A2-301"
+      },
+      "to": {
+        "courseName": "计算机组成原理",
+        "periodText": "第7-8节",
+        "campusName": "校区B",
+        "roomName": "B1-201"
+      },
+      "gapMinutes": 20
+    }
+  ],
+  "actions": [
+    {
+      "id": "conflict-self-schedule",
+      "type": "sys.chat",
+      "label": "查看当天课表",
+      "message": "查看教师003第1周周一的课"
+    },
+    {
+      "id": "conflict-change-target",
+      "type": "sys.chat",
+      "label": "换对象比较",
+      "message": "把教师003换一个对象继续比较冲突"
+    }
+  ]
+}

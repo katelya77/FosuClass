@@ -1,0 +1,100 @@
+{
+  "schema": "fosuclass-adp-r4-closure-pack/v1",
+  "environment": "competition-current",
+  "dataVersion": "competition-demo-v1",
+  "dataHash": "sha1:fefef4bf425b",
+  "runtimeBinding": "LOCAL_GREEN_TENCENT_RUNTIME_PENDING",
+  "hero": {
+    "status": "PILOT_WIDGET_READY_AWAITING_REAL_ID",
+    "realWidgetId": null
+  },
+  "workflows": [
+    {
+      "slot": "01",
+      "workflowId": "eea1d35d-ec8e-51a5-aef8-9d88f19be05c",
+      "name": "01-多维课表查询-R3",
+      "artifact": "01-多维课表查询-R3-Bound.zip",
+      "sha256": "ab61b8640a5005b732f48d580e735e3b321718108fd689c0e20c87565701b0c9"
+    },
+    {
+      "slot": "02",
+      "workflowId": "e6c337c8-e962-5d43-ad19-511a881305d4",
+      "name": "02-空教室规划-R3",
+      "artifact": "02-空教室规划-R3-Bound.zip",
+      "sha256": "25ecfa4d3abc845215e84ae2e5c653416acd0af06b6c03d213ca86a03f75b2cd"
+    },
+    {
+      "slot": "03",
+      "workflowId": "e0a7e26f-e792-5b43-b57b-e71ba8730d81",
+      "name": "03-课程冲突比较-R3",
+      "artifact": "03-课程冲突比较-R3-Bound.zip",
+      "sha256": "9fdf24a54b63ac3c643412af3ccf23fc33d1f74a0718eed109e2dcdab2d6eb6f"
+    },
+    {
+      "slot": "04",
+      "workflowId": "cd895c2f-42f8-5981-b63d-f0a40f9fe242",
+      "name": "04-今日校园计划-R3",
+      "artifact": "04-今日校园计划-R3-Bound.zip",
+      "sha256": "bcc02ac2c9a74c81a9e1f5262508cccc773764ee1c12869fe847f6f7a7e640cd"
+    }
+  ],
+  "evaluation": {
+    "existingCases": 80,
+    "heroCases": 12,
+    "totalCases": 92
+  },
+  "golden": {
+    "expected": 33,
+    "actual": 33
+  },
+  "artifacts": [
+    {
+      "file": "widget-registry.runtime.json",
+      "sha256": "1633ceb9ac04c4299dfcf09f55a89a6ab58f50baf24825d018db8b3009227905"
+    },
+    {
+      "file": "01-多维课表查询-R3-Bound.zip",
+      "sha256": "ab61b8640a5005b732f48d580e735e3b321718108fd689c0e20c87565701b0c9"
+    },
+    {
+      "file": "02-空教室规划-R3-Bound.zip",
+      "sha256": "25ecfa4d3abc845215e84ae2e5c653416acd0af06b6c03d213ca86a03f75b2cd"
+    },
+    {
+      "file": "03-课程冲突比较-R3-Bound.zip",
+      "sha256": "9fdf24a54b63ac3c643412af3ccf23fc33d1f74a0718eed109e2dcdab2d6eb6f"
+    },
+    {
+      "file": "04-今日校园计划-R3-Bound.zip",
+      "sha256": "bcc02ac2c9a74c81a9e1f5262508cccc773764ee1c12869fe847f6f7a7e640cd"
+    },
+    {
+      "file": "05-校园教学态势-R1-Pilot.widget",
+      "sha256": "8d2abb47db65e81a0f5fd631f6a34dd6dae962fb95c231a218a2c20aa3bb3c0a"
+    },
+    {
+      "file": "05-Campus-Overview-Contract.json",
+      "sha256": "5c191a6bb276a39fc4819e7a43f235feae605c9a7e5b1d5eed801a11f1b25cd5"
+    },
+    {
+      "file": "ADP-R4-RUNTIME-E2E-CHECKLIST.md",
+      "sha256": "37cd9866d1fe0a054f36992595aafb21a4a953bc7793bbc8f9d6908650c5ec7c"
+    },
+    {
+      "file": "ADP-HERO-DEMO-SCRIPT.md",
+      "sha256": "6604f596769a5471e38293fa7f0feaae7f85bb8c8671af9d48f5c5ac049c1648"
+    },
+    {
+      "file": "ROLLBACK.md",
+      "sha256": "93fe924736d0ac94908e4d77eb7d9ea0636033d2c4600d527545dba3510f986c"
+    },
+    {
+      "file": "ADP-R4-APP-EXPECTED-CONFIG.json",
+      "sha256": "a5bb57dcdf6882b30abf53e916cd45138869f2d52fd5747ec6790281c072adf9"
+    },
+    {
+      "file": "ADP-R4-EVALUATION.xlsx",
+      "sha256": "8840ae29c4d832722dff6c8876921e721a448dbf12f1e948b82bcb98276f8b07"
+    }
+  ]
+}

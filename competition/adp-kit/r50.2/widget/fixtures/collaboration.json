@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0003",
+  "dataVersion": "competition-demo-v3",
+  "resolvedEntity": { "type": "group", "id": "grp-1", "name": "教师001、教师002" },
+  "items": [
+    {
+      "weekday": 3,
+      "weekdayName": "周三",
+      "date": "2026-09-02",
+      "periodStart": 7,
+      "periodEnd": 8,
+      "periodText": "第7-8节",
+      "freePeriodCount": 2,
+      "roomCount": 3,
+      "rooms": [
+        { "roomId": "r-401", "roomName": "A3-101", "building": "A3", "campusId": "campus-a", "campusName": "校区A", "capacity": 60, "type": "普通教室" },
+        { "roomId": "r-402", "roomName": "A3-102", "building": "A3", "campusId": "campus-a", "campusName": "校区A", "capacity": 60, "type": "普通教室" },
+        { "roomId": "r-403", "roomName": "A3-103", "building": "A3", "campusId": "campus-a", "campusName": "校区A", "capacity": 80, "type": "多媒体教室" }
+      ]
+    },
+    {
+      "weekday": 6,
+      "weekdayName": "周六",
+      "date": "2026-09-05",
+      "periodStart": 1,
+      "periodEnd": 4,
+      "periodText": "第1-4节",
+      "freePeriodCount": 4,
+      "roomCount": 2,
+      "rooms": [
+        { "roomId": "r-404", "roomName": "A3-104", "building": "A3", "campusId": "campus-a", "campusName": "校区A", "capacity": 60, "type": "普通教室" },
+        { "roomId": "r-405", "roomName": "A3-105", "building": "A3", "campusId": "campus-a", "campusName": "校区A", "capacity": 60, "type": "普通教室" }
+      ]
+    }
+  ],
+  "actions": [],
+  "summary": { "entityCount": 2, "candidateCount": 2 },
+  "query": { "week": 1 },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:02:00.000Z",
+    "verified": true
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "queryId": "q-20260819-0002",
+  "dataVersion": "competition-demo-v3",
+  "resolvedEntity": { "type": "campus", "id": "campus-a", "name": "校区A" },
+  "items": [
+    {
+      "roomId": "r-301",
+      "roomName": "A1-101",
+      "building": "A1",
+      "campusId": "campus-a",
+      "campusName": "校区A",
+      "capacity": 120,
+      "type": "多媒体教室"
+    },
+    {
+      "roomId": "r-302",
+      "roomName": "A1-102",
+      "building": "A1",
+      "campusId": "campus-a",
+      "campusName": "校区A",
+      "capacity": 60,
+      "type": "普通教室"
+    },
+    {
+      "roomId": "r-303",
+      "roomName": "A2-201",
+      "building": "A2",
+      "campusId": "campus-a",
+      "campusName": "校区A",
+      "capacity": 80,
+      "type": "多媒体教室"
+    }
+  ],
+  "actions": [],
+  "query": { "weekday": 3, "periodStart": 5, "periodEnd": 6 },
+  "evidence": {
+    "dataVersion": "competition-demo-v3",
+    "dataHash": "sha256:deadbeefdeadbeefdeadbeefdeadbeef",
+    "source": "competition-demo-v3",
+    "computedAt": "2026-08-19T10:01:00.000Z",
+    "verified": true
+  }
+}

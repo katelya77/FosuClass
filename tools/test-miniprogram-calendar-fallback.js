@@ -97,8 +97,8 @@ async function run() {
   page.onShow();
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert(Array.isArray(page.data.weeks), "page should set weeks");
-  assert.strictEqual(page.data.weeks.length, 19, "calendar page should never leave weeks empty after network failure");
-  assert(page.data.title.includes("2025-2026学年第二学期"), "page should show current semester title");
+  assert.strictEqual(page.data.weeks.length, 0, "cold start without an active pointer must not resurrect an archived semester");
+  assert(!page.data.title.includes("2025-2026"), "unknown active term must not be labeled as the archived built-in semester");
   console.log("test-miniprogram-calendar-fallback passed");
 }
 

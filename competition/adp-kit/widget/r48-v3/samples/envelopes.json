@@ -1,0 +1,235 @@
+{
+  "schedule-day": {
+    "success": true,
+    "queryId": "q-r48-schedule-day",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": { "type": "teacher", "name": "教师003" },
+    "query": { "week": 1, "weekday": 3 },
+    "evidence": { "verified": true },
+    "items": [
+      {
+        "lessonId": "les-101",
+        "courseName": "高等数学A",
+        "periodText": "第1-2节",
+        "startTime": "08:00",
+        "endTime": "09:40",
+        "date": "2026-09-02",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "campusName": "校区A",
+        "building": "教学楼A1",
+        "roomName": "A1-104",
+        "teachers": ["教师003"],
+        "classes": ["2025级A班"]
+      },
+      {
+        "lessonId": "les-102",
+        "courseName": "数据结构",
+        "periodText": "第5-6节",
+        "startTime": "14:00",
+        "endTime": "15:40",
+        "date": "2026-09-02",
+        "weekday": 3,
+        "weekdayName": "周三",
+        "campusName": "校区B",
+        "building": "实验楼B2",
+        "roomName": "B2-301",
+        "teachers": ["教师003"],
+        "classes": ["2025级A班", "2025级B班"]
+      }
+    ]
+  },
+  "schedule-week": {
+    "success": true,
+    "queryId": "q-r48-schedule-week",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": { "type": "teacher", "name": "教师009" },
+    "query": { "week": 1 },
+    "evidence": { "verified": true },
+    "items": [
+      { "lessonId": "les-201", "courseName": "操作系统", "periodText": "第1-2节", "startTime": "08:00", "endTime": "09:40", "date": "2026-08-31", "weekday": 1, "weekdayName": "周一", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-201", "teachers": ["教师009"], "classes": ["2024级C班"] },
+      { "lessonId": "les-202", "courseName": "操作系统", "periodText": "第3-4节", "startTime": "10:00", "endTime": "11:40", "date": "2026-08-31", "weekday": 1, "weekdayName": "周一", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-201", "teachers": ["教师009"], "classes": ["2024级D班"] },
+      { "lessonId": "les-203", "courseName": "编译原理", "periodText": "第5-6节", "startTime": "14:00", "endTime": "15:40", "date": "2026-09-01", "weekday": 2, "weekdayName": "周二", "campusName": "校区B", "building": "教学楼B1", "roomName": "B1-102", "teachers": ["教师009"], "classes": ["2024级C班"] },
+      { "lessonId": "les-204", "courseName": "操作系统实验", "periodText": "第7-8节", "startTime": "16:00", "endTime": "17:40", "date": "2026-09-02", "weekday": 3, "weekdayName": "周三", "campusName": "校区B", "building": "实验楼B2", "roomName": "B2-204", "teachers": ["教师009"], "classes": ["2024级C班"] },
+      { "lessonId": "les-205", "courseName": "编译原理", "periodText": "第1-2节", "startTime": "08:00", "endTime": "09:40", "date": "2026-09-03", "weekday": 4, "weekdayName": "周四", "campusName": "校区A", "building": "教学楼A2", "roomName": "A2-305", "teachers": ["教师009"], "classes": ["2024级D班"] },
+      { "lessonId": "les-206", "courseName": "操作系统", "periodText": "第5-6节", "startTime": "14:00", "endTime": "15:40", "date": "2026-09-04", "weekday": 5, "weekdayName": "周五", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-201", "teachers": ["教师009"], "classes": ["2024级C班"] },
+      { "lessonId": "les-207", "courseName": "专业导论", "periodText": "第9-10节", "startTime": "19:00", "endTime": "20:40", "date": "2026-09-04", "weekday": 5, "weekdayName": "周五", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-108", "teachers": ["教师009"], "classes": ["2025级A班"] }
+    ]
+  },
+  "schedule-date": {
+    "success": true,
+    "queryId": "q-r48-schedule-date",
+    "dataVersion": "competition-demo-v1",
+    "resolvedEntity": { "type": "room", "name": "A1-101" },
+    "query": { "date": "2026-09-03" },
+    "evidence": { "verified": true },
+    "items": [
+      { "lessonId": "les-301", "courseName": "大学物理B", "periodText": "第1-2节", "startTime": "08:00", "endTime": "09:40", "date": "2026-09-03", "weekday": 4, "weekdayName": "周四", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-101", "teachers": ["教师004"], "classes": ["2025级B班"] },
+      { "lessonId": "les-302", "courseName": "大学物理B", "periodText": "第3-4节", "startTime": "10:00", "endTime": "11:40", "date": "2026-09-03", "weekday": 4, "weekdayName": "周四", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-101", "teachers": ["教师004"], "classes": ["2025级C班"] },
+      { "lessonId": "les-303", "courseName": "思政通识", "periodText": "第7-8节", "startTime": "16:00", "endTime": "17:40", "date": "2026-09-03", "weekday": 4, "weekdayName": "周四", "campusName": "校区A", "building": "教学楼A1", "roomName": "A1-101", "teachers": ["教师007"], "classes": ["2025级A班"] }
+    ]
+  },
+  "classroom-normal": {
+    "success": true,
+    "queryId": "q-r48-classroom",
+    "dataVersion": "competition-demo-v1",
+    "query": { "campus": "校区A", "date": "2026-09-03", "periodStart": 7, "periodEnd": 8, "capacity": 60 },
+    "evidence": { "verified": true },
+    "items": [
+      { "roomName": "A1-103", "campusName": "校区A", "building": "教学楼A1", "capacity": 80, "roomType": "多媒体", "periodText": "第7-8节", "date": "2026-09-03" },
+      { "roomName": "A1-106", "campusName": "校区A", "building": "教学楼A1", "capacity": 80, "roomType": "多媒体", "periodText": "第7-8节", "date": "2026-09-03" },
+      { "roomName": "A2-201", "campusName": "校区A", "building": "教学楼A2", "capacity": 60, "roomType": "普通", "periodText": "第7-8节", "date": "2026-09-03" },
+      { "roomName": "A2-204", "campusName": "校区A", "building": "教学楼A2", "capacity": 60, "roomType": "普通", "periodText": "第7-8节", "date": "2026-09-03" }
+    ]
+  },
+  "classroom-empty": {
+    "success": true,
+    "queryId": "q-r48-classroom-empty",
+    "dataVersion": "competition-demo-v1",
+    "query": { "campus": "校区B", "date": "2026-09-03", "periodStart": 3, "periodEnd": 4, "building": "实验楼B1", "capacity": 120 },
+    "evidence": { "verified": true },
+    "items": []
+  },
+  "conflict-compare": {
+    "success": true,
+    "queryId": "q-r48-conflict-compare",
+    "dataVersion": "competition-demo-v1",
+    "query": { "week": 1, "weekday": 5 },
+    "compared": [
+      { "type": "teacher", "name": "教师003" },
+      { "type": "teacher", "name": "教师009" }
+    ],
+    "summary": { "conflictCount": 1, "hasConflict": true, "firstBusySlots": 2, "secondBusySlots": 3, "selfCompare": false, "rushWarningCount": 1 },
+    "evidence": { "verified": true },
+    "items": [
+      {
+        "date": "2026-09-04",
+        "weekdayName": "周五",
+        "periodText": "第5-6节",
+        "first": { "courseName": "高等数学A", "periodText": "第5-6节", "campusName": "校区A", "roomName": "A1-201" },
+        "second": { "courseName": "操作系统", "periodText": "第5-6节", "campusName": "校区A", "roomName": "A1-201" }
+      }
+    ],
+    "rushWarnings": [
+      {
+        "entity": "教师009",
+        "date": "2026-09-04",
+        "weekdayName": "周五",
+        "gapMinutes": 20,
+        "from": { "courseName": "操作系统", "periodText": "第5-6节", "campusName": "校区A", "roomName": "A1-201" },
+        "to": { "courseName": "专业导论", "periodText": "第9-10节", "campusName": "校区B", "roomName": "B1-105" }
+      }
+    ]
+  },
+  "conflict-self": {
+    "success": true,
+    "queryId": "q-r48-conflict-self",
+    "dataVersion": "competition-demo-v1",
+    "query": { "week": 1, "weekday": 1 },
+    "compared": [
+      { "type": "teacher", "name": "教师009" },
+      { "type": "teacher", "name": "教师009" }
+    ],
+    "summary": { "conflictCount": 0, "hasConflict": false, "firstBusySlots": 3, "secondBusySlots": 3, "selfCompare": true, "rushWarningCount": 1 },
+    "evidence": { "verified": true },
+    "items": [],
+    "rushWarnings": [
+      {
+        "entity": "教师009",
+        "date": "2026-08-31",
+        "weekdayName": "周一",
+        "gapMinutes": 20,
+        "from": { "courseName": "操作系统", "periodText": "第3-4节", "campusName": "校区A", "roomName": "A1-201" },
+        "to": { "courseName": "编译原理", "periodText": "第5-6节", "campusName": "校区B", "roomName": "B1-102" }
+      }
+    ]
+  },
+  "conflict-safe": {
+    "success": true,
+    "queryId": "q-r48-conflict-safe",
+    "dataVersion": "competition-demo-v1",
+    "query": { "week": 1, "weekday": 2 },
+    "compared": [
+      { "type": "teacher", "name": "教师003" },
+      { "type": "teacher", "name": "教师003" }
+    ],
+    "summary": { "conflictCount": 0, "hasConflict": false, "firstBusySlots": 2, "secondBusySlots": 2, "selfCompare": true, "rushWarningCount": 0 },
+    "evidence": { "verified": true },
+    "items": [],
+    "rushWarnings": []
+  },
+  "day-plan": {
+    "success": true,
+    "queryId": "q-r48-day-plan",
+    "dataVersion": "competition-demo-v1",
+    "query": { "date": "2026-09-04", "weekday": 5, "visitorId": "visitor-demo-001" },
+    "summary": { "lessonCount": 2, "gapCount": 2, "hasCrossCampus": true },
+    "evidence": { "verified": true },
+    "items": [
+      { "type": "lesson", "lessonId": "les-401", "courseName": "思政通识", "periodText": "第1-2节", "startTime": "08:00", "endTime": "09:40", "campusName": "校区A", "roomName": "A1-201", "teachers": ["教师007"], "suggestion": "", "studyRooms": [] },
+      { "type": "gap", "lessonId": "", "courseName": "", "periodText": "第3-4节", "startTime": "10:00", "endTime": "11:40", "campusName": "", "roomName": "", "teachers": [], "suggestion": "空闲时段，可安排自习", "studyRooms": ["A1-203（60人）", "A1-205（60人）"] },
+      { "type": "lesson", "lessonId": "les-402", "courseName": "大学物理B", "periodText": "第5-6节", "startTime": "14:00", "endTime": "15:40", "campusName": "校区B", "roomName": "B1-201", "teachers": ["教师004"], "suggestion": "", "studyRooms": [] },
+      { "type": "risk", "lessonId": "", "courseName": "", "periodText": "午间转场", "startTime": "11:40", "endTime": "14:00", "campusName": "", "roomName": "", "teachers": [], "suggestion": "上午在校区A、下午在校区B，注意午间跨校区转场时间", "studyRooms": [] },
+      { "type": "gap", "lessonId": "", "courseName": "", "periodText": "第7-8节", "startTime": "16:00", "endTime": "17:40", "campusName": "", "roomName": "", "teachers": [], "suggestion": "空闲时段，可安排自习", "studyRooms": ["B1-301（45人）"] }
+    ]
+  },
+  "campus-overview": {
+    "success": true,
+    "queryId": "q-r48-campus-overview",
+    "dataVersion": "competition-demo-v1",
+    "evidence": { "verified": true },
+    "items": [
+      {
+        "window": {
+          "windowStart": "2026-08-25",
+          "windowEnd": "2026-09-27",
+          "teachingStart": "2026-08-31",
+          "preparationPeriod": { "startDate": "2026-08-25", "endDate": "2026-08-30" }
+        },
+        "summary": { "weekCount": 4, "lessonOccurrences": 126, "teacherCount": 8, "roomCount": 22, "campusCount": 2 },
+        "matrix": [
+          { "week": 1, "days": [{ "lessonCount": 7 }, { "lessonCount": 6 }, { "lessonCount": 7 }, { "lessonCount": 5 }, { "lessonCount": 6 }] },
+          { "week": 2, "days": [{ "lessonCount": 7 }, { "lessonCount": 6 }, { "lessonCount": 7 }, { "lessonCount": 5 }, { "lessonCount": 7 }] },
+          { "week": 3, "days": [{ "lessonCount": 7 }, { "lessonCount": 6 }, { "lessonCount": 7 }, { "lessonCount": 5 }, { "lessonCount": 6 }] },
+          { "week": 4, "days": [{ "lessonCount": 7 }, { "lessonCount": 6 }, { "lessonCount": 7 }, { "lessonCount": 5 }, { "lessonCount": 7 }] }
+        ],
+        "campusResources": [
+          { "campusName": "校区A", "lessonOccurrences": 76, "occupancyRate": 0.063, "freeRoomPeriodUnits": 2248, "largeRoomAvailabilityRate": 0.933 },
+          { "campusName": "校区B", "lessonOccurrences": 50, "occupancyRate": 0.063, "freeRoomPeriodUnits": 1500, "largeRoomAvailabilityRate": 0.934 }
+        ],
+        "teacherLoadTop": [
+          { "teacherName": "教师002", "lessonOccurrences": 24, "periodUnits": 48 },
+          { "teacherName": "教师003", "lessonOccurrences": 20, "periodUnits": 40 },
+          { "teacherName": "教师001", "lessonOccurrences": 16, "periodUnits": 32 }
+        ],
+        "risks": { "conflictCount": 0, "rushCount": 8, "continuousLoadCount": 24 },
+        "peakSlot": { "week": 1, "weekdayName": "周三", "period": 5, "lessonCount": 3 }
+      }
+    ]
+  },
+  "choice": {
+    "success": false,
+    "queryId": "q-r48-choice",
+    "dataVersion": "competition-demo-v1",
+    "error": { "code": "AMBIGUOUS_ENTITY", "message": "需要确认查询对象" },
+    "items": [
+      { "name": "教师003", "type": "teacher", "description": "第1周有 5 次课程" },
+      { "name": "教师009", "type": "teacher", "description": "第1周有 7 次课程" },
+      { "name": "教师030", "type": "teacher", "description": "第1周有 2 次课程" }
+    ]
+  },
+  "recovery-range": {
+    "success": false,
+    "queryId": "q-r48-recovery-range",
+    "dataVersion": "competition-demo-v1",
+    "query": { "date": "2027-03-01" },
+    "error": { "code": "OUT_OF_RANGE", "message": "这个日期超出了当前学期可查询范围" }
+  },
+  "recovery-tool": {
+    "success": false,
+    "queryId": "q-r48-recovery-tool",
+    "dataVersion": "competition-demo-v1",
+    "query": { "campus": "校区A", "date": "2026-09-03", "periodStart": 7, "periodEnd": 8 },
+    "error": { "code": "TIMEOUT", "message": "校园工具暂时没有返回可核验结果" }
+  }
+}

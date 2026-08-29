@@ -1,0 +1,19 @@
+{
+  "$schema": "./campus-result-envelope.schema.json",
+  "description": "R50.2B Agent Tool → Envelope variant 映射（唯一权威清单，13 个 Agent Tool 全量覆盖）。",
+  "mapping": {
+    "campus_schedule_query": "schedule",
+    "campus_schedule_range_query": "schedule",
+    "campus_day_plan": "schedule",
+    "campus_classroom_search": "space",
+    "campus_common_free_time_query": "collaboration",
+    "campus_group_plan": "collaboration",
+    "campus_risk_check": "risk",
+    "campus_reschedule_feasibility": "reschedule",
+    "campus_teacher_load_query": "ranking",
+    "campus_room_utilization_query": "ranking",
+    "campus_overview": "overview",
+    "campus_entity_search": "message",
+    "campus_academic_context": "message"
+  }
+}

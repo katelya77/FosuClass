@@ -1,0 +1,31 @@
+{
+  "version": "R49.4",
+  "title": "个人导入边界策略（匿名提交）",
+  "principles": {
+    "personalImportStorage": "excluded",
+    "rawImportAllowed": false,
+    "credentialed": false,
+    "modelExposure": "none",
+    "submissionPackaging": "anonymous-only"
+  },
+  "scanScope": [
+    "competition/adp-kit/r49-ma",
+    "competition/adp-kit submission inputs (mock-data/knowledge/qa/workflows/widget/evaluation/openapi/mcp)",
+    "competition/submission-package"
+  ],
+  "gates": {
+    "privateExtensions": [".xls", ".xlsx"],
+    "credentialPatterns": [
+      "password/passwd/pwd 字面量",
+      "cookie/sessionId/jsessionid 字面量",
+      "authorization Bearer 值",
+      "api key/secret/access-token 字面量",
+      "账号/密码/学号 值",
+      "带填充 base64 长串"
+    ],
+    "identityDenylist": "test-only constants in test-r49-4-anonymity-boundary.js; not copied into generated submission assets",
+    "builderGuard": "build-submission-package.js refuses personal-import/raw-import/private-import directories",
+    "fixtureNaming": "neutral values only (教师A01 / 2026级示例1班 / 示例课程A / 校区A / A1-101)"
+  },
+  "note": "denylist 常量只存在于测试代码，绝不进入生成资产；知识库 publish/rollback 等高风险操作仍需人工确认。"
+}

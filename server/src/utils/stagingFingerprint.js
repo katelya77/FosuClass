@@ -128,6 +128,38 @@ function stableClone(value, path = []) {
   return output;
 }
 
+function canonicalTermConfig(source) {
+  const data = source && typeof source === "object" ? source : {};
+  const config = data.termConfig && typeof data.termConfig === "object" ? data.termConfig : {};
+  return {
+    term: config.term || data.term || data.semester || "",
+    semesterText: config.semesterText || data.semesterText || "",
+    termStartDate: config.termStartDate || data.termStartDate || data.sourceStartDate || data.meta && data.meta.startDate || "",
+    totalWeeks: Number(config.totalWeeks || data.totalWeeks || 0) || 0,
+    weekStart: config.weekStart || data.weekStart || "monday",
+  };
+}
+
+function canonicalTeachingCalendar(source) {
+  const data = source && typeof source === "object" ? source : {};
+  const calendar = data.teachingCalendar && typeof data.teachingCalendar === "object" ? data.teachingCalendar : {};
+  if (!Object.keys(calendar).length) return {};
+  return {
+    schemaVersion: calendar.schemaVersion || "",
+    term: calendar.term || data.term || data.semester || "",
+    semesterText: calendar.semesterText || "",
+    termStartDate: calendar.termStartDate || "",
+    totalWeeks: Number(calendar.totalWeeks || 0) || 0,
+    weekStart: calendar.weekStart || "monday",
+    source: calendar.source || "",
+    sourceStatus: calendar.sourceStatus || "",
+    sourceHash: calendar.sourceHash || "",
+    weeks: Array.isArray(calendar.weeks) ? calendar.weeks : [],
+    specialDates: Array.isArray(calendar.specialDates) ? calendar.specialDates : [],
+    cohortMilestones: Array.isArray(calendar.cohortMilestones) ? calendar.cohortMilestones : [],
+  };
+}
+
 function canonicalPayload(data) {
   const source = data && typeof data === "object" ? data : {};
   return stableClone({
@@ -135,6 +167,8 @@ function canonicalPayload(data) {
     term: source.term || source.semester || "",
     semester: source.semester || source.term || "",
     termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+    termConfig: canonicalTermConfig(source),
+    teachingCalendar: canonicalTeachingCalendar(source),
     catalog: source.catalog || {},
     majors: source.majors || [],
     classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
@@ -158,6 +192,8 @@ function canonicalSource(data) {
     term: source.term || source.semester || "",
     semester: source.semester || source.term || "",
     termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+    termConfig: canonicalTermConfig(source),
+    teachingCalendar: canonicalTeachingCalendar(source),
     catalog: source.catalog || {},
     majors: source.majors || [],
     classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
@@ -249,6 +285,9 @@ function buildSidecarMeta(data, options = {}) {
     usedProgressCache: Boolean(meta.usedProgressCache),
     usedNoScheduleCache: Boolean(meta.usedNoScheduleCache),
     usedClassScheduleCache: Boolean(meta.usedClassScheduleCache),
+    resumedFromRunProgress: Boolean(meta.resumedFromRunProgress),
+    progressCacheRunId: meta.progressCacheRunId || "",
+    cacheSource: meta.cacheSource || "",
     actualNetworkRequestCount: Number(meta.actualNetworkRequestCount || 0),
     skippedByProgressCount: Number(meta.skippedByProgressCount || 0),
     skippedByNoScheduleCount: Number(meta.skippedByNoScheduleCount || 0),

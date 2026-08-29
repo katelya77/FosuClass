@@ -1,0 +1,12 @@
+{
+  "region": "ap-shanghai",
+  "appId": "LOCAL_ONLY_APP_ID",
+  "pluginId": "LOCAL_ONLY_PLUGIN_ID",
+  "agentIds": {
+    "main": "LOCAL_ONLY_MAIN_AGENT_ID",
+    "schedule": "LOCAL_ONLY_SCHEDULE_AGENT_ID",
+    "risk": "LOCAL_ONLY_RISK_AGENT_ID",
+    "insight": "LOCAL_ONLY_INSIGHT_AGENT_ID"
+  },
+  "cloudBaseEnvId": "LOCAL_ONLY_ENV_ID"
+}

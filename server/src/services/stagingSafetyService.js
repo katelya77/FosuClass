@@ -185,6 +185,39 @@ function getSourceMode(resourceCounts, resource) {
   return resourceCounts && resourceCounts[resource] && resourceCounts[resource].sourceMode || "unknown";
 }
 
+function resolveStagingPublishMode(data, activeSnapshot, options = {}) {
+  const stagingTerm = String(data && (data.term || data.semester) || "").trim();
+  const registryTerm = options.registryTerm === undefined
+    ? (stagingTerm ? termRegistryService.getTerm(stagingTerm) : null)
+    : options.registryTerm;
+  const activeRegistryTerm = options.activeRegistryTerm === undefined
+    ? termRegistryService.getActiveTerm()
+    : options.activeRegistryTerm;
+  const activeTerm = String(
+    options.currentTerm ||
+    activeSnapshot && (activeSnapshot.term || activeSnapshot.semester) ||
+    activeRegistryTerm && activeRegistryTerm.term ||
+    appConfigService.getAdminConfig().currentSemester ||
+    ""
+  ).trim();
+  const crossTermReadyCandidate = Boolean(
+    stagingTerm &&
+    activeTerm &&
+    stagingTerm !== activeTerm &&
+    registryTerm &&
+    ["planned", "ready"].includes(registryTerm.status)
+  );
+  const readyOnly = options.readyOnly === true || crossTermReadyCandidate;
+  return {
+    activeTerm,
+    stagingTerm,
+    registryStatus: registryTerm && registryTerm.status || "",
+    crossTermReadyCandidate,
+    readyOnly,
+    publishMode: readyOnly ? "ready-only" : "activate-current",
+  };
+}
+
 function buildStagingSafety(data, activeSnapshot, options = {}) {
   const includeScopes = getStagingIncludeScopes(data);
   const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
@@ -199,7 +232,8 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
       activeSnapshot
     )
     : (options.activeResourceCounts || null);
-  const contractComparison = activeResourceCounts
+  const crossTermReadyCandidate = options.crossTermReadyCandidate === true;
+  const contractComparison = activeResourceCounts && !crossTermReadyCandidate
     ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
     : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
   const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
@@ -223,7 +257,7 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
   ].forEach((item) => {
     const activeCount = Number(activeCounts[item.key] || 0);
     const stagingCount = Number(counts[item.key] || 0);
-    if (!activeResourceCounts || activeCount <= 0 || stagingCount >= activeCount) return;
+    if (crossTermReadyCandidate || !activeResourceCounts || activeCount <= 0 || stagingCount >= activeCount) return;
     const dropRate = (activeCount - stagingCount) / activeCount;
     if (dropRate <= 0.3) return;
     const dropPercent = parseFloat((dropRate * 100).toFixed(2));
@@ -268,7 +302,9 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
     blockers.push("partial staging snapshots cannot be published by default");
   }
   if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
-    warnings.push(`Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
+    warnings.push(crossTermReadyCandidate
+      ? `Ready-only candidate ${stagingTerm} differs from active term ${currentTerm}; activation remains disabled.`
+      : `Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
   }
   if (releaseVersionExists) {
     warnings.push(`releaseVersion ${releaseVersion} already exists`);
@@ -306,6 +342,7 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
     currentTerm,
     stagingTerm,
     releaseVersionExists,
+    crossTermReadyCandidate,
   };
 }
 
@@ -315,6 +352,7 @@ module.exports = {
   buildStagingSafety,
   getStagingClassSchedules,
   getStagingIncludeScopes,
+  resolveStagingPublishMode,
   summarizeStagingData,
   validateStagingData,
 };

@@ -204,7 +204,7 @@ function testReleaseLifecycle() {
   const appConfig = appConfigService.getPublicAppConfig().data;
   assert.strictEqual(appConfig.currentSemester, "2026-2027-2");
   assert(Array.isArray(appConfig.availableTerms), "app-config should expose availableTerms");
-  assert(appConfig.availableTerms.some((item) => item.term === "2025-2026-2"), "archived term should remain public");
+  assert.deepStrictEqual(appConfig.availableTerms.map((item) => item.term), ["2026-2027-2"], "only the active term should remain public");
 
   const retention = storageLifecycleService.runMaintenance({ dryRun: true });
   const retentionText = JSON.stringify(retention);
@@ -227,7 +227,8 @@ async function testTermDataIsolation() {
   assert.strictEqual(catalogB.colleges[0].code, "B");
   assert.strictEqual(catalogB.term, termB);
   const majorsB = await schoolCatalogService.getMajors("B", "2026", termB);
-  assert.strictEqual(majorsB.majors[0].code, "B1");
+  assert.strictEqual(majorsB.dataSource, "release-class-index");
+  assert.deepStrictEqual(majorsB.majors, [], "release class index must not expose majors without schedule data");
 
   const planned = termRegistryService.createPlannedTerm({ term: "2027-2028-1", totalWeeks: 20 });
   assert.strictEqual(planned.status, "planned");

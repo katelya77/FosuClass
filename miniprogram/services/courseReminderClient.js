@@ -106,6 +106,11 @@ async function planReminder(input) {
       todayDate: safeText(source.todayDate, 10),
       todayWeekday: Math.max(1, Math.min(7, Number(source.todayWeekday || 1) || 1)),
       currentTeachingWeek: Math.max(0, Number(source.currentTeachingWeek || 0) || 0),
+      termStartDate: safeText(source.termStartDate, 10),
+      totalWeeks: Math.max(0, Number(source.totalWeeks || 0) || 0),
+      weekStart: source.weekStart === "sunday" ? "sunday" : "monday",
+      termPhase: safeText(source.termPhase, 24),
+      isInTerm: source.isInTerm === true,
       clientTimestampMs: Number(source.clientTimestampMs || Date.now()) || Date.now(),
     }, options({ retries: 0, timeout: 15000 }));
     if (!response || response.success === false) return mapFailure(response, "REMINDER_PLAN_FAILED");
@@ -130,6 +135,11 @@ async function configureReminder(input) {
       todayDate: safeText(source.todayDate, 10),
       todayWeekday: Math.max(1, Math.min(7, Number(source.todayWeekday || 1) || 1)),
       currentTeachingWeek: Math.max(0, Number(source.currentTeachingWeek || 0) || 0),
+      termStartDate: safeText(source.termStartDate, 10),
+      totalWeeks: Math.max(0, Number(source.totalWeeks || 0) || 0),
+      weekStart: source.weekStart === "sunday" ? "sunday" : "monday",
+      termPhase: safeText(source.termPhase, 24),
+      isInTerm: source.isInTerm === true,
       clientTimestampMs: Number(source.clientTimestampMs || Date.now()) || Date.now(),
     }, options({ retries: 0, timeout: 20000 }));
     if (!response || response.success === false) return mapFailure(response, "REMINDER_CREATE_FAILED");

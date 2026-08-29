@@ -22,7 +22,11 @@ global.getApp = () => ({ globalData: {} });
 
 const coordinator = require("../miniprogram/services/startupCoordinator");
 coordinator.resolveCriticalRuntime().then(() => {
-  assert(calls.length <= 1, `critical runtime should need at most 1 request, got ${calls.length}`);
+  const pointerCalls = calls.filter((url) => url.includes("/runtime/active.json"));
+  const otherCalls = calls.filter((url) => !url.includes("/runtime/active.json"));
+  assert(pointerCalls.length >= 1, "critical runtime must read the runtime pointer");
+  assert(pointerCalls.length <= 2, `runtime pointer fan-out must stay within ready origins, got ${pointerCalls.length}`);
+  assert.deepStrictEqual(otherCalls, [], `critical path must not issue non-pointer requests: ${otherCalls.join(", ")}`);
   assert(!calls.some((url) => url.includes("/periodic-data")), "periodic-data must not be in critical path");
   console.log("test-cold-start-request-budget passed");
 });

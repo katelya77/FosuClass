@@ -33,6 +33,10 @@ const DIRECT_NO_PROXY_HOSTS = [
   "127.0.0.1",
   "172.16.0.0/12",
 ];
+const DIRECT_BROWSER_ARGS = [
+  "--no-proxy-server",
+  "--proxy-bypass-list=*",
+];
 
 function parseEnvValue(rawValue) {
   let value = String(rawValue == null ? "" : rawValue).trim();
@@ -79,13 +83,13 @@ function loadSyncClientEnv(options = {}) {
     );
 
   Object.keys(parsed).forEach((key) => {
-    if (env[key] === undefined || env[key] === "") {
+    if (env[key] === undefined) {
       env[key] = parsed[key];
     }
   });
 
   SYNC_ENV_FIELDS.forEach((key) => {
-    if (env[key] === undefined || env[key] === "") {
+    if (env[key] === undefined || (env[key] === "" && SYNC_DEFAULTS[key] !== "")) {
       env[key] = SYNC_DEFAULTS[key];
     }
   });
@@ -150,6 +154,18 @@ function prepareDirectNetworkEnvironment(env = process.env, options = {}) {
   };
 }
 
+function withDirectBrowserArgs(args = []) {
+  const seen = new Set();
+  return (Array.isArray(args) ? args : [])
+    .concat(DIRECT_BROWSER_ARGS)
+    .filter((item) => {
+      const key = String(item || "").trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function safeEnvSummary(env = process.env) {
   return {
     FOSU_BASE_URL: env.FOSU_BASE_URL || SYNC_DEFAULTS.FOSU_BASE_URL,
@@ -162,6 +178,7 @@ function safeEnvSummary(env = process.env) {
 
 module.exports = {
   CLIENT_DIR,
+  DIRECT_BROWSER_ARGS,
   DIRECT_NO_PROXY_HOSTS,
   PROXY_ENV_NAMES,
   SYNC_DEFAULTS,
@@ -175,4 +192,5 @@ module.exports = {
   prepareDirectNetworkEnvironment,
   readSyncClientEnv,
   safeEnvSummary,
+  withDirectBrowserArgs,
 };

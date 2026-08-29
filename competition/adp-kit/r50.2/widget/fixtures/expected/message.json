@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "variant": "message",
+  "status": "success",
+  "title": "查询结果",
+  "verified": true,
+  "summary": "共 3 条结果。",
+  "sections": [
+    {
+      "title": "结果列表",
+      "kind": "prose",
+      "rows": [
+        {
+          "label": "教师001",
+          "value": "程序设计基础 · 高等数学",
+          "badge": "teacher"
+        },
+        {
+          "label": "教师002",
+          "value": "数据结构 · 操作系统",
+          "badge": "teacher"
+        },
+        {
+          "label": "教师003",
+          "value": "计算机网络 · 数据库原理",
+          "badge": "teacher"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "message-browse",
+      "type": "sys.chat",
+      "label": "查看课表",
+      "payload": {
+        "query": "查看的课表"
+      }
+    }
+  ],
+  "displayMeta": {}
+}

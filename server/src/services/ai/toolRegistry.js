@@ -535,11 +535,12 @@ function buildOpenScheduleIntent(goal, context = {}) {
       };
     }
     // not_found for class-looking entity: still try search with locked type, never fall to teacher
+    const normalizedEntity = classAliasResolver.normalizeClassEntity(entity) || entity;
     return {
       name: "search_school_index",
       slots: {
         type: "class",
-        q: entity,
+        q: normalizedEntity,
         lockedEntityType: "class",
         goalAction: "open_schedule",
         explicitCommand: goal.explicitCommand === true,
@@ -664,7 +665,7 @@ function buildSetCurrentScheduleIntent(goal, context = {}) {
 function isProjectQaMessage(text) {
   const value = normalizeText(text);
   if (!value) return false;
-  return /你是谁|介绍一下自己|自我介绍|你叫什么|小佛是谁|你是什么助手|你能做什么|你可以做什么|如何使用校园查询|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|校园服务管家架构|项目知识|Release Pack|XLS-only/i.test(value);
+  return /你是谁|介绍一下自己|自我介绍|你叫什么|小序是谁|小佛是谁|你是什么助手|你能做什么|你可以做什么|如何使用校园查询|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小序.*项目|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|校园服务管家架构|项目知识|Release Pack|XLS-only/i.test(value);
 }
 
 function isConversationalHelp(text) {
@@ -809,7 +810,7 @@ function resolveModernChineseIntent(message, context = {}) {
     if (classroom) return { name: "get_classroom_location", slots: { classroom } };
     return { name: "search_campus_place", slots: { q: stripChineseIntentWords(text) || text } };
   }
-  if (/隐私|使用说明|故障|小佛|佛课小表|校园服务|帮助|说明/.test(text)) {
+  if (/隐私|使用说明|故障|小序|小佛|佛课小表|校园服务|帮助|说明/.test(text)) {
     return { name: "rag_search", slots: { q: text } };
   }
   // 连续自习/共同空闲时间推荐：优先于“连续空教室”与泛化教室搜索

@@ -106,7 +106,7 @@ function removeTimeWords(text) {
 
 function stripIntentWords(text) {
   return removeTimeWords(text)
-    .replace(/^(帮我|请|麻烦|小佛|小佛校园助手|查|查询|查看|看|找|打开|跳转|换成|改成|切到|切换到)+/g, "")
+    .replace(/^(帮我|请|麻烦|小佛|小佛校园助手|小序校园助手|小序|查|查询|查看|看|找|打开|跳转|换成|改成|切到|切换到)+/g, "")
     .replace(/(的)?(课表|课程表|课程安排|排课|上课安排|有没有课|有课吗|课|这门课|课程)$/g, "")
     .replace(/^(这个|该|那|再看|继续看)/g, "")
     .trim();

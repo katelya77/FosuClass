@@ -1,0 +1,102 @@
+{
+  "schema": "fosuclass-adp-transport-contract/v1",
+  "dataVersion": "competition-demo-v1",
+  "policies": [
+    "REQUIRED",
+    "OMIT_IF_EMPTY",
+    "DEFAULT",
+    "EXPLICIT_NULL_ALLOWED",
+    "INVALID_IF_EMPTY"
+  ],
+  "rules": {
+    "emptyValues": [null, "", "ADP_INT_SENTINEL_0"],
+    "integerSentinel": "腾讯 ADP 可把 optional INT 空值序列化为 0；OMIT_IF_EMPTY 参数必须通过结构分支从 Tool Node Body 中完全删除，不能只传 None/null/空串。",
+    "factBoundary": "Transport policy 只能决定字段是否出现在请求中；不得计算、补造或放宽 CampusTools 校园事实。"
+  },
+  "workflows": {
+    "01-schedule": {
+      "tool": "query_schedule",
+      "routes": {
+        "WEEK": {
+          "requiredKeys": ["entityType", "entityName", "week", "periodStart", "periodEnd"],
+          "forbiddenKeys": ["date", "weekday"],
+          "parameters": {
+            "entityType": {"type": "STRING", "policy": "REQUIRED"},
+            "entityName": {"type": "STRING", "policy": "REQUIRED"},
+            "week": {"type": "INT", "policy": "REQUIRED", "range": [1, 20]},
+            "periodStart": {"type": "INT", "policy": "DEFAULT", "default": 1, "range": [1, 10]},
+            "periodEnd": {"type": "INT", "policy": "DEFAULT", "default": 10, "range": [1, 10]}
+          }
+        },
+        "DAY": {
+          "requiredKeys": ["entityType", "entityName", "week", "weekday", "periodStart", "periodEnd"],
+          "forbiddenKeys": ["date"],
+          "parameters": {
+            "entityType": {"type": "STRING", "policy": "REQUIRED"},
+            "entityName": {"type": "STRING", "policy": "REQUIRED"},
+            "week": {"type": "INT", "policy": "REQUIRED", "range": [1, 20]},
+            "weekday": {"type": "INT", "policy": "REQUIRED", "range": [1, 7]},
+            "periodStart": {"type": "INT", "policy": "DEFAULT", "default": 1, "range": [1, 10]},
+            "periodEnd": {"type": "INT", "policy": "DEFAULT", "default": 10, "range": [1, 10]}
+          }
+        },
+        "DATE": {
+          "requiredKeys": ["entityType", "entityName", "date", "periodStart", "periodEnd"],
+          "forbiddenKeys": ["week", "weekday"],
+          "parameters": {
+            "entityType": {"type": "STRING", "policy": "REQUIRED"},
+            "entityName": {"type": "STRING", "policy": "REQUIRED"},
+            "date": {"type": "STRING", "policy": "REQUIRED", "format": "YYYY-MM-DD"},
+            "periodStart": {"type": "INT", "policy": "DEFAULT", "default": 1, "range": [1, 10]},
+            "periodEnd": {"type": "INT", "policy": "DEFAULT", "default": 10, "range": [1, 10]}
+          }
+        }
+      }
+    },
+    "02-classroom": {
+      "tool": "find_available_classrooms",
+      "parameters": {
+        "campus": {"type": "STRING", "policy": "REQUIRED"},
+        "date": {"type": "STRING", "policy": "OMIT_IF_EMPTY", "exclusiveWith": ["week", "weekday"]},
+        "week": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 20]},
+        "weekday": {"type": "INT", "policy": "INVALID_IF_EMPTY", "range": [1, 7], "when": "week route"},
+        "periodStart": {"type": "INT", "policy": "REQUIRED", "range": [1, 10]},
+        "periodEnd": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 10], "exclusiveWith": ["consecutivePeriods"]},
+        "consecutivePeriods": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 10], "exclusiveWith": ["periodEnd"]},
+        "building": {"type": "STRING", "policy": "OMIT_IF_EMPTY"},
+        "capacity": {"type": "INT", "policy": "OMIT_IF_EMPTY", "minimum": 1}
+      },
+      "recommendedRoutes": ["DATE_WITH_PERIOD_END", "DATE_WITH_CONSECUTIVE", "WEEKDAY_WITH_PERIOD_END", "WEEKDAY_WITH_CONSECUTIVE"]
+    },
+    "03-conflict": {
+      "tool": "compare_schedules",
+      "parameters": {
+        "firstType": {"type": "STRING", "policy": "REQUIRED"},
+        "firstName": {"type": "STRING", "policy": "REQUIRED"},
+        "secondType": {"type": "STRING", "policy": "REQUIRED"},
+        "secondName": {"type": "STRING", "policy": "REQUIRED"},
+        "date": {"type": "STRING", "policy": "OMIT_IF_EMPTY", "exclusiveWith": ["week", "weekday"]},
+        "week": {"type": "INT", "policy": "REQUIRED", "range": [1, 20]},
+        "weekday": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 7]},
+        "periodStart": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 10]},
+        "periodEnd": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 10]}
+      },
+      "note": "CampusTools 现有 compare_schedules 兼容 weekday=0 仅是旧 ADP 入口保护；Final transport 仍必须在整周请求中省略 weekday。"
+    },
+    "04-day-plan": {
+      "tool": "generate_day_plan",
+      "parameters": {
+        "visitorId": {"type": "STRING", "policy": "DEFAULT", "default": "visitor-demo-001", "source": "workflow constant"},
+        "date": {"type": "STRING", "policy": "REQUIRED", "format": "YYYY-MM-DD"},
+        "preferredCampus": {"type": "STRING", "policy": "OMIT_IF_EMPTY"},
+        "preferredStudyDuration": {"type": "INT", "policy": "OMIT_IF_EMPTY", "range": [1, 10]}
+      }
+    },
+    "academic-context": {
+      "tool": "get_academic_context",
+      "parameters": {
+        "dateText": {"type": "STRING", "policy": "DEFAULT", "default": "", "note": "空串由冻结工具按 Asia/Shanghai 当前日期解析；显式教学周只作为辅助上下文，不进入 schedule WEEK/DAY 请求。"}
+      }
+    }
+  }
+}

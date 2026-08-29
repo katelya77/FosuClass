@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "timeText": {"type": "string"},
+    "queryId": {"type": "string"},
+    "dataVersion": {"type": "string", "const": "competition-demo-v1"},
+    "summary": {
+      "type": "object",
+      "properties": {
+        "totalCount": {"type": "integer", "minimum": 0},
+        "entityType": {"type": "string"},
+        "entityName": {"type": "string"},
+        "scope": {"type": "string", "enum": ["WEEK", "DAY", "DATE"]}
+      },
+      "required": ["totalCount", "entityType", "entityName", "scope"],
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "weekday": {"type": "integer", "minimum": 1, "maximum": 7},
+          "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+          "periodText": {"type": "string"},
+          "courseName": {"type": "string"},
+          "campusName": {"type": "string"},
+          "building": {"type": "string"},
+          "roomName": {"type": "string"},
+          "timeText": {"type": "string"},
+          "teachers": {"type": "array", "items": {"type": "string"}},
+          "classes": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["weekday", "date", "periodText", "courseName", "campusName", "building", "roomName", "timeText", "teachers", "classes"],
+        "additionalProperties": false
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "const": "sys.chat"},
+          "label": {"type": "string"},
+          "query": {"type": "string"},
+          "intent": {"type": "string"},
+          "entityType": {"type": "string"},
+          "entityName": {"type": "string"},
+          "week": {"type": "integer", "minimum": 1, "maximum": 20},
+          "weekday": {"type": ["integer", "null"]},
+          "date": {"type": "string"}
+        },
+        "required": ["id", "type", "label", "query", "intent", "entityType", "entityName", "week", "weekday", "date"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["title", "timeText", "queryId", "dataVersion", "summary", "items", "actions"],
+  "additionalProperties": false
+}

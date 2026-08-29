@@ -9,8 +9,8 @@ Staging JSON 是本机校园网同步和接力上传的唯一数据交付格式�
   "schemaVersion": "1.0",
   "releaseVersion": "202620271-20260901-090000",
   "term": "2026-2027-1",
-  "termStartDate": "2026-09-01",
-  "generatedAt": "2026-09-01T01:00:00.000Z",
+  "termStartDate": "2026-09-07",
+  "generatedAt": "2026-09-07T01:00:00.000Z",
   "source": "local-sync-client",
   "catalog": {
     "colleges": [],
@@ -76,7 +76,7 @@ Staging JSON 不得包含：
 ## 生成方式
 
 ```powershell
-npm run sync:local-campus -- --term=2026-2027-1 --start=2026-09-01 --output=./staging/2026-2027-1-full.json
+npm run sync:current-term
 ```
 
 ## 上传方式

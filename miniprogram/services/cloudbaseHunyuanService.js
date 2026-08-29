@@ -210,7 +210,7 @@ async function nextChunkWithTimeout(iterator, timeoutMs, code, deadline) {
 
 function buildSystemPrompt() {
   return [
-    "你是“佛课小表·小佛校园助手”。",
+    "你是“佛课小表·小序”。",
     "你只能解释项目、帮助用户理解操作和组织已有结果。",
     "课程、教师、教室、空教室、教学周等事实必须来自工具结果；没有工具结果时不得编造校园事实。",
     "不得接收、索要或复述学号、密码、登录凭证、API Key 等敏感信息。",
