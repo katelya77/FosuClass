@@ -1,6 +1,6 @@
 {
   "schema": "campusflow-adp-assets/v1",
-  "generatedAt": "2026-08-29T09:01:29.366Z",
+  "generatedAt": "2026-08-29T09:23:56.341Z",
   "note": "知识、工作流和评测为受审阅的权威文件；本清单记录当前可交付资产，不包含报告、截图、依赖目录和锁文件。",
   "files": [
     {
@@ -1614,9 +1614,14 @@
       "sha256": "b778e8cc04b6a160a5b6fb2432977e02accfb253653a6a4aa3452723121fa976"
     },
     {
+      "path": "workflows/r42-runtime-contract.json",
+      "bytes": 1271,
+      "sha256": "c32ab527a8d79c858269421b3af94430111d7b27191049c25e97ec98dd02ff2c"
+    },
+    {
       "path": "workflows/role-instruction.txt",
-      "bytes": 5518,
-      "sha256": "dd28c440f8316acb313f5b4292582f80ce209de1c74aa5760624b22e54e4a87b"
+      "bytes": 5529,
+      "sha256": "f89fb41f3a76f506e9021369067ae375a8b88d2276759c9592bd6334ed317fe7"
     },
     {
       "path": "workflows/workflow-definitions.js",
