@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const builtin = require("../server/src/content/dailyKnowledgeBuiltin");
 const { buildDeployment } = require("../server/src/content/dailyKnowledgeCloudbaseData");
 const serverAppConfigService = require("../server/src/services/appConfigService");
@@ -14,6 +16,20 @@ assert.strictEqual(first.builtinCount, 360);
 assert.strictEqual(first.rotationCount, 360);
 assert.strictEqual(first.collectionName, repeated.collectionName, "collection name must be content-addressed");
 assert.strictEqual(new Set(first.documents.map((item) => item._id)).size, first.documents.length);
+
+const syncScript = fs.readFileSync(path.join(__dirname, "cloudbase", "sync-daily-knowledge.js"), "utf8");
+assert.ok(
+  syncScript.includes("const batch = documents.slice(offset, offset + BATCH_SIZE);"),
+  "CloudBase MCP insert payload must remain an object array"
+);
+assert.ok(
+  syncScript.includes("const missingDocuments = deployment.documents.filter"),
+  "a failed partial upload must resume by inserting only missing documents"
+);
+assert.ok(
+  syncScript.includes("item.TableName || item.Name"),
+  "CloudBase collection listings must recognize the MCP TableName field"
+);
 
 const managedDeployment = buildDeployment({
   managed: [
