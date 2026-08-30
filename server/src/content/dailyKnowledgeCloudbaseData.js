@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const builtin = require("./dailyKnowledgeBuiltin");
+const dailyKnowledgePolicy = require("./dailyKnowledgePolicy");
 
 const REGISTRY_COLLECTION = "fosu_daily_knowledge_registry";
 const ACTIVE_DOCUMENT_ID = "active";
@@ -12,15 +13,21 @@ function normalizePools(source) {
     return {
       managed: Array.isArray(source.managed) ? source.managed : [],
       builtin: Array.isArray(source.builtin) ? source.builtin : builtin,
+      policy: dailyKnowledgePolicy.normalizePolicy(source.policy),
     };
   }
-  return { managed: [], builtin: Array.isArray(source) ? source : builtin };
+  return { managed: [], builtin: Array.isArray(source) ? source : builtin, policy: dailyKnowledgePolicy.normalizePolicy() };
 }
 
 function stablePayload(source = builtin) {
   const pools = normalizePools(source);
-  return pools.managed.map((item) => Object.assign({ source: "managed" }, item))
-    .concat(pools.builtin.map((item) => Object.assign({ source: "builtin" }, item)))
+  const resolved = dailyKnowledgePolicy.resolvePool({
+    managed: pools.managed,
+    builtin: pools.builtin,
+    policy: pools.policy,
+    now: source && source.now instanceof Date ? source.now : new Date(),
+  });
+  return resolved.items.map((item) => Object.assign({ source: resolved.source }, item))
     .map((item) => ({
       sourceId: item.id,
       source: item.source,
@@ -40,8 +47,17 @@ function contentVersion(items = builtin) {
 
 function buildDeployment(items = builtin, now = new Date()) {
   const pools = normalizePools(items);
-  const payload = stablePayload(items);
-  const version = contentVersion(items);
+  const resolved = dailyKnowledgePolicy.resolvePool({ managed: pools.managed, builtin: pools.builtin, policy: pools.policy, now });
+  const payload = resolved.items.map((item) => ({
+    sourceId: item.id,
+    source: resolved.source,
+    category: dailyKnowledgePolicy.categoryFor(item),
+    title: item.title,
+    content: item.content,
+    type: item.type,
+    enabled: true,
+  }));
+  const version = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
   const collectionName = `${CONTENT_COLLECTION_PREFIX}${version.slice(0, 12)}`;
   const publishedAt = now.toISOString();
   const documents = payload.map((item, slot) => Object.assign({
@@ -58,10 +74,13 @@ function buildDeployment(items = builtin, now = new Date()) {
     collectionName,
     contentVersion: version,
     count: documents.length,
-    managedCount: pools.managed.length,
-    builtinCount: pools.builtin.length,
-    rotationOffset: 0,
-    rotationCount: pools.managed.length || pools.builtin.length,
+    enabled: pools.policy.enabled,
+    strategy: pools.policy.strategy,
+    source: resolved.source,
+    managedCount: resolved.source === "managed" ? payload.length : 0,
+    builtinCount: resolved.source === "builtin" ? payload.length : 0,
+    rotationOffset: pools.policy.rotationOffset % Math.max(1, payload.length),
+    rotationCount: payload.length,
     publishedAt,
     documents,
   };

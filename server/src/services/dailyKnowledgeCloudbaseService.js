@@ -24,7 +24,7 @@ function getActiveManaged(now = new Date()) {
 
 function getPlan(now = new Date()) {
   const { state, managed } = getActiveManaged(now);
-  const deployment = buildDeployment({ managed, builtin: state.builtin || [] }, now);
+  const deployment = buildDeployment({ managed, builtin: state.builtin || [], policy: state.policy }, now);
   const runtimeReady = fs.existsSync(SYNC_SCRIPT);
   return {
     envId: ENV_ID,
@@ -35,6 +35,9 @@ function getPlan(now = new Date()) {
     managedCount: deployment.managedCount,
     builtinCount: deployment.builtinCount,
     rotationCount: deployment.rotationCount,
+    enabled: deployment.enabled,
+    strategy: deployment.strategy,
+    source: deployment.source,
     permission: "READONLY",
     keepVersions: 2,
     runtimeReady,

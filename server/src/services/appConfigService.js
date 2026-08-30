@@ -6,6 +6,7 @@ const feedbackService = require("./feedbackService");
 const termRegistryService = require("./termRegistryService");
 const { safeLog } = require("../utils/safeLogger");
 const DEFAULT_DAILY_KNOWLEDGE = require("../content/dailyKnowledgeBuiltin");
+const dailyKnowledgePolicy = require("../content/dailyKnowledgePolicy");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const CONFIG_PATH = path.join(STORAGE_DIR, "admin-config.json");
@@ -36,6 +37,7 @@ const DEFAULT_CONFIG = {
   appConfig: {
     enableFosuStudentImport: true,
   },
+  dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(),
   dataVersion: {
     releaseVersion: "",
     classScheduleUpdatedAt: "",
@@ -120,6 +122,7 @@ function mergeConfig(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   return Object.assign({}, DEFAULT_CONFIG, source, {
     appConfig: Object.assign({}, DEFAULT_CONFIG.appConfig, source.appConfig || {}),
+    dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(source.dailyKnowledge),
     dataVersion: Object.assign({}, DEFAULT_CONFIG.dataVersion, source.dataVersion || {}),
   });
 }
@@ -138,6 +141,7 @@ function saveAdminConfig(patch) {
     disclaimer: toText(source.disclaimer !== undefined ? source.disclaimer : current.disclaimer, 1000) || DEFAULT_DISCLAIMER,
     dataVersion: Object.assign({}, current.dataVersion, source.dataVersion || {}),
     appConfig: Object.assign({}, current.appConfig || {}, source.appConfig || {}),
+    dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(source.dailyKnowledge || current.dailyKnowledge),
     updatedAt: nowIso(),
   });
   next.dataVersion.releaseVersion = toText(next.dataVersion.releaseVersion, 80);
@@ -213,6 +217,9 @@ function normalizeNotice(payload, existing) {
     enabled: toBool(source.enabled, base.enabled !== undefined ? base.enabled : true),
     closable: toBool(source.closable, base.closable !== undefined ? base.closable : true),
     ...(category ? { category } : {}),
+    ...(displayMode === "daily-tip" && (source.externalId || base.externalId)
+      ? { externalId: toText(source.externalId !== undefined ? source.externalId : base.externalId, 160) }
+      : {}),
     version: makeResourceVersion(),
     createdAt: base.createdAt || now,
     updatedAt: now,
@@ -407,6 +414,8 @@ function createNotice(payload, options = {}) {
 }
 
 function dailyKnowledgeImportId(item) {
+  const recordId = toText(item.recordId, 100);
+  if (/^(?:daily_import_[a-f0-9]{32}|notice_[a-f0-9]{32})$/.test(recordId)) return recordId;
   const category = DAILY_KNOWLEDGE_CATEGORIES.has(item.category) ? item.category : "campus";
   const externalId = toText(item.externalId || item.importId || item.key, 120);
   const identity = externalId || [category, toText(item.title, 120), toText(item.content || item.text || item.body, 500)].join("|");
@@ -442,6 +451,7 @@ function normalizeDailyKnowledgeImportPack(payload) {
     const defaultTitle = category === "mind" ? "心理小知识" : (category === "fraud" ? "防诈小知识" : "校园小知识");
     const normalized = {
       id: dailyKnowledgeImportId(Object.assign({}, item, { category })),
+      externalId: toText(item.externalId || item.importId || item.key, 160),
       title: toText(item.title, 120) || defaultTitle,
       content: toText(item.content || item.text || item.body, 500),
       category,
@@ -624,21 +634,15 @@ function isInDisplayWindow(item, now = new Date()) {
 }
 
 function shanghaiDateKey(now) {
-  const timestamp = now instanceof Date ? now.getTime() : Number(now);
-  const safeTimestamp = Number.isFinite(timestamp) ? timestamp : Date.now();
-  return new Date(safeTimestamp + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+  return dailyKnowledgePolicy.shanghaiDateKey(now);
 }
 
 function selectDailyKnowledge(items, now = new Date()) {
-  const managed = (Array.isArray(items) ? items : [])
-    .filter((item) => item && item.displayMode === "daily-tip" && ["home", "all"].includes(item.targetPage))
-    .slice()
-    .sort((left, right) => String(left.id || "").localeCompare(String(right.id || "")));
-  const pool = managed.length ? managed : DEFAULT_DAILY_KNOWLEDGE;
-  if (!pool.length) return null;
+  const policy = getAdminConfig().dailyKnowledge;
+  const resolved = dailyKnowledgePolicy.resolvePool({ managed: items, builtin: DEFAULT_DAILY_KNOWLEDGE, policy, now });
+  if (!resolved.policy.enabled || !resolved.items.length) return null;
   const date = shanghaiDateKey(now);
-  const dayNumber = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
-  const selected = pool[((dayNumber % pool.length) + pool.length) % pool.length];
+  const selected = resolved.items[dailyKnowledgePolicy.slotForDate(date, resolved.items.length, resolved.policy.rotationOffset)];
   return {
     id: toText(selected.id, 80),
     title: toText(selected.title, 120) || "每日小知识",
@@ -649,7 +653,7 @@ function selectDailyKnowledge(items, now = new Date()) {
       : (selected.type === "warning" ? "fraud" : (selected.type === "success" ? "mind" : "campus")),
     date,
     version: toText(selected.version, 120) || `builtin:${selected.id}`,
-    source: managed.length ? "managed" : "builtin",
+    source: resolved.source,
   };
 }
 
@@ -660,7 +664,6 @@ function getDailyKnowledgeAdminState(now = new Date()) {
     .slice()
     .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
   const activeNotices = notices.filter((notice) => isInDisplayWindow(notice, now));
-  const activeManaged = managed.filter((notice) => isInDisplayWindow(notice, now));
   const builtin = DEFAULT_DAILY_KNOWLEDGE.map((item) => ({
     id: item.id,
     title: item.title,
@@ -672,17 +675,102 @@ function getDailyKnowledgeAdminState(now = new Date()) {
     enabled: true,
     source: "builtin",
   }));
+  const policy = getAdminConfig().dailyKnowledge;
+  const resolved = dailyKnowledgePolicy.resolvePool({ managed, builtin, policy, now });
+  const effectiveCount = policy.enabled ? resolved.items.length : 0;
   return {
-    mode: activeManaged.length ? "managed" : "builtin",
+    mode: policy.enabled ? resolved.source : "disabled",
+    effectiveSource: resolved.source,
+    policy,
     selected: selectDailyKnowledge(activeNotices, now),
-    managed,
+    managed: managed.map((item) => Object.assign({}, item, { active: dailyKnowledgePolicy.isActiveManaged(item, now) })),
     builtin,
     counts: {
       managed: managed.length,
-      active: activeManaged.length,
+      managedActive: resolved.activeManaged.length,
+      active: effectiveCount,
+      effective: effectiveCount,
+      total: resolved.items.length,
       builtin: builtin.length,
     },
   };
+}
+
+function saveDailyKnowledgePolicy(patch) {
+  return saveAdminConfig({ dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(patch) }).dailyKnowledge;
+}
+
+function exportDailyKnowledgePack(scope = "effective", now = new Date()) {
+  const state = getDailyKnowledgeAdminState(now);
+  let items;
+  if (scope === "managed") items = state.managed;
+  else if (scope === "builtin") items = state.builtin;
+  else {
+    const resolved = dailyKnowledgePolicy.resolvePool({ managed: state.managed, builtin: state.builtin, policy: state.policy, now });
+    items = resolved.items;
+  }
+  return {
+    schemaVersion: 1,
+    exportedAt: now.toISOString(),
+    scope: ["managed", "builtin"].includes(scope) ? scope : "effective",
+    policy: state.policy,
+    items: items.map((item) => ({
+      recordId: item.source === "builtin" ? undefined : item.id,
+      externalId: item.externalId || item.id,
+      category: dailyKnowledgePolicy.categoryFor(item),
+      title: item.title,
+      content: item.content,
+      enabled: item.enabled !== false,
+      startAt: item.startAt || "",
+      endAt: item.endAt || "",
+    })),
+  };
+}
+
+function seedBuiltinDailyKnowledge(options = {}) {
+  return importDailyKnowledgePack({
+    schemaVersion: 1,
+    items: DEFAULT_DAILY_KNOWLEDGE.map((item) => ({
+      externalId: `builtin:${item.id}`,
+      category: item.category,
+      title: item.title,
+      content: item.content,
+      enabled: true,
+    })),
+  }, options);
+}
+
+function bulkDailyKnowledge(payload, options = {}) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const action = String(source.action || "");
+  if (!["enable", "disable", "delete"].includes(action)) {
+    const error = new Error("批量操作仅支持 enable、disable 或 delete");
+    error.statusCode = 400;
+    error.code = "DAILY_KNOWLEDGE_BULK_ACTION_INVALID";
+    throw error;
+  }
+  const ids = Array.from(new Set((Array.isArray(source.ids) ? source.ids : []).map((id) => toText(id, 100)).filter(Boolean)));
+  if (!ids.length || ids.length > DAILY_KNOWLEDGE_IMPORT_LIMIT) {
+    const error = new Error(`请选择 1-${DAILY_KNOWLEDGE_IMPORT_LIMIT} 条后台内容`);
+    error.statusCode = 400;
+    error.code = "DAILY_KNOWLEDGE_BULK_IDS_INVALID";
+    throw error;
+  }
+  const idSet = new Set(ids);
+  const notices = listNotices();
+  let affected = 0;
+  const next = [];
+  notices.forEach((item) => {
+    const selected = idSet.has(item.id) && item.displayMode === "daily-tip";
+    if (!selected) return next.push(item);
+    affected += 1;
+    if (action !== "delete") next.push(normalizeNotice({ enabled: action === "enable" }, item));
+  });
+  if (affected && options.dryRun !== true) {
+    if (typeof options.beforeWrite === "function") options.beforeWrite();
+    saveArray(NOTICES_PATH, next);
+  }
+  return { action, requested: ids.length, affected, missing: ids.length - affected, dryRun: options.dryRun === true };
 }
 
 function readSyncMeta() {
@@ -904,6 +992,8 @@ module.exports = {
   createNoticeOperation,
   deleteNews,
   deleteNotice,
+  bulkDailyKnowledge,
+  exportDailyKnowledgePack,
   getAdminConfig,
   getAdminDashboard,
   getDailyKnowledgeAdminState,
@@ -913,6 +1003,8 @@ module.exports = {
   listNews,
   listNotices,
   saveAdminConfig,
+  saveDailyKnowledgePolicy,
+  seedBuiltinDailyKnowledge,
   selectDailyKnowledge,
   normalizeDailyKnowledgeImportPack,
   touchDataVersionForSyncKey,
