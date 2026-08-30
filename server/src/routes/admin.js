@@ -26,13 +26,13 @@ const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
 const adminAuth = require("../services/adminAuth");
 const appConfigService = require("../services/appConfigService");
-const dailyKnowledgeCloudbaseService = require("../services/dailyKnowledgeCloudbaseService");
 const feedbackService = require("../services/feedbackService");
 const adminCapabilitiesService = require("../services/adminCapabilitiesService");
 const backupService = require("../services/backupService");
 const adminAuditService = require("../services/adminAuditService");
 const contentDomainService = require("../modules/content/service");
 const { createDailyKnowledgeImportHandler } = require("../modules/content/dailyKnowledgeImportController");
+const { createDailyKnowledgeListHandler, createDailyKnowledgeCloudbaseVerifyHandler, createDailyKnowledgeCloudbaseSyncHandler } = require("../modules/content/dailyKnowledgeCloudbaseController");
 const settingsDomainService = require("../modules/settings/service");
 const catalogDomainService = require("../modules/catalog/service");
 const qualityDomainService = require("../modules/quality/service");
@@ -3629,47 +3629,11 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.get("/daily-knowledge", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    const data = contentDomainService.getDailyKnowledgeAdminState(new Date());
-    data.cloudbase = dailyKnowledgeCloudbaseService.getPlan(new Date());
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    safeLog("admin-daily-knowledge-list-failed", { error: error.message });
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+router.get("/daily-knowledge", adminAuth.verifyAdminAccess, createDailyKnowledgeListHandler({ safeLog }));
 
-router.get("/daily-knowledge/cloudbase/verify", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    return res.json({ success: true, data: dailyKnowledgeCloudbaseService.verify() });
-  } catch (error) {
-    safeLog("admin-daily-knowledge-cloudbase-verify-failed", { error: error.message, code: error.code || "" });
-    return res.status(400).json({
-      success: false,
-      code: error.code || "DAILY_KNOWLEDGE_CLOUDBASE_VERIFY_FAILED",
-      message: error.message,
-    });
-  }
-});
+router.get("/daily-knowledge/cloudbase/verify", adminAuth.verifyAdminAccess, createDailyKnowledgeCloudbaseVerifyHandler({ safeLog }));
 
-router.post("/daily-knowledge/cloudbase/sync", verifyAdminWriteAccess, (req, res) => {
-  try {
-    const result = dailyKnowledgeCloudbaseService.sync();
-    writeAuditLog(req, "sync", "daily-knowledge-cloudbase", result.contentVersion || "pending", "同步并验证每日知识 CloudBase 只读镜像");
-    return res.json({ success: true, data: result });
-  } catch (error) {
-    safeLog("admin-daily-knowledge-cloudbase-sync-failed", { error: error.message, code: error.code || "" });
-    return res.status(400).json({
-      success: false,
-      code: error.code || "DAILY_KNOWLEDGE_CLOUDBASE_SYNC_FAILED",
-      message: error.message,
-    });
-  }
-});
+router.post("/daily-knowledge/cloudbase/sync", verifyAdminWriteAccess, createDailyKnowledgeCloudbaseSyncHandler({ safeLog, writeAuditLog }));
 
 router.post("/daily-knowledge/import", adminAuth.verifyAdminAccess, createDailyKnowledgeImportHandler({
   createBackup, writeAuditLog, safeLog,
