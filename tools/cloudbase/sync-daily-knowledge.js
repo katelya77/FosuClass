@@ -92,7 +92,9 @@ function callMcp(tool, args) {
 
 function listCollections() {
   const result = callMcp("readNoSqlDatabaseStructure", { action: "listCollections", limit: 1000 });
-  return Array.isArray(result.collections) ? result.collections.map((item) => String(item.Name || item.name || item.CollectionName || item)) : [];
+  return Array.isArray(result.collections)
+    ? result.collections.map((item) => String(item.TableName || item.Name || item.name || item.CollectionName || item))
+    : [];
 }
 
 function ensureCollection(collectionName, existing) {
@@ -109,13 +111,23 @@ function ensureCollection(collectionName, existing) {
 
 function insertDocuments(collectionName, documents) {
   for (let offset = 0; offset < documents.length; offset += BATCH_SIZE) {
-    const batch = documents.slice(offset, offset + BATCH_SIZE).map((document) => JSON.stringify(document));
+    const batch = documents.slice(offset, offset + BATCH_SIZE);
     callMcp("writeNoSqlDatabaseContent", {
       action: "insert",
       collectionName,
       documents: batch,
     });
   }
+}
+
+function listDocumentIds(collectionName) {
+  const result = callMcp("readNoSqlDatabaseContent", {
+    collectionName,
+    projection: { _id: 1 },
+    limit: 1000,
+  });
+  const records = result.data || result.documents || result.records || [];
+  return new Set(Array.isArray(records) ? records.map((item) => String(item && item._id || "")).filter(Boolean) : []);
 }
 
 function readRegistry() {
@@ -272,7 +284,9 @@ function main() {
     return;
   }
   const contentCreated = ensureCollection(deployment.collectionName, collections);
-  if (contentCreated) insertDocuments(deployment.collectionName, deployment.documents);
+  const existingIds = contentCreated ? new Set() : listDocumentIds(deployment.collectionName);
+  const missingDocuments = deployment.documents.filter((document) => !existingIds.has(document._id));
+  if (missingDocuments.length) insertDocuments(deployment.collectionName, missingDocuments);
   const refreshedCollections = contentCreated ? collections.concat(deployment.collectionName) : collections;
   ensureCollection(REGISTRY_COLLECTION, refreshedCollections);
   const count = countDocuments(deployment.collectionName);
