@@ -798,6 +798,16 @@ Page({
     const data = this.originalCatalogData;
     if (!data) return;
 
+    // The active release pointer is the only term authority. Catalog payloads can
+    // contain scraped historical/future terms, so never expose them to the picker.
+    const activeTerm = String(
+      this.data.activeSnapshot && this.data.activeSnapshot.term
+      || getFallbackTerm()
+      || data.semesters && data.semesters[0] && data.semesters[0].value
+      || ""
+    ).trim();
+    const activeSemesters = activeTerm ? [{ value: activeTerm, label: activeTerm }] : [];
+
     const { getSettings } = require("../../utils/storage");
     const settings = getSettings();
     const showHistorical = settings.showHistoricalGrades || false;
@@ -805,7 +815,7 @@ Page({
     let grades = data.grades || [];
     if (!showHistorical) {
       // 默认只显示最近 4 个有效本科年级
-      const activeSemester = (data.semesters && data.semesters[0]?.value) || getFallbackTerm();
+      const activeSemester = activeTerm || getFallbackTerm();
       const match = activeSemester.match(/^(\d{4})/);
       if (match) {
         const startYear = parseInt(match[1], 10);
@@ -871,7 +881,8 @@ Page({
     }
 
     this.setData({
-      semesters: data.semesters || [],
+      semesters: activeSemesters,
+      selectedSemesterIndex: 0,
       colleges,
       teacherColleges,
       selectedCollegeIndex,
@@ -3268,6 +3279,7 @@ Page({
       const data = payload && payload.catalog ? payload.catalog : payload;
       if (!data || !Array.isArray(data.colleges) || data.colleges.length === 0) return null;
       return Object.assign({}, data, {
+        semesters: term ? [{ value: term, label: term }] : [],
         dataSource: payload.dataSource || data.dataSource || "cache",
         updatedAt: payload.updatedAt || data.updatedAt || snapshot.catalogUpdatedAt || snapshot.scheduleUpdatedAt || "",
         version: payload.releaseVersion || payload.version || (payload.versions && payload.versions.snapshot) || data.version || releaseVersion,

@@ -14,7 +14,7 @@ const SYNC_META_PATH = path.join(STORAGE_DIR, "sync-meta.json");
 
 const NOTICE_TYPES = new Set(["info", "warning", "success", "update", "maintenance"]);
 const NOTICE_PRIORITIES = new Set(["normal", "important", "urgent"]);
-const NOTICE_DISPLAY_MODES = new Set(["banner", "modal", "ticker", "card"]);
+const NOTICE_DISPLAY_MODES = new Set(["banner", "modal", "ticker", "card", "daily-tip"]);
 const NOTICE_TARGET_PAGES = new Set(["home", "today", "school", "settings", "all"]);
 const PRIORITY_SCORE = {
   urgent: 3,
@@ -23,6 +23,16 @@ const PRIORITY_SCORE = {
 };
 
 const DEFAULT_DISCLAIMER = "课表仅供参考，以任课教师及教务通知为准。";
+const DEFAULT_DAILY_KNOWLEDGE = Object.freeze([
+  { id: "daily_fraud_01", title: "防诈小知识", content: "凡是要求共享屏幕、远程控制手机并指导转账的，先挂断，再通过官方渠道核实。", type: "warning" },
+  { id: "daily_fraud_02", title: "防诈小知识", content: "陌生链接里的“奖学金、补贴、退款”不要急着填写账号信息，先向学校或平台官方确认。", type: "warning" },
+  { id: "daily_fraud_03", title: "防诈小知识", content: "验证码和登录口令只用于本人操作，老师、客服和平台工作人员都不会索要。", type: "warning" },
+  { id: "daily_mind_01", title: "心理小知识", content: "任务很多时，先写下最小的一步并完成它，比反复担心整个任务更容易重新获得掌控感。", type: "success" },
+  { id: "daily_mind_02", title: "心理小知识", content: "持续疲惫时可以短暂离开屏幕、喝水并活动几分钟；若长期影响生活，及时向可信任的人或专业机构求助。", type: "success" },
+  { id: "daily_mind_03", title: "心理小知识", content: "情绪不是需要立刻消灭的错误。先准确说出“我现在感到什么”，常常就是调节的第一步。", type: "success" },
+  { id: "daily_campus_01", title: "校园小知识", content: "公共电脑使用完毕后记得退出账号，并确认浏览器没有保存密码或个人文件。", type: "info" },
+  { id: "daily_campus_02", title: "校园小知识", content: "收到临时换教室或停课消息时，优先以任课教师、学院和教务系统的正式通知为准。", type: "info" },
+]);
 
 const DEFAULT_CONFIG = {
   appName: "佛课小表",
@@ -178,7 +188,8 @@ function normalizeNotice(payload, existing) {
   const type = NOTICE_TYPES.has(source.type) ? source.type : (NOTICE_TYPES.has(base.type) ? base.type : "info");
   const priority = NOTICE_PRIORITIES.has(source.priority) ? source.priority : (NOTICE_PRIORITIES.has(base.priority) ? base.priority : "normal");
   const displayMode = NOTICE_DISPLAY_MODES.has(source.displayMode) ? source.displayMode : (NOTICE_DISPLAY_MODES.has(base.displayMode) ? base.displayMode : "banner");
-  const targetPage = NOTICE_TARGET_PAGES.has(source.targetPage) ? source.targetPage : (NOTICE_TARGET_PAGES.has(base.targetPage) ? base.targetPage : "all");
+  const requestedTargetPage = NOTICE_TARGET_PAGES.has(source.targetPage) ? source.targetPage : (NOTICE_TARGET_PAGES.has(base.targetPage) ? base.targetPage : "all");
+  const targetPage = displayMode === "daily-tip" ? "home" : requestedTargetPage;
   const title = toText(source.title !== undefined ? source.title : base.title, 120);
   const content = toText(source.content !== undefined ? source.content : base.content, 3000);
   if (!title) {
@@ -424,6 +435,33 @@ function isInDisplayWindow(item, now = new Date()) {
   return true;
 }
 
+function shanghaiDateKey(now) {
+  const timestamp = now instanceof Date ? now.getTime() : Number(now);
+  const safeTimestamp = Number.isFinite(timestamp) ? timestamp : Date.now();
+  return new Date(safeTimestamp + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+function selectDailyKnowledge(items, now = new Date()) {
+  const managed = (Array.isArray(items) ? items : [])
+    .filter((item) => item && item.displayMode === "daily-tip" && ["home", "all"].includes(item.targetPage))
+    .slice()
+    .sort((left, right) => String(left.id || "").localeCompare(String(right.id || "")));
+  const pool = managed.length ? managed : DEFAULT_DAILY_KNOWLEDGE;
+  if (!pool.length) return null;
+  const date = shanghaiDateKey(now);
+  const digest = crypto.createHash("sha256").update(date).digest("hex");
+  const selected = pool[Number.parseInt(digest.slice(0, 8), 16) % pool.length];
+  return {
+    id: toText(selected.id, 80),
+    title: toText(selected.title, 120) || "每日小知识",
+    content: toText(selected.content, 500),
+    type: NOTICE_TYPES.has(selected.type) ? selected.type : "info",
+    date,
+    version: toText(selected.version, 120) || `builtin:${selected.id}`,
+    source: managed.length ? "managed" : "builtin",
+  };
+}
+
 function readSyncMeta() {
   const meta = readJsonFile(SYNC_META_PATH, {});
   return meta && typeof meta === "object" ? meta : {};
@@ -487,7 +525,9 @@ function getPublicAppConfig() {
   const availableTerms = termRegistryService.getPublicTerms();
   const registryUpdatedAt = registry && registry.updatedAt || activeTerm.updatedAt || config.updatedAt || "";
   
-  let notices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
+  const activeNotices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
+  const dailyKnowledge = selectDailyKnowledge(activeNotices, now);
+  let notices = activeNotices.filter((notice) => notice.displayMode !== "daily-tip");
   
   // 检查当前学期是否已发布数据
   const activeRelease = releaseService.getActiveReleaseInfoFast
@@ -530,6 +570,7 @@ function getPublicAppConfig() {
         enableFosuStudentImport: process.env.FOSU_IMPORT_ENABLE !== "false",
       }, config.appConfig || {}),
       notices,
+      dailyKnowledge,
       news: listNews().filter((item) => item.enabled === true),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,
       updatedAt: config.updatedAt || "",
@@ -645,6 +686,7 @@ module.exports = {
   listNews,
   listNotices,
   saveAdminConfig,
+  selectDailyKnowledge,
   touchDataVersionForSyncKey,
   updateNews,
   updateNotice,

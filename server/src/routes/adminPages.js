@@ -7090,6 +7090,7 @@ const adminConsoleHtml = `<!doctype html>
                   <option value="modal">弹窗提醒 (modal)</option>
                   <option value="ticker">跑马灯 ticker</option>
                   <option value="card">普通卡片 (card)</option>
+                  <option value="daily-tip">每日小知识 (daily-tip)</option>
                 </select>
               </div>
             </div>
@@ -13642,7 +13643,13 @@ const adminConsoleHtml = `<!doctype html>
         titleEl.textContent = "模式预览: " + mode.toUpperCase();
         screen.appendChild(titleEl);
 
-        if (mode === "banner" || mode === "card") {
+        if (mode === "daily-tip") {
+          var daily = document.createElement("div");
+          daily.className = "mini-banner " + (type === "warning" ? "warning" : "");
+          daily.innerHTML = "<div style='font-size:9px;font-weight:800;color:#127a68;'>今日 · " + escapeHtml(title) + "</div>" +
+            "<div style='margin-top:5px;font-size:9px;line-height:1.45;'>" + escapeHtml(content) + "</div>";
+          screen.appendChild(daily);
+        } else if (mode === "banner" || mode === "card") {
           var banner = document.createElement("div");
           banner.className = "mini-banner " + (priority === "urgent" ? "urgent" : (priority === "important" ? "warning" : ""));
           banner.innerHTML = "<div style='font-weight: 800;'>【" + escapeHtml(type) + "】" + escapeHtml(title) + "</div>" +

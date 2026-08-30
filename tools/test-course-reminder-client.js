@@ -48,6 +48,15 @@ async function run() {
   assert.strictEqual(typeof client.listInAppEvents, "function");
   assert.strictEqual(typeof client.acknowledgeInAppEvent, "function");
   assert.strictEqual(typeof client.grantSubscriptionAuthorization, "function");
+  const sameDayNow = Date.parse("2026-08-29T12:00:00+08:00");
+  assert.strictEqual(client.isCurrentInAppEvent({
+    kind: "course_start",
+    occurrence: { date: "2026-08-29" },
+  }, sameDayNow), true);
+  assert.strictEqual(client.isCurrentInAppEvent({
+    kind: "course_start",
+    occurrence: { date: "2026-08-27" },
+  }, sameDayNow), false, "client must not render a previous-day course reminder from an older server");
 
   assert.ok(source.includes("planReminder"), "client exports planReminder");
 assert.ok(source.includes("createReminderFromConfig"), "client exports createReminderFromConfig");

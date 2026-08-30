@@ -449,12 +449,13 @@
 }
 
 .notice-strip {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14rpx;
   margin-top: 12rpx;
-  padding: 16rpx 18rpx;
+  padding: 16rpx 58rpx 16rpx 18rpx;
   border-radius: 14rpx;
   background: linear-gradient(135deg, #eef4ff, #fbf8ff);
 }
@@ -501,18 +502,71 @@
 }
 
 .notice-close {
-  flex: 0 0 auto;
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.72);
+  position: absolute;
+  top: -2rpx;
+  right: 0;
+  width: 58rpx;
+  height: 58rpx;
+  background: transparent;
   color: #8a94a6;
-  font-size: 30rpx;
+  font-size: 20rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   padding: 0;
+}
+
+.notice-close::after {
+  border: 0;
+}
+
+.daily-knowledge {
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  margin-top: 12rpx;
+  padding: 18rpx;
+  border: 1rpx solid #dcebe6;
+  border-radius: 14rpx;
+  background: linear-gradient(135deg, #f3faf7, #ffffff);
+}
+
+.daily-knowledge.warning {
+  border-color: #f4ddc0;
+  background: linear-gradient(135deg, #fff8ed, #ffffff);
+}
+
+.daily-knowledge-mark {
+  flex: 0 0 auto;
+  padding: 5rpx 10rpx;
+  border-radius: 8rpx;
+  background: #127a68;
+  color: #ffffff;
+  font-size: 18rpx;
+  font-weight: 900;
+  letter-spacing: 1rpx;
+}
+
+.daily-knowledge.warning .daily-knowledge-mark {
+  background: #b45309;
+}
+
+.daily-knowledge-main {
+  min-width: 0;
+}
+
+.daily-knowledge-title {
+  color: #243042;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+
+.daily-knowledge-content {
+  margin-top: 6rpx;
+  color: #5d6878;
+  font-size: 21rpx;
+  line-height: 1.5;
 }
 
 .ticker-strip {
@@ -605,7 +659,8 @@
 
 .schedule-control-wrapper {
   flex: 1;
-  max-width: 460rpx;
+  max-width: 540rpx;
+  min-width: 0;
 }
 
 .unplaced-entry {

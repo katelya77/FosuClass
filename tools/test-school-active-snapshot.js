@@ -90,6 +90,26 @@ async function run() {
   assert.strictEqual(result.activeSnapshot, null);
   assert.strictEqual(result.state, "networkError");
 
+  page = createPage();
+  page.setData({
+    activeSnapshot: { term, releaseVersion },
+    semesters: [],
+    colleges: [],
+    teacherColleges: [],
+    grades: [],
+    selectedSemesterIndex: 0,
+  });
+  page.originalCatalogData = {
+    semesters: [
+      { value: term, label: term },
+      { value: "2028-2029-1", label: "2028-2029-1" },
+    ],
+    colleges: [{ code: "01", name: "测试学院" }],
+    grades: ["2025"],
+  };
+  page.applyCatalogFilter();
+  assert.deepStrictEqual(page.data.semesters, [{ value: term, label: term }], "catalog term picker must expose only the active release term");
+
   console.log("test-school-active-snapshot passed");
 }
 

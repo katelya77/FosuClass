@@ -162,7 +162,12 @@ Component({
       ]);
       const capability = capabilityResult && capabilityResult.success
         ? capabilityResult
-        : { configured: false, templateId: "" };
+        : {
+            configured: false,
+            templateId: "",
+            unavailable: true,
+            error: capabilityResult && capabilityResult.error || "服务连接暂不可用",
+          };
       if (!result.success) {
         this.setData({ loading: false, items: [], capability, errorText: result.error || "提醒列表暂不可用" });
         return;
@@ -171,9 +176,13 @@ Component({
         loading: false,
         items: result.items.map(formatItem),
         capability,
-        disclosure: capability.configured
-          ? "微信服务通知使用一次性订阅：每次主动接受增加 1 次发送额度；额度不足时自动保留应用内提醒。"
-          : "微信服务通知模板尚未配置；提醒会保留在应用内，配置完成后可在这里补充授权。",
+        disclosure: capability.unavailable
+          ? "微信服务通知能力暂时无法读取，可稍后重新加载；提醒仍会保留在应用内。"
+          : (capability.degraded
+              ? (capability.disclosure || "已沿用最近一次有效服务通知配置；应用内提醒不受影响。")
+              : (capability.configured
+                  ? "微信服务通知使用一次性订阅：每次主动接受增加 1 次发送额度；额度不足时自动保留应用内提醒。"
+                  : "微信服务通知模板尚未配置；提醒会保留在应用内，配置完成后可在这里补充授权。")),
         errorText: "",
       });
     },

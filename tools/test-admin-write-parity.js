@@ -21,6 +21,17 @@ const appConfigService = require("../server/src/services/appConfigService");
 const contentService = require("../server/src/modules/content/service");
 
 const viaDomain = contentService.createNotice({ title: "parity-a", content: "x", enabled: true });
+const dailyTip = contentService.createNotice({
+  title: "防诈小知识",
+  content: "不要向陌生人提供验证码。",
+  displayMode: "daily-tip",
+  targetPage: "all",
+  enabled: true,
+});
+assert.strictEqual(dailyTip.targetPage, "home", "daily knowledge is always scoped to the home page");
+const selectedTip = appConfigService.selectDailyKnowledge(contentService.listNotices(), new Date("2026-08-29T00:00:00+08:00"));
+assert.strictEqual(selectedTip.source, "managed");
+assert.strictEqual(selectedTip.id, dailyTip.id);
 const listedDirect = appConfigService.listNotices();
 const listedDomain = contentService.listNotices();
 assert.strictEqual(listedDirect.length, listedDomain.length);

@@ -81,7 +81,11 @@ async function run() {
   const secondDispatch = await successDispatch.dispatchDue({ now: secondDueAt, limit: 10 });
   assert.strictEqual(successCalls, 1, "zero-credit occurrence must not call WeChat");
   assert.strictEqual(secondDispatch.appOnlyDue, 1);
-  assert.strictEqual(successScenario.service.listInAppEvents({ principal: successScenario.principal }).items.length, 1);
+  assert.strictEqual(successScenario.service.listInAppEvents({ principal: successScenario.principal, now: secondDueAt }).items.length, 1);
+  assert.strictEqual(successScenario.service.listInAppEvents({
+    principal: successScenario.principal,
+    now: secondDueAt + (24 * 60 * 60 * 1000),
+  }).items.length, 0, "course reminders from a previous Shanghai calendar day must be pruned");
 
   const unauthorizedScenario = setup("unauthorized");
   const unauthorizedDispatch = new CourseReminderDispatchService({
@@ -92,8 +96,9 @@ async function run() {
       retryable: false,
     }),
   });
+  const unauthorizedDueAt = Date.parse(unauthorizedScenario.created.reminder.nextTriggerAt);
   await unauthorizedDispatch.dispatchDue({
-    now: Date.parse(unauthorizedScenario.created.reminder.nextTriggerAt),
+    now: unauthorizedDueAt,
     limit: 10,
   });
   const afterUnauthorized = unauthorizedScenario.service.get({
@@ -103,7 +108,7 @@ async function run() {
   assert.strictEqual(afterUnauthorized.authorizationCredits, 0);
   assert.strictEqual(afterUnauthorized.authorizationState, "authorization_required");
   assert.strictEqual(afterUnauthorized.status, "enabled");
-  assert.strictEqual(unauthorizedScenario.service.listInAppEvents({ principal: unauthorizedScenario.principal }).items.length, 1);
+  assert.strictEqual(unauthorizedScenario.service.listInAppEvents({ principal: unauthorizedScenario.principal, now: unauthorizedDueAt }).items.length, 1);
 
   const retryScenario = setup("retry");
   let retryCalls = 0;
@@ -115,8 +120,10 @@ async function run() {
     },
   });
   let retryReminder = retryScenario.created.reminder;
+  let retryAttemptAt = Date.parse(retryReminder.nextTriggerAt);
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    await retryDispatch.dispatchDue({ now: Date.parse(retryReminder.nextTriggerAt), limit: 10 });
+    retryAttemptAt = Date.parse(retryReminder.nextTriggerAt);
+    await retryDispatch.dispatchDue({ now: retryAttemptAt, limit: 10 });
     retryReminder = retryScenario.service.get({
       principal: retryScenario.principal,
       reminderId: retryReminder.id,
@@ -124,7 +131,7 @@ async function run() {
   }
   assert.strictEqual(retryCalls, 4);
   assert.strictEqual(retryReminder.status, "enabled");
-  assert.strictEqual(retryScenario.service.listInAppEvents({ principal: retryScenario.principal }).items.length, 1);
+  assert.strictEqual(retryScenario.service.listInAppEvents({ principal: retryScenario.principal, now: retryAttemptAt }).items.length, 1);
   assert.ok(retryReminder.sendLog.some((item) => item.status === "app_only" && item.code === "WECHAT_NETWORK_ERROR"));
 
   fs.rmSync(rootTemp, { recursive: true, force: true });

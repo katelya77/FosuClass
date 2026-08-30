@@ -158,6 +158,23 @@ function publicInAppEvent(value) {
   };
 }
 
+function shanghaiCalendarDate(nowMs) {
+  const timestamp = Number(nowMs);
+  if (!Number.isFinite(timestamp)) return "";
+  return new Date(timestamp + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+function isInAppEventCurrent(event, nowMs) {
+  const item = event && typeof event === "object" ? event : {};
+  const expiresAt = Date.parse(item.expiresAt || "");
+  if (Number.isFinite(expiresAt) && expiresAt <= nowMs) return false;
+  const today = shanghaiCalendarDate(nowMs);
+  const occurrenceDate = String(item.occurrence && item.occurrence.date || "").slice(0, 10);
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)) return false;
+  if (item.kind === "schedule_change") return occurrenceDate >= today;
+  return occurrenceDate === today;
+}
+
 class CourseReminderService {
   constructor(options = {}) {
     this.rootDir = path.resolve(
@@ -474,10 +491,7 @@ class CourseReminderService {
     return this.withLock(principalKey, (filePath, shard) => {
       const state = this.readUnlocked(filePath, shard, principalKey);
       const before = state.inAppEvents.length;
-      state.inAppEvents = state.inAppEvents.filter((item) => {
-        const expiresAt = Date.parse(item && item.expiresAt || "");
-        return !Number.isFinite(expiresAt) || expiresAt > now;
-      });
+      state.inAppEvents = state.inAppEvents.filter((item) => isInAppEventCurrent(item, now));
       if (state.inAppEvents.length !== before) this.writeUnlocked(filePath, shard, state);
       return {
         success: true,
@@ -795,6 +809,8 @@ module.exports = {
   CONFIRMATION_TTL_MS,
   CourseReminderService,
   IN_APP_EVENT_TTL_MS,
+  isInAppEventCurrent,
+  shanghaiCalendarDate,
   MAX_IN_APP_EVENTS,
   MAX_AUTHORIZATION_CREDITS,
   MAX_REMINDERS,
