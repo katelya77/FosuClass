@@ -3,6 +3,7 @@ const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require
 const { getSettings, saveSettings } = require("../../utils/storage");
 const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
+const dailyKnowledgeCloudService = require("../../services/dailyKnowledgeCloudService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
@@ -211,15 +212,21 @@ Page({
             [modalKey]: true,
           });
         }
+        const serverDailyKnowledge = normalizedConfig.dailyKnowledge || null;
         this.setData({
           appConfig: normalizedConfig,
           dataVersionText,
           homeNotice,
-          dailyKnowledge: normalizedConfig.dailyKnowledge || null,
+          dailyKnowledge: serverDailyKnowledge,
           tickerNotice,
           modalNotice,
           showAppNoticeModal: Boolean(shouldShowModal),
         });
+        dailyKnowledgeCloudService.loadDailyKnowledge({ fallback: serverDailyKnowledge })
+          .then((dailyKnowledge) => {
+            if (dailyKnowledge) this.setData({ dailyKnowledge });
+          })
+          .catch(() => {});
       })
       .catch((err) => {
         console.warn("首页公告配置加载失败", err);

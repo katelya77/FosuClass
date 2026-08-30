@@ -101,6 +101,30 @@ async function testSameReleaseDoesNotFetchOrNotify() {
   assert.strictEqual(result.shouldNotify, undefined);
 }
 
+async function testSameReleaseEmptyCoursesRehydrates() {
+  reset();
+  storage.setCurrentScheduleTarget(makeTarget({
+    releaseVersion: "release-b",
+    courses: [],
+  }));
+  let calls = 0;
+  releasePackService.loadDetail = async (type, id) => {
+    calls += 1;
+    assert.strictEqual(type, "class");
+    assert.strictEqual(id, "class-1");
+    return makeDetail(id);
+  };
+  const result = await currentScheduleService.ensureCurrentScheduleFresh({
+    activeSnapshot: ACTIVE_B,
+    force: true,
+  });
+  const saved = storage.getCurrentScheduleTarget();
+  assert.strictEqual(result.status, "UPDATED", "empty same-release cache must be rehydrated");
+  assert.strictEqual(calls, 1, "empty same-release cache must fetch its detail once");
+  assert.strictEqual(saved.courses.length, 1);
+  assert.strictEqual(saved.courses[0].courseName, "新课");
+}
+
 async function testDetailFailureKeepsLastKnownGood() {
   reset();
   storage.setCurrentScheduleTarget(makeTarget());
@@ -309,6 +333,7 @@ function testRecentScheduleDoesNotDuplicateCoursePayload() {
 async function run() {
   await testUpdatesOldReleaseToActiveRelease();
   await testSameReleaseDoesNotFetchOrNotify();
+  await testSameReleaseEmptyCoursesRehydrates();
   await testDetailFailureKeepsLastKnownGood();
   await testStableDetailIdAndExactNameMigration();
   await testCrossTermMigrationFallsBackToExactName();

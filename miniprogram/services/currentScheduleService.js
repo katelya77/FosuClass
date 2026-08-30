@@ -172,6 +172,12 @@ function sameContentRelease(target, active) {
   return targetTerm === active.term && String(target.releaseVersion || "") === String(active.releaseVersion || "");
 }
 
+function hasHydratedScheduleContent(target) {
+  if (!target || !Array.isArray(target.courses)) return false;
+  if (target.courses.length > 0) return true;
+  return target.coursesHydrated === true;
+}
+
 function getRefreshStateKey(target, active) {
   return [
     target.type || "",
@@ -361,6 +367,8 @@ function buildUpdatedTarget(target, active, loaded, validated) {
     updatedAt: schedule.updatedAt || active.updatedAt || target.updatedAt || "",
     updateTime: nowText,
     courses: validated.courses,
+    courseCount: validated.courses.length,
+    coursesHydrated: true,
     source: "release-pack",
   });
 }
@@ -445,7 +453,7 @@ async function refreshCurrentSchedule(options = {}) {
     semester: normalizedTargetTerm,
   });
 
-  if (sameContentRelease(targetWithTerm, active)) {
+  if (sameContentRelease(targetWithTerm, active) && hasHydratedScheduleContent(targetWithTerm)) {
     if (targetWithTerm !== target) {
       setCurrentScheduleTarget(targetWithTerm);
     }
