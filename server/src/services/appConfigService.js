@@ -462,6 +462,37 @@ function selectDailyKnowledge(items, now = new Date()) {
   };
 }
 
+function getDailyKnowledgeAdminState(now = new Date()) {
+  const notices = listNotices();
+  const managed = notices
+    .filter((item) => item && item.displayMode === "daily-tip")
+    .slice()
+    .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
+  const activeNotices = notices.filter((notice) => isInDisplayWindow(notice, now));
+  const activeManaged = managed.filter((notice) => isInDisplayWindow(notice, now));
+  const builtin = DEFAULT_DAILY_KNOWLEDGE.map((item) => ({
+    id: item.id,
+    title: item.title,
+    content: item.content,
+    type: item.type,
+    displayMode: "daily-tip",
+    targetPage: "home",
+    enabled: true,
+    source: "builtin",
+  }));
+  return {
+    mode: activeManaged.length ? "managed" : "builtin",
+    selected: selectDailyKnowledge(activeNotices, now),
+    managed,
+    builtin,
+    counts: {
+      managed: managed.length,
+      active: activeManaged.length,
+      builtin: builtin.length,
+    },
+  };
+}
+
 function readSyncMeta() {
   const meta = readJsonFile(SYNC_META_PATH, {});
   return meta && typeof meta === "object" ? meta : {};
@@ -681,6 +712,7 @@ module.exports = {
   deleteNotice,
   getAdminConfig,
   getAdminDashboard,
+  getDailyKnowledgeAdminState,
   getPublicAppConfig,
   isInDisplayWindow,
   listNews,

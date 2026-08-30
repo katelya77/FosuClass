@@ -6,6 +6,7 @@ const appConfigService = require("../../services/appConfigService");
 
 module.exports = {
   listNotices: () => appConfigService.listNotices(),
+  getDailyKnowledgeAdminState: (now) => appConfigService.getDailyKnowledgeAdminState(now),
   createNotice: (payload) => appConfigService.createNotice(payload),
   updateNotice: (id, payload, options) => appConfigService.updateNotice(id, payload, options),
   deleteNotice: (id) => appConfigService.deleteNotice(id),

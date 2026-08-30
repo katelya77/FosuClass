@@ -58,9 +58,16 @@
     <button wx:if="{{homeNotice.closable}}" class="notice-close" catchtap="dismissHomeNotice">×</button>
   </view>
 
-  <view class="daily-knowledge card {{dailyKnowledge.type}}" wx:if="{{dailyKnowledge}}">
-    <view class="daily-knowledge-mark">今日</view>
+  <view class="daily-knowledge card {{dailyKnowledge.type}} {{dailyKnowledge.category}}" wx:if="{{dailyKnowledge}}">
+    <view class="daily-knowledge-art" aria-hidden="true">
+      <view class="daily-knowledge-ring"></view>
+      <view class="daily-knowledge-mark">{{dailyKnowledge.categoryMark}}</view>
+    </view>
     <view class="daily-knowledge-main">
+      <view class="daily-knowledge-meta">
+        <text>{{dailyKnowledge.categoryLabel}}</text>
+        <text>{{dailyKnowledge.dateLabel}}</text>
+      </view>
       <view class="daily-knowledge-title">{{dailyKnowledge.title}}</view>
       <view class="daily-knowledge-content">{{dailyKnowledge.content}}</view>
     </view>

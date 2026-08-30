@@ -28,4 +28,17 @@ assert(Array.isArray(normalized.notices), "app config notices should normalize t
 assert(Array.isArray(normalized.banners), "app config banners should normalize to array");
 assert(Array.isArray(normalized.news), "app config news should normalize to array");
 
+const normalizedDaily = appConfigService.normalizeConfig({
+  dailyKnowledge: {
+    title: "防诈小知识",
+    content: "验证码不要告诉任何人。",
+    type: "warning",
+    date: "2026-08-30",
+  },
+}).dailyKnowledge;
+assert.strictEqual(normalizedDaily.category, "fraud");
+assert.strictEqual(normalizedDaily.categoryLabel, "防诈提醒");
+assert.strictEqual(normalizedDaily.categoryMark, "盾");
+assert.strictEqual(normalizedDaily.dateLabel, "8月30日");
+
 console.log("test-notice-ticker-array-guard passed");

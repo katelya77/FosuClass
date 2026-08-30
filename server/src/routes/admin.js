@@ -3627,6 +3627,18 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+router.get("/daily-knowledge", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: contentDomainService.getDailyKnowledgeAdminState(new Date()),
+    });
+  } catch (error) {
+    safeLog("admin-daily-knowledge-list-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     createBackup("notices", contentDomainService.NOTICES_PATH);

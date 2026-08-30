@@ -32,6 +32,12 @@ assert.strictEqual(dailyTip.targetPage, "home", "daily knowledge is always scope
 const selectedTip = appConfigService.selectDailyKnowledge(contentService.listNotices(), new Date("2026-08-29T00:00:00+08:00"));
 assert.strictEqual(selectedTip.source, "managed");
 assert.strictEqual(selectedTip.id, dailyTip.id);
+const dailyAdminState = contentService.getDailyKnowledgeAdminState(new Date("2026-08-29T00:00:00+08:00"));
+assert.strictEqual(dailyAdminState.mode, "managed");
+assert.strictEqual(dailyAdminState.counts.managed, 1);
+assert.strictEqual(dailyAdminState.counts.active, 1);
+assert.ok(dailyAdminState.counts.builtin >= 8);
+assert.ok(dailyAdminState.builtin.every((item) => item.source === "builtin"));
 const listedDirect = appConfigService.listNotices();
 const listedDomain = contentService.listNotices();
 assert.strictEqual(listedDirect.length, listedDomain.length);
@@ -44,6 +50,11 @@ assert.strictEqual(appConfigService.listNotices().find((n) => n.id === viaDomain
 
 contentService.deleteNotice(viaDomain.id);
 assert.strictEqual(appConfigService.listNotices().some((n) => n.id === viaDomain.id), false);
+
+contentService.deleteNotice(dailyTip.id);
+const fallbackDailyState = contentService.getDailyKnowledgeAdminState(new Date("2026-08-29T00:00:00+08:00"));
+assert.strictEqual(fallbackDailyState.mode, "builtin");
+assert.strictEqual(fallbackDailyState.selected.source, "builtin");
 
 fs.rmSync(tmpRoot, { recursive: true, force: true });
 console.log("Admin write parity tests passed.");

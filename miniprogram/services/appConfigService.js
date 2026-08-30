@@ -4,6 +4,31 @@ const { resolveSelectedTerm, sanitizeClientTerms } = require("../shared/termVisi
 const APP_CONFIG_CACHE_KEY = "FOSU_APP_CONFIG_CACHE";
 const NOTICE_DISMISSED_KEY = "FOSU_NOTICE_DISMISSED";
 
+function normalizeDailyKnowledge(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const title = String(payload.title || "每日小知识").trim().slice(0, 60);
+  const content = String(payload.content || "").trim().slice(0, 500);
+  if (!content) return null;
+  const type = ["info", "warning", "success"].indexOf(payload.type) >= 0 ? payload.type : "info";
+  const combined = title + content;
+  const isFraud = /防诈|诈骗|验证码|转账|陌生链接/.test(combined);
+  const isMind = !isFraud && /心理|情绪|压力|疲惫|掌控感/.test(combined);
+  const category = isFraud ? "fraud" : (isMind ? "mind" : "campus");
+  const categoryLabels = { fraud: "防诈提醒", mind: "心理关怀", campus: "校园日签" };
+  const categoryMarks = { fraud: "盾", mind: "心", campus: "校" };
+  const dateText = String(payload.date || "");
+  const dateMatch = dateText.match(/^\d{4}-(\d{2})-(\d{2})$/);
+  return Object.assign({}, payload, {
+    title,
+    content,
+    type,
+    category,
+    categoryLabel: categoryLabels[category],
+    categoryMark: categoryMarks[category],
+    dateLabel: dateMatch ? (Number(dateMatch[1]) + "月" + Number(dateMatch[2]) + "日") : "今日",
+  });
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -45,7 +70,7 @@ function normalizeConfig(payload) {
     config.currentSemester = config.termConfig.term;
   }
   if (!Array.isArray(config.notices)) config.notices = [];
-  if (!config.dailyKnowledge || typeof config.dailyKnowledge !== "object") config.dailyKnowledge = null;
+  config.dailyKnowledge = normalizeDailyKnowledge(config.dailyKnowledge);
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];
   if (config.urgentNotice === undefined) config.urgentNotice = null;
@@ -221,6 +246,7 @@ module.exports = {
   getPrimaryNotice,
   isNoticeDismissed,
   loadAppConfig,
+  normalizeDailyKnowledge,
   normalizeConfig,
   shouldShowNotice,
 };

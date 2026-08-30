@@ -140,6 +140,7 @@ const requiredFunctions = [
   "initNavigation",
   "initDashboard",
   "initNoticeModule",
+  "initDailyKnowledgeModule",
   "initNewsModule",
   "initSyncModule",
   "initFeedbackModule",
@@ -151,6 +152,9 @@ const requiredFunctions = [
   "safeBind",
   "api",
   "repairCurrentTermReleaseFromPanel",
+  "loadDailyKnowledge",
+  "renderDailyKnowledge",
+  "saveDailyKnowledge",
 ];
 
 const missingRequired = requiredFunctions.filter((name) => !functionNames.has(name));
