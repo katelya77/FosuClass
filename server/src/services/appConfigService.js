@@ -9,6 +9,7 @@ const { safeLog } = require("../utils/safeLogger");
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const CONFIG_PATH = path.join(STORAGE_DIR, "admin-config.json");
 const NOTICES_PATH = path.join(STORAGE_DIR, "notices.json");
+const NOTICE_IDEMPOTENCY_PATH = path.join(STORAGE_DIR, "notice-idempotency.json");
 const NEWS_PATH = path.join(STORAGE_DIR, "news.json");
 const SYNC_META_PATH = path.join(STORAGE_DIR, "sync-meta.json");
 
@@ -16,6 +17,8 @@ const NOTICE_TYPES = new Set(["info", "warning", "success", "update", "maintenan
 const NOTICE_PRIORITIES = new Set(["normal", "important", "urgent"]);
 const NOTICE_DISPLAY_MODES = new Set(["banner", "modal", "ticker", "card", "daily-tip"]);
 const NOTICE_TARGET_PAGES = new Set(["home", "today", "school", "settings", "all"]);
+const DAILY_KNOWLEDGE_CATEGORIES = new Set(["mind", "fraud", "campus"]);
+const DAILY_KNOWLEDGE_TYPE_BY_CATEGORY = Object.freeze({ mind: "success", fraud: "warning", campus: "info" });
 const PRIORITY_SCORE = {
   urgent: 3,
   important: 2,
@@ -24,14 +27,14 @@ const PRIORITY_SCORE = {
 
 const DEFAULT_DISCLAIMER = "课表仅供参考，以任课教师及教务通知为准。";
 const DEFAULT_DAILY_KNOWLEDGE = Object.freeze([
-  { id: "daily_fraud_01", title: "防诈小知识", content: "凡是要求共享屏幕、远程控制手机并指导转账的，先挂断，再通过官方渠道核实。", type: "warning" },
-  { id: "daily_fraud_02", title: "防诈小知识", content: "陌生链接里的“奖学金、补贴、退款”不要急着填写账号信息，先向学校或平台官方确认。", type: "warning" },
-  { id: "daily_fraud_03", title: "防诈小知识", content: "验证码和登录口令只用于本人操作，老师、客服和平台工作人员都不会索要。", type: "warning" },
-  { id: "daily_mind_01", title: "心理小知识", content: "任务很多时，先写下最小的一步并完成它，比反复担心整个任务更容易重新获得掌控感。", type: "success" },
-  { id: "daily_mind_02", title: "心理小知识", content: "持续疲惫时可以短暂离开屏幕、喝水并活动几分钟；若长期影响生活，及时向可信任的人或专业机构求助。", type: "success" },
-  { id: "daily_mind_03", title: "心理小知识", content: "情绪不是需要立刻消灭的错误。先准确说出“我现在感到什么”，常常就是调节的第一步。", type: "success" },
-  { id: "daily_campus_01", title: "校园小知识", content: "公共电脑使用完毕后记得退出账号，并确认浏览器没有保存密码或个人文件。", type: "info" },
-  { id: "daily_campus_02", title: "校园小知识", content: "收到临时换教室或停课消息时，优先以任课教师、学院和教务系统的正式通知为准。", type: "info" },
+  { id: "daily_fraud_01", category: "fraud", title: "防诈小知识", content: "凡是要求共享屏幕、远程控制手机并指导转账的，先挂断，再通过官方渠道核实。", type: "warning" },
+  { id: "daily_fraud_02", category: "fraud", title: "防诈小知识", content: "陌生链接里的“奖学金、补贴、退款”不要急着填写账号信息，先向学校或平台官方确认。", type: "warning" },
+  { id: "daily_fraud_03", category: "fraud", title: "防诈小知识", content: "验证码和登录口令只用于本人操作，老师、客服和平台工作人员都不会索要。", type: "warning" },
+  { id: "daily_mind_01", category: "mind", title: "心理小知识", content: "任务很多时，先写下最小的一步并完成它，比反复担心整个任务更容易重新获得掌控感。", type: "success" },
+  { id: "daily_mind_02", category: "mind", title: "心理小知识", content: "持续疲惫时可以短暂离开屏幕、喝水并活动几分钟；若长期影响生活，及时向可信任的人或专业机构求助。", type: "success" },
+  { id: "daily_mind_03", category: "mind", title: "心理小知识", content: "情绪不是需要立刻消灭的错误。先准确说出“我现在感到什么”，常常就是调节的第一步。", type: "success" },
+  { id: "daily_campus_01", category: "campus", title: "校园小知识", content: "公共电脑使用完毕后记得退出账号，并确认浏览器没有保存密码或个人文件。", type: "info" },
+  { id: "daily_campus_02", category: "campus", title: "校园小知识", content: "收到临时换教室或停课消息时，优先以任课教师、学院和教务系统的正式通知为准。", type: "info" },
 ]);
 
 const DEFAULT_CONFIG = {
@@ -185,7 +188,7 @@ function normalizeNotice(payload, existing) {
   const now = nowIso();
   const source = payload || {};
   const base = existing || {};
-  const type = NOTICE_TYPES.has(source.type) ? source.type : (NOTICE_TYPES.has(base.type) ? base.type : "info");
+  let type = NOTICE_TYPES.has(source.type) ? source.type : (NOTICE_TYPES.has(base.type) ? base.type : "info");
   const priority = NOTICE_PRIORITIES.has(source.priority) ? source.priority : (NOTICE_PRIORITIES.has(base.priority) ? base.priority : "normal");
   const displayMode = NOTICE_DISPLAY_MODES.has(source.displayMode) ? source.displayMode : (NOTICE_DISPLAY_MODES.has(base.displayMode) ? base.displayMode : "banner");
   const requestedTargetPage = NOTICE_TARGET_PAGES.has(source.targetPage) ? source.targetPage : (NOTICE_TARGET_PAGES.has(base.targetPage) ? base.targetPage : "all");
@@ -196,6 +199,14 @@ function normalizeNotice(payload, existing) {
     const err = new Error("notice title is required");
     err.statusCode = 400;
     throw err;
+  }
+  let category = "";
+  if (displayMode === "daily-tip") {
+    const requestedCategory = toText(source.category !== undefined ? source.category : base.category, 20);
+    category = DAILY_KNOWLEDGE_CATEGORIES.has(requestedCategory)
+      ? requestedCategory
+      : (type === "warning" ? "fraud" : (type === "success" ? "mind" : "campus"));
+    type = DAILY_KNOWLEDGE_TYPE_BY_CATEGORY[category];
   }
   return {
     id: base.id || toText(source.id, 80) || makeId("notice"),
@@ -209,6 +220,7 @@ function normalizeNotice(payload, existing) {
     endAt: normalizeOptionalDate(source.endAt !== undefined ? source.endAt : base.endAt),
     enabled: toBool(source.enabled, base.enabled !== undefined ? base.enabled : true),
     closable: toBool(source.closable, base.closable !== undefined ? base.closable : true),
+    ...(category ? { category } : {}),
     version: makeResourceVersion(),
     createdAt: base.createdAt || now,
     updatedAt: now,
@@ -318,12 +330,88 @@ function listNotices() {
     });
 }
 
-function createNotice(payload) {
+function noticeBusinessFingerprint(item) {
+  return crypto.createHash("sha256").update(JSON.stringify({
+    title: item.title,
+    content: item.content,
+    type: item.type,
+    priority: item.priority,
+    displayMode: item.displayMode,
+    targetPage: item.targetPage,
+    startAt: item.startAt,
+    endAt: item.endAt,
+    enabled: item.enabled,
+    closable: item.closable,
+    category: item.category || "",
+  })).digest("hex");
+}
+
+function readNoticeOperations() {
+  const value = readJsonFile(NOTICE_IDEMPOTENCY_PATH, { schemaVersion: 1, operations: [] });
+  const now = Date.now();
+  const operations = (Array.isArray(value && value.operations) ? value.operations : [])
+    .filter((item) => item && new Date(item.expiresAt || 0).getTime() > now)
+    .slice(-500);
+  return { schemaVersion: 1, operations };
+}
+
+function findNoticeOperation(idempotencyKey, payloadFingerprint) {
+  if (!idempotencyKey) return null;
+  const keyHash = crypto.createHash("sha256").update(idempotencyKey).digest("hex");
+  const operation = readNoticeOperations().operations.find((item) => item.keyHash === keyHash);
+  if (operation && operation.payloadFingerprint !== payloadFingerprint) {
+    const err = new Error("操作标识已用于不同内容，请刷新后重试");
+    err.statusCode = 409;
+    err.code = "IDEMPOTENCY_KEY_CONFLICT";
+    throw err;
+  }
+  return operation || null;
+}
+
+function rememberNoticeOperation(idempotencyKey, payloadFingerprint, item) {
+  if (!idempotencyKey) return;
+  const state = readNoticeOperations();
+  const keyHash = crypto.createHash("sha256").update(idempotencyKey).digest("hex");
+  const completedAt = nowIso();
+  const expiresAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString();
+  state.operations = state.operations.filter((entry) => entry.keyHash !== keyHash);
+  state.operations.push({ keyHash, payloadFingerprint, completedAt, expiresAt, receipt: item });
+  state.operations = state.operations.slice(-500);
+  writeJsonAtomic(NOTICE_IDEMPOTENCY_PATH, state);
+}
+
+function createNoticeOperation(payload, options = {}) {
   const items = listNotices();
-  const notice = normalizeNotice(payload);
+  const idempotencyKey = toText(options.idempotencyKey, 160);
+  const deterministicId = idempotencyKey
+    ? `notice_${crypto.createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 32)}`
+    : "";
+  const notice = normalizeNotice(deterministicId ? { ...(payload || {}), id: deterministicId } : payload);
+  const payloadFingerprint = noticeBusinessFingerprint(notice);
+  const operation = findNoticeOperation(idempotencyKey, payloadFingerprint);
+  if (operation) return { item: operation.receipt, replayed: true };
+  if (deterministicId) {
+    const existing = items.find((item) => item.id === deterministicId);
+    if (existing) {
+      if (noticeBusinessFingerprint(existing) !== payloadFingerprint) {
+        const err = new Error("操作标识已用于不同内容，请刷新后重试");
+        err.statusCode = 409;
+        err.code = "IDEMPOTENCY_KEY_CONFLICT";
+        throw err;
+      }
+      rememberNoticeOperation(idempotencyKey, payloadFingerprint, existing);
+      return { item: existing, replayed: true };
+    }
+  }
+  if (typeof options.beforeCreate === "function") options.beforeCreate();
   items.push(notice);
   saveArray(NOTICES_PATH, items);
-  return notice;
+  rememberNoticeOperation(idempotencyKey, payloadFingerprint, notice);
+  return { item: notice, replayed: false };
+}
+
+function createNotice(payload, options = {}) {
+  return createNoticeOperation(payload, options).item;
 }
 
 function updateNotice(id, payload, options) {
@@ -456,9 +544,44 @@ function selectDailyKnowledge(items, now = new Date()) {
     title: toText(selected.title, 120) || "每日小知识",
     content: toText(selected.content, 500),
     type: NOTICE_TYPES.has(selected.type) ? selected.type : "info",
+    category: DAILY_KNOWLEDGE_CATEGORIES.has(selected.category)
+      ? selected.category
+      : (selected.type === "warning" ? "fraud" : (selected.type === "success" ? "mind" : "campus")),
     date,
     version: toText(selected.version, 120) || `builtin:${selected.id}`,
     source: managed.length ? "managed" : "builtin",
+  };
+}
+
+function getDailyKnowledgeAdminState(now = new Date()) {
+  const notices = listNotices();
+  const managed = notices
+    .filter((item) => item && item.displayMode === "daily-tip" && ["home", "all"].includes(item.targetPage))
+    .slice()
+    .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
+  const activeNotices = notices.filter((notice) => isInDisplayWindow(notice, now));
+  const activeManaged = managed.filter((notice) => isInDisplayWindow(notice, now));
+  const builtin = DEFAULT_DAILY_KNOWLEDGE.map((item) => ({
+    id: item.id,
+    title: item.title,
+    content: item.content,
+    type: item.type,
+    category: item.category,
+    displayMode: "daily-tip",
+    targetPage: "home",
+    enabled: true,
+    source: "builtin",
+  }));
+  return {
+    mode: activeManaged.length ? "managed" : "builtin",
+    selected: selectDailyKnowledge(activeNotices, now),
+    managed,
+    builtin,
+    counts: {
+      managed: managed.length,
+      active: activeManaged.length,
+      builtin: builtin.length,
+    },
   };
 }
 
@@ -675,12 +798,15 @@ module.exports = {
   CONFIG_PATH,
   NEWS_PATH,
   NOTICES_PATH,
+  NOTICE_IDEMPOTENCY_PATH,
   createNews,
   createNotice,
+  createNoticeOperation,
   deleteNews,
   deleteNotice,
   getAdminConfig,
   getAdminDashboard,
+  getDailyKnowledgeAdminState,
   getPublicAppConfig,
   isInDisplayWindow,
   listNews,

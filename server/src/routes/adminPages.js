@@ -1,5 +1,6 @@
 const express = require("express");
 const adminAuth = require("../services/adminAuth");
+const { DAILY_KNOWLEDGE_BINDINGS, DAILY_KNOWLEDGE_SCRIPT, DAILY_KNOWLEDGE_SECTION, DAILY_KNOWLEDGE_STYLES } = require("./adminDailyKnowledgeAssets");
 
 const router = express.Router();
 
@@ -1736,6 +1737,8 @@ const adminConsoleHtml = `<!doctype html>
     }
     .mini-banner.urgent { background: var(--danger-soft); border-left-color: var(--danger); color: var(--danger); }
     .mini-banner.warning { background: var(--warning-soft); border-left-color: var(--warning); color: var(--warning); }
+
+${DAILY_KNOWLEDGE_STYLES}
     
     .mini-modal-mask {
       position: absolute;
@@ -5894,6 +5897,7 @@ const adminConsoleHtml = `<!doctype html>
 
             <li class="nav-group-label" data-nav-group="内容管理">内容管理</li>
             <li class="nav-item" data-section="notices"><button type="button" title="公告管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13V9l12-5v14L4 13Zm12-4h3a2 2 0 0 1 0 4h-3M6 14l1.5 6h4L10 15"/></svg><span class="nav-label">公告管理</span></button></li>
+            <li class="nav-item" data-section="daily-knowledge"><button type="button" title="每日知识"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 4h6m-6 4h6m-6 4h4M4 7h2m-2 5h2m-2 5h2"/></svg><span class="nav-label">每日知识</span></button></li>
             <li class="nav-item" data-section="news"><button type="button" title="最新动态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 4h8M8 12h8m-8 4h5"/></svg><span class="nav-label">最新动态</span></button></li>
             <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
             <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
@@ -7090,7 +7094,6 @@ const adminConsoleHtml = `<!doctype html>
                   <option value="modal">弹窗提醒 (modal)</option>
                   <option value="ticker">跑马灯 ticker</option>
                   <option value="card">普通卡片 (card)</option>
-                  <option value="daily-tip">每日小知识 (daily-tip)</option>
                 </select>
               </div>
             </div>
@@ -7167,6 +7170,8 @@ const adminConsoleHtml = `<!doctype html>
           </div>
         </div>
       </section>
+
+${DAILY_KNOWLEDGE_SECTION}
 
       <!-- 面板六：最新动态 -->
       <section id="section-news" class="section">
@@ -8133,9 +8138,13 @@ const adminConsoleHtml = `<!doctype html>
         dashboardOpsUnavailable: false,
         config: null,
         notices: [],
+        dailyKnowledge: { mode: "builtin", selected: null, managed: [], builtin: [], counts: {} },
+        dailyKnowledgeCreateOperation: null,
+        dailyKnowledgeSaving: false,
         news: [],
         feedbacks: [],
         editingNoticeId: "",
+        editingDailyKnowledgeId: "",
         editingNewsId: "",
         
         // 资源管理
@@ -8254,6 +8263,7 @@ const adminConsoleHtml = `<!doctype html>
         terms: "/admin/terms",
         quality: "/admin/quality",
         notices: "/admin/announcements",
+        "daily-knowledge": "/admin/daily-knowledge",
         news: "/admin/news",
         config: "/admin/config",
         "ai-provider": "/admin/ai-provider",
@@ -8285,6 +8295,8 @@ const adminConsoleHtml = `<!doctype html>
         "/admin/quality": { section: "quality" },
         "/admin/notices": { section: "notices" },
         "/admin/announcements": { section: "notices" },
+        "/admin/daily-knowledge": { section: "daily-knowledge" },
+        "/admin/daily-tips": { section: "daily-knowledge" },
         "/admin/news": { section: "news" },
         "/admin/config": { section: "config" },
         "/admin/version": { section: "config" },
@@ -8937,6 +8949,7 @@ const adminConsoleHtml = `<!doctype html>
           terms: "学期管理",
           quality: "数据质量中心",
           notices: "公告管理",
+          "daily-knowledge": "每日知识",
           news: "最新动态",
           config: "数据版本",
           "ai-provider": "查询服务",
@@ -8956,6 +8969,7 @@ const adminConsoleHtml = `<!doctype html>
           sync: "发布与运维 / 同步管线",
           config: "发布与运维 / 版本配置",
           notices: "内容管理 / 公告",
+          "daily-knowledge": "内容管理 / 每日知识",
           news: "内容管理 / 动态",
           "assistant-kb": "内容管理 / 助手知识库",
           "campus-map": "内容管理 / 校园地图",
@@ -8996,6 +9010,8 @@ const adminConsoleHtml = `<!doctype html>
           ignoreLoadError(loadTerms());
         } else if (targetSection === "quality") {
           ignoreLoadError(loadQualityReport());
+        } else if (targetSection === "daily-knowledge") {
+          ignoreLoadError(loadDailyKnowledge());
         } else if (targetSection === "settings") {
           ignoreLoadError(loadSettingsLogs());
         } else if (targetSection === "security") {
@@ -9471,6 +9487,22 @@ const adminConsoleHtml = `<!doctype html>
             console.error("[Admin Console] loadNotices failed:", error);
             showToast(error.message || "公告配置加载失败", "error");
             showModuleError("notices", error);
+            throw error;
+          });
+      }
+
+      function loadDailyKnowledge() {
+        return api("/api/admin/daily-knowledge")
+          .then(function (res) {
+            state.dailyKnowledge = res.data || { mode: "builtin", selected: null, managed: [], builtin: [], counts: {} };
+            renderDailyKnowledge();
+            return state.dailyKnowledge;
+          })
+          .catch(function (error) {
+            if (isAbortError(error)) return null;
+            console.error("[Admin Console] loadDailyKnowledge failed:", error);
+            showToast(error.message || "每日知识加载失败", "error");
+            showModuleError("daily-knowledge", error);
             throw error;
           });
       }
@@ -13731,7 +13763,7 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function renderNotices() {
-        var list = state.notices;
+        var list = state.notices.filter(function(item) { return item && item.displayMode !== "daily-tip"; });
         var tbody = $("noticeListTable");
         tbody.textContent = "";
         
@@ -13772,6 +13804,8 @@ const adminConsoleHtml = `<!doctype html>
           tbody.appendChild(tr);
         });
       }
+
+${DAILY_KNOWLEDGE_SCRIPT}
 
       // 最新动态管理
       function newsPayload() {
@@ -16275,6 +16309,7 @@ const adminConsoleHtml = `<!doctype html>
             ["全局配置", loadConfig()],
             ["查询服务", loadAiProviderConfig()],
             ["公告管理", loadNotices()],
+            ["每日知识", loadDailyKnowledge()],
             ["最新动态", loadNews()],
             ["反馈管理", loadFeedbacks()]
           ];
@@ -16344,6 +16379,8 @@ const adminConsoleHtml = `<!doctype html>
       ["noticeType", "noticeDisplayMode", "noticePriority"].forEach(function (id) {
         safeBind(id, "change", updateNoticePreview);
       });
+
+${DAILY_KNOWLEDGE_BINDINGS}
 
       ["newsTitle", "newsSummary", "newsTag", "newsDate"].forEach(function (id) {
         safeBind(id, "input", updateNewsPreview);
@@ -16440,6 +16477,8 @@ const adminConsoleHtml = `<!doctype html>
       });
       safeBind("saveNoticeButton", "click", saveNotice);
       safeBind("clearNoticeButton", "click", clearNoticeForm);
+      safeBind("saveDailyKnowledgeButton", "click", saveDailyKnowledge);
+      safeBind("clearDailyKnowledgeButton", "click", clearDailyKnowledgeForm);
       safeBind("saveNewsButton", "click", saveNews);
       safeBind("clearNewsButton", "click", clearNewsForm);
       
@@ -16724,6 +16763,12 @@ const adminConsoleHtml = `<!doctype html>
       function initNoticeModule() {
         if ($("noticeFormTitle")) {
           clearNoticeForm();
+        }
+      }
+
+      function initDailyKnowledgeModule() {
+        if ($("dailyKnowledgeFormTitle")) {
+          clearDailyKnowledgeForm();
         }
       }
 
@@ -17341,6 +17386,7 @@ const adminConsoleHtml = `<!doctype html>
                 ["navigation", initNavigation],
                 ["dashboard", initDashboard],
                 ["notice", initNoticeModule],
+                ["daily-knowledge", initDailyKnowledgeModule],
                 ["news", initNewsModule],
                 ["sync", initSyncModule],
                 ["feedback", initFeedbackModule],
@@ -17421,6 +17467,8 @@ router.get([
   "/map",
   "/announcements",
   "/notices",
+  "/daily-knowledge",
+  "/daily-tips",
   "/news",
   "/config",
   "/version",

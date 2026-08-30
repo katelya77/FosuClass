@@ -44,6 +44,11 @@ function assertStaticHtml(html) {
   assertIncludes(html, 'id="mobileMenuBtn"', "mobile menu");
   assertIncludes(html, 'id="section-sync"', "sync section");
   assertIncludes(html, 'id="section-terms"', "terms section");
+  assertIncludes(html, 'id="section-daily-knowledge"', "daily knowledge section");
+  assertIncludes(html, 'id="dailyKnowledgeList"', "daily knowledge visual library");
+  assertIncludes(html, 'id="dailyKnowledgePhoneScreen"', "daily knowledge phone preview");
+  assertIncludes(html, "/api/admin/daily-knowledge", "daily knowledge admin API");
+  assertIncludes(html, "保存到正式版内容池", "daily knowledge publish action");
   assertIncludes(html, 'id="repairCurrentTermReleaseBtn"', "semester repair button");
   assertIncludes(html, 'id="termRepairJobLog"', "semester repair job log");
   assertIncludes(html, "/repair-release/dry-run", "semester repair dry-run API");
@@ -127,6 +132,8 @@ function assertRoutes() {
     "/quality",
     "/catalog",
     "/announcements",
+    "/daily-knowledge",
+    "/daily-tips",
     "/map",
   ].forEach((routePath) => {
     if (!paths.has(routePath)) {
