@@ -3641,12 +3641,18 @@ router.get("/daily-knowledge", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("notices", contentDomainService.NOTICES_PATH);
-    const item = contentDomainService.createNotice(req.body || {});
-    writeAuditLog(req, "create", "notices", item.id, `创建公告: ${item.title}`);
+    const operation = contentDomainService.createNoticeOperation(req.body || {}, {
+      idempotencyKey: req.get("idempotency-key") || "",
+      beforeCreate: () => createBackup("notices", contentDomainService.NOTICES_PATH),
+    });
+    const item = operation.item;
+    if (!operation.replayed) {
+      writeAuditLog(req, "create", "notices", item.id, `创建公告: ${item.title}`);
+    }
     return res.json({
       success: true,
       item,
+      replayed: operation.replayed,
     });
   } catch (error) {
     safeLog("admin-notice-create-failed", { error: error.message });

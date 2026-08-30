@@ -10,10 +10,9 @@ function normalizeDailyKnowledge(payload) {
   const content = String(payload.content || "").trim().slice(0, 500);
   if (!content) return null;
   const type = ["info", "warning", "success"].indexOf(payload.type) >= 0 ? payload.type : "info";
-  const combined = title + content;
-  const isFraud = /防诈|诈骗|验证码|转账|陌生链接/.test(combined);
-  const isMind = !isFraud && /心理|情绪|压力|疲惫|掌控感/.test(combined);
-  const category = isFraud ? "fraud" : (isMind ? "mind" : "campus");
+  const category = ["mind", "fraud", "campus"].indexOf(payload.category) >= 0
+    ? payload.category
+    : (type === "warning" ? "fraud" : (type === "success" ? "mind" : "campus"));
   const categoryLabels = { fraud: "防诈提醒", mind: "心理关怀", campus: "校园日签" };
   const categoryMarks = { fraud: "盾", mind: "心", campus: "校" };
   const dateText = String(payload.date || "");

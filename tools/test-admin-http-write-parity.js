@@ -159,6 +159,55 @@ async function main() {
     });
     assert.strictEqual(createLegacy.status, 200, createLegacy.text);
 
+    const dailyKnowledgeBody = {
+      title: "心理小知识",
+      content: "先完成眼前最小的一步。",
+      category: "mind",
+      displayMode: "daily-tip",
+      targetPage: "home",
+      enabled: true,
+    };
+    const dailyHeaders = {
+      "X-Fosu-CSRF": csrf,
+      "Idempotency-Key": "http-daily-knowledge-create-1",
+    };
+    const createDaily = await request(port, "POST", "/api/admin/notices", {
+      cookie,
+      headers: dailyHeaders,
+      body: dailyKnowledgeBody,
+    });
+    assert.strictEqual(createDaily.status, 200, createDaily.text);
+    assert.strictEqual(createDaily.json.replayed, false);
+    assert.strictEqual(createDaily.json.item.category, "mind");
+    const replayDaily = await request(port, "POST", "/api/admin/notices", {
+      cookie,
+      headers: dailyHeaders,
+      body: dailyKnowledgeBody,
+    });
+    assert.strictEqual(replayDaily.status, 200, replayDaily.text);
+    assert.strictEqual(replayDaily.json.replayed, true);
+    assert.strictEqual(replayDaily.json.item.id, createDaily.json.item.id);
+    const dailyConflict = await request(port, "POST", "/api/admin/notices", {
+      cookie,
+      headers: dailyHeaders,
+      body: { ...dailyKnowledgeBody, content: "不同内容" },
+    });
+    assert.strictEqual(dailyConflict.status, 409, dailyConflict.text);
+    const deleteDaily = await request(port, "DELETE", `/api/admin/notices/${createDaily.json.item.id}`, {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+    });
+    assert.strictEqual(deleteDaily.status, 200, deleteDaily.text);
+    const replayDeletedDaily = await request(port, "POST", "/api/admin/notices", {
+      cookie,
+      headers: dailyHeaders,
+      body: dailyKnowledgeBody,
+    });
+    assert.strictEqual(replayDeletedDaily.status, 200, replayDeletedDaily.text);
+    assert.strictEqual(replayDeletedDaily.json.replayed, true);
+    const afterDeleteList = await request(port, "GET", "/api/admin/notices", { cookie });
+    assert.strictEqual(afterDeleteList.json.items.some((entry) => entry.id === createDaily.json.item.id), false);
+
     const list = await request(port, "GET", "/api/admin/notices", { cookie });
     assert.ok(list.json.items.every((n) => n.version), "all notices need version");
 
@@ -268,6 +317,7 @@ async function main() {
             "module-gate-403",
             "vue-create",
             "legacy-create",
+            "daily-knowledge-idempotency",
             "version-list",
             "428",
             "409",

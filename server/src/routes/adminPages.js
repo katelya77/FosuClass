@@ -8320,6 +8320,8 @@ const adminConsoleHtml = `<!doctype html>
         config: null,
         notices: [],
         dailyKnowledge: { mode: "builtin", selected: null, managed: [], builtin: [], counts: {} },
+        dailyKnowledgeCreateOperation: null,
+        dailyKnowledgeSaving: false,
         news: [],
         feedbacks: [],
         editingNoticeId: "",
@@ -13994,10 +13996,8 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function dailyKnowledgeCategoryForItem(item) {
-        var text = String(item && item.title || "") + String(item && item.content || "");
-        if (/防诈|诈骗|验证码|转账|陌生链接/.test(text)) return "fraud";
-        if (/心理|情绪|压力|疲惫|掌控感/.test(text)) return "mind";
-        return "campus";
+        if (item && ["mind", "fraud", "campus"].indexOf(item.category) >= 0) return item.category;
+        return item && item.type === "warning" ? "fraud" : (item && item.type === "success" ? "mind" : "campus");
       }
 
       function dailyKnowledgePayload() {
@@ -14006,6 +14006,7 @@ const adminConsoleHtml = `<!doctype html>
         var payload = {
           title: value("dailyKnowledgeTitle") || meta.title,
           content: value("dailyKnowledgeContent"),
+          category: category,
           type: meta.type,
           priority: "normal",
           displayMode: "daily-tip",
@@ -14067,6 +14068,7 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function saveDailyKnowledge() {
+        if (state.dailyKnowledgeSaving) return;
         var payload = dailyKnowledgePayload();
         if (!payload.content) {
           showToast("请先填写每日知识正文", "warning");
@@ -14075,13 +14077,30 @@ const adminConsoleHtml = `<!doctype html>
         }
         var isEdit = Boolean(state.editingDailyKnowledgeId);
         var path = isEdit ? "/api/admin/notices/" + encodeURIComponent(state.editingDailyKnowledgeId) : "/api/admin/notices";
-        api(path, { method: isEdit ? "PUT" : "POST", body: JSON.stringify(payload) })
+        var payloadFingerprint = JSON.stringify(payload);
+        if (!isEdit && (!state.dailyKnowledgeCreateOperation || state.dailyKnowledgeCreateOperation.fingerprint !== payloadFingerprint)) {
+          state.dailyKnowledgeCreateOperation = {
+            fingerprint: payloadFingerprint,
+            key: "daily-knowledge:" + Date.now() + ":" + Math.random().toString(36).slice(2)
+          };
+        }
+        var headers = {};
+        if (!isEdit) headers["Idempotency-Key"] = state.dailyKnowledgeCreateOperation.key;
+        state.dailyKnowledgeSaving = true;
+        var saveButton = $("saveDailyKnowledgeButton");
+        if (saveButton) saveButton.disabled = true;
+        api(path, { method: isEdit ? "PUT" : "POST", headers: headers, body: JSON.stringify(payload) })
           .then(function () {
+            state.dailyKnowledgeCreateOperation = null;
             showToast(isEdit ? "每日知识已更新" : "每日知识已加入正式版内容池", "success");
             clearDailyKnowledgeForm();
             return Promise.all([loadDailyKnowledge(), loadNotices()]);
           })
-          .catch(function (error) { showToast(error.message || "每日知识保存失败", "error"); });
+          .catch(function (error) { showToast(error.message || "每日知识保存失败", "error"); })
+          .finally(function () {
+            state.dailyKnowledgeSaving = false;
+            if (saveButton) saveButton.disabled = false;
+          });
       }
 
       function deleteDailyKnowledge(id) {
