@@ -47,7 +47,11 @@ function assertStaticHtml(html) {
   assertIncludes(html, 'id="section-daily-knowledge"', "daily knowledge section");
   assertIncludes(html, 'id="dailyKnowledgeList"', "daily knowledge visual library");
   assertIncludes(html, 'id="dailyKnowledgePhoneScreen"', "daily knowledge phone preview");
+  assertIncludes(html, 'id="dailyKnowledgeImportJson"', "daily knowledge JSON import editor");
+  assertIncludes(html, 'id="dailyKnowledgeValidateButton"', "daily knowledge import validator");
+  assertIncludes(html, 'id="dailyKnowledgeImportButton"', "daily knowledge import action");
   assertIncludes(html, "/api/admin/daily-knowledge", "daily knowledge admin API");
+  assertIncludes(html, "/api/admin/daily-knowledge/import", "daily knowledge import API");
   assertIncludes(html, "保存到正式版内容池", "daily knowledge publish action");
   assertIncludes(html, 'id="repairCurrentTermReleaseBtn"', "semester repair button");
   assertIncludes(html, 'id="termRepairJobLog"', "semester repair job log");

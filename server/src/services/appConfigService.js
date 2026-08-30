@@ -5,6 +5,7 @@ const releaseService = require("./releaseService");
 const feedbackService = require("./feedbackService");
 const termRegistryService = require("./termRegistryService");
 const { safeLog } = require("../utils/safeLogger");
+const DEFAULT_DAILY_KNOWLEDGE = require("../content/dailyKnowledgeBuiltin");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const CONFIG_PATH = path.join(STORAGE_DIR, "admin-config.json");
@@ -19,6 +20,7 @@ const NOTICE_DISPLAY_MODES = new Set(["banner", "modal", "ticker", "card", "dail
 const NOTICE_TARGET_PAGES = new Set(["home", "today", "school", "settings", "all"]);
 const DAILY_KNOWLEDGE_CATEGORIES = new Set(["mind", "fraud", "campus"]);
 const DAILY_KNOWLEDGE_TYPE_BY_CATEGORY = Object.freeze({ mind: "success", fraud: "warning", campus: "info" });
+const DAILY_KNOWLEDGE_IMPORT_LIMIT = 1000;
 const PRIORITY_SCORE = {
   urgent: 3,
   important: 2,
@@ -26,16 +28,6 @@ const PRIORITY_SCORE = {
 };
 
 const DEFAULT_DISCLAIMER = "课表仅供参考，以任课教师及教务通知为准。";
-const DEFAULT_DAILY_KNOWLEDGE = Object.freeze([
-  { id: "daily_fraud_01", category: "fraud", title: "防诈小知识", content: "凡是要求共享屏幕、远程控制手机并指导转账的，先挂断，再通过官方渠道核实。", type: "warning" },
-  { id: "daily_fraud_02", category: "fraud", title: "防诈小知识", content: "陌生链接里的“奖学金、补贴、退款”不要急着填写账号信息，先向学校或平台官方确认。", type: "warning" },
-  { id: "daily_fraud_03", category: "fraud", title: "防诈小知识", content: "验证码和登录口令只用于本人操作，老师、客服和平台工作人员都不会索要。", type: "warning" },
-  { id: "daily_mind_01", category: "mind", title: "心理小知识", content: "任务很多时，先写下最小的一步并完成它，比反复担心整个任务更容易重新获得掌控感。", type: "success" },
-  { id: "daily_mind_02", category: "mind", title: "心理小知识", content: "持续疲惫时可以短暂离开屏幕、喝水并活动几分钟；若长期影响生活，及时向可信任的人或专业机构求助。", type: "success" },
-  { id: "daily_mind_03", category: "mind", title: "心理小知识", content: "情绪不是需要立刻消灭的错误。先准确说出“我现在感到什么”，常常就是调节的第一步。", type: "success" },
-  { id: "daily_campus_01", category: "campus", title: "校园小知识", content: "公共电脑使用完毕后记得退出账号，并确认浏览器没有保存密码或个人文件。", type: "info" },
-  { id: "daily_campus_02", category: "campus", title: "校园小知识", content: "收到临时换教室或停课消息时，优先以任课教师、学院和教务系统的正式通知为准。", type: "info" },
-]);
 
 const DEFAULT_CONFIG = {
   appName: "佛课小表",
@@ -414,6 +406,114 @@ function createNotice(payload, options = {}) {
   return createNoticeOperation(payload, options).item;
 }
 
+function dailyKnowledgeImportId(item) {
+  const category = DAILY_KNOWLEDGE_CATEGORIES.has(item.category) ? item.category : "campus";
+  const externalId = toText(item.externalId || item.importId || item.key, 120);
+  const identity = externalId || [category, toText(item.title, 120), toText(item.content || item.text || item.body, 500)].join("|");
+  return `daily_import_${crypto.createHash("sha256").update(`${category}|${identity}`).digest("hex").slice(0, 32)}`;
+}
+
+function normalizeDailyKnowledgeImportPack(payload) {
+  const source = Array.isArray(payload) ? { items: payload } : (payload && typeof payload === "object" ? payload : {});
+  const schemaVersion = Number(source.schemaVersion || source.version || 1);
+  if (schemaVersion !== 1) {
+    const err = new Error("每日知识导入格式版本不受支持，请使用 schemaVersion: 1");
+    err.statusCode = 400;
+    err.code = "DAILY_KNOWLEDGE_IMPORT_SCHEMA_UNSUPPORTED";
+    throw err;
+  }
+  const rawItems = Array.isArray(source.items) ? source.items : [];
+  if (!rawItems.length) {
+    const err = new Error("导入内容不能为空");
+    err.statusCode = 400;
+    err.code = "DAILY_KNOWLEDGE_IMPORT_EMPTY";
+    throw err;
+  }
+  if (rawItems.length > DAILY_KNOWLEDGE_IMPORT_LIMIT) {
+    const err = new Error(`单次最多导入 ${DAILY_KNOWLEDGE_IMPORT_LIMIT} 条每日知识`);
+    err.statusCode = 400;
+    err.code = "DAILY_KNOWLEDGE_IMPORT_TOO_LARGE";
+    throw err;
+  }
+  const ids = new Set();
+  const items = rawItems.map((raw, index) => {
+    const item = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const category = DAILY_KNOWLEDGE_CATEGORIES.has(item.category) ? item.category : "campus";
+    const defaultTitle = category === "mind" ? "心理小知识" : (category === "fraud" ? "防诈小知识" : "校园小知识");
+    const normalized = {
+      id: dailyKnowledgeImportId(Object.assign({}, item, { category })),
+      title: toText(item.title, 120) || defaultTitle,
+      content: toText(item.content || item.text || item.body, 500),
+      category,
+      type: DAILY_KNOWLEDGE_TYPE_BY_CATEGORY[category],
+      priority: "normal",
+      displayMode: "daily-tip",
+      targetPage: "home",
+      startAt: item.startAt || "",
+      endAt: item.endAt || "",
+      enabled: item.enabled !== false,
+      closable: false,
+    };
+    if (!normalized.content) {
+      const err = new Error(`第 ${index + 1} 条每日知识正文为空`);
+      err.statusCode = 400;
+      err.code = "DAILY_KNOWLEDGE_IMPORT_ITEM_INVALID";
+      throw err;
+    }
+    if (ids.has(normalized.id)) {
+      const err = new Error(`第 ${index + 1} 条与导入包内已有内容使用了相同 externalId`);
+      err.statusCode = 400;
+      err.code = "DAILY_KNOWLEDGE_IMPORT_DUPLICATE_ID";
+      throw err;
+    }
+    ids.add(normalized.id);
+    return normalized;
+  });
+  return { schemaVersion: 1, items };
+}
+
+function importDailyKnowledgePack(payload, options = {}) {
+  const pack = normalizeDailyKnowledgeImportPack(payload);
+  const notices = listNotices();
+  const next = notices.slice();
+  const indexById = new Map(next.map((item, index) => [item.id, index]));
+  const dailyFingerprintIds = new Map(next
+    .filter((item) => item && item.displayMode === "daily-tip")
+    .map((item) => [noticeBusinessFingerprint(item), item.id]));
+  const result = { schemaVersion: 1, total: pack.items.length, created: 0, updated: 0, skipped: 0, dryRun: options.dryRun === true, items: [] };
+
+  pack.items.forEach((source) => {
+    const existingIndex = indexById.has(source.id) ? indexById.get(source.id) : -1;
+    const existing = existingIndex >= 0 ? next[existingIndex] : null;
+    const normalized = normalizeNotice(source, existing || undefined);
+    const fingerprint = noticeBusinessFingerprint(normalized);
+    const duplicateId = dailyFingerprintIds.get(fingerprint);
+    if ((existing && noticeBusinessFingerprint(existing) === fingerprint) || (!existing && duplicateId)) {
+      result.skipped += 1;
+      result.items.push({ id: existing ? existing.id : duplicateId, title: normalized.title, category: normalized.category, status: "skipped" });
+      return;
+    }
+    if (existing) {
+      next[existingIndex] = normalized;
+      result.updated += 1;
+      result.items.push({ id: normalized.id, title: normalized.title, category: normalized.category, status: "updated" });
+    } else {
+      indexById.set(normalized.id, next.length);
+      next.push(normalized);
+      result.created += 1;
+      result.items.push({ id: normalized.id, title: normalized.title, category: normalized.category, status: "created" });
+    }
+    dailyFingerprintIds.set(fingerprint, normalized.id);
+  });
+
+  const changed = result.created + result.updated;
+  if (changed && options.dryRun !== true) {
+    if (typeof options.beforeWrite === "function") options.beforeWrite();
+    saveArray(NOTICES_PATH, next);
+  }
+  return result;
+}
+
 function updateNotice(id, payload, options) {
   const items = listNotices();
   const index = items.findIndex((item) => item.id === id);
@@ -537,8 +637,8 @@ function selectDailyKnowledge(items, now = new Date()) {
   const pool = managed.length ? managed : DEFAULT_DAILY_KNOWLEDGE;
   if (!pool.length) return null;
   const date = shanghaiDateKey(now);
-  const digest = crypto.createHash("sha256").update(date).digest("hex");
-  const selected = pool[Number.parseInt(digest.slice(0, 8), 16) % pool.length];
+  const dayNumber = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
+  const selected = pool[((dayNumber % pool.length) + pool.length) % pool.length];
   return {
     id: toText(selected.id, 80),
     title: toText(selected.title, 120) || "每日小知识",
@@ -808,11 +908,13 @@ module.exports = {
   getAdminDashboard,
   getDailyKnowledgeAdminState,
   getPublicAppConfig,
+  importDailyKnowledgePack,
   isInDisplayWindow,
   listNews,
   listNotices,
   saveAdminConfig,
   selectDailyKnowledge,
+  normalizeDailyKnowledgeImportPack,
   touchDataVersionForSyncKey,
   updateNews,
   updateNotice,

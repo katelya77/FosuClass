@@ -208,6 +208,42 @@ async function main() {
     const afterDeleteList = await request(port, "GET", "/api/admin/notices", { cookie });
     assert.strictEqual(afterDeleteList.json.items.some((entry) => entry.id === createDaily.json.item.id), false);
 
+    const dailyImportPack = {
+      schemaVersion: 1,
+      items: [
+        { externalId: "http-mind-001", category: "mind", title: "心理小知识", content: "先完成五分钟内可以完成的一步。" },
+        { externalId: "http-fraud-001", category: "fraud", title: "防诈小知识", content: "涉及转账时换一种联系方式核实。" },
+      ],
+    };
+    const dryRunImport = await request(port, "POST", "/api/admin/daily-knowledge/import", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: { ...dailyImportPack, dryRun: true },
+    });
+    assert.strictEqual(dryRunImport.status, 200, dryRunImport.text);
+    assert.deepStrictEqual(
+      { created: dryRunImport.json.data.created, updated: dryRunImport.json.data.updated, skipped: dryRunImport.json.data.skipped },
+      { created: 2, updated: 0, skipped: 0 }
+    );
+    const importDailyPack = await request(port, "POST", "/api/admin/daily-knowledge/import", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: dailyImportPack,
+    });
+    assert.strictEqual(importDailyPack.status, 200, importDailyPack.text);
+    assert.strictEqual(importDailyPack.json.data.created, 2);
+    const replayDailyPack = await request(port, "POST", "/api/admin/daily-knowledge/import", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: dailyImportPack,
+    });
+    assert.strictEqual(replayDailyPack.status, 200, replayDailyPack.text);
+    assert.strictEqual(replayDailyPack.json.data.skipped, 2);
+    const unauthDailyPack = await request(port, "POST", "/api/admin/daily-knowledge/import", {
+      body: dailyImportPack,
+    });
+    assert.ok([401, 403].includes(unauthDailyPack.status), `expected protected import, got ${unauthDailyPack.status}`);
+
     const list = await request(port, "GET", "/api/admin/notices", { cookie });
     assert.ok(list.json.items.every((n) => n.version), "all notices need version");
 
@@ -318,6 +354,7 @@ async function main() {
             "vue-create",
             "legacy-create",
             "daily-knowledge-idempotency",
+            "daily-knowledge-bulk-import",
             "version-list",
             "428",
             "409",

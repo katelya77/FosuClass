@@ -171,7 +171,8 @@ Page({
     if (eventChannel && typeof eventChannel.on === "function") {
       eventChannel.on("acceptDataFromOpenerPage", (data) => {
         if (data && Array.isArray(data.courses)) {
-          hasLoadedData = true;
+          const hasUsableCourses = data.courses.length > 0;
+          hasLoadedData = hasUsableCourses;
           const schedule = data.schedule || {};
           const nextDisplayType = schedule.displayType || this.data.displayType;
           const nextAggregated = Boolean(schedule.isAggregated || this.data.isAggregated || nextDisplayType === "major-schedule" || nextDisplayType === "major-shared-schedule");
@@ -182,7 +183,9 @@ Page({
             scheduleKindText: getScheduleKindText(this.data.type, nextDisplayType, nextAggregated),
             scheduleMeta: schedule,
           }, () => {
-            this.initScheduleLayout();
+            if (hasUsableCourses) {
+              this.initScheduleLayout();
+            }
           });
         }
       });

@@ -31,6 +31,8 @@ const adminCapabilitiesService = require("../services/adminCapabilitiesService")
 const backupService = require("../services/backupService");
 const adminAuditService = require("../services/adminAuditService");
 const contentDomainService = require("../modules/content/service");
+const { createDailyKnowledgeImportHandler } = require("../modules/content/dailyKnowledgeImportController");
+const { createDailyKnowledgeListHandler, createDailyKnowledgeCloudbaseVerifyHandler, createDailyKnowledgeCloudbaseSyncHandler } = require("../modules/content/dailyKnowledgeCloudbaseController");
 const settingsDomainService = require("../modules/settings/service");
 const catalogDomainService = require("../modules/catalog/service");
 const qualityDomainService = require("../modules/quality/service");
@@ -3627,17 +3629,15 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.get("/daily-knowledge", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    return res.json({
-      success: true,
-      data: contentDomainService.getDailyKnowledgeAdminState(new Date()),
-    });
-  } catch (error) {
-    safeLog("admin-daily-knowledge-list-failed", { error: error.message });
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+router.get("/daily-knowledge", adminAuth.verifyAdminAccess, createDailyKnowledgeListHandler({ safeLog }));
+
+router.get("/daily-knowledge/cloudbase/verify", adminAuth.verifyAdminAccess, createDailyKnowledgeCloudbaseVerifyHandler({ safeLog }));
+
+router.post("/daily-knowledge/cloudbase/sync", verifyAdminWriteAccess, createDailyKnowledgeCloudbaseSyncHandler({ safeLog, writeAuditLog }));
+
+router.post("/daily-knowledge/import", adminAuth.verifyAdminAccess, createDailyKnowledgeImportHandler({
+  createBackup, writeAuditLog, safeLog,
+}));
 
 router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
