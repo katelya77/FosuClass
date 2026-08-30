@@ -49,6 +49,14 @@ function writeCache(dateKey, registry, item) {
   }
 }
 
+function clearCache() {
+  try {
+    wx.removeStorageSync(CACHE_KEY);
+  } catch (error) {
+    // Cache cleanup is best-effort; the authoritative registry still disables display.
+  }
+}
+
 function normalizeRegistry(payload) {
   const data = payload && payload.data ? payload.data : payload;
   const activeCollection = String(data && data.activeCollection || "").trim();
@@ -56,7 +64,7 @@ function normalizeRegistry(payload) {
   const rotationOffset = Math.max(0, Math.floor(Number(data && data.rotationOffset) || 0));
   const rotationCount = Math.max(0, Math.floor(Number(data && data.rotationCount) || count));
   if (!COLLECTION_PATTERN.test(activeCollection) || count < 1 || count > 1000 ||
-      rotationCount < 1 || rotationOffset + rotationCount > count) {
+      rotationCount < 1 || rotationCount > count || rotationOffset >= rotationCount) {
     return null;
   }
   return {
@@ -65,6 +73,8 @@ function normalizeRegistry(payload) {
     rotationOffset,
     rotationCount,
     contentVersion: String(data && data.contentVersion || "").slice(0, 80),
+    enabled: data && data.enabled !== false,
+    strategy: data && data.strategy === "sequential" ? "sequential" : "balanced",
   };
 }
 
@@ -94,13 +104,18 @@ function loadDailyKnowledge(options) {
     .then((result) => {
       const registry = normalizeRegistry(result);
       if (!registry) throw new Error("DAILY_KNOWLEDGE_REGISTRY_INVALID");
-      const slot = registry.rotationOffset + slotForDate(date, registry.rotationCount);
+      if (!registry.enabled) {
+        clearCache();
+        return { registry, item: null, disabled: true };
+      }
+      const slot = (registry.rotationOffset + slotForDate(date, registry.rotationCount)) % registry.rotationCount;
       return db.collection(registry.activeCollection)
         .doc(slotDocumentId(slot))
         .get()
         .then((itemResult) => ({ registry, item: itemResult && itemResult.data }));
     })
-    .then(({ registry, item }) => {
+    .then(({ registry, item, disabled }) => {
+      if (disabled) return null;
       if (fallback && (
         String(item && item.sourceId || "") !== String(fallback.id || "") ||
         String(item && item.content || "") !== String(fallback.content || "")

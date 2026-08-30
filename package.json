@@ -17,7 +17,7 @@
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js && node tools/test-semester-repair.js",
     "test:term-deletion-lifecycle": "node tools/test-term-deletion-lifecycle.js",
     "test:home-ui-performance": "node tools/test-home-ui-performance.js",
-    "test:daily-knowledge": "node tools/test-home-schedule-daily-knowledge-regression.js && node tools/test-daily-knowledge-content-pack.js && node tools/test-daily-knowledge-cloudbase.js",
+    "test:daily-knowledge": "node tools/test-home-schedule-daily-knowledge-regression.js && node tools/test-daily-knowledge-content-pack.js && node tools/test-daily-knowledge-management.js && node tools/test-daily-knowledge-cloudbase.js",
     "test:current-term-one-click": "node tools/test-current-term-one-click.js",
     "test:sync-snapshot-term-coherence": "node tools/test-sync-snapshot-term-coherence.js",
     "test:staging-fingerprint": "node tools/test-staging-fingerprint.js",

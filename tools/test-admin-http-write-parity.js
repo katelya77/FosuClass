@@ -244,6 +244,48 @@ async function main() {
     });
     assert.ok([401, 403].includes(unauthDailyPack.status), `expected protected import, got ${unauthDailyPack.status}`);
 
+    const dailyState = await request(port, "GET", "/api/admin/daily-knowledge", { cookie });
+    assert.strictEqual(dailyState.status, 200, dailyState.text);
+    assert.strictEqual(dailyState.json.data.counts.active, 2);
+    assert.strictEqual(dailyState.json.data.counts.total, 2);
+    assert.strictEqual(dailyState.json.data.policy.enabled, true);
+
+    const policyUpdate = await request(port, "POST", "/api/admin/daily-knowledge/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: { enabled: true, strategy: "sequential", rotationOffset: 4 },
+    });
+    assert.strictEqual(policyUpdate.status, 200, policyUpdate.text);
+    assert.deepStrictEqual(policyUpdate.json.data.policy, { enabled: true, strategy: "sequential", rotationOffset: 4 });
+
+    const exportedDaily = await request(port, "GET", "/api/admin/daily-knowledge/export?scope=managed", { cookie });
+    assert.strictEqual(exportedDaily.status, 200, exportedDaily.text);
+    assert.strictEqual(exportedDaily.json.data.items.length, 2);
+    assert.ok(String(exportedDaily.headers["content-disposition"] || "").includes("fosu-daily-knowledge-managed.json"));
+
+    const importedIds = importDailyPack.json.data.items.map((entry) => entry.id);
+    const bulkDisable = await request(port, "POST", "/api/admin/daily-knowledge/bulk", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: { action: "disable", ids: importedIds },
+    });
+    assert.strictEqual(bulkDisable.status, 200, bulkDisable.text);
+    assert.strictEqual(bulkDisable.json.data.affected, 2);
+
+    const seedBuiltins = await request(port, "POST", "/api/admin/daily-knowledge/seed-builtins", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: {},
+    });
+    assert.strictEqual(seedBuiltins.status, 200, seedBuiltins.text);
+    assert.strictEqual(seedBuiltins.json.data.created, 360);
+    const seedReplay = await request(port, "POST", "/api/admin/daily-knowledge/seed-builtins", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf },
+      body: {},
+    });
+    assert.strictEqual(seedReplay.json.data.skipped, 360);
+
     const list = await request(port, "GET", "/api/admin/notices", { cookie });
     assert.ok(list.json.items.every((n) => n.version), "all notices need version");
 
@@ -355,6 +397,7 @@ async function main() {
             "legacy-create",
             "daily-knowledge-idempotency",
             "daily-knowledge-bulk-import",
+            "daily-knowledge-policy-export-bulk-seed",
             "version-list",
             "428",
             "409",

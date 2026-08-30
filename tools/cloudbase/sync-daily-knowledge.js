@@ -98,15 +98,15 @@ function listCollections() {
 }
 
 function ensureCollection(collectionName, existing) {
-  if (existing.includes(collectionName)) return false;
-  callMcp("writeNoSqlDatabaseStructure", { action: "createCollection", collectionName });
+  const created = !existing.includes(collectionName);
+  if (created) callMcp("writeNoSqlDatabaseStructure", { action: "createCollection", collectionName });
   callMcp("managePermissions", {
     action: "updateResourcePermission",
     resourceType: "noSqlDatabase",
     resourceId: collectionName,
     permission: "READONLY",
   });
-  return true;
+  return created;
 }
 
 function insertDocuments(collectionName, documents) {
@@ -154,6 +154,17 @@ function countDocuments(collectionName) {
   return Array.isArray(records) ? records.length : Number(result.total || 0);
 }
 
+function readCollectionPermission(collectionName) {
+  const result = callMcp("queryPermissions", {
+    action: "getResourcePermission",
+    resourceType: "noSqlDatabase",
+    resourceId: collectionName,
+  });
+  const data = result && result.data ? result.data : result;
+  const permissions = Array.isArray(data && data.permissions) ? data.permissions : [];
+  return String(data && data.aclTag || permissions[0] && permissions[0].Permission || "").toUpperCase();
+}
+
 function updateRegistry(deployment, previousCollection) {
   callMcp("writeNoSqlDatabaseContent", {
     action: "update",
@@ -169,6 +180,9 @@ function updateRegistry(deployment, previousCollection) {
         builtinCount: deployment.builtinCount,
         rotationOffset: deployment.rotationOffset,
         rotationCount: deployment.rotationCount,
+        enabled: deployment.enabled !== false,
+        strategy: deployment.strategy || "balanced",
+        source: deployment.source || "builtin",
         contentVersion: deployment.contentVersion,
         publishedAt: deployment.publishedAt,
       },
@@ -189,6 +203,13 @@ function rollback(collectionName, currentRegistry, collections) {
     count,
     contentVersion: version,
     publishedAt: new Date().toISOString(),
+    enabled: currentRegistry && currentRegistry.enabled !== false,
+    strategy: currentRegistry && currentRegistry.strategy || "balanced",
+    source: currentRegistry && currentRegistry.source || "builtin",
+    rotationOffset: Math.min(Number(currentRegistry && currentRegistry.rotationOffset) || 0, count - 1),
+    rotationCount: count,
+    managedCount: Number(currentRegistry && currentRegistry.managedCount) || 0,
+    builtinCount: Number(currentRegistry && currentRegistry.builtinCount) || count,
   }, currentRegistry && currentRegistry.activeCollection || "");
   return { activeCollection: collectionName, count };
 }
@@ -220,8 +241,36 @@ function verifyDeployment(deployment, collections) {
   try {
     const registry = readRegistry();
     const count = countDocuments(deployment.collectionName);
-    const ok = Boolean(registry && registry.activeCollection === deployment.collectionName && count === deployment.count);
-    return { ok, registry, count, expectedCount: deployment.count };
+    const permissions = {
+      content: readCollectionPermission(deployment.collectionName),
+      registry: readCollectionPermission(REGISTRY_COLLECTION),
+    };
+    const expectations = {
+      activeCollection: deployment.collectionName,
+      contentVersion: deployment.contentVersion,
+      count: deployment.count,
+      rotationCount: deployment.rotationCount,
+      rotationOffset: deployment.rotationOffset,
+      enabled: deployment.enabled !== false,
+      strategy: deployment.strategy || "balanced",
+      source: deployment.source || "builtin",
+    };
+    const actual = registry ? {
+      activeCollection: registry.activeCollection,
+      contentVersion: registry.contentVersion,
+      count: Number(registry.count),
+      rotationCount: Number(registry.rotationCount),
+      rotationOffset: Number(registry.rotationOffset),
+      enabled: registry.enabled !== false,
+      strategy: registry.strategy || "balanced",
+      source: registry.source || "builtin",
+    } : null;
+    const mismatches = Object.keys(expectations).filter((key) => !actual || actual[key] !== expectations[key]);
+    if (count !== deployment.count) mismatches.push("documentCount");
+    if (permissions.content !== "READONLY") mismatches.push("contentPermission");
+    if (permissions.registry !== "READONLY") mismatches.push("registryPermission");
+    const ok = mismatches.length === 0;
+    return { ok, registry, count, expectedCount: deployment.count, permissions, expectations, mismatches };
   } catch (error) {
     return {
       ok: false,
@@ -244,7 +293,7 @@ function main() {
     const end = item.endAt ? new Date(item.endAt).getTime() : NaN;
     return !(Number.isFinite(start) && time < start) && !(Number.isFinite(end) && time > end);
   }).sort((left, right) => String(left.id || "").localeCompare(String(right.id || "")));
-  const deployment = buildDeployment({ managed, builtin: adminState.builtin || [] }, now);
+  const deployment = buildDeployment({ managed, builtin: adminState.builtin || [], policy: adminState.policy }, now);
   const plan = {
     mode: options.execute ? "execute" : (options.verify ? "verify" : "dry-run"),
     envId: options.envId,
@@ -255,6 +304,9 @@ function main() {
     managedCount: deployment.managedCount,
     builtinCount: deployment.builtinCount,
     rotationCount: deployment.rotationCount,
+    enabled: deployment.enabled,
+    strategy: deployment.strategy,
+    source: deployment.source,
     categories: deployment.documents.reduce((acc, item) => {
       acc[item.category] = (acc[item.category] || 0) + 1;
       return acc;

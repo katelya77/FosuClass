@@ -33,15 +33,15 @@ assert.ok(
 
 const managedDeployment = buildDeployment({
   managed: [
-    { id: "managed_a", category: "mind", title: "心理小知识", content: "后台内容 A", type: "success" },
-    { id: "managed_b", category: "fraud", title: "防诈小知识", content: "后台内容 B", type: "warning" },
+    { id: "managed_a", category: "mind", title: "心理小知识", content: "后台内容 A", type: "success", enabled: true, displayMode: "daily-tip", targetPage: "home" },
+    { id: "managed_b", category: "fraud", title: "防诈小知识", content: "后台内容 B", type: "warning", enabled: true, displayMode: "daily-tip", targetPage: "home" },
   ],
   builtin,
 }, new Date("2026-08-31T00:00:00.000Z"));
-assert.strictEqual(managedDeployment.count, 362);
+assert.strictEqual(managedDeployment.count, 2, "CloudBase must publish only the effective managed pool");
 assert.strictEqual(managedDeployment.rotationCount, 2, "managed items must take rotation priority");
 assert.strictEqual(managedDeployment.documents[0].source, "managed");
-assert.strictEqual(managedDeployment.documents[2].source, "builtin");
+assert.strictEqual(managedDeployment.builtinCount, 0, "fallback items must not duplicate the effective pool");
 
 const storage = new Map();
 let requestedDocumentId = "";
@@ -59,6 +59,8 @@ const registry = {
   rotationOffset: 0,
   rotationCount: first.rotationCount,
   contentVersion: first.contentVersion,
+  enabled: true,
+  strategy: "balanced",
 };
 
 global.wx = {
@@ -104,6 +106,15 @@ const service = require("../miniprogram/services/dailyKnowledgeCloudService");
   const changedFallback = Object.assign({}, fallback, { content: "服务端已更新但云端尚未同步。" });
   const fallbackResult = await service.loadDailyKnowledge({ fallback: changedFallback, now: new Date("2026-09-01T08:00:00.000Z") });
   assert.strictEqual(fallbackResult.content, changedFallback.content, "server result must remain the last-known-good fallback");
+
+  registry.enabled = false;
+  global.wx.cloud.database = () => ({
+    collection() {
+      return { doc() { return { get() { return Promise.resolve({ data: registry }); } }; } };
+    },
+  });
+  const disabled = await service.loadDailyKnowledge({ fallback, now });
+  assert.strictEqual(disabled, null, "disabled registry must suppress stale CloudBase and cache content");
   console.log("test-daily-knowledge-cloudbase passed");
 })().catch((error) => {
   console.error(error);
