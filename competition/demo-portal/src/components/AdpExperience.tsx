@@ -69,7 +69,7 @@ export interface DiagnosticsSnapshot {
 
 const QUICK_PROMPTS = [
   "未来四周教师负载最高的是谁？",
-  "检查 Top1 未来四周的跨校区赶场风险。",
+  "检查 Top1 未来四周的教学空间转场风险。",
   "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
 ];
 

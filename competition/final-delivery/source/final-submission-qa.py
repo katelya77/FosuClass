@@ -422,14 +422,14 @@ def run() -> dict[str, object]:
     truth_text = (ROOT / "FINAL-TRUTH.json").read_text(encoding="utf-8")
     ppt_fact_groups = [
         ("4 Agent", ["4个智能体"]), ("13 CampusTools", ["13", "campustools"]), ("14 bindings", ["14绑定关系"]),
-        ("Teacher025", ["教师025"]), ("risk 0/4", ["0课表硬冲突", "4每周赶场风险"]),
+        ("Teacher025", ["教师025"]), ("risk 0/4", ["0课表硬冲突", "4每周转场风险"]),
         ("collaboration 3/63/7/A1-201", ["3", "63", "7", "a1-201"]),
         ("reschedule", ["feasible=true", "warning", "mutateddata", "false"]),
         ("insight", ["56课次", "112课时"]), ("1500+", ["1500+"]),
     ]
     doc_fact_groups = [
         ("4 Agent", ["4个智能体"]), ("13 CampusTools", ["13"]), ("14 bindings", ["14"]),
-        ("Teacher025", ["教师025"]), ("risk 0/4", ["0", "冲突", "4", "赶场"]),
+        ("Teacher025", ["教师025"]), ("risk 0/4", ["0", "冲突", "4", "转场"]),
         ("collaboration 3/63/7/A1-201", ["3", "63", "7", "a1-201"]),
         ("reschedule", ["可行", "有提醒", "mutateddata=false"]),
         ("insight", ["56", "课次", "112", "课时"]), ("1500+", ["1500+"]),
@@ -484,7 +484,7 @@ def run() -> dict[str, object]:
         "portal": {"home": portal_home, "experience": portal_experience, "anonymousBrowserTest": True},
         "qrDecoded": decoded_qr,
         "adoption1500Pages": {"ppt": ppt_1500_pages, "designBook": doc_1500_pages},
-        "portalScreenshotPages": {"ppt": [11, 12], "designBook": [4, 15]},
+        "portalScreenshotPages": {"ppt": [5, 11], "designBook": [4, 11, 15]},
         "scan": {"bannedHits": banned_hits, "secretHits": secret_hits},
         "checks": checks,
     }
@@ -506,7 +506,7 @@ def run() -> dict[str, object]:
         f"{rows}\n\n"
         "## 页面定位\n\n"
         "- `1500+`：PPT 第 2、11 页；设计说明书第 4、20 页。\n"
-        "- Judge Portal 实际截图：PPT 第 11、12 页；设计说明书第 4、15 页。\n"
+        "- Judge Portal 实际截图：PPT 第 5、11 页；设计说明书第 4、11、15 页。\n"
         "- PPT 全 12 页已输出 1920×1080 PNG 并逐页检查；设计书全 20 页已输出 PNG，重点页与首尾页已实机检查。\n\n"
         "## 在线与匿名结论\n\n"
         "- `https://adp.katelya.top/` 与 `/experience`：HTTP 200。\n"

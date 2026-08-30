@@ -54,5 +54,10 @@ else {
     $app.Quit()
     [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($app) | Out-Null
   }
-  & pdftoppm -png -r 144 $pdfResolved (Join-Path $previewResolved 'page')
+  if (Get-Command pdftoppm -ErrorAction SilentlyContinue) {
+    & pdftoppm -png -r 144 $pdfResolved (Join-Path $previewResolved 'page')
+  } else {
+    python (Join-Path $PSScriptRoot 'render-doc-previews.py') $pdfResolved $previewResolved
+    if ($LASTEXITCODE -ne 0) { throw 'PDF preview render failed (pdftoppm missing and python fallback failed)' }
+  }
 }

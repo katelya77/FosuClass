@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$PptxPath = (Join-Path $PSScriptRoot "..\校园智序-小序-答辩.pptx")
 )
 

@@ -1,7 +1,7 @@
 # 校园智序·小序｜FINAL SUBMISSION QA
 
 - 总结：`PASS`（31/31 项通过）
-- 生成时间：2026-08-29T12:43:55+08:00
+- 生成时间：2026-08-31T04:15:34+08:00
 - 事实源：`FINAL-TRUTH.md` / `FINAL-TRUTH.json` 与四份标准核验结果
 - 说明：PPTX 与 DOCX 已在 Microsoft PowerPoint / Word 桌面端实际打开；PPT 12 页、Word 状态栏 20/20 页。
 
@@ -14,14 +14,14 @@
 | PASS | PPT/PDF 页数一致 | PPTX=12, PDF=12 |
 | PASS | PPT 16:9 | ratio=1.777778 |
 | PASS | PPT 文本框溢出 | overflow=[]; min explicit font=8.5pt |
-| PASS | PPT 原生逐步放映动画 | S1=4组/7效果; S2=5组/23效果; S3=8组/28效果; S4=6组/36效果; S5=5组/24效果; S6=4组/9效果; S7=6组/15效果; S8=4组/9效果; S9=4组/17效果; S10=4组/16效果; S11=5组/15效果; S12=6组/13效果 |
-| PASS | DOCX 可解析且可编辑 | python-docx 打开；paragraphs=139 |
+| PASS | PPT 原生逐步放映动画 | S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/28效果; S5=6组/19效果; S6=6组/15效果; S7=6组/15效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=5组/17效果; S12=9组/19效果 |
+| PASS | DOCX 可解析且可编辑 | python-docx 打开；paragraphs=140 |
 | PASS | 设计书 PDF 页数 | PDF=20 页；Word 实机状态栏已核验 20/20 |
 | PASS | PPT 逐页预览 | 12 张 1920×1080；failures=[] |
 | PASS | 设计书逐页预览 | 20 张；failures=[] |
 | PASS | 演示视频存在且小于 5 分钟 | 04:44.212；h264 1920×1080 |
 | PASS | 视频未重新编码 | source/final SHA-256=A48A1B88E4CA73FE571AD750A601C33C546F50C9D7C7709D4CF9F70080B4024C |
-| PASS | 最终 SHA-256 清单 | 12 个文件；failures=[] |
+| PASS | 最终 SHA-256 清单 | 13 个文件；failures=[] |
 | PASS | 程序 ZIP 可解压 | entries=55; bad=None |
 | PASS | 程序包 A–F 结构 | roots=['ARCHITECTURE.md', 'A_ADP工程', 'B_CampusTools', 'C_Widget', 'D_Agent配置', 'E_Data', 'F_Verification', 'MANIFEST-SHA256.txt', 'README-程序交付与运行说明.md'] |
 | PASS | ADP/CampusTools 人工导出可解压 | [('校园智序-小序_v20260827164200_package.zip', True, 4, None), ('校园智序-CampusTools.zip', True, 13, None)] |
@@ -44,7 +44,7 @@
 ## 页面定位
 
 - `1500+`：PPT 第 2、11 页；设计说明书第 4、20 页。
-- Judge Portal 实际截图：PPT 第 11、12 页；设计说明书第 4、15 页。
+- Judge Portal 实际截图：PPT 第 5、11 页；设计说明书第 4、11、15 页。
 - PPT 全 12 页已输出 1920×1080 PNG 并逐页检查；设计书全 20 页已输出 PNG，重点页与首尾页已实机检查。
 
 ## 在线与匿名结论

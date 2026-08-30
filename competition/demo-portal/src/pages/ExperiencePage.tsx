@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { Check, Clipboard, MousePointerClick, Send } from "lucide-react";
+import { Check, Clipboard, MousePointerClick, Send, ShieldCheck } from "lucide-react";
 
 import { AdpExperience } from "../components/AdpExperience";
 import { CapabilityQuestionLibrary } from "../components/CapabilityQuestionLibrary";
@@ -95,6 +95,14 @@ export function ExperiencePage({ caseKey, onNavigate, recordMode = false }: Expe
           <MousePointerClick size={14} />
           把左侧问题直接发给真实小序
         </span>
+      </div>
+
+      <div className="liquid-glass mb-4 flex items-start gap-3 rounded-2xl px-4 py-3">
+        <ShieldCheck size={16} className="mt-0.5 shrink-0" style={{ color: "#237f69" }} />
+        <p className="text-xs leading-relaxed text-body sm:text-sm">
+          <strong className="text-ink">真实体验</strong>
+          ——这里是已发布小序的真实回答：官方接口调用、匿名演示数据、结果卡携带核验依据；左侧问题可直接发送，实时不可用时会明确告知并提供已核验回放。
+        </p>
       </div>
 
       <div className={cn(

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29T12:43:55+08:00",
+  "generatedAt": "2026-08-31T04:15:34+08:00",
   "status": "PASS",
   "summary": {
     "passed": 31,
@@ -24,37 +24,37 @@
         "slide": 1,
         "timing": 1,
         "clickGroups": 4,
-        "effects": 7
+        "effects": 5
       },
       {
         "slide": 2,
         "timing": 1,
-        "clickGroups": 5,
-        "effects": 23
+        "clickGroups": 6,
+        "effects": 27
       },
       {
         "slide": 3,
-        "timing": 1,
-        "clickGroups": 8,
-        "effects": 28
-      },
-      {
-        "slide": 4,
-        "timing": 1,
-        "clickGroups": 6,
-        "effects": 36
-      },
-      {
-        "slide": 5,
         "timing": 1,
         "clickGroups": 5,
         "effects": 24
       },
       {
+        "slide": 4,
+        "timing": 1,
+        "clickGroups": 8,
+        "effects": 28
+      },
+      {
+        "slide": 5,
+        "timing": 1,
+        "clickGroups": 6,
+        "effects": 19
+      },
+      {
         "slide": 6,
         "timing": 1,
-        "clickGroups": 4,
-        "effects": 9
+        "clickGroups": 6,
+        "effects": 15
       },
       {
         "slide": 7,
@@ -66,13 +66,13 @@
         "slide": 8,
         "timing": 1,
         "clickGroups": 4,
-        "effects": 9
+        "effects": 17
       },
       {
         "slide": 9,
         "timing": 1,
-        "clickGroups": 4,
-        "effects": 17
+        "clickGroups": 6,
+        "effects": 36
       },
       {
         "slide": 10,
@@ -84,13 +84,13 @@
         "slide": 11,
         "timing": 1,
         "clickGroups": 5,
-        "effects": 15
+        "effects": 17
       },
       {
         "slide": 12,
         "timing": 1,
-        "clickGroups": 6,
-        "effects": 13
+        "clickGroups": 9,
+        "effects": 19
       }
     ]
   },
@@ -132,11 +132,12 @@
   },
   "portalScreenshotPages": {
     "ppt": [
-      11,
-      12
+      5,
+      11
     ],
     "designBook": [
       4,
+      11,
       15
     ]
   },
@@ -185,13 +186,13 @@
       "name": "PPT 原生逐步放映动画",
       "ok": true,
       "hard": true,
-      "evidence": "S1=4组/7效果; S2=5组/23效果; S3=8组/28效果; S4=6组/36效果; S5=5组/24效果; S6=4组/9效果; S7=6组/15效果; S8=4组/9效果; S9=4组/17效果; S10=4组/16效果; S11=5组/15效果; S12=6组/13效果"
+      "evidence": "S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/28效果; S5=6组/19效果; S6=6组/15效果; S7=6组/15效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=5组/17效果; S12=9组/19效果"
     },
     {
       "name": "DOCX 可解析且可编辑",
       "ok": true,
       "hard": true,
-      "evidence": "python-docx 打开；paragraphs=139"
+      "evidence": "python-docx 打开；paragraphs=140"
     },
     {
       "name": "设计书 PDF 页数",
@@ -227,7 +228,7 @@
       "name": "最终 SHA-256 清单",
       "ok": true,
       "hard": true,
-      "evidence": "12 个文件；failures=[]"
+      "evidence": "13 个文件；failures=[]"
     },
     {
       "name": "程序 ZIP 可解压",

@@ -189,7 +189,7 @@ def build_online_pdf(output: Path) -> None:
     image_fit(c, PORTAL_WIDGET, 54, H - 433, W - 108, 276)
     txt(c, "可直接验证的四个问题", 42, 338, 15, CORAL_DARK, True)
     prompts = [
-        "01  教师025未来四周有没有冲突与跨校区赶场风险？",
+        "01  教师025未来四周有没有冲突与跨校区转场风险？",
         "02  教师005、006、014何时共同空闲，并推荐不少于120座的教室。",
         "03  将周一5–6节模拟调整到周四7–8节，是否可行？",
         "04  未来四周谁最忙？继续查看其课表并检查风险。",
@@ -349,7 +349,7 @@ def write_text_files(video_source: Path) -> None:
         encoding="utf-8",
         newline="\n",
     )
-    readme = FINAL / "README-提交说明.txt"
+    (FINAL / "05_其他可选材料" / "在线体验-校园智序小序.url").write_text("[InternetShortcut]\r\nURL=" + URL + "\r\n", encoding="ascii"); readme = FINAL / "README-提交说明.txt"
     readme.write_text(
         "校园智序·小序｜FINAL SUBMISSION\n\n"
         "01_智能体设计说明书：可编辑 DOCX 与同版 PDF。\n"

@@ -22,19 +22,19 @@ describe("App routing", () => {
     expect(screen.getAllByText("问问小序").length).toBeGreaterThan(0);
   });
 
-  it("opens the story cases page", async () => {
+  it("opens the verified cases page", async () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/cases");
-    expect(await screen.findByText("四个问题，四次完整决策")).toBeTruthy();
+    expect(await screen.findByText("四个案例，四次已核验的完整决策")).toBeTruthy();
     expect(screen.getByText("多人协同")).toBeTruthy();
   });
 
-  it("opens the capability map page", async () => {
+  it("opens the roles and abilities page", async () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/capability");
-    expect((await screen.findAllByText("能力地图")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("角色与能力")).length).toBeGreaterThan(0);
   });
 
   it("opens the about page", async () => {
@@ -68,7 +68,7 @@ describe("App routing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "查课表" }));
     await waitFor(() => {
-      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("查看教师025第1周课表，并检查他的跨校区赶场风险。");
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("查看2025级计算机类01班第1周课表。");
     });
   });
 

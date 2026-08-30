@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "image-size": "^2.0.2",
+    "pptxgenjs": "^3.12.0"
+  }
+}

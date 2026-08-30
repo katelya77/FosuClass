@@ -63,9 +63,9 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
     <div className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:px-8 sm:pt-12">
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-brand">演示案例</p>
+          <p className="text-sm font-semibold tracking-[0.2em] text-brand">已核验案例</p>
           <h1 className="mt-2 max-w-2xl text-balance text-3xl font-bold leading-tight text-ink sm:text-4xl">
-            四个问题，四次完整决策
+            四个案例，四次已核验的完整决策
           </h1>
           <p className="mt-4 max-w-2xl text-pretty text-base leading-relaxed text-body">
             每个案例都从一句自然的提问开始，小序先查、再算、后验，
@@ -77,8 +77,20 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
           className="brand-button shrink-0 px-5 py-3 text-sm"
         >
           <Sparkles size={16} />
-          开始体验
+          进入真实体验
         </button>
+      </div>
+
+      <div className="liquid-glass mt-8 flex flex-col gap-2.5 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm leading-relaxed text-body">
+          以下案例均来自同一份匿名演示数据，并配有
+          <strong className="text-ink"> 已核验演示回放（非实时）</strong>
+          ；点击任意案例，可在“真实体验”中现场发起同样的任务。
+        </p>
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-semibold text-brand-deep">
+          <BadgeCheck size={13} />
+          Verified Replay · 非实时
+        </span>
       </div>
 
       <div className="mt-10 grid gap-5 lg:grid-cols-2">
@@ -165,7 +177,7 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
           <div>
             <p className="text-sm font-semibold tracking-[0.2em] text-brand">背后的协作组</p>
             <h2 className="mt-2 text-2xl font-bold text-ink sm:text-3xl">
-              四个问题，不只是一次调用
+              四个案例，不只是一次调用
             </h2>
           </div>
           <p className="max-w-md text-sm leading-relaxed text-body">
