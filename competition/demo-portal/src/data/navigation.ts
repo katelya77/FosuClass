@@ -1,9 +1,8 @@
 import {
+  BookOpenCheck,
   Home,
   Sparkles,
-  Map,
-  BookOpen,
-  Info,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,14 +17,13 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "首页", route: { name: "home" }, icon: Home, activeRoutes: ["home"] },
-  { label: "开始体验", route: { name: "experience" }, icon: Sparkles, activeRoutes: ["experience"] },
-  { label: "能力地图", route: { name: "capability" }, icon: Map, activeRoutes: ["capability"] },
-  { label: "演示案例", route: { name: "cases" }, icon: BookOpen, activeRoutes: ["cases"] },
-  { label: "关于作品", route: { name: "about" }, icon: Info, activeRoutes: ["about"] },
+  { label: "能力与角色", route: { name: "capability" }, icon: Users, activeRoutes: ["capability"] },
+  { label: "案例演示", route: { name: "cases" }, icon: BookOpenCheck, activeRoutes: ["cases"] },
+  { label: "真实体验", route: { name: "experience" }, icon: Sparkles, activeRoutes: ["experience"] },
 ];
 
 export const VERIFIED_COPY = {
-  package: "competition-demo-v3",
-  mark: "已核验 CampusTools",
-  badge: "Verified",
+  package: "匿名演示数据",
+  mark: "结果已核验",
+  badge: "已核验",
 };

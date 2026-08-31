@@ -5,8 +5,7 @@ export type Route =
   | { name: "experience"; caseKey?: string }
   | { name: "adp-diagnostics" }
   | { name: "capability" }
-  | { name: "cases" }
-  | { name: "about" };
+  | { name: "cases" };
 
 export function routeToHash(route: Route): string {
   switch (route.name) {
@@ -20,8 +19,6 @@ export function routeToHash(route: Route): string {
       return "#/capability";
     case "cases":
       return "#/cases";
-    case "about":
-      return "#/about";
   }
 }
 
@@ -34,7 +31,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "adp-diagnostics") return { name: "adp-diagnostics" };
   if (parts[0] === "capability") return { name: "capability" };
   if (parts[0] === "cases") return { name: "cases" };
-  if (parts[0] === "about") return { name: "about" };
+  if (parts[0] === "about") return { name: "home" };
   return { name: "home" };
 }
 

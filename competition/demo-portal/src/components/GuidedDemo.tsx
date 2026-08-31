@@ -46,9 +46,9 @@ const STEPS: DemoStep[] = [
     number: "03",
     label: "验",
     title: "验",
-    detail: "逐项核验跨校区赶场、容量与可用性",
+    detail: "逐项核验教学空间转场、容量与可用性",
     icon: ShieldCheck,
-    bullets: ["冲突 0", "赶场预警 4 次", "最短间隔 20 分钟"],
+    bullets: ["冲突 0", "转场预警 4 次", "最短间隔 20 分钟"],
   },
   {
     key: "decide",

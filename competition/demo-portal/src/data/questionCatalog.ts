@@ -12,7 +12,7 @@ export interface AgentQuestionGroup {
 }
 
 /**
- * Final-facing question library derived from the frozen R51 prompts, 13 CampusTools
+ * Final-facing question library aligned with the frozen prompts and 13 CampusTools
  * and the seven result-card variants. Golden marks only the four verified Hero paths;
  * the remaining entries are supported deterministic-tool examples, not extra claims.
  */
@@ -23,7 +23,7 @@ export const AGENT_QUESTION_GROUPS: AgentQuestionGroup[] = [
     role: "跨域理解与连续追问",
     widget: "统一结果卡",
     questions: [
-      { text: "未来四周谁最忙？再检查 Top1 的跨校区赶场风险。", golden: true },
+      { text: "未来四周谁最忙？再检查 Top1 的教学空间转场风险。", golden: true },
       { text: "先查教师025第1周课表，再解释他的负载和风险。" },
     ],
   },
@@ -43,7 +43,7 @@ export const AGENT_QUESTION_GROUPS: AgentQuestionGroup[] = [
   {
     agentId: "risk",
     name: "风险规划",
-    role: "冲突、赶场、日计划与调课",
+    role: "冲突、转场、日计划与调课",
     widget: "风险 / What-if 核验卡",
     questions: [
       { text: "检查教师025未来四周的教学风险。", golden: true },

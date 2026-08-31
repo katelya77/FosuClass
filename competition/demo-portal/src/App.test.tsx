@@ -22,26 +22,35 @@ describe("App routing", () => {
     expect(screen.getAllByText("问问小序").length).toBeGreaterThan(0);
   });
 
-  it("opens the story cases page", async () => {
+  it("opens the verified cases page", async () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/cases");
-    expect(await screen.findByText("四个问题，四次完整决策")).toBeTruthy();
+    expect(await screen.findByText("四个案例，四次已核验的完整决策")).toBeTruthy();
     expect(screen.getByText("多人协同")).toBeTruthy();
   });
 
-  it("opens the capability map page", async () => {
+  it("plays a clearly labelled non-live case replay", async () => {
+    window.location.hash = "#/cases";
+    render(<App />);
+    fireEvent.click(await screen.findByText("学生的一天"));
+    expect(await screen.findByRole("dialog", { name: "学生的一天已核验演示回放" })).toBeTruthy();
+    expect(screen.getAllByText("已核验演示回放 · 非实时").length).toBeGreaterThan(0);
+    expect(screen.getByText(/不伪装成实时请求/)).toBeTruthy();
+  });
+
+  it("opens the roles and abilities page", async () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/capability");
-    expect((await screen.findAllByText("能力地图")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("能力与角色")).length).toBeGreaterThan(0);
   });
 
-  it("opens the about page", async () => {
+  it("redirects the retired about route back to the homepage", async () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/about");
-    expect((await screen.findAllByText("关于作品")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("问问小序")).length).toBeGreaterThan(0);
   });
 
   it("opens an experience workspace directly from a case", async () => {
@@ -59,8 +68,8 @@ describe("App routing", () => {
     expect(await screen.findByText("从常用查询到跨域决策")).toBeTruthy();
     expect(screen.getAllByText("全部能力").length).toBeGreaterThan(0);
     expect(screen.getByText(/教师 \/ 班级 \/ 课程 \/ 教室课表/)).toBeTruthy();
-    expect(screen.getByText("4 Agent")).toBeTruthy();
-    expect(screen.getByText("13 CampusTools")).toBeTruthy();
+    expect(screen.getByText("4 个智能体")).toBeTruthy();
+    expect(screen.getByText("13 项 CampusTools")).toBeTruthy();
 
     const roomQuestion = screen.getByRole("button", { name: "A1-201第1周什么时候有课？" });
     fireEvent.click(roomQuestion);
@@ -68,7 +77,7 @@ describe("App routing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "查课表" }));
     await waitFor(() => {
-      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("查看教师025第1周课表，并检查他的跨校区赶场风险。");
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("查看2025级计算机类01班第1周课表。");
     });
   });
 
@@ -86,14 +95,14 @@ describe("App routing", () => {
   it("record mode keeps only the clean live experience", async () => {
     window.location.hash = "#/experience/query";
     render(<App search="?mode=record" />);
-    expect(await screen.findByText("真实 ADP 运行")).toBeTruthy();
+    expect(await screen.findByText("真实智能体运行")).toBeTruthy();
     expect(screen.getAllByText("用户问题").length).toBeGreaterThan(0);
     expect(screen.getByText("主协调")).toBeTruthy();
-    expect(screen.getByText("专业 Agent")).toBeTruthy();
+    expect(screen.getByText("专业智能体")).toBeTruthy();
     expect(screen.getByText("CampusTools")).toBeTruthy();
-    expect(screen.getByText("Widget")).toBeTruthy();
+    expect(screen.getByText("结果卡")).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull();
-    expect(screen.queryByText("Verified Replay")).toBeNull();
+    expect(screen.queryByText("已核验回放")).toBeNull();
     expect(screen.queryByText("诊断")).toBeNull();
     expect(screen.queryByText(/Native ADP API/)).toBeNull();
   });
