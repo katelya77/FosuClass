@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-31T04:15:34+08:00",
+  "generatedAt": "2026-08-31T13:06:14+08:00",
   "status": "PASS",
   "summary": {
-    "passed": 31,
-    "total": 31,
+    "passed": 33,
+    "total": 33,
     "failed": 0
   },
   "video": {
@@ -42,13 +42,13 @@
         "slide": 4,
         "timing": 1,
         "clickGroups": 8,
-        "effects": 28
+        "effects": 29
       },
       {
         "slide": 5,
         "timing": 1,
-        "clickGroups": 6,
-        "effects": 19
+        "clickGroups": 5,
+        "effects": 16
       },
       {
         "slide": 6,
@@ -83,8 +83,8 @@
       {
         "slide": 11,
         "timing": 1,
-        "clickGroups": 5,
-        "effects": 17
+        "clickGroups": 8,
+        "effects": 28
       },
       {
         "slide": 12,
@@ -126,6 +126,7 @@
       11
     ],
     "designBook": [
+      3,
       4,
       20
     ]
@@ -133,7 +134,8 @@
   "portalScreenshotPages": {
     "ppt": [
       5,
-      11
+      11,
+      12
     ],
     "designBook": [
       4,
@@ -156,7 +158,7 @@
       "name": "最终目录必需文件",
       "ok": true,
       "hard": true,
-      "evidence": "13 项；missing=[]"
+      "evidence": "17 项；missing=[]"
     },
     {
       "name": "PPTX 可解析",
@@ -186,7 +188,7 @@
       "name": "PPT 原生逐步放映动画",
       "ok": true,
       "hard": true,
-      "evidence": "S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/28效果; S5=6组/19效果; S6=6组/15效果; S7=6组/15效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=5组/17效果; S12=9组/19效果"
+      "evidence": "S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/29效果; S5=5组/16效果; S6=6组/15效果; S7=6组/15效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=8组/28效果; S12=9组/19效果"
     },
     {
       "name": "DOCX 可解析且可编辑",
@@ -213,6 +215,18 @@
       "evidence": "20 张；failures=[]"
     },
     {
+      "name": "逐页 PNG 已纳入正式提交",
+      "ok": true,
+      "hard": true,
+      "evidence": "PPT=12; DOC=20"
+    },
+    {
+      "name": "网站 1920×1080 构建截图与溢出检查",
+      "ok": true,
+      "hard": true,
+      "evidence": "screenshots=5; pages=[('home', False), ('capability', False), ('cases', False), ('replay', False), ('experience', False)]"
+    },
+    {
       "name": "演示视频存在且小于 5 分钟",
       "ok": true,
       "hard": true,
@@ -228,7 +242,7 @@
       "name": "最终 SHA-256 清单",
       "ok": true,
       "hard": true,
-      "evidence": "13 个文件；failures=[]"
+      "evidence": "54 个文件；failures=[]"
     },
     {
       "name": "程序 ZIP 可解压",
@@ -288,7 +302,7 @@
       "name": "页面匿名可访问",
       "ok": true,
       "hard": true,
-      "evidence": "HTML 无登录/密码入口；浏览器实测首页、Experience、Verified Widget 均无需账号"
+      "evidence": "HTML 无登录/密码入口；浏览器实测首页、真实体验与已核验结果卡均无需账号"
     },
     {
       "name": "二维码解析",
@@ -336,7 +350,7 @@
       "name": "1500+ 页面定位",
       "ok": true,
       "hard": true,
-      "evidence": "PPT=[2, 11]; DOC=[4, 20]"
+      "evidence": "PPT=[2, 11]; DOC=[3, 4, 20]"
     }
   ]
 }
