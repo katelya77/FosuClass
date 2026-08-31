@@ -18,6 +18,7 @@ PORTAL_HOME = ROOT / "assets" / "portal-home-1920x1080-final.png"
 PORTAL_EXPERIENCE = ROOT / "assets" / "portal-experience-1920x1080-final.png"
 PORTAL_CAPABILITY = ROOT / "assets" / "portal-capability-1920x1080-final.png"
 PORTAL_WIDGET = ROOT / "assets" / "portal-verified-widget-1920x1080-final.png"
+PORTAL_STUDENT_LIVE = ROOT / "qa" / "live-final" / "screenshots" / "04-student-live-1920x1080-final.png"
 
 
 def blocks(document):
@@ -180,6 +181,10 @@ visible_replacements = {
     "mutatedData=false": "未写入真实课表（mutatedData=false）",
     "mutatedData=false，不绕过审批与审计": "真实课表未写入（mutatedData=false），不绕过审批与审计",
     "所有动态校园结论来自匿名版本化数据、明确输入和可复现算法。": "所有动态校园结论来自匿名数据、明确输入和可复现算法。",
+    "最终对外品牌唯一为“校园智序·小序”；身份线索、真实域名与凭据全部禁止进入产物。": "内部域名、生产内部地址、私人服务地址及访问凭据不得进入提交产物；公开评审演示域名 adp.katelya.top 除外。",
+    "本阶段不改生产配置、不直接部署": "演示站独立部署并提供公开评审入口；ADP 与其它生产配置通过受控发布流程管理",
+    "最终地址与二维码提交前人工加入": "公开评审入口与二维码已写入最终提交材料",
+    "从排课辅助出发，可扩展到资源调度、教学运行治理与跨部门协同。": "从真实课表服务出发，可扩展到资源调度、教学运行治理与跨部门协同。",
 }
 
 term_replacements = {
@@ -262,6 +267,20 @@ for paragraph in all_paragraphs(doc):
     if updated != original:
         set_text_keep_first_run(paragraph, updated)
 
+# Earlier cascading replacements could duplicate the page-13 slogan. Keep one
+# headline and separate the verified decision state as its own subtitle.
+for paragraph in all_paragraphs(doc):
+    value = paragraph.text.strip()
+    if value.startswith("没有冲突，不等于来得及；"):
+        set_text_keep_first_run(paragraph, "没有冲突，不等于来得及；可以调，也不等于没有提醒")
+    elif value.startswith("第1周周一5–6节"):
+        set_text_keep_first_run(paragraph, "可行 · 有提醒 · 不写入真实课表")
+    elif value.startswith("板块时间、教师时间"):
+        set_text_keep_first_run(
+            paragraph,
+            "第1周周一5–6节 → 周四7–8节；自动推荐 A1-201。班级、教师、教室占用与容量逐项核验。",
+        )
+
 # Rebuild the abstract table around the three roles instead of the old
 # “what it solves / why it is trustworthy” framing.  The real table is a
 # single row with two multi-paragraph cells, so match by prefix and fill
@@ -275,7 +294,7 @@ ROLE_TABLE_LEFT = [
 ]
 ROLE_TABLE_RIGHT = [
     "小序怎样回答",
-    "一句话查询班级 / 教师课表与空教室，连续追问不丢上下文",
+    "一句话查询班级 / 教师课表与空教室，支持连续追问与共享上下文",
     "共同空闲计算、教室推荐与调课前模拟核验",
     "负载排名、对象定位与逐层风险下钻",
     "查、算、筛、验、解释，一次任务内完成",
@@ -357,23 +376,23 @@ for paragraph in all_paragraphs(doc):
 for paragraph in doc.paragraphs:
     value = paragraph.text.strip()
     if value.startswith("前期产品形态累计服务用户"):
-        set_text_keep_first_run(paragraph, "累计真实用户 1500+")
+        set_text_keep_first_run(paragraph, "底层课表服务用户 1500+")
     elif value.startswith("作品并非从概念页起步"):
         set_text_keep_first_run(
             paragraph,
-            "项目源于已经真实投入使用的校园课表服务，底层服务累计服务用户已达到 1500+。本次参赛作品在这些真实需求基础上，从“课表查询”升级为面向学生、教师与教学管理者的校园教学时空资源智能体。",
+            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
         )
     elif value.startswith("对外材料仅保留"):
         set_text_keep_first_run(
             paragraph,
-            "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。匿名评审不展示学校、学院、姓名、学号、真实内部地址或任何账号凭证。",
+            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。匿名评审不展示学校、学院、姓名、学号、内部服务地址或任何账号凭证；公开评审域名除外。",
         )
     elif value.startswith("让教学时空，被理解"):
         set_text_keep_first_run(paragraph, "让教学时空，被理解、被安排。")
     elif value.startswith("总结："):
         set_text_keep_first_run(
             paragraph,
-            "总结：作品已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡负责把结论与核验依据清楚地呈现给人。",
+            "总结：底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡呈现核验依据。",
         )
 
 # Role-facing scenario copy.  NOTE: match the pristine document's real
@@ -398,12 +417,12 @@ for paragraph in all_paragraphs(doc):
 
 # Scenario 1 is now the student day: swap the teacher-risk stat card
 # (0 conflicts / 4 transitions / 20 minutes) for real student capability
-# facts — one sentence, four query object kinds, zero context loss.
+# facts — one sentence, four query object kinds, and continuous follow-up.
 # The teacher-risk numbers stay on page 03 (真实需求与痛点) and page 14.
 STUDENT_STAT_CARDS = [
     ["1", "句话完成"],
     ["4", "类查询对象"],
-    ["0", "上下文丢失"],
+    ["连续", "追问"],
 ]
 doc_items = list(blocks(doc))
 scenario_one_start = heading_index(doc_items, "11  /")
@@ -412,7 +431,7 @@ for item in doc_items[scenario_one_start + 1 :]:
         break
     if isinstance(item, Table):
         cells = item.rows[0].cells
-        if any("冲突 / 周" in cell.text for cell in cells):
+        if any("冲突 / 周" in cell.text or "上下文丢失" in cell.text for cell in cells):
             for cell, lines in zip(cells, STUDENT_STAT_CARDS):
                 set_cell_lines(cell, lines)
             break
@@ -452,7 +471,7 @@ for paragraph in doc.paragraphs:
 # Scenario 1 (student day) carries the capability page full-width; page 15
 # keeps the verified-widget replay capture.
 replace_page_images(doc, "04  /", [(PORTAL_HOME, 7.22)])
-replace_page_images(doc, "11  /", [(PORTAL_CAPABILITY, 7.22)])
+replace_page_images(doc, "11  /", [(PORTAL_STUDENT_LIVE, 7.22)])
 replace_page_images(doc, "15  /", [(PORTAL_WIDGET, 7.22)])
 
 doc.core_properties.title = "校园智序·小序—智能体设计说明书"

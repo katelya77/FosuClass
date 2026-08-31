@@ -43,7 +43,7 @@ describe("App routing", () => {
     window.location.hash = "#/";
     render(<App />);
     goTo("#/capability");
-    expect((await screen.findAllByText("能力与角色")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("角色与能力")).length).toBeGreaterThan(0);
   });
 
   it("redirects the retired about route back to the homepage", async () => {
@@ -59,6 +59,18 @@ describe("App routing", () => {
     goTo("#/experience/query");
     expect(await screen.findByText("这次想解决什么")).toBeTruthy();
     expect(screen.getAllByText("查课表").length).toBeGreaterThan(0);
+  });
+
+  it("keeps internal ADP addresses out of the judge-facing page", async () => {
+    window.location.hash = "#/experience";
+    const { container } = render(<App />);
+    expect(await screen.findByText("真实智能体对话")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Quick Start · 学生" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Quick Start · 教师" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Quick Start · 教学管理" })).toBeTruthy();
+    for (const anchor of container.querySelectorAll("a")) {
+      expect(anchor.getAttribute("href") || "").not.toMatch(/^http:\/\//i);
+    }
   });
 
   it("opens the all-capabilities library and sends a selected question to the composer", async () => {

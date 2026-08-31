@@ -43,7 +43,7 @@ for (const [width, height] of viewports) {
     const recording = document.querySelector("[data-qa-portal-recording]");
     if (!recording) found.push("recording-root-missing");
     const bodyText = document.body.innerText;
-    for (const label of ["用户问题", "主协调", "专业 Agent", "CampusTools", "Widget", "真实 ADP 运行"]) {
+    for (const label of ["用户问题", "主协调", "专业智能体", "CampusTools", "结果卡", "真实智能体运行"]) {
       if (!bodyText.includes(label)) found.push(`recording-label-missing ${label}`);
     }
     for (const forbidden of ["诊断", "Verified Replay", "Native ADP API", "developer", "debug", "技术状态"]) {

@@ -28,9 +28,11 @@ QR = ASSETS / "在线演示二维码.png"
 PORTAL_HOME = ASSETS / "portal-home-1920x1080-final.png"
 PORTAL_EXPERIENCE = ASSETS / "portal-experience-1920x1080-final.png"
 PORTAL_WIDGET = ASSETS / "portal-verified-widget-1920x1080-final.png"
+STUDENT_LIVE = ROOT / "qa" / "live-final" / "screenshots" / "04-student-live-1920x1080-final.png"
 PPT_PREVIEWS = ROOT / "ppt-preview-final"
 DOC_PREVIEWS = ROOT / "doc-preview-final"
-SITE_QA = ROOT / "site-qa"
+SITE_QA = ROOT / "qa" / "live-final" / "screenshots"
+LIVE_EVIDENCE = ROOT / "qa" / "live-final" / "evidence"
 PPT_NOTES = ROOT / "PPT-SPEAKER-NOTES.md"
 VIDEO_NOTES = ROOT / "剪映二次剪辑建议.md"
 CHANGELOG = ROOT / "CHANGELOG-FINAL-REVIEW.md"
@@ -200,19 +202,19 @@ def build_online_pdf(output: Path) -> None:
     txt(c, "真实体验 · 已核验结果", 42, H - 62, 8.5, CORAL, True)
     txt(c, "真实页面，不需要先理解智能体配置", 42, H - 105, 23, INK, True)
     panel(c, 42, H - 445, W - 84, 300)
-    image_fit(c, PORTAL_WIDGET, 54, H - 433, W - 108, 276)
+    image_fit(c, STUDENT_LIVE, 54, H - 433, W - 108, 276)
     txt(c, "可直接验证的四个问题", 42, 338, 15, CORAL_DARK, True)
     prompts = [
-        "01  教师025未来四周有没有冲突与跨校区转场风险？",
-        "02  教师005、006、014何时共同空闲，并推荐不少于120座的教室。",
-        "03  将周一5–6节模拟调整到周四7–8节，是否可行？",
-        "04  未来四周谁最忙？继续查看其课表并检查风险。",
+        "案例 1｜学生  查看2025级计算机类01班第1周课表。→ 只看周三。→ 下午哪里有空教室？",
+        "案例 2｜教师多人协同  帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
+        "案例 3｜教师调课  将周一5–6节模拟调整到周四7–8节，是否可行？",
+        "案例 4｜教学管理者  未来四周谁的教学负载最高？→ 看他的课表。→ 再检查他的风险。",
     ]
-    y = 302
+    y = 304
     for value in prompts:
-        panel(c, 42, y - 22, W - 84, 38, fill="#FFFFFF", alpha=0.62, radius=12)
-        txt(c, value, 56, y - 8, 8.7, BODY, True)
-        y -= 50
+        panel(c, 42, y - 27, W - 84, 47, fill="#FFFFFF", alpha=0.62, radius=12)
+        wrapped(c, value, 56, y - 5, W - 112, 8.2, BODY, True, leading=11.2)
+        y -= 55
     txt(c, "权限结论", 42, 88, 8.2, CORAL, True)
     txt(c, "测试账号：无需账号", 42, 63, 11, GREEN, True)
     c.showPage()
@@ -339,7 +341,7 @@ def build_overview_pdf(output: Path, video_duration_text: str) -> None:
         "Collaboration：3 → 63 → 7 → A1-201",
         "Reschedule：feasible + warning / mutatedData=false",
         "Insight：教师025 / 56 课次 / 112 课时",
-        "底层课表服务：累计真实用户 1500+",
+        "底层校园课表服务累计服务用户达到 1500+（非参赛智能体用户数）",
     ]
     y = H - 170
     for idx, fact in enumerate(facts, 1):
@@ -359,7 +361,17 @@ def write_text_files(video_source: Path) -> None:
         "作品：校园智序·小序\n"
         f"在线演示：{URL}\n\n"
         "说明：评委可直接从自然语言问题进入课程查询、多人协同、模拟调课与校园洞察等核心场景。\n"
-        "测试账号：无需账号\n",
+        "测试账号：无需账号\n\n"
+        "案例 1｜学生\n"
+        "查看2025级计算机类01班第1周课表。\n→ 只看周三。\n→ 下午哪里有空教室？\n\n"
+        "案例 2｜教师多人协同\n"
+        "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。\n\n"
+        "案例 3｜教师调课\n"
+        "将周一5–6节模拟调整到周四7–8节，是否可行？\n"
+        "在线实测说明：为让确定性工具获得课程、班级与教学周，页面使用同义完整问法补齐必要条件。\n\n"
+        "案例 4｜教学管理者\n"
+        "未来四周谁的教学负载最高？\n→ 看他的课表。\n→ 再检查他的风险。\n\n"
+        "口径：底层校园课表服务累计服务用户达到 1500+；不等同于参赛智能体用户数。\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -370,7 +382,7 @@ def write_text_files(video_source: Path) -> None:
         "02_作品演示视频：从 Downloads 最新最终 MP4 原样复制，未重新编码。\n"
         "03_程序交付材料：平台工程、自定义 CampusTools、Widget、Agent 配置、匿名数据与验证材料。\n"
         "04_答辩PPT：12 页 PPTX 与同版 PDF。\n"
-        "05_其他可选材料：在线演示说明、二维码、网站 QA 截图、PPT 逐页讲稿、剪映建议与变更说明。\n"
+        "05_其他可选材料：在线演示说明、二维码、网站 QA 截图、真实调用取证、PPT 逐页讲稿、剪映建议与变更说明。\n"
         "逐页 PNG：分别位于设计说明书与答辩 PPT 目录的“逐页PNG”子目录。\n\n"
         f"在线演示：{URL}\n"
         "测试账号：无需账号\n"
@@ -408,13 +420,45 @@ def main() -> None:
     copy(VIDEO_NOTES, FINAL / "05_其他可选材料" / VIDEO_NOTES.name)
     copy(CHANGELOG, FINAL / "05_其他可选材料" / CHANGELOG.name)
     site_qa_target = FINAL / "05_其他可选材料" / "网站QA截图"
-    if copy_matches(SITE_QA, "0*-*.png", site_qa_target) != 5:
-        raise RuntimeError("Portal QA screenshot count is not 5")
+    required_shots = [
+        "01-home-1920x1080-final.png",
+        "02-roles-1920x1080-final.png",
+        "03-cases-1920x1080-final.png",
+        "04-student-live-1920x1080-final.png",
+        "05-collaboration-live-1920x1080-final.png",
+        "06-reschedule-live-1920x1080-final.png",
+        "07-insight-live-1920x1080-final.png",
+        "08-verified-replay-1920x1080-final.png",
+    ]
+    for name in required_shots:
+        copy(SITE_QA / name, site_qa_target / name)
+    for source in sorted(SITE_QA.glob("*-1366x768-final.png")):
+        copy(source, site_qa_target / source.name)
     (site_qa_target / "网站QA说明.txt").write_text(
-        "本目录为重构后网站源码的 1920×1080 本地构建验收截图。\n"
-        "页面覆盖：首页、能力与角色、案例演示、已核验回放、真实体验。\n"
-        "五页均已检查横向溢出；已核验回放明确标注为非实时，未伪装成实时结果。\n"
-        "生产站未在本次材料整理中直接部署；请按正式发布流程上线本次源码。\n",
+        "本目录为 https://adp.katelya.top/ 正式部署后的公网验收截图。\n"
+        "页面覆盖：首页、角色与能力、已核验案例、学生/教师/管理者真实体验与已核验回放。\n"
+        "四个 PC 分辨率与移动端均已检查横向溢出；回放明确标注为非实时，未伪装成 Live。\n"
+        "真实体验通过同源服务端 SSE 连接腾讯 ADP，凭据不进入浏览器与提交材料。\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    evidence_target = FINAL / "05_其他可选材料" / "真实在线取证"
+    for name in (
+        "student.json",
+        "student.md",
+        "collaboration.json",
+        "collaboration.md",
+        "reschedule.json",
+        "reschedule.md",
+        "insight.json",
+        "insight.md",
+    ):
+        copy(LIVE_EVIDENCE / name, evidence_target / name)
+    copy(SITE_QA / "portal-production-qa.json", evidence_target / "portal-production-qa.json")
+    (evidence_target / "取证说明.txt").write_text(
+        "本目录保存正式部署后四组真实 ADP 调用的脱敏输入、可见结果、Widget.View、Agent/Tool、时间戳与页面 QA。\n"
+        "会话标识仅保留 SHA-256 摘要；不包含 Token、Cookie、Authorization、内部地址或私人账号。\n"
+        "Live 失败不会自动以 Replay 冒充成功；已核验回放与真实体验在页面中保持独立并明确标注。\n",
         encoding="utf-8",
         newline="\n",
     )

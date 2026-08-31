@@ -79,7 +79,7 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
     <div className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:px-8 sm:pt-12">
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-brand">案例演示</p>
+          <p className="text-sm font-semibold tracking-[0.2em] text-brand">已核验案例</p>
           <h1 className="mt-2 max-w-2xl text-balance text-3xl font-bold leading-tight text-ink sm:text-4xl">
             四个案例，四次已核验的完整决策
           </h1>
