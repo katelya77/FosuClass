@@ -84,3 +84,15 @@ server/data/ai/run-store/
 private.key
 *.private.key
 
+# Local delivery/build scratch files (never part of a submission or deploy)
+/push-*.txt
+/competition/demo-portal/build-log.txt
+/competition/demo-portal/deploy-log.txt
+/competition/final-delivery/assets-backup-*/
+/competition/final-delivery/assets-refresh/
+/competition/final-delivery/*-preview-final/contact-sheet.png
+/competition/final-delivery/site-qa/edge-profile/
+/competition/final-delivery/site-qa/edge-test.png
+/competition/final-delivery/source/dump-docx-blocks.py
+/competition/final-delivery/source/dump-docx-blocks.txt
+

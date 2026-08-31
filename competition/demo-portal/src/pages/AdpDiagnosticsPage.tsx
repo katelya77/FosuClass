@@ -36,11 +36,11 @@ export function AdpDiagnosticsPage({ onNavigate }: AdpDiagnosticsPageProps): Rea
 
   const items = [
     { label: "API", value: snapshot?.api === "ok" ? "200 · Server-side" : snapshot?.api || "未调用", ok: snapshot?.api === "ok" },
-    { label: "SSE", value: snapshot?.sse || "未建立", ok: snapshot?.sse === "streaming" || snapshot?.sse === "completed" },
+    { label: "实时事件流", value: snapshot?.sse || "未建立", ok: snapshot?.sse === "streaming" || snapshot?.sse === "completed" },
     { label: "Conversation", value: conversationId, ok: Boolean(conversationId) },
     { label: "Multi-Agent", value: snapshot?.multiAgent ? `${snapshot.agentNames.length} 个真实 Agent` : "等待真实事件", ok: Boolean(snapshot?.multiAgent) },
-    { label: "Widget SDK", value: snapshot?.widgetSdk ? "官方 Web Component 已加载" : "等待 SDK", ok: Boolean(snapshot?.widgetSdk) },
-    { label: "Widget Render", value: snapshot?.widgetRendered ? "widget-rendered" : snapshot?.widgetReceived ? "已收到 View" : "等待 Widget", ok: Boolean(snapshot?.widgetRendered) },
+    { label: "结果卡组件", value: snapshot?.widgetSdk ? "官方渲染组件已加载" : "等待组件", ok: Boolean(snapshot?.widgetSdk) },
+    { label: "结果卡渲染", value: snapshot?.widgetRendered ? "已完成" : snapshot?.widgetReceived ? "已收到结构" : "等待结果卡", ok: Boolean(snapshot?.widgetRendered) },
   ];
 
   return (
@@ -51,7 +51,7 @@ export function AdpDiagnosticsPage({ onNavigate }: AdpDiagnosticsPageProps): Rea
       <div className="mt-7 max-w-3xl">
         <span className="text-xs font-bold tracking-[0.24em] text-brand">ADP DIAGNOSTICS</span>
         <h1 className="mt-2 text-4xl font-bold tracking-tight text-ink">只显示真实发生过的状态</h1>
-        <p className="mt-3 text-sm leading-relaxed text-body">这里不展示密钥、系统提示或原始 JSON，只汇总 API、SSE、Multi-Agent 与 Widget 的可核查运行元数据。</p>
+        <p className="mt-3 text-sm leading-relaxed text-body">这里不展示密钥、系统提示或原始数据，只汇总接口、实时事件、多智能体协作与结果卡的可核查运行状态。</p>
       </div>
 
       <section className="diagnostics-grid mt-8">
@@ -75,7 +75,7 @@ export function AdpDiagnosticsPage({ onNavigate }: AdpDiagnosticsPageProps): Rea
           <Wrench size={18} />
           <span>Last Tool</span>
           <strong>{snapshot?.toolNames.at(-1)?.split("/").at(-1) || "尚未出现"}</strong>
-          <small>{snapshot ? `${snapshot.eventCount} 个 SSE 事件已解析` : "发送一次真实问题后更新"}</small>
+          <small>{snapshot ? `${snapshot.eventCount} 个实时事件已解析` : "发送一次真实问题后更新"}</small>
         </div>
         <div>
           <Activity size={18} />

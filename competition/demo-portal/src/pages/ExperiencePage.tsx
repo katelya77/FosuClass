@@ -201,7 +201,7 @@ export function ExperiencePage({ caseKey, onNavigate, recordMode = false }: Expe
                   {copied ? "已复制问题" : "复制这段问题"}
                 </MagneticButton>
                 <p className="px-2 text-center text-[11px] leading-relaxed text-mute">
-                  右侧通过官方 SSE 调用已发布 Multi-Agent
+                  右侧连接已发布的真实智能体，执行过程会实时返回
                 </p>
               </div>
             </>

@@ -120,7 +120,7 @@ export function CapabilityPage({ onNavigate }: CapabilityPageProps): ReactElemen
   return (
     <div className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:px-8 sm:pt-12">
       <div className="text-center">
-        <p className="text-sm font-semibold tracking-[0.2em] text-brand">角色与能力</p>
+        <p className="text-sm font-semibold tracking-[0.2em] text-brand">能力与角色</p>
         <h1 className="mx-auto mt-3 max-w-3xl text-balance text-3xl font-bold leading-tight text-ink sm:text-4xl">
           把校园教学安排，变成一句话能问的事
         </h1>

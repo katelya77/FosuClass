@@ -16,14 +16,14 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "首页", route: { name: "home" }, icon: Home, activeRoutes: ["home", "about"] },
-  { label: "角色与能力", route: { name: "capability" }, icon: Users, activeRoutes: ["capability"] },
-  { label: "已核验案例", route: { name: "cases" }, icon: BookOpenCheck, activeRoutes: ["cases"] },
+  { label: "首页", route: { name: "home" }, icon: Home, activeRoutes: ["home"] },
+  { label: "能力与角色", route: { name: "capability" }, icon: Users, activeRoutes: ["capability"] },
+  { label: "案例演示", route: { name: "cases" }, icon: BookOpenCheck, activeRoutes: ["cases"] },
   { label: "真实体验", route: { name: "experience" }, icon: Sparkles, activeRoutes: ["experience"] },
 ];
 
 export const VERIFIED_COPY = {
-  package: "competition-demo-v3",
-  mark: "已核验 CampusTools",
-  badge: "Verified",
+  package: "匿名演示数据",
+  mark: "结果已核验",
+  badge: "已核验",
 };

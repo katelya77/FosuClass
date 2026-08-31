@@ -112,7 +112,7 @@ export function AdpWidget({
   if (!widgetJson) {
     return (
       <div className="rounded-2xl border border-brand/15 bg-white/48 p-4 text-sm text-body">
-        Widget.View 不是可渲染的 JSON；已安全停止渲染。
+        结果卡数据无法安全渲染；已停止展示，请稍后重试。
       </div>
     );
   }

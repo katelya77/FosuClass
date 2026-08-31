@@ -117,7 +117,7 @@ export function HomePage({ onNavigate, onQuickDemo }: HomePageProps): ReactEleme
             transition={{ delay: 0.24, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="mt-3 max-w-[630px] text-sm font-semibold leading-relaxed text-brand-deep"
           >
-            校园智序·小序 —— 面向学生、教师与教学管理者的校园教学时空智能协同系统。
+            校园智序·小序 —— 面向学生、教师与教学管理者的校园教学时空资源智能体。
           </motion.p>
 
           <motion.div
@@ -290,12 +290,12 @@ export function HomePage({ onNavigate, onQuickDemo }: HomePageProps): ReactEleme
             <p className="text-sm font-semibold tracking-[0.2em] text-brand">关于作品</p>
             <h2 className="mt-2 text-2xl font-bold text-ink sm:text-3xl">从真实课表服务里长出来的参赛作品</h2>
           </div>
-          <button onClick={() => onNavigate({ name: "about" })} className="glass-button w-fit px-4 py-2 text-sm">
-            了解完整边界 <ArrowUpRight size={15} />
-          </button>
+          <span className="inline-flex w-fit items-center rounded-full border border-white/50 bg-white/28 px-4 py-2 text-xs font-semibold text-brand-deep">
+            匿名数据 · 不采集真实用户信息
+          </span>
         </div>
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-body">
-          项目源于已经真实投入使用的校园课表服务，底层服务累计服务用户已达到 1500+。本次参赛作品在这些真实需求基础上，进一步从“课表查询”升级为面向学生、教师与教学管理者的教学时空智能协同系统；所有演示均基于匿名数据，不采集任何真实用户数据。
+          项目源于已经真实投入使用的校园课表服务，底层服务累计服务用户已达到 1500+。本次参赛作品在这些真实需求基础上，从“课表查询”升级为面向学生、教师与教学管理者的校园教学时空资源智能体；所有演示均基于匿名数据，不采集任何真实用户数据。
         </p>
       </section>
     </div>

@@ -66,7 +66,7 @@ export function CapabilityQuestionLibrary({
 
       <div className="capability-question-library__proof">
         <CheckCircle2 size={13} />
-        <span><strong>4 Agent</strong> 协作 · <strong>13 CampusTools</strong> 核验 · 7 类 Widget 结果</span>
+        <span><strong>4 个智能体</strong> 协作 · <strong>13 项 CampusTools</strong> 核验 · 7 类结果卡</span>
       </div>
     </div>
   );

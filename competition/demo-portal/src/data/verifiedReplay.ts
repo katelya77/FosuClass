@@ -7,7 +7,7 @@ export interface VerifiedReplayStep {
 }
 
 /**
- * PHASE 3.2 submission-lock evidence.
+ * Frozen anonymous submission evidence used only for clearly labeled replay.
  *
  * This is deliberately a replay descriptor, not a synthetic ADP response. It
  * points at the captured browser result from a previously successful, real SSE
@@ -32,6 +32,6 @@ export const VERIFIED_REPLAY = Object.freeze({
     { label: "小序·主协调", detail: "理解任务并转交校园洞察 Agent", kind: "main" },
     { label: "小序·校园洞察", detail: "拆解全校概览与教师负载查询", kind: "child" },
     { label: "CampusTools", detail: "确定性计算 overview + teacher_load_query", kind: "tool" },
-    { label: "Verified Widget", detail: "ADP 返回 Widget.View 并由官方 SDK 渲染", kind: "widget" },
+    { label: "已核验结果卡", detail: "平台返回结构化结果并完成官方渲染", kind: "widget" },
   ] satisfies VerifiedReplayStep[],
 });

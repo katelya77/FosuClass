@@ -13,17 +13,17 @@ afterEach(() => {
 describe("AdpExperience native API mode", () => {
   it("starts with a real same-origin composer instead of an iframe", () => {
     const { container } = render(<AdpExperience />);
-    expect(screen.getByText("Native ADP API · 真实对话")).toBeTruthy();
+    expect(screen.getByText("真实智能体对话")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("textbox")).toBeTruthy();
   });
 
   it("record mode removes replay, diagnostics and API jargon", () => {
     render(<AdpExperience recordMode />);
-    expect(screen.getByText("真实 ADP 运行")).toBeTruthy();
+    expect(screen.getByText("真实智能体运行")).toBeTruthy();
     expect(screen.getByText("用户问题")).toBeTruthy();
-    expect(screen.getByText("专业 Agent")).toBeTruthy();
-    expect(screen.queryByText("Verified Replay")).toBeNull();
+    expect(screen.getByText("专业智能体")).toBeTruthy();
+    expect(screen.queryByText("已核验回放")).toBeNull();
     expect(screen.queryByText("诊断")).toBeNull();
     expect(screen.queryByText(/Native ADP API/)).toBeNull();
   });
@@ -33,10 +33,10 @@ describe("AdpExperience native API mode", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AdpExperience />);
     expect(fetchMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Verified Replay" }));
+    fireEvent.click(screen.getByRole("button", { name: "已核验回放" }));
     expect(screen.getAllByText("已核验实录回放").length).toBeGreaterThan(0);
     expect(screen.getByText(/非实时请求/)).toBeTruthy();
-    expect(screen.getByAltText(/真实成功会话中由官方 ADP Widget SDK/)).toBeTruthy();
+    expect(screen.getByAltText(/真实成功会话中渲染的已核验教师负载结果卡/)).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

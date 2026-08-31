@@ -1,16 +1,18 @@
-import type { ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import {
   BadgeCheck,
   ChevronRight,
+  CircleX,
   Lightbulb,
+  Play,
   Search,
   Sparkles,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { AgentBrandStrip } from "../components/AgentBrandStrip";
 import { SpotlightCard } from "../components/SpotlightCard";
-import { STORY_CARDS, type StoryFlow } from "../data/stories";
+import { STORY_CARDS, type StoryCard, type StoryFlow } from "../data/stories";
 import { type Route } from "../lib/router";
 
 interface CasesPageProps {
@@ -59,11 +61,25 @@ function SectionLabel({
 }
 
 export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
+  const [replay, setReplay] = useState<StoryCard | null>(null);
+  const [replayStep, setReplayStep] = useState(0);
+
+  useEffect(() => {
+    if (!replay) return;
+    setReplayStep(0);
+    const showExecution = window.setTimeout(() => setReplayStep(1), 900);
+    const showResult = window.setTimeout(() => setReplayStep(2), 1800);
+    return () => {
+      window.clearTimeout(showExecution);
+      window.clearTimeout(showResult);
+    };
+  }, [replay]);
+
   return (
     <div className="mx-auto max-w-6xl px-5 pb-24 pt-8 sm:px-8 sm:pt-12">
       <div className="flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold tracking-[0.2em] text-brand">已核验案例</p>
+          <p className="text-sm font-semibold tracking-[0.2em] text-brand">案例演示</p>
           <h1 className="mt-2 max-w-2xl text-balance text-3xl font-bold leading-tight text-ink sm:text-4xl">
             四个案例，四次已核验的完整决策
           </h1>
@@ -89,7 +105,7 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
         </p>
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-semibold text-brand-deep">
           <BadgeCheck size={13} />
-          Verified Replay · 非实时
+          已核验演示回放 · 非实时
         </span>
       </div>
 
@@ -100,7 +116,7 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
             delay={0.04 + index * 0.05}
             accent={story.accent}
             className="h-full cursor-pointer p-6 sm:p-7"
-            onClick={() => onNavigate({ name: "experience", caseKey: story.key })}
+            onClick={() => setReplay(story)}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -139,7 +155,7 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
                   <span className="text-[11px] font-semibold text-mute">完整路径</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint px-2.5 py-1 text-[10px] font-semibold text-brand-deep">
                     <BadgeCheck size={12} />
-                    Verified
+                    已核验
                   </span>
                 </div>
                 <FlowChips flow={story.flow} />
@@ -165,6 +181,95 @@ export function CasesPage({ onNavigate }: CasesPageProps): ReactElement {
           </SpotlightCard>
         ))}
       </div>
+
+      <AnimatePresence>
+        {replay && (
+          <motion.div
+            className="fixed inset-0 z-[80] grid place-items-center bg-[#261d19]/35 p-4 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setReplay(null)}
+          >
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${replay.title}已核验演示回放`}
+              className="liquid-glass relative w-full max-w-4xl overflow-hidden rounded-[32px] p-6 sm:p-9"
+              initial={{ opacity: 0, y: 28, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.98 }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setReplay(null)}
+                className="absolute right-4 top-4 grid size-10 place-items-center rounded-full border border-white/50 bg-white/35 text-mute transition hover:bg-white/60 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                aria-label="关闭演示回放"
+              >
+                <CircleX size={19} />
+              </button>
+
+              <div className="pr-12">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1.5 text-[11px] font-semibold text-brand-deep">
+                  <BadgeCheck size={13} />
+                  已核验演示回放 · 非实时
+                </span>
+                <h2 className="mt-4 text-2xl font-bold text-ink sm:text-3xl">{replay.title}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-body">不用等待模型，先看清问题怎样一步步变成结果。</p>
+              </div>
+
+              <div className="mt-7 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr] lg:items-stretch">
+                {[
+                  { label: "问题", text: replay.problem, color: "#d9593f" },
+                  { label: "执行", text: replay.action, color: "#c98a62" },
+                  { label: "结果", text: replay.outcome, color: "#237f69" },
+                ].map((item, index) => (
+                  <div key={item.label} className="contents">
+                    <motion.div
+                      className="rounded-3xl border border-white/55 bg-white/32 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]"
+                      initial={false}
+                      animate={{ opacity: replayStep >= index ? 1 : 0.25, y: replayStep >= index ? 0 : 10 }}
+                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <p className="text-[11px] font-semibold tracking-[0.18em]" style={{ color: item.color }}>{item.label}</p>
+                      <p className="mt-3 text-base font-semibold leading-relaxed text-ink">{item.text}</p>
+                    </motion.div>
+                    {index < 2 && (
+                      <motion.div
+                        aria-hidden
+                        className="hidden self-center text-2xl font-light text-brand lg:block"
+                        initial={false}
+                        animate={{ opacity: replayStep > index ? 1 : 0.18, x: replayStep > index ? 0 : -8 }}
+                      >
+                        →
+                      </motion.div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-white/45 bg-white/24 p-4">
+                <p className="text-[11px] font-semibold tracking-[0.16em] text-mute">核验路径</p>
+                <div className="mt-3"><FlowChips flow={replay.flow} /></div>
+              </div>
+
+              <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-xl text-xs leading-relaxed text-mute">这是同一份匿名演示数据的固定回放，不伪装成实时请求。</p>
+                <button
+                  type="button"
+                  onClick={() => onNavigate({ name: "experience", caseKey: replay.key })}
+                  className="brand-button px-5 py-3 text-sm"
+                >
+                  <Play size={15} />
+                  进入真实体验
+                </button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <motion.section
         initial={{ opacity: 0, y: 24 }}
