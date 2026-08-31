@@ -69,7 +69,7 @@ export const EXPERIENCE_CASES: ExperienceCase<HeroCaseKey>[] = [
     eyebrow: "02 · 多人协同",
     shortPrompt: "帮教师005、006、014找共同空闲教室",
     fullPrompt:
-      "帮教师005、教师006、教师014寻找第1周周四上午的共同空闲，并推荐一间满足需求的教室。",
+      "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
     taskLabel: "为三位教师找一段共同空闲与合适教室",
     steps: ["拆解三位教师课表", "计算共同空闲", "筛选满足容量的教室"],
     context: [

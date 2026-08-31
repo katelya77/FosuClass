@@ -1,21 +1,7 @@
 {
   "version": 1,
   "include": [
-    "/api/adp/chat",
-    "/adp-relay-health",
-    "/adp-chat-client/*",
-    "/webim/*",
-    "/adp-origin/*",
-    "/account/*",
-    "/application/*",
-    "/chat/*",
-    "/dev/*",
-    "/feedback/*",
-    "/file/*",
-    "/helper/*",
-    "/reference/*",
-    "/share/*",
-    "/system/*"
+    "/api/adp/chat"
   ],
   "exclude": []
 }

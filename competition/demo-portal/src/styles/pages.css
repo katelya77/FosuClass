@@ -1080,6 +1080,26 @@
 .native-adp__answer-meta strong { font-size: 0.75rem; color: var(--ink); }
 .native-adp__answer-meta span { margin-left: auto; max-width: 17rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.62rem; color: var(--brand-deep); }
 
+.native-adp__context-proof {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid rgba(255,255,255,0.78);
+  border-radius: 0.9rem;
+  background: rgba(255,252,249,0.92);
+  box-shadow: 0 9px 24px rgba(102,62,50,0.08);
+  backdrop-filter: blur(18px);
+}
+
+.native-adp__context-proof > strong { flex: 0 0 auto; color: var(--brand-deep); font-size: 0.62rem; }
+.native-adp__context-proof > span { display: flex; min-width: 0; align-items: center; gap: 0.28rem; overflow: hidden; color: var(--body); font-size: 0.58rem; text-overflow: ellipsis; white-space: nowrap; }
+.native-adp__context-proof > span b { display: grid; width: 1rem; height: 1rem; flex: 0 0 auto; place-items: center; border-radius: 999px; background: var(--brand-tint); color: var(--brand-deep); font-size: 0.52rem; }
+.native-adp__context-proof > span svg { flex: 0 0 auto; color: #237f69; }
+
 .native-adp__widget {
   margin-top: 0.85rem;
   overflow: hidden;
@@ -1172,25 +1192,30 @@
 .native-adp__replay-evidence figcaption { padding: 0.55rem 0.35rem 0.1rem; color: var(--mute); font-size: 0.6rem; line-height: 1.5; }
 
 .native-adp__quick-prompts {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.55fr) minmax(0, 0.8fr);
   gap: 0.4rem;
-  overflow-x: auto;
   padding-bottom: 0.55rem;
 }
 
 .native-adp__quick-prompts button {
-  flex: 0 0 auto;
-  max-width: 17rem;
-  overflow: hidden;
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.35rem;
   padding: 0.36rem 0.65rem;
   border: 1px solid rgba(206, 100, 76, 0.14);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.5);
   color: var(--body);
   font-size: 0.64rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
 }
+
+.native-adp__quick-prompts button strong { flex: 0 0 auto; color: var(--brand-deep); }
+.native-adp__quick-prompts button span { min-width: 0; }
 
 .native-adp__input-row {
   display: grid;
@@ -1441,6 +1466,9 @@
     grid-template-columns: minmax(0, 1fr);
     overflow: hidden;
   }
+
+  .native-adp__context-proof { align-items: stretch; flex-direction: column; }
+  .native-adp__context-proof > span { width: 100%; }
 
   .native-adp__quick-prompts button {
     width: 100%;

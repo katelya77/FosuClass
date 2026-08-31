@@ -4,7 +4,6 @@ import {
   Bot,
   CheckCircle2,
   CirclePlay,
-  ExternalLink,
   LoaderCircle,
   ShieldCheck,
   Square,
@@ -16,8 +15,6 @@ import {
   ADP_CHAT_API_URL,
   ADP_DIAGNOSTICS_STORAGE_KEY,
   getPersistentConversationId,
-  resolveAdpConfig,
-  type AdpFrameConfig,
 } from "../lib/adp";
 import {
   consumeSseBuffer,
@@ -31,7 +28,6 @@ import { cn } from "../lib/cn";
 import { AdpWidget, type AdpWidgetAction } from "./AdpWidget";
 
 interface AdpExperienceProps {
-  config?: AdpFrameConfig;
   className?: string;
   initialPrompt?: string;
   showHeader?: boolean;
@@ -68,9 +64,9 @@ export interface DiagnosticsSnapshot {
 }
 
 const QUICK_PROMPTS = [
-  "未来四周教师负载最高的是谁？",
-  "检查 Top1 未来四周的教学空间转场风险。",
-  "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
+  { role: "学生", prompt: "查看2025级计算机类01班第1周课表。" },
+  { role: "教师", prompt: "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。" },
+  { role: "教学管理", prompt: "未来四周谁的教学负载最高？" },
 ];
 
 export function saveDiagnostics(snapshot: DiagnosticsSnapshot): void {
@@ -171,13 +167,11 @@ function VerifiedReplay({ onLive }: { onLive: () => void }): React.ReactElement 
 }
 
 export function AdpExperience({
-  config,
   className,
-  initialPrompt = QUICK_PROMPTS[0],
+  initialPrompt = QUICK_PROMPTS[0].prompt,
   showHeader = true,
   recordMode = false,
 }: AdpExperienceProps): React.ReactElement {
-  const cfg = config ?? resolveAdpConfig();
   const conversationId = useMemo(() => getPersistentConversationId(), []);
   const [input, setInput] = useState(initialPrompt);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -383,10 +377,6 @@ export function AdpExperience({
               <button type="button" className="is-active" aria-pressed="true">实时体验</button>
               <button type="button" onClick={() => setMode("replay")}>已核验回放</button>
             </div>
-            <a href="#/adp-diagnostics" className="glass-button px-3 py-1.5 text-xs">诊断</a>
-            <a className="glass-button px-3 py-1.5 text-xs" href={cfg.externalWebimUrl} target="_blank" rel="noreferrer noopener">
-              <ExternalLink size={13} /> 官方体验
-            </a>
           </div>}
         </header>
       )}
@@ -400,6 +390,18 @@ export function AdpExperience({
       </div>
 
       <div className="native-adp__conversation">
+        {turns.length > 1 && (
+          <div className="native-adp__context-proof" aria-label="同一会话连续追问轨迹">
+            <strong>同一会话</strong>
+            {turns.map((turn, index) => (
+              <span key={turn.id} title={turn.question}>
+                <b>{index + 1}</b>
+                {turn.question || "结果卡操作"}
+                {turn.widget && <CheckCircle2 size={12} aria-label="已返回结果卡" />}
+              </span>
+            ))}
+          </div>
+        )}
         {turns.length === 0 ? (
           <div className="native-adp__empty">
             <img src="/branding/platform-logo.png" alt="小序" />
@@ -450,7 +452,11 @@ export function AdpExperience({
           </div>
         )}
         {!recordMode && <div className="native-adp__quick-prompts">
-          {QUICK_PROMPTS.map((prompt, index) => <button key={prompt} onClick={() => setInput(prompt)} disabled={isRunning}>{index + 1}. {prompt}</button>)}
+          {QUICK_PROMPTS.map(({ role, prompt }) => (
+            <button key={role} aria-label={`Quick Start · ${role}`} onClick={() => setInput(prompt)} disabled={isRunning}>
+              <strong>{role}</strong><span>{prompt}</span>
+            </button>
+          ))}
         </div>}
         <div className="native-adp__input-row">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {

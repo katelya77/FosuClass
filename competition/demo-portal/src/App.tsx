@@ -1,12 +1,11 @@
 import { useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Clapperboard, ExternalLink } from "lucide-react";
+import { Clapperboard, Sparkles } from "lucide-react";
 
 import { BrandMark } from "./components/BrandMark";
 import { GuidedDemo } from "./components/GuidedDemo";
 import { MobileNav } from "./components/MobileNav";
 import { Sidebar } from "./components/Sidebar";
-import { DEFAULT_ADP_CHAT_URL } from "./lib/adp";
 import { useHashRoute, useNavigate, type Route } from "./lib/router";
 import { AdpDiagnosticsPage } from "./pages/AdpDiagnosticsPage";
 import { CapabilityPage } from "./pages/CapabilityPage";
@@ -71,15 +70,14 @@ export function App({ search }: { search?: string } = {}): ReactElement {
             <BrandMark size="sm" />
           </div>
           <div className="app-header__actions flex items-center gap-2">
-            <a
-              href={DEFAULT_ADP_CHAT_URL}
-              target="_blank"
-              rel="noreferrer noopener"
+            <button
+              type="button"
+              onClick={() => onNavigate({ name: "experience" })}
               className="glass-button px-3.5 py-2 text-xs sm:text-sm"
             >
-              <ExternalLink size={14} />
-              打开完整小序
-            </a>
+              <Sparkles size={14} />
+              进入真实体验
+            </button>
             <button onClick={openDemo} className="brand-button px-3.5 py-2 text-xs sm:text-sm">
               <Clapperboard size={14} />
               比赛演示模式
