@@ -1,0 +1,37 @@
+[
+  {
+    "label": "home",
+    "url": "http://127.0.0.1:4174/#/",
+    "title": "校园智序 · 小序 — Judge Experience Portal",
+    "horizontalOverflow": false,
+    "hasVisibleLogin": false
+  },
+  {
+    "label": "capability",
+    "url": "http://127.0.0.1:4174/#/capability",
+    "title": "校园智序 · 小序 — Judge Experience Portal",
+    "horizontalOverflow": false,
+    "hasVisibleLogin": false
+  },
+  {
+    "label": "cases",
+    "url": "http://127.0.0.1:4174/#/cases",
+    "title": "校园智序 · 小序 — Judge Experience Portal",
+    "horizontalOverflow": false,
+    "hasVisibleLogin": false
+  },
+  {
+    "label": "replay",
+    "url": "http://127.0.0.1:4174/#/cases",
+    "title": "校园智序 · 小序 — Judge Experience Portal",
+    "horizontalOverflow": false,
+    "hasVisibleLogin": false
+  },
+  {
+    "label": "experience",
+    "url": "http://127.0.0.1:4174/?timeout=2200#/experience/query",
+    "title": "校园智序 · 小序 — Judge Experience Portal",
+    "horizontalOverflow": false,
+    "hasVisibleLogin": false
+  }
+]

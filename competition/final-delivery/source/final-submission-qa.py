@@ -252,8 +252,8 @@ def http_check(url: str) -> dict[str, object]:
         }
 
 
-def image_preview_check(folder: Path, expected: int, expected_size: tuple[int, int]) -> tuple[bool, list[str]]:
-    files = sorted(folder.glob("*.png"))
+def image_preview_check(folder: Path, pattern: str, expected: int, expected_size: tuple[int, int]) -> tuple[bool, list[str]]:
+    files = sorted(folder.glob(pattern))
     failures: list[str] = []
     if len(files) != expected:
         failures.append(f"count={len(files)}, expected={expected}")
@@ -288,9 +288,13 @@ def run() -> dict[str, object]:
         QR,
         SUBMISSION / "05_其他可选材料" / "在线演示与权限说明.pdf",
         SUBMISSION / "05_其他可选材料" / "在线演示与权限说明.txt",
+        SUBMISSION / "05_其他可选材料" / "PPT-逐页讲稿.md",
+        SUBMISSION / "05_其他可选材料" / "剪映二次剪辑建议.md",
+        SUBMISSION / "05_其他可选材料" / "CHANGELOG-FINAL-REVIEW.md",
+        SUBMISSION / "05_其他可选材料" / "网站QA截图" / "网站QA说明.txt",
     ]
     missing = [str(path.relative_to(SUBMISSION)) for path in required if not path.is_file()]
-    add(checks, "最终目录必需文件", not missing, f"13 项；missing={missing}")
+    add(checks, "最终目录必需文件", not missing, f"{len(required)} 项；missing={missing}")
 
     ppt_slides, ppt_overflow, ppt_ratio, ppt_count, min_font = ppt_text_and_geometry(PPTX)
     ppt_pdf_pages = pdf_page_text(PPT_PDF)
@@ -319,8 +323,8 @@ def run() -> dict[str, object]:
     add(checks, "DOCX 可解析且可编辑", len(document.paragraphs) > 100, f"python-docx 打开；paragraphs={len(document.paragraphs)}")
     add(checks, "设计书 PDF 页数", len(doc_pages) == 20 and doc_core_pages == 20, f"PDF={len(doc_pages)} 页；Word 实机状态栏已核验 20/20")
 
-    ppt_preview_ok, ppt_preview_failures = image_preview_check(ROOT / "ppt-preview-final", 12, (1920, 1080))
-    doc_preview_files = sorted((ROOT / "doc-preview-final").glob("*.png"))
+    ppt_preview_ok, ppt_preview_failures = image_preview_check(ROOT / "ppt-preview-final", "幻灯片*.PNG", 12, (1920, 1080))
+    doc_preview_files = sorted((ROOT / "doc-preview-final").glob("page-*.png"))
     doc_preview_failures: list[str] = []
     if len(doc_preview_files) != 20:
         doc_preview_failures.append(f"count={len(doc_preview_files)}, expected=20")
@@ -333,6 +337,18 @@ def run() -> dict[str, object]:
                 doc_preview_failures.append(f"{path.name}: blank/flat image")
     add(checks, "PPT 逐页预览", ppt_preview_ok, f"12 张 1920×1080；failures={ppt_preview_failures}")
     add(checks, "设计书逐页预览", not doc_preview_failures, f"20 张；failures={doc_preview_failures}")
+    final_ppt_previews = sorted((SUBMISSION / "04_答辩PPT" / "逐页PNG").glob("幻灯片*.PNG"))
+    final_doc_previews = sorted((SUBMISSION / "01_智能体设计说明书" / "逐页PNG").glob("page-*.png"))
+    add(checks, "逐页 PNG 已纳入正式提交", len(final_ppt_previews) == 12 and len(final_doc_previews) == 20, f"PPT={len(final_ppt_previews)}; DOC={len(final_doc_previews)}")
+
+    portal_qa = json.loads((ROOT / "site-qa" / "portal-qa.json").read_text(encoding="utf-8"))
+    portal_qa_images = sorted((SUBMISSION / "05_其他可选材料" / "网站QA截图").glob("0*-*.png"))
+    portal_qa_ok = (
+        len(portal_qa) == 5
+        and len(portal_qa_images) == 5
+        and all(not item["horizontalOverflow"] and not item["hasVisibleLogin"] for item in portal_qa)
+    )
+    add(checks, "网站 1920×1080 构建截图与溢出检查", portal_qa_ok, f"screenshots={len(portal_qa_images)}; pages={[(item['label'], item['horizontalOverflow']) for item in portal_qa]}")
 
     video = ffprobe_video(VIDEO)
     add(checks, "演示视频存在且小于 5 分钟", video["durationSeconds"] < 300, f"{video['durationDisplay']}；{video['codec']} {video['width']}×{video['height']}")
@@ -405,7 +421,7 @@ def run() -> dict[str, object]:
         checks,
         "页面匿名可访问",
         not portal_home["loginMarker"] and not portal_experience["loginMarker"],
-        "HTML 无登录/密码入口；浏览器实测首页、Experience、Verified Widget 均无需账号",
+        "HTML 无登录/密码入口；浏览器实测首页、真实体验与已核验结果卡均无需账号",
     )
 
     decoded_qr = decode_qr(QR)
@@ -421,7 +437,7 @@ def run() -> dict[str, object]:
     doc_normalized = re.sub(r"\s+", "", doc_full_text).lower()
     truth_text = (ROOT / "FINAL-TRUTH.json").read_text(encoding="utf-8")
     ppt_fact_groups = [
-        ("4 Agent", ["4个智能体"]), ("13 CampusTools", ["13", "campustools"]), ("14 bindings", ["14绑定关系"]),
+        ("4 Agent", ["4个智能体"]), ("13 CampusTools", ["13", "campustools"]), ("14 bindings", ["14", "协作绑定"]),
         ("Teacher025", ["教师025"]), ("risk 0/4", ["0课表硬冲突", "4每周转场风险"]),
         ("collaboration 3/63/7/A1-201", ["3", "63", "7", "a1-201"]),
         ("reschedule", ["feasible=true", "warning", "mutateddata", "false"]),
@@ -459,7 +475,7 @@ def run() -> dict[str, object]:
 
     ppt_1500_pages = [index for index, text in enumerate(ppt_slides, 1) if "1500+" in text]
     doc_1500_pages = [index for index, text in enumerate(doc_pages, 1) if "1500+" in text]
-    add(checks, "1500+ 页面定位", ppt_1500_pages == [2, 11] and doc_1500_pages == [4, 20], f"PPT={ppt_1500_pages}; DOC={doc_1500_pages}")
+    add(checks, "1500+ 页面定位", ppt_1500_pages == [2, 11] and doc_1500_pages == [3, 4, 20], f"PPT={ppt_1500_pages}; DOC={doc_1500_pages}")
 
     hard_failures = [item for item in checks if item["hard"] and not item["ok"]]
     report = {
@@ -484,7 +500,7 @@ def run() -> dict[str, object]:
         "portal": {"home": portal_home, "experience": portal_experience, "anonymousBrowserTest": True},
         "qrDecoded": decoded_qr,
         "adoption1500Pages": {"ppt": ppt_1500_pages, "designBook": doc_1500_pages},
-        "portalScreenshotPages": {"ppt": [5, 11], "designBook": [4, 11, 15]},
+        "portalScreenshotPages": {"ppt": [5, 11, 12], "designBook": [4, 11, 15]},
         "scan": {"bannedHits": banned_hits, "secretHits": secret_hits},
         "checks": checks,
     }
@@ -505,9 +521,9 @@ def run() -> dict[str, object]:
         "|---|---|---|\n"
         f"{rows}\n\n"
         "## 页面定位\n\n"
-        "- `1500+`：PPT 第 2、11 页；设计说明书第 4、20 页。\n"
-        "- Judge Portal 实际截图：PPT 第 5、11 页；设计说明书第 4、11、15 页。\n"
-        "- PPT 全 12 页已输出 1920×1080 PNG 并逐页检查；设计书全 20 页已输出 PNG，重点页与首尾页已实机检查。\n\n"
+        f"- `1500+`：PPT 第 {', '.join(map(str, ppt_1500_pages))} 页；设计说明书第 {', '.join(map(str, doc_1500_pages))} 页。\n"
+        "- 在线体验实际截图：PPT 第 5、11、12 页；设计说明书第 4、11、15 页。\n"
+        "- PPT 全 12 页已输出 1920×1080 PNG 并逐页检查；设计书全 20 页已输出 PNG 并完成整套视觉复核。\n\n"
         "## 在线与匿名结论\n\n"
         "- `https://adp.katelya.top/` 与 `/experience`：HTTP 200。\n"
         "- 浏览器实测：首页、在线体验与已核验结果卡均可匿名打开；无需测试账号。\n"

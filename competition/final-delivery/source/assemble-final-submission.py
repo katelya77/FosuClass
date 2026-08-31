@@ -28,6 +28,12 @@ QR = ASSETS / "在线演示二维码.png"
 PORTAL_HOME = ASSETS / "portal-home-1920x1080-final.png"
 PORTAL_EXPERIENCE = ASSETS / "portal-experience-1920x1080-final.png"
 PORTAL_WIDGET = ASSETS / "portal-verified-widget-1920x1080-final.png"
+PPT_PREVIEWS = ROOT / "ppt-preview-final"
+DOC_PREVIEWS = ROOT / "doc-preview-final"
+SITE_QA = ROOT / "site-qa"
+PPT_NOTES = ROOT / "PPT-SPEAKER-NOTES.md"
+VIDEO_NOTES = ROOT / "剪映二次剪辑建议.md"
+CHANGELOG = ROOT / "CHANGELOG-FINAL-REVIEW.md"
 
 FONT_REGULAR = r"C:\Windows\Fonts\msyh.ttc"
 FONT_BOLD = r"C:\Windows\Fonts\msyhbd.ttc"
@@ -75,6 +81,14 @@ def copy(source: Path, target: Path) -> None:
         raise FileNotFoundError(source)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
+
+
+def copy_matches(source_dir: Path, pattern: str, target_dir: Path) -> int:
+    files = sorted(path for path in source_dir.glob(pattern) if path.is_file())
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for source in files:
+        copy(source, target_dir / source.name)
+    return len(files)
 
 
 def find_final_video() -> Path:
@@ -211,7 +225,7 @@ def build_program_readme_pdf(output: Path) -> None:
     c.setAuthor("校园智序·小序")
 
     page_background(c, 1, 3)
-    txt(c, "PROGRAM DELIVERY", 42, H - 62, 8.5, CORAL, True)
+    txt(c, "程序交付", 42, H - 62, 8.5, CORAL, True)
     txt(c, "程序交付与运行说明", 42, H - 105, 26, INK, True)
     wrapped(c, "腾讯 ADP 平台化编排 + 自定义 CampusTools 确定性事实层 + 可核验结果卡的最小充分正式交付。", 42, H - 139, W - 84, 11)
     facts = [("4", "智能体", CORAL_DARK), ("13", "CampusTools", GREEN), ("14", "协作绑定", BLUE)]
@@ -226,7 +240,7 @@ def build_program_readme_pdf(output: Path) -> None:
     lines = [
         "自然语言 → 主协调 → 专业智能体 → CampusTools",
         "→ 约束核验 → 结构化结果 → 已核验结果卡",
-        "→ academic_context 续接下一轮问题",
+        "→ 共享教学上下文续接下一轮问题",
     ]
     y = 343
     for idx, line in enumerate(lines):
@@ -237,7 +251,7 @@ def build_program_readme_pdf(output: Path) -> None:
     c.showPage()
 
     page_background(c, 2, 3)
-    txt(c, "PACKAGE MAP", 42, H - 62, 8.5, CORAL, True)
+    txt(c, "交付包结构", 42, H - 62, 8.5, CORAL, True)
     txt(c, "程序 ZIP 内部结构", 42, H - 105, 24, INK, True)
     rows = [
         ("A_ADP工程", "最新 ADP 应用人工导出 ZIP", CORAL_DARK),
@@ -292,7 +306,7 @@ def build_overview_pdf(output: Path, video_duration_text: str) -> None:
     c.setTitle("校园智序·小序｜提交材料总览")
     c.setAuthor("校园智序·小序")
     page_background(c, 1, 2)
-    txt(c, "FINAL SUBMISSION", 42, H - 62, 8.5, CORAL, True)
+    txt(c, "最终提交", 42, H - 62, 8.5, CORAL, True)
     txt(c, "提交材料总览", 42, H - 105, 27, INK, True)
     wrapped(c, "小序把复杂的校园教学时空，变成一句话可以理解、计算、核验和继续决策的事情。", 42, H - 140, W - 84, 11.2)
     items = [
@@ -316,7 +330,7 @@ def build_overview_pdf(output: Path, video_duration_text: str) -> None:
     c.showPage()
 
     page_background(c, 2, 2)
-    txt(c, "FINAL TRUTH", 42, H - 62, 8.5, CORAL, True)
+    txt(c, "关键事实核对", 42, H - 62, 8.5, CORAL, True)
     txt(c, "一页核对全部关键事实", 42, H - 105, 24, INK, True)
     facts = [
         "4 Agent · 13 CampusTools · 14 bindings · Main → Child → Main",
@@ -325,7 +339,7 @@ def build_overview_pdf(output: Path, video_duration_text: str) -> None:
         "Collaboration：3 → 63 → 7 → A1-201",
         "Reschedule：feasible + warning / mutatedData=false",
         "Insight：教师025 / 56 课次 / 112 课时",
-        "真实落地：累计真实用户 1500+",
+        "底层课表服务：累计真实用户 1500+",
     ]
     y = H - 170
     for idx, fact in enumerate(facts, 1):
@@ -356,7 +370,8 @@ def write_text_files(video_source: Path) -> None:
         "02_作品演示视频：从 Downloads 最新最终 MP4 原样复制，未重新编码。\n"
         "03_程序交付材料：平台工程、自定义 CampusTools、Widget、Agent 配置、匿名数据与验证材料。\n"
         "04_答辩PPT：12 页 PPTX 与同版 PDF。\n"
-        "05_其他可选材料：在线演示说明与二维码。\n\n"
+        "05_其他可选材料：在线演示说明、二维码、网站 QA 截图、PPT 逐页讲稿、剪映建议与变更说明。\n"
+        "逐页 PNG：分别位于设计说明书与答辩 PPT 目录的“逐页PNG”子目录。\n\n"
         f"在线演示：{URL}\n"
         "测试账号：无需账号\n"
         f"视频来源文件名：{video_source.name}\n"
@@ -379,12 +394,30 @@ def main() -> None:
 
     copy(DOCX, FINAL / "01_智能体设计说明书" / DOCX.name)
     copy(DOC_PDF, FINAL / "01_智能体设计说明书" / DOC_PDF.name)
+    if copy_matches(DOC_PREVIEWS, "page-*.png", FINAL / "01_智能体设计说明书" / "逐页PNG") != 20:
+        raise RuntimeError("Design-book preview count is not 20")
     video_target = FINAL / "02_作品演示视频" / "校园智序-小序-作品演示视频.mp4"
     copy(video_source, video_target)
     copy(PROGRAM_ZIP, FINAL / "03_程序交付材料" / PROGRAM_ZIP.name)
     copy(PPTX, FINAL / "04_答辩PPT" / PPTX.name)
     copy(PPT_PDF, FINAL / "04_答辩PPT" / PPT_PDF.name)
+    if copy_matches(PPT_PREVIEWS, "幻灯片*.PNG", FINAL / "04_答辩PPT" / "逐页PNG") != 12:
+        raise RuntimeError("PPT preview count is not 12")
     copy(QR, FINAL / "05_其他可选材料" / QR.name)
+    copy(PPT_NOTES, FINAL / "05_其他可选材料" / "PPT-逐页讲稿.md")
+    copy(VIDEO_NOTES, FINAL / "05_其他可选材料" / VIDEO_NOTES.name)
+    copy(CHANGELOG, FINAL / "05_其他可选材料" / CHANGELOG.name)
+    site_qa_target = FINAL / "05_其他可选材料" / "网站QA截图"
+    if copy_matches(SITE_QA, "0*-*.png", site_qa_target) != 5:
+        raise RuntimeError("Portal QA screenshot count is not 5")
+    (site_qa_target / "网站QA说明.txt").write_text(
+        "本目录为重构后网站源码的 1920×1080 本地构建验收截图。\n"
+        "页面覆盖：首页、能力与角色、案例演示、已核验回放、真实体验。\n"
+        "五页均已检查横向溢出；已核验回放明确标注为非实时，未伪装成实时结果。\n"
+        "生产站未在本次材料整理中直接部署；请按正式发布流程上线本次源码。\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
     online_pdf = FINAL / "05_其他可选材料" / "在线演示与权限说明.pdf"
     program_pdf = FINAL / "03_程序交付材料" / "README-程序交付与运行说明.pdf"
