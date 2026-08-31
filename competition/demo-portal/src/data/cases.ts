@@ -38,7 +38,7 @@ export const GENERAL_EXPERIENCE: ExperienceCase = {
   steps: ["理解对象与时间", "转交对应专业智能体", "用 CampusTools 核验并返回结果卡"],
   context: [
     { label: "协作", value: "主协调 → 专业智能体 → 主协调" },
-    { label: "能力", value: "4 Agent · 13 CampusTools" },
+    { label: "能力", value: "4 个智能体 · 13 项 CampusTools" },
     { label: "结果", value: "已核验 · 核验依据 · 结果卡" },
   ],
   icon: Sparkles,

@@ -8,7 +8,6 @@ import { MobileNav } from "./components/MobileNav";
 import { Sidebar } from "./components/Sidebar";
 import { DEFAULT_ADP_CHAT_URL } from "./lib/adp";
 import { useHashRoute, useNavigate, type Route } from "./lib/router";
-import { AboutPage } from "./pages/AboutPage";
 import { AdpDiagnosticsPage } from "./pages/AdpDiagnosticsPage";
 import { CapabilityPage } from "./pages/CapabilityPage";
 import { CasesPage } from "./pages/CasesPage";
@@ -39,8 +38,6 @@ function PageOutlet({ route, onNavigate, onQuickDemo, recordMode }: PageOutletPr
       return <CapabilityPage onNavigate={onNavigate} />;
     case "cases":
       return <CasesPage onNavigate={onNavigate} />;
-    case "about":
-      return <AboutPage onNavigate={onNavigate} />;
     default:
       return <HomePage onNavigate={onNavigate} onQuickDemo={onQuickDemo} />;
   }
