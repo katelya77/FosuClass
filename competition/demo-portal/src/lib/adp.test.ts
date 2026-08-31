@@ -1,39 +1,38 @@
 import { describe, expect, it } from "vitest";
 
-import { isMixedContentEmbed, resolveAdpConfig } from "./adp";
+import {
+  ADP_CHAT_API_URL,
+  containsCredentialMarker,
+  getPersistentConversationId,
+} from "./adp";
 
-describe("ADP public embed configuration", () => {
-  it("flags HTTPS page to HTTP frame as mixed content", () => {
-    expect(isMixedContentEmbed("https:", "http://101.42.184.216/webim/#/chat/uxjybB")).toBe(true);
+describe("ADP native browser boundary", () => {
+  it("uses only the same-origin server endpoint", () => {
+    expect(ADP_CHAT_API_URL).toBe("/api/adp/chat");
   });
 
-  it("allows same-protocol HTTP locally and future HTTPS ADP without page changes", () => {
-    expect(isMixedContentEmbed("http:", "http://101.42.184.216/webim/#/chat/uxjybB")).toBe(false);
-    expect(isMixedContentEmbed("https:", "https://adp.example.com/chat")).toBe(false);
+  it("reuses a valid anonymous conversation id", () => {
+    const storage = new Map<string, string>();
+    const adapter = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    } as unknown as Storage;
+    const first = getPersistentConversationId(adapter);
+    expect(getPersistentConversationId(adapter)).toBe(first);
+    expect(first).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it("keeps both public visitor URLs in the centralized config", () => {
-    const config = resolveAdpConfig({
-      VITE_ADP_EMBED_URL: "https://adp.example.com/app",
-      VITE_ADP_WEBIM_URL: "https://adp.example.com/webim",
-    }, "https:");
-    expect(config).toMatchObject({
-      chatUrl: "https://adp.example.com/app",
-      webimUrl: "https://adp.example.com/webim",
-      externalChatUrl: "https://adp.example.com/app",
-      externalWebimUrl: "https://adp.example.com/webim",
-      relayActive: false,
-    });
+  it("rejects an invalid stored conversation id", () => {
+    const values = new Map([["campusflow.adp.conversation.v1", "invalid"]]);
+    const adapter = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    } as unknown as Storage;
+    expect(getPersistentConversationId(adapter)).not.toBe("invalid");
   });
 
-  it("uses the same-origin Pages relay for an HTTPS page with the current HTTP ADP", () => {
-    const config = resolveAdpConfig({}, "https:");
-    expect(config).toMatchObject({
-      chatUrl: "/adp-chat-client/#/app/2084871572396491520",
-      webimUrl: "/webim/#/chat/uxjybB",
-      externalChatUrl: expect.stringMatching(/^http:\/\//),
-      relayActive: true,
-      relayHealthUrl: "/adp-relay-health",
-    });
+  it("detects credential-shaped text before it reaches diagnostics or artifacts", () => {
+    expect(containsCredentialMarker("Authorization: Bearer redacted")).toBe(true);
+    expect(containsCredentialMarker("匿名演示数据 · 已核验")).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ const root = path.resolve(here, "..");
 const repo = path.resolve(root, "..", "..");
 const assets = path.join(root, "assets");
 const qa = path.join(root, "qa", "final-cut");
+const finalShots = path.join(root, "qa", "live-final", "screenshots");
 const brand = path.join(repo, "competition", "demo-portal", "public", "branding");
 const output = path.join(root, "校园智序-小序-答辩.pptx");
 
@@ -141,7 +142,7 @@ function label(slide, value, x, y, w, color, group) {
   addImage(s, imageContain(path.join(brand, "platform-logo.png"), 0.72, 0.64, 1.0, 1.0), null, "logo");
   addText(s, "序", 9.18, 0.35, 3.7, 5.8, { fontFace: F.title, fontSize: 220, bold: true, color: "FFFFFF", transparency: 88, align: "center" }, null);
   addText(s, "校园智序·小序", 0.78, 1.88, 7.8, 0.78, { fontFace: F.title, fontSize: 39, bold: true, color: C.white }, "A01");
-  addText(s, "面向学生、教师与教学管理者的\n校园教学时空智能协同系统", 0.78, 2.92, 7.9, 1.28, { fontFace: F.title, fontSize: 25, bold: true, color: "FFD9CF", breakLine: true, valign: "top" }, "A02");
+  addText(s, "面向学生、教师与教学管理者的\n校园教学时空资源智能体", 0.78, 2.92, 7.9, 1.28, { fontFace: F.title, fontSize: 25, bold: true, color: "FFD9CF", breakLine: true, valign: "top" }, "A02");
   hairline(s, 0.8, 4.66, 4.8, "E89989", 1.3, "A03");
   addText(s, "一句自然语言，统一完成课表查询、空间查找、多人协同、调课核验与教学运行分析。", 0.8, 4.84, 7.4, 0.42, { fontSize: 13.5, color: "F2E8E3" }, "A03");
   addText(s, "让教学时空，被理解、被安排。", 0.8, 5.56, 6.2, 0.5, { fontFace: F.title, fontSize: 19, bold: true, color: C.white }, "A04");
@@ -231,30 +232,30 @@ function label(slide, value, x, y, w, color, group) {
   hairline(s, 5.34, 4.62, 6.65, C.line, 1.0, "A07");
   addText(s, "模型负责听懂人话和组织协作；CampusTools 负责把动态校园事实算清楚。", 5.36, 4.87, 6.68, 0.5, { fontSize: 14, bold: true }, "A07");
   addText(s, "结果进入统一结果卡，可以继续追问“那看看他的课表”“再查一下风险”。", 5.36, 5.5, 6.65, 0.42, { fontSize: 13, color: C.body }, "A08");
-  label(s, "查得清 · 算得出 · 验得过 · 接得住", 8.06, 6.16, 3.06, C.coral, "A08");
+  addText(s, "4 个智能体 · 13 项工具 · 14 组协作绑定", 5.36, 6.18, 2.75, 0.28, { fontSize: 10.2, bold: true, color: C.body }, "A08");
+  label(s, "查得清 · 算得出 · 验得过 · 接得住", 8.46, 6.16, 3.06, C.coral, "A08");
 }
 
-// 05｜学生场景：真实功能演示，不虚构核验数字。
+// 05｜学生场景：用一段连续追问讲清真实能力，不虚构结果数字。
 {
   const s = pptx.addSlide();
-  header(s, 5, "学生场景｜真实功能演示", "一句话查课，也能继续追问", "以下能力来自真实系统，可在在线体验中现场验证；演示数据包含真实班级、课程与教室对象。");
-  const abilities = [
-    { n: "01", t: "查课表", d: "班级 / 教师 / 课程 / 教室，一句话查询。例如：“查看2025级计算机类01班第1周课表。”", c: C.coral },
-    { n: "02", t: "连续追问", d: "“只看周三。”“那下午呢？”“这节课在哪？”——上下文不丢，对象不换。", c: C.amber },
-    { n: "03", t: "找空教室", d: "“周三下午哪里有空教室？”时间与空间一起回答，还可以继续筛。", c: C.green },
-    { n: "04", t: "今日安排", d: "今天有什么课、几点在哪里，一次说清。", c: C.blue },
+  header(s, 5, "学生场景｜从查课到找空间", "一句话查课，也能接着问", "学生不用反复选择查询入口；系统记住对象和时间，把下一句话接下去。");
+  const turns = [
+    { n: "01", q: "“查看 01 班第 1 周课表。”", d: "先查清课程安排", c: C.coral, group: "A01" },
+    { n: "02", q: "“只看周三。”", d: "沿用班级与周次", c: C.amber, group: "A02" },
+    { n: "03", q: "“下午哪里有空教室？”", d: "继续查询可用空间", c: C.green, group: "A03" },
   ];
-  abilities.forEach((item, index) => {
-    const group = `A0${index + 1}`;
-    const y = 1.92 + index * 1.08;
-    addText(s, item.n, 0.82, y, 0.6, 0.32, { fontSize: 10.5, bold: true, color: item.c }, group);
-    addText(s, item.t, 1.52, y - 0.04, 1.7, 0.44, { fontFace: F.title, fontSize: 19, bold: true, color: item.c }, group);
-    addText(s, item.d, 0.84, y + 0.48, 4.05, 0.56, { fontSize: 11.8, color: C.body, breakLine: true, valign: "top" }, group);
-    if (index < abilities.length - 1) hairline(s, 0.84, y + 1.02, 3.9, C.line, 0.9, group);
+  turns.forEach((item, index) => {
+    const y = 1.94 + index * 1.28;
+    addText(s, item.n, 0.82, y, 0.48, 0.3, { fontSize: 10, bold: true, color: item.c }, item.group);
+    addText(s, item.q, 1.42, y - 0.02, 3.52, 0.5, { fontFace: F.title, fontSize: 17.5, bold: true, color: C.ink }, item.group);
+    addText(s, item.d, 1.42, y + 0.55, 3.2, 0.3, { fontSize: 11.2, bold: true, color: item.c }, item.group);
+    if (index < turns.length - 1) arrow(s, 1.04, y + 0.72, 0, 0.5, C.line, 1.2, item.group);
   });
-  screen(s, path.join(assets, "portal-capability-1920x1080-final.png"), 5.24, 1.9, 7.42, 4.42, "A05", true);
-  addText(s, "真实产品界面：学生查询是系统的第一入口", 8.6, 6.44, 4.0, 0.3, { fontSize: 11.5, bold: true, color: C.coralDark, align: "right" }, "A05");
-  addText(s, "真实功能演示——没有包装的数字，只有可以直接上手的能力。", 0.82, 6.5, 4.3, 0.56, { fontFace: F.title, fontSize: 12.5, bold: true, color: C.coralDark, breakLine: true, valign: "top" }, "A06");
+  hairline(s, 0.82, 5.86, 3.98, C.line, 1.0, "A04");
+  addText(s, "不用重填班级，不用重选时间，\n也不用学习教务系统的复杂入口。", 0.82, 6.05, 4.02, 0.72, { fontFace: F.title, fontSize: 13.4, bold: true, color: C.coralDark, breakLine: true, valign: "top" }, "A04");
+  screen(s, path.join(finalShots, "04-student-live-1920x1080-final.png"), 5.24, 1.9, 7.42, 4.42, "A05", false);
+  addText(s, "真实 ADP 三轮连续追问 · 同一会话", 8.54, 6.44, 4.06, 0.3, { fontSize: 11.5, bold: true, color: C.coralDark, align: "right" }, "A05");
 }
 
 // 06｜教师案例一：多人协同，3 → 63 → 7 → A1-201。
@@ -281,20 +282,16 @@ function label(slide, value, x, y, w, color, group) {
 {
   const s = pptx.addSlide();
   header(s, 7, "教师案例｜风险与模拟调课", "没有冲突，不等于来得及；可以调，也不等于没有提醒", "教师025 · 第1—4周；系统先算清空间转场风险，再模拟调整方案——真实课表不会被改动。");
-  addText(s, "0", 0.78, 1.8, 1.42, 1.0, { fontSize: 58, bold: true, color: C.green }, "A01");
-  addText(s, "课表硬冲突", 2.16, 2.14, 1.9, 0.4, { fontSize: 15.5, bold: true, color: C.green }, "A01");
-  addText(s, "第1—4周 · 每周14课次", 0.82, 2.86, 3.2, 0.3, { fontSize: 11, color: C.body }, "A01");
-  addText(s, "4", 0.78, 3.32, 1.42, 1.0, { fontSize: 58, bold: true, color: C.amber }, "A02");
-  addText(s, "每周转场风险", 2.16, 3.66, 2.2, 0.4, { fontSize: 15.5, bold: true, color: C.amber }, "A02");
-  addText(s, "最短间隔只有 20 分钟", 0.82, 4.38, 3.2, 0.3, { fontSize: 11, bold: true, color: C.body }, "A02");
-  addText(s, "“课表没有打架”，不等于“人来得及赶到”。", 0.82, 4.84, 3.8, 0.56, { fontFace: F.title, fontSize: 14.5, bold: true, color: C.ink, breakLine: true, valign: "top" }, "A03");
-  addShape(s, S.rect, { x: 0.74, y: 5.52, w: 4.04, h: 1.34, fill: { color: C.greenSoft, transparency: 20 }, line: noLine }, "A04", "reschedule-band");
-  addText(s, "“如果换到周四 7—8 节呢？”", 0.94, 5.64, 3.7, 0.34, { fontFace: F.title, fontSize: 13.5, bold: true, color: C.green }, "A04");
-  addText(s, "可以调，但有提醒：调整后教师连续 4 节连堂。", 0.94, 6.0, 3.72, 0.32, { fontSize: 11.2, bold: true, color: C.body }, "A04");
-
-  addText(s, "feasible=true · warning=1 · mutatedData=false", 0.94, 6.34, 3.7, 0.3, { fontSize: 10.5, bold: true, color: C.coralDark }, "A04");
-  screen(s, path.join(qa, "4173-risk-1920x1080.png"), 5.08, 1.84, 7.58, 2.42, "A05", true);
-  screen(s, path.join(qa, "4173-reschedule-1920x1080.png"), 5.08, 4.44, 7.58, 2.42, "A06", true);
+  addText(s, "0", 0.78, 1.82, 1.42, 1.0, { fontSize: 58, bold: true, color: C.green }, "A01");
+  addText(s, "硬冲突", 2.16, 2.16, 1.9, 0.4, { fontSize: 17, bold: true, color: C.green }, "A01");
+  addText(s, "4 次", 0.78, 3.24, 1.82, 0.9, { fontSize: 50, bold: true, color: C.amber }, "A02");
+  addText(s, "转场 / 周", 2.44, 3.53, 1.72, 0.4, { fontSize: 16, bold: true, color: C.amber }, "A02");
+  addText(s, "最短间隔 20 分钟", 0.82, 4.22, 3.2, 0.34, { fontSize: 13, bold: true, color: C.body }, "A02");
+  addShape(s, S.rect, { x: 0.74, y: 5.03, w: 4.04, h: 1.55, fill: { color: C.greenSoft, transparency: 16 }, line: noLine }, "A03", "reschedule-band");
+  addText(s, "可行 · 有提醒 · 未写入", 0.94, 5.3, 3.68, 0.42, { fontFace: F.title, fontSize: 17, bold: true, color: C.green }, "A03");
+  addText(s, "模拟核验不修改真实课表", 0.94, 5.91, 3.68, 0.34, { fontSize: 11.5, bold: true, color: C.body }, "A03");
+  screen(s, path.join(qa, "4173-risk-1920x1080.png"), 5.08, 1.84, 7.58, 2.42, "A04", true);
+  screen(s, path.join(qa, "4173-reschedule-1920x1080.png"), 5.08, 4.44, 7.58, 2.42, "A05", true);
 }
 
 // 08｜教学管理案例：全局到个体，排名是入口不是结论。
@@ -358,14 +355,14 @@ function label(slide, value, x, y, w, color, group) {
   addText(s, "绑定关系", 11.86, 6.09, 1.0, 0.3, { fontSize: 10.5, bold: true }, "A06");
 }
 
-// 10｜为什么相信它：三层职责分开。
+// 10｜技术创新：让理解、事实与上下文各自有边界。
 {
   const s = pptx.addSlide();
-  header(s, 10, "为什么相信它", "三层各做自己最擅长的事", "不是把技术名词堆在一起，而是把“理解、计算、表达”三件事真正分开。");
+  header(s, 10, "技术创新", "技术创新：让任务接得住，让结果核得清", "把多人协作、确定性事实与跨轮次上下文，组织成同一条可复核的任务链。");
   const layers = [
-    { y: 1.91, h: 1.34, fill: C.coralSoft, color: C.coralDark, n: "01", title: "模型听懂人话", body: "识别用户想解决什么问题，决定由谁来处理，再把结果解释清楚。", tech: "多智能体协作", group: "A01" },
-    { y: 3.39, h: 1.56, fill: C.greenSoft, color: C.green, n: "02", title: "工具把事实算清", body: "课表、教室、时间、容量与风险都由确定性工具查询和计算，模型不能自行猜。", tech: "CampusTools", group: "A02" },
-    { y: 5.09, h: 1.34, fill: C.blueSoft, color: C.blue, n: "03", title: "结果让人放心复核", body: "结论、提醒和证据一起进入统一结果卡；失败时不会伪装成成功。", tech: "结果卡与证据", group: "A03" },
+    { y: 1.91, h: 1.34, fill: C.coralSoft, color: C.coralDark, n: "01", title: "多角色接力", body: "主协调听懂目标，专业智能体各自处理课表、风险与全局洞察。", tech: "分工有边界", group: "A01" },
+    { y: 3.39, h: 1.56, fill: C.greenSoft, color: C.green, n: "02", title: "事实单独核验", body: "课表、教室、容量与风险由 CampusTools 计算；模型不能自行补写动态事实。", tech: "结果可复核", group: "A02" },
+    { y: 5.09, h: 1.34, fill: C.blueSoft, color: C.blue, n: "03", title: "追问不用重来", body: "从“谁最忙”到“看他的课表”再到“查他的风险”，同一对象持续传递。", tech: "上下文连续", group: "A03" },
   ];
   layers.forEach((l) => {
     addShape(s, S.rect, { x: 0.72, y: l.y, w: 11.9, h: l.h, fill: { color: l.fill, transparency: 6 }, line: noLine }, l.group, "layer");
@@ -383,7 +380,7 @@ function label(slide, value, x, y, w, color, group) {
   header(s, 11, "真实落地与下一步", "从真实服务长出来，也朝着真实需求走下去", "项目源于已经真实投入使用的校园课表服务；只呈现已发生的真实使用，不虚构活跃度、满意度或增长率。");
   addText(s, "1500+", 0.7, 1.86, 3.5, 0.98, { fontSize: 60, bold: true, color: C.coralDark }, "A01");
   addText(s, "底层课表服务累计用户", 0.76, 2.86, 3.1, 0.36, { fontSize: 16, bold: true }, "A01");
-  addText(s, "本次参赛作品在这些真实需求基础上，从“课表查询”升级为教学时空智能协同系统。", 0.78, 3.36, 3.6, 0.82, { fontSize: 12.5, color: C.body, breakLine: true, valign: "top" }, "A02");
+  addText(s, "本次参赛作品在这些真实需求基础上，从课表查询升级为校园教学时空资源智能体。", 0.78, 3.36, 3.6, 0.82, { fontSize: 12.5, color: C.body, breakLine: true, valign: "top" }, "A02");
   hairline(s, 0.78, 4.32, 3.37, C.line, 1.0, "A02");
   const values = ["减少信息差", "减少重复核对", "降低协调成本", "提前发现风险", "让安排更可解释"];
   values.forEach((value, index) => {
@@ -391,8 +388,15 @@ function label(slide, value, x, y, w, color, group) {
     addText(s, `0${index + 1}`, 0.8, y, 0.42, 0.28, { fontSize: 9, bold: true, color: index % 2 ? C.green : C.coral }, "A03");
     addText(s, value, 1.32, y, 2.77, 0.3, { fontSize: 12.2, bold: true }, "A03");
   });
-  screen(s, path.join(assets, "portal-home-1920x1080-final.png"), 4.7, 1.86, 7.96, 4.5, "A04", true);
-  addText(s, "今天：学生查询 · 教师协同 · 教学运行辅助　→　未来：校园教学时空治理", 4.72, 6.52, 7.92, 0.34, { fontSize: 12.5, bold: true, color: C.coralDark, align: "center" }, "A05");
+  screen(s, path.join(assets, "portal-home-1920x1080-final.png"), 4.7, 1.86, 7.96, 3.38, "A04", true);
+  const roadmap = ["学生高频课表服务", "教师协同与资源推荐", "教学管理风险预警", "教学时空数字化治理"];
+  roadmap.forEach((item, index) => {
+    const x = 4.72 + index * 1.98;
+    const group = `A0${index + 2}`;
+    addText(s, `0${index + 1}`, x, 5.55, 0.38, 0.25, { fontSize: 8.5, bold: true, color: index < 2 ? C.coral : C.green }, group);
+    hairline(s, x, 5.91, 1.62, index < 2 ? C.coral : C.green, 2.1, group);
+    addText(s, item, x, 6.08, 1.72, 0.58, { fontSize: 10.2, bold: true, color: C.body, breakLine: true, valign: "top" }, group);
+  });
 }
 
 // 12｜在线体验与收束。
@@ -415,11 +419,11 @@ function label(slide, value, x, y, w, color, group) {
     addText(s, item.role, item.x + 0.06, 4.86, 3.5, 0.3, { fontSize: 12, bold: true, color: "FFB7A7" }, group);
     addText(s, item.q, item.x + 0.06, 5.16, 3.5, 0.62, { fontSize: 11, color: "F2E8E3", breakLine: true, valign: "top" }, group);
   });
-  addImage(s, imageContain(path.join(assets, "在线演示二维码.png"), 10.94, 5.98, 1.3, 1.3), "A08", "qr");
-  addText(s, "扫码体验", 9.32, 6.06, 1.38, 0.3, { fontSize: 13, bold: true, color: C.white, align: "right" }, "A08");
-  addText(s, "无需账号", 9.56, 6.4, 1.14, 0.26, { fontSize: 10, bold: true, color: "9FDBC8", align: "right" }, "A08");
-  addText(s, "让教学时空，被理解、被安排。", 0.66, 6.02, 7.65, 0.52, { fontFace: F.title, fontSize: 22, bold: true, color: "FFD3C8" }, "A09");
-  addText(s, "adp.katelya.top", 0.68, 6.62, 3.2, 0.28, { fontSize: 12, bold: true, color: C.white }, "A09");
+  addImage(s, imageContain(path.join(assets, "在线演示二维码.png"), 10.94, 5.98, 1.3, 1.3), "A05", "qr");
+  addText(s, "扫码体验", 9.32, 6.06, 1.38, 0.3, { fontSize: 13, bold: true, color: C.white, align: "right" }, "A05");
+  addText(s, "无需账号", 9.56, 6.4, 1.14, 0.26, { fontSize: 10, bold: true, color: "9FDBC8", align: "right" }, "A05");
+  addText(s, "让教学时空，被理解、被安排。", 0.66, 6.02, 7.65, 0.52, { fontFace: F.title, fontSize: 22, bold: true, color: "FFD3C8" }, "A06");
+  addText(s, "adp.katelya.top", 0.68, 6.62, 3.2, 0.28, { fontSize: 12, bold: true, color: C.white }, "A06");
   footer(s, 12, true);
 }
 

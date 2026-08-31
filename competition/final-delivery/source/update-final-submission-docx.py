@@ -18,6 +18,7 @@ PORTAL_HOME = ROOT / "assets" / "portal-home-1920x1080-final.png"
 PORTAL_EXPERIENCE = ROOT / "assets" / "portal-experience-1920x1080-final.png"
 PORTAL_CAPABILITY = ROOT / "assets" / "portal-capability-1920x1080-final.png"
 PORTAL_WIDGET = ROOT / "assets" / "portal-verified-widget-1920x1080-final.png"
+PORTAL_STUDENT_LIVE = ROOT / "qa" / "live-final" / "screenshots" / "04-student-live-1920x1080-final.png"
 
 
 def blocks(document):
@@ -89,6 +90,17 @@ def set_cell_lines(cell, lines: list[str]) -> None:
         set_text_keep_first_run(extra, "")
 
 
+def set_table_grid(table: Table, rows: list[list[str]]) -> None:
+    """Replace table text while retaining the existing visual geometry."""
+    for row_index, values in enumerate(rows):
+        if row_index >= len(table.rows):
+            break
+        for cell_index, value in enumerate(values):
+            if cell_index >= len(table.rows[row_index].cells):
+                break
+            set_cell_lines(table.rows[row_index].cells[cell_index], value.split("\n"))
+
+
 def clear_content(paragraph: Paragraph) -> None:
     for child in list(paragraph._p):
         if child.tag.endswith("}pPr"):
@@ -126,6 +138,8 @@ doc = Document(DOCX)
 # understand or reproduce the work; translate implementation shorthand into
 # clear Chinese and remove build/port/version labels from the narrative.
 visible_replacements = {
+    "同一个 academic_context 作为共享工具形成 14 个 Agent bindings，但唯一 CampusTools 数量仍为 13。": "同一份教学上下文贯穿协作，形成 14 组专业智能体绑定关系；底层仍只有 13 项 CampusTools。",
+    "同一个 共享教学上下文 作为共享工具形成 14 个 专业角色 绑定关系，但唯一 CampusTools 数量仍为 13。": "同一份教学上下文贯穿协作，形成 14 组专业智能体绑定关系；底层仍只有 13 项 CampusTools。",
     "PHASE 3.0  /  FINAL TRUTH FREEZE": "校园教学任务智能体｜设计说明书",
     "Judge Portal 首页：统一品牌、任务入口与比赛叙事。": "在线体验首页：统一呈现作品定位、任务入口与核心场景。",
     "真实 4173 架构场景：Main → Child → CampusTools → Child → Main。": "真实协作链路：主协调 → 专业智能体 → CampusTools → 专业智能体 → 主协调。",
@@ -167,9 +181,14 @@ visible_replacements = {
     "mutatedData=false": "未写入真实课表（mutatedData=false）",
     "mutatedData=false，不绕过审批与审计": "真实课表未写入（mutatedData=false），不绕过审批与审计",
     "所有动态校园结论来自匿名版本化数据、明确输入和可复现算法。": "所有动态校园结论来自匿名数据、明确输入和可复现算法。",
+    "最终对外品牌唯一为“校园智序·小序”；身份线索、真实域名与凭据全部禁止进入产物。": "内部域名、生产内部地址、私人服务地址及访问凭据不得进入提交产物；公开评审演示域名 adp.katelya.top 除外。",
+    "本阶段不改生产配置、不直接部署": "演示站独立部署并提供公开评审入口；ADP 与其它生产配置通过受控发布流程管理",
+    "最终地址与二维码提交前人工加入": "公开评审入口与二维码已写入最终提交材料",
+    "从排课辅助出发，可扩展到资源调度、教学运行治理与跨部门协同。": "从真实课表服务出发，可扩展到资源调度、教学运行治理与跨部门协同。",
 }
 
 term_replacements = {
+    "academic_context": "共享教学上下文",
     "Main → Child → Main": "主协调 → 专业智能体 → 主协调",
     "Main → Child → CampusTools → Child → Main": "主协调 → 专业智能体 → CampusTools → 专业智能体 → 主协调",
     "领域 Agent": "专业智能体",
@@ -225,6 +244,13 @@ for paragraph in all_paragraphs(doc):
 # turn the risk page into the student scenario, and give each scenario a
 # role-facing title so the narrative follows “who is using it → what it does”.
 narrative_replacements = {
+    "项目摘要": "一句话定义",
+    "真实需求与痛点": "真实需求来源",
+    "已落地验证": "三类用户与需求",
+    "多智能体协作机制": "三角色能力地图",
+    "功能模块与确定性事实层": "多智能体协作机制",
+    "数据模型": "CampusTools 确定性事实层",
+    "算法原理": "算法与数据模型",
     "应用场景一｜教学风险发现": "应用场景一｜学生的一天",
     "没有冲突，不等于没有风险": "一句话查课，也能继续追问",
     "应用场景二｜多人协同规划": "应用场景二｜教师协同规划",
@@ -241,6 +267,20 @@ for paragraph in all_paragraphs(doc):
     if updated != original:
         set_text_keep_first_run(paragraph, updated)
 
+# Earlier cascading replacements could duplicate the page-13 slogan. Keep one
+# headline and separate the verified decision state as its own subtitle.
+for paragraph in all_paragraphs(doc):
+    value = paragraph.text.strip()
+    if value.startswith("没有冲突，不等于来得及；"):
+        set_text_keep_first_run(paragraph, "没有冲突，不等于来得及；可以调，也不等于没有提醒")
+    elif value.startswith("第1周周一5–6节"):
+        set_text_keep_first_run(paragraph, "可行 · 有提醒 · 不写入真实课表")
+    elif value.startswith("板块时间、教师时间"):
+        set_text_keep_first_run(
+            paragraph,
+            "第1周周一5–6节 → 周四7–8节；自动推荐 A1-201。班级、教师、教室占用与容量逐项核验。",
+        )
+
 # Rebuild the abstract table around the three roles instead of the old
 # “what it solves / why it is trustworthy” framing.  The real table is a
 # single row with two multi-paragraph cells, so match by prefix and fill
@@ -254,7 +294,7 @@ ROLE_TABLE_LEFT = [
 ]
 ROLE_TABLE_RIGHT = [
     "小序怎样回答",
-    "一句话查询班级 / 教师课表与空教室，连续追问不丢上下文",
+    "一句话查询班级 / 教师课表与空教室，支持连续追问与共享上下文",
     "共同空闲计算、教室推荐与调课前模拟核验",
     "负载排名、对象定位与逐层风险下钻",
     "查、算、筛、验、解释，一次任务内完成",
@@ -264,6 +304,64 @@ for table in doc.tables:
         set_cell_lines(table.rows[0].cells[0], ROLE_TABLE_LEFT)
         set_cell_lines(table.rows[0].cells[1], ROLE_TABLE_RIGHT)
         break
+
+# The first ten pages now follow the judging logic: what it is → where the
+# need came from → who uses it → how it works.  These are surgical edits on
+# the retained 20-page template, so all typography and page furniture remain.
+front_matter_replacements = {
+    "把一句话，变成可核验的校园任务": "学生查课与找空间，教师协同与调课，管理者看全局与查风险",
+    "围绕真实问题组织协作，把复杂教学时空转化为可执行、可复现的辅助决策。": "小序是面向学生、教师与教学管理者的校园教学时空资源智能体。",
+    "课表没有冲突，不代表教学安排没有风险": "从 1500+ 底层课表服务，走向教学时空协同",
+    "校园教学任务跨越时间、空间、人群与规则；单一查询只能看到其中一层。": "真实使用证明了查询需求，也让我们看到：查得到，不等于安排得合理。",
+    "匿名演示数据中的教学风险发现：冲突为 0，但教学空间转场持续发生。": "查询只是第一步；真正复杂的是人员、时间、空间、课程与规则之间的关系。",
+    "真正的问题不是“能不能排”，而是“排完之后是否仍然可行、合理、可解释”。": "底层校园课表服务累计服务用户达到 1500+；本次作品是在真实需求上的能力升级。",
+    "累计真实用户 1500+": "同一套教学时空，三类人有不同问题",
+    "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。真实使用反馈推动作品从查询工具演进为可理解、可核验的校园教学任务智能体。": "学生需要查课与找空间，教师需要协同与调课，教学管理者需要看全局与查风险。",
+    "在线体验首页：统一呈现作品定位、任务入口与核心场景。": "在线体验先呈现三类用户，再说明背后的智能体与工具。",
+    "理解、分工、核验、回收：每一步都受边界约束": "先讲谁在用，再讲背后怎样实现",
+    "四个角色共享协议与事实层，但各自承担清晰、不可混淆的职责。": "三类用户从同一句话入口进入，系统再由专业角色接力完成任务。",
+    "模型负责理解，工具负责把事实算清": "主协调组织任务，专业智能体完成领域核验",
+    "所有动态校园结论来自匿名数据、明确输入和可复现算法。": "四个智能体共享同一事实层，但主协调不直接调用 CampusTools。",
+    "匿名数据，让教学时空可以计算": "模型可以理解，但不能编造校园事实",
+    "所有核心场景统一使用同一份匿名演示数据，查询、计算与核验结果可以稳定复现。": "13 项 CampusTools 对课表、空间、协同、风险与洞察进行确定性查询和计算。",
+    "算法不是黑箱：每一步都能复现": "从自然语言到核验结果，每一步都能解释",
+    "每一步都能解释“候选为何进入、为何被筛掉、最终为何被推荐”。": "统一数据模型把课程、教师、班级、教室、教学周与节次连接起来。",
+}
+for paragraph in all_paragraphs(doc):
+    value = paragraph.text.strip()
+    if value in front_matter_replacements:
+        set_text_keep_first_run(paragraph, front_matter_replacements[value])
+
+for table in doc.tables:
+    text = "\n".join(cell.text for row in table.rows for cell in row.cells)
+    if "课程冲突" in text and "最短转场间隔" in text:
+        set_table_grid(table, [["1500+\n底层服务用户", "查询 ≠\n合理安排", "人 × 时 × 空 × 规则\n真正复杂关系"]])
+    elif "累计服务用户" in text and "校园使用环境" in text:
+        set_table_grid(table, [["学生\n查课与找空间", "教师\n协同与调课", "教学管理者\n看全局与查风险"]])
+    elif "主协调" in text and "课表" in text and "洞察" in text and "层" in text:
+        set_table_grid(table, [
+            ["角色", "高频问题", "小序提供的能力"],
+            ["学生", "我的课在哪？哪里有空教室？", "查课表、连续追问、找空教室、一日安排"],
+            ["教师", "大家何时都空？这门课能不能调？", "共同空闲、教室推荐、转场风险、模拟调课"],
+            ["教学管理者", "谁最忙？哪里可能有风险？", "负载排名、资源分析、对象定位、风险下钻"],
+            ["实现层", "自然语言统一入口", "多智能体协作 + CampusTools 确定性事实层"],
+        ])
+    elif "唯一工具" in text and "关键结论可回放" in text:
+        set_table_grid(table, [["4\n智能体", "13\nCampusTools", "14\n协作绑定"]])
+    elif "时间与空间" in text and "风险与洞察" in text:
+        set_table_grid(table, [[
+            "专业分工\n主协调：理解、路由、汇总\n课程空间：查课、教室与共同空闲\n风险规划：冲突、转场与模拟调课",
+            "协作路径\n用户问题 → 主协调 → 专业智能体\n专业智能体 → CampusTools → 专业智能体\n最后回到主协调统一解释",
+        ]])
+    elif "校区" in text and "匿名教学单位" in text and "班级" in text and "教师" in text:
+        set_table_grid(table, [["13\n唯一工具", "0\n主协调直接工具", "14\n专业角色绑定", "1\n共享教学上下文"]])
+    elif "课程" in text and "教室" in text and "课次" in text and "数据哈希" in text:
+        set_table_grid(table, [["明确输入\n对象与时间", "确定性计算\n查询与集合运算", "约束核验\n容量、占用与风险", "可复现结果\n同一输入同一结论"]])
+    elif "核心关系" in text and "版本纪律" in text:
+        set_table_grid(table, [[
+            "工具能力\n课表与对象查询\n空教室与共同空闲\n风险检查与模拟调课\n负载与空间使用分析",
+            "可信边界\n匿名数据先校验再使用\n关键结果保留核验依据\n条件变化必须重新调用工具\n缺失或损坏时保守返回",
+        ]])
 
 # Lock the only updated landing fact and the final narrative line throughout the editable document.
 for paragraph in all_paragraphs(doc):
@@ -278,23 +376,23 @@ for paragraph in all_paragraphs(doc):
 for paragraph in doc.paragraphs:
     value = paragraph.text.strip()
     if value.startswith("前期产品形态累计服务用户"):
-        set_text_keep_first_run(paragraph, "累计真实用户 1500+")
+        set_text_keep_first_run(paragraph, "底层课表服务用户 1500+")
     elif value.startswith("作品并非从概念页起步"):
         set_text_keep_first_run(
             paragraph,
-            "项目源于已经真实投入使用的校园课表服务，底层服务累计服务用户已达到 1500+。本次参赛作品在这些真实需求基础上，进一步从“课表查询”升级为面向学生、教师与教学管理者的教学时空智能协同系统。",
+            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
         )
     elif value.startswith("对外材料仅保留"):
         set_text_keep_first_run(
             paragraph,
-            "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。匿名评审不展示学校、学院、姓名、学号、真实内部地址或任何账号凭证。",
+            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。匿名评审不展示学校、学院、姓名、学号、内部服务地址或任何账号凭证；公开评审域名除外。",
         )
     elif value.startswith("让教学时空，被理解"):
         set_text_keep_first_run(paragraph, "让教学时空，被理解、被安排。")
     elif value.startswith("总结："):
         set_text_keep_first_run(
             paragraph,
-            "总结：作品已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡负责把结论与核验依据清楚地呈现给人。",
+            "总结：底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡呈现核验依据。",
         )
 
 # Role-facing scenario copy.  NOTE: match the pristine document's real
@@ -319,12 +417,12 @@ for paragraph in all_paragraphs(doc):
 
 # Scenario 1 is now the student day: swap the teacher-risk stat card
 # (0 conflicts / 4 transitions / 20 minutes) for real student capability
-# facts — one sentence, four query object kinds, zero context loss.
+# facts — one sentence, four query object kinds, and continuous follow-up.
 # The teacher-risk numbers stay on page 03 (真实需求与痛点) and page 14.
 STUDENT_STAT_CARDS = [
     ["1", "句话完成"],
     ["4", "类查询对象"],
-    ["0", "上下文丢失"],
+    ["连续", "追问"],
 ]
 doc_items = list(blocks(doc))
 scenario_one_start = heading_index(doc_items, "11  /")
@@ -333,7 +431,7 @@ for item in doc_items[scenario_one_start + 1 :]:
         break
     if isinstance(item, Table):
         cells = item.rows[0].cells
-        if any("冲突 / 周" in cell.text for cell in cells):
+        if any("冲突 / 周" in cell.text or "上下文丢失" in cell.text for cell in cells):
             for cell, lines in zip(cells, STUDENT_STAT_CARDS):
                 set_cell_lines(cell, lines)
             break
@@ -349,7 +447,7 @@ for paragraph in all_paragraphs(doc):
 
 # Cover: insert the frozen product definition right above the brand claim.
 inserted_definition = any(
-    paragraph.text.strip().startswith("面向学生、教师与教学管理者的校园教学时空智能协同系统")
+    paragraph.text.strip().startswith("面向学生、教师与教学管理者的校园教学时空资源智能体")
     for paragraph in doc.paragraphs
 )
 for paragraph in doc.paragraphs:
@@ -361,7 +459,7 @@ for paragraph in doc.paragraphs:
         new_paragraph = Paragraph(new_element, paragraph._parent)
         set_text_keep_first_run(
             new_paragraph,
-            "面向学生、教师与教学管理者的校园教学时空智能协同系统：用一句自然语言，统一完成课表查询、空间查找、多人协同、调课核验与教学运行分析。",
+            "面向学生、教师与教学管理者的校园教学时空资源智能体：学生查课与找空间，教师协同与调课，管理者看全局与查风险。",
         )
         for run in new_paragraph.runs:
             run.font.size = Pt(13)
@@ -373,7 +471,7 @@ for paragraph in doc.paragraphs:
 # Scenario 1 (student day) carries the capability page full-width; page 15
 # keeps the verified-widget replay capture.
 replace_page_images(doc, "04  /", [(PORTAL_HOME, 7.22)])
-replace_page_images(doc, "11  /", [(PORTAL_CAPABILITY, 7.22)])
+replace_page_images(doc, "11  /", [(PORTAL_STUDENT_LIVE, 7.22)])
 replace_page_images(doc, "15  /", [(PORTAL_WIDGET, 7.22)])
 
 doc.core_properties.title = "校园智序·小序—智能体设计说明书"

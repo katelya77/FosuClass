@@ -12,7 +12,7 @@ export interface AgentQuestionGroup {
 }
 
 /**
- * Final-facing question library derived from the frozen R51 prompts, 13 CampusTools
+ * Final-facing question library aligned with the frozen prompts and 13 CampusTools
  * and the seven result-card variants. Golden marks only the four verified Hero paths;
  * the remaining entries are supported deterministic-tool examples, not extra claims.
  */

@@ -38,7 +38,7 @@ export const GENERAL_EXPERIENCE: ExperienceCase = {
   steps: ["理解对象与时间", "转交对应专业智能体", "用 CampusTools 核验并返回结果卡"],
   context: [
     { label: "协作", value: "主协调 → 专业智能体 → 主协调" },
-    { label: "能力", value: "4 Agent · 13 CampusTools" },
+    { label: "能力", value: "4 个智能体 · 13 项 CampusTools" },
     { label: "结果", value: "已核验 · 核验依据 · 结果卡" },
   ],
   icon: Sparkles,
@@ -69,7 +69,7 @@ export const EXPERIENCE_CASES: ExperienceCase<HeroCaseKey>[] = [
     eyebrow: "02 · 多人协同",
     shortPrompt: "帮教师005、006、014找共同空闲教室",
     fullPrompt:
-      "帮教师005、教师006、教师014寻找第1周周四上午的共同空闲，并推荐一间满足需求的教室。",
+      "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
     taskLabel: "为三位教师找一段共同空闲与合适教室",
     steps: ["拆解三位教师课表", "计算共同空闲", "筛选满足容量的教室"],
     context: [

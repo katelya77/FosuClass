@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "qa:capture": "node qa/capture.mjs",
-    "qa:final": "node qa/final-capture.mjs"
+    "qa:final": "node qa/final-capture.mjs",
+    "qa:live-evidence": "node qa/live-evidence.mjs",
+    "qa:production-capture": "node qa/capture-final-production.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -31,7 +33,7 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "jsdom": "^27.0.0",
-    "puppeteer-core": "^24.15.0",
+    "puppeteer-core": "^25.9.0",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.9.2",
     "vite": "^7.1.9",

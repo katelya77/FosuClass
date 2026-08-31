@@ -37,7 +37,7 @@ const ROLE_CARDS: Array<{
     name: "学生",
     color: "#d9593f",
     question: "“今天有什么课？附近哪里有空教室？”",
-    points: ["一句话查课表", "连续追问不丢上下文", "找空教室与可用空间"],
+    points: ["一句话查课表", "连续追问", "找空教室", "今日安排"],
     routeCase: "query",
   },
   {
@@ -45,7 +45,7 @@ const ROLE_CARDS: Array<{
     name: "教师",
     color: "#237f69",
     question: "“我们什么时候都空？调到新时间行不行？”",
-    points: ["多人共同空闲与教室推荐", "教学空间转场风险提醒", "调课前模拟核验"],
+    points: ["多人共同空闲", "教室推荐", "教学空间转场风险", "模拟调课"],
     routeCase: "collaboration",
   },
   {
@@ -53,7 +53,7 @@ const ROLE_CARDS: Array<{
     name: "教学管理者",
     color: "#507ba0",
     question: "“谁最忙？哪里可能有风险？”",
-    points: ["全局负载总览", "风险对象定位", "逐层下钻看原因"],
+    points: ["全局负载", "空间利用", "风险对象定位", "下钻原因"],
     routeCase: "insight",
   },
 ];

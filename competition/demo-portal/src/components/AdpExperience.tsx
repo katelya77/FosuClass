@@ -4,7 +4,6 @@ import {
   Bot,
   CheckCircle2,
   CirclePlay,
-  ExternalLink,
   LoaderCircle,
   ShieldCheck,
   Square,
@@ -16,8 +15,6 @@ import {
   ADP_CHAT_API_URL,
   ADP_DIAGNOSTICS_STORAGE_KEY,
   getPersistentConversationId,
-  resolveAdpConfig,
-  type AdpFrameConfig,
 } from "../lib/adp";
 import {
   consumeSseBuffer,
@@ -31,7 +28,6 @@ import { cn } from "../lib/cn";
 import { AdpWidget, type AdpWidgetAction } from "./AdpWidget";
 
 interface AdpExperienceProps {
-  config?: AdpFrameConfig;
   className?: string;
   initialPrompt?: string;
   showHeader?: boolean;
@@ -68,9 +64,9 @@ export interface DiagnosticsSnapshot {
 }
 
 const QUICK_PROMPTS = [
-  "未来四周教师负载最高的是谁？",
-  "检查 Top1 未来四周的教学空间转场风险。",
-  "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
+  { role: "学生", prompt: "查看2025级计算机类01班第1周课表。" },
+  { role: "教师", prompt: "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。" },
+  { role: "教学管理", prompt: "未来四周谁的教学负载最高？" },
 ];
 
 export function saveDiagnostics(snapshot: DiagnosticsSnapshot): void {
@@ -132,8 +128,8 @@ function VerifiedReplay({ onLive }: { onLive: () => void }): React.ReactElement 
           <p className="mt-1 text-[11px] text-mute">真实成功会话证据 · 非实时请求 · 不消耗 ADP 配额</p>
         </div>
         <div className="native-adp__mode-switch" aria-label="体验模式">
-          <button type="button" onClick={onLive}>Live ADP</button>
-          <button type="button" className="is-active" aria-pressed="true">Verified Replay</button>
+          <button type="button" onClick={onLive}>实时体验</button>
+          <button type="button" className="is-active" aria-pressed="true">已核验回放</button>
         </div>
       </header>
 
@@ -148,7 +144,7 @@ function VerifiedReplay({ onLive }: { onLive: () => void }): React.ReactElement 
 
       <div className="native-adp__replay-body">
         <div className="native-adp__replay-copy">
-          <span className="native-adp__replay-seal">VERIFIED RECORDING · {VERIFIED_REPLAY.capturedAt}</span>
+          <span className="native-adp__replay-seal">已核验实录 · {VERIFIED_REPLAY.capturedAt}</span>
           <p className="native-adp__replay-question">{VERIFIED_REPLAY.question}</p>
           <div className="native-adp__replay-steps">
             {VERIFIED_REPLAY.steps.slice(1).map((step, index) => (
@@ -157,13 +153,13 @@ function VerifiedReplay({ onLive }: { onLive: () => void }): React.ReactElement 
           </div>
           <div className="native-adp__replay-result">
             <CheckCircle2 size={17} />
-            <div><strong>{VERIFIED_REPLAY.answer}</strong><small>WidgetId {VERIFIED_REPLAY.widgetId.slice(0, 8)}… · 证据 SHA-256 {VERIFIED_REPLAY.evidenceSha256.slice(0, 12)}…</small></div>
+            <div><strong>{VERIFIED_REPLAY.answer}</strong><small>结果卡编号 {VERIFIED_REPLAY.widgetId.slice(0, 8)}… · 核验摘要 {VERIFIED_REPLAY.evidenceSha256.slice(0, 12)}…</small></div>
           </div>
         </div>
         <figure className="native-adp__replay-evidence">
-          <div className="native-adp__replay-capture-label"><ShieldCheck size={13} /> 真实 ADP Widget 成功画面</div>
-          <img src={VERIFIED_REPLAY.image} alt="真实成功会话中由官方 ADP Widget SDK 渲染的已核验教师负载结果卡" />
-          <figcaption>截图来自已成功完成的 Native SSE 会话；回放不重新构造 Widget.View。</figcaption>
+          <div className="native-adp__replay-capture-label"><ShieldCheck size={13} /> 真实结果卡成功画面</div>
+          <img src={VERIFIED_REPLAY.image} alt="真实成功会话中渲染的已核验教师负载结果卡" />
+          <figcaption>截图来自已经成功完成的真实会话；回放不会重新计算或伪造结果。</figcaption>
         </figure>
       </div>
     </section>
@@ -171,13 +167,11 @@ function VerifiedReplay({ onLive }: { onLive: () => void }): React.ReactElement 
 }
 
 export function AdpExperience({
-  config,
   className,
-  initialPrompt = QUICK_PROMPTS[0],
+  initialPrompt = QUICK_PROMPTS[0].prompt,
   showHeader = true,
   recordMode = false,
 }: AdpExperienceProps): React.ReactElement {
-  const cfg = config ?? resolveAdpConfig();
   const conversationId = useMemo(() => getPersistentConversationId(), []);
   const [input, setInput] = useState(initialPrompt);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -358,9 +352,9 @@ export function AdpExperience({
   const rail = [
     { label: recordMode ? "用户问题" : "用户", active: turns.length > 0, icon: ArrowUp },
     { label: recordMode ? "主协调" : "小序·主协调", active: execution.agentNames.length > 0, icon: Bot },
-    { label: recordMode ? "专业 Agent" : childAgent || "领域 Agent", active: execution.agentNames.length > 1, icon: Bot },
+    { label: recordMode ? "专业智能体" : childAgent || "专业智能体", active: execution.agentNames.length > 1, icon: Bot },
     { label: "CampusTools", active: execution.toolNames.length > 0, icon: Wrench },
-    { label: recordMode ? "Widget" : "已核验结果", active: Boolean(execution.widget) || execution.status === "completed", icon: ShieldCheck },
+    { label: recordMode ? "结果卡" : "已核验结果", active: Boolean(execution.widget) || execution.status === "completed", icon: ShieldCheck },
   ];
 
   if (mode === "replay" && !recordMode) {
@@ -374,19 +368,15 @@ export function AdpExperience({
           <div>
             <div className="flex items-center gap-2">
               <span className={cn("native-adp__live", isRunning && "animate-pulse")} />
-              <p className="text-sm font-semibold text-ink">{recordMode ? "真实 ADP 运行" : "Native ADP API · 真实对话"}</p>
+              <p className="text-sm font-semibold text-ink">{recordMode ? "真实智能体运行" : "真实智能体对话"}</p>
             </div>
-            <p className="mt-1 text-[11px] text-mute">{recordMode ? "问题、协作、工具与结果依次到达" : "密钥仅存在服务端 · 官方 SSE 事件直达"}</p>
+            <p className="mt-1 text-[11px] text-mute">{recordMode ? "问题、协作、工具与结果依次到达" : "访问凭证仅保存在服务端 · 执行过程实时返回"}</p>
           </div>
           {!recordMode && <div className="native-adp__header-actions flex items-center gap-2">
             <div className="native-adp__mode-switch" aria-label="体验模式">
-              <button type="button" className="is-active" aria-pressed="true">Live ADP</button>
-              <button type="button" onClick={() => setMode("replay")}>Verified Replay</button>
+              <button type="button" className="is-active" aria-pressed="true">实时体验</button>
+              <button type="button" onClick={() => setMode("replay")}>已核验回放</button>
             </div>
-            <a href="#/adp-diagnostics" className="glass-button px-3 py-1.5 text-xs">诊断</a>
-            <a className="glass-button px-3 py-1.5 text-xs" href={cfg.externalWebimUrl} target="_blank" rel="noreferrer noopener">
-              <ExternalLink size={13} /> 官方体验
-            </a>
           </div>}
         </header>
       )}
@@ -400,10 +390,22 @@ export function AdpExperience({
       </div>
 
       <div className="native-adp__conversation">
+        {turns.length > 1 && (
+          <div className="native-adp__context-proof" aria-label="同一会话连续追问轨迹">
+            <strong>同一会话</strong>
+            {turns.map((turn, index) => (
+              <span key={turn.id} title={turn.question}>
+                <b>{index + 1}</b>
+                {turn.question || "结果卡操作"}
+                {turn.widget && <CheckCircle2 size={12} aria-label="已返回结果卡" />}
+              </span>
+            ))}
+          </div>
+        )}
         {turns.length === 0 ? (
           <div className="native-adp__empty">
             <img src="/branding/platform-logo.png" alt="小序" />
-            <div><p>{recordMode ? "发送问题，观看真实协作过程" : "问一句，看到真实 Multi-Agent 怎么做"}</p><span>生成模型负责理解任务，CampusTools 负责事实。</span></div>
+            <div><p>{recordMode ? "发送问题，观看真实协作过程" : "问一句，看小序怎样理解、计算并核验"}</p><span>模型负责理解任务，CampusTools 负责计算事实。</span></div>
           </div>
         ) : (
           turns.map((turn, index) => {
@@ -429,7 +431,7 @@ export function AdpExperience({
                   ) : null}
                   {turn.widget && (
                     <div className="native-adp__widget">
-                      <div className="native-adp__widget-label"><CheckCircle2 size={14} /> {recordMode ? "已核验结果" : "官方 ADP Widget"}</div>
+                      <div className="native-adp__widget-label"><CheckCircle2 size={14} /> {recordMode ? "已核验结果" : "官方结果卡"}</div>
                       <AdpWidget widget={turn.widget} disabled={isRunning} onAction={onWidgetAction} onRendered={() => {
                         setWidgetRendered(true);
                         saveDiagnostics(buildDiagnostics(execution, conversationId, true));
@@ -450,7 +452,11 @@ export function AdpExperience({
           </div>
         )}
         {!recordMode && <div className="native-adp__quick-prompts">
-          {QUICK_PROMPTS.map((prompt, index) => <button key={prompt} onClick={() => setInput(prompt)} disabled={isRunning}>{index + 1}. {prompt}</button>)}
+          {QUICK_PROMPTS.map(({ role, prompt }) => (
+            <button key={role} aria-label={`Quick Start · ${role}`} onClick={() => setInput(prompt)} disabled={isRunning}>
+              <strong>{role}</strong><span>{prompt}</span>
+            </button>
+          ))}
         </div>}
         <div className="native-adp__input-row">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {
