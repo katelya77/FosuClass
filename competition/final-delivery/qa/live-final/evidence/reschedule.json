@@ -1,0 +1,513 @@
+{
+  "key": "reschedule",
+  "role": "教师调课",
+  "baseUrl": "https://adp.katelya.top",
+  "startedAt": "2026-08-31T22:13:31.388Z",
+  "completedAt": "2026-08-31T22:14:54.931Z",
+  "conversationSha256": "0135f3977ea831b199608833d511a12162fb0f25e285866eefb222614010f976",
+  "requestedPrompt": "将周一5–6节模拟调整到周四7–8节，是否可行？",
+  "adjustmentReason": "短句首次真实运行仅路由到 campus_day_plan，240 秒内未返回结果卡；为保持同一调课含义并让确定性工具获得必要参数，补充班级、课程与教学周。",
+  "verificationNote": null,
+  "expected": [
+    "campus_reschedule_feasibility",
+    "可行",
+    "风险提示 / 现存风险 / 轻微负荷风险 / 轻度连堂负荷 / 轻微负荷预警 / 风险预警 / 教学疲劳风险",
+    "A1-201",
+    "120",
+    "不修改真实课表 / 没有修改真实课表 / 未写入真实课表"
+  ],
+  "missingExpected": [],
+  "turns": [
+    {
+      "input": "模拟把2025级计算机类01班第1周周一第5-6节的数据结构课调整到第1周周四第7-8节，不指定教室，请帮我自动选择合适教室，并检查可行性和风险。",
+      "startedAt": "2026-08-31T22:13:31.390Z",
+      "completedAt": "2026-08-31T22:14:53.423Z",
+      "durationMs": 82033,
+      "status": 200,
+      "requestId": "6b35c5a8-45e0-45e5-8a83-538a3b422852",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 305,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-风险规划"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_reschedule_feasibility"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_a527d180576d4ce6",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#EEFAF4",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "调课模拟",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "模拟",
+                              "color": "warning",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            },
+                            {
+                              "type": "Badge",
+                              "label": "已核验",
+                              "color": "success",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "调课可行性模拟结果",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "2025级计算机类01班数据结构课程调整核验",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "本次调课模拟可行，无教师、班级、教室的时间冲突，自动匹配推荐教室为校区A A1-201，仅存在教师连续4节的连堂负荷风险；本次为可行性模拟，未修改真实课表。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "针对2025级计算机类01班第1周周一第5-6节数据结构课，模拟调整至第1周周四第7-8节（不指定教室）的可行性、教室匹配及风险核验",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "核心核验结果-0",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "核心核验结果",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "核心核验结果-调整可行性-0",
+                          "gap": 2,
+                          "align": "start",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "可行",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "调整可行性",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "核心核验结果-冲突检查-1",
+                          "gap": 2,
+                          "align": "start",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "无教师、班级、教室的时间冲突，教室容量、教学功能均满足课程要求",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "冲突检查",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "核心核验结果-推荐教室-2",
+                          "gap": 2,
+                          "align": "start",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区A A1-201（容量120人，同校区共8间符合条件的空闲教室可供选择）",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "推荐教室",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "风险提示-1",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "风险提示",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "风险提示-连续教学负荷-0",
+                          "gap": 2,
+                          "align": "start",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "调整后授课教师将连续开展4节教学，存在一定的连堂负荷压力",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "连续教学负荷",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "重要说明-2",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "重要说明",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "重要说明-操作性质-0",
+                          "gap": 2,
+                          "align": "start",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "这是可行性模拟，没有修改真实课表。",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "操作性质",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "action-confirm",
+                      "label": "确认采用推荐方案",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "确认采用本次模拟的调课方案，将2025级计算机类01班第1周数据结构课调整至周四第7-8节A1-201教室"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "action-check-alt-rooms",
+                      "label": "查看其他可选教室",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "查看本次调课目标时段其余符合条件的空闲教室"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "1.0",
+          "variant": "reschedule",
+          "status": "success",
+          "title": "调课可行性模拟结果",
+          "subtitle": "2025级计算机类01班数据结构课程调整核验",
+          "verified": true,
+          "summary": "本次调课模拟可行，无教师、班级、教室的时间冲突，自动匹配推荐教室为校区A A1-201，仅存在教师连续4节的连堂负荷风险；本次为可行性模拟，未修改真实课表。",
+          "context": "针对2025级计算机类01班第1周周一第5-6节数据结构课，模拟调整至第1周周四第7-8节（不指定教室）的可行性、教室匹配及风险核验",
+          "sections": [
+            {
+              "title": "核心核验结果",
+              "rows": [
+                {
+                  "label": "调整可行性",
+                  "value": "可行"
+                },
+                {
+                  "label": "冲突检查",
+                  "value": "无教师、班级、教室的时间冲突，教室容量、教学功能均满足课程要求"
+                },
+                {
+                  "label": "推荐教室",
+                  "value": "校区A A1-201（容量120人，同校区共8间符合条件的空闲教室可供选择）"
+                }
+              ]
+            },
+            {
+              "title": "风险提示",
+              "rows": [
+                {
+                  "label": "连续教学负荷",
+                  "value": "调整后授课教师将连续开展4节教学，存在一定的连堂负荷压力"
+                }
+              ]
+            },
+            {
+              "title": "重要说明",
+              "rows": [
+                {
+                  "label": "操作性质",
+                  "value": "这是可行性模拟，没有修改真实课表。"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "action-confirm",
+              "label": "确认采用推荐方案",
+              "payload": {
+                "query": "确认采用本次模拟的调课方案，将2025级计算机类01班第1周数据结构课调整至周四第7-8节A1-201教室"
+              },
+              "type": "sys.chat"
+            },
+            {
+              "id": "action-check-alt-rooms",
+              "label": "查看其他可选教室",
+              "payload": {
+                "query": "查看本次调课目标时段其余符合条件的空闲教室"
+              },
+              "type": "sys.chat"
+            }
+          ],
+          "displayMeta": {
+            "recoverable": true,
+            "simulated": true,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "result-card",
+          "weekBoardTitle": "",
+          "weekBoardSubtitle": "",
+          "days": []
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    }
+  ],
+  "ok": true
+}

@@ -243,7 +243,7 @@ function label(slide, value, x, y, w, color, group) {
   const turns = [
     { n: "01", q: "“查看 01 班第 1 周课表。”", d: "先查清课程安排", c: C.coral, group: "A01" },
     { n: "02", q: "“只看周三。”", d: "沿用班级与周次", c: C.amber, group: "A02" },
-    { n: "03", q: "“下午哪里有空教室？”", d: "继续查询可用空间", c: C.green, group: "A03" },
+    { n: "03", q: "“继续看周三下午，哪里有空教室？”", d: "沿用对象与周次，继续找空间", c: C.green, group: "A03" },
   ];
   turns.forEach((item, index) => {
     const y = 1.94 + index * 1.28;
@@ -408,7 +408,7 @@ function label(slide, value, x, y, w, color, group) {
   addText(s, "匿名访问，无需测试账号；三类角色的问题都可以直接试。", 0.66, 2.19, 5.26, 0.42, { fontSize: 13, color: "E9DDD7" }, "A01");
   screen(s, path.join(assets, "portal-home-1920x1080-final.png"), 0.66, 2.66, 3.62, 2.04, "A02", true);
   screen(s, path.join(assets, "portal-capability-1920x1080-final.png"), 4.5, 2.66, 3.62, 2.04, "A03", true);
-  screen(s, path.join(assets, "portal-verified-widget-1920x1080-final.png"), 8.34, 2.66, 3.62, 2.04, "A04", true);
+  screen(s, path.join(assets, "portal-verified-widget-1920x1080-final.png"), 8.34, 2.66, 3.62, 2.04, "A03", true);
   const roleQuestions = [
     { x: 0.66, role: "学生", q: "“查看2025级计算机类01班\n第1周课表。”" },
     { x: 4.5, role: "教师", q: "“帮三位老师找周四上午\n的共同空闲。”" },

@@ -1,11 +1,12 @@
 {
   "schema": "campus-intelligence-final-truth/v1",
-  "frozenAt": "2026-08-24T00:00:00+08:00",
+  "frozenAt": "2026-09-01T06:00:00+08:00",
   "baseline": {
-    "sourceBranch": "deploy/demo-portal",
-    "sourceCommit": "28e816e",
-    "deliveryBranch": "deliver/competition-final",
-    "deliveryPhase": "PHASE 3.1 — FINAL CUT"
+    "sourceBranch": "main",
+    "sourceCommit": "c55ef3bc763d75a9dbac52c56b90a2bd56348df0",
+    "portalDeployBranch": "deploy/demo-portal",
+    "portalDeployCommit": "838510e4fd97b945805dd384bc9d5095c43cc2d6",
+    "deliveryPhase": "FINAL JUDGE PACKAGE"
   },
   "brand": {
     "product": "校园智序·小序",
@@ -18,7 +19,7 @@
       "可核查 Widget",
       "辅助决策"
     ],
-    "anonymousAdoptionClaim": "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。"
+    "anonymousAdoptionClaim": "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。"
   },
   "architecture": {
     "agents": [
@@ -90,7 +91,7 @@
     "deterministicTextFallback": true,
     "failClosed": true,
     "showcasePort": 4173,
-    "judgePortalPort": 4174,
+    "judgePortalUrl": "https://adp.katelya.top/",
     "judgePortalMode": "native-adp-sse",
     "widgetRenderer": "official-adp-widget-sdk",
     "isSubAgentFieldObserved": false,
@@ -181,11 +182,14 @@
     "historicalDataVersionsAllowedInFinalFacingArtifacts": false,
     "realAdpOperationRequiredInVideo": true,
     "manualConsoleExportsRequired": true,
-    "productionDeploymentAllowed": false
+    "productionDeploymentAllowed": true,
+    "productionDeploymentId": "64abc3b1-04f1-4740-889f-c8e32dd2bafd"
   },
   "status": {
     "repository": "REPO_GOLDEN",
-    "pr49": "OPEN",
+    "pr57": "MERGED",
+    "productionPortal": "DEPLOYED_AND_PUBLICLY_VERIFIED",
+    "liveCases": "4_OF_4_PASS",
     "runtimeCoreModifiedByFinalDelivery": false,
     "campusToolSemanticsModifiedByFinalDelivery": false,
     "bindingsModifiedByFinalDelivery": false,

@@ -1,0 +1,3 @@
+本目录保存正式部署后四组真实 ADP 调用的脱敏输入、可见结果、Widget.View、Agent/Tool、时间戳与页面 QA。
+会话标识仅保留 SHA-256 摘要；不包含 Token、Cookie、Authorization、内部地址或私人账号。
+Live 失败不会自动以 Replay 冒充成功；已核验回放与真实体验在页面中保持独立并明确标注。

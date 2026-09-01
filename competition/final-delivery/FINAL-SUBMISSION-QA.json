@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-31T13:06:14+08:00",
+  "generatedAt": "2026-09-01T10:44:40+08:00",
   "status": "PASS",
   "summary": {
     "passed": 33,
@@ -59,8 +59,8 @@
       {
         "slide": 7,
         "timing": 1,
-        "clickGroups": 6,
-        "effects": 15
+        "clickGroups": 5,
+        "effects": 12
       },
       {
         "slide": 8,
@@ -83,13 +83,13 @@
       {
         "slide": 11,
         "timing": 1,
-        "clickGroups": 8,
+        "clickGroups": 5,
         "effects": 28
       },
       {
         "slide": 12,
         "timing": 1,
-        "clickGroups": 9,
+        "clickGroups": 6,
         "effects": 19
       }
     ]
@@ -188,7 +188,7 @@
       "name": "PPT 原生逐步放映动画",
       "ok": true,
       "hard": true,
-      "evidence": "S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/29效果; S5=5组/16效果; S6=6组/15效果; S7=6组/15效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=8组/28效果; S12=9组/19效果"
+      "evidence": "S1=4组/5效果; S2=6组/27效果; S3=5组/24效果; S4=8组/29效果; S5=5组/16效果; S6=6组/15效果; S7=5组/12效果; S8=4组/17效果; S9=6组/36效果; S10=4组/16效果; S11=5组/28效果; S12=6组/19效果"
     },
     {
       "name": "DOCX 可解析且可编辑",
@@ -221,10 +221,10 @@
       "evidence": "PPT=12; DOC=20"
     },
     {
-      "name": "网站 1920×1080 构建截图与溢出检查",
+      "name": "网站生产截图与多视口溢出检查",
       "ok": true,
       "hard": true,
-      "evidence": "screenshots=5; pages=[('home', False), ('capability', False), ('cases', False), ('replay', False), ('experience', False)]"
+      "evidence": "screenshots=10; live=4; viewports=14; console=0; page=0"
     },
     {
       "name": "演示视频存在且小于 5 分钟",
@@ -242,7 +242,7 @@
       "name": "最终 SHA-256 清单",
       "ok": true,
       "hard": true,
-      "evidence": "54 个文件；failures=[]"
+      "evidence": "69 个文件；failures=[]"
     },
     {
       "name": "程序 ZIP 可解压",

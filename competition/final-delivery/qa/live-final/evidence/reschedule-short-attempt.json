@@ -1,0 +1,55 @@
+{
+  "key": "reschedule",
+  "role": "教师调课",
+  "baseUrl": "https://adp.katelya.top",
+  "startedAt": "2026-08-31T12:12:34.752Z",
+  "completedAt": "2026-08-31T12:16:34.771Z",
+  "conversationSha256": "486498d068a1005890c33b9d106bd61e278d9553e2b8b1aafea074ac374e894c",
+  "expected": [
+    "可行",
+    "提醒",
+    "未写入"
+  ],
+  "missingExpected": [
+    "提醒",
+    "未写入"
+  ],
+  "turns": [
+    {
+      "input": "将周一5–6节模拟调整到周四7–8节，是否可行？",
+      "startedAt": "2026-08-31T12:12:34.754Z",
+      "completedAt": "2026-08-31T12:16:34.767Z",
+      "durationMs": 240013,
+      "status": 200,
+      "requestId": "14b6ceb1-ef56-4d1d-b3e9-b5ec06b8f030",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 1012,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-风险规划"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_day_plan"
+      ],
+      "reply": "",
+      "widget": null,
+      "completed": false,
+      "errors": [
+        "timeout-240000ms"
+      ],
+      "ok": false
+    }
+  ],
+  "ok": false
+}
