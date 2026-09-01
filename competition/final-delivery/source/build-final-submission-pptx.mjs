@@ -154,7 +154,7 @@ function label(slide, value, x, y, w, color, group) {
   const s = pptx.addSlide();
   header(s, 2, "它从哪里来", "从真实使用的课表服务里长出来", "项目源于已经真实投入使用的校园课表服务；真实需求让作品不断生长。");
   addText(s, "1500+", 0.66, 1.86, 3.6, 1.0, { fontSize: 60, bold: true, color: C.coralDark }, "A01");
-  addText(s, "底层课表服务累计用户", 0.72, 2.88, 3.4, 0.36, { fontSize: 16, bold: true }, "A01");
+  addText(s, "底层课表服务累计服务用户", 0.72, 2.88, 3.4, 0.36, { fontSize: 16, bold: true }, "A01");
   addText(s, "查到课表，只是第一步。", 0.74, 3.5, 3.9, 0.62, { fontFace: F.title, fontSize: 24, bold: true, color: C.coralDark, valign: "top" }, "A02");
   hairline(s, 0.78, 4.24, 3.45, C.coral, 2.2, "A02");
   const questions = ["谁有空？", "哪里有空？", "会不会赶不及？", "能不能调？", "哪里最忙？"];
@@ -184,7 +184,7 @@ function label(slide, value, x, y, w, color, group) {
   const roles = [
     {
       x: 0.7, title: "学生", color: C.coral, q: "“我今天有什么课？\n附近哪里有空教室？”",
-      caps: ["一句话查课表", "连续追问不丢上下文", "找空教室与可用空间", "今天课程与安排"],
+      caps: ["一句话查课表", "连续追问承接上下文", "找空教室与可用空间", "今天课程与安排"],
     },
     {
       x: 4.92, title: "教师", color: C.green, q: "“我们什么时候都空？\n能不能调整？”",
@@ -379,8 +379,8 @@ function label(slide, value, x, y, w, color, group) {
   const s = pptx.addSlide();
   header(s, 11, "真实落地与下一步", "从真实服务长出来，也朝着真实需求走下去", "项目源于已经真实投入使用的校园课表服务；只呈现已发生的真实使用，不虚构活跃度、满意度或增长率。");
   addText(s, "1500+", 0.7, 1.86, 3.5, 0.98, { fontSize: 60, bold: true, color: C.coralDark }, "A01");
-  addText(s, "底层课表服务累计用户", 0.76, 2.86, 3.1, 0.36, { fontSize: 16, bold: true }, "A01");
-  addText(s, "本次参赛作品在这些真实需求基础上，从课表查询升级为校园教学时空资源智能体。", 0.78, 3.36, 3.6, 0.82, { fontSize: 12.5, color: C.body, breakLine: true, valign: "top" }, "A02");
+  addText(s, "底层课表服务累计服务用户", 0.76, 2.86, 3.1, 0.36, { fontSize: 16, bold: true }, "A01");
+  addText(s, "本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。", 0.78, 3.36, 3.6, 0.82, { fontSize: 12.5, color: C.body, breakLine: true, valign: "top" }, "A02");
   hairline(s, 0.78, 4.32, 3.37, C.line, 1.0, "A02");
   const values = ["减少信息差", "减少重复核对", "降低协调成本", "提前发现风险", "让安排更可解释"];
   values.forEach((value, index) => {
