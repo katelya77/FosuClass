@@ -1,0 +1,616 @@
+{
+  "key": "collaboration",
+  "role": "教师多人协同",
+  "baseUrl": "https://adp.katelya.top",
+  "startedAt": "2026-08-31T22:10:40.222Z",
+  "completedAt": "2026-08-31T22:12:53.202Z",
+  "conversationSha256": "31edc0baaff40784e5e3ee45ffeceaec4b7d3a64f04d49c5a00d519a3626844a",
+  "requestedPrompt": null,
+  "adjustmentReason": null,
+  "verificationNote": "本轮最新 Widget.View 直接呈现 7 间满足 120 座的教室与 A1-201；63 间总可用教室由同数据版本的确定性标准核验单独锁定，不冒充本轮 Widget 文案。",
+  "expected": [
+    "教师005、006、014 / 教师005/006/014",
+    "7间 / 7 间",
+    "A1-201",
+    "120座 / 120 座"
+  ],
+  "missingExpected": [],
+  "turns": [
+    {
+      "input": "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
+      "startedAt": "2026-08-31T22:10:40.223Z",
+      "completedAt": "2026-08-31T22:12:51.697Z",
+      "durationMs": 131474,
+      "status": 200,
+      "requestId": "fdb014bf-5948-49ec-80ed-fd089eab4aa3",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 550,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-课程空间"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_group_plan"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_31eead8738d878a9",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#EEFAF4",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "协作方案",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "已核验",
+                              "color": "success",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "教师共同空闲及教室推荐结果",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "教师005、006、014 第1周周四上午",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "已查询到3位教师在第1周周四上午第1-4节为共同空闲，共匹配到7间容量≥120座的可用教室",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "查询范围：第1教学周周四（2026-09-03）上午第1-4节；查询对象：教师005、教师006、教师014；筛选条件：教室容量不少于120座",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "共同空闲时段-0",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "共同空闲时段",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "共同空闲时段-可用时段-0",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#E8F8F0",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "可用时段",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "第1周周四（2026-09-03）第1-4节（上午）",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "符合容量要求的可用教室-1",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "符合容量要求的可用教室",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 1,
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区A · A公共教学楼-0",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区A · A公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区A · A公共教学楼-1",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区A · A公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-202（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区B · B公共教学楼-2",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区B · B公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "B1-201（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区B · B公共教学楼-3",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区B · B公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "B1-202（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区C · C公共教学楼-4",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区C · C公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "C1-202（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区D · D公共教学楼-5",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区D · D公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "D1-201（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "符合容量要求的可用教室-校区D · D公共教学楼-6",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "校区D · D公共教学楼",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "D1-202（阶梯教室，容量120座）",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "说明-2",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "说明",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        },
+                        {
+                          "type": "Caption",
+                          "value": "以上教室均在该共同空闲时段无排课，容量均满足120座要求，可根据校区需求选择",
+                          "color": "#77827D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "background": "#F6FAF8",
+                      "radius": "md"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "confirm-plan",
+                      "label": "确认推荐方案",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "确认采用当前第1-4节的空闲及教室推荐方案"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "1.0",
+          "variant": "collaboration",
+          "status": "success",
+          "title": "教师共同空闲及教室推荐结果",
+          "subtitle": "教师005、006、014 第1周周四上午",
+          "verified": true,
+          "summary": "已查询到3位教师在第1周周四上午第1-4节为共同空闲，共匹配到7间容量≥120座的可用教室",
+          "context": "查询范围：第1教学周周四（2026-09-03）上午第1-4节；查询对象：教师005、教师006、教师014；筛选条件：教室容量不少于120座",
+          "sections": [
+            {
+              "kind": "recommendation",
+              "title": "共同空闲时段",
+              "rows": [
+                {
+                  "label": "可用时段",
+                  "value": "第1周周四（2026-09-03）第1-4节（上午）"
+                }
+              ]
+            },
+            {
+              "kind": "entity-list",
+              "title": "符合容量要求的可用教室",
+              "rows": [
+                {
+                  "label": "校区A · A公共教学楼",
+                  "value": "A1-201（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区A · A公共教学楼",
+                  "value": "A1-202（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区B · B公共教学楼",
+                  "value": "B1-201（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区B · B公共教学楼",
+                  "value": "B1-202（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区C · C公共教学楼",
+                  "value": "C1-202（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区D · D公共教学楼",
+                  "value": "D1-201（阶梯教室，容量120座）"
+                },
+                {
+                  "label": "校区D · D公共教学楼",
+                  "value": "D1-202（阶梯教室，容量120座）"
+                }
+              ]
+            },
+            {
+              "kind": "notice",
+              "title": "说明",
+              "note": "以上教室均在该共同空闲时段无排课，容量均满足120座要求，可根据校区需求选择",
+              "rows": []
+            }
+          ],
+          "actions": [
+            {
+              "id": "confirm-plan",
+              "label": "确认推荐方案",
+              "payload": {
+                "query": "确认采用当前第1-4节的空闲及教室推荐方案"
+              },
+              "type": "sys.chat"
+            }
+          ],
+          "displayMeta": {
+            "recoverable": false,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "result-card",
+          "weekBoardTitle": "第1周周四空闲查询结果",
+          "weekBoardSubtitle": "教师005/006/014 上午时段",
+          "days": [
+            {
+              "label": "第1周 周四（2026-09-03）",
+              "blocks": [
+                {
+                  "time": "第1-4节（上午）",
+                  "title": "3位教师共同空闲",
+                  "location": "共7间120座教室可用",
+                  "meta": "容量满足≥120座要求"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    }
+  ],
+  "ok": true
+}

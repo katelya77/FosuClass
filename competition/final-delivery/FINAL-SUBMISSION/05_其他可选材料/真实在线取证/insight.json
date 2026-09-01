@@ -1,0 +1,2443 @@
+{
+  "key": "insight",
+  "role": "教学管理者",
+  "baseUrl": "https://adp.katelya.top",
+  "startedAt": "2026-08-31T15:39:41.470Z",
+  "completedAt": "2026-08-31T15:44:44.931Z",
+  "conversationSha256": "b165c07471184e35cb73526836b67c0672d12899f1775ce2a72770e1fcca585d",
+  "requestedPrompt": null,
+  "adjustmentReason": null,
+  "expected": [
+    "教师025",
+    "56",
+    "112",
+    "4",
+    "20"
+  ],
+  "missingExpected": [],
+  "turns": [
+    {
+      "input": "未来四周谁的教学负载最高？",
+      "startedAt": "2026-08-31T15:39:41.471Z",
+      "completedAt": "2026-08-31T15:41:03.623Z",
+      "durationMs": 82152,
+      "status": 200,
+      "requestId": "1be4b027-120d-4973-9b7a-aecca57e713c",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 325,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-校园洞察"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_teacher_load_query"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_9a7b23dd88d87ad3",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#EEF5FF",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "校园排名",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "已核验",
+                              "color": "success",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "未来四周教师教学负载排名",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "统计范围：2026年秋季学期第1-4教学周（2026-08-31起未来四周）",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "未来四周教学负载最高的教师为教师025，累计授课56次、合计112课时单位，负载水平显著高于其他教师。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "本次统计基于2026-08-31最新核验的秋季学期排课数据，统计窗口为第1至第4教学周，按教师已排定的常规授课课时单位计算教学负载并从高到低排序。",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "align": "center",
+                  "children": [
+                    {
+                      "type": "Badge",
+                      "label": "并列",
+                      "color": "info",
+                      "variant": "soft",
+                      "size": "sm"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "本次排名无并列情况，排序结果稳定",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "教学负载Top3教师-0",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "教学负载Top3教师",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 1,
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "教学负载Top3教师-第1名 教师025-0",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "9px",
+                          "background": "#EEF5FF",
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "第1名 教师025",
+                              "color": "info",
+                              "variant": "soft",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "累计授课56次，合计112课时单位",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "教学负载Top3教师-第2名 教师018-1",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "9px",
+                          "background": "#FFFFFF",
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "第2名 教师018",
+                              "color": "info",
+                              "variant": "outline",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "累计授课44次，合计88课时单位",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "教学负载Top3教师-第3名 教师034-2",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "9px",
+                          "background": "#FFFFFF",
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "第3名 教师034",
+                              "color": "info",
+                              "variant": "outline",
+                              "size": "sm"
+                            },
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "累计授课32次，合计64课时单位",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "统计说明-1",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "统计说明",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "background": "#F6FAF8",
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "统计说明-统计口径-0",
+                          "gap": 2,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "按已排定的常规授课计划课时单位计算负载，暂未包含临时调课、补课等临时安排",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "统计口径",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "act-1",
+                      "label": "查看教师025详细课表",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "查看教师025未来四周的详细课表安排"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-2",
+                      "label": "对比全校平均负载水平",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "对比未来四周教师025的教学负载与全校教师平均负载的差异"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-3",
+                      "label": "查看高负载教师授课风险",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "检查未来四周Top3高负载教师是否存在授课冲突或跨校区赶场风险"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "1.0",
+          "variant": "ranking",
+          "status": "success",
+          "title": "未来四周教师教学负载排名",
+          "subtitle": "统计范围：2026年秋季学期第1-4教学周（2026-08-31起未来四周）",
+          "verified": true,
+          "summary": "未来四周教学负载最高的教师为教师025，累计授课56次、合计112课时单位，负载水平显著高于其他教师。",
+          "context": "本次统计基于2026-08-31最新核验的秋季学期排课数据，统计窗口为第1至第4教学周，按教师已排定的常规授课课时单位计算教学负载并从高到低排序。",
+          "sections": [
+            {
+              "kind": "ranking",
+              "title": "教学负载Top3教师",
+              "rows": [
+                {
+                  "label": "第1名 教师025",
+                  "value": "累计授课56次，合计112课时单位"
+                },
+                {
+                  "label": "第2名 教师018",
+                  "value": "累计授课44次，合计88课时单位"
+                },
+                {
+                  "label": "第3名 教师034",
+                  "value": "累计授课32次，合计64课时单位"
+                }
+              ]
+            },
+            {
+              "kind": "notice",
+              "title": "统计说明",
+              "rows": [
+                {
+                  "label": "统计口径",
+                  "value": "按已排定的常规授课计划课时单位计算负载，暂未包含临时调课、补课等临时安排"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "act-1",
+              "label": "查看教师025详细课表",
+              "type": "sys.chat",
+              "payload": {
+                "query": "查看教师025未来四周的详细课表安排"
+              }
+            },
+            {
+              "id": "act-2",
+              "label": "对比全校平均负载水平",
+              "type": "sys.chat",
+              "payload": {
+                "query": "对比未来四周教师025的教学负载与全校教师平均负载的差异"
+              }
+            },
+            {
+              "id": "act-3",
+              "label": "查看高负载教师授课风险",
+              "type": "sys.chat",
+              "payload": {
+                "query": "检查未来四周Top3高负载教师是否存在授课冲突或跨校区赶场风险"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": true,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "本次排名无并列情况，排序结果稳定",
+            "weekendMarked": false
+          },
+          "layoutMode": "result-card",
+          "weekBoardTitle": "",
+          "weekBoardSubtitle": "",
+          "days": []
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "input": "看他的课表。",
+      "startedAt": "2026-08-31T15:41:05.134Z",
+      "completedAt": "2026-08-31T15:42:46.607Z",
+      "durationMs": 101473,
+      "status": 200,
+      "requestId": "c338174d-24d9-4280-b5f5-68793d0849e5",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 368,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-课程空间"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_schedule_range_query"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_587cadaaa131c84f",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#E8F8F0",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "课程时间板",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Badge",
+                          "label": "已核验",
+                          "color": "success",
+                          "variant": "soft",
+                          "size": "sm",
+                          "pill": true
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "教师025 固定周课表（第1-4周通用）",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "每日授课安排（无周末课程）",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "已为你查询到教师025未来四周的课表，该时间段内其授课安排为固定周循环，所有课程均为《大学英语》，每周累计授课14个连排共28课时单位，四周合计112课时单位，覆盖4个校区的14个行政班。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "align": "stretch",
+                  "children": [
+                    {
+                      "type": "Box",
+                      "key": "周一-0",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周一",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周一-08:00-09:40（第1-2节）-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "08:00-09:40（第1-2节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区C C1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2024级环境类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周一-10:00-11:40（第3-4节）-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "10:00-11:40（第3-4节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区B B1-103",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级会计类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周一-14:00-15:40（第5-6节）-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "14:00-15:40（第5-6节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区B B1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2024级历史类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周二-1",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周二",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周二-08:00-09:40（第1-2节）-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "08:00-09:40（第1-2节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区B B1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级中文类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周二-10:00-11:40（第3-4节）-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "10:00-11:40（第3-4节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区C C1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级生命科学类02班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周二-14:00-15:40（第5-6节）-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "14:00-15:40（第5-6节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区D D1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级体育类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周三-2",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周三",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "2 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周三-08:00-09:40（第1-2节）-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "08:00-09:40（第1-2节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区A A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级计算机类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周三-14:00-15:40（第5-6节）-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "14:00-15:40（第5-6节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区B B1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级经管类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周四-3",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周四",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周四-08:00-09:40（第1-2节）-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "08:00-09:40（第1-2节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区D D1-106",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级教育类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周四-10:00-11:40（第3-4节）-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "10:00-11:40（第3-4节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区A A1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级计算机类02班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周四-14:00-15:40（第5-6节）-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "14:00-15:40（第5-6节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区D D1-102",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2024级小学教育类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周五-4",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周五",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周五-08:00-09:40（第1-2节）-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "08:00-09:40（第1-2节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区D D1-101",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级心理类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周五-10:00-11:40（第3-4节）-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "10:00-11:40（第3-4节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区A A1-102",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级软件类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周五-14:00-15:40（第5-6节）-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "14:00-15:40（第5-6节）",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "校区B B1-102",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "授课班级：2025级传播类01班",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "act-1",
+                      "label": "检查跨校区授课风险",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "检查教师025未来四周跨校区授课是否存在赶场时间冲突风险"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-2",
+                      "label": "查看授课班级课表",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "查看2025级计算机类01班的详细课表安排"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-3",
+                      "label": "查询授课间隙空教室",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "查询教师025每日授课间隙所在校区的可用空教室"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "1.0",
+          "variant": "schedule",
+          "status": "success",
+          "title": "教师025 第1-4教学周课表",
+          "subtitle": "统计范围：2026年秋季学期第1-4教学周（2026-08-31至2026-09-25）",
+          "verified": true,
+          "summary": "已为你查询到教师025未来四周的课表，该时间段内其授课安排为固定周循环，所有课程均为《大学英语》，每周累计授课14个连排共28课时单位，四周合计112课时单位，覆盖4个校区的14个行政班。",
+          "context": "本次课表基于2026-08-31最新核验的秋季学期排课数据，第1-4教学周课程安排完全一致，无临时调课、补课安排，授课均安排在白天第1-6节，无晚间课程。",
+          "sections": [
+            {
+              "kind": "prose",
+              "title": "课程概览",
+              "rows": [
+                {
+                  "label": "授课课程",
+                  "value": "《大学英语》"
+                },
+                {
+                  "label": "周均课时",
+                  "value": "14个连排，合计28课时单位"
+                },
+                {
+                  "label": "覆盖校区",
+                  "value": "校区A、校区B、校区C、校区D"
+                },
+                {
+                  "label": "授课班级",
+                  "value": "14个本科行政班"
+                }
+              ]
+            },
+            {
+              "kind": "notice",
+              "title": "安排说明",
+              "rows": [
+                {
+                  "label": "循环规则",
+                  "value": "第1-4教学周课程安排完全一致，为固定周度循环授课"
+                },
+                {
+                  "label": "节次分布",
+                  "value": "每日授课集中在第1-2、3-4、5-6节，周三仅安排2个连排课程"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "act-1",
+              "label": "检查跨校区授课风险",
+              "type": "sys.chat",
+              "payload": {
+                "query": "检查教师025未来四周跨校区授课是否存在赶场时间冲突风险"
+              }
+            },
+            {
+              "id": "act-2",
+              "label": "查看授课班级课表",
+              "type": "sys.chat",
+              "payload": {
+                "query": "查看2025级计算机类01班的详细课表安排"
+              }
+            },
+            {
+              "id": "act-3",
+              "label": "查询授课间隙空教室",
+              "type": "sys.chat",
+              "payload": {
+                "query": "查询教师025每日授课间隙所在校区的可用空教室"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": true,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "week-board",
+          "weekBoardTitle": "教师025 固定周课表（第1-4周通用）",
+          "weekBoardSubtitle": "每日授课安排（无周末课程）",
+          "days": [
+            {
+              "label": "周一",
+              "blocks": [
+                {
+                  "time": "08:00-09:40（第1-2节）",
+                  "title": "大学英语",
+                  "location": "校区C C1-101",
+                  "meta": "授课班级：2024级环境类01班"
+                },
+                {
+                  "time": "10:00-11:40（第3-4节）",
+                  "title": "大学英语",
+                  "location": "校区B B1-103",
+                  "meta": "授课班级：2025级会计类01班"
+                },
+                {
+                  "time": "14:00-15:40（第5-6节）",
+                  "title": "大学英语",
+                  "location": "校区B B1-101",
+                  "meta": "授课班级：2024级历史类01班"
+                }
+              ]
+            },
+            {
+              "label": "周二",
+              "blocks": [
+                {
+                  "time": "08:00-09:40（第1-2节）",
+                  "title": "大学英语",
+                  "location": "校区B B1-101",
+                  "meta": "授课班级：2025级中文类01班"
+                },
+                {
+                  "time": "10:00-11:40（第3-4节）",
+                  "title": "大学英语",
+                  "location": "校区C C1-101",
+                  "meta": "授课班级：2025级生命科学类02班"
+                },
+                {
+                  "time": "14:00-15:40（第5-6节）",
+                  "title": "大学英语",
+                  "location": "校区D D1-101",
+                  "meta": "授课班级：2025级体育类01班"
+                }
+              ]
+            },
+            {
+              "label": "周三",
+              "blocks": [
+                {
+                  "time": "08:00-09:40（第1-2节）",
+                  "title": "大学英语",
+                  "location": "校区A A1-201",
+                  "meta": "授课班级：2025级计算机类01班"
+                },
+                {
+                  "time": "14:00-15:40（第5-6节）",
+                  "title": "大学英语",
+                  "location": "校区B B1-201",
+                  "meta": "授课班级：2025级经管类01班"
+                }
+              ]
+            },
+            {
+              "label": "周四",
+              "blocks": [
+                {
+                  "time": "08:00-09:40（第1-2节）",
+                  "title": "大学英语",
+                  "location": "校区D D1-106",
+                  "meta": "授课班级：2025级教育类01班"
+                },
+                {
+                  "time": "10:00-11:40（第3-4节）",
+                  "title": "大学英语",
+                  "location": "校区A A1-101",
+                  "meta": "授课班级：2025级计算机类02班"
+                },
+                {
+                  "time": "14:00-15:40（第5-6节）",
+                  "title": "大学英语",
+                  "location": "校区D D1-102",
+                  "meta": "授课班级：2024级小学教育类01班"
+                }
+              ]
+            },
+            {
+              "label": "周五",
+              "blocks": [
+                {
+                  "time": "08:00-09:40（第1-2节）",
+                  "title": "大学英语",
+                  "location": "校区D D1-101",
+                  "meta": "授课班级：2025级心理类01班"
+                },
+                {
+                  "time": "10:00-11:40（第3-4节）",
+                  "title": "大学英语",
+                  "location": "校区A A1-102",
+                  "meta": "授课班级：2025级软件类01班"
+                },
+                {
+                  "time": "14:00-15:40（第5-6节）",
+                  "title": "大学英语",
+                  "location": "校区B B1-102",
+                  "meta": "授课班级：2025级传播类01班"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "input": "检查他的风险。",
+      "startedAt": "2026-08-31T15:42:48.124Z",
+      "completedAt": "2026-08-31T15:44:43.426Z",
+      "durationMs": 115302,
+      "status": 200,
+      "requestId": "f514b1ef-035a-4d30-ad9b-004071c2ab7c",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 411,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-风险规划"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_risk_check"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_f88f62dbb689b8d6",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#FFF7E3",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "教学风险",
+                          "color": "#D88A18",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "已核验",
+                              "color": "success",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "教师025未来四周授课风险检查结果",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "检查范围：2026年秋季学期第1-4教学周（2026-08-31至2026-09-25）",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "教师025未来四周授课不存在时间冲突，但存在1处每周固定重复的跨校区赶场风险，整体连续授课负荷处于合理范围。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "本次风险检查基于已核验的教师025第1-4教学周固定周循环课表数据，覆盖时间冲突、跨校区衔接、连续课程负荷三类核心风险项，因课程安排每周完全一致，检出的风险将在检查周期内每周重复出现。",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "风险概览-0",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "风险概览",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "wrap": "wrap",
+                      "align": "stretch",
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "风险概览-时间冲突-0",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "10px",
+                          "width": "48%",
+                          "minWidth": "140px",
+                          "background": "#FFFFFF",
+                          "border": {
+                            "size": 1,
+                            "color": "#E7EFEA",
+                            "style": "solid"
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Caption",
+                              "value": "时间冲突",
+                              "color": "#77827D"
+                            },
+                            {
+                              "type": "Text",
+                              "value": "无冲突，所有授课时段无重复安排",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "风险概览-跨校区赶场风险-1",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "10px",
+                          "width": "48%",
+                          "minWidth": "140px",
+                          "background": "#FFFFFF",
+                          "border": {
+                            "size": 1,
+                            "color": "#E7EFEA",
+                            "style": "solid"
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Caption",
+                              "value": "跨校区赶场风险",
+                              "color": "#77827D"
+                            },
+                            {
+                              "type": "Text",
+                              "value": "存在1处高优先级赶场风险",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "风险概览-连续课程负荷-2",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "10px",
+                          "width": "48%",
+                          "minWidth": "140px",
+                          "background": "#FFFFFF",
+                          "border": {
+                            "size": 1,
+                            "color": "#E7EFEA",
+                            "style": "solid"
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Caption",
+                              "value": "连续课程负荷",
+                              "color": "#77827D"
+                            },
+                            {
+                              "type": "Text",
+                              "value": "合理，每日最多3个连排课程，午间休息充足",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "赶场风险详情-1",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "赶场风险详情",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "赶场风险详情-风险时段-0",
+                          "gap": 2,
+                          "align": "stretch",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "1",
+                              "color": "warning",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            },
+                            {
+                              "type": "Box",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "10px",
+                              "flex": 1,
+                              "background": "#FFF7E3",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#D88A18",
+                                  "style": "solid"
+                                }
+                              },
+                              "radius": "md",
+                              "children": [
+                                {
+                                  "type": "Row",
+                                  "gap": 2,
+                                  "align": "center",
+                                  "justify": "between",
+                                  "children": [
+                                    {
+                                      "type": "Caption",
+                                      "value": "风险时段",
+                                      "color": "#A8660D"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "每周一第2-3节课间隙",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "赶场风险详情-前序课程-1",
+                          "gap": 2,
+                          "align": "stretch",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "2",
+                              "color": "warning",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            },
+                            {
+                              "type": "Box",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "10px",
+                              "flex": 1,
+                              "background": "#FFF7E3",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#D88A18",
+                                  "style": "solid"
+                                }
+                              },
+                              "radius": "md",
+                              "children": [
+                                {
+                                  "type": "Row",
+                                  "gap": 2,
+                                  "align": "center",
+                                  "justify": "between",
+                                  "children": [
+                                    {
+                                      "type": "Caption",
+                                      "value": "前序课程",
+                                      "color": "#A8660D"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "校区C C1-101 第1-2节《大学英语》，09:40结束",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "赶场风险详情-后续课程-2",
+                          "gap": 2,
+                          "align": "stretch",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "3",
+                              "color": "warning",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            },
+                            {
+                              "type": "Box",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "10px",
+                              "flex": 1,
+                              "background": "#FFF7E3",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#D88A18",
+                                  "style": "solid"
+                                }
+                              },
+                              "radius": "md",
+                              "children": [
+                                {
+                                  "type": "Row",
+                                  "gap": 2,
+                                  "align": "center",
+                                  "justify": "between",
+                                  "children": [
+                                    {
+                                      "type": "Caption",
+                                      "value": "后续课程",
+                                      "color": "#A8660D"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "校区B B1-103 第3-4节《大学英语》，10:00开始",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "赶场风险详情-间隔时间-3",
+                          "gap": 2,
+                          "align": "stretch",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "4",
+                              "color": "warning",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            },
+                            {
+                              "type": "Box",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "10px",
+                              "flex": 1,
+                              "background": "#FFF7E3",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#D88A18",
+                                  "style": "solid"
+                                }
+                              },
+                              "radius": "md",
+                              "children": [
+                                {
+                                  "type": "Row",
+                                  "gap": 2,
+                                  "align": "center",
+                                  "justify": "between",
+                                  "children": [
+                                    {
+                                      "type": "Caption",
+                                      "value": "间隔时间",
+                                      "color": "#A8660D"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "仅20分钟，跨校区通勤余量不足，存在迟到风险",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "补充说明-2",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "补充说明",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "background": "#FFF7E3",
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "key": "补充说明-风险频率-0",
+                          "gap": 2,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "因第1-4周课程为固定周循环，该赶场风险将在每周一重复出现",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "风险频率",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Row",
+                          "key": "补充说明-其余时段-1",
+                          "gap": 2,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "其余工作日相邻课程要么同校区、要么间隔充足，无额外赶场风险",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "其余时段",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "act-1",
+                      "label": "模拟调课消除赶场风险",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "将教师025周一第3-4节的大学英语调整至校区C的可用教室，判断调课可行性"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-2",
+                      "label": "检查授课班级连带风险",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "检查教师025授课的14个班级是否存在课程冲突或赶场风险"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "key": "act-3",
+                      "label": "查看同校区可用教室",
+                      "size": "sm",
+                      "variant": "outline",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "查询第1-4周周一第3-4节校区C容量满足2025级会计类01班使用的可用公共教室"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "1.0",
+          "variant": "risk",
+          "status": "success",
+          "title": "教师025未来四周授课风险检查结果",
+          "subtitle": "检查范围：2026年秋季学期第1-4教学周（2026-08-31至2026-09-25）",
+          "verified": true,
+          "summary": "教师025未来四周授课不存在时间冲突，但存在1处每周固定重复的跨校区赶场风险，整体连续授课负荷处于合理范围。",
+          "context": "本次风险检查基于已核验的教师025第1-4教学周固定周循环课表数据，覆盖时间冲突、跨校区衔接、连续课程负荷三类核心风险项，因课程安排每周完全一致，检出的风险将在检查周期内每周重复出现。",
+          "sections": [
+            {
+              "kind": "metric",
+              "title": "风险概览",
+              "rows": [
+                {
+                  "label": "时间冲突",
+                  "value": "无冲突，所有授课时段无重复安排"
+                },
+                {
+                  "label": "跨校区赶场风险",
+                  "value": "存在1处高优先级赶场风险"
+                },
+                {
+                  "label": "连续课程负荷",
+                  "value": "合理，每日最多3个连排课程，午间休息充足"
+                }
+              ]
+            },
+            {
+              "kind": "route",
+              "title": "赶场风险详情",
+              "rows": [
+                {
+                  "label": "风险时段",
+                  "value": "每周一第2-3节课间隙"
+                },
+                {
+                  "label": "前序课程",
+                  "value": "校区C C1-101 第1-2节《大学英语》，09:40结束"
+                },
+                {
+                  "label": "后续课程",
+                  "value": "校区B B1-103 第3-4节《大学英语》，10:00开始"
+                },
+                {
+                  "label": "间隔时间",
+                  "value": "仅20分钟，跨校区通勤余量不足，存在迟到风险"
+                }
+              ]
+            },
+            {
+              "kind": "notice",
+              "title": "补充说明",
+              "rows": [
+                {
+                  "label": "风险频率",
+                  "value": "因第1-4周课程为固定周循环，该赶场风险将在每周一重复出现"
+                },
+                {
+                  "label": "其余时段",
+                  "value": "其余工作日相邻课程要么同校区、要么间隔充足，无额外赶场风险"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "act-1",
+              "label": "模拟调课消除赶场风险",
+              "type": "sys.chat",
+              "payload": {
+                "query": "将教师025周一第3-4节的大学英语调整至校区C的可用教室，判断调课可行性"
+              }
+            },
+            {
+              "id": "act-2",
+              "label": "检查授课班级连带风险",
+              "type": "sys.chat",
+              "payload": {
+                "query": "检查教师025授课的14个班级是否存在课程冲突或赶场风险"
+              }
+            },
+            {
+              "id": "act-3",
+              "label": "查看同校区可用教室",
+              "type": "sys.chat",
+              "payload": {
+                "query": "查询第1-4周周一第3-4节校区C容量满足2025级会计类01班使用的可用公共教室"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": true,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "result-card",
+          "weekBoardTitle": "",
+          "weekBoardSubtitle": "",
+          "days": []
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    }
+  ],
+  "ok": true
+}

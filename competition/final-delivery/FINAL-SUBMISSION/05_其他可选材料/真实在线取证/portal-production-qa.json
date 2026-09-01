@@ -1,0 +1,363 @@
+{
+  "baseUrl": "https://adp.katelya.top",
+  "generatedAt": "2026-09-01T02:37:54.934Z",
+  "sourceReports": [
+    {
+      "key": "static",
+      "file": "portal-production-qa-static.json",
+      "startedAt": "2026-08-31T20:31:41.942Z",
+      "completedAt": "2026-08-31T20:32:06.797Z",
+      "ok": true
+    },
+    {
+      "key": "student",
+      "file": "portal-production-qa-student.json",
+      "startedAt": "2026-08-31T21:51:07.618Z",
+      "completedAt": "2026-08-31T21:56:35.530Z",
+      "ok": true
+    },
+    {
+      "key": "collaboration",
+      "file": "portal-production-qa-collaboration.json",
+      "startedAt": "2026-08-31T21:18:39.842Z",
+      "completedAt": "2026-08-31T21:20:56.591Z",
+      "ok": true
+    },
+    {
+      "key": "reschedule",
+      "file": "portal-production-qa-reschedule.json",
+      "startedAt": "2026-08-31T21:59:05.802Z",
+      "completedAt": "2026-08-31T22:00:28.497Z",
+      "ok": true
+    },
+    {
+      "key": "insight",
+      "file": "portal-production-qa-insight.json",
+      "startedAt": "2026-08-31T21:27:11.574Z",
+      "completedAt": "2026-08-31T21:33:59.143Z",
+      "ok": true
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "01-home-1920x1080-final.png",
+      "capturedAt": "2026-08-31T20:31:51.587Z"
+    },
+    {
+      "name": "02-roles-1920x1080-final.png",
+      "capturedAt": "2026-08-31T20:31:52.923Z"
+    },
+    {
+      "name": "03-cases-1920x1080-final.png",
+      "capturedAt": "2026-08-31T20:31:54.243Z"
+    },
+    {
+      "name": "08-verified-replay-1920x1080-final.png",
+      "capturedAt": "2026-08-31T20:31:56.640Z"
+    },
+    {
+      "name": "09-mobile-experience-390x844-final.png",
+      "capturedAt": "2026-08-31T20:32:06.787Z"
+    },
+    {
+      "name": "04-student-live-1920x1080-final.png",
+      "capturedAt": "2026-08-31T21:56:31.456Z"
+    },
+    {
+      "name": "04-student-live-1366x768-final.png",
+      "capturedAt": "2026-08-31T21:56:32.519Z"
+    },
+    {
+      "name": "05-collaboration-live-1920x1080-final.png",
+      "capturedAt": "2026-08-31T21:20:53.568Z"
+    },
+    {
+      "name": "06-reschedule-live-1920x1080-final.png",
+      "capturedAt": "2026-08-31T22:00:24.436Z"
+    },
+    {
+      "name": "06-reschedule-live-1366x768-final.png",
+      "capturedAt": "2026-08-31T22:00:25.483Z"
+    },
+    {
+      "name": "07-insight-live-1920x1080-final.png",
+      "capturedAt": "2026-08-31T21:33:56.121Z"
+    }
+  ],
+  "viewports": [
+    {
+      "label": "home-1920x1080",
+      "route": "#/",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "roles-1920x1080",
+      "route": "#/capability",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "cases-1920x1080",
+      "route": "#/cases",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "replay-1920x1080",
+      "route": "#/experience/query",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "experience-1600x900",
+      "route": "#/experience",
+      "width": 1600,
+      "height": 900,
+      "scrollWidth": 1600,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "experience-1440x900",
+      "route": "#/experience",
+      "width": 1440,
+      "height": 900,
+      "scrollWidth": 1440,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "experience-1366x768",
+      "route": "#/experience",
+      "width": 1366,
+      "height": 768,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "experience-390x844",
+      "route": "#/experience",
+      "width": 390,
+      "height": 844,
+      "scrollWidth": 390,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "student-1920x1080",
+      "route": "#/experience/query",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "student-1366x768",
+      "route": "#/experience/query",
+      "width": 1366,
+      "height": 768,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "collaboration-1920x1080",
+      "route": "#/experience/collaboration",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "reschedule-1920x1080",
+      "route": "#/experience/reschedule",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "reschedule-1366x768",
+      "route": "#/experience/reschedule",
+      "width": 1366,
+      "height": 768,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    },
+    {
+      "label": "insight-1920x1080",
+      "route": "#/experience/insight",
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "horizontalOverflow": false,
+      "internalLinks": []
+    }
+  ],
+  "liveCases": [
+    {
+      "key": "student",
+      "ok": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "turns": [
+            {
+              "question": "查看2025级计算机类01班第1周课表。",
+              "tool": "campus_schedule_query",
+              "hasWidget": true,
+              "failure": ""
+            },
+            {
+              "question": "只看周三。",
+              "tool": "",
+              "hasWidget": true,
+              "failure": ""
+            },
+            {
+              "question": "继续看周三下午，哪里有空教室？",
+              "tool": "campus_classroom_search",
+              "hasWidget": true,
+              "failure": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "collaboration",
+      "ok": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "turns": [
+            {
+              "question": "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。",
+              "tool": "campus_group_plan",
+              "hasWidget": true,
+              "failure": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "reschedule",
+      "ok": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "turns": [
+            {
+              "question": "模拟把2025级计算机类01班第1周周一第5-6节的数据结构课调整到第1周周四第7-8节，不指定教室，请帮我自动选择合适教室，并检查可行性和风险。",
+              "tool": "campus_reschedule_feasibility",
+              "hasWidget": true,
+              "failure": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "insight",
+      "ok": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "ok": true,
+          "turns": [
+            {
+              "question": "未来四周谁的教学负载最高？",
+              "tool": "campus_teacher_load_query",
+              "hasWidget": true,
+              "failure": ""
+            },
+            {
+              "question": "看他的课表。",
+              "tool": "campus_schedule_range_query",
+              "hasWidget": true,
+              "failure": ""
+            },
+            {
+              "question": "检查他的风险。",
+              "tool": "campus_risk_check",
+              "hasWidget": true,
+              "failure": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "issues": [],
+  "requiredScreenshots": [
+    {
+      "name": "01-home-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "02-roles-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "03-cases-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "04-student-live-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "05-collaboration-live-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "06-reschedule-live-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "07-insight-live-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "08-verified-replay-1920x1080-final.png",
+      "exists": true
+    },
+    {
+      "name": "04-student-live-1366x768-final.png",
+      "exists": true
+    },
+    {
+      "name": "06-reschedule-live-1366x768-final.png",
+      "exists": true
+    },
+    {
+      "name": "09-mobile-experience-390x844-final.png",
+      "exists": true
+    }
+  ],
+  "ok": true
+}

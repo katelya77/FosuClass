@@ -341,14 +341,30 @@ def run() -> dict[str, object]:
     final_doc_previews = sorted((SUBMISSION / "01_智能体设计说明书" / "逐页PNG").glob("page-*.png"))
     add(checks, "逐页 PNG 已纳入正式提交", len(final_ppt_previews) == 12 and len(final_doc_previews) == 20, f"PPT={len(final_ppt_previews)}; DOC={len(final_doc_previews)}")
 
-    portal_qa = json.loads((ROOT / "site-qa" / "portal-qa.json").read_text(encoding="utf-8"))
+    portal_report = json.loads((SUBMISSION / "05_其他可选材料" / "真实在线取证" / "portal-production-qa.json").read_text(encoding="utf-8"))
     portal_qa_images = sorted((SUBMISSION / "05_其他可选材料" / "网站QA截图").glob("0*-*.png"))
+    required_portal_images = {
+        "01-home-1920x1080-final.png",
+        "02-roles-1920x1080-final.png",
+        "03-cases-1920x1080-final.png",
+        "04-student-live-1920x1080-final.png",
+        "05-collaboration-live-1920x1080-final.png",
+        "06-reschedule-live-1920x1080-final.png",
+        "07-insight-live-1920x1080-final.png",
+        "08-verified-replay-1920x1080-final.png",
+    }
+    present_portal_images = {path.name for path in portal_qa_images}
     portal_qa_ok = (
-        len(portal_qa) == 5
-        and len(portal_qa_images) == 5
-        and all(not item["horizontalOverflow"] and not item["hasVisibleLogin"] for item in portal_qa)
+        portal_report.get("ok") is True
+        and required_portal_images.issubset(present_portal_images)
+        and len(portal_report.get("liveCases", [])) == 4
+        and len(portal_report.get("viewports", [])) >= 9
+        and not portal_report.get("issues")
+        and not portal_report.get("consoleErrors")
+        and not portal_report.get("pageErrors")
+        and all(not item.get("horizontalOverflow") for item in portal_report.get("viewports", []))
     )
-    add(checks, "网站 1920×1080 构建截图与溢出检查", portal_qa_ok, f"screenshots={len(portal_qa_images)}; pages={[(item['label'], item['horizontalOverflow']) for item in portal_qa]}")
+    add(checks, "网站生产截图与多视口溢出检查", portal_qa_ok, f"screenshots={len(portal_qa_images)}; live={len(portal_report.get('liveCases', []))}; viewports={len(portal_report.get('viewports', []))}; console={len(portal_report.get('consoleErrors', []))}; page={len(portal_report.get('pageErrors', []))}")
 
     video = ffprobe_video(VIDEO)
     add(checks, "演示视频存在且小于 5 分钟", video["durationSeconds"] < 300, f"{video['durationDisplay']}；{video['codec']} {video['width']}×{video['height']}")
@@ -438,9 +454,9 @@ def run() -> dict[str, object]:
     truth_text = (ROOT / "FINAL-TRUTH.json").read_text(encoding="utf-8")
     ppt_fact_groups = [
         ("4 Agent", ["4个智能体"]), ("13 CampusTools", ["13", "campustools"]), ("14 bindings", ["14", "协作绑定"]),
-        ("Teacher025", ["教师025"]), ("risk 0/4", ["0课表硬冲突", "4每周转场风险"]),
+        ("Teacher025", ["教师025"]), ("risk 0/4", ["0硬冲突", "4次转场"]),
         ("collaboration 3/63/7/A1-201", ["3", "63", "7", "a1-201"]),
-        ("reschedule", ["feasible=true", "warning", "mutateddata", "false"]),
+        ("reschedule", ["可行", "有提醒", "未写入"]),
         ("insight", ["56课次", "112课时"]), ("1500+", ["1500+"]),
     ]
     doc_fact_groups = [
@@ -530,8 +546,8 @@ def run() -> dict[str, object]:
         "- 二维码解码结果：`https://adp.katelya.top/`。\n"
         "- 本机绝对路径、localhost、真实学校名称、真实个人身份、旧 v1/v2、凭证值：0 命中。\n\n"
         "## 回滚与未改动边界\n\n"
-        "- 本轮未修改 Agent / CampusTools / Widget 业务语义，未部署、未合并 PR #49。\n"
-        "- 如需回滚参赛材料，仅删除 `competition/final-delivery/FINAL-SUBMISSION/` 并重新运行 source 中的生成脚本；业务代码不受影响。\n"
+        "- 本轮未修改 Agent / CampusTools / Widget 业务语义；Portal 已按授权通过受控流程部署，PR #57 已合并。\n"
+        "- Portal 回滚源码为 `b60a5749672cb87d548532ff209176693e65c6fa`，上一生产 Deployment ID 为 `96d3139a-d7b8-489a-aea3-0ab837fd9f83`；材料可由 source 生成脚本重建。\n"
         "- PPT、设计书与提交说明均以中文叙述为主；内部端口号、阶段号和套件版本标签已从评审正文移除。\n",
         encoding="utf-8",
     )

@@ -1,10 +1,10 @@
 # 校园智序·小序 — FINAL TRUTH
 
-冻结日期：2026-08-24
+冻结日期：2026-09-01
 
-冻结基线：`deploy/demo-portal` @ `28e816e`
+材料源码基线：`main` @ `c55ef3bc763d75a9dbac52c56b90a2bd56348df0`
 
-交付分支：`deliver/competition-final`
+Portal 生产发布：`deploy/demo-portal` @ `838510e4fd97b945805dd384bc9d5095c43cc2d6`，Cloudflare Deployment `64abc3b1-04f1-4740-889f-c8e32dd2bafd`
 
 > 本文件是比赛设计书、答辩、视频、字幕、截图说明与程序交付包的唯一最终事实源。最终材料不得以 R47、R48、R49 或其他历史阶段文档替代本文件。
 
@@ -13,7 +13,7 @@
 - 产品名称：**校园智序·小序**。
 - 核心文案：**让复杂的校园教学安排，简单到一句话就能问。**
 - 叙事主线：**真实问题 → 自然语言任务 → Multi-Agent 理解与分工 → CampusTools 确定性核验 → 可核查 Widget → 辅助决策。**
-- 真实落地：**已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。** 对外只使用这一匿名表述，不出现学校、学院、城市、姓名、学号、邮箱、代码托管账号或真实域名。
+- 真实落地：**底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。** 1500+ 不得表述为参赛多智能体用户量。
 - 产品边界：生成模型负责理解任务、组织协作与表达；动态校园事实只由 CampusTools 基于匿名演示数据确定性计算，生成模型不得补写或改写事实。
 
 ## 2. 最终系统事实
@@ -32,7 +32,7 @@
 | 展示契约 | 统一结果卡；关键结论带 Verified 与 Evidence；卡片不可渲染时从同一已核验投影确定性生成可读文本 |
 | 写入边界 | What-if 调课只模拟，不修改真实数据；`mutatedData=false` |
 | 可靠性 | 输入校验、fresh call、确定性排序、Evidence、失败关闭；缺失或损坏数据不伪造结果 |
-| 展示端 | 4173 Competition Showcase；4174 Judge Portal |
+| 展示端 | 正式 Judge Portal：`https://adp.katelya.top/`；匿名访问，无需账号 |
 
 ## 3. 4 Agent 与 13 CampusTools
 
@@ -132,9 +132,9 @@
 
 | 权重 | 最终讲法 |
 | --- | --- |
-| 25% 真场景 | 真实校园教学任务；累计真实用户量 1500+；四个 Hero 均是可复现的匿名真实任务形态 |
+| 25% 真场景 | 来自底层课表服务的真实校园教学需求；底层服务累计用户 1500+；四个 Hero 均是可复现的匿名真实任务形态 |
 | 25% 创新实用 | Multi-Agent 分工 + 确定性 CampusTools + What-if + 风险与洞察联合决策 |
-| 20% 技术完整 | 4 Agent / 13 Tools / 14 bindings / Main→Child→Main / 统一 Widget / 4173+4174 Demo |
+| 20% 技术完整 | 4 Agent / 13 Tools / 14 bindings / Main→Child→Main / 统一 Widget / 正式 Judge Portal |
 | 15% 数据算法 | 匿名数据、确定性计算、约束检查、稳定排序、Evidence、Verified、fresh call、fail-closed |
 | 15% 体验展示 | 一句话操作、Auroraqua/Iced Jelly 视觉、Judge Portal、电影化 Showcase、真实 ADP 操作链路 |
 
@@ -142,8 +142,8 @@
 
 - 最终对外品牌只使用“校园智序·小序”。
 - 最终材料只引用 `competition-demo-v3`；旧数据版本仅留在历史 archive，禁止进入最终交付包。
-- 不在最终材料中出现真实学校、学院、城市、姓名、学号、邮箱、代码托管账号、真实域名、本机用户路径或任何凭据。
-- 4173/4174 是只读展示层；不得把展示动画描述为 Runtime 证据。视频必须插入真实腾讯 ADP 操作画面，展示用户输入 → Main → Child → CampusTools → 最终 Widget。
+- 不在最终材料中出现真实学校、学院、城市、姓名、学号、邮箱、代码托管账号、内部域名、生产内部地址、本机用户路径或任何凭据；公开评审演示域名 `adp.katelya.top` 除外。
+- Judge Portal 的 Live 是只读实时链路；Replay 明确标注为非实时，不得把展示回放描述为 Runtime 证据。
 - 腾讯 ADP Console 中的应用导出、自定义插件导出与最终 Widget 导出由人工完成并加入 `manual-exports/`；自动程序包不得伪造 Console 导出。
 
 ## 8. 冻结证据
@@ -158,13 +158,14 @@
 - `competition/showcase/src/fixtures/heroes/*.json`
 - `competition/showcase/docs/PHASE2.8-RELEASE.md`
 
-## 9. PHASE 3.1 FINAL CUT 冻结
+## 9. FINAL JUDGE PACKAGE 冻结
 
-- 4174 的主体验是服务端 Native ADP SSE，不再依赖 iframe；官方体验链接只作为 secondary fallback。
+- `https://adp.katelya.top/` 的主体验是同源服务端 Native ADP SSE，不依赖 iframe；Live 失败时明确显示错误，不自动切换 Replay。
 - 浏览器只发送消息、持久 ConversationId 与 Widget Action；密钥不进入 React Bundle、Git、截图或最终材料。
 - 真实成功会话出现过 `小序-主协调`、`小序-校园洞察`、全校概览查询、教师负载查询与官方 Widget 返回。
 - 当前发布版本没有返回 `IsSubAgent`；最终诊断页必须如实显示“字段尚未返回”，不得推测或伪造。
 - Widget 只使用 ADP 返回的 View / WidgetId / WidgetRunId，由官方 `<adp-widget>` 渲染；不得以自制结果卡冒充官方 Widget。
-- 4173 导演片固定为 Opening 10 秒、Architecture 15 秒、四个 Hero 各 28 秒；每幕统一“问题 → 协作 → 核验 → 结论”。
-- 最终答辩固定 12 页，设计说明书固定 20 页；核心证据来自真实 4173 / 4174 运行截图。
-- 最终视频时间轴固定 275 秒（04:35），REAL ADP 段固定为 02:34–03:38。
+- 生产发布状态为 success；部署 ID `64abc3b1-04f1-4740-889f-c8e32dd2bafd`，Portal 发布提交 `838510e4fd97b945805dd384bc9d5095c43cc2d6`。
+- 公网四组真实验证均通过：学生 3 轮、教师协同 1 轮、模拟调课 1 轮、管理下钻 3 轮；原始 Widget.View、工具名与时间戳均保存在 `qa/live-final/evidence/`。
+- 最终答辩固定 12 页，设计说明书固定 20 页；P5 使用学生真实三轮 Live 截图。
+- 现有作品演示视频保持原样，SHA-256 为 `A48A1B88E4CA73FE571AD750A601C33C546F50C9D7C7709D4CF9F70080B4024C`。

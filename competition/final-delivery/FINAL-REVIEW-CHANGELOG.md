@@ -1,69 +1,63 @@
-# FINAL-REVIEW-CHANGELOG · 最终评审叙事重构 · 全部变更清单
+# FINAL-REVIEW-CHANGELOG｜终局评审材料收敛
 
-> 时间窗：2026-08-31 00:00 – 04:20（本日历夜）
-> 范围：按"评委第一次看到作品"的视角重构五类产物；**不改业务数据、底层 Agent、CampusTools、Widget、Schema、bindings；不重新发布 ADP；不 merge main；不删分支。**
-> 终态：QA 31/31 全绿 PASS（2026-08-31T04:15:34+08:00）
+> 完成日期：2026-09-01
+> 范围：最终评审材料、Judge Portal、真实线上体验、自动取证与 `adp.katelya.top` 正式部署。
+> 边界：未改变 Agent / CampusTools / Widget 业务语义，未改变冻结数据，未编辑或转码演示视频。
 
----
+## 1. Portal 与生产部署
 
-## 1. 答辩 PPT（12 页全新叙事）
+- 保持温暖浅色、珊瑚红和轻玻璃质感视觉，导航统一为：首页 / 角色与能力 / 已核验案例 / 真实体验。
+- 三类角色能力按学生、教师、教学管理者清晰分组。
+- “已核验案例”显著标注“已核验演示回放 · 非实时”；Live 失败不以 fixture 或 Replay 伪装成功。
+- Live 通过 Cloudflare Function 使用服务端凭据接入腾讯 ADP SSE，并直接渲染当前 Widget.View。
+- 增加三角色 Quick Start、自由输入、真实等待状态和长 Widget 响应式布局。
+- PR #57 已合并；Cloudflare 正式 Deployment ID：`64abc3b1-04f1-4740-889f-c8e32dd2bafd`；公网入口：`https://adp.katelya.top/`。
 
-- `source/build-final-submission-pptx.mjs`：按新叙事（谁在用→什么问题→怎样帮→为什么能做到→为什么可信→验证程度→未来）全量重写 12 页；所有可动画元素注册 objectName 分组（A01…A0n）；品牌 Auroraqua warm white / coral / rose / peach / lavender；Noto Serif SC + MiSans。
-- `source/add-ppt-animations.ps1`：原生逐步点击动画注入（仅 Fade），12 页共 67 组 / 242 效果，每页 timing=1。
-- 术语与事实：4 Agent / 13 CampusTools / 14 绑定 / 0 硬冲突 / 4 转场·20 分钟 / 3→63→7→A1-201 / 教师025·56 课次·112 课时 / 1500+ 全部与 FINAL-TRUTH 冻结一致；"跨校区赶场"上升为"教学空间转场风险"（数字不变，唯一许可的表达升级）。
-- 兜底修复：`imageCrop` / `imageContain` 两处适配 image-size v2（`readFileSync` 后传 Buffer；v2 的 `imageSize()` 不再接受路径）。
-- 产物：`校园智序-小序-答辩.pptx`（12 页，scrub 清理 8 处本机路径）+ `校园智序-小序-答辩.pdf` + 12 张 1920×1080 预览（`ppt-preview-final/`）。
+## 2. 四组真实线上案例
 
-## 2. 智能体设计说明书（20 页）
+- 学生：同一会话三轮完成“查第1周课表 → 只看周三 → 继续看周三下午空教室”，最终返回 A1-103。第三句补充“继续看周三下午”是为了消除跨日歧义，未重复班级和周次。
+- 教师协同：教师005/006/014 第1周周四上午；返回 7 间满足 120 座要求的教室，推荐 A1-201；63 间总可用教室由确定性标准结果核验。
+- 模拟调课：周一5–6节到周四7–8节；可行、有提醒、推荐 A1-201（120座）、不写入真实课表。
+- 管理下钻：教师025、56课次、112课时；继续看课表并检查风险，0硬冲突、每周4次转场、最短20分钟。
 
-- `source/update-final-submission-docx.py`：全量重写（≈370 行）。三层替换链（visible → term → narrative）+ 摘要三角色表 + 场景文案 + 1500+ 锁定 + 冻结产品定义插入封面 + 截图替换。
-- **本轮二次修复（内容错位，04:08 发现 → 04:15 修复落地）**：
-  1. P11"应用场景一｜学生的一天"：副标题分支匹配串修正（pristine 原文为无空格"教师025｜第1–4周"，旧分支带空格永不命中）→ 现为学生场景文案。
-  2. P11 数字卡：教师风险卡（0 冲突/4 转场/20′）→ 学生能力卡（1 句话完成 / 4 类查询对象 / 0 上下文丢失）；教师风险数字保留在第 03 章节（真实需求与痛点）与 P14。
-  3. P14 副标题：消除"负载 负载第一"重复词病句 → "未来四周负载第一的是教师 025：56 课次 / 112 课时；随后重新调用风险工具核验。"
-  4. 项目摘要表：旧"它解决什么/它为什么可信"表（因多行文本导致等值匹配失效）→ 重建为三角色表，与 PPT P3 对齐。
-  5. P11 截图：真实体验页截图 → 角色与能力页全宽截图（与"学生的一天"主题匹配）。
-- 产物：`校园智序-小序-智能体设计说明书.docx`（20 页，Word 实机核验）+ PDF + 20 张 150dpi 预览（`doc-preview-final/`）。
+证据包含原始输入、时间戳、结构化 Widget 和核验摘要，保存在 `qa/live-final/evidence/`；不含凭据。
 
-## 3. 在线演示网站（demo-portal）
+## 3. 自动截图与浏览器 QA
 
-- 源码 8 文件重写：导航压缩为 4 个一级入口（首页 / 角色与能力 / 已核验案例 / 真实体验）；案例页"已核验演示回放 · 非实时"诚信标注；Live 页"真实体验"定位；"跨校区赶场"→"教学空间转场风险"；1500+ 口径统一；新视觉（Auroraqua）。
-- 测试/配置 5 文件同步：24 个测试全部通过（App routing / AdpExperience / GuidedDemo / AdpWidget / adp / adp-stream）。
-- 资产管线：`source/capture-portal-assets.mjs` 自动拍摄 4 张 1920×1080 官方截图（home / capability / experience / verified-widget）并写入 `final-delivery/assets/`；历史资产全部备份至 6 个时间戳目录（assets-backup-20260831-*）。
-- 线上部署：**未执行**（线上 adp.katelya.top 仍为旧导航；QA 活站检查只验 200 + 无登录标记，通过）。
+- 生成 01–08 八张 1920×1080 终局截图，以及学生、模拟调课两张 1366×768 重点检查图和一张移动端检查图。
+- 视口覆盖 1920×1080、1600×900、1440×900、1366×768、390×844。
+- 合并报告：14 个视口记录；横向溢出 0；console error 0；page error 0。
+- 学生真实截图已替换 PPT P5。
 
-## 4. 提交材料与 QA
+## 4. 答辩 PPT
 
-- `source/assemble-final-submission.py`：重新组装 FINAL-SUBMISSION（视频 SHA 冻结、程序包 55 条目、二维码、说明文档）。
-- `source/final-submission-qa.py`：31 项硬检查全绿；报告截图页码同步为 ppt[5,11] / designBook[4,11,15]；1500+ 定位 PPT[2,11] / DOC[4,20]。
-- 视频：未重编码、未替换（source/final SHA-256 一致：`A48A1B88…4024C`，04:44.212 < 5 分钟）。
-- 匿名扫描：machine_path / localhost / real_school / real_identity / stale_demo / secret 全部 0 命中。
+- 保留 12 页 judge-first 主结构和成熟视觉语言。
+- P5 改为真实学生同会话连续追问证据。
+- P7 收敛为“0 硬冲突 / 4 次转场·20 分钟 / 可行·有提醒·未写入”。
+- P10 标题改为“技术创新：让任务接得住，让结果核得清”。
+- P12 收敛为约 6 组有效点击动画；逐页讲稿同步为约 6分45秒。
+- PPTX 与 PDF 均为 12 页、16:9；完成桌面端打开、动画和逐页视觉复核。
 
-## 5. 管线与基础设施
+## 5. 智能体设计说明书
 
-- `source/run-restructure.ps1`：九阶段全链路（build+test → 截图 → 资产替换+备份 → pptxgenjs 定位 → PPT 构建+动画+scrub → PPT 导出 → 设计书 pristine 还原+升级+导出 → assemble+QA → 清理）。含中文路径，已补 UTF-8 BOM（PowerShell 5.1 无 BOM 会按 GBK 误读中文字面量）。
-- `source/export-office-artifacts.ps1`：新增 pdftoppm 缺失时的 Python 兜底分支（`render-doc-previews.py`，PyMuPDF 150dpi 渲染）。
-- `source/render-doc-previews.py`：新增。
-- `source/dump-docx-blocks.py` + `dump-docx-blocks.txt`：本轮排查临时工具（设计书结构 dump），任务收尾时可删除。
-- 依赖落位：pptxgenjs@3.12.0 + image-size@2.0.2（final-delivery/node_modules）；reportlab@5.0.1、python-pptx@1.0.2、pypdf@6.16.2（全局 Python）；pymupdf@1.27.2.3 已预装。
+- 保持 20 页。
+- P11 将不可证明的“0 上下文丢失”改为“连续追问”，并使用学生真实证据。
+- P13 消除标题重复，统一为“没有冲突，不等于来得及；可以调，也不等于没有提醒”，状态为“可行 · 有提醒 · 不写入真实课表”。
+- P17 明确内部域名、生产内部地址、私人服务地址和凭据不得进入产物，公开评审域名除外。
+- P19 更新为真实公开部署现状与受控发布边界。
+- P20 将 1500+ 限定为底层校园课表服务累计服务用户，并统一“从真实课表服务出发”。
 
-## 6. 新增交付支撑文档
+## 6. 在线体验与最终提交包
 
-- `PPT-SPEAKER-NOTES.md`：12 页逐页讲稿（画面重点 / 点击节奏 / 20–40s 讲稿 / 6 分 45 秒时间分配 / 高频追问一句话预案）。
-- `VIDEO-RESTRUCTURE-NOTES.md`：视频宏观重剪建议（不重做视频；含剪映精修清单、重排顺序、替换纪律）。
-- `FINAL-REVIEW-CHANGELOG.md`：本文件。
+- 在线体验材料改为学生、教师多人协同、教师调课、教学管理者四例；重新生成 PDF、TXT、URL 与二维码。
+- `.url` 与二维码均指向 `https://adp.katelya.top/`；无需账号。
+- 重建程序交付包，保持 4 Agent / 13 CampusTools / 14 bindings / 4 个标准核验结果。
+- 重建 `FINAL-SUBMISSION/`、README、SHA256 Manifest、PPT/PDF、DOCX/PDF、在线材料、截图和真实证据。
+- 视频保持原文件不变，SHA-256：`A48A1B88E4CA73FE571AD750A601C33C546F50C9D7C7709D4CF9F70080B4024C`。
 
-## 7. 明确未做（待主人决策）
+## 7. QA 与回滚
 
-1. **commit / push**：本轮大量变更仍在工作区（网站源码、final-delivery 产物、管线脚本、备份目录），未提交。工作区另有 2 个与本轮无关的 png 变更（output/agent-config-plane-browser/）不应误提交。
-2. **线上部署**：新导航网站尚未发布到 adp.katelya.top（原 competition/docs/cloudflare-pages.md 路径已不存在，部署方式待确认：Cloudflare Pages 连 GitHub 自动部署 or wrangler deploy）。
-3. **视频重剪**：仅产出建议文档，未动视频本体。
-4. **临时文件清理**：dump-docx-blocks.py/.txt 可删（属本轮生成的排查工具）。
-
-## 8. 复现命令（全链路）
-
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Katelya\Documents\VScode\FosuClass\competition\final-delivery\source\run-restructure.ps1" -SkipSite
-```
-
-各阶段幂等：可重复执行；截图重拍；资产备份带时间戳；设计书从 pristine 备份还原重放全部替换。
+- 最终材料硬检查 33/33 通过；PPT 12 页、设计书 20 页、程序 ZIP 55 条目、Manifest 69 个文件。
+- 匿名与安全扫描：本机路径、localhost、真实学校/个人身份、旧口径与凭据值均为 0 命中。
+- 当前部署回滚源码：`b60a5749672cb87d548532ff209176693e65c6fa`；上一生产 Deployment ID：`96d3139a-d7b8-489a-aea3-0ab837fd9f83`。
+- 回滚只使用仓库现有受控 Cloudflare 工作流，不触碰其他 FosuClass 生产业务。

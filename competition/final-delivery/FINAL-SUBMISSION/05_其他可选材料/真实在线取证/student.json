@@ -1,0 +1,2101 @@
+{
+  "key": "student",
+  "role": "学生",
+  "baseUrl": "https://adp.katelya.top",
+  "startedAt": "2026-08-31T20:19:33.338Z",
+  "completedAt": "2026-08-31T20:25:01.325Z",
+  "conversationSha256": "c34c618d6566f6f21f7194ca8b578ba6b031560eb768f0149d16cc21df4cb5a9",
+  "requestedPrompt": "下午哪里有空教室？",
+  "adjustmentReason": "跨日实测发现该短句可能被解释为当天；改用“继续看周三下午”明确指回上一轮，同时仍不重复班级与周次。",
+  "expected": [
+    "2025级计算机类01班",
+    "周三",
+    "campus_classroom_search",
+    "A1-103"
+  ],
+  "missingExpected": [],
+  "turns": [
+    {
+      "input": "查看2025级计算机类01班第1周课表。",
+      "startedAt": "2026-08-31T20:19:33.340Z",
+      "completedAt": "2026-08-31T20:21:06.126Z",
+      "durationMs": 92786,
+      "status": 200,
+      "requestId": "8daf4578-1987-4a5d-b5bc-913c2d704ec5",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 375,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-课程空间"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_schedule_query"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_8efb3f05e7a25d22",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#E8F8F0",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "课程时间板",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Badge",
+                          "label": "已核验",
+                          "color": "success",
+                          "variant": "soft",
+                          "size": "sm",
+                          "pill": true
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "2025级计算机类01班 第1周课表",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "2026年8月31日-9月6日 | 校区A",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "已成功查询到2025级计算机类01班第1周的课表，周内共安排7门次课程，多数课程在A公共教学楼A1-201教室开展，周三下午的大学体育课程在A体育场馆上课，周四、周六、周日无课程安排。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "align": "stretch",
+                  "children": [
+                    {
+                      "type": "Box",
+                      "key": "周一 8月31日-0",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周一 8月31日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "1 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周一 8月31日-第5-6节 14:00-15:40-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第5-6节 14:00-15:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "数据结构",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师003",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周二 9月1日-1",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周二 9月1日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "2 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周二 9月1日-第1-2节 08:00-09:40-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第1-2节 08:00-09:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "高等数学A",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师001",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周二 9月1日-第3-4节 10:00-11:40-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第3-4节 10:00-11:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "线性代数",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师005",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周三 9月2日-2",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周三 9月2日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第1-2节 08:00-09:40-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第1-2节 08:00-09:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师025",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第3-4节 10:00-11:40-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第3-4节 10:00-11:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "程序设计",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师004",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第5-6节 14:00-15:40-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第5-6节 14:00-15:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学体育",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A5-601",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A体育场馆 | 教师039",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周四 9月3日-3",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周四 9月3日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "0 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周五 9月4日-4",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周五 9月4日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "1 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周五 9月4日-第1-2节 08:00-09:40-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第1-2节 08:00-09:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学物理",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师011",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周六 9月5日-5",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周六 9月5日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "0 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Box",
+                      "key": "周日 9月6日-6",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周日 9月6日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "0 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "view-card-01",
+                      "label": "以卡片查看完整课表",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "2025级计算机类01班第1周课表"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "competition-demo-v3",
+          "variant": "schedule",
+          "status": "success",
+          "title": "2025级计算机类01班第1周课表",
+          "subtitle": "校区A | 2026-08-31至2026-09-06（第1教学周）",
+          "verified": true,
+          "summary": "已成功查询到2025级计算机类01班第1周的课表，周内共安排7门次课程，多数课程在A公共教学楼A1-201教室开展，周三下午的大学体育课程在A体育场馆上课，周四、周六、周日无课程安排。",
+          "context": "本次为班级周课表查询，查询实体为2025级计算机类01班，查询范围为2026-2027学年第一学期第1教学周，所有课表信息来源已核验有效。",
+          "sections": [
+            {
+              "kind": "prose",
+              "title": "课表概览",
+              "rows": [
+                {
+                  "label": "查询班级",
+                  "value": "2025级计算机类01班"
+                },
+                {
+                  "label": "教学周",
+                  "value": "第1周（2026.8.31-9.6）"
+                },
+                {
+                  "label": "课程总门次",
+                  "value": "7门次"
+                },
+                {
+                  "label": "上课校区",
+                  "value": "校区A"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "view-card-01",
+              "label": "以卡片查看完整课表",
+              "type": "open_widget",
+              "payload": {
+                "query": "2025级计算机类01班第1周课表"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": false,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": true
+          },
+          "layoutMode": "week-board",
+          "weekBoardTitle": "2025级计算机类01班 第1周课表",
+          "weekBoardSubtitle": "2026年8月31日-9月6日 | 校区A",
+          "days": [
+            {
+              "label": "周一 8月31日",
+              "blocks": [
+                {
+                  "time": "第5-6节 14:00-15:40",
+                  "title": "数据结构",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师003"
+                }
+              ]
+            },
+            {
+              "label": "周二 9月1日",
+              "blocks": [
+                {
+                  "time": "第1-2节 08:00-09:40",
+                  "title": "高等数学A",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师001"
+                },
+                {
+                  "time": "第3-4节 10:00-11:40",
+                  "title": "线性代数",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师005"
+                }
+              ]
+            },
+            {
+              "label": "周三 9月2日",
+              "blocks": [
+                {
+                  "time": "第1-2节 08:00-09:40",
+                  "title": "大学英语",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师025"
+                },
+                {
+                  "time": "第3-4节 10:00-11:40",
+                  "title": "程序设计",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师004"
+                },
+                {
+                  "time": "第5-6节 14:00-15:40",
+                  "title": "大学体育",
+                  "location": "A5-601",
+                  "meta": "A体育场馆 | 教师039"
+                }
+              ]
+            },
+            {
+              "label": "周四 9月3日",
+              "blocks": []
+            },
+            {
+              "label": "周五 9月4日",
+              "blocks": [
+                {
+                  "time": "第1-2节 08:00-09:40",
+                  "title": "大学物理",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师011"
+                }
+              ]
+            },
+            {
+              "label": "周六 9月5日",
+              "blocks": []
+            },
+            {
+              "label": "周日 9月6日",
+              "blocks": []
+            }
+          ]
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "input": "只看周三。",
+      "startedAt": "2026-08-31T20:21:07.647Z",
+      "completedAt": "2026-08-31T20:22:31.271Z",
+      "durationMs": 83624,
+      "status": 200,
+      "requestId": "28b76d89-6fd8-4502-8de0-5706e06d745c",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 317,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-课程空间"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_schedule_query"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_400465c6fc366827",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#E8F8F0",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "课程时间板",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Badge",
+                          "label": "已核验",
+                          "color": "success",
+                          "variant": "soft",
+                          "size": "sm",
+                          "pill": true
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "2025级计算机类01班 第1周周三课表",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "2026年9月2日 | 校区A",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "已为你筛选出2025级计算机类01班第1周周三的课程安排，当日共3门课程：上午为大学英语、程序设计，均在A公共教学楼A1-201教室上课；下午为大学体育，在A体育场馆A5-601开展。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "align": "stretch",
+                  "children": [
+                    {
+                      "type": "Box",
+                      "key": "周三 9月2日-0",
+                      "direction": "col",
+                      "gap": 2,
+                      "padding": "10px",
+                      "width": "48%",
+                      "minWidth": "148px",
+                      "background": "#FFFFFF",
+                      "border": {
+                        "size": 1,
+                        "color": "#E7EFEA",
+                        "style": "solid"
+                      },
+                      "radius": "lg",
+                      "children": [
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "justify": "between",
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "周三 9月2日",
+                              "size": "sm",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "3 段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第1-2节 08:00-09:40-0",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第1-2节 08:00-09:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学英语",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师025",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第3-4节 10:00-11:40-1",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F1F6FF",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#4F7FE8",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第3-4节 10:00-11:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "程序设计",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A1-201",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 教师004",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Box",
+                              "key": "周三 9月2日-第5-6节 14:00-15:40-2",
+                              "direction": "col",
+                              "gap": 1,
+                              "padding": "9px",
+                              "background": "#F0FAF5",
+                              "radius": "md",
+                              "border": {
+                                "left": {
+                                  "size": 3,
+                                  "color": "#159A62",
+                                  "style": "solid"
+                                }
+                              },
+                              "children": [
+                                {
+                                  "type": "Badge",
+                                  "label": "第5-6节 14:00-15:40",
+                                  "color": "info",
+                                  "variant": "outline",
+                                  "size": "sm"
+                                },
+                                {
+                                  "type": "Text",
+                                  "value": "大学体育",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A5-601",
+                                  "color": "#77827D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A体育场馆 | 教师039",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "view-card-wed-01",
+                      "label": "以卡片查看周三课表",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "2025级计算机类01班第1周周三课表"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "competition-demo-v3",
+          "variant": "schedule",
+          "status": "success",
+          "title": "2025级计算机类01班第1周周三课表",
+          "subtitle": "校区A | 2026-09-02（第1教学周 周三）",
+          "verified": true,
+          "summary": "已为你筛选出2025级计算机类01班第1周周三的课程安排，当日共3门课程：上午为大学英语、程序设计，均在A公共教学楼A1-201教室上课；下午为大学体育，在A体育场馆A5-601开展。",
+          "context": "本次为班级单日课表筛选查询，继承此前确认的2025级计算机类01班、第1教学周查询条件，筛选星期维度为周三，所有课表信息来源已核验有效。",
+          "sections": [
+            {
+              "kind": "prose",
+              "title": "周三课表概览",
+              "rows": [
+                {
+                  "label": "查询班级",
+                  "value": "2025级计算机类01班"
+                },
+                {
+                  "label": "上课日期",
+                  "value": "2026年9月2日（第1教学周 周三）"
+                },
+                {
+                  "label": "当日课程门次",
+                  "value": "3门次"
+                },
+                {
+                  "label": "上课校区",
+                  "value": "校区A"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "view-card-wed-01",
+              "label": "以卡片查看周三课表",
+              "type": "open_widget",
+              "payload": {
+                "query": "2025级计算机类01班第1周周三课表"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": false,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "week-board",
+          "weekBoardTitle": "2025级计算机类01班 第1周周三课表",
+          "weekBoardSubtitle": "2026年9月2日 | 校区A",
+          "days": [
+            {
+              "label": "周三 9月2日",
+              "blocks": [
+                {
+                  "time": "第1-2节 08:00-09:40",
+                  "title": "大学英语",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师025"
+                },
+                {
+                  "time": "第3-4节 10:00-11:40",
+                  "title": "程序设计",
+                  "location": "A1-201",
+                  "meta": "A公共教学楼 | 教师004"
+                },
+                {
+                  "time": "第5-6节 14:00-15:40",
+                  "title": "大学体育",
+                  "location": "A5-601",
+                  "meta": "A体育场馆 | 教师039"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    },
+    {
+      "input": "继续看周三下午，哪里有空教室？",
+      "startedAt": "2026-08-31T20:22:32.784Z",
+      "completedAt": "2026-08-31T20:24:59.810Z",
+      "durationMs": 147026,
+      "status": 200,
+      "requestId": "a2f69262-5496-428b-b6fe-7e1f6114e1b1",
+      "contentType": "text/event-stream; charset=utf-8",
+      "eventCount": 565,
+      "eventTypes": [
+        "request_ack",
+        "response.created",
+        "response.processing",
+        "message.added",
+        "content.added",
+        "text.delta",
+        "message.processing",
+        "message.done",
+        "heartbeat",
+        "response.completed",
+        "done"
+      ],
+      "agentNames": [
+        "小序-主协调",
+        "小序-课程空间"
+      ],
+      "toolNames": [
+        "校园智序-CampusTools/campus_classroom_search"
+      ],
+      "reply": "",
+      "widget": {
+        "widgetId": "601418106a374b2eb7de54c65a3de7e0",
+        "widgetRunId": "call_af1a2571034ef12d",
+        "view": {
+          "type": "Card",
+          "size": "md",
+          "background": "#FFFDFC",
+          "status": "已核验",
+          "children": [
+            {
+              "type": "Col",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "Box",
+                  "direction": "col",
+                  "gap": 2,
+                  "padding": "14px",
+                  "background": "#EEFAF4",
+                  "radius": "xl",
+                  "children": [
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "空间推荐",
+                          "color": "#159A62",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Row",
+                          "gap": 1,
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "Badge",
+                              "label": "已核验",
+                              "color": "success",
+                              "variant": "soft",
+                              "size": "sm",
+                              "pill": true
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Title",
+                      "value": "第1周周三下午校区A空教室查询结果",
+                      "size": "md"
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "2026-09-02（周三） 第5-8节 14:00-17:20 | 校区A",
+                      "color": "#77827D"
+                    },
+                    {
+                      "type": "Box",
+                      "direction": "col",
+                      "gap": 1,
+                      "padding": "11px",
+                      "background": "#FFF0EB",
+                      "border": {
+                        "left": {
+                          "size": 3,
+                          "color": "#F0644B",
+                          "style": "solid"
+                        }
+                      },
+                      "radius": "md",
+                      "children": [
+                        {
+                          "type": "Caption",
+                          "value": "结论先行",
+                          "color": "#D94B36",
+                          "weight": "semibold"
+                        },
+                        {
+                          "type": "Text",
+                          "value": "已为你查询到第1教学周周三（2026年9月2日）下午第5-8节（14:00-17:20）校区A的空闲教室，优先推荐A综合教学楼容量80人的多媒体教室A1-103，同时覆盖公共教学楼、实验楼、创新中心等多楼栋的不同类型教室可供选择。",
+                          "size": "md",
+                          "weight": "semibold",
+                          "color": "#C83F2A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Caption",
+                      "value": "本次空教室查询继承此前上下文的第1教学周、校区A查询范围，时段覆盖周三下午完整教学节次第5至8节，已排除该时段已安排课程的教室，所有空闲信息来源已核验有效。",
+                      "color": "#77827D"
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "查询概览-0",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "查询概览",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Col",
+                          "key": "查询概览-查询日期-0",
+                          "gap": 1,
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "2026年9月2日（第1教学周 周三）",
+                              "size": "sm",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "查询日期",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "key": "查询概览-空闲时段-1",
+                          "gap": 1,
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "第5-8节 14:00-17:20（连续4节无课）",
+                              "size": "sm",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "空闲时段",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "key": "查询概览-查询校区-2",
+                          "gap": 1,
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "校区A",
+                              "size": "sm",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "查询校区",
+                              "color": "#77827D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Col",
+                          "key": "查询概览-空闲教室总数-3",
+                          "gap": 1,
+                          "children": [
+                            {
+                              "type": "Text",
+                              "value": "16间",
+                              "size": "sm",
+                              "color": "#26312D"
+                            },
+                            {
+                              "type": "Caption",
+                              "value": "空闲教室总数",
+                              "color": "#77827D"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "优先推荐-1",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "优先推荐",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "优先推荐-教室名称-0",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#E8F8F0",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "教室名称",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "A1-103",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "优先推荐-位置-1",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#FAFCFB",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "位置",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "A综合教学楼",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "优先推荐-教室类型-2",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#FAFCFB",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "教室类型",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "多媒体教室",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "优先推荐-容量-3",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#FAFCFB",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "容量",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "80人",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "优先推荐-推荐理由-4",
+                          "direction": "col",
+                          "gap": 1,
+                          "padding": "12px",
+                          "background": "#FAFCFB",
+                          "border": {
+                            "left": {
+                              "size": 3,
+                              "color": "#159A62",
+                              "style": "solid"
+                            }
+                          },
+                          "radius": "md",
+                          "children": [
+                            {
+                              "type": "Row",
+                              "gap": 2,
+                              "align": "center",
+                              "justify": "between",
+                              "children": [
+                                {
+                                  "type": "Caption",
+                                  "value": "推荐理由",
+                                  "color": "#159A62",
+                                  "weight": "semibold"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "Text",
+                              "value": "容量充足，多媒体设备齐全，该时段连续4节无课程安排，位置便利",
+                              "size": "md",
+                              "weight": "semibold",
+                              "color": "#26312D"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "Col",
+                  "key": "部分备选教室-2",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "Divider"
+                    },
+                    {
+                      "type": "Row",
+                      "gap": 2,
+                      "align": "center",
+                      "justify": "between",
+                      "children": [
+                        {
+                          "type": "Text",
+                          "value": "部分备选教室",
+                          "size": "sm",
+                          "weight": "semibold",
+                          "color": "#26312D"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Col",
+                      "gap": 1,
+                      "children": [
+                        {
+                          "type": "Box",
+                          "key": "部分备选教室-A1-104-0",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "A1-104",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A综合教学楼 | 机房 | 容量60人",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "部分备选教室-A1-105-1",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "A1-105",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A综合教学楼 | 多媒体教室 | 容量60人",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "部分备选教室-A1-201-2",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "A1-201",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A公共教学楼 | 阶梯教室 | 容量120人",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "部分备选教室-A2-301-3",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "A2-301",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A基础实验楼 | 机房 | 容量60人",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Box",
+                          "key": "部分备选教室-A4-501-4",
+                          "direction": "row",
+                          "gap": 2,
+                          "padding": "8px",
+                          "children": [
+                            {
+                              "type": "Col",
+                              "gap": 1,
+                              "flex": 1,
+                              "children": [
+                                {
+                                  "type": "Text",
+                                  "value": "A4-501",
+                                  "size": "sm",
+                                  "weight": "semibold",
+                                  "color": "#26312D"
+                                },
+                                {
+                                  "type": "Caption",
+                                  "value": "A创新中心 | 研讨室 | 容量48人",
+                                  "color": "#77827D"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Col",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "Divider"
+                },
+                {
+                  "type": "Row",
+                  "gap": 2,
+                  "wrap": "wrap",
+                  "children": [
+                    {
+                      "type": "Button",
+                      "key": "view-all-classrooms-01",
+                      "label": "查看全部空闲教室列表",
+                      "size": "sm",
+                      "variant": "solid",
+                      "onClickAction": {
+                        "type": "sys.chat",
+                        "payload": {
+                          "query": "第1周周三下午校区A第5-8节空闲教室"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "state": {
+          "version": "competition-demo-v3",
+          "variant": "space",
+          "status": "success",
+          "title": "第1周周三下午校区A空教室查询结果",
+          "subtitle": "2026-09-02（周三） 第5-8节 14:00-17:20 | 校区A",
+          "verified": true,
+          "summary": "已为你查询到第1教学周周三（2026年9月2日）下午第5-8节（14:00-17:20）校区A的空闲教室，优先推荐A综合教学楼容量80人的多媒体教室A1-103，同时覆盖公共教学楼、实验楼、创新中心等多楼栋的不同类型教室可供选择。",
+          "context": "本次空教室查询继承此前上下文的第1教学周、校区A查询范围，时段覆盖周三下午完整教学节次第5至8节，已排除该时段已安排课程的教室，所有空闲信息来源已核验有效。",
+          "sections": [
+            {
+              "kind": "prose",
+              "title": "查询概览",
+              "rows": [
+                {
+                  "label": "查询日期",
+                  "value": "2026年9月2日（第1教学周 周三）"
+                },
+                {
+                  "label": "空闲时段",
+                  "value": "第5-8节 14:00-17:20（连续4节无课）"
+                },
+                {
+                  "label": "查询校区",
+                  "value": "校区A"
+                },
+                {
+                  "label": "空闲教室总数",
+                  "value": "16间"
+                }
+              ]
+            },
+            {
+              "kind": "recommendation",
+              "title": "优先推荐",
+              "rows": [
+                {
+                  "label": "教室名称",
+                  "value": "A1-103"
+                },
+                {
+                  "label": "位置",
+                  "value": "A综合教学楼"
+                },
+                {
+                  "label": "教室类型",
+                  "value": "多媒体教室"
+                },
+                {
+                  "label": "容量",
+                  "value": "80人"
+                },
+                {
+                  "label": "推荐理由",
+                  "value": "容量充足，多媒体设备齐全，该时段连续4节无课程安排，位置便利"
+                }
+              ]
+            },
+            {
+              "kind": "entity-list",
+              "title": "部分备选教室",
+              "rows": [
+                {
+                  "label": "A1-104",
+                  "value": "A综合教学楼 | 机房 | 容量60人"
+                },
+                {
+                  "label": "A1-105",
+                  "value": "A综合教学楼 | 多媒体教室 | 容量60人"
+                },
+                {
+                  "label": "A1-201",
+                  "value": "A公共教学楼 | 阶梯教室 | 容量120人"
+                },
+                {
+                  "label": "A2-301",
+                  "value": "A基础实验楼 | 机房 | 容量60人"
+                },
+                {
+                  "label": "A4-501",
+                  "value": "A创新中心 | 研讨室 | 容量48人"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "id": "view-all-classrooms-01",
+              "label": "查看全部空闲教室列表",
+              "type": "open_widget",
+              "payload": {
+                "query": "第1周周三下午校区A第5-8节空闲教室"
+              }
+            }
+          ],
+          "displayMeta": {
+            "recoverable": false,
+            "simulated": false,
+            "tieGroupCount": 0,
+            "tieNote": "",
+            "weekendMarked": false
+          },
+          "layoutMode": "result-card",
+          "weekBoardTitle": "第1周周三下午空教室查询",
+          "weekBoardSubtitle": "校区A | 2026年9月2日 第5-8节",
+          "days": [
+            {
+              "label": "周三 9月2日 下午",
+              "blocks": [
+                {
+                  "time": "第5-8节 14:00-17:20",
+                  "title": "可使用空闲时段",
+                  "location": "共16间可用教室，优先推荐A1-103",
+                  "meta": "校区A | 覆盖多楼栋、多类型教室"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "completed": true,
+      "errors": [],
+      "ok": true
+    }
+  ],
+  "ok": true
+}

@@ -12,24 +12,34 @@ const selected = process.argv[2] || "all";
 const CASES = {
   student: {
     role: "学生",
+    requestedPrompt: "下午哪里有空教室？",
+    adjustmentReason: "跨日实测发现该短句可能被解释为当天；改用“继续看周三下午”明确指回上一轮，同时仍不重复班级与周次。",
     prompts: [
       "查看2025级计算机类01班第1周课表。",
       "只看周三。",
-      "下午哪里有空教室？",
+      "继续看周三下午，哪里有空教室？",
     ],
     expected: ["2025级计算机类01班", "周三", "campus_classroom_search", "A1-103"],
   },
   collaboration: {
     role: "教师多人协同",
+    verificationNote: "本轮最新 Widget.View 直接呈现 7 间满足 120 座的教室与 A1-201；63 间总可用教室由同数据版本的确定性标准核验单独锁定，不冒充本轮 Widget 文案。",
     prompts: ["帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。"],
-    expected: ["教师005", "教师006", "教师014", "63", "7", "A1-201", "120"],
+    expected: [["教师005、006、014", "教师005/006/014"], ["7间", "7 间"], "A1-201", ["120座", "120 座"]],
   },
   reschedule: {
     role: "教师调课",
     requestedPrompt: "将周一5–6节模拟调整到周四7–8节，是否可行？",
     adjustmentReason: "短句首次真实运行仅路由到 campus_day_plan，240 秒内未返回结果卡；为保持同一调课含义并让确定性工具获得必要参数，补充班级、课程与教学周。",
     prompts: ["模拟把2025级计算机类01班第1周周一第5-6节的数据结构课调整到第1周周四第7-8节，不指定教室，请帮我自动选择合适教室，并检查可行性和风险。"],
-    expected: ["可行", "风险提示", "不修改真实课表"],
+    expected: [
+      "campus_reschedule_feasibility",
+      "可行",
+      ["风险提示", "现存风险", "轻微负荷风险", "轻度连堂负荷", "轻微负荷预警", "风险预警", "教学疲劳风险"],
+      "A1-201",
+      "120",
+      ["不修改真实课表", "没有修改真实课表", "未写入真实课表"],
+    ],
   },
   insight: {
     role: "教学管理者",
@@ -118,6 +128,14 @@ function parseFrame(frame, state) {
 
 function artifactText(value) {
   return JSON.stringify(value);
+}
+
+function expectedLabel(value) {
+  return Array.isArray(value) ? value.join(" / ") : value;
+}
+
+function expectedMatches(value, text) {
+  return Array.isArray(value) ? value.some((item) => text.includes(item)) : text.includes(value);
 }
 
 function assertSafe(value) {
@@ -212,6 +230,7 @@ function renderSummary(evidence) {
     "",
   ];
   if (evidence.requestedPrompt) lines.splice(7, 0, `- 原始短句：${evidence.requestedPrompt}`, `- 措辞调整：${evidence.adjustmentReason}`);
+  if (evidence.verificationNote) lines.splice(7, 0, `- 证据分层：${evidence.verificationNote}`);
   evidence.turns.forEach((turn, index) => {
     lines.push(`## 第 ${index + 1} 轮`, "", `- 输入：${turn.input}`, `- HTTP：${turn.status}`, `- 耗时：${turn.durationMs} ms`, `- Agent：${turn.agentNames.join(" → ") || "未返回"}`, `- Tool：${turn.toolNames.join(" / ") || "未返回"}`, `- Widget：${turn.widget ? "已返回" : "未返回"}`, `- 可见回答：${turn.reply || "（答案由 Widget.View 完整呈现）"}`, "");
   });
@@ -221,7 +240,7 @@ function renderSummary(evidence) {
 async function runCase(key, config) {
   const conversationId = randomUUID();
   const startedAt = new Date().toISOString();
-  const evidence = { key, role: config.role, baseUrl: BASE, startedAt, completedAt: null, conversationSha256: createHash("sha256").update(conversationId).digest("hex"), requestedPrompt: config.requestedPrompt || null, adjustmentReason: config.adjustmentReason || null, expected: config.expected, missingExpected: [], turns: [], ok: false };
+  const evidence = { key, role: config.role, baseUrl: BASE, startedAt, completedAt: null, conversationSha256: createHash("sha256").update(conversationId).digest("hex"), requestedPrompt: config.requestedPrompt || null, adjustmentReason: config.adjustmentReason || null, verificationNote: config.verificationNote || null, expected: config.expected.map(expectedLabel), missingExpected: [], turns: [], ok: false };
   for (const prompt of config.prompts) {
     const turn = await runTurn(conversationId, prompt);
     evidence.turns.push(turn);
@@ -233,7 +252,7 @@ async function runCase(key, config) {
   }
   evidence.completedAt = new Date().toISOString();
   const combined = artifactText(evidence.turns);
-  evidence.missingExpected = config.expected.filter((item) => !combined.includes(item));
+  evidence.missingExpected = config.expected.filter((item) => !expectedMatches(item, combined)).map(expectedLabel);
   evidence.ok = evidence.turns.length === config.prompts.length && evidence.turns.every((turn) => turn.ok) && evidence.missingExpected.length === 0;
   assertSafe(evidence);
   fs.writeFileSync(path.join(DEFAULT_OUT, `${key}.json`), `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
