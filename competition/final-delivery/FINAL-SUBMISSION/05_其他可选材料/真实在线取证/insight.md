@@ -16,7 +16,6 @@
 - Tool：校园智序-CampusTools/campus_teacher_load_query
 - Widget：已返回
 - 可见回答：（答案由 Widget.View 完整呈现）
-
 ## 第 2 轮
 
 - 输入：看他的课表。
@@ -36,4 +35,3 @@
 - Tool：校园智序-CampusTools/campus_risk_check
 - Widget：已返回
 - 可见回答：（答案由 Widget.View 完整呈现）
-

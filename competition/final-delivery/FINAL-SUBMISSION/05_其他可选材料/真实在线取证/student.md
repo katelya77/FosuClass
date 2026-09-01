@@ -18,7 +18,6 @@
 - Tool：校园智序-CampusTools/campus_schedule_query
 - Widget：已返回
 - 可见回答：（答案由 Widget.View 完整呈现）
-
 ## 第 2 轮
 
 - 输入：只看周三。
@@ -38,4 +37,3 @@
 - Tool：校园智序-CampusTools/campus_classroom_search
 - Widget：已返回
 - 可见回答：（答案由 Widget.View 完整呈现）
-

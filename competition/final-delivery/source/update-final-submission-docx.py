@@ -257,7 +257,7 @@ narrative_replacements = {
     "应用场景三｜模拟调课": "应用场景三｜教师调课核验",
     "应用场景四｜全局教学洞察": "应用场景四｜教学管理洞察",
     "可行、有提醒，但不写入真实课表": "没有冲突，不等于来得及；可行、有提醒，但不写入真实课表",
-    "统一结果卡把自然语言结论、结构化数据与工具证据投影到同一展示层。": "统一结果卡把自然语言结论、结构化数据与工具证据投影到同一展示层；结果卡支持多轮接力——同一个对象可以继续追问，从查课表到看风险再到模拟调课，上下文不丢。",
+    "统一结果卡把自然语言结论、结构化数据与工具证据投影到同一展示层。": "统一结果卡把自然语言结论、结构化数据与工具证据投影到同一展示层；结果卡支持多轮接力——同一会话持续承接对象与时间条件，可从查课表继续看风险或模拟调课。",
 }
 for paragraph in all_paragraphs(doc):
     original = paragraph.text
@@ -294,7 +294,7 @@ ROLE_TABLE_LEFT = [
 ]
 ROLE_TABLE_RIGHT = [
     "小序怎样回答",
-    "一句话查询班级 / 教师课表与空教室，支持连续追问与共享上下文",
+    "一句话查询班级 / 教师课表与空教室，支持连续追问承接上下文",
     "共同空闲计算、教室推荐与调课前模拟核验",
     "负载排名、对象定位与逐层风险下钻",
     "查、算、筛、验、解释，一次任务内完成",
@@ -314,7 +314,7 @@ front_matter_replacements = {
     "课表没有冲突，不代表教学安排没有风险": "从 1500+ 底层课表服务，走向教学时空协同",
     "校园教学任务跨越时间、空间、人群与规则；单一查询只能看到其中一层。": "真实使用证明了查询需求，也让我们看到：查得到，不等于安排得合理。",
     "匿名演示数据中的教学风险发现：冲突为 0，但教学空间转场持续发生。": "查询只是第一步；真正复杂的是人员、时间、空间、课程与规则之间的关系。",
-    "真正的问题不是“能不能排”，而是“排完之后是否仍然可行、合理、可解释”。": "底层校园课表服务累计服务用户达到 1500+；本次作品是在真实需求上的能力升级。",
+    "真正的问题不是“能不能排”，而是“排完之后是否仍然可行、合理、可解释”。": "底层校园课表服务已在真实校园场景投入使用，累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
     "累计真实用户 1500+": "同一套教学时空，三类人有不同问题",
     "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。真实使用反馈推动作品从查询工具演进为可理解、可核验的校园教学任务智能体。": "学生需要查课与找空间，教师需要协同与调课，教学管理者需要看全局与查风险。",
     "在线体验首页：统一呈现作品定位、任务入口与核心场景。": "在线体验先呈现三类用户，再说明背后的智能体与工具。",
@@ -335,7 +335,7 @@ for paragraph in all_paragraphs(doc):
 for table in doc.tables:
     text = "\n".join(cell.text for row in table.rows for cell in row.cells)
     if "课程冲突" in text and "最短转场间隔" in text:
-        set_table_grid(table, [["1500+\n底层服务用户", "查询 ≠\n合理安排", "人 × 时 × 空 × 规则\n真正复杂关系"]])
+        set_table_grid(table, [["1500+\n底层课表服务用户", "查询 ≠\n合理安排", "人 × 时 × 空 × 规则\n真正复杂关系"]])
     elif "累计服务用户" in text and "校园使用环境" in text:
         set_table_grid(table, [["学生\n查课与找空间", "教师\n协同与调课", "教学管理者\n看全局与查风险"]])
     elif "主协调" in text and "课表" in text and "洞察" in text and "层" in text:
@@ -380,20 +380,36 @@ for paragraph in doc.paragraphs:
     elif value.startswith("作品并非从概念页起步"):
         set_text_keep_first_run(
             paragraph,
-            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
+            "底层校园课表服务已在真实校园场景投入使用，累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
         )
     elif value.startswith("对外材料仅保留"):
         set_text_keep_first_run(
             paragraph,
-            "底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。匿名评审不展示学校、学院、姓名、学号、内部服务地址或任何账号凭证；公开评审域名除外。",
+            "底层校园课表服务已在真实校园场景投入使用，累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。匿名评审不展示学校、学院、姓名、学号、内部服务地址或任何账号凭证；公开评审域名除外。",
         )
     elif value.startswith("让教学时空，被理解"):
         set_text_keep_first_run(paragraph, "让教学时空，被理解、被安排。")
     elif value.startswith("总结："):
         set_text_keep_first_run(
             paragraph,
-            "总结：底层校园课表服务累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡呈现核验依据。",
+            "总结：底层校园课表服务已在真实校园场景投入使用，累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。生成模型负责理解与组织，CampusTools 负责动态事实，结果卡呈现核验依据。",
         )
+
+# Final material text freeze: remove the last legacy attribution and absolute
+# context claims regardless of whether they are split across runs or cells.
+freeze_replacements = {
+    "已在真实校园教学服务场景投入使用，累计真实用户量达到 1500+。": "底层校园课表服务已在真实校园场景投入使用，累计服务用户达到 1500+；本次参赛作品在这些真实需求基础上进一步扩展为校园教学时空协同智能体。",
+    "连续追问不丢上下文": "连续追问承接上下文",
+    "连续追问不丢失上下文": "连续追问承接上下文",
+    "上下文不丢": "同一会话持续承接对象与时间条件",
+}
+for paragraph in all_paragraphs(doc):
+    original = paragraph.text
+    updated = original
+    for old, new in freeze_replacements.items():
+        updated = updated.replace(old, new)
+    if updated != original:
+        set_text_keep_first_run(paragraph, updated)
 
 # Role-facing scenario copy.  NOTE: match the pristine document's real
 # spacing (“教师025”, “第1周”) — earlier space-padded prefixes never matched.
