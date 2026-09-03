@@ -12,6 +12,7 @@ assert(storageSource.includes("duplicateUploadRetentionDays"), "storage lifecycl
 assert(storageSource.includes("failedUploadRetentionDays"), "storage lifecycle must apply failed upload retention");
 assert(storageSource.includes("incompleteUploadRetentionHours"), "storage lifecycle must apply 24-hour incomplete upload retention");
 assert(storageSource.includes("term-latest-published"), "storage lifecycle must preserve each term latest published upload");
+assert(storageSource.includes("superseded-published-upload"), "storage lifecycle must prune old non-latest published upload records");
 assert(uploadSource.includes("STAGING_UPLOAD_ACTIVE_REFERENCE"), "upload deletion must protect active upload records");
 assert(uploadSource.includes("STAGING_UPLOAD_LATEST_REFERENCE"), "upload deletion must protect staging-latest source records");
 assert(storageSource.includes("dryRun"), "storage cleanup must support preview/dry-run");

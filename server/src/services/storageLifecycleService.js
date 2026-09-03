@@ -265,6 +265,12 @@ function collectUploadMaintenanceCandidates(config) {
         candidates.push({ type: "staging-upload-record", path: item.path, preserveReason: "term-latest-published", bytes: 0, uploadId: item.name });
         return;
       }
+      if (status === "published") {
+        if (olderThan(item.stat, supersededMs)) {
+          candidates.push({ type: "superseded-published-upload", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
+        }
+        return;
+      }
       if (["duplicate", "unchanged"].includes(status) && olderThan(item.stat, duplicateMs)) {
         candidates.push({ type: "duplicate-upload", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
         return;
