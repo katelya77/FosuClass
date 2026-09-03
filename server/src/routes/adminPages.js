@@ -6185,7 +6185,7 @@ ${DAILY_KNOWLEDGE_STYLES}
               <label for="publisherQuickTermInput" style="margin:0;flex:1 1 220px;max-width:320px;">目标学期
                 <input type="text" id="publisherQuickTermInput" inputmode="numeric" pattern="[0-9]{4}-[0-9]{4}-[12]" placeholder="例如 2027-2028-1" style="margin-top:4px;">
               </label>
-              <button type="button" class="primary" id="copyPublisherTermCommandBtn">复制一键命令</button>
+              <button type="button" class="secondary" id="copyPublisherTermCommandBtn">复制一键命令</button>
             </div>
             <code id="publisherQuickCommandPreview" style="display:block;margin-top:10px;white-space:pre-wrap;word-break:break-all;">正在读取当前学期...</code>
           </div>
