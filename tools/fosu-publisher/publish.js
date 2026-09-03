@@ -1006,7 +1006,24 @@ function resolveCanonicalPreferredTerm() {
 async function resolveTerm(args) {
   const cliTerm = String(args.term || args.semester || "").trim();
   const envTerm = String(process.env.PREFERRED_SEMESTER || "").trim();
-  const source = await fetchOracleActivePointer({ oracleBaseUrl: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL });
+  // Mock Publisher runs must be hermetic. They previously reached the live
+  // runtime pointer, which made local tests pass only when an admin token was
+  // present and made CI fail with 403. Real runs still require the Oracle
+  // pointer so future-term auto-promotion is based on production truth.
+  const source = process.env.FOSU_PUBLISHER_MOCK === "1"
+    ? {
+      source: "publisher-mock-active-pointer",
+      pointer: {
+        activeTerm: String(
+          process.env.FOSU_PUBLISHER_MOCK_ACTIVE_TERM ||
+          cliTerm ||
+          envTerm ||
+          resolveCanonicalPreferredTerm()
+        ).trim(),
+        releaseVersion: "publisher-mock-active-release",
+      },
+    }
+    : await fetchOracleActivePointer({ oracleBaseUrl: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL });
   const active = extractActiveRelease(source);
   if (cliTerm) {
     const explicit = selectPublisherTerm({

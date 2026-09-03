@@ -220,6 +220,7 @@ async function run() {
   assert(publishSource.includes("verify-session.js"), "publisher must call verify-session.js");
   assert(publishSource.includes("CRAWL_OUTPUT_MISSING"), "publisher should fail when crawl output is missing");
   assert(publishSource.includes("withHttpRetry"), "publisher admin HTTP calls should retry transient failures");
+  assert(publishSource.includes("publisher-mock-active-pointer"), "publisher mock tests must not read the live active pointer");
   assert(publishSource.includes("ECONNABORTED"), "publisher should classify write timeouts as retryable");
   assert(publishSource.includes("staging upload finalize"), "publisher should wait for staging finalize jobs before publishing");
   assert(publishSource.includes("staging-finalize-reconcile"), "publisher resume should reconcile old finalize-wait stages");
