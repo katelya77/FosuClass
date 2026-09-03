@@ -228,7 +228,13 @@ function isActiveUploadRecord(record, context) {
   if (!record) return false;
   const version = String(record.publishedReleaseVersion || record.publishedVersion || record.releaseVersion || record.summary?.releaseVersion || "").trim();
   const status = String(record.status || record.stagingState || "").toLowerCase();
-  return Boolean(record.active || status === "published" && context.activeVersion && version && context.activeVersion === version);
+  if (context.activeVersion) {
+    return Boolean(status === "published" && version && context.activeVersion === version);
+  }
+  // Legacy records may contain a sticky `active=true` flag. Trust it only when
+  // the runtime pointer is unavailable; once a pointer exists, exact release
+  // version matching above is the authority.
+  return record.active === true;
 }
 
 function collectUploadMaintenanceCandidates(config) {
@@ -571,6 +577,7 @@ module.exports = {
   getDiskStatus,
   getStorageStatus,
   gzipAndRotateLog,
+  isActiveUploadRecord,
   runMaintenance,
   scanStorageSizes,
   scheduleMaintenance,

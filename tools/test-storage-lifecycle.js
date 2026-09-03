@@ -20,6 +20,31 @@ const jobService = require("../server/src/services/jobService");
 const stagingUploadService = require("../server/src/services/stagingUploadService");
 const storageLifecycleService = require("../server/src/services/storageLifecycleService");
 
+assert.strictEqual(
+  storageLifecycleService.isActiveUploadRecord(
+    { active: true, status: "published", publishedReleaseVersion: "old-release" },
+    { activeVersion: "current-release" },
+  ),
+  false,
+  "a sticky legacy active flag must not protect an upload from a different release version",
+);
+assert.strictEqual(
+  storageLifecycleService.isActiveUploadRecord(
+    { active: false, status: "published", publishedReleaseVersion: "current-release" },
+    { activeVersion: "current-release" },
+  ),
+  true,
+  "the published upload for the exact runtime release must stay protected",
+);
+assert.strictEqual(
+  storageLifecycleService.isActiveUploadRecord(
+    { active: true, status: "published", publishedReleaseVersion: "legacy-release" },
+    { activeVersion: "" },
+  ),
+  true,
+  "legacy active flags remain a conservative fallback when the runtime pointer is unavailable",
+);
+
 function snapshot(version) {
   const course = {
     courseName: "Storage Course",
