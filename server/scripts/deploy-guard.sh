@@ -55,10 +55,27 @@ case "$ACTION" in
       echo "newCommitSha=$COMMIT_SHA"
       echo "backupAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     } > "$BACKUP_DIR/pre-deploy-state.txt"
+    # storage is live application state. Pause the running container while tar
+    # reads it so the backup is internally consistent and GNU tar cannot abort
+    # with "file changed as we read it". Always unpause on success, failure, or
+    # interruption; this guard runs before any deploy mutation.
+    container_paused_by_guard=false
+    resume_container() {
+      if [ "$container_paused_by_guard" = true ]; then
+        sudo docker unpause "$CONTAINER_NAME" > /dev/null 2>&1 || true
+        container_paused_by_guard=false
+      fi
+    }
+    trap resume_container EXIT INT TERM HUP
+    if [ "$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" = true ]; then
+      sudo docker pause "$CONTAINER_NAME" > /dev/null
+      container_paused_by_guard=true
+    fi
     # storage subtrees written by the root-owned API container (storage/secure,
-    # publisher-receipts) are unreadable to the deploy user; archive via sudo so
-    # the backup is complete instead of aborting the deploy (exit 2 from tar).
+    # publisher-receipts) are unreadable to the deploy user; archive via sudo.
     sudo tar czf "$BACKUP_DIR/server-storage.tar.gz" -C "$APP_DIR/server" storage
+    resume_container
+    trap - EXIT INT TERM HUP
     if [ -f "$APP_DIR/server/.env" ]; then
       sudo cp -a "$APP_DIR/server/.env" "$BACKUP_DIR/env.backup"
       sudo chmod 600 "$BACKUP_DIR/env.backup"

@@ -150,6 +150,19 @@ assert(
   fs.existsSync(path.join(root, "server", "scripts", "deploy-guard.sh")),
   "deploy-guard.sh must exist in the repo (SCP uploads server/**)",
 );
+const deployGuard = fs.readFileSync(path.join(root, "server", "scripts", "deploy-guard.sh"), "utf8");
+assert(
+  deployGuard.includes('sudo docker pause "$CONTAINER_NAME"'),
+  "pre-deploy storage backup must pause the live writer for a consistent archive",
+);
+assert(
+  deployGuard.includes('sudo docker unpause "$CONTAINER_NAME"'),
+  "pre-deploy storage backup must always resume the paused container",
+);
+assert(
+  deployGuard.includes("trap resume_container EXIT INT TERM HUP"),
+  "pre-deploy storage backup must resume the container after interruption or failure",
+);
 assert(
   remoteDeployScript.indexOf("deploy-guard.sh pre ") < remoteDeployScript.indexOf("docker compose up -d --build"),
   "pre-deploy backup must run before docker compose up",
