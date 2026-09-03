@@ -15,7 +15,6 @@ const tests = [
   "tools/test-capability-contract.js",
   "tools/test-xiaofu-action-bus.js",
   "tools/test-coze-tool-gateway.js",
-  "tools/test-ai-voice-transcribe.js",
   "tools/test-fosu-knowledge-ingest.js",
   "tools/test-xiaofu-capability-registry.js",
   "tools/test-agent-capability-manifest.js",

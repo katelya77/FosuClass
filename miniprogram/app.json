@@ -50,11 +50,6 @@
     "request": 60000
   },
   "__usePrivacyCheck__": true,
-  "permission": {
-    "scope.record": {
-      "desc": "仅用于本次语音转文字；识别完成后会删除临时音频，不会用于其他用途。"
-    }
-  },
   "requiredPrivateInfos": [],
   "tabBar": {
     "color": "#7a8494",

@@ -176,8 +176,8 @@ function inferCampus(text) {
 
 function parseDateOffset(text) {
   const value = compact(text);
-  if (/后天/.test(value)) return { dateOffset: 2, dateHint: "day_after_tomorrow" };
   if (/大后天/.test(value)) return { dateOffset: 3, dateHint: "in_3_days" };
+  if (/后天/.test(value)) return { dateOffset: 2, dateHint: "day_after_tomorrow" };
   if (/明天|翌日|明日/.test(value)) return { dateOffset: 1, dateHint: "tomorrow" };
   if (/今天|今日/.test(value)) return { dateOffset: 0, dateHint: "today" };
   return null;

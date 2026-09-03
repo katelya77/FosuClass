@@ -17,11 +17,6 @@ const AI_CLIENT_EXPRESSION_LAYER_ENABLED = false;
 const AI_MAX_HISTORY_MESSAGES = 6;
 const AI_MAX_USER_MESSAGE_LENGTH = 1200;
 const AI_MAX_DAILY_GENERATIVE_REQUESTS = 20;
-// 语音走 CloudBase 云函数 aiVoiceTranscribe → 腾讯 ASR；密钥仅在云函数环境
-const AI_VOICE_INPUT_ENABLED = true;
-const AI_VOICE_PROVIDER = "cloudbase-function";
-const AI_VOICE_MAX_DURATION_MS = 15000;
-const AI_VOICE_DAILY_LIMIT = 30;
 // 生产聊天传输：true = runs API + RunEvent 轮询（UI 状态全部来自服务端真实事件）；
 // false = 回滚到直连 /api/ai/agent/chat（无实时事件，仅兼容/回滚用途）。
 const AI_AGENT_RUNS_TRANSPORT_ENABLED = true;
@@ -44,9 +39,5 @@ module.exports = {
   AI_MAX_HISTORY_MESSAGES,
   AI_MAX_USER_MESSAGE_LENGTH,
   AI_MAX_DAILY_GENERATIVE_REQUESTS,
-  AI_VOICE_INPUT_ENABLED,
-  AI_VOICE_PROVIDER,
-  AI_VOICE_MAX_DURATION_MS,
-  AI_VOICE_DAILY_LIMIT,
   AI_AGENT_RUNS_TRANSPORT_ENABLED,
 };

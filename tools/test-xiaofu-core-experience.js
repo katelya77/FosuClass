@@ -2,7 +2,7 @@
 /**
  * Core experience convergence suite — exercises shipped modules on real paths.
  * Covers: working state follow-up, GoalContract-ish intent lock, teacher college
- * filter (client+server), voice auth state machine, UI geometry helpers,
+ * filter (client+server), retired voice surface, UI geometry helpers,
  * response composer domain labels, public-zero provider structural check.
  */
 const assert = require("assert");
@@ -295,84 +295,8 @@ const teacherFixture = [
   check("TEACHER_INDEX_SCHEMA_VERSION >= 4", storage.TEACHER_INDEX_SCHEMA_VERSION >= 4);
 }
 
-// --- 3) Voice state machine
-const voiceAuth = require(path.join(ROOT, "miniprogram/utils/voiceAuthStateMachine"));
-
-function mockWx(script) {
-  const calls = [];
-  return {
-    calls,
-    wx: {
-      getPrivacySetting(opts) {
-        calls.push("getPrivacySetting");
-        const r = script.privacy || { needAuthorization: false };
-        opts.success && opts.success(r);
-      },
-      requirePrivacyAuthorize(opts) {
-        calls.push("requirePrivacyAuthorize");
-        if (script.privacyOk === false) opts.fail && opts.fail({});
-        else opts.success && opts.success({});
-      },
-      getSetting(opts) {
-        calls.push("getSetting");
-        const auth = script.authSetting || {};
-        opts.success && opts.success({ authSetting: auth });
-      },
-      authorize(opts) {
-        calls.push("authorize");
-        if (script.authorizeOk) opts.success && opts.success({});
-        else opts.fail && opts.fail({});
-      },
-      openSetting(opts) {
-        calls.push("openSetting");
-        opts.success && opts.success({ authSetting: script.afterSetting || {} });
-      },
-    },
-  };
-}
-
 (async () => {
-  // first tap: privacy then record; never openSetting first
-  {
-    const host = mockWx({ privacy: { needAuthorization: true }, privacyOk: true, authSetting: {}, authorizeOk: true });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("voice first path ok", res.ok === true && res.state.phase === "ready");
-    check("voice privacy before authorize", host.calls.indexOf("getPrivacySetting") < host.calls.indexOf("authorize"));
-    check("voice no openSetting on first success", !host.calls.includes("openSetting"));
-  }
-  {
-    const host = mockWx({
-      privacy: { needAuthorization: false },
-      authSetting: { "scope.record": false },
-      authorizeOk: false,
-    });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("voice denied suggests setting", res.ok === false && res.openSettingSuggested === true);
-    check("voice denied reasonCode", res.reasonCode === "WECHAT_RECORD_DENIED");
-    check("voice denied did not auto openSetting", !host.calls.includes("openSetting"));
-  }
-  {
-    // Undecided: authorize fail + still no scope.record key
-    const host = mockWx({
-      privacy: { needAuthorization: false },
-      authSetting: {},
-      authorizeOk: false,
-    });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("voice undecided reasonCode", res.reasonCode === "WECHAT_RECORD_UNDECIDED");
-    check("voice undecided can retry", res.canRetryAuthorize === true);
-    check("voice undecided no openSetting", res.openSettingSuggested === false);
-  }
-  {
-    const host = mockWx({
-      privacy: { needAuthorization: false },
-      authSetting: { "scope.record": true },
-    });
-    const res = await voiceAuth.resumeAfterOpenSetting(voiceAuth.createInitialState(), host);
-    check("voice resume after setting", res.ok === true && res.shouldResume === true);
-  }
-
-  // --- 4) Geometry helpers (real DOM snapshot-shaped inputs)
+  // --- 3) Geometry helpers (real DOM snapshot-shaped inputs)
   const geometry = require(path.join(ROOT, "miniprogram/utils/xiaofuGeometry"));
   {
     // Full-width capsule: same left as wrap, almost full width
@@ -444,16 +368,16 @@ function mockWx(script) {
     check("ui composer pill", wxml.includes("composer-pill"));
     check("ui no 麦 text button", !/>麦</.test(wxml));
     check("ui no ↑ send glyph", !/{{sending \? "■" : "↑"}}/.test(wxml) && !/>↑</.test(wxml));
-    check("ui svg mic", wxml.includes("composer/microphone.svg"));
+    check("ui no voice control", !/voice|microphone|stop-wave/i.test(wxml));
     check("ui svg send", wxml.includes("composer/send.svg"));
     check("ui capsule width 100%", /\.agent-status-capsule\s*\{[^}]*width:\s*100%/.test(wxss));
     check("ui capsule no width auto", !/\.agent-status-capsule\s*\{[^}]*width:\s*auto/.test(wxss));
     check("ui composer align center", /\.composer-pill\s*\{[^}]*align-items:\s*center/.test(wxss));
     check("ui composer in-flow relative", /\.composer\s*\{[^}]*position:\s*relative/.test(wxss));
     check("ui composer not absolute overlay", !/\.composer\s*\{[^}]*position:\s*absolute/.test(wxss));
-    check("ui message-scroll tight bottom pad", /\.message-scroll\s*\{[^}]*padding:\s*4rpx\s+0\s+12rpx/.test(wxss));
+    check("ui message-scroll tight bottom pad", /\.message-scroll\s*\{[^}]*padding:\s*var\(--xf-space-1\)\s+0\s+var\(--xf-space-4\)/.test(wxss));
     check("ui reduced-motion", /prefers-reduced-motion/.test(wxss));
-    check("app.json record permission", appJson.permission && appJson.permission["scope.record"] && /语音转文字/.test(appJson.permission["scope.record"].desc));
+    check("app.json no record permission", !appJson.permission || !appJson.permission["scope.record"]);
     check("svg files exist", fs.existsSync(path.join(ROOT, "miniprogram/assets/icons/composer/plus.svg")));
     check("scheduleNavigationService exists", fs.existsSync(path.join(ROOT, "miniprogram/services/scheduleNavigationService.js")));
     check("audit doc exists", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/agent-platform-reorientation-audit.md")));

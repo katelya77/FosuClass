@@ -50,17 +50,17 @@
 - 动物科技学院搜索陈芳必须命中；人文学院搜索陈芳不得命中；全校搜索陈芳必须命中。
 - 教师、班级、教室、课程四类结果必须通过统一导航服务直接打开 schedule-view。
 
-### R8 语音状态机
+### R8 文字输入边界
 
-- 状态必须按 `privacy → record_permission → recording → transcribing → fill_composer` 转移。
-- 必须区分隐私授权失败、微信录音权限失败、系统麦克风失败、ASR 未开通、ASR 调用失败。
-- 转写成功只能填入 composer，用户仍控制发送；云函数部署成功不得被描述为真机语音可用。
+- 校园管家只保留文字 Composer 与受控快捷任务，不展示麦克风入口。
+- 小程序不得申请 `scope.record`，不得上传临时音频，也不得调用语音转写云函数。
+- 退役能力必须从客户端依赖、CloudBase 部署清单和发布门禁中一并移除，并由负向测试防止回归。
 
 ### R9 UI 真相流
 
 - Loading/Understanding/Thinking/Tool/Verify/Compose 必须消费服务端 RunEvent；客户端不得猜测正在执行的具体阶段。
 - `Thinking` 只能在真实 `provider.started` 后显示。
-- 状态岛必须全宽且真居中；只保留一个悬浮输入胶囊；消息区底部 inset 必须由真实 composer 高度驱动。
+- 状态提示必须全宽、轻量且可展开；只保留一个底部文字 Composer；消息区底部 inset 必须由真实 composer 高度驱动。
 - Action、Card、RunEvent 必须由同一响应/事件状态流消费。
 
 ## 3. 非功能需求

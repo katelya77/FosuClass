@@ -90,7 +90,7 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
     case "understanding.completed":
       return "已理解任务目标";
     case "understanding.fallback":
-      return "增强理解暂不可用，已切换确定性理解";
+      return "正在改用校园工具理解";
     case "intent.resolved":
     case "skill.selected":
       return "正在理解你的问题";
@@ -127,7 +127,7 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
     case "provider.completed":
       return "正在组织回答";
     case "provider.failed":
-      return "增强理解暂不可用";
+      return "智能理解未完成，校园工具继续处理";
     case "provider.shadow.started":
       return "正在执行推理层影子评估";
     case "provider.shadow.completed":
@@ -147,7 +147,7 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
       if (event.status === "partial") return "部分结果已通过核验";
       return "结果已核验";
     case "run.degraded":
-      return "已切换到本地能力";
+      return "校园工具已完成";
     case "run.completed":
       return "已完成";
     case "run.failed":

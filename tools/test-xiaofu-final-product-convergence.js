@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Final product convergence — real shipped path gates:
- * Teacher Index Schema v3 + 陈芳三组、四类课表直开、状态岛/composer 几何、麦克风 reasonCode。
+ * Teacher Index Schema v3 + 陈芳三组、四类课表直开、状态提示/composer 几何、文本输入边界。
  * Inputs use real DOM-shaped rects and production filter functions (not reimplemented).
  */
 const assert = require("assert");
@@ -29,7 +29,6 @@ const releasePackService = require(path.join(ROOT, "miniprogram/services/release
 const releaseService = require(path.join(ROOT, "server/src/services/releaseService"));
 const storage = require(path.join(ROOT, "miniprogram/utils/storage"));
 const geometry = require(path.join(ROOT, "miniprogram/utils/xiaofuGeometry"));
-const voiceAuth = require(path.join(ROOT, "miniprogram/utils/voiceAuthStateMachine"));
 const scheduleNav = require(path.join(ROOT, "miniprogram/services/scheduleNavigationService"));
 const agentService = require(path.join(ROOT, "server/src/services/ai/agentService"));
 
@@ -282,72 +281,7 @@ const payloadV3 = {
   check("js scrollMessagesToBottom", pageJs.includes("scrollMessagesToBottom"));
 }
 
-// ---------- Voice reasonCodes ----------
-function mockWx(script) {
-  const calls = [];
-  return {
-    calls,
-    wx: {
-      getPrivacySetting(opts) {
-        calls.push("getPrivacySetting");
-        opts.success && opts.success(script.privacy || { needAuthorization: false });
-      },
-      requirePrivacyAuthorize(opts) {
-        calls.push("requirePrivacyAuthorize");
-        if (script.privacyOk === false) opts.fail && opts.fail({});
-        else opts.success && opts.success({});
-      },
-      getSetting(opts) {
-        calls.push("getSetting");
-        opts.success && opts.success({ authSetting: script.authSetting || {} });
-      },
-      authorize(opts) {
-        calls.push("authorize");
-        if (script.authorizeOk) opts.success && opts.success({});
-        else opts.fail && opts.fail({ errMsg: script.authErrMsg || "authorize:fail" });
-      },
-      openSetting(opts) {
-        calls.push("openSetting");
-        opts.success && opts.success({ authSetting: script.afterSetting || {} });
-      },
-    },
-  };
-}
-
 (async () => {
-  {
-    const host = mockWx({ privacy: { needAuthorization: true }, privacyOk: false });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("reason PRIVACY_NOT_ACCEPTED", res.reasonCode === "PRIVACY_NOT_ACCEPTED");
-  }
-  {
-    const host = mockWx({ authSetting: {}, authorizeOk: false });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("reason WECHAT_RECORD_UNDECIDED", res.reasonCode === "WECHAT_RECORD_UNDECIDED");
-    check("undecided canRetryAuthorize", res.canRetryAuthorize === true);
-  }
-  {
-    const host = mockWx({ authSetting: { "scope.record": false } });
-    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
-    check("reason WECHAT_RECORD_DENIED", res.reasonCode === "WECHAT_RECORD_DENIED");
-    check("denied openSettingSuggested", res.openSettingSuggested === true);
-  }
-  {
-    const st = voiceAuth.markRecorderStartFailed({}, "system denied microphone");
-    check("reason SYSTEM_MIC_DENIED or RECORDER", ["SYSTEM_MIC_DENIED", "RECORDER_START_FAILED"].includes(st.reasonCode));
-  }
-  {
-    const st = voiceAuth.markAsrError({}, "ASR_NOT_ENABLED");
-    check("reason ASR_NOT_ENABLED", st.reasonCode === "ASR_NOT_ENABLED");
-    const st2 = voiceAuth.markAsrError({}, "ASR_FAILED");
-    check("reason ASR_FAILED", st2.reasonCode === "ASR_FAILED");
-  }
-  {
-    const host = mockWx({ authSetting: { "scope.record": true } });
-    const res = await voiceAuth.resumeAfterOpenSetting(voiceAuth.createInitialState(), host);
-    check("resume after setting", res.ok && res.shouldResume);
-  }
-
   // public zero external models structural
   {
     const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "server/config/agent-capability-manifest.json"), "utf8"));
