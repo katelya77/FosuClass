@@ -6,13 +6,15 @@
 
 ## 常用命令
 
-日常同步：
+推荐入口（明确学期，日常更新和新学期首次同步都用这一条）：
 
 ```powershell
-npm run sync:publish
+npm run sync:publish -- --term=2026-2027-1
 ```
 
-当 `config/terms/<term>.json` 中 `preferred: true` 的学期领先线上 active 学期时（例如新学期 `2026-2027-1` 已配置但线上仍是 `2025-2026-2`），`sync:publish` 会自动切换到该新学期并升级为 full 全量采集（目录 network-only、强制刷新），无需手工加 `--mode=full --term=...`；需要固定其他学期仍用显式 `--term`。
+同一学期会自动采用 routine 日常模式；指定学期领先线上 active 学期时会自动升级为 full 全量采集（目录 network-only、强制刷新）。因此未来 `2026-2027-2`、`2027-2028-1` 仍只需更换 `--term`，不需要在命令里维护开学日期和总周数。
+
+省略 `--term` 时，Publisher 使用 `config/terms/<term>.json` 中 `preferred: true` 的学期。运维人员需要避免误选学期时，应始终显式传入 `--term`。
 
 深度全量模式（手工指定）：
 
@@ -50,7 +52,8 @@ npm run sync:export-cloudbase -- --release=<releaseVersion>
 6. 构建不可变 Release Pack 并执行 Deep Health。
 7. 同步 OpenResty 并激活 runtime pointer。
 8. 自动镜像 CloudBase Hosting，先上传 release 目录，远端校验后最后覆盖 `runtime/active.json`。
-9. 自动运行 Oracle/CloudBase live smoke，双源一致才显示发布成功。
+9. 新 CloudBase 版本切换成功后，自动保护 active 与最近 3 个版本并清理更老版本；no-change 日常同步跳过这一步。
+10. 自动运行 Oracle/CloudBase live smoke，双源一致才显示发布成功。
 
 任何阶段失败都不得切换 active，旧线上版本继续可用。
 
@@ -84,24 +87,22 @@ GitHub Actions 部署服务端不等于微信小程序代码已经上传。体�
 
 ## 学期周数规则
 
-学期配置优先级：
+学期配置解析优先级：
 
-1. 显式 `--total-weeks`
-2. 同学期 Term Registry
-3. 已验证本地 Term Config
-4. 新学期无配置时报错
+1. 仓库内已验证的 `config/terms/<term>.json`
+2. 显式传入并完整成组的 `--term-start-date`、`--total-weeks`、`--week-start`
+3. 同学期后台 Term Registry
+4. 新学期仍无可信配置时快速报错
 
-`2025-2026-2` 的配置为：
+Publisher 不会根据学期名称猜测开学日期或教学周数。新学期先在后台“学期管理”录入可信配置，或新增经核实的本地 Term Config；CLI 参数仅作为应急覆盖。
 
-```json
-{
-  "termStartDate": "2026-03-09",
-  "weekStart": "monday",
-  "totalWeeks": 19
-}
-```
+## CloudBase 保留策略
 
-CLI 与 Registry 冲突时默认采用 Registry；只有显式 `--override-term-config` 才允许覆盖。
+- `FOSU_CLOUDBASE_AUTO_PRUNE=true`：只在新版本成功上传并切换 pointer 后自动清理。
+- `FOSU_CLOUDBASE_KEEP_LATEST=3`：除 active / last-known-good 外至少保留最近 3 个版本。
+- `--skip-cloudbase-prune`：单次同步跳过清理。
+- `--prune-cloudbase`：即使本次镜像是 no-op，也执行一次受保护的远端保留清理。
+- 清理失败只写入 Publisher receipt 并提示重试，不回滚已经验证生效的 Release。
 
 ## 运行产物
 

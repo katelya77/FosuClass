@@ -106,7 +106,7 @@ function getActiveInfo() {
       activeCanonicalHash: "",
     };
   }
-  let activeCanonicalHash = normalizeHash(active.canonicalHash);
+  const activeCanonicalHash = normalizeHash(active.canonicalHash);
   return {
     active,
     activeReleaseVersion: active.version || active.releaseVersion || "",
@@ -190,10 +190,12 @@ function patchLatestStagingMeta(patch) {
 function inferUploadLifecycle(upload, activeInfo, stagingInfo) {
   const uploadHash = normalizeHash(upload && (upload.canonicalHash || upload.summary && upload.summary.canonicalHash));
   const uploadVersion = String(upload && (upload.publishedReleaseVersion || upload.publishedVersion || upload.releaseVersion || upload.summary && upload.summary.releaseVersion) || "");
-  const activeHash = activeInfo.activeCanonicalHash;
   const activeVersion = activeInfo.activeReleaseVersion;
+  // Hash equality means "this observation matches the live data"; it does not
+  // make every historical upload the source of the active pointer. Only the
+  // reconciled source record (or a published record for the exact version) is
+  // Active. This keeps old unchanged/duplicate markers safely cleanable.
   const isActive = Boolean(
-    (activeHash && uploadHash && activeHash === uploadHash) ||
     (activeVersion && uploadVersion && activeVersion === uploadVersion && upload.status === "published") ||
     (upload && upload.active === true)
   );

@@ -193,14 +193,26 @@ async function run() {
   process.env.FOSU_PUBLISHER_MOCK = "1";
   process.env.ADMIN_API_TOKEN = "publisher-test-token";
   process.env.FOSU_PUBLISHER_MOCK_CAMPUS_READINESS = "ready-with-warning";
-  const warned = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("network-warning")}`]);
+  const warned = await publisher.main([
+    "--mode=routine",
+    "--term=2025-2026-2",
+    "--term-start-date=2026-03-09",
+    "--total-weeks=20",
+    `--run-id=${runId("network-warning")}`,
+  ]);
   assert.strictEqual(warned.success, true);
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK = "1";
   process.env.ADMIN_API_TOKEN = "publisher-test-token";
   process.env.FOSU_PUBLISHER_MOCK_CAMPUS_READINESS = "blocked";
-  await expectReject(() => publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("network-blocked")}`]), "CAMPUS_NETWORK_BLOCKED");
+  await expectReject(() => publisher.main([
+    "--mode=routine",
+    "--term=2025-2026-2",
+    "--term-start-date=2026-03-09",
+    "--total-weeks=20",
+    `--run-id=${runId("network-blocked")}`,
+  ]), "CAMPUS_NETWORK_BLOCKED");
 
   const publishSource = fs.readFileSync(path.join(root, "tools", "fosu-publisher", "publish.js"), "utf8");
   assert(!publishSource.includes("run\", \"diagnose\""), "publisher must not call npm run diagnose");

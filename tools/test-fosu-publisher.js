@@ -15,6 +15,12 @@ const lockPath = path.join(runsRoot, "publisher.lock");
 const testIds = [];
 const originalEnv = Object.assign({}, process.env);
 const originalLock = fs.existsSync(lockPath) ? fs.readFileSync(lockPath) : null;
+const trustedTestTermArgs = [
+  "--term=2025-2026-2",
+  "--term-start-date=2026-03-09",
+  "--total-weeks=20",
+  "--week-start=monday",
+];
 
 function restoreEnv() {
   Object.keys(process.env).forEach((key) => {
@@ -111,7 +117,7 @@ async function expectReject(fn, code) {
 
 async function run() {
   restoreEnv();
-  const changed = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("changed")}`]);
+  const changed = await publisher.main(["--mode=routine", ...trustedTestTermArgs, `--run-id=${runId("changed")}`]);
   assert.strictEqual(changed.success, true);
   assert.strictEqual(changed.oracleStatus, "published");
   assert.strictEqual(changed.cloudbaseStatus, "mirrored");
@@ -124,7 +130,7 @@ async function run() {
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK_NO_CHANGE = "1";
-  const noChange = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("no-change")}`]);
+  const noChange = await publisher.main(["--mode=routine", ...trustedTestTermArgs, `--run-id=${runId("no-change")}`]);
   assert.strictEqual(noChange.status, "no-change");
   assert.strictEqual(noChange.cloudbaseStatus, "same-and-healthy");
   assert(noChange.uploadResult && noChange.uploadResult.unchanged, "no-change should record an unchanged upload marker");
@@ -145,7 +151,7 @@ async function run() {
     summary: { "local-preflight": { success: true, preloaded: true } },
     startedAt: new Date().toISOString(),
   });
-  const resumed = await publisher.main(["--mode=resume", "--term=2025-2026-2", `--run-id=${resumeId}`]);
+  const resumed = await publisher.main(["--mode=resume", ...trustedTestTermArgs, `--run-id=${resumeId}`]);
   assert.strictEqual(resumed.success, true);
 
   restoreEnv();
@@ -166,20 +172,20 @@ async function run() {
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK_ORACLE_UPLOAD_FAIL = "1";
-  await expectReject(() => publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("upload-fail")}`]), "MOCK_ORACLE_UPLOAD_FAILED");
+  await expectReject(() => publisher.main(["--mode=routine", ...trustedTestTermArgs, `--run-id=${runId("upload-fail")}`]), "MOCK_ORACLE_UPLOAD_FAILED");
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK_ORACLE_PUBLISH_FAIL = "1";
-  await expectReject(() => publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("publish-fail")}`]), "MOCK_ORACLE_PUBLISH_FAILED");
+  await expectReject(() => publisher.main(["--mode=routine", ...trustedTestTermArgs, `--run-id=${runId("publish-fail")}`]), "MOCK_ORACLE_PUBLISH_FAILED");
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK_CLOUDBASE_FAIL = "1";
-  const partial = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("cloudbase-fail")}`]);
+  const partial = await publisher.main(["--mode=routine", ...trustedTestTermArgs, `--run-id=${runId("cloudbase-fail")}`]);
   assert.strictEqual(partial.status, "partial-success");
   assert.strictEqual(partial.cloudbaseStatus, "cloudbase-mirror-pending");
 
   restoreEnv();
-  const mirror = await publisher.main(["--mode=mirror-only", "--term=2025-2026-2", `--run-id=${runId("mirror")}`]);
+  const mirror = await publisher.main(["--mode=mirror-only", ...trustedTestTermArgs, `--run-id=${runId("mirror")}`]);
   assert.strictEqual(mirror.success, true);
   assert.strictEqual(mirror.cloudbaseStatus, "mirrored");
 
@@ -189,7 +195,7 @@ async function run() {
   buildRelease(tempReleaseRoot, version);
   const exported = await publisher.main([
     "--mode=export-cloudbase",
-    "--term=2025-2026-2",
+    ...trustedTestTermArgs,
     `--release=${version}`,
     `--output-root=${tempReleaseRoot}`,
     `--run-id=${runId("export")}`,

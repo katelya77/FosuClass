@@ -27,6 +27,7 @@ const ROUTE_SCOPE_MAP = {
   "POST /staging/upload/unchanged": [SCOPES.STAGING_INIT, SCOPES.ADMIN_FULL],
   "POST /staging/upload/rebuild-index": FULL,
   "DELETE /staging/:uploadId": FULL,
+  "POST /storage/maintenance/run": FULL,
 
   // Publish / release
   "POST /sync/staging/publish": [SCOPES.RELEASE_PUBLISH, SCOPES.ADMIN_FULL],
@@ -35,6 +36,7 @@ const ROUTE_SCOPE_MAP = {
   "POST /sync/releases/rebuild-index": [SCOPES.RELEASE_BUILD, SCOPES.ADMIN_FULL],
   "POST /release-pack/deep-health/start": [SCOPES.STATIC_VERIFY, SCOPES.ADMIN_FULL],
   "POST /release-pack/verify/start": [SCOPES.STATIC_VERIFY, SCOPES.ADMIN_FULL],
+  "DELETE /sync/releases/:version": FULL,
 
   // Static sync
   "POST /static-release-sync/start": [SCOPES.STATIC_SYNC, SCOPES.ADMIN_FULL],

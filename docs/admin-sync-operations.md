@@ -26,7 +26,7 @@
 示例命令：
 
 ```powershell
-npm run sync:publish
+npm run sync:publish -- --term=2026-2027-1
 ```
 
 ## 统一同步入口
@@ -34,7 +34,7 @@ npm run sync:publish
 主入口固定为：
 
 ```powershell
-npm run sync:publish
+npm run sync:publish -- --term=2026-2027-1
 ```
 
 该入口自动串联 session 检查、校园网采集、规范化、Staging/Release Pack 生成、gzip/chunk 上传、服务端校验、Release 发布、OpenResty 静态同步、CloudBase 镜像和状态回报。100 网 session 过期时必须快速失败，并提示：
@@ -43,18 +43,18 @@ npm run sync:publish
 session 已过期，请执行 npm run sync:login 后重试
 ```
 
-常用模式：
+运维只需记住一个模式参数：
 
 ```powershell
-npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume
-npm run sync:publish -- --full --term=2026-2027-1 --grade=2026
+npm run sync:publish -- --term=2026-2027-1
+npm run sync:publish -- --mode=full --term=2026-2027-1
+npm run sync:publish -- --mode=resume --run-id=RUN_ID
 ```
 
-- `--incremental` 用于开学初频繁调整，只拉取目录和疑似变化课表，并复用断点进度。
-- `--full` 用于新学期首次采集或源站目录大变更，会忽略旧进度并重新校验负缓存。
-- `--resume` 用于中断后继续，避免无意义重复抓取。
-- `--grade=2026` 只限定采集范围，不硬编码 26 级；源站未发现 26 级课表时应提示“当前源站未发现 2026 级课表”，不作为发布失败。
-- `--concurrency=8` 为受控并发，仍受限速、超时和重试保护。
+- 默认 routine 用于同一学期的日常更新，自动复用进度与缓存并做 canonicalHash no-change 短路。
+- 指定学期领先线上 active 学期时自动升级为 full；只有异常修复时才需手工写 `--mode=full`。
+- resume 用于中断后继续，避免重复抓取。
+- 学期日期和周数来自可信 Term Config / Term Registry，后台生成命令不再要求手工拼接。
 
 每次同步回执必须记录阶段耗时：session 检查、目录抓取、课表抓取、规范化、hash、gzip、上传、校验、release、OpenResty、CloudBase。后台只展示摘要；完整 hash、manifest URL、uploadId、stagingId、target dir 只放在技术详情中。
 
@@ -110,7 +110,7 @@ Staging 与线上 active 只在相同契约版本、相同学期、相同过滤�
 
 ## 上传记录语义
 
-- 只有 canonicalHash 与 active 一致时显示“与当前线上数据一致”。
+- canonicalHash 与 active 一致时显示“与当前线上数据一致”，但历史记录不会因此被标记为 Active。
 - 只是与另一个 Staging 一致时显示“重复上传”。
 - `stagingState` 描述上传和校验状态。
 - `releaseState` 描述版本包状态。
@@ -118,5 +118,7 @@ Staging 与线上 active 只在相同契约版本、相同学期、相同过滤�
 - 删除上传记录、删除 Staging 文件、删除 Release 是三类不同操作，后台按钮会明确区分。
 - Active、正在上传、正在验证、正在发布、当前 staging-latest 唯一来源禁止删除。
 - 自动清理策略：duplicate > 7 天、failed > 7 天、incomplete > 24 小时、superseded 原始大文件 > 30 天；Active 与每学期最新 Published 永久保留。
+- 同一 no-change 结果按学期、hash、来源合并为一条观测记录，列表显示累计观测次数和原始记录数。
+- “执行过期清理（高权限）”要求 `admin:full` 和精确确认文本，完成后同步重建并压缩上传索引。
 
 技术字段如 uploadId、hash、stagingId 放入技术详情，不作为主视觉。

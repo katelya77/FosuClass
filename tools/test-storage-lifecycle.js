@@ -11,11 +11,13 @@ process.env.FOSU_RELEASE_RETENTION_DAYS = "1";
 process.env.FOSU_JOB_SUCCESS_RETENTION_DAYS = "1";
 process.env.FOSU_JOB_FAILED_RETENTION_DAYS = "2";
 process.env.FOSU_TEMP_RETENTION_HOURS = "1";
+process.env.FOSU_DUPLICATE_UPLOAD_RETENTION_DAYS = "1";
 process.env.FOSU_MIN_FREE_DISK_GB = "0";
 process.env.NODE_ENV = "test";
 
 const releaseService = require("../server/src/services/releaseService");
 const jobService = require("../server/src/services/jobService");
+const stagingUploadService = require("../server/src/services/stagingUploadService");
 const storageLifecycleService = require("../server/src/services/storageLifecycleService");
 
 function snapshot(version) {
@@ -85,10 +87,22 @@ try {
   const oldJobPath = path.join(jobService.JOBS_DIR, `${oldJob.id}.json`);
   touchOld(oldJobPath, 3 * 86400000);
 
+  const staleObservation = stagingUploadService.recordUnchangedUpload({
+    term: "2025-2026-2",
+    canonicalHash: "b".repeat(64),
+    reason: "active-release",
+    source: "publisher-test",
+    publisherRunId: "storage-retention-run",
+    activeReleaseVersion: activeVersion,
+  }, { type: "admin", id: "storage-test" });
+  const staleObservationDir = path.join(process.env.FOSU_STORAGE_DIR, "staging-uploads", staleObservation.uploadId);
+  touchOld(staleObservationDir, 3 * 86400000);
+
   const dryRun = storageLifecycleService.runMaintenance({ dryRun: true });
   assert(fs.existsSync(staleBuildingDir), "dry-run should not delete stale building dir");
   assert(fs.existsSync(stalePublicDir), "dry-run should not delete orphan public dir");
   assert(fs.existsSync(oldJobPath), "dry-run should not delete old job");
+  assert(fs.existsSync(staleObservationDir), "dry-run should not delete stale no-change observation");
   assert(fs.existsSync(activeDir), "dry-run should preserve active release");
   assert(dryRun.reclaimedBytes > 0, "dry-run should report reclaimable bytes");
   assert(dryRun.skippedActive >= 1, "dry-run should report skipped active release");
@@ -97,6 +111,9 @@ try {
   assert(!fs.existsSync(staleBuildingDir), "maintenance should clean stale building dir");
   assert(!fs.existsSync(stalePublicDir), "maintenance should clean old orphan public release");
   assert(!fs.existsSync(oldJobPath), "maintenance should prune old success job");
+  assert(!fs.existsSync(staleObservationDir), "maintenance should delete stale no-change observation artifact");
+  assert(!stagingUploadService.listUploadRecords({ limit: 5000, internal: true }).records.some((item) => item.uploadId === staleObservation.uploadId), "maintenance should compact deleted upload records out of the index");
+  assert(run.uploadRecordCompaction && run.uploadRecordCompaction.removed >= 1, "maintenance should report upload index compaction");
   assert(fs.existsSync(activeDir), "maintenance must preserve active release");
   assert(run.reclaimedBytes > 0, "maintenance should report reclaimed bytes");
 

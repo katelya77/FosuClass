@@ -4743,6 +4743,9 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
       pendingReview,
       latest: uploads[0] || null,
       total: uploadResult.total,
+      recordTotal: uploadResult.recordTotal,
+      groupTotal: uploadResult.groupTotal,
+      paginationUnit: uploadResult.paginationUnit,
       limit: uploadResult.limit,
       cursor: uploadResult.cursor,
       nextCursor: uploadResult.nextCursor,
@@ -4957,7 +4960,7 @@ router.get("/staging/fingerprint", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.delete("/staging/:uploadId", adminAuth.verifyAdminAccess, (req, res) => {
+router.delete("/staging/:uploadId", verifyAdminWriteAccess, adminAuth.requireScopes(["admin:full"]), (req, res) => {
   try {
     const deleted = stagingUploadService.deleteUpload(req.params.uploadId, buildAdminStagingUploadActor(req));
     if (deleted && deleted.status === "pending-review" && fs.existsSync(STAGING_LATEST_PATH)) {
@@ -4983,7 +4986,7 @@ router.post("/staging/upload/init", verifyAdminWriteAccess, adminAuth.requireSco
   }
 });
 
-router.post("/staging/upload/unchanged", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/staging/upload/unchanged", verifyAdminWriteAccess, adminAuth.requireScopes(["staging:init"]), (req, res) => {
   try {
     const body = req.body || {};
     const canonicalHash = String(body.canonicalHash || "").trim().toLowerCase();
@@ -5002,7 +5005,13 @@ router.post("/staging/upload/unchanged", adminAuth.verifyAdminAccess, (req, res)
       reason: sameAsActive ? "active-release" : "staging",
       activeReleaseVersion: body.activeReleaseVersion || fingerprint.activeRelease?.version || fingerprint.activeRelease?.releaseVersion || "",
     }), buildAdminStagingUploadActor(req));
-    writeAuditLog(req, "upload-skip", "staging-upload", upload.uploadId, `No-change sync marker: ${upload.term || ""}`);
+    writeAuditLog(
+      req,
+      upload.coalesced ? "upload-observation-coalesced" : "upload-skip",
+      "staging-upload",
+      upload.uploadId,
+      `No-change sync observation: ${upload.term || ""}; count=${upload.observationCount || 1}`
+    );
     return res.json({
       success: true,
       skipped: true,
@@ -5371,9 +5380,17 @@ router.post("/storage/maintenance/preview", adminAuth.verifyAdminAccess, (req, r
   }
 });
 
-router.post("/storage/maintenance/run", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/storage/maintenance/run", verifyAdminWriteAccess, adminAuth.requireScopes(["admin:full"]), (req, res) => {
   try {
+    if (!req.body || req.body.confirm !== "DELETE_UNUSED_SCHEDULE_DATA") {
+      return res.status(400).json({
+        success: false,
+        code: "STORAGE_MAINTENANCE_CONFIRMATION_REQUIRED",
+        message: "执行清理需要确认短语 DELETE_UNUSED_SCHEDULE_DATA",
+      });
+    }
     const job = releaseWorkerManager.startReleaseJob("storage-maintenance", { dryRun: false, reason: "manual-run" });
+    writeAuditLog(req, "cleanup", "schedule-storage", job.id, `启动课表存储安全清理；idempotencyKey=${String(req.body.idempotencyKey || "")}`);
     return res.status(202).json({ success: true, job });
   } catch (error) {
     return releaseWorkerManager.sendAlreadyRunning(res, error);
@@ -5762,7 +5779,7 @@ router.post("/sync/releases/rollback", adminAuth.verifyAdminAccess, async (req, 
   }
 });
 
-router.delete("/sync/releases/:version", adminAuth.verifyAdminAccess, (req, res) => {
+router.delete("/sync/releases/:version", verifyAdminWriteAccess, adminAuth.requireScopes(["admin:full"]), (req, res) => {
   try {
     const result = releaseService.deleteReleaseVersion(req.params.version);
     writeAuditLog(req, "delete", "sync-release", result.version, `删除历史 Release: ${result.version}`);
@@ -5930,7 +5947,7 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
     const activeTerm = appConfigService.getAdminConfig().currentSemester || getDefaultTerm();
     const term = req.query.term || activeTerm || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
     const termRecord = termRegistryService.getTerm(term) || termRegistryService.LEGACY_CURRENT_TERM_CONFIG;
-    const start = req.query.start || req.query.termStartDate || "YYYY-MM-DD";
+    const start = req.query.start || req.query.termStartDate || termRecord.termStartDate || "YYYY-MM-DD";
     const totalWeeks = req.query.totalWeeks ? Number(req.query.totalWeeks) : Number(termRecord.totalWeeks);
     if (!Number.isInteger(totalWeeks) || totalWeeks < 1 || totalWeeks > 30) {
       return res.status(400).json({
@@ -5944,8 +5961,8 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
       {
         id: "sync:publish",
         displayName: "生成本机一键同步命令",
-        command: "npm run sync:publish",
-        displayScene: "日常全校课表同步与发布",
+        command: `npm run sync:publish -- --term=${term}`,
+        displayScene: "自动判断日常增量或新学期全量，同步后自动发布",
         sceneCode: "publisher-routine",
         intranetRequired: true,
         usesCatalogCache: true,
@@ -5962,7 +5979,7 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
       {
         id: "sync:publish:full",
         displayName: "新学期 / 深度全量采集",
-        command: `npm run sync:publish -- --mode=full --term=${term} --term-start-date=${start} --total-weeks=${totalWeeks}`,
+        command: `npm run sync:publish -- --mode=full --term=${term}`,
         displayScene: "新学期、目录变化或异常修复",
         sceneCode: "publisher-full",
         intranetRequired: true,

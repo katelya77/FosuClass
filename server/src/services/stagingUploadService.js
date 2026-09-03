@@ -354,12 +354,12 @@ function recordUnchangedUpload(input = {}, actor) {
   }
   const reason = String(input.reason || input.unchangedReason || "active-release");
   const now = new Date().toISOString();
-  const uploadId = `unchanged_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
-  const dir = getUploadDir(uploadId);
-  ensureDir(dir);
+  const term = String(input.term || "");
+  const source = String(input.source || "fosu-publisher");
+  const publisherRunId = String(input.publisherRunId || "");
   const counts = input.counts && typeof input.counts === "object" ? input.counts : {};
   const summary = Object.assign({
-    term: String(input.term || ""),
+    term,
     releaseVersion: String(input.activeReleaseVersion || input.releaseVersion || ""),
     publishedReleaseVersion: String(input.activeReleaseVersion || ""),
     canonicalHash,
@@ -373,19 +373,73 @@ function recordUnchangedUpload(input = {}, actor) {
     unchangedReason: reason,
     stagingState: reason === "active-release" ? "duplicate-active" : "duplicate-staging",
     releaseState: reason === "active-release" ? "published" : "not-built",
-    runtimeState: reason === "active-release" ? "active" : "inactive",
+    runtimeState: reason === "active-release" ? "matches-active" : "inactive",
     message: reason === "active-release"
       ? "local sync matched current active release"
       : "local sync matched existing staging",
   }, input.summary && typeof input.summary === "object" ? input.summary : {});
+
+  // A successful no-change run is an observation, not a new Staging artifact.
+  // Coalesce repeated observations for the same term/hash/source so daily
+  // Publisher runs do not grow upload metadata forever. Publisher run receipts
+  // remain the per-run audit source; this marker keeps a bounded recent-run list.
+  const reusable = readRecordIndex().find((record) => {
+    return record &&
+      String(record.status || "").toLowerCase() === "unchanged" &&
+      String(record.term || record.summary?.term || "") === term &&
+      getManifestCanonicalHash(record) === canonicalHash &&
+      String(record.source || "fosu-publisher") === source;
+  });
+  if (reusable && reusable.uploadId) {
+    try {
+      const manifest = readManifest(reusable.uploadId);
+      checkActor(manifest, actor);
+      if (String(manifest.unchangedReason || "active-release") === reason) {
+        const previousRunIds = Array.isArray(manifest.publisherRunIds)
+          ? manifest.publisherRunIds.map(String).filter(Boolean)
+          : [manifest.publisherRunId].map(String).filter(Boolean);
+        const alreadyObserved = Boolean(publisherRunId && previousRunIds.includes(publisherRunId));
+        const publisherRunIds = publisherRunId && !alreadyObserved
+          ? previousRunIds.concat(publisherRunId).slice(-20)
+          : previousRunIds.slice(-20);
+        const observationCount = Math.max(1, Number(manifest.observationCount || manifest.summary?.observationCount || 1)) +
+          (alreadyObserved ? 0 : 1);
+        manifest.active = false;
+        manifest.runtimeState = summary.runtimeState;
+        manifest.stagingState = summary.stagingState;
+        manifest.releaseState = summary.releaseState;
+        manifest.lastObservedAt = now;
+        manifest.updatedAt = now;
+        manifest.observationCount = observationCount;
+        manifest.publisherRunId = publisherRunId || manifest.publisherRunId || "";
+        manifest.publisherRunIds = publisherRunIds;
+        manifest.summary = Object.assign({}, manifest.summary || {}, summary, {
+          observationCount,
+          firstObservedAt: manifest.firstObservedAt || manifest.unchangedAt || manifest.createdAt || now,
+          lastObservedAt: now,
+        });
+        writeManifest(manifest);
+        return Object.assign(publicManifest(manifest), {
+          coalesced: true,
+          observationCount,
+        });
+      }
+    } catch (error) {
+      if (error.statusCode !== 404) throw error;
+    }
+  }
+
+  const uploadId = `unchanged_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+  const dir = getUploadDir(uploadId);
+  ensureDir(dir);
   const manifest = {
     uploadId,
     fileName: "unchanged-sync-marker.json",
     originalFileName: "unchanged-sync-marker.json",
-    term: summary.term,
+    term,
     releaseVersion: summary.releaseVersion,
     note: String(input.note || ""),
-    source: String(input.source || "fosu-publisher"),
+    source,
     actorType: actor && actor.type ? String(actor.type) : "admin",
     actorId: actor && actor.id ? String(actor.id || "") : "",
     contentEncoding: "identity",
@@ -402,13 +456,21 @@ function recordUnchangedUpload(input = {}, actor) {
     stagingState: summary.stagingState,
     releaseState: summary.releaseState,
     runtimeState: summary.runtimeState,
-    active: summary.runtimeState === "active",
+    active: false,
     unchangedReason: reason,
     unchangedAt: now,
+    firstObservedAt: now,
+    lastObservedAt: now,
+    observationCount: 1,
     createdAt: now,
     updatedAt: now,
-    publisherRunId: String(input.publisherRunId || ""),
-    summary,
+    publisherRunId,
+    publisherRunIds: publisherRunId ? [publisherRunId] : [],
+    summary: Object.assign({}, summary, {
+      observationCount: 1,
+      firstObservedAt: now,
+      lastObservedAt: now,
+    }),
     resourceCounts: summary.resourceCounts || null,
     uploadDir: dir,
   };
@@ -782,14 +844,16 @@ function getUploadStatus(uploadId, actor) {
 
 function normalizeListOptions(input) {
   if (input && typeof input === "object") {
+    const maxLimit = input.internal === true ? 10000 : 200;
     return {
-      limit: toPositiveInteger(input.limit, 50, 200),
+      limit: toPositiveInteger(input.limit, 50, maxLimit),
       cursor: Math.max(0, Number(input.cursor || input.offset || 0) || 0),
       term: String(input.term || "").trim(),
       status: String(input.status || input.stagingState || "").trim(),
+      grouped: input.grouped === true || input.grouped === "1" || input.grouped === "true",
     };
   }
-  return { limit: toPositiveInteger(input, 20, 200), cursor: 0, term: "", status: "" };
+  return { limit: toPositiveInteger(input, 20, 200), cursor: 0, term: "", status: "", grouped: false };
 }
 
 function matchesUploadRecordOptions(item, options) {
@@ -856,17 +920,43 @@ function listUploadRecords(options = {}) {
   const normalized = normalizeListOptions(options);
   const all = readRecordIndex()
     .filter((item) => matchesUploadRecordOptions(item, normalized));
-  const records = all
-    .slice(normalized.cursor, normalized.cursor + normalized.limit)
+  let selected = all.slice(normalized.cursor, normalized.cursor + normalized.limit);
+  let total = all.length;
+  let nextCursor = normalized.cursor + normalized.limit < all.length ? normalized.cursor + normalized.limit : null;
+  let groupTotal = null;
+  if (normalized.grouped) {
+    const groups = [];
+    const byKey = new Map();
+    all.forEach((item) => {
+      const term = String(item.term || item.summary?.term || "").trim();
+      const hash = getManifestCanonicalHash(item);
+      const key = term && hash ? `${term}:${hash}` : `upload:${item.uploadId || groups.length}`;
+      if (!byKey.has(key)) {
+        const group = { key, records: [] };
+        byKey.set(key, group);
+        groups.push(group);
+      }
+      byKey.get(key).records.push(item);
+    });
+    const selectedGroups = groups.slice(normalized.cursor, normalized.cursor + normalized.limit);
+    selected = selectedGroups.flatMap((group) => group.records);
+    groupTotal = groups.length;
+    total = groups.length;
+    nextCursor = normalized.cursor + normalized.limit < groups.length ? normalized.cursor + normalized.limit : null;
+  }
+  const records = selected
     .map((item) => toUploadRecord(item, { missingManifest: Boolean(item.missingManifest) }))
     .filter(Boolean);
   return {
     success: true,
     records: decorateDuplicateUploadRecords(records),
-    total: all.length,
+    total,
+    recordTotal: all.length,
+    groupTotal,
+    paginationUnit: normalized.grouped ? "group" : "record",
     limit: normalized.limit,
     cursor: normalized.cursor,
-    nextCursor: normalized.cursor + normalized.limit < all.length ? normalized.cursor + normalized.limit : null,
+    nextCursor,
     indexPath: RECORD_INDEX_PATH,
   };
 }
@@ -984,9 +1074,15 @@ function rebuildUploadRecordIndex(options = {}) {
   scanManifestDirectory(records, RESOURCE_UPLOAD_STAGING_DIR, "resource-upload-staging");
   importSyncHistoryRecords(records);
   importRelayUploadRecords(records);
+  const dropUploadIds = new Set(
+    (Array.isArray(options.dropUploadIds) ? options.dropUploadIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
   const byId = new Map();
   records.filter(Boolean).forEach((record) => {
     const id = record.uploadId;
+    if (dropUploadIds.has(String(id || ""))) return;
     const existing = byId.get(id);
     if (!existing || normalizeRecordTime(record) >= normalizeRecordTime(existing)) byId.set(id, record);
   });
@@ -1067,11 +1163,10 @@ function assertUploadCanDelete(uploadId, manifest) {
   } catch (error) {
     active = null;
   }
-  const activeHash = String(active && active.canonicalHash || "").trim().toLowerCase();
   const activeVersion = String(active && (active.version || active.releaseVersion) || "").trim();
-  const uploadHash = getManifestCanonicalHash(item);
   const uploadVersion = getManifestReleaseVersion(item);
-  if (item.active === true || (activeHash && uploadHash && activeHash === uploadHash) || (activeVersion && uploadVersion && activeVersion === uploadVersion)) {
+  const isPublishedSource = status === "published" && activeVersion && uploadVersion && activeVersion === uploadVersion;
+  if (item.active === true || isPublishedSource) {
     const error = new Error("Active 对应上传记录禁止删除");
     error.statusCode = 409;
     error.code = "STAGING_UPLOAD_ACTIVE_REFERENCE";

@@ -6243,8 +6243,19 @@ ${DAILY_KNOWLEDGE_STYLES}
             <div class="openresty-meta-item"><span>CloudBase</span><strong>-</strong></div>
             <div class="openresty-meta-item"><span>双源一致性</span><strong>-</strong></div>
           </div>
+          <div class="staging-inline-upload" style="cursor:default;margin-top:12px;">
+            <strong>输入学期，复制一条自动同步命令</strong>
+            <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">同一学期自动走日常更新；新于线上学期时自动升级为全量采集。开学日期与教学周数由可信学期配置读取。</p>
+            <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+              <label for="publisherQuickTermInput" style="margin:0;flex:1 1 220px;max-width:320px;">目标学期
+                <input type="text" id="publisherQuickTermInput" inputmode="numeric" pattern="[0-9]{4}-[0-9]{4}-[12]" placeholder="例如 2027-2028-1" style="margin-top:4px;">
+              </label>
+              <button type="button" class="primary" id="copyPublisherTermCommandBtn">复制一键命令</button>
+            </div>
+            <code id="publisherQuickCommandPreview" style="display:block;margin-top:10px;white-space:pre-wrap;word-break:break-all;">正在读取当前学期...</code>
+          </div>
           <div class="openresty-actions">
-            <button type="button" class="secondary" id="copyPublisherCommandBtn">生成本机一键同步命令</button>
+            <button type="button" class="secondary" id="copyPublisherCommandBtn">复制当前学期命令</button>
             <button type="button" class="secondary" id="refreshPublisherStatusBtn">查看本机 Publisher 状态</button>
             <button type="button" class="secondary" id="copyCloudbaseRetryBtn">重试 CloudBase 镜像</button>
             <button type="button" class="ghost" id="copyCloudbaseExportBtn">导出人工上传包</button>
@@ -6389,6 +6400,7 @@ ${DAILY_KNOWLEDGE_STYLES}
                   <button type="button" class="secondary" id="purgeFailedStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理失败项</button>
                   <button type="button" class="secondary" id="purgeIncompleteStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理未完成项</button>
                   <button type="button" class="ghost" id="previewExpiredStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理过期项</button>
+                  <button type="button" class="danger" id="runExpiredStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">执行过期清理（高权限）</button>
                   <button type="button" class="ghost" id="rebuildStagingUploadIndexBtn" style="padding:6px 10px;font-size:12px;">重建索引</button>
                 </div>
               </div>
@@ -6440,7 +6452,7 @@ ${DAILY_KNOWLEDGE_STYLES}
                   
                   <div class="step-indicator-item active" data-step="1">
                     <div class="step-num">1</div>
-                    <div class="step-label">学期/日期</div>
+                    <div class="step-label">目标学期</div>
                   </div>
                   <div class="step-indicator-item" data-step="2">
                     <div class="step-num">2</div>
@@ -6470,7 +6482,7 @@ ${DAILY_KNOWLEDGE_STYLES}
                     
                     <!-- Step 1: 选择学期与日期 -->
                     <div class="step-content active" id="step-content-1">
-                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 1: 配置目标学期与开学日期</h4>
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 1: 选择目标学期</h4>
                       <div class="form-row">
                         <div>
                           <label for="wizardTerm">目标学期 (term)</label>
@@ -6480,8 +6492,8 @@ ${DAILY_KNOWLEDGE_STYLES}
                           </div>
                         </div>
                         <div>
-                          <label for="wizardStartDate">学期开始日期 (StartDate)</label>
-                          <input type="date" id="wizardStartDate">
+                          <label for="wizardStartDate">学期开始日期（由学期配置自动带入）</label>
+                          <input type="date" id="wizardStartDate" readonly>
                         </div>
                       </div>
                       <div class="form-row">
@@ -8166,6 +8178,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         relayUploads: [],
         stagingUploads: [],
         stagingUploadTotal: 0,
+        stagingUploadRecordTotal: 0,
         stagingUploadCursor: 0,
         stagingUploadNextCursor: null,
         stagingUploadPageSize: 50,
@@ -9141,6 +9154,7 @@ ${DAILY_KNOWLEDGE_SECTION}
             state.termRegistry = res.registry || null;
             state.termReleaseIndex = res.releaseIndex || null;
             renderTerms();
+            refreshPublisherQuickCommand(false);
             return res;
           })
           .catch(function(error) {
@@ -10341,6 +10355,7 @@ ${DAILY_KNOWLEDGE_SECTION}
             state.syncStatus = res.data;
             setSyncOnlineState(true);
             renderSyncStatusGrid();
+            refreshPublisherQuickCommand(false);
             if ($("syncLastRefreshAt")) {
               $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
             }
@@ -10455,7 +10470,7 @@ ${DAILY_KNOWLEDGE_SECTION}
 
       function loadStagingUploadsPanel() {
         var pageSize = Number(state.stagingUploadPageSize || 50) || 50;
-        var params = ["limit=" + encodeURIComponent(pageSize), "cursor=" + encodeURIComponent(state.stagingUploadCursor || 0)];
+        var params = ["limit=" + encodeURIComponent(pageSize), "cursor=" + encodeURIComponent(state.stagingUploadCursor || 0), "grouped=true"];
         if (state.stagingUploadFilters && state.stagingUploadFilters.term) {
           params.push("term=" + encodeURIComponent(state.stagingUploadFilters.term));
         }
@@ -10466,6 +10481,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           .then(function(res) {
             state.stagingUploads = res.uploads || [];
             state.stagingUploadTotal = Number(res.total || (res.uploads || []).length || 0);
+            state.stagingUploadRecordTotal = Number(res.recordTotal || (res.uploads || []).length || 0);
             state.stagingUploadNextCursor = res.nextCursor == null ? null : Number(res.nextCursor);
             renderStagingUploads();
             return res;
@@ -10580,6 +10596,7 @@ ${DAILY_KNOWLEDGE_SECTION}
             state.syncStatus = res.data;
             setSyncOnlineState(true);
             renderSyncStatusGrid();
+            refreshPublisherQuickCommand(false);
             if ($("syncLastRefreshAt")) {
               $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
             }
@@ -11218,7 +11235,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           var chunkCount = upload.chunkCount || upload.totalChunks || 0;
           var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
           var progressWidth = Math.max(0, Math.min(100, progress));
-          var isActiveUpload = Boolean(upload.active || (state.syncStatus && state.syncStatus.activeCanonicalHash && upload.canonicalHash && state.syncStatus.activeCanonicalHash === upload.canonicalHash));
+          var isActiveUpload = isActiveStagingUpload(upload);
           var statusLabel = isActiveUpload ? "当前生效" : relayStatusText(upload.status);
           var statusClass = String(isActiveUpload ? "active" : (upload.status || "")).replace(/[^a-z0-9_-]/gi, "-");
           var historyCount = Array.isArray(upload.historySources) ? upload.historySources.length : 1;
@@ -11329,10 +11346,14 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
       function isActiveStagingUpload(upload) {
-        var hash = getStagingUploadHash(upload);
         var releaseVersion = getStagingReleaseVersion(upload);
         var syncStatus = state.syncStatus || {};
-        return Boolean(upload && upload.active || syncStatus.activeCanonicalHash && hash && syncStatus.activeCanonicalHash === hash || syncStatus.releaseVersion && releaseVersion && syncStatus.releaseVersion === releaseVersion);
+        var status = String(upload && (upload.status || upload.stagingState) || "").toLowerCase();
+        var runtimeState = String(upload && upload.runtimeState || "").toLowerCase();
+        return Boolean(
+          upload && upload.active === true ||
+          status === "published" && runtimeState === "active" && syncStatus.releaseVersion && releaseVersion && syncStatus.releaseVersion === releaseVersion
+        );
       }
 
       function isIncompleteStagingUpload(upload) {
@@ -11499,7 +11520,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         if (pageInfo) {
           var pageSize = Number(state.stagingUploadPageSize || 50) || 50;
           var page = Math.floor((state.stagingUploadCursor || 0) / pageSize) + 1;
-          pageInfo.textContent = "第 " + page + " 页 · " + (state.stagingUploadTotal || groups.length) + " 条记录";
+          pageInfo.textContent = "第 " + page + " 页 · " + (state.stagingUploadTotal || groups.length) + " 组 / " + (state.stagingUploadRecordTotal || 0) + " 条记录";
         }
         if ($("stagingUploadPrevPageBtn")) $("stagingUploadPrevPageBtn").disabled = (state.stagingUploadCursor || 0) <= 0;
         if ($("stagingUploadNextPageBtn")) $("stagingUploadNextPageBtn").disabled = state.stagingUploadNextCursor == null;
@@ -11528,7 +11549,7 @@ ${DAILY_KNOWLEDGE_SECTION}
             "<td><input type='checkbox' class='staging-upload-group-select' data-group-key='" + escapeHtml(groupKey) + "'" + (canDeleteCount ? "" : " disabled title='" + escapeHtml(groupProtection) + "'") + "></td>" +
             "<td><strong>" + escapeHtml(group.term || "-") + "</strong><span class='staging-row-summary'>Release " + escapeHtml(releaseVersion) + " · " + formatDate(upload.updatedAt || upload.createdAt) + "</span></td>" +
             "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(group.isActive ? "Active" : relayStatusText(stagingState)) + "</span><span class='staging-row-summary'>release " + escapeHtml(relayStatusText(releaseState)) + " · runtime " + escapeHtml(relayStatusText(runtimeState)) + "</span></td>" +
-            "<td><strong>" + group.uploads.length + "</strong><span class='staging-row-summary'>可删 " + canDeleteCount + " · 展开查看 Hash 与计数</span></td>" +
+            "<td><strong>" + group.uploads.reduce(function(total, item) { return total + Math.max(1, Number(item.observationCount || item.summary && item.summary.observationCount || 1)); }, 0) + "</strong><span class='staging-row-summary'>观测次数 · 原始记录 " + group.uploads.length + " · 可删 " + canDeleteCount + "</span></td>" +
             "<td class='action-cell'><div class='staging-action-row'></div></td>";
           var actions = tr.querySelector(".staging-action-row");
           var expandBtn = document.createElement("button");
@@ -11839,11 +11860,39 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
       function resolveSyncScriptName(source, scopes) {
-        var selected = Array.isArray(scopes) ? scopes : [];
         if (source === "staging-upload") return "sync:upload-staging";
         if (source === "relay-agent") return "sync:relay-agent";
         if ($("wizardForceRefresh") && $("wizardForceRefresh").checked) return "sync:publish:full";
         return "sync:publish";
+      }
+
+      function getPublisherQuickTerm() {
+        var input = $("publisherQuickTermInput");
+        var typed = String(input && input.value || "").trim();
+        if (typed) return typed;
+        var syncStatus = state.syncStatus || {};
+        var current = (state.terms || []).find(function(item) { return item && item.status === "current"; });
+        return String(syncStatus.term || syncStatus.semester || current && current.term || state.dashboard && state.dashboard.currentSemester || "").trim();
+      }
+
+      function buildPublisherQuickCommand() {
+        var term = getPublisherQuickTerm();
+        var winSlash = String.fromCharCode(92);
+        var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
+        return "cd " + projectDirWin + String.fromCharCode(10) +
+          "npm run sync:publish -- --term=" + (term || "请先输入学期");
+      }
+
+      function refreshPublisherQuickCommand(forceTerm) {
+        var input = $("publisherQuickTermInput");
+        if (input && (forceTerm || !String(input.value || "").trim())) {
+          var syncStatus = state.syncStatus || {};
+          var current = (state.terms || []).find(function(item) { return item && item.status === "current"; });
+          input.value = String(syncStatus.term || syncStatus.semester || current && current.term || state.dashboard && state.dashboard.currentSemester || "").trim();
+        }
+        if ($("publisherQuickCommandPreview")) {
+          $("publisherQuickCommandPreview").textContent = buildPublisherQuickCommand();
+        }
       }
 
       // 更新向导命令预览与运维卡片列表
@@ -11953,11 +12002,11 @@ ${DAILY_KNOWLEDGE_SECTION}
         }
 
         var scriptName = resolveSyncScriptName(source, scopes);
-        var publisherArgs = [];
+        var publisherArgs = [
+          "--term=" + (term || "请先选择学期")
+        ];
         if (scriptName === "sync:publish:full") {
-          publisherArgs = [
-            "--term=" + (term || "请先选择学期")
-          ];
+          publisherArgs.unshift("--mode=full");
         }
         var cliArgsStr = scriptName === "sync:upload-staging"
           ? "--file=" + output + " --term=" + (term || "请先选择学期")
@@ -12368,7 +12417,10 @@ ${DAILY_KNOWLEDGE_SECTION}
         var restoreButton = setButtonLoading(btn, dryRun ? "已启动..." : "已启动...");
         api(dryRun ? "/api/admin/storage/maintenance/preview" : "/api/admin/storage/maintenance/run", {
           method: "POST",
-          body: "{}"
+          body: JSON.stringify(dryRun ? {} : {
+            confirm: "DELETE_UNUSED_SCHEDULE_DATA",
+            idempotencyKey: "schedule-maintenance-" + Date.now()
+          })
         })
           .then(function(res) {
             var job = res.job || {};
@@ -12382,7 +12434,10 @@ ${DAILY_KNOWLEDGE_SECTION}
               restoreButton();
               if (doneJob && doneJob.status === "success") {
                 var report = doneJob.result && doneJob.result.report || {};
-                showToast((dryRun ? "清理预览完成" : "安全清理完成") + "，释放 " + formatBytes(report.reclaimedBytes || 0), "success");
+                var compaction = report.uploadRecordCompaction || {};
+                var compactText = Number(compaction.removed || 0) > 0 ? "，移除列表记录 " + compaction.removed + " 条" : "";
+                showToast((dryRun ? "清理预览完成" : "安全清理完成") + "，释放 " + formatBytes(report.reclaimedBytes || 0) + compactText, "success");
+                loadStagingUploadsPanel().catch(function() {});
                 refreshStorageStatus(true);
               }
             });
@@ -12834,6 +12889,10 @@ ${DAILY_KNOWLEDGE_SECTION}
       });
       safeBind("previewExpiredStagingUploadsBtn", "click", function() {
         runMaintenance($("previewExpiredStagingUploadsBtn"), true);
+      });
+      safeBind("runExpiredStagingUploadsBtn", "click", function() {
+        if (!confirm("确认按保留策略清理过期课表数据？系统会保护 Active、每学期最新 Published、正在运行任务与 staging-latest 唯一来源，并同步压缩上传记录索引。")) return;
+        runMaintenance($("runExpiredStagingUploadsBtn"), false);
       });
       safeBind("rebuildStagingUploadIndexBtn", "click", function() {
         rebuildStagingUploadIndex($("rebuildStagingUploadIndexBtn"));
@@ -16976,10 +17035,20 @@ ${DAILY_KNOWLEDGE_BINDINGS}
           if (text) copyText(text);
         });
         safeBind("copyPublisherCommandBtn", "click", function() {
-          var winSlash = String.fromCharCode(92);
-          var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
-          copyText("cd " + projectDirWin + String.fromCharCode(10) + "npm run sync:publish");
+          copyText(buildPublisherQuickCommand());
         });
+        safeBind("publisherQuickTermInput", "input", function() {
+          refreshPublisherQuickCommand(false);
+        });
+        safeBind("copyPublisherTermCommandBtn", "click", function() {
+          var term = getPublisherQuickTerm();
+          if (!/^\d{4}-\d{4}-[12]$/.test(term)) {
+            showToast("请输入正确学期，例如 2027-2028-1", "error");
+            return;
+          }
+          copyText(buildPublisherQuickCommand());
+        });
+        refreshPublisherQuickCommand(false);
         safeBind("copyPublisherCommandTopBtn", "click", function() {
           var btn = $("copyPublisherCommandBtn");
           if (btn) btn.click();
@@ -17001,7 +17070,7 @@ ${DAILY_KNOWLEDGE_BINDINGS}
           });
         });
         safeBind("copyCloudbaseRetryBtn", "click", function() {
-          copyText("npm run sync:publish -- --mode=mirror-only");
+          copyText("npm run sync:publish -- --mode=mirror-only --term=" + (getPublisherQuickTerm() || "请先输入学期"));
         });
         safeBind("copyCloudbaseExportBtn", "click", function() {
           var data = state.syncStatus || {};

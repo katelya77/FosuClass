@@ -6,6 +6,7 @@ const {
   buildCrawlArgs,
   buildTermRegistryPatch,
   loadPublisherTermConfig,
+  resolveCloudbaseRetentionPlan,
   selectPublisherTerm,
 } = require("./fosu-publisher/publish");
 
@@ -25,6 +26,13 @@ const explicitHistorical = selectPublisherTerm({
 });
 assert.strictEqual(explicitHistorical.term, "2025-2026-2");
 assert.strictEqual(explicitHistorical.source, "cli");
+
+const explicitFuture = selectPublisherTerm({
+  cliTerm: "2027-2028-1",
+  activeTerm: "2026-2027-2",
+  activeReleaseVersion: "release-2026-2",
+});
+assert.strictEqual(explicitFuture.promotedFromTerm, "2026-2027-2", "an explicit future term should auto-promote routine to full");
 
 const activeDefault = selectPublisherTerm({
   activeTerm: "2026-2027-1",
@@ -104,4 +112,9 @@ assert(crawl.args.includes("--term-start-date=2026-09-07"));
 assert(crawl.args.includes("--total-weeks=19"));
 assert(crawl.args.includes("--week-start=monday"));
 assert(crawl.args.includes("--override-term-config"));
+
+assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "uploaded-and-cutover" }, {}).shouldPrune, true);
+assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "no-op" }, {}).shouldPrune, false);
+assert.strictEqual(resolveCloudbaseRetentionPlan({ "prune-cloudbase": true }, { action: "no-op" }, {}).shouldPrune, true);
+assert.strictEqual(resolveCloudbaseRetentionPlan({ "skip-cloudbase-prune": true }, { action: "uploaded-and-cutover" }, {}).shouldPrune, false);
 console.log("test-publisher-term-selection passed");

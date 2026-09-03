@@ -27,6 +27,7 @@ const {
   buildCloudbasePointer,
   fileMeta,
   listLocalReleaseVersions,
+  pruneRemoteReleasePack,
   verifyLocalReleasePack,
   writeJson,
 } = require("../cloudbase/release-pack-utils");
@@ -57,26 +58,26 @@ const DEFAULT_ENV_ID = cloudbaseConfig.ENV_ID || "cloud1-d3g17rpe7566d3d5c";
 const STALE_LOCK_MS = Number(process.env.FOSU_PUBLISHER_STALE_LOCK_MS || 6 * 60 * 60 * 1000);
 
 const STAGES = [
-  ["acquiring-lock", "acquiring publisher lock"],
-  ["local-preflight", "running local publisher preflight"],
-  ["resolving-term", "resolving term"],
-  ["reconciling-term-registry", "reconciling canonical term config"],
-  ["checking-campus-network", "checking campus network"],
-  ["checking-session", "checking education session"],
-  ["crawling", "crawling school schedules"],
-  ["building-staging", "building staging snapshot"],
-  ["validating-local", "validating local staging"],
-  ["calculating-diff", "writing diff report"],
-  ["checking-fingerprint", "checking canonicalHash"],
-  ["recording-unchanged-upload", "recording unchanged sync marker"],
-  ["uploading-oracle", "uploading Oracle staging"],
-  ["waiting-staging-finalize", "waiting Oracle staging finalize"],
-  ["publishing-release", "publishing Oracle release"],
-  ["waiting-release-job", "waiting Oracle release job"],
-  ["verifying-oracle-only", "running Oracle-only smoke"],
-  ["cloudbase-preflight-and-mirror", "running CloudBase preflight and mirror"],
-  ["verifying-cloudbase-and-dual-source", "running CloudBase and dual-source smoke"],
-  ["completed", "completed"],
+  ["acquiring-lock", "获取 Publisher 单实例锁"],
+  ["local-preflight", "检查本机运行环境"],
+  ["resolving-term", "解析学期与教学周配置"],
+  ["reconciling-term-registry", "校准服务端学期配置"],
+  ["checking-campus-network", "检查校园网链路"],
+  ["checking-session", "验证教务登录态"],
+  ["crawling", "采集全校课表"],
+  ["building-staging", "生成 Staging 快照"],
+  ["validating-local", "执行本地质量与隐私校验"],
+  ["calculating-diff", "生成变更摘要"],
+  ["checking-fingerprint", "核对 canonicalHash"],
+  ["recording-unchanged-upload", "合并无变化观测记录"],
+  ["uploading-oracle", "分片上传 Oracle"],
+  ["waiting-staging-finalize", "等待服务端校验"],
+  ["publishing-release", "发布不可变 Release"],
+  ["waiting-release-job", "等待 Release 任务完成"],
+  ["verifying-oracle-only", "验证 Oracle 线上读路径"],
+  ["cloudbase-preflight-and-mirror", "同步 CloudBase 镜像"],
+  ["verifying-cloudbase-and-dual-source", "验证双源一致性"],
+  ["completed", "完成"],
 ];
 const STAGE_INDEX = new Map(STAGES.map(([name], index) => [name, index]));
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "partial-success", "no-change"]);
@@ -367,6 +368,15 @@ function stageDuration(timings, stage) {
   return item && Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null;
 }
 
+function formatElapsedMs(ms) {
+  const value = Math.max(0, Number(ms || 0));
+  if (value < 1000) return `${Math.round(value)}ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
+}
+
 function sumStageDurations(timings, stages) {
   let total = 0;
   let hasValue = false;
@@ -481,7 +491,7 @@ class PublisherRun {
     const index = STAGE_INDEX.get(stage);
     const label = STAGES[index] && STAGES[index][1] || stage;
     this.stageStartedAt[stage] = { ms: Date.now(), at: nowIso() };
-    console.log(`[${index + 1}/${STAGES.length}] ${label}`);
+    console.log(`\n[${String(index + 1).padStart(2, "0")}/${STAGES.length}] ${label}`);
     this.event("stage-start", { stage, index: index + 1, label, startedAt: this.stageStartedAt[stage].at });
     this.save({ currentStage: stage, currentStageStartedAt: this.stageStartedAt[stage].at });
   }
@@ -496,6 +506,7 @@ class PublisherRun {
     const stageTimings = Object.assign({}, this.state.stageTimings || {});
     stageTimings[stage] = { stage, label, startedAt: started.at || "", finishedAt, durationMs };
     this.event("stage-complete", { stage, durationMs, summary: summary || null });
+    console.log(`  完成 · ${label}${durationMs == null ? "" : ` · ${formatElapsedMs(durationMs)}`}`);
     this.save({
       completedStages: Array.from(completed),
       summary: Object.assign({}, this.state.summary || {}, summary || {}),
@@ -825,7 +836,12 @@ function selectPublisherTerm({ cliTerm = "", envTerm = "", activeTerm = "", acti
   const preferred = String(envTerm || "").trim();
   const canonical = String(canonicalTerm || "").trim();
   const active = String(activeTerm || "").trim();
-  if (explicit) return { term: explicit, source: "cli", activeReleaseVersion };
+  if (explicit) {
+    const promotedFromTerm = active && explicit !== active && compareTerms({ term: explicit }, { term: active }) < 0
+      ? active
+      : undefined;
+    return { term: explicit, source: "cli", activeReleaseVersion, promotedFromTerm };
+  }
   if (!active) {
     const error = new Error("PUBLISHER_ACTIVE_TERM_MISSING");
     error.code = "PUBLISHER_ACTIVE_TERM_MISSING";
@@ -887,10 +903,33 @@ function loadPublisherTermConfig(term, args = {}) {
   });
 }
 
-function attachPublisherTermConfig(selected, args = {}) {
-  return Object.assign({}, selected, {
-    termConfig: loadPublisherTermConfig(selected.term, args),
+async function loadRemotePublisherTermConfig(term, args = {}) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") return null;
+  const baseUrl = String(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL).replace(/\/+$/g, "");
+  const response = await getJson(`${baseUrl}/api/admin/terms`, {
+    headers: axiosHeaders(),
+    timeoutMs: 30000,
+    label: "term-registry-config-read",
   });
+  const terms = Array.isArray(response && response.terms) ? response.terms : [];
+  const remote = terms.find((item) => item && String(item.term || "") === String(term || ""));
+  const normalized = normalizePublisherTermConfig(remote);
+  return normalized ? Object.assign({}, normalized, { source: "term-registry" }) : null;
+}
+
+async function attachResolvedPublisherTermConfig(selected, args = {}) {
+  let termConfig = loadPublisherTermConfig(selected.term, args);
+  if (!termConfig) termConfig = await loadRemotePublisherTermConfig(selected.term, args);
+  if (!termConfig) {
+    const error = new Error(
+      `学期 ${selected.term} 缺少可信教学周配置。请先在后台“学期管理”录入开学日期与总周数，` +
+      `或新增 config/terms/${selected.term}.json；系统不会猜测课表事实。`
+    );
+    error.code = "PUBLISHER_TERM_CONFIG_REQUIRED";
+    error.term = selected.term;
+    throw error;
+  }
+  return Object.assign({}, selected, { termConfig });
 }
 
 function buildTermRegistryPatch(remoteTerm, canonicalConfig) {
@@ -966,10 +1005,21 @@ function resolveCanonicalPreferredTerm() {
 
 async function resolveTerm(args) {
   const cliTerm = String(args.term || args.semester || "").trim();
-  if (cliTerm) return attachPublisherTermConfig(selectPublisherTerm({ cliTerm }), args);
   const envTerm = String(process.env.PREFERRED_SEMESTER || "").trim();
   const source = await fetchOracleActivePointer({ oracleBaseUrl: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL });
   const active = extractActiveRelease(source);
+  if (cliTerm) {
+    const explicit = selectPublisherTerm({
+      cliTerm,
+      activeTerm: active.term,
+      activeReleaseVersion: active.releaseVersion,
+      activeSource: source.source,
+    });
+    if (explicit.promotedFromTerm) {
+      console.warn(`[publisher] ${explicit.term} 新于线上当前学期 ${explicit.promotedFromTerm}，本次自动采用新学期全量策略。`);
+    }
+    return attachResolvedPublisherTermConfig(explicit, args);
+  }
   const selected = selectPublisherTerm({
     envTerm,
     activeTerm: active.term,
@@ -979,16 +1029,16 @@ async function resolveTerm(args) {
   });
   if (selected.promotedFromTerm) {
     console.warn(`[publisher] 检测到 canonical 新学期 ${selected.term} 领先线上当前学期 ${selected.promotedFromTerm}，已自动切换目标学期并升级为 full 全量同步（覆盖新年级课表）。`);
-    return attachPublisherTermConfig(selected, args);
+    return attachResolvedPublisherTermConfig(selected, args);
   }
   if (selected.ignoredEnvTerm) {
     // A stale PREFERRED_SEMESTER in local .env files must not silently retarget a
     // routine publish to an old term. The live active pointer is the source of
     // truth; pinning a different term requires an explicit --term.
     console.warn(`[publisher] WARN PREFERRED_SEMESTER=${envTerm} 与线上当前学期 ${active.term} 不一致，已按线上当前学期继续。若需指定其他学期，请显式传入 --term=<学期>。`);
-    return attachPublisherTermConfig(selected, args);
+    return attachResolvedPublisherTermConfig(selected, args);
   }
-  return attachPublisherTermConfig(selected, args);
+  return attachResolvedPublisherTermConfig(selected, args);
 }
 
 function requireSession() {
@@ -1496,15 +1546,61 @@ async function mirrorCloudbase(args) {
   });
 }
 
+function resolveCloudbaseRetentionPlan(args = {}, mirror = {}, env = process.env) {
+  const enabled = !["0", "false", "no", "off"].includes(
+    String(env.FOSU_CLOUDBASE_AUTO_PRUNE == null ? "true" : env.FOSU_CLOUDBASE_AUTO_PRUNE).toLowerCase()
+  );
+  const forced = args["prune-cloudbase"] === true;
+  const skipped = args["skip-cloudbase-prune"] === true;
+  return {
+    enabled,
+    forced,
+    skipped,
+    shouldPrune: enabled && !skipped && (forced || mirror.action === "uploaded-and-cutover"),
+    keepLatest: Math.max(2, Number(args["cloudbase-keep-latest"] || env.FOSU_CLOUDBASE_KEEP_LATEST || 3) || 3),
+  };
+}
+
 async function cloudbasePreflightAndMirror(args) {
   if (process.env.FOSU_PUBLISHER_MOCK !== "1") {
     runCommand("npm", ["run", "cloudbase:preflight"], { code: "CLOUDBASE_PREFLIGHT_FAILED", timeoutMs: 360000 });
   }
   const mirror = await mirrorCloudbase(args);
+  const retentionPlan = resolveCloudbaseRetentionPlan(args, mirror);
+  let retention = {
+    success: true,
+    skipped: true,
+    reason: retentionPlan.enabled ? "no-new-cloudbase-release" : "disabled",
+  };
+  if (retentionPlan.shouldPrune && process.env.FOSU_PUBLISHER_MOCK !== "1") {
+    try {
+      retention = await pruneRemoteReleasePack({
+        envId: args["env-id"] || DEFAULT_ENV_ID,
+        hostingBaseUrl: args["hosting-base-url"] || DEFAULT_CLOUDBASE_BASE_URL,
+        keepLatest: retentionPlan.keepLatest,
+        keep: [mirror.releaseVersion].filter(Boolean),
+        execute: true,
+        dryRun: false,
+        confirm: "CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES",
+      });
+    } catch (error) {
+      // A retention failure must not roll back a release that already passed
+      // mirror verification and pointer cutover. Keep the warning in the
+      // Publisher receipt so operations can retry only the cleanup.
+      retention = {
+        success: false,
+        skipped: false,
+        code: error.code || "CLOUDBASE_RETENTION_FAILED",
+        message: error.message,
+      };
+      console.warn(`  CloudBase 旧版本清理未完成：${retention.code} ${retention.message}`);
+    }
+  }
   return {
     success: true,
     preflight: { success: true },
     mirror,
+    retention,
   };
 }
 
@@ -2051,12 +2147,11 @@ async function main(argv = process.argv.slice(2)) {
   if (args.help || args.h) {
     console.log([
       "Usage:",
-      "  npm run sync:publish",
-      "  npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume",
-      "  npm run sync:publish -- --full --term=2026-2027-1 --grade=2026",
+      "  npm run sync:publish -- --term=2026-2027-1        # 推荐：自动判断日常 / 新学期全量",
       "  npm run sync:publish -- --mode=full --term=2026-2027-1",
       "  npm run sync:publish -- --mode=resume --run-id=<runId>",
-      "  npm run sync:publish -- --mode=mirror-only",
+      "  npm run sync:publish -- --mode=mirror-only --term=2026-2027-1",
+      "  npm run sync:publish -- --mode=mirror-only --term=2026-2027-1 --prune-cloudbase",
       "  npm run sync:export-cloudbase -- --release=<releaseVersion>",
     ].join(os.EOL));
     return null;
@@ -2067,14 +2162,8 @@ async function main(argv = process.argv.slice(2)) {
   }
   if (mode === "full") {
     const fullTerm = String(args.term || args.semester || "").trim();
-    const missing = [];
-    if (!fullTerm) missing.push("term");
-    if (fullTerm && !loadPublisherTermConfig(fullTerm, args)) {
-      if (!args["term-start-date"] && !args.termStartDate) missing.push("term-start-date");
-      if (!args["total-weeks"] && !args.totalWeeks) missing.push("total-weeks");
-    }
-    if (missing.length) {
-      const error = new Error(`full mode requires canonical config/terms/<term>.json or explicit ${missing.map((key) => `--${key}`).join(", ")}`);
+    if (!fullTerm) {
+      const error = new Error("full mode requires --term=<学期>; teaching week config is resolved from local config or Term Registry");
       error.code = "PUBLISHER_FULL_TERM_CONFIG_REQUIRED";
       throw error;
     }
@@ -2133,7 +2222,7 @@ async function main(argv = process.argv.slice(2)) {
     run.event("publisher-receipt-upload-failed", receipt.publisherReceiptWarning);
     writeJsonAtomic(run.receiptPath, redact(receipt));
   }
-  console.log(JSON.stringify(redact({
+  const compactReceipt = redact({
     runId: receipt.runId,
     status: receipt.status || (receipt.success ? "success" : "failed"),
     term: receipt.term || "",
@@ -2141,7 +2230,9 @@ async function main(argv = process.argv.slice(2)) {
     oracleStatus: receipt.oracleStatus || "",
     cloudbaseStatus: receipt.cloudbaseStatus || "",
     receiptPaths: receipt.receiptPaths,
-  }), null, 2));
+  });
+  console.log(`\n同步结果 · ${compactReceipt.status} · 学期 ${compactReceipt.term || "-"} · Oracle ${compactReceipt.oracleStatus || "-"} · CloudBase ${compactReceipt.cloudbaseStatus || "-"}`);
+  console.log(JSON.stringify(compactReceipt, null, 2));
   return receipt;
 }
 
@@ -2177,6 +2268,7 @@ module.exports = {
   redact,
   reconcileOracleTermConfig,
   reconcilePublisherLock,
+  resolveCloudbaseRetentionPlan,
   removePublisherLock,
   runDualSourceSmoke,
   runLocalPreflight,

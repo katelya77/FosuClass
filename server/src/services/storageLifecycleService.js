@@ -203,7 +203,7 @@ function getUploadCleanupContext() {
   const activeVersion = String(active && (active.version || active.releaseVersion) || "").trim();
   let records = [];
   try {
-    records = stagingUploadService.listUploadRecords({ limit: 5000 }).records || [];
+    records = stagingUploadService.listUploadRecords({ limit: 5000, internal: true }).records || [];
   } catch (error) {
     records = [];
   }
@@ -213,7 +213,8 @@ function getUploadCleanupContext() {
     if (!record || !record.uploadId) return;
     byId.set(record.uploadId, record);
     const term = String(record.term || record.summary?.term || "").trim();
-    const published = record.status === "published" || record.releaseState === "published" || record.publishedReleaseVersion;
+    const status = String(record.status || record.stagingState || "").toLowerCase();
+    const published = status === "published" || Boolean(record.publishedReleaseVersion && !["unchanged", "duplicate", "superseded"].includes(status));
     if (!term || !published) return;
     const current = latestPublishedByTerm.get(term);
     const currentTime = Date.parse(current && (current.updatedAt || current.createdAt) || "") || 0;
@@ -225,9 +226,9 @@ function getUploadCleanupContext() {
 
 function isActiveUploadRecord(record, context) {
   if (!record) return false;
-  const hash = String(record.canonicalHash || record.summary?.canonicalHash || "").trim().toLowerCase();
   const version = String(record.publishedReleaseVersion || record.publishedVersion || record.releaseVersion || record.summary?.releaseVersion || "").trim();
-  return Boolean(record.active || context.activeHash && hash && context.activeHash === hash || context.activeVersion && version && context.activeVersion === version);
+  const status = String(record.status || record.stagingState || "").toLowerCase();
+  return Boolean(record.active || status === "published" && context.activeVersion && version && context.activeVersion === version);
 }
 
 function collectUploadMaintenanceCandidates(config) {
@@ -376,6 +377,8 @@ function runMaintenance(options = {}) {
 
   try {
     const candidates = collectMaintenanceCandidates(config);
+    const uploadRecordCountBefore = stagingUploadService.listUploadRecords({ limit: 5000, internal: true }).recordTotal || 0;
+    const removedUploadIds = new Set();
     report.scannedCandidates = candidates.length;
     candidates.forEach((candidate) => {
       if (candidate.preserveReason) {
@@ -393,6 +396,7 @@ function runMaintenance(options = {}) {
           if (statWasDir) report.deletedDirs += 1;
           else report.deletedFiles += 1;
           report.actions.push(Object.assign({}, candidate, { action: dryRun ? "would-delete" : "delete", bytes: result.bytes || candidate.bytes || 0 }));
+          if (!dryRun && candidate.uploadId) removedUploadIds.add(String(candidate.uploadId));
         } else {
           report.actions.push(Object.assign({}, candidate, { action: "skip", preserveReason: result.reason }));
         }
@@ -400,6 +404,24 @@ function runMaintenance(options = {}) {
         report.errors.push({ path: candidate.path, message: error.message });
       }
     });
+    if (!dryRun && removedUploadIds.size) {
+      const rebuilt = stagingUploadService.rebuildUploadRecordIndex({
+        reason: "storage-maintenance",
+        dropUploadIds: Array.from(removedUploadIds),
+      });
+      report.uploadRecordCompaction = {
+        before: uploadRecordCountBefore,
+        after: Number(rebuilt && rebuilt.records && rebuilt.records.length || 0),
+        removed: Math.max(0, uploadRecordCountBefore - Number(rebuilt && rebuilt.records && rebuilt.records.length || 0)),
+      };
+    } else {
+      report.uploadRecordCompaction = {
+        before: uploadRecordCountBefore,
+        after: uploadRecordCountBefore,
+        removed: 0,
+        dryRun,
+      };
+    }
     report.durationMs = Date.now() - started;
     const state = Object.assign({}, readJsonFile(STATE_PATH, {}), {
       lastRunAt: report.startedAt,

@@ -199,6 +199,32 @@ async function main() {
   assert.strictEqual(deleted.uploadId, upload.uploadId, "deleteUpload should return deleted upload id");
   assert(!stagingUploadService.listUploads(10).some((item) => item.uploadId === upload.uploadId), "deleted upload should be removed from list");
 
+  const markerInput = {
+    term: "2025-2026-2",
+    canonicalHash: "a".repeat(64),
+    reason: "active-release",
+    source: "publisher",
+    publisherRunId: "coalesced-run-1",
+    activeReleaseVersion: "test-active-release",
+    counts: { classScheduleCount: 1 },
+  };
+  const firstMarker = stagingUploadService.recordUnchangedUpload(markerInput, actor);
+  const repeatedMarker = stagingUploadService.recordUnchangedUpload(Object.assign({}, markerInput, {
+    publisherRunId: "coalesced-run-2",
+  }), actor);
+  const idempotentMarker = stagingUploadService.recordUnchangedUpload(Object.assign({}, markerInput, {
+    publisherRunId: "coalesced-run-2",
+  }), actor);
+  assert.strictEqual(repeatedMarker.uploadId, firstMarker.uploadId, "same no-change observation should reuse one upload record");
+  assert.strictEqual(repeatedMarker.coalesced, true, "repeated no-change observation should be marked coalesced");
+  assert.strictEqual(repeatedMarker.observationCount, 2, "different runs should increase observationCount");
+  assert.strictEqual(idempotentMarker.observationCount, 2, "retrying the same run id must be idempotent");
+  assert.strictEqual(idempotentMarker.active, false, "same hash observation must not impersonate the active release record");
+  const grouped = stagingUploadService.listUploadRecords({ grouped: true, limit: 10, page: 1 });
+  assert.strictEqual(grouped.paginationUnit, "group", "grouped listing should paginate complete hash groups");
+  assert(grouped.records.some((item) => item.uploadId === firstMarker.uploadId), "coalesced marker should remain visible in grouped listing");
+  stagingUploadService.deleteUpload(firstMarker.uploadId, actor);
+
   assertReleasePublishRegression();
   console.log("Staging publish regression smoke test passed.");
 
