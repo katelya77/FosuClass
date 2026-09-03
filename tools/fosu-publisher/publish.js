@@ -298,7 +298,41 @@ function safeRelativePath(value) {
 }
 
 function sanitizeReceiptForUpload(receipt) {
-  const clean = redact(JSON.parse(JSON.stringify(receipt || {})));
+  const source = receipt || {};
+  // The local receipt intentionally contains detailed validation probes and can
+  // be several megabytes. The server only needs an operational/audit summary;
+  // uploading the full object can exceed the admin JSON body limit and obscure
+  // an otherwise successful publish with a 413 warning.
+  const clean = redact(JSON.parse(JSON.stringify({
+    schemaVersion: 1,
+    runId: source.runId || "",
+    success: source.success === true,
+    status: source.status || source.overallStatus || (source.success === true ? "success" : "failed"),
+    overallStatus: source.overallStatus || source.status || (source.success === true ? "success" : "failed"),
+    mode: source.mode || source.originalMode || "",
+    term: source.term || "",
+    startedAt: source.startedAt || "",
+    completedAt: source.completedAt || source.endedAt || source.updatedAt || "",
+    currentStage: source.currentStage || source.stage || "",
+    canonicalHash: source.canonicalHash || "",
+    previousCanonicalHash: source.previousCanonicalHash || "",
+    counts: source.counts || source.summary && source.summary.counts || {},
+    resourceCounts: source.resourceCounts || null,
+    actualNetworkRequestCount: source.actualNetworkRequestCount || source.networkRequestCount || 0,
+    usedCache: source.usedCache === true,
+    sourceModes: source.sourceModes || {},
+    includeScopes: Array.isArray(source.includeScopes) ? source.includeScopes.slice(0, 20) : [],
+    diffSummary: source.diffSummary || source.diff || {},
+    oracleStatus: source.oracleStatus || "",
+    cloudbaseStatus: source.cloudbaseStatus || "",
+    dualSourceStatus: source.dualSourceStatus || source.liveSmoke && (source.liveSmoke.success ? "healthy" : "failed") || "",
+    stageTimings: source.stageTimings || {},
+    performanceSummary: source.performanceSummary || {},
+    errorCode: source.errorCode || source.code || source.error && source.error.code || "",
+    errorMessage: source.errorMessage || source.message || source.error && source.error.message || "",
+    warnings: Array.isArray(source.warnings) ? source.warnings.slice(0, 20) : [],
+    blockerCodes: Array.isArray(source.blockerCodes) ? source.blockerCodes.slice(0, 20) : [],
+  })));
   function scrubPaths(value) {
     if (Array.isArray(value)) return value.map(scrubPaths);
     if (value && typeof value === "object") {
@@ -312,7 +346,25 @@ function sanitizeReceiptForUpload(receipt) {
     }
     return value;
   }
-  return scrubPaths(clean);
+  const scrubbed = scrubPaths(clean);
+  if (Buffer.byteLength(JSON.stringify(scrubbed), "utf8") < 64 * 1024) return scrubbed;
+  return scrubPaths(redact({
+    schemaVersion: 1,
+    receiptTruncated: true,
+    runId: source.runId || "",
+    success: source.success === true,
+    status: source.status || source.overallStatus || (source.success === true ? "success" : "failed"),
+    overallStatus: source.overallStatus || source.status || (source.success === true ? "success" : "failed"),
+    mode: source.mode || source.originalMode || "",
+    term: source.term || "",
+    completedAt: source.completedAt || source.endedAt || source.updatedAt || "",
+    canonicalHash: source.canonicalHash || "",
+    oracleStatus: source.oracleStatus || "",
+    cloudbaseStatus: source.cloudbaseStatus || "",
+    dualSourceStatus: source.dualSourceStatus || source.liveSmoke && (source.liveSmoke.success ? "healthy" : "failed") || "",
+    errorCode: source.errorCode || source.code || source.error && source.error.code || "",
+    errorMessage: String(source.errorMessage || source.message || source.error && source.error.message || "").slice(0, 1000),
+  }));
 }
 
 async function uploadPublisherReceipt(args, receipt) {

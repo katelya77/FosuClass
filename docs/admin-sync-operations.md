@@ -58,6 +58,8 @@ npm run sync:publish -- --mode=resume --run-id=RUN_ID
 
 每次同步回执必须记录阶段耗时：session 检查、目录抓取、课表抓取、规范化、hash、gzip、上传、校验、release、OpenResty、CloudBase。后台只展示摘要；完整 hash、manifest URL、uploadId、stagingId、target dir 只放在技术详情中。
 
+后台回执接口只保存脱敏紧凑摘要；完整双源探针留在本机受控回执中，防止大体积回执触发 413。上传记录的 Active 状态始终以 runtime pointer 的精确 Release 版本为准，历史 `active=true` 仅在 pointer 不可用时作为兼容回退。
+
 ## Release 与镜像约束
 
 - Release Pack 是不可变版本；active pointer 切换必须保持原子化。

@@ -7,6 +7,31 @@ const storageRoot = path.join(os.tmpdir(), `fosu-receipts-${process.pid}-${Date.
 process.env.FOSU_STORAGE_DIR = storageRoot;
 
 const receiptService = require("../server/src/services/publisherReceiptService");
+const { sanitizeReceiptForUpload } = require("./fosu-publisher/publish");
+
+const compactUpload = sanitizeReceiptForUpload({
+  runId: "large-receipt-test",
+  success: true,
+  mode: "routine",
+  term: "2026-2027-1",
+  canonicalHash: "abcdef1234567890",
+  oracleStatus: "published",
+  cloudbaseStatus: "mirrored",
+  stageTimings: { crawling: { durationMs: 1234 } },
+  performanceSummary: { totalKnownMs: 5678 },
+  oracleVerification: { raw: "x".repeat(2 * 1024 * 1024) },
+  liveSmoke: { success: true, raw: "y".repeat(2 * 1024 * 1024) },
+  diffSummary: { raw: "z".repeat(2 * 1024 * 1024) },
+  token: "must-not-upload",
+});
+const compactJson = JSON.stringify(compactUpload);
+assert(compactJson.length < 64 * 1024, "publisher receipt upload should stay below the admin body limit");
+assert.strictEqual(compactUpload.runId, "large-receipt-test");
+assert.strictEqual(compactUpload.cloudbaseStatus, "mirrored");
+assert.strictEqual(compactUpload.dualSourceStatus, "healthy");
+assert.strictEqual(compactUpload.receiptTruncated, true, "oversized summaries should fall back to the minimal receipt contract");
+assert(!Object.prototype.hasOwnProperty.call(compactUpload, "oracleVerification"), "full verification probes must remain local");
+assert(!compactJson.includes("must-not-upload"), "publisher upload summary must not include secrets");
 
 const saved = receiptService.saveReceipt({
   runId: "receipt-test",

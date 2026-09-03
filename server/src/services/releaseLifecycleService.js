@@ -195,10 +195,9 @@ function inferUploadLifecycle(upload, activeInfo, stagingInfo) {
   // make every historical upload the source of the active pointer. Only the
   // reconciled source record (or a published record for the exact version) is
   // Active. This keeps old unchanged/duplicate markers safely cleanable.
-  const isActive = Boolean(
-    (activeVersion && uploadVersion && activeVersion === uploadVersion && upload.status === "published") ||
-    (upload && upload.active === true)
-  );
+  const isActive = activeVersion
+    ? Boolean(uploadVersion && activeVersion === uploadVersion && upload.status === "published")
+    : Boolean(upload && upload.active === true);
   const sameAsStaging = Boolean(stagingInfo.stagingCanonicalHash && uploadHash && stagingInfo.stagingCanonicalHash === uploadHash);
   return {
     uploadId: upload && upload.uploadId || "",

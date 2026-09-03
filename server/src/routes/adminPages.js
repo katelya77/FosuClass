@@ -11350,10 +11350,14 @@ ${DAILY_KNOWLEDGE_SECTION}
         var syncStatus = state.syncStatus || {};
         var status = String(upload && (upload.status || upload.stagingState) || "").toLowerCase();
         var runtimeState = String(upload && upload.runtimeState || "").toLowerCase();
-        return Boolean(
-          upload && upload.active === true ||
-          status === "published" && runtimeState === "active" && syncStatus.releaseVersion && releaseVersion && syncStatus.releaseVersion === releaseVersion
-        );
+        if (syncStatus.releaseVersion && releaseVersion) {
+          return Boolean(
+            status === "published" &&
+            runtimeState === "active" &&
+            syncStatus.releaseVersion === releaseVersion
+          );
+        }
+        return Boolean(upload && upload.active === true);
       }
 
       function isIncompleteStagingUpload(upload) {

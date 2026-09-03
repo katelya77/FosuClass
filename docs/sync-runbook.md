@@ -57,6 +57,10 @@ npm run sync:export-cloudbase -- --release=<releaseVersion>
 
 任何阶段失败都不得切换 active，旧线上版本继续可用。
 
+CloudBase 目录达到 400 个文件时会在首次上传前按 80 个文件自动分片，避免大目录传输到末端被网关重置；小目录仍走单次上传。可用 `CLOUDBASE_DEPLOY_PRECHUNK_FILE_THRESHOLD` 和 `CLOUDBASE_DEPLOY_FILE_FALLBACK_CHUNK_SIZE` 调整阈值与分片大小。
+
+完整 Publisher receipt 保存在本机 `.local/publisher-runs/<runId>/receipt.json`；后台只接收小于请求体上限的脱敏运维摘要（状态、计数、阶段耗时和双源结果），不会上传完整探针或本机路径。
+
 ## CloudBase 人工包
 
 CloudBase 镜像失败时，Oracle 已发布的 Release 不回滚，Publisher 会把状态标记为 `cloudbase-mirror-pending`，并生成：

@@ -110,6 +110,21 @@ try {
   assert.strictEqual(latestAfter.publishedReleaseVersion, "2026-06-05T12-39-28");
   assert(["duplicate", "superseded"].includes(olderAfter.status), "older matching upload should be duplicate or superseded");
 
+  const staleSticky = initPendingUpload("stale-sticky", "f".repeat(64), "old-release-version");
+  stagingUploadService.markUploadPublished(staleSticky.uploadId, "old-release-version", { active: true });
+  const truthRecords = stagingUploadService.listUploadRecords({ limit: 20 }).records;
+  const staleTruth = truthRecords.find((item) => item.uploadId === staleSticky.uploadId);
+  const activeTruth = truthRecords.filter((item) => item.active === true);
+  assert(staleTruth, "stale sticky upload should remain visible before cleanup");
+  assert.strictEqual(staleTruth.active, false, "runtime pointer must override a stale persisted active flag");
+  assert.strictEqual(staleTruth.runtimeState, "inactive", "stale active runtime state must be normalized on read");
+  assert.strictEqual(activeTruth.length, 1, "exactly one published upload may be Active");
+  assert.strictEqual(activeTruth[0].uploadId, latest.uploadId, "Active upload must match the runtime release source");
+  assert.doesNotThrow(
+    () => stagingUploadService.deleteUpload(staleSticky.uploadId, { type: "admin", id: "test" }),
+    "stale active flags must not block authorized cleanup once a runtime pointer exists"
+  );
+
   const status = releaseLifecycleService.buildLifecycleStatus({ reason: "test-status" });
   assert.strictEqual(status.stagingSameAsActive, true);
   assert.strictEqual(status.stagingNeedsPublish, false);

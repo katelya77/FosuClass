@@ -57,6 +57,16 @@ function buildRelease(version, options = {}) {
       schedule: { id: `${type}-1`, courses: [] },
     });
   });
+  if (options.extraCourseDetails) {
+    writeJson(path.join(releaseDir, "detail", "course", "course-2.json"), {
+      success: true,
+      type: "course",
+      id: "course-2",
+      term: "2025-2026-2",
+      releaseVersion: version,
+      schedule: { id: "course-2", courses: [] },
+    });
+  }
   writeJson(path.join(releaseDir, "empty-room", "index.json"), {
     success: true,
     term: "2025-2026-2",
@@ -162,6 +172,25 @@ async function run() {
   assert.strictEqual(fallback.success, true);
   assert(fallback.commands.some((item) => item.cloudPath === `releases/${version}/detail/course` && item.fallback === "files"), "directory deploy should fall back to chunked file upload");
   assert(!fallbackCalls.some((item) => item.cloudPath === "runtime/active.json"), "fallback deploy must not update active pointer");
+
+  const prechunkFixture = buildRelease(`${version}-prechunk`, { extraCourseDetails: true });
+  const prechunkCalls = [];
+  const prechunked = await utils.deployReleasePack({
+    publicRoot: prechunkFixture.root,
+    releaseVersion: `${version}-prechunk`,
+    execute: true,
+    hostingBaseUrl: "https://cloud.example.com",
+    fileFallbackChunkSize: 1,
+    prechunkFileThreshold: 2,
+    commandRunner: (localPath, cloudPath) => {
+      prechunkCalls.push({ localPath, cloudPath });
+      return { localPath, cloudPath };
+    },
+    remoteVerifier: async () => ({ success: true, releaseVersion: `${version}-prechunk`, samples: ["manifest.json"] }),
+  });
+  assert.strictEqual(prechunked.success, true);
+  assert(prechunked.commands.some((item) => item.prechunked === true), "large directories should be chunked before a doomed whole-directory upload");
+  assert(!prechunkCalls.some((item) => item.localPath === path.join(prechunkFixture.releaseDir, "detail", "course")), "prechunking must skip the original large directory command");
 
   const secretVersion = "cloudbase-release-secret-2026-06-14";
   const secret = buildRelease(secretVersion, { secretFile: true });

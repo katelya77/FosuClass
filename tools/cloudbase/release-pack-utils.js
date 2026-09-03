@@ -485,7 +485,10 @@ async function runDeployFilesFallback(commandRunner, task, options = {}, cause) 
   const chunkSize = Math.max(1, Number(options.fileFallbackChunkSize || process.env.CLOUDBASE_DEPLOY_FILE_FALLBACK_CHUNK_SIZE || 80) || 80);
   const commands = [];
   if (options.quiet !== true) {
-    console.error(`[cloudbase] directory deploy failed for ${task.cloudPath}; falling back to ${files.length} files in chunks of ${chunkSize}`);
+    const reason = cause
+      ? "directory deploy failed"
+      : "large directory detected";
+    console.error(`[cloudbase] ${reason} for ${task.cloudPath}; uploading ${files.length} files in chunks of ${chunkSize}`);
   }
   for (let offset = 0; offset < files.length; offset += chunkSize) {
     const chunk = files.slice(offset, offset + chunkSize);
@@ -539,6 +542,7 @@ async function runDeployFilesFallback(commandRunner, task, options = {}, cause) 
     localPath: task.localPath,
     cloudPath: task.cloudPath,
     fallback: "files",
+    prechunked: !cause,
     fileCount: files.length,
     commands,
     failedWith: cause && (cause.code || cause.message) || "",
@@ -721,7 +725,21 @@ async function deployReleasePack(options = {}) {
     }
   }
   for (let index = 0; index < planned.length; index += 1) {
-    commands.push(await runDeployTaskWithRetry(commandRunner, planned[index], index, planned.length, options));
+    const task = planned[index];
+    const stat = fs.existsSync(task.localPath) ? fs.statSync(task.localPath) : null;
+    const chunkSize = Math.max(1, Number(options.fileFallbackChunkSize || process.env.CLOUDBASE_DEPLOY_FILE_FALLBACK_CHUNK_SIZE || 80) || 80);
+    const prechunkThreshold = Math.max(
+      chunkSize + 1,
+      Number(options.prechunkFileThreshold || process.env.CLOUDBASE_DEPLOY_PRECHUNK_FILE_THRESHOLD || 400) || 400
+    );
+    const directoryFiles = stat && stat.isDirectory() ? collectDeployFiles(task.localPath) : [];
+    if (directoryFiles.length >= prechunkThreshold) {
+      commands.push(await runDeployFilesFallback(commandRunner, task, Object.assign({}, options, {
+        fileFallbackChunkSize: chunkSize,
+      }), null));
+      continue;
+    }
+    commands.push(await runDeployTaskWithRetry(commandRunner, task, index, planned.length, options));
   }
   let remote = null;
   if (options.verifyRemote !== false) {

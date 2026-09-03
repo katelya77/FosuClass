@@ -944,8 +944,25 @@ function listUploadRecords(options = {}) {
     total = groups.length;
     nextCursor = normalized.cursor + normalized.limit < groups.length ? normalized.cursor + normalized.limit : null;
   }
+  let activeRelease = null;
+  try {
+    activeRelease = releaseService.getActiveReleaseInfoFast && releaseService.getActiveReleaseInfoFast();
+  } catch (error) {
+    activeRelease = null;
+  }
+  const activeVersion = String(activeRelease && (activeRelease.version || activeRelease.releaseVersion) || "").trim();
   const records = selected
     .map((item) => toUploadRecord(item, { missingManifest: Boolean(item.missingManifest) }))
+    .map((item) => {
+      if (!item || !activeVersion) return item;
+      const version = getManifestReleaseVersion(item);
+      const status = String(item.status || item.stagingState || "").toLowerCase();
+      const active = Boolean(status === "published" && version && version === activeVersion);
+      return Object.assign({}, item, {
+        active,
+        runtimeState: active ? "active" : "inactive",
+      });
+    })
     .filter(Boolean);
   return {
     success: true,
@@ -1166,7 +1183,7 @@ function assertUploadCanDelete(uploadId, manifest) {
   const activeVersion = String(active && (active.version || active.releaseVersion) || "").trim();
   const uploadVersion = getManifestReleaseVersion(item);
   const isPublishedSource = status === "published" && activeVersion && uploadVersion && activeVersion === uploadVersion;
-  if (item.active === true || isPublishedSource) {
+  if (activeVersion ? isPublishedSource : item.active === true) {
     const error = new Error("Active 对应上传记录禁止删除");
     error.statusCode = 409;
     error.code = "STAGING_UPLOAD_ACTIVE_REFERENCE";
