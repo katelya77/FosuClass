@@ -201,6 +201,8 @@ assert.deepStrictEqual(indexPage.data.weekdays.map((item) => `${item.label} ${it
   "周三 6月10日",
   "周四 6月11日",
   "周五 6月12日",
+  "周六 6月13日",
+  "周日 6月14日",
 ]);
 assert.strictEqual(indexPage.data.weekdays[3].isToday, true);
 assertNoBadDateText(indexPage.data, "index page data");
@@ -209,11 +211,20 @@ const settingsPage = createPage(pages[1]);
 settingsPage.loadSettings();
 assert.strictEqual(settingsPage.data.settings.currentWeek, 14);
 assert.strictEqual(settingsPage.data.settings.semester, "2025-2026-2");
+assert.strictEqual(settingsPage.data.settings.showWeekend, true);
 assert.strictEqual(settingsPage.data.teachingInfo.dateLabel, "6月11日");
 assert.strictEqual(settingsPage.data.teachingInfo.weekdayLabel, "周四");
 assert.strictEqual(settingsPage.data.termStartDate, "2026年3月9日");
 assert.strictEqual(settingsPage.data.termStartWeekdayText, "周一");
 assert.strictEqual(settingsPage.data.totalTeachingWeeks, "19周");
 assertNoBadDateText(settingsPage.data, "settings page data");
+
+require("../miniprogram/utils/storage").saveSettings({ showWeekend: false });
+indexPage.loadSchedule();
+assert.deepStrictEqual(
+  indexPage.data.weekdays.map((item) => item.label),
+  ["周一", "周二", "周三", "周四", "周五"],
+  "an explicit user choice to hide weekends should still be respected"
+);
 
 console.log("test-miniprogram-calendar-date-fix passed");

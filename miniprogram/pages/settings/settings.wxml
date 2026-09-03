@@ -78,7 +78,7 @@
     <view class="setting-row">
       <view>
         <view class="row-title">显示周末</view>
-        <view class="row-desc">关闭后首页只显示周一到周五</view>
+        <view class="row-desc">默认开启，避免漏看周六、周日课程；确认无课可关闭</view>
       </view>
       <switch
         checked="{{settings.showWeekend}}"

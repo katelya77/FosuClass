@@ -86,7 +86,7 @@ const defaultSettings = {
   currentWeek: 12,
   manualWeekOverride: false,
   hideInactiveCourses: false,
-  showWeekend: false,
+  showWeekend: true,
   showHistoricalGrades: false,
   enableTodayStartupReminder: true,
 };
