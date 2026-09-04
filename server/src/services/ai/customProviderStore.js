@@ -153,16 +153,111 @@ function findEntry(existingList, id) {
   return parseList(existingList).find((entry) => entry.id === target) || null;
 }
 
+function modelArrayFromResponse(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const candidates = [
+    payload.data,
+    payload.models,
+    payload.result,
+    payload.data && payload.data.data,
+    payload.data && payload.data.models,
+    payload.result && payload.result.data,
+    payload.result && payload.result.models,
+  ];
+  return candidates.find((candidate) => Array.isArray(candidate)) || [];
+}
+
+function modelIdFromItem(item) {
+  if (typeof item === "string") return item.trim().slice(0, 180);
+  if (!item || typeof item !== "object") return "";
+  return String(item.id || item.model || item.slug || item.name || "").trim().slice(0, 180);
+}
+
+function parseExpiration(value) {
+  if (value == null || value === "") return 0;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric > 1e12 ? numeric : numeric * 1000;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isZeroPrice(value) {
+  if (value == null || value === "") return false;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric === 0;
+}
+
+function normalizeOpenRouterItem(item) {
+  const id = modelIdFromItem(item);
+  if (!id) return null;
+  const raw = item && typeof item === "object" ? item : {};
+  const name = String(raw.name || id).trim().slice(0, 180);
+  const pricing = raw.pricing && typeof raw.pricing === "object" ? raw.pricing : {};
+  const free = /:free$/i.test(id) || (isZeroPrice(pricing.prompt) && isZeroPrice(pricing.completion));
+  const architecture = raw.architecture && typeof raw.architecture === "object" ? raw.architecture : {};
+  const outputModalities = Array.isArray(architecture.output_modalities)
+    ? architecture.output_modalities
+    : Array.isArray(raw.output_modalities)
+      ? raw.output_modalities
+      : [];
+  const modalityText = String(architecture.modality || raw.modality || "").toLowerCase();
+  const looksNonText = /(?:embed|rerank|tts|speech|transcri|image[-_ ]?(?:gen|edit)|video|audio)/i.test(`${id} ${name}`);
+  const emitsText = outputModalities.length
+    ? outputModalities.some((value) => String(value).toLowerCase() === "text")
+    : /(?:->|\b)text\b/.test(modalityText) || !looksNonText;
+  const expiresAtMs = parseExpiration(raw.expiration_date || raw.expirationDate || raw.expires_at || raw.expiresAt);
+  const expired = Boolean(expiresAtMs && expiresAtMs <= Date.now());
+  const supported = new Set((Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [])
+    .map((value) => String(value).trim().toLowerCase()));
+  const supportsStructured = supported.has("response_format") || supported.has("structured_outputs") || supported.has("json_schema");
+  const supportsTools = supported.has("tools") || supported.has("tool_choice");
+  const contextLength = Math.max(0, Number(raw.context_length || raw.contextLength || 0) || 0);
+  let score = Math.min(30, Math.round(Math.log2(Math.max(1, contextLength))));
+  if (supportsStructured) score += 50;
+  if (supportsTools) score += 35;
+  if (!/(?:preview|experimental|beta)/i.test(`${id} ${name}`)) score += 12;
+  if (!expiresAtMs) score += 8;
+  return {
+    id,
+    name,
+    free,
+    textOutput: emitsText && !looksNonText,
+    expired,
+    contextLength,
+    supportsStructured,
+    supportsTools,
+    expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : "",
+    score,
+  };
+}
+
+function dedupeModelItems(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    if (!item || !item.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
 /**
  * 拉取端点模型列表（OpenAI GET /models；Anthropic GET /v1/models）。
+ * OpenRouter 免费目录也通过官方 /models API 获取，不依赖网页 DOM 或爬虫。
  * 仅用于后台"获取模型"按钮；密钥只进出站请求，绝不写日志。
  */
 async function fetchModelList(options = {}) {
   const protocol = normalizeProtocol(options.protocol);
   const baseUrl = normalizeBaseUrl(options.baseUrl, protocol || "openai");
   const apiKey = String(options.apiKey || "").trim();
-  if (!protocol || !baseUrl || !apiKey) {
-    const error = new Error("protocol / baseUrl / apiKey 均为必填。");
+  const openrouterFreeCatalog = String(options.catalog || "").trim().toLowerCase() === "openrouter-free";
+  if (!protocol || !baseUrl || (!apiKey && !openrouterFreeCatalog)) {
+    const error = new Error(openrouterFreeCatalog
+      ? "protocol / baseUrl 均为必填。"
+      : "protocol / baseUrl / apiKey 均为必填。");
     error.code = "bad_request";
     throw error;
   }
@@ -170,16 +265,38 @@ async function fetchModelList(options = {}) {
   const url = protocol === "anthropic" ? `${baseUrl}/models` : `${baseUrl}/models`;
   const headers = protocol === "anthropic"
     ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
-    : { Authorization: `Bearer ${apiKey}` };
+    : apiKey
+      ? { Authorization: `Bearer ${apiKey}` }
+      : {};
   const started = Date.now();
   try {
     const response = await axios.get(url, { timeout: timeoutMs, headers });
-    const data = response.data && Array.isArray(response.data.data) ? response.data.data : [];
-    const models = data
-      .map((item) => String(item && (item.id || item.name) || "").trim())
-      .filter(Boolean)
-      .slice(0, 200);
-    return { models, latencyMs: Date.now() - started };
+    const data = modelArrayFromResponse(response.data);
+    if (openrouterFreeCatalog) {
+      const items = dedupeModelItems(data.map(normalizeOpenRouterItem).filter((item) => item && item.free && item.textOutput && !item.expired))
+        .sort((a, b) => b.score - a.score || b.contextLength - a.contextLength || a.id.localeCompare(b.id))
+        .slice(0, 200)
+        .map(({ score, textOutput, expired, ...item }) => item);
+      const recommendedModels = items.slice(0, 4).map((item) => item.id);
+      if (!recommendedModels.includes("openrouter/free")) recommendedModels.push("openrouter/free");
+      return {
+        models: items.map((item) => item.id),
+        items,
+        recommendedModels,
+        source: "openrouter-free",
+        latencyMs: Date.now() - started,
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+    const models = Array.from(new Set(data.map(modelIdFromItem).filter(Boolean))).slice(0, 200);
+    return {
+      models,
+      items: models.map((id) => ({ id, name: id })),
+      recommendedModels: models.slice(0, 4),
+      source: "provider-models",
+      latencyMs: Date.now() - started,
+      fetchedAt: new Date().toISOString(),
+    };
   } catch (error) {
     const status = error && error.response && error.response.status;
     const wrapped = new Error("获取模型列表失败。");
@@ -202,6 +319,7 @@ module.exports = {
   isEntryUsable,
   listFromRuntimeConfig,
   normalizeBaseUrl,
+  modelArrayFromResponse,
   normalizeProtocol,
   parseList,
   publicView,

@@ -26,6 +26,48 @@ function parseModels(value) {
   return Array.from(new Set(models)).slice(0, 8);
 }
 
+function isRouterModel(model) {
+  return /^openrouter\//i.test(String(model || "").trim());
+}
+
+/**
+ * OpenRouter accepts either a concrete `models` fallback list or one router in
+ * `model`. Mixing `openrouter/free` into `models` makes the whole request fail
+ * validation before any concrete model is attempted. Keep the router as a
+ * second, explicit request while preserving the configured priority order.
+ */
+function buildModelAttempts(models) {
+  const attempts = [];
+  let concrete = [];
+  const flushConcrete = () => {
+    if (!concrete.length) return;
+    attempts.push({ models: concrete });
+    concrete = [];
+  };
+  parseModels(models).forEach((model) => {
+    if (isRouterModel(model)) {
+      flushConcrete();
+      attempts.push({ model });
+      return;
+    }
+    concrete.push(model);
+  });
+  flushConcrete();
+  return attempts;
+}
+
+function canTryNextModel(error) {
+  const status = Number(error && (error.status || error.response && error.response.status) || 0);
+  const code = String(error && error.code || "");
+  if (status === 401 || status === 403 || code === "NOT_CONFIGURED") return false;
+  if (/abort|cancel/i.test(code) || error && error.name === "AbortError") return false;
+  return true;
+}
+
+function remainingTimeout(totalMs, startedAt) {
+  return Math.max(0, Number(totalMs || 0) - (Date.now() - startedAt));
+}
+
 function firstConfiguredKey(runtimeConfig = {}) {
   return String(configValue(runtimeConfig, "OPENROUTER_API_KEY", "")).trim();
 }
@@ -87,7 +129,6 @@ async function generate(input = {}) {
     },
   ];
   const body = {
-    models: config.models,
     stream: false,
     max_tokens: config.maxTokens,
     temperature: conversational ? 0.4 : 0,
@@ -95,20 +136,36 @@ async function generate(input = {}) {
     provider: providerRouting(!conversational),
   };
   if (!conversational) body.response_format = { type: "json_object" };
+  const timeoutMs = Math.max(50, Math.min(config.timeoutMs, Number(input.timeoutMs || config.timeoutMs) || config.timeoutMs));
+  const modelAttempts = buildModelAttempts(config.models);
+  const startedAt = Date.now();
   let response;
-  try {
-    response = await axios.post(`${config.baseUrl}/chat/completions`, body, {
-      timeout: Math.min(config.timeoutMs, Number(input.timeoutMs || config.timeoutMs) || config.timeoutMs),
-      signal: input.signal || undefined,
-      httpAgent: input.httpAgent || undefined,
-      httpsAgent: input.httpsAgent || undefined,
-      headers: Object.assign({ Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" }, headers()),
-    });
-  } catch (error) {
-    const wrapped = new Error("OpenRouter provider request failed.");
-    wrapped.code = deepseekProvider.classifyHttpError(error);
-    wrapped.status = error && error.response && error.response.status;
-    throw wrapped;
+  let lastError;
+  for (let index = 0; index < modelAttempts.length; index += 1) {
+    const remainingMs = remainingTimeout(timeoutMs, startedAt);
+    if (remainingMs <= 0) break;
+    try {
+      response = await axios.post(`${config.baseUrl}/chat/completions`, Object.assign({}, body, modelAttempts[index]), {
+        timeout: Math.max(50, remainingMs),
+        signal: input.signal || undefined,
+        httpAgent: input.httpAgent || undefined,
+        httpsAgent: input.httpsAgent || undefined,
+        headers: Object.assign({ Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" }, headers()),
+      });
+      break;
+    } catch (error) {
+      const wrapped = new Error("OpenRouter provider request failed.");
+      wrapped.code = deepseekProvider.classifyHttpError(error);
+      wrapped.status = error && error.response && error.response.status;
+      lastError = wrapped;
+      if (index === modelAttempts.length - 1 || !canTryNextModel(wrapped)) throw wrapped;
+    }
+  }
+  if (!response) {
+    if (lastError) throw lastError;
+    const error = new Error("OpenRouter provider request timed out before a model could be selected.");
+    error.code = "provider_timeout";
+    throw error;
   }
   const content = response.data && response.data.choices && response.data.choices[0]
     && response.data.choices[0].message && response.data.choices[0].message.content;
@@ -136,26 +193,44 @@ async function generateStructured(input = {}) {
     error.code = "NOT_CONFIGURED";
     throw error;
   }
-  return openaiStructuredProvider.generateStructured({
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    models: config.models,
-    messages: input.messages,
-    maxTokens: input.maxTokens || config.maxTokens,
-    timeoutMs: input.timeoutMs || config.timeoutMs,
-    provider: "openrouter",
-    providerRouting: providerRouting(true),
-    headers: headers(),
-    classifyError: deepseekProvider.classifyHttpError,
-    signal: input.signal || null,
-    httpAgent: input.httpAgent,
-    httpsAgent: input.httpsAgent,
-  });
+  const timeoutMs = Math.max(50, Math.min(config.timeoutMs, Number(input.timeoutMs || config.timeoutMs) || config.timeoutMs));
+  const modelAttempts = buildModelAttempts(config.models);
+  const startedAt = Date.now();
+  let lastError;
+  for (let index = 0; index < modelAttempts.length; index += 1) {
+    const remainingMs = remainingTimeout(timeoutMs, startedAt);
+    if (remainingMs <= 0) break;
+    try {
+      const result = await openaiStructuredProvider.generateStructured(Object.assign({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        messages: input.messages,
+        maxTokens: input.maxTokens || config.maxTokens,
+        timeoutMs: remainingMs,
+        provider: "openrouter",
+        providerRouting: providerRouting(true),
+        headers: headers(),
+        classifyError: deepseekProvider.classifyHttpError,
+        signal: input.signal || null,
+        httpAgent: input.httpAgent,
+        httpsAgent: input.httpsAgent,
+      }, modelAttempts[index]));
+      return Object.assign({}, result, { latencyMs: Date.now() - startedAt });
+    } catch (error) {
+      lastError = error;
+      if (index === modelAttempts.length - 1 || !canTryNextModel(error)) throw error;
+    }
+  }
+  if (lastError) throw lastError;
+  const error = new Error("OpenRouter provider request timed out before a model could be selected.");
+  error.code = "provider_timeout";
+  throw error;
 }
 
 module.exports = {
   DEFAULT_BASE_URL,
   DEFAULT_MODELS,
+  buildModelAttempts,
   firstConfiguredKey,
   generate,
   generateStructured,

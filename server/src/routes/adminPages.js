@@ -14112,7 +14112,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           "</div>";
         }
         if (providerName === "openrouter") {
-          return "<div class='form-row'>" + aiConfigInput("openrouterBaseUrl", "Base URL", profile.openrouterBaseUrl || "https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1") + aiConfigInput("openrouterTimeoutMs", "timeout / ms", profile.openrouterTimeoutMs || "12000", "12000") + "</div><div class='form-row full'>" + aiConfigInput("openrouterModels", "免费模型故障切换顺序", profile.openrouterModels || "", "model-a:free,model-b:free,openrouter/free") + "</div><div class='form-row'>" + aiConfigInput("openrouterMaxTokens", "max tokens", profile.openrouterMaxTokens || "800", "800") + aiConfigInput("openrouterApiKey", "API Key", "", "留空表示保留原密钥", "password") + "</div><div class='ai-secret-note'>服务端按列表顺序请求，OpenRouter 会在限流、停机或不可用时自动切换；最后一项 openrouter/free 由平台动态挑选免费模型。结构化阶段强制要求参数兼容，并拒绝数据收集端点。</div>";
+          return "<div class='form-row'>" + aiConfigInput("openrouterBaseUrl", "Base URL", profile.openrouterBaseUrl || "https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1") + aiConfigInput("openrouterTimeoutMs", "timeout / ms", profile.openrouterTimeoutMs || "12000", "12000") + "</div><div class='form-row full'><div><label>免费模型故障切换顺序</label><input id='openrouterModels' list='openrouterModelOptions' autocomplete='off' value='" + escapeHtml(profile.openrouterModels || "") + "' placeholder='点击「获取免费模型」自动填入'><datalist id='openrouterModelOptions'></datalist></div></div><div class='form-row'>" + aiConfigInput("openrouterMaxTokens", "max tokens", profile.openrouterMaxTokens || "800", "800") + aiConfigInput("openrouterApiKey", "API Key", "", "留空表示保留原密钥", "password") + "</div><div class='provider-actions-row'><button id='openrouterFetchModelsBtn' class='secondary' type='button'>获取免费模型并自动填入</button></div><div id='openrouterFetchResult' class='ai-verify-box'>从 OpenRouter 官方模型 API 筛选免费、可输出文本且未过期的模型；无需抓取网页。</div><div class='ai-secret-note'>具体免费模型会作为第一组故障切换；最后的 openrouter/free 会作为独立兜底请求，避免与 models 数组混用导致 400。结构化阶段继续要求参数兼容并拒绝数据收集端点。</div>";
         }
         if (providerName === "cloudbase-openai") {
           return "<div class='form-row'>" +
@@ -14138,19 +14138,10 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           "<div class='provider-actions-row' style='margin-top:12px;'><button id='cozeTestConnectionBtn' class='secondary' type='button'>测试 Coze 连接</button></div>" +
           "<div id='cozeConnectionResult' class='ai-verify-box'>尚未测试。会区分 Token、项目/Bot、部署状态、权限、限流与超时。</div>";
         }
-        return "<div class='form-row'>" +
-          aiConfigInput("aiBaseUrl", "Base URL", profile.baseUrl, "https://api.deepseek.com") +
-          aiConfigInput("aiModel", "快速模型", profile.model, "deepseek-v4-flash") +
-        "</div><div class='form-row'>" +
-          aiConfigInput("aiReasoningModel", "推理模型", profile.reasoningModel, "deepseek-v4-pro") +
-          aiConfigInput("aiTemperature", "temperature", profile.temperature, "0.1") +
-        "</div><div class='form-row'>" +
-          aiConfigInput("aiMaxTokens", "max tokens", profile.maxTokens, "1200") +
-          aiConfigInput("aiApiKey", "API Key", "", "留空表示保留原密钥", "password") +
-        "</div><div class='form-row'>" +
-          "<div><label>json repair</label><select id='aiJsonRepair'><option value='true'>开启</option><option value='false'>关闭</option></select></div>" +
-          "<div><label>Thinking</label><select id='aiThinkingEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></div>" +
-          "</div>";
+        return "<div class='form-row'>" + aiConfigInput("aiBaseUrl", "Base URL", profile.baseUrl, "https://api.deepseek.com") + "<div><label>快速模型</label><input id='aiModel' list='deepseekModelOptions' autocomplete='off' value='" + escapeHtml(profile.model || "") + "' placeholder='获取模型或手动填写'><datalist id='deepseekModelOptions'></datalist></div></div>" +
+          "<div class='form-row'><div><label>推理模型</label><input id='aiReasoningModel' list='deepseekModelOptions' autocomplete='off' value='" + escapeHtml(profile.reasoningModel || "") + "' placeholder='获取模型或手动填写'></div>" + aiConfigInput("aiTemperature", "temperature", profile.temperature, "0.1") + "</div>" +
+          "<div class='form-row'>" + aiConfigInput("aiMaxTokens", "max tokens", profile.maxTokens, "1200") + aiConfigInput("aiApiKey", "API Key", "", "留空表示保留原密钥", "password") + "</div>" +
+          "<div class='form-row'><div><label>json repair</label><select id='aiJsonRepair'><option value='true'>开启</option><option value='false'>关闭</option></select></div><div><label>Thinking</label><select id='aiThinkingEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></div></div><div class='provider-actions-row'><button id='deepseekFetchModelsBtn' class='secondary' type='button'>从 Base URL 获取模型</button></div><div id='deepseekFetchResult' class='ai-verify-box'>兼容 DeepSeek 与采用 OpenAI /models 协议的网关。</div>";
       }
 
       function syncCozeModeFields() {
@@ -14580,6 +14571,8 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           });
       }
 
+      function fillProviderModelOptions(datalistId, models) { var datalist = $(datalistId); if (datalist) datalist.innerHTML = (Array.isArray(models) ? models : []).map(function(model) { return "<option value='" + escapeHtml(model) + "'></option>"; }).join(""); }
+      function fetchBuiltinProviderModels(providerName) { var isOpenRouter = providerName === "openrouter", button = $(isOpenRouter ? "openrouterFetchModelsBtn" : "deepseekFetchModelsBtn"), box = $(isOpenRouter ? "openrouterFetchResult" : "deepseekFetchResult"), payload = { provider: providerName, environment: aiExperienceEnvironment(), baseUrl: value(isOpenRouter ? "openrouterBaseUrl" : "aiBaseUrl") }, enteredKey = value(isOpenRouter ? "openrouterApiKey" : "aiApiKey"); if (enteredKey) payload.apiKey = enteredKey; if (button) button.disabled = true; if (box) box.textContent = isOpenRouter ? "正在读取官方免费模型目录并筛选能力…" : "正在请求 Base URL 的 /models…"; api("/api/admin/ai-provider/fetch-models", { method: "POST", body: JSON.stringify(payload) }).then(function(res) { var data = res.data || {}, models = Array.isArray(data.models) ? data.models : [], recommended = Array.isArray(data.recommendedModels) ? data.recommendedModels : models.slice(0, 4); if (isOpenRouter) { fillProviderModelOptions("openrouterModelOptions", models); var input = $("openrouterModels"), capable = (Array.isArray(data.items) ? data.items : []).filter(function(item) { return item.supportsStructured && item.supportsTools; }).length; if (input && recommended.length) input.value = recommended.join(","); if (box) box.textContent = models.length ? "已从" + (data.source === "openrouter-free" ? "OpenRouter 官方免费目录" : "模型目录") + "发现 " + models.length + " 个免费文本模型（其中 " + capable + " 个同时声明结构化输出与工具能力），已按稳定性能力排序并填入 " + recommended.length + " 个故障切换项。保存后生效。" : "官方目录当前没有返回符合条件的免费文本模型，请稍后重试。"; } else { fillProviderModelOptions("deepseekModelOptions", models); var modelInput = $("aiModel"), reasoningInput = $("aiReasoningModel"); if (modelInput && models.length && !modelInput.value) modelInput.value = models[0]; if (reasoningInput && models.length > 1 && !reasoningInput.value) reasoningInput.value = models[1]; if (box) box.textContent = models.length ? "获取成功（" + Number(data.latencyMs || 0) + "ms），共 " + models.length + " 个模型。可在模型输入框中搜索选择。" : "端点请求成功，但未解析到模型；仍可手动填写模型 ID。"; } if (models.length) showToast("已获取 " + models.length + " 个模型。", "success"); if (button) button.disabled = false; }).catch(function(error) { if (box) box.textContent = "获取失败：" + error.message; if (button) button.disabled = false; showToast(error.message, "error"); }); }
       function setPrimaryCustomProvider(id, canonical) {
         var environment = aiExperienceEnvironment();
         var entry = apcFindEntry(id);
@@ -14748,6 +14741,8 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           renderAiProviderConfig();
         });
         safeBind("cpFetchModelsBtn", "click", fetchCustomProviderModels);
+        safeBind("openrouterFetchModelsBtn", "click", function() { fetchBuiltinProviderModels("openrouter"); });
+        safeBind("deepseekFetchModelsBtn", "click", function() { fetchBuiltinProviderModels("deepseek"); });
         document.querySelectorAll("[data-cp-edit]").forEach(function(btn) {
           btn.addEventListener("click", function() { openCustomProviderForm(btn.dataset.cpEdit); });
         });

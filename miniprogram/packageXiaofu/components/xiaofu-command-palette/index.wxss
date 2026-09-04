@@ -205,3 +205,87 @@ button::after {
     color: #cfc5bc;
   }
 }
+
+/* Liquid Jade optical polish: keep the compact Telegram-like command behavior. */
+.command-panel {
+  padding: 24rpx 18rpx 16rpx;
+  border-color: rgba(91, 74, 64, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.96);
+  border-radius: 36rpx 36rpx 24rpx 24rpx;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.91), rgba(247, 243, 236, 0.82));
+  box-shadow: 0 28rpx 82rpx rgba(61, 44, 35, 0.2), inset 0 1rpx 0 rgba(255, 255, 255, 0.98);
+  -webkit-backdrop-filter: blur(34rpx) saturate(165%);
+  backdrop-filter: blur(34rpx) saturate(165%);
+}
+
+.command-head {
+  padding-bottom: 18rpx;
+  border-bottom-color: rgba(74, 61, 53, 0.09);
+}
+
+.command-title {
+  color: #202320;
+  font-size: 32rpx;
+  letter-spacing: -0.02em;
+}
+
+.command-mode {
+  border-color: rgba(38, 116, 93, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.78);
+  border-radius: 13rpx;
+  background: rgba(38, 116, 93, 0.08);
+  color: #26745d;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
+}
+
+.command-item {
+  min-height: 116rpx;
+  border-bottom-color: rgba(74, 61, 53, 0.075);
+  border-radius: 18rpx;
+}
+
+.command-item:active {
+  background: rgba(216, 58, 49, 0.055);
+  transform: scale(0.992);
+}
+
+.command-mark {
+  width: 62rpx;
+  height: 62rpx;
+  flex-basis: 62rpx;
+  border-color: rgba(216, 58, 49, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.94);
+  border-radius: 18rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(216, 58, 49, 0.09));
+  color: #b5302a;
+  box-shadow: 0 8rpx 20rpx rgba(132, 45, 38, 0.11), inset 0 1rpx 0 rgba(255, 255, 255, 0.96);
+}
+
+.command-name {
+  color: #272a27;
+}
+
+.command-hint {
+  border-left-color: #d83a31;
+  border-radius: 0 14rpx 14rpx 0;
+  background: rgba(216, 58, 49, 0.065);
+}
+
+@media (prefers-color-scheme: dark) {
+  .command-panel {
+    border-color: rgba(255, 255, 255, 0.12);
+    border-top-color: rgba(255, 255, 255, 0.21);
+    background: linear-gradient(150deg, rgba(49, 48, 45, 0.96), rgba(27, 29, 27, 0.94));
+  }
+
+  .command-title,
+  .command-name {
+    color: #f4f0ea;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-item {
+    transition: none !important;
+  }
+}

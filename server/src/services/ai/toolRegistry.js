@@ -227,6 +227,10 @@ function inferPeriodHint(message) {
   return "";
 }
 
+function hasSpecificDateCue(message) {
+  return /今天|今日|明天|明日|翌日|后天|大后天|星期|礼拜|周[一二三四五六日天1-7]/.test(normalizeText(message));
+}
+
 function buildTemporalSlots(message, context = {}, options = {}) {
   const text = normalizeText(message);
   const slots = {};
@@ -501,7 +505,7 @@ function resolveIntentChinese(message, context = {}) {
     }
     return {
       name: "recommend_meeting_time",
-      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: hasSpecificDateCue(text) }), {
         durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
         building: extractBuilding(text),
       }),
@@ -920,7 +924,7 @@ function resolveModernChineseIntent(message, context = {}) {
     }
     return {
       name: "recommend_meeting_time",
-      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: hasSpecificDateCue(text) }), {
         durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
         building: extractBuilding(text),
       }),

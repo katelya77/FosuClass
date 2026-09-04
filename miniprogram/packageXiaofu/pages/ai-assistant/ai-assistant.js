@@ -324,8 +324,8 @@ const PROVIDER_LABELS = {
 
 const SAFETY_MODE_LABELS = {
   "tool-grounded": "已核验",
-  fallback: "降级模式",
-  "fallback-mock": "已降级",
+  fallback: "校园工具核验",
+  "fallback-mock": "校园工具核验",
 };
 
 const CARD_TITLE_FALLBACKS = {
@@ -576,7 +576,7 @@ function mapProviderLabel(provider) {
 function mapSafetyModeLabel(mode) {
   const normalized = String(mode || "tool-grounded").toLowerCase();
   if (SAFETY_MODE_LABELS[normalized]) return SAFETY_MODE_LABELS[normalized];
-  if (normalized.indexOf("fallback") >= 0) return "降级模式";
+  if (normalized.indexOf("fallback") >= 0) return "校园工具核验";
   if (normalized.indexOf("tool") >= 0 || normalized.indexOf("grounded") >= 0) return "已核验";
   return "安全模式";
 }
@@ -1446,7 +1446,7 @@ function buildHeaderSubtitle(state) {
     return "本机可用";
   }
   if (source.statusMachine === "enhanced_degraded") {
-    return "增强降级";
+    return "工具模式";
   }
   // When enhanced chip already shown, do not repeat readiness text.
   if (source.statusMachine === "enhanced_ready") {
@@ -1751,7 +1751,7 @@ Page({
             agentActivityState: "idle",
             statusCapsuleText: "待命 · 校园工具可用",
             statusCapsuleDetail: status.statusMachine === "enhanced_degraded"
-              ? "增强表达层暂不可用，课表与提醒仍由校园工具完成。"
+              ? "智能理解正在恢复；课表与提醒仍可由校园工具准确完成。"
               : "课表与提醒由本机课表、Release Pack 与校园工具核验。",
             statusCapsuleExpanded: false,
           });
@@ -2290,6 +2290,18 @@ Page({
         this.setData(nextState);
       },
     });
+  },
+
+  onShowSlashCommands() {
+    const inputValue = "/";
+    this.setData({
+      inputValue,
+      inputFocus: true,
+      slashCommandVisible: true,
+      slashCommandItems: xiaofuSlashCommand.filterCommands(inputValue),
+      slashCommandHint: "选择命令后会自动填入可修改的示例。",
+    });
+    this.syncComposerInset();
   },
 
   onInput(event) {
@@ -3205,8 +3217,8 @@ Page({
           slowRequest: false,
           sendingStatusText: "已生成卡片",
           agentActivityState: "network_error",
-          statusCapsuleText: "服务异常 · 已提供降级入口",
-          statusCapsuleDetail: "问题已保留，可以重试或使用现有校园工具页面。",
+          statusCapsuleText: "连接受限 · 校园工具仍可用",
+          statusCapsuleDetail: "问题已保留，可以重试或直接选择校园工具继续。",
           statusCapsuleExpanded: true,
           liveRunVisible: false,
           liveRunEvents: [],

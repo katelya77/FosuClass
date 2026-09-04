@@ -213,6 +213,90 @@ async function main() {
     console.log("  PASS group7 public safety invariant");
   }
 
+  // group7b: 通用 /models 响应兼容 + OpenRouter 免费文本模型目录筛选
+  {
+    const axios = require("../server/node_modules/axios");
+    const originalGet = axios.get;
+    const calls = [];
+    axios.get = async (url, options) => {
+      calls.push({ url: String(url), options });
+      if (String(url).includes("openrouter.ai")) {
+        return {
+          data: {
+            data: [
+              {
+                id: "vendor/strong-text:free",
+                name: "Strong Text (free)",
+                context_length: 131072,
+                pricing: { prompt: "0", completion: "0" },
+                architecture: { output_modalities: ["text"] },
+                supported_parameters: ["response_format", "tools"]
+              },
+              {
+                id: "vendor/basic-text:free",
+                name: "Basic Text (free)",
+                context_length: 32768,
+                pricing: { prompt: "0", completion: "0" },
+                architecture: { output_modalities: ["text"] },
+                supported_parameters: []
+              },
+              {
+                id: "vendor/embedding:free",
+                name: "Embedding (free)",
+                pricing: { prompt: "0", completion: "0" },
+                architecture: { output_modalities: ["embeddings"] }
+              },
+              {
+                id: "vendor/paid-chat",
+                name: "Paid chat",
+                pricing: { prompt: "0.000001", completion: "0.000001" },
+                architecture: { output_modalities: ["text"] }
+              },
+              {
+                id: "vendor/expired:free",
+                name: "Expired (free)",
+                expiration_date: "2020-01-01T00:00:00.000Z",
+                pricing: { prompt: "0", completion: "0" },
+                architecture: { output_modalities: ["text"] }
+              }
+            ]
+          }
+        };
+      }
+      return { data: { data: { models: [{ id: "deepseek-chat" }, { model: "deepseek-reasoner" }, "gateway-model"] } } };
+    };
+    try {
+      const generic = await customProviderStore.fetchModelList({
+        protocol: "openai",
+        baseUrl: "https://newapi.example.com/v1",
+        apiKey: "sk-test-only"
+      });
+      assert.deepStrictEqual(generic.models, ["deepseek-chat", "deepseek-reasoner", "gateway-model"], "g7b common NewAPI/Sub2API shapes normalized");
+      assert.strictEqual(generic.source, "provider-models", "g7b generic source");
+
+      const openrouter = await customProviderStore.fetchModelList({
+        protocol: "openai",
+        baseUrl: "https://openrouter.ai/api/v1",
+        catalog: "openrouter-free"
+      });
+      assert.deepStrictEqual(openrouter.models, ["vendor/strong-text:free", "vendor/basic-text:free"], "g7b filters paid, expired and non-text models");
+      assert.strictEqual(openrouter.items[0].supportsStructured, true, "g7b structured capability exposed");
+      assert.strictEqual(openrouter.items[0].supportsTools, true, "g7b tool capability exposed");
+      assert.deepStrictEqual(openrouter.recommendedModels, ["vendor/strong-text:free", "vendor/basic-text:free", "openrouter/free"], "g7b recommended fallback ends with free router");
+      assert.ok(!calls[1].options.headers.Authorization, "g7b public OpenRouter catalog does not require or invent a key");
+
+      const throughService = await providerConfigService.fetchProviderModels({
+        provider: "openrouter",
+        environment: "trial",
+        baseUrl: "https://openrouter.ai/api/v1"
+      });
+      assert.strictEqual(throughService.source, "openrouter-free", "g7b config service selects OpenRouter free catalog");
+      console.log("  PASS group7b generic/OpenRouter model discovery");
+    } finally {
+      axios.get = originalGet;
+    }
+  }
+
   // group8: 回复阶段对话历史注入（三协议共用 buildHistoryMessages 口径）
   {
     const axios = require("../server/node_modules/axios");

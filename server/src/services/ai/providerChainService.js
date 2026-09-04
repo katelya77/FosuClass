@@ -248,11 +248,11 @@ function markSuccess(name, latencyMs, meta = {}) {
 function classifyFailure(error = {}) {
   const code = String(error.code || "");
   const status = Number(error.status || error.statusCode || error.response && error.response.status || 0) || 0;
+  if (code === "invalid_model") return "invalid_model";
   if (status === 400 || code === "provider_bad_request" || code === "invalid_payload") return "bad_request";
   if (status === 401) return "unauthorized";
   if (status === 403) return "forbidden";
   if (status === 429) return "rate_limited";
-  if (code === "invalid_model") return "invalid_model";
   if (/timeout/i.test(code) || /timeout/i.test(String(error.message || ""))) return "timeout";
   if (code === "NOT_CONFIGURED") return "not_configured";
   return code || "provider_failed";

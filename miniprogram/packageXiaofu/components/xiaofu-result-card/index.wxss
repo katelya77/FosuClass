@@ -156,3 +156,106 @@
 .card-overflow::after {
   border: none;
 }
+
+/* Verified campus result card — translucent paper, jade evidence, red actions. */
+.ai-result-card {
+  position: relative;
+  overflow: hidden;
+  margin-top: 14rpx;
+  padding: 21rpx 20rpx 18rpx;
+  border: 1rpx solid rgba(91, 74, 64, 0.13);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 25rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(249, 246, 240, 0.6));
+  box-shadow: 0 13rpx 34rpx rgba(70, 54, 43, 0.075), inset 0 1rpx 0 rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(22rpx) saturate(145%);
+  backdrop-filter: blur(22rpx) saturate(145%);
+}
+
+.ai-result-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 24rpx;
+  right: 24rpx;
+  height: 1rpx;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+}
+
+.card-title {
+  color: #252825;
+  font-size: 28rpx;
+  font-weight: 720;
+}
+
+.card-subtitle,
+.item-subtitle,
+.filtered-hint,
+.weather-updated {
+  color: #8b847c;
+}
+
+.badge {
+  border: 1rpx solid rgba(38, 116, 93, 0.1);
+  background: rgba(38, 116, 93, 0.07);
+  color: #326e5a;
+}
+
+.card-item {
+  border-top-color: rgba(62, 55, 49, 0.07);
+}
+
+.card-item-tappable {
+  min-height: 68rpx;
+  border-radius: 16rpx;
+}
+
+.card-item-tappable:active {
+  background: rgba(216, 58, 49, 0.055);
+}
+
+.card-item-tappable .item-value,
+.card-overflow {
+  color: #a53530;
+}
+
+.card-action-primary {
+  min-height: 70rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid rgba(91, 74, 64, 0.11);
+  border-top-color: rgba(255, 255, 255, 0.84);
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.5);
+  color: #343633;
+  font-weight: 650;
+  line-height: 70rpx;
+  box-shadow: 0 6rpx 18rpx rgba(68, 53, 43, 0.055), inset 0 1rpx 0 rgba(255, 255, 255, 0.86);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ai-result-card {
+    border-color: rgba(255, 255, 255, 0.11);
+    border-top-color: rgba(255, 255, 255, 0.19);
+    background: linear-gradient(145deg, rgba(49, 48, 45, 0.76), rgba(29, 31, 29, 0.66));
+    box-shadow: 0 14rpx 36rpx rgba(0, 0, 0, 0.25), inset 0 1rpx 0 rgba(255, 255, 255, 0.09);
+  }
+
+  .card-title,
+  .item-title,
+  .weather-campus,
+  .weather-temp {
+    color: #f4f0ea;
+  }
+
+  .item-value,
+  .weather-status,
+  .weather-advice {
+    color: #c4bbb2;
+  }
+
+  .card-action-primary {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.07);
+    color: #eee8e1;
+  }
+}

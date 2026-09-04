@@ -51,7 +51,7 @@ async function run() {
     assert.strictEqual(result.provider, "openrouter");
     assert.strictEqual(result.resolvedModel, "unit/free-model");
     assert(captured.url.endsWith("/chat/completions"));
-    assert.deepStrictEqual(captured.body.models, ["unit/model-a:free", "unit/model-b:free", "openrouter/free"]);
+    assert.deepStrictEqual(captured.body.models, ["unit/model-a:free", "unit/model-b:free"]);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(captured.body, "model"), false);
     assert.deepStrictEqual(captured.body.response_format, { type: "json_object" });
     assert.strictEqual(captured.body.provider.allow_fallbacks, true);
@@ -59,6 +59,42 @@ async function run() {
     assert.strictEqual(captured.body.provider.data_collection, "deny");
     assert.strictEqual(captured.options.timeout, 4321);
     assert.strictEqual(captured.options.headers["X-OpenRouter-Title"], "FosuClass Xiaoxu");
+
+    const fallbackCalls = [];
+    axios.post = async (url, body, options) => {
+      fallbackCalls.push({ url, body, options });
+      if (fallbackCalls.length === 1) {
+        const error = new Error("request rejected");
+        error.response = {
+          status: 400,
+          data: { error: { message: "No endpoints found for model unit/model-a:free" } },
+        };
+        throw error;
+      }
+      return {
+        data: {
+          model: "unit/router-selected-free-model",
+          choices: [{ message: { content: '{"ok":true}' } }],
+        },
+      };
+    };
+    const fallbackResult = await openrouterProvider.generateStructured({
+      providerRuntimeConfig: runtime,
+      messages: [{ role: "user", content: "health-check" }],
+      timeoutMs: 4000,
+    });
+    assert.strictEqual(fallbackResult.resolvedModel, "unit/router-selected-free-model");
+    assert.strictEqual(fallbackCalls.length, 2, "the free router must be attempted separately after the model list fails");
+    assert.deepStrictEqual(fallbackCalls[0].body.models, ["unit/model-a:free", "unit/model-b:free"]);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(fallbackCalls[0].body, "model"), false);
+    assert.strictEqual(fallbackCalls[1].body.model, "openrouter/free");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(fallbackCalls[1].body, "models"), false);
+    assert.strictEqual(providerChainService.classifyFailure({ status: 400, code: "invalid_model" }), "invalid_model");
+    assert.deepStrictEqual(
+      openrouterProvider.buildModelAttempts(["openrouter/free", "unit/model-a:free", "unit/model-b:free"]),
+      [{ model: "openrouter/free" }, { models: ["unit/model-a:free", "unit/model-b:free"] }],
+      "configured router/concrete priority must be preserved"
+    );
 
     assert.deepStrictEqual(providerChainService.getProviderChain("public", Object.assign({ AI_PROVIDER: "openrouter" }, runtime)), ["mock"]);
     assert.deepStrictEqual(

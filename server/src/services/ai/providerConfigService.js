@@ -1063,20 +1063,60 @@ function deleteCustomProvider(payload = {}) {
   return getStatus();
 }
 
-/** 获取模型列表：apiKey 留空且给了 id 时，回退用已存储条目的密钥（不明文出仓）。 */
-async function fetchCustomProviderModels(payload = {}) {
+/**
+ * 获取模型列表：
+ * - OpenRouter 读取官方免费模型目录，不要求把已存密钥回传浏览器；
+ * - DeepSeek 与任意 OpenAI / Anthropic 兼容端点请求各自的 /models；
+ * - apiKey 留空且给了自定义 Provider id 时，使用加密存储中的密钥。
+ */
+async function fetchProviderModels(payload = {}) {
+  const requestedProvider = String(payload.provider || "").trim().toLowerCase();
+  const environment = normalizeEnvironment(payload.environment || "trial");
+  const runtimeConfig = getRuntimeConfigForEnvironment(environment);
+  let protocol = payload.protocol;
+  let baseUrl = payload.baseUrl;
   let apiKey = String(payload.apiKey || "").trim();
+
   if (!apiKey && payload.id) {
     const existing = customProviderStore.findEntry(readRuntimeValues().AI_CUSTOM_PROVIDERS || "", payload.id);
-    if (existing) apiKey = existing.apiKey;
+    if (existing) {
+      apiKey = existing.apiKey;
+      protocol = protocol || existing.protocol;
+      baseUrl = baseUrl || existing.baseUrl;
+    }
   }
+
+  let catalog = String(payload.catalog || "").trim().toLowerCase();
+  let timeoutMs = payload.timeoutMs;
+  if (requestedProvider === "openrouter") {
+    protocol = "openai";
+    baseUrl = baseUrl || runtimeConfig.OPENROUTER_BASE_URL || DEFAULTS.OPENROUTER_BASE_URL;
+    apiKey = apiKey || runtimeConfig.OPENROUTER_API_KEY || "";
+    timeoutMs = timeoutMs || runtimeConfig.OPENROUTER_TIMEOUT_MS;
+    catalog = "openrouter-free";
+  } else if (requestedProvider === "deepseek") {
+    protocol = "openai";
+    baseUrl = baseUrl || runtimeConfig.AI_BASE_URL || DEFAULTS.AI_BASE_URL;
+    apiKey = apiKey || runtimeConfig.DEEPSEEK_API_KEY || runtimeConfig.AI_API_KEY || "";
+    timeoutMs = timeoutMs || runtimeConfig.AI_TIMEOUT_MS;
+  } else if (requestedProvider === "cloudbase-openai") {
+    protocol = "openai";
+    baseUrl = baseUrl || runtimeConfig.CLOUDBASE_OPENAI_BASE_URL || DEFAULTS.CLOUDBASE_OPENAI_BASE_URL;
+    apiKey = apiKey || runtimeConfig.CLOUDBASE_OPENAI_API_KEY || "";
+    timeoutMs = timeoutMs || runtimeConfig.CLOUDBASE_OPENAI_TIMEOUT_MS;
+  }
+
   return customProviderStore.fetchModelList({
-    protocol: payload.protocol,
-    baseUrl: payload.baseUrl,
+    protocol,
+    baseUrl,
     apiKey,
-    timeoutMs: payload.timeoutMs,
+    timeoutMs,
+    catalog,
   });
 }
+
+// 兼容旧调用名；后台新旧页面都进入同一套通用模型发现逻辑。
+const fetchCustomProviderModels = fetchProviderModels;
 
 /**
  * 运行时移除/恢复内置外部 Provider。
@@ -1202,6 +1242,7 @@ module.exports = {
   ENV_PATH,
   buildUpdates,
   deleteCustomProvider,
+  fetchProviderModels,
   fetchCustomProviderModels,
   getAuthoritativeProviderConfig,
   getEnvironmentForContext,
