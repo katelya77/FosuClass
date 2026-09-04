@@ -11,9 +11,9 @@ function statusCopy(statusMachine) {
     case "server_unreachable":
       return { label: "服务不可达", className: "warn", chips: ["本地模式"] };
     case "enhanced_ready":
-      return { label: "增强就绪", className: "online", chips: ["增强模式"] };
+      return { label: "智能理解就绪", className: "online", chips: ["智能理解"] };
     case "enhanced_degraded":
-      return { label: "增强降级", className: "warn", chips: ["增强模式"] };
+      return { label: "校园工具可用", className: "warn", chips: ["校园工具"] };
     case "public_ready":
     default:
       return { label: "稳定模式", className: "online", chips: ["稳定模式"] };

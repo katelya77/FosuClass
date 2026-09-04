@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "小序",
+  "navigationBarTitleText": "校园管家",
   "usingComponents": {
     "xiaofu-agent-run": "/packageXiaofu/components/xiaofu-agent-run/index",
     "xiaofu-live-run": "/packageXiaofu/components/xiaofu-live-run/index",

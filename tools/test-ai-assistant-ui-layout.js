@@ -69,7 +69,12 @@ function run() {
   );
   assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
   assert(/display\s*:\s*flex/.test(header), "Xiaofu header should use a stable three-column flex row");
-  assert(/gap\s*:\s*(1[0-2])rpx/.test(header) || /gap\s*:\s*10rpx/.test(compactHeader), "header should reserve space between avatar, title, and actions");
+  assert(
+    /gap\s*:\s*(1[0-2])rpx/.test(header)
+      || /gap\s*:\s*10rpx/.test(compactHeader)
+      || /gap\s*:\s*var\(--xf-space-3\)/.test(header + compactHeader),
+    "header should reserve tokenized space between avatar, title, and actions"
+  );
 
   const titleBlock = getRule(wxss, ".xiaofu-title-block");
   assert(/flex\s*:\s*1\s+1\s+auto/.test(titleBlock), "header title column should take remaining width");

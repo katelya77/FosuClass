@@ -9,9 +9,9 @@
   flex-direction: column;
   overflow: hidden;
   /* Flex column: scroll fills middle, composer is real bottom chrome (no absolute overlay blank). */
-  padding: calc(8rpx + env(safe-area-inset-top)) 16rpx 0;
+  padding: calc(var(--xf-space-2) + env(safe-area-inset-top)) var(--xf-page-pad-x) 0;
   padding-bottom: 0;
-  background: #f6f4f1;
+  background: var(--xf-bg);
 }
 
 button {
@@ -40,10 +40,10 @@ button::after {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 12rpx;
-  min-height: 96rpx;
-  max-height: 112rpx;
-  padding: 10rpx 4rpx 12rpx;
+  gap: var(--xf-space-3);
+  min-height: 88rpx;
+  max-height: 104rpx;
+  padding: var(--xf-space-2) var(--xf-space-1) var(--xf-space-3);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -51,20 +51,20 @@ button::after {
 }
 
 .xiaofu-header-compact {
-  min-height: 96rpx;
-  padding: 8rpx 2rpx 10rpx;
-  gap: 10rpx;
+  min-height: 88rpx;
+  padding: var(--xf-space-2) var(--xf-space-1) var(--xf-space-3);
+  gap: var(--xf-space-3);
   box-shadow: none;
-  border-bottom: 1rpx solid rgba(42, 38, 34, 0.06);
+  border-bottom: 1rpx solid var(--xf-divider);
 }
 
 .xiaofu-header-compact .xiaofu-avatar-wrap {
-  flex-basis: 48rpx;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 14rpx;
+  flex-basis: 52rpx;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: var(--xf-radius-sm);
   box-shadow: none;
-  background: #ebe7e1;
+  background: var(--xf-surface-muted);
 }
 
 .xiaofu-header-compact .xiaofu-avatar,
@@ -73,7 +73,7 @@ button::after {
   height: 40rpx;
   line-height: 40rpx;
   font-size: 20rpx;
-  border-radius: 12rpx;
+  border-radius: var(--xf-radius-xs);
 }
 
 /* Full content-width capsule: same width collapsed/expanded; no extra wrapper inset */
@@ -85,7 +85,7 @@ button::after {
   align-items: center;
   justify-content: center;
   width: 100%;
-  margin: 4rpx 0 2rpx;
+  margin: var(--xf-space-1) 0 var(--xf-space-2);
   padding: 0;
 }
 
@@ -98,15 +98,15 @@ button::after {
   justify-content: space-between;
   width: 100%;
   max-width: 100%;
-  min-height: 56rpx;
+  min-height: 62rpx;
   max-height: none;
   margin: 0;
-  padding: 10rpx 18rpx;
-  border: 1rpx solid rgba(42, 38, 34, 0.08);
-  border-radius: 999rpx;
-  background: rgba(42, 38, 34, 0.05);
+  padding: var(--xf-space-3) var(--xf-space-4);
+  border: 1rpx solid var(--xf-border);
+  border-radius: var(--xf-radius-md);
+  background: var(--xf-bg-elevated);
   color: var(--xf-text);
-  box-shadow: 0 2rpx 8rpx rgba(42, 38, 34, 0.06);
+  box-shadow: var(--xf-shadow-xs);
   /* Animate height / opacity / translate only — never width */
   transition:
     min-height 200ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -117,21 +117,21 @@ button::after {
 }
 
 .agent-status-capsule.expanded {
-  min-height: 96rpx;
-  border-radius: 28rpx;
+  min-height: 98rpx;
+  border-radius: var(--xf-radius-lg);
   width: 100%;
   max-width: 100%;
   align-items: flex-start;
-  padding: 14rpx 18rpx;
+  padding: var(--xf-space-4);
   transform: translateY(0);
 }
 
-/* Symmetric side rails so title reads centered */
+/* The status reads like a short service notice, aligned with the page copy. */
 .agent-status-dot {
-  flex: 0 0 28rpx;
+  flex: 0 0 20rpx;
   width: 12rpx;
   height: 12rpx;
-  margin: 0 8rpx 0 0;
+  margin: 0 var(--xf-space-2) 0 0;
   border-radius: 999rpx;
   background: currentColor;
   opacity: 0.55;
@@ -140,15 +140,15 @@ button::after {
 .agent-status-copy {
   flex: 1 1 auto;
   min-width: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .agent-status-chevron {
-  flex: 0 0 28rpx;
-  width: 28rpx;
-  margin-left: 8rpx;
+  flex: 0 0 32rpx;
+  width: 32rpx;
+  margin-left: var(--xf-space-2);
   color: inherit;
-  font-size: 28rpx;
+  font-size: 26rpx;
   line-height: 1;
   text-align: center;
   opacity: 0.65;
@@ -797,9 +797,9 @@ button::after {
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 10rpx;
+  margin-top: var(--xf-space-2);
   /* Composer sits in flex flow below; only a tight gap to the pill top edge. */
-  padding: 4rpx 0 12rpx;
+  padding: var(--xf-space-1) 0 var(--xf-space-4);
 }
 
 .message-bottom-anchor {
@@ -811,27 +811,38 @@ button::after {
   box-sizing: border-box;
   width: 100%;
   max-height: none;
-  margin: 48rpx 0 24rpx;
-  padding: 12rpx 0 8rpx;
+  margin: 54rpx 0 var(--xf-space-6);
+  padding: var(--xf-space-3) 0 var(--xf-space-2);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
+.empty-eyebrow {
+  color: var(--xf-primary);
+  font-size: var(--xf-font-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: var(--xf-lh-tight);
+}
+
 .empty-brand {
   color: var(--xf-text);
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: 0.02em;
+  line-height: 1.32;
+  letter-spacing: 0;
+  max-width: 620rpx;
+  margin-top: var(--xf-space-3);
 }
 
 .empty-title {
-  margin-top: 12rpx;
+  max-width: 640rpx;
+  margin-top: var(--xf-space-3);
   color: var(--xf-text-secondary);
-  font-size: 28rpx;
-  font-weight: 500;
-  line-height: 1.5;
+  font-size: var(--xf-font-md);
+  font-weight: 400;
+  line-height: var(--xf-lh-body);
 }
 
 .empty-desc {
@@ -846,19 +857,19 @@ button.proactive-insight {
   display: block;
   width: 100%;
   max-width: none;
-  min-height: 210rpx;
-  margin: 30rpx 0 0;
-  padding: 26rpx 28rpx 24rpx;
-  border: 1rpx solid #e5dfd7;
-  border-left: 8rpx solid var(--xf-primary-strong);
-  border-radius: 18rpx;
+  min-height: 176rpx;
+  margin: var(--xf-space-8) 0 0;
+  padding: var(--xf-space-6);
+  border: 1rpx solid var(--xf-border);
+  border-left: 6rpx solid var(--xf-primary);
+  border-radius: var(--xf-radius-lg);
   background: var(--xf-surface);
-  box-shadow: 0 8rpx 24rpx rgba(42, 38, 34, 0.06);
+  box-shadow: var(--xf-shadow-xs);
   text-align: left;
 }
 
 .proactive-insight.schedule_change {
-  border-left-color: #9a5b2e;
+  border-left-color: var(--xf-warning);
 }
 
 .proactive-insight.free_day,
@@ -868,60 +879,62 @@ button.proactive-insight {
 
 .proactive-eyebrow {
   color: var(--xf-text-faint);
-  font-size: 20rpx;
-  font-weight: 650;
+  font-size: var(--xf-font-xs);
+  font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.3;
 }
 
 .proactive-title {
-  margin-top: 12rpx;
+  margin-top: var(--xf-space-3);
   color: var(--xf-text);
-  font-size: 31rpx;
+  font-size: var(--xf-font-lg);
   font-weight: 700;
   line-height: 1.38;
 }
 
 .proactive-detail {
-  margin-top: 12rpx;
+  margin-top: var(--xf-space-3);
   color: var(--xf-text-secondary);
-  font-size: 23rpx;
-  line-height: 1.58;
+  font-size: var(--xf-font-sm);
+  line-height: var(--xf-lh-body);
 }
 
 .proactive-link {
-  margin-top: 18rpx;
-  color: #a51f1f;
-  font-size: 23rpx;
-  font-weight: 650;
+  margin-top: var(--xf-space-4);
+  color: var(--xf-text-link);
+  font-size: var(--xf-font-sm);
+  font-weight: 700;
   line-height: 1.4;
 }
 
 .contextual-action-row {
-  display: flex;
-  gap: 10rpx;
-  margin-top: 16rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--xf-space-3);
+  margin-top: var(--xf-space-4);
 }
 
 .contextual-action {
-  flex: 1 1 0;
   min-width: 0;
   min-height: 88rpx;
-  padding: 20rpx 10rpx;
-  border-bottom: 2rpx solid #d8d1c9;
-  color: #4f4841;
-  font-size: 22rpx;
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: center;
+  padding: var(--xf-space-4) var(--xf-space-5);
+  border: 1rpx solid var(--xf-border);
+  border-radius: var(--xf-radius-md);
+  background: var(--xf-surface-soft);
+  color: var(--xf-text-soft);
+  font-size: var(--xf-font-sm);
+  font-weight: 650;
+  line-height: var(--xf-lh-tight);
+  text-align: left;
 }
 
 .empty-safe-note {
-  margin-top: 18rpx;
-  color: #b0a8a0;
-  font-size: 18rpx;
+  margin-top: var(--xf-space-4);
+  color: var(--xf-text-tertiary);
+  font-size: var(--xf-font-xs);
   font-weight: 500;
-  line-height: 1.3;
+  line-height: var(--xf-lh-body);
 }
 
 .message-row {
@@ -2006,41 +2019,41 @@ button.proactive-insight {
   box-sizing: border-box;
   width: 100%;
   margin: 0;
-  padding: 8rpx 8rpx calc(10rpx + env(safe-area-inset-bottom));
+  padding: var(--xf-space-2) 0 calc(var(--xf-space-3) + env(safe-area-inset-bottom));
   border-top: 0;
-  background: #f6f4f1;
+  background: var(--xf-bg);
   box-shadow: none;
 }
 
 .composer-pill {
   display: flex;
   align-items: center;
-  gap: 4rpx;
+  gap: var(--xf-space-1);
   box-sizing: border-box;
   width: 100%;
-  min-height: 88rpx;
+  min-height: 90rpx;
   max-height: 280rpx;
-  padding: 8rpx 12rpx;
-  border: 1rpx solid rgba(42, 38, 34, 0.1);
-  border-radius: 999rpx;
-  background: #fbf9f6;
-  box-shadow: 0 8rpx 28rpx rgba(42, 38, 34, 0.08);
+  padding: var(--xf-space-2) var(--xf-space-3);
+  border: 1rpx solid var(--xf-border-strong);
+  border-radius: var(--xf-radius-xl);
+  background: var(--xf-bg-elevated);
+  box-shadow: 0 8rpx 28rpx var(--xf-border);
 }
 
 .composer-icon-btn {
-  flex: 0 0 72rpx;
+  flex: 0 0 68rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   align-self: center;
-  width: 72rpx;
-  height: 72rpx;
-  min-width: 72rpx;
-  min-height: 72rpx;
+  width: 68rpx;
+  height: 68rpx;
+  min-width: 68rpx;
+  min-height: 68rpx;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: var(--xf-radius-lg);
   background: transparent;
   line-height: 1;
 }
@@ -2050,8 +2063,8 @@ button.proactive-insight {
 }
 
 .composer-icon {
-  width: 40rpx;
-  height: 40rpx;
+  width: 36rpx;
+  height: 36rpx;
 }
 
 .composer-icon-send {
@@ -2061,18 +2074,6 @@ button.proactive-insight {
 
 .composer-plus-btn {
   color: var(--xf-text-soft);
-}
-
-.voice-btn {
-  color: var(--xf-text-soft);
-}
-
-.voice-btn.recording {
-  background: rgba(185, 28, 28, 0.1);
-}
-
-.voice-btn.disabled {
-  opacity: 0.45;
 }
 
 .composer-input-wrap {
@@ -2092,12 +2093,12 @@ button.proactive-insight {
   width: 100%;
   min-height: 68rpx;
   max-height: 240rpx;
-  padding: 16rpx 8rpx;
+  padding: var(--xf-space-4) var(--xf-space-2);
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--xf-text);
-  font-size: 28rpx;
+  font-size: var(--xf-font-md);
   line-height: 1.45;
 }
 
@@ -2108,8 +2109,8 @@ button.proactive-insight {
   top: 50%;
   z-index: 1;
   overflow: hidden;
-  color: #a5adba;
-  font-size: 24rpx;
+  color: var(--xf-text-tertiary);
+  font-size: var(--xf-font-sm);
   line-height: 1.2;
   pointer-events: none;
   text-overflow: ellipsis;
@@ -2117,25 +2118,15 @@ button.proactive-insight {
   white-space: nowrap;
 }
 
-.voice-status {
-  height: 28rpx;
-  margin-top: 6rpx;
-  color: #64748b;
-  font-size: 18rpx;
-  font-weight: 650;
-  line-height: 28rpx;
-  text-align: center;
-}
-
 .send-btn {
-  flex: 0 0 72rpx;
-  width: 72rpx;
-  min-width: 72rpx;
-  background: var(--xf-primary-strong);
+  flex: 0 0 68rpx;
+  width: 68rpx;
+  min-width: 68rpx;
+  background: var(--xf-primary);
 }
 
 .send-btn.disabled {
-  background: rgba(198, 40, 40, 0.28);
+  background: var(--xf-primary-muted);
   opacity: 1;
 }
 
@@ -2147,14 +2138,14 @@ button.proactive-insight {
   width: 22rpx;
   height: 22rpx;
   border-radius: 4rpx;
-  background: #fff;
+  background: var(--xf-text-on-primary);
 }
 
 .send-btn.icon-send {
-  min-width: 72rpx;
-  width: 72rpx;
+  min-width: 68rpx;
+  width: 68rpx;
   padding: 0;
-  border-radius: 999rpx;
+  border-radius: var(--xf-radius-lg);
 }
 
 /* Settings sheet system */
@@ -2449,8 +2440,8 @@ button.proactive-insight {
     margin-top: 0;
   }
 
-  .send-btn {
-    width: 104rpx;
+  .empty-welcome {
+    margin-top: var(--xf-space-6);
   }
 }
 
@@ -2458,6 +2449,17 @@ button.proactive-insight {
 
 @media (prefers-color-scheme: dark) {
   .ai-page {
+    --xf-bg: #181614;
+    --xf-bg-elevated: #201d1a;
+    --xf-surface: #24211e;
+    --xf-surface-soft: #2b2723;
+    --xf-surface-muted: #312c27;
+    --xf-text: #f4f0ea;
+    --xf-text-secondary: #bcb3aa;
+    --xf-text-tertiary: #948b82;
+    --xf-divider: rgba(255, 255, 255, 0.08);
+    --xf-border: rgba(255, 255, 255, 0.1);
+    --xf-border-strong: rgba(255, 255, 255, 0.16);
     background: #181614;
   }
 
@@ -2532,15 +2534,15 @@ button.proactive-insight {
   }
 
   .contextual-action {
-    border-bottom-color: #4a433d;
+    border-color: var(--xf-border-strong);
+    background: var(--xf-surface-soft);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-status-capsule,
   .composer,
-  .send-btn,
-  .voice-btn {
+  .send-btn {
     transition: none !important;
     animation: none !important;
   }

@@ -77,7 +77,7 @@ assert(json.includes("xiaofu-memory-sheet"));
 const composerBlock = (wxss.match(/\.composer\s*\{[\s\S]*?\n\}/) || [""])[0];
 assert(!/position\s*:\s*fixed/.test(composerBlock), "composer must not be fixed");
 assert(/flex\s*:\s*0\s+0\s+auto|flex-shrink\s*:\s*0/.test(composerBlock), "composer flex-shrink 0");
-assert(wxml.includes("voice-btn") || wxml.includes("voiceInputVisible"));
+assert(!/voice-btn|voiceInputVisible|microphone\.svg/.test(wxml), "voice input must be removed from the assistant page");
 assert(wxss.includes("safe-area") || wxml.includes("safe-area"));
 
 // Agent run component

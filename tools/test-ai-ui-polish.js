@@ -13,16 +13,16 @@ function check(name, cond, extra) {
 const wxss = fs.readFileSync(path.join(__dirname, "../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss"), "utf8");
 const pageJs = fs.readFileSync(path.join(__dirname, "../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
 
-// 1. 状态岛样式（全宽 wrapper 居中 + 内容自适应胶囊；禁止 align-self:flex-start 偏左）
+// 1. 状态提示栏（全宽、轻层级、与页面文案左对齐）
 const capsuleBlock = (wxss.match(/\.agent-status-capsule \{[\s\S]*?\n\}/) || [""])[0];
 const wrapBlock = (wxss.match(/\.agent-status-island-wrap \{[\s\S]*?\n\}/) || [""])[0];
 check("状态岛：全宽 wrapper 居中", /justify-content:\s*center/.test(wrapBlock) && /width:\s*100%/.test(wrapBlock));
 check("状态岛：真正长胶囊（width: 100%）", /width:\s*100%/.test(capsuleBlock));
 check("状态岛：不使用 align-self:flex-start 偏左", !/align-self:\s*flex-start/.test(capsuleBlock));
-check("状态岛：浅底（rgba(42, 38, 34, 0.05)）", capsuleBlock.includes("rgba(42, 38, 34, 0.05)"));
+check("状态栏：使用抬升背景令牌", capsuleBlock.includes("var(--xf-bg-elevated)"));
 check("状态岛：黑色胶囊背景已移除", !/background:\s*var\(--xf-text\)/.test(capsuleBlock));
-check("状态岛：全圆角 999rpx", /border-radius:\s*999rpx/.test(capsuleBlock));
-check("状态岛：轻阴影", capsuleBlock.includes("0 2rpx 8rpx"));
+check("状态栏：克制圆角", /border-radius:\s*var\(--xf-radius-md\)/.test(capsuleBlock));
+check("状态栏：轻阴影令牌", capsuleBlock.includes("var(--xf-shadow-xs)"));
 check("状态岛变体：waiting_confirmation 浅底方案", /\.agent-status-capsule\.waiting_confirmation\s*\{[^}]*rgba\(108, 61, 46, 0\.1\)/.test(wxss));
 check("状态岛变体：network_error 浅底方案", /\.agent-status-capsule\.network_error\s*\{[^}]*rgba\(125, 48, 46, 0\.1\)/.test(wxss));
 

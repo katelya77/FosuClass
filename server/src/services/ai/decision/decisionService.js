@@ -189,7 +189,7 @@ function createDecisionService(options = {}) {
     const skills = skillOptions(input.skillCatalog || skillCatalog, runtimeMode);
     const validatorOptions = validationOptions(skills);
     const providers = resolveDecisionProviders(runtimeMode, input.providerRuntimeConfig || {});
-    const decisionBudgetMs = Math.max(1, Number(input.decisionBudgetMs || 6500) || 6500);
+    const decisionBudgetMs = Math.max(1, Number(input.decisionBudgetMs || 9000) || 9000);
     const providerLease = deriveProviderStageLease({
       outerBudgetMs: decisionBudgetMs,
       finishReserveMs: Math.max(0, Number(input.finishReserveMs || 500) || 0),

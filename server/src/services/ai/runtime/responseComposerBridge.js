@@ -202,7 +202,7 @@ function applyFinalResponseOutcome(response, outcome) {
   if (outcome.partialCompletion) response.partialCompletion = true;
   const statusLabel = outcome.status === "partial"
     ? "部分完成"
-    : (outcome.status === "failed" ? "未完成" : (outcome.status === "degraded" ? "已安全降级" : "已完成"));
+    : (outcome.status === "failed" ? "未完成" : (outcome.status === "degraded" ? "校园工具已完成" : "已完成"));
   const reconcileSummary = (summary) => {
     if (!summary || typeof summary !== "object") return;
     summary.status = outcome.status;

@@ -150,7 +150,8 @@ function inferSections(message, clientTime) {
   );
   const range = text.match(/(\d{1,2})\s*[-~～至到]\s*(\d{1,2})\s*节?/);
   if (range) return `${range[1]}-${range[2]}`;
-  const single = text.match(/第?\s*(\d{1,2})\s*节/);
+  // A bare “3节” after 连续/连着 is a duration, not 第3节.
+  const single = text.match(/第\s*(\d{1,2})\s*节/);
   if (single) return single[1];
   const minFreeSections = text.includes("连续") ? parseChineseNumber(text, 2) : 1;
   if (/现在|当前|马上/.test(text)) {
@@ -178,6 +179,111 @@ function inferTargetDate(message, context) {
     : (/明天|翌日|明日/.test(text) ? 1 : 0);
   if (offset) date.setDate(date.getDate() + offset);
   return formatDate(date);
+}
+
+function inferExplicitDate(message, context = {}) {
+  const text = normalizeText(message);
+  const full = text.match(/(20\d{2})\s*(?:年|[-/])\s*(\d{1,2})\s*(?:月|[-/])\s*(\d{1,2})\s*日?/);
+  const short = !full && text.match(/(?:^|\D)(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
+  const base = parseClientDate(context, new Date());
+  const year = full ? Number(full[1]) : base.getFullYear();
+  const month = full ? Number(full[2]) : (short ? Number(short[1]) : 0);
+  const day = full ? Number(full[3]) : (short ? Number(short[2]) : 0);
+  if (!month || !day) return "";
+  const candidate = new Date(year, month - 1, day);
+  if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return "";
+  return formatDate(candidate);
+}
+
+function inferWeekday(message) {
+  const match = normalizeText(message).match(/(?:星期|礼拜|周)([一二三四五六日天1-7])/);
+  if (!match) return null;
+  const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
+  const value = map[match[1]] || Number(match[1]);
+  return Number.isFinite(value) && value >= 1 && value <= 7 ? value : null;
+}
+
+function inferTeachingWeek(message, context = {}) {
+  const text = normalizeText(message);
+  const explicit = text.match(/第\s*(\d{1,2})\s*(?:教学)?周/);
+  if (explicit) return Math.min(30, Math.max(1, Number(explicit[1]) || 1));
+  if (!/本周|这周|这一周|下周|下下周/.test(text)) return null;
+  const resolved = resolveCurrentTeachingWeek(context, {});
+  const current = Number(context.currentTeachingWeek || context.currentWeek || resolved && resolved.currentWeek || 0) || 0;
+  if (!current) return null;
+  const offset = /下下周/.test(text) ? 2 : (/下周/.test(text) ? 1 : 0);
+  return Math.min(30, Math.max(1, current + offset));
+}
+
+function inferPeriodHint(message) {
+  const text = normalizeText(message);
+  if (/早上|早晨|上午/.test(text)) return "morning";
+  if (/中午|午间/.test(text)) return "noon";
+  if (/下午/.test(text)) return "afternoon";
+  if (/晚上|今晚|夜间/.test(text)) return "evening";
+  if (/现在|当前|马上/.test(text)) return "current";
+  return "";
+}
+
+function buildTemporalSlots(message, context = {}, options = {}) {
+  const text = normalizeText(message);
+  const slots = {};
+  const offsetInfo = followUpResolver.parseDateOffset(text);
+  const explicitDate = inferExplicitDate(text, context);
+  const weekday = inferWeekday(text);
+  const week = inferTeachingWeek(text, context);
+  const periodHint = inferPeriodHint(text);
+  const campus = followUpResolver.inferCampus(text);
+  const hasSectionCue = /(?:\d{1,2}\s*[-~～至到]\s*\d{1,2}|\d{1,2})\s*节|现在|当前|马上|早上|早晨|上午|中午|午间|下午|晚上|今晚|夜间/.test(text);
+
+  if (offsetInfo) {
+    slots.dateOffset = offsetInfo.dateOffset;
+    slots.dayOffset = offsetInfo.dateOffset;
+    slots.dateHint = offsetInfo.dateHint;
+  }
+  if (explicitDate || offsetInfo) {
+    slots.date = explicitDate || inferTargetDate(text, context);
+  } else if (options.includeDefaultDate === true && weekday != null) {
+    const base = parseClientDate(context, new Date());
+    const resolved = resolveCurrentTeachingWeek(context, {});
+    const currentWeek = Number(context.currentTeachingWeek || context.currentWeek || resolved && resolved.currentWeek || 0) || 0;
+    const weekDelta = week != null && currentWeek ? (week - currentWeek) * 7 : 0;
+    base.setDate(base.getDate() + weekDelta + weekday - getWeekday(base));
+    slots.date = formatDate(base);
+  } else if (options.includeDefaultDate === true) {
+    slots.date = inferTargetDate(text, context);
+  }
+  if (week != null) slots.week = week;
+  if (weekday != null) slots.weekday = weekday;
+  if (periodHint) slots.periodHint = periodHint;
+  if (hasSectionCue) slots.sections = inferSections(text, context);
+  if (campus) slots.campus = campus;
+  return slots;
+}
+
+function buildEmptyRoomSlots(message, context = {}, continuous = false) {
+  const minFreeSections = continuous
+    ? (followUpResolver.parseContinuousSections(message) || parseChineseDuration(message, 2))
+    : (/\u8fde\u7eed|连着|连堂/.test(message) ? parseChineseDuration(message, 2) : 1);
+  return Object.assign(buildTemporalSlots(message, context, { includeDefaultDate: true }), {
+    building: extractBuilding(message),
+    minFreeSections,
+    duration: minFreeSections,
+  });
+}
+
+function stripSearchConstraintWords(value) {
+  return normalizeText(value)
+    .replace(/20\d{2}\s*(?:年|[-/])\s*\d{1,2}\s*(?:月|[-/])\s*\d{1,2}\s*日?/g, " ")
+    .replace(/\d{1,2}\s*月\s*\d{1,2}\s*日?/g, " ")
+    .replace(/大后天|后天|明天|明日|翌日|今天|今日|本周|这周|这一周|下周|下下周/g, " ")
+    .replace(/第\s*\d{1,2}\s*(?:教学)?周/g, " ")
+    .replace(/(?:星期|礼拜|周)[一二三四五六日天1-7]/g, " ")
+    .replace(/(?:第\s*)?(?:\d{1,2}\s*[-~～至到]\s*\d{1,2}|\d{1,2})\s*节/g, " ")
+    .replace(/早上|早晨|上午|中午|午间|下午|晚上|今晚|夜间|现在|当前/g, " ")
+    .replace(/江湾(?:校区)?|仙溪(?:校区)?|河滨(?:校区)?/g, " ")
+    .replace(/\s+/g, "")
+    .trim();
 }
 
 function buildWeatherSlots(message, context = {}) {
@@ -392,42 +498,39 @@ function resolveIntentChinese(message, context = {}) {
     }
     return {
       name: "recommend_meeting_time",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
         building: extractBuilding(text),
-      },
+      }),
     };
   }
   if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
     return {
       name: "search_continuous_empty_rooms",
-      slots: {
-        building: extractBuilding(text),
-        minFreeSections: parseChineseDuration(text, 2),
-      },
+      slots: buildEmptyRoomSlots(text, context, true),
     };
   }
   if (/空教室|空课室|找教室|可用教室|附近|找.*教室.*自习|自习.*教室/.test(text)) {
     return {
       name: "search_empty_rooms",
-      slots: {
-        building: extractBuilding(text),
-        minFreeSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 1,
-      },
+      slots: buildEmptyRoomSlots(text, context, false),
     };
   }
-  if (/今天|今日|明天|下一节|还有课|上什么课/.test(text)) {
-    return { name: "get_today_courses", slots: {} };
+  if (/明天|明日|翌日/.test(text) && /课|课程|安排|课表/.test(text)) {
+    return { name: "get_tomorrow_courses", slots: buildTemporalSlots(text, context, { includeDefaultDate: true }) };
+  }
+  if (/今天|今日|还有课|上什么课/.test(text)) {
+    return { name: "get_today_courses", slots: buildTemporalSlots(text, context, { includeDefaultDate: true }) };
   }
   // 排除自习/空教室场景，避免“教室”关键词抢占为全校索引查询
   if (/老师|教师|任课|教室|课室|课程|科目|查课|班级|行政班|专业|课表|课程表|占用|安排/.test(text) &&
     !/自习|空教室|空课室|可用教室|共同空闲/.test(text)) {
     const type = inferSearchTypeChinese(text);
-    const q = stripChineseIntentWords(text);
+    const q = stripSearchConstraintWords(stripChineseIntentWords(text));
     if (needsClarification(type, q)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
     }
-    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q) };
+    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q, buildTemporalSlots(text, context)) };
   }
   return null;
 }
@@ -715,6 +818,7 @@ function resolveModernChineseIntent(message, context = {}) {
     /\u5728\u54ea|\u54ea\u91cc|\u4f4d\u7f6e|\u6559\u5b66\u697c|\u5730\u56fe|\u600e\u4e48\u8d70/.test(text);
   const hasCampusMapQuery = /\u5730\u56fe|\u5730\u70b9|\u4f4d\u7f6e|\u5728\u54ea|\u54ea\u91cc|\u56fe\u4e66\u9986|\u996d\u5802|\u98df\u5802|\u5bbf\u820d|\u4f53\u80b2\u9986|\u6821\u95e8|\u533b\u9662|\u533b\u52a1|\u6559\u5b66\u697c|\u4e3b\u8981\u5730\u70b9|\b[A-Z]\d{1,2}\b/i.test(text);
   const hasCampusScope = /\u6c5f\u6e7e|\u4ed9\u6eaa|\u6cb3\u6ee8|\u6821\u533a|\u6821\u56ed|\b[A-Z]\d{1,2}\b/i.test(text);
+  const hasScheduleSearch = /老师|教师|任课|课程|科目|查课|班级|行政班|专业|课表|课程表|占用|安排/.test(text);
   const wantsDeparture = /(?:几点|什么时候|何时).*(?:出发|走)|(?:出发|走).*(?:几点|什么时候|何时)|该出发|出发建议/.test(text);
   if (wantsDeparture && /下一节|下节|明天|上课|课程|宿舍/.test(text)) {
     const fromMatch = text.match(/从\s*([^，。！？?]{1,16}?)(?:出发|走)/);
@@ -737,12 +841,10 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/两节课中间|课程中间|课间.*(?:一小时|空档)|空档.*(?:空教室|自习)|规划.*(?:上课|课程).*(?:自习|空教室)/.test(text)) {
     return {
       name: "campus_multi_step_advice",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         campus,
-        date: inferTargetDate(text, context),
-        sections: inferSections(text, context),
         building: extractBuilding(text),
-      },
+      }),
     };
   }
   if (hasNextCourseLocation) {
@@ -756,20 +858,17 @@ function resolveModernChineseIntent(message, context = {}) {
   if (hasWeather && (hasEmptyRoom || hasTravel)) {
     return {
       name: "campus_multi_step_advice",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         campus,
-        date: inferTargetDate(text, context),
-        dateOffset: (followUpResolver.parseDateOffset(text) || {}).dateOffset,
-        sections: inferSections(text, context),
         building: extractBuilding(text),
         wantsWeather: true,
-      },
+      }),
     };
   }
   if (hasWeather) {
     return { name: "get_campus_weather", slots: buildWeatherSlots(text, context) };
   }
-  if (hasCampusMapQuery && hasCampusScope) {
+  if (hasCampusMapQuery && hasCampusScope && !hasEmptyRoom && !hasScheduleSearch) {
     const classroom = (text.match(/[A-Z]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
     if (classroom) return { name: "get_classroom_location", slots: { classroom } };
     return { name: "search_campus_place", slots: { q: text } };
@@ -782,7 +881,7 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/\u9690\u79c1|\u4f7f\u7528\u8bf4\u660e|\u6545\u969c|\u5c0f\u4f5b|\u4f5b\u8bfe\u5c0f\u8868|\u6821\u56ed\u670d\u52a1|\u5e2e\u52a9|\u8bf4\u660e/.test(text)) {
     return { name: "rag_search", slots: { q: text } };
   }
-  if (/\u5b66\u6821|\u6821\u533a|\u6821\u56ed|\u901a\u77e5|\u670d\u52a1|\u6307\u5357|\u89c4\u5219|\u6821\u5386/.test(text)) {
+  if (/\u5b66\u6821|\u6821\u533a|\u6821\u56ed|\u901a\u77e5|\u670d\u52a1|\u6307\u5357|\u89c4\u5219|\u6821\u5386/.test(text) && !hasEmptyRoom && !hasScheduleSearch) {
     return { name: "rag_search", slots: { q: text } };
   }
   if (/生图|图片|海报|分享图|配图|展示素材|生成.*图/.test(text)) {
@@ -791,12 +890,10 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/天气|下雨|降雨|高温|雷暴|带伞|出行/.test(text) && /空教室|自习|没课|明天|下午|路线|位置/.test(text)) {
     return {
       name: "campus_multi_step_advice",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         campus: inferCampusFromText(text),
-        date: inferTargetDate(text, context),
-        sections: inferSections(text, context),
         building: extractBuilding(text),
-      },
+      }),
     };
   }
   if (/天气|下雨|降雨|高温|雷暴|带伞|出行/.test(text)) {
@@ -820,38 +917,32 @@ function resolveModernChineseIntent(message, context = {}) {
     }
     return {
       name: "recommend_meeting_time",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
         building: extractBuilding(text),
-      },
+      }),
     };
   }
   if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
     return {
       name: "search_continuous_empty_rooms",
-      slots: {
-        building: extractBuilding(text),
-        minFreeSections: parseChineseDuration(text, 2),
-      },
+      slots: buildEmptyRoomSlots(text, context, true),
     };
   }
   if (/空教室|空课室|找教室|可用教室|自习/.test(text)) {
     return {
       name: "search_empty_rooms",
-      slots: {
-        building: extractBuilding(text),
-        minFreeSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 1,
-      },
+      slots: buildEmptyRoomSlots(text, context, false),
     };
   }
   if (/明天|明日/.test(text) && /课|课程|安排|课表/.test(text)) {
-    return { name: "get_tomorrow_courses", slots: {} };
+    return { name: "get_tomorrow_courses", slots: buildTemporalSlots(text, context, { includeDefaultDate: true }) };
   }
   if (/下一节|下节课|马上.*课|接下来.*课/.test(text)) {
     return { name: "get_next_course", slots: {} };
   }
   if (/本周|这一周|整周|周课表/.test(text) && /课|课程|安排|课表/.test(text)) {
-    return { name: "get_week_schedule", slots: {} };
+    return { name: "get_week_schedule", slots: buildTemporalSlots(text, context) };
   }
   if (/教学周|第几周|当前周|现在.*周/.test(text)) {
     return { name: "get_teaching_week", slots: {} };
@@ -956,32 +1047,32 @@ function resolveIntent(message, context = {}) {
     }
     return {
       name: "recommend_meeting_time",
-      slots: {
+      slots: Object.assign(buildTemporalSlots(text, context, { includeDefaultDate: true }), {
         durationSections: /连续/.test(text) ? parseChineseNumber(text, 2) : 2,
         building: extractBuilding(text),
-      },
+      }),
     };
   }
   if (/空教室|自习|空课室|找教室|可用教室|附近/.test(text)) {
     return {
       name: "search_empty_rooms",
-      slots: {
-        building: extractBuilding(text),
-        minFreeSections: /连续/.test(text) ? parseChineseNumber(text, 2) : 1,
-      },
+      slots: buildEmptyRoomSlots(text, context, /连续|连着|连堂/.test(text)),
     };
   }
-  if (/今天|今日|明天|还有课|下一节|上什么课/.test(text) ||
+  if (/明天|明日|翌日/.test(text) && /课|课程|安排|课表/.test(text)) {
+    return { name: "get_tomorrow_courses", slots: buildTemporalSlots(text, context, { includeDefaultDate: true }) };
+  }
+  if (/今天|今日|还有课|下一节|上什么课/.test(text) ||
     (/安排/.test(text) && !/老师|教师|教室|课室|课程|班级|行政班|专业/.test(text))) {
-    return { name: "get_today_courses", slots: {} };
+    return { name: "get_today_courses", slots: buildTemporalSlots(text, context, { includeDefaultDate: true }) };
   }
   if (/老师|教师|教室|课程|班级|查课|课表/.test(text)) {
     const type = inferSearchType(text);
-    const q = stripIntentWords(text);
+    const q = stripSearchConstraintWords(stripIntentWords(text));
     if (needsClarification(type, q)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
     }
-    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q) };
+    return { name: "search_school_index", slots: buildSchoolSearchSlots(type, q, buildTemporalSlots(text, context)) };
   }
   if (isConversationalHelp(text)) {
     return { name: "conversational_help", slots: {} };

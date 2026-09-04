@@ -275,12 +275,10 @@ async function runGroup4DateSwitch() {
     "g4 legacy gate must stay date-word-free (compat lock)"
   );
 
-  // 【疑似缺陷】parseDateOffset 分支顺序：/后天/ 先于 /大后天/ 判定，"大后天"
-  // 永远走不到 offset 3 分支（followUpResolver.js :137-139）。按任务纪律锁定
-  // 现状（offset 2），不擅自修；修复决策留给里程碑主 Agent。
-  const locked = followUpResolver.parseDateOffset("大后天");
-  assert.strictEqual(locked.dateOffset, 2, "g4 【疑似缺陷】大后天 locked at offset 2");
-  assert.strictEqual(locked.dateHint, "day_after_tomorrow", "g4 【疑似缺陷】大后天 locked hint");
+  // 更长日期词先匹配：“大后天”不得被“后天”子串截断。
+  const inThreeDays = followUpResolver.parseDateOffset("大后天");
+  assert.strictEqual(inThreeDays.dateOffset, 3, "g4 大后天 offset");
+  assert.strictEqual(inThreeDays.dateHint, "in_3_days", "g4 大后天 hint");
 }
 
 // ---------------------------------------------------------------------------

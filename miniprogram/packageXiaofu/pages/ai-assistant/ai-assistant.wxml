@@ -1,5 +1,5 @@
 <view class="page ai-page">
-  <!-- Slim header: conversation title primary; ≤2 icon actions; no thick card chrome -->
+  <!-- Calm task header: conversation title primary; at most two actions. -->
   <view class="xiaofu-header xiaofu-header-compact">
     <view class="xiaofu-avatar-wrap" aria-hidden="true">
       <image wx:if="{{hasHeroLogo}}" class="xiaofu-avatar" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
@@ -16,7 +16,7 @@
     </view>
   </view>
 
-  <!-- Full content-width long capsule; collapsed/expanded share the same width. -->
+  <!-- Runtime truth is a quiet notice rail, not a competing navigation bar. -->
   <view class="agent-status-island-wrap" id="agent-status-island-wrap">
     <view
       id="agent-status-capsule"
@@ -71,10 +71,11 @@
     show-scrollbar="{{false}}"
     lower-threshold="80"
   >
-    <!-- Empty state: one verified contextual insight and at most three actions -->
+    <!-- Empty state: task-first editorial hierarchy with one verified insight. -->
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-brand">{{assistantBrand.assistantName}}</view>
-      <view class="empty-title">可以直接告诉我你想完成的校园任务。</view>
+      <view class="empty-eyebrow">校园管家 · {{assistantBrand.assistantName}}</view>
+      <view class="empty-brand">今天想先处理哪件校园小事？</view>
+      <view class="empty-title">说出目标和时间就好，我会调用校园工具核验后给你结果。</view>
       <button
         wx:if="{{proactiveInsight}}"
         class="proactive-insight {{proactiveInsight.kind}}"
@@ -95,7 +96,7 @@
           bindtap="onContextualActionTap"
         >{{item.label}}</button>
       </view>
-      <view class="empty-safe-note" wx:if="{{showPrivacyTip}}">请勿输入学号、密码等敏感信息</view>
+      <view class="empty-safe-note" wx:if="{{showPrivacyTip}}">不用提供学号或密码，个人课表只读取受控摘要。</view>
     </view>
 
     <view
@@ -360,7 +361,6 @@
           <button class="plus-action-row" bindtap="openRemindersFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/reminder-manage.svg" mode="aspectFit" /><view class="plus-action-title">管理提醒</view><view class="plus-action-arrow">›</view></button>
           <button class="plus-action-row" bindtap="openTaskPanelFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/campus-tools.svg" mode="aspectFit" /><view class="plus-action-title">校园工具</view><view class="plus-action-arrow">›</view></button>
           <button class="plus-action-row" bindtap="openCampusMapFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/campus-map.svg" mode="aspectFit" /><view class="plus-action-title">校园地图</view><view class="plus-action-arrow">›</view></button>
-          <button class="plus-action-row" bindtap="startVoiceFromPlus" wx:if="{{voiceInputVisible}}"><image class="plus-action-icon" src="/assets/icons/ai-actions/voice.svg" mode="aspectFit" /><view class="plus-action-title">语音输入</view><view class="plus-action-arrow">›</view></button>
           <button class="plus-action-row" bindtap="createNewConversationFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/conversation-new.svg" mode="aspectFit" /><view class="plus-action-title">新建对话</view><view class="plus-action-arrow">›</view></button>
         </view>
       </view>
@@ -459,14 +459,14 @@
     </view>
   </view>
 
-  <!-- Unified floating pill composer: [+] [input] [mic/stop] [send]; safe-area only on outer shell -->
+  <!-- One clear input path: shortcuts, text, send/stop. -->
   <view class="composer" id="composer-shell">
     <view class="composer-pill" id="composer-pill">
       <button class="composer-icon-btn composer-plus-btn" bindtap="openComposerPlus" disabled="{{sending}}" aria-label="快捷操作">
         <image class="composer-icon" src="/assets/icons/composer/plus.svg" mode="aspectFit" aria-hidden="true" />
       </button>
       <view class="composer-input-wrap">
-        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉{{assistantBrand.assistantName}}你想完成什么…</view>
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">描述任务，可带上时间和地点…</view>
         <textarea
           class="composer-input"
           value="{{inputValue}}"
@@ -488,20 +488,6 @@
         />
       </view>
       <button
-        wx:if="{{voiceInputVisible && !sending}}"
-        class="composer-icon-btn voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing ? 'disabled' : ''}}"
-        bindtap="onVoiceTap"
-        disabled="{{voiceRecognizing}}"
-        aria-label="{{voiceRecording ? '停止录音' : '语音输入'}}"
-      >
-        <image
-          class="composer-icon"
-          src="{{voiceRecording ? '/assets/icons/composer/stop-wave.svg' : '/assets/icons/composer/microphone.svg'}}"
-          mode="aspectFit"
-          aria-hidden="true"
-        />
-      </button>
-      <button
         class="composer-icon-btn send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
         bindtap="onSubmit"
         disabled="{{!sending && !inputValue}}"
@@ -517,7 +503,6 @@
         <view wx:else class="composer-stop-mark" aria-hidden="true"></view>
       </button>
     </view>
-    <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
   </view>
   <xiaofu-float />
 </view>

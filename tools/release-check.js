@@ -98,20 +98,6 @@ function readCloudbaseConfig() {
   return require("../miniprogram/config/cloudbase");
 }
 
-function voiceGateCheck(formal = false) {
-  const config = readCloudbaseConfig();
-  const enabled = config.AI_VOICE_INPUT_ENABLED === true;
-  const provider = String(config.AI_VOICE_PROVIDER || "");
-  const providerReady = !enabled || provider === "cloudbase-function";
-  const ok = providerReady || (formal && !enabled);
-  return configCheck("voice feature gate", ok, {
-    enabled,
-    provider,
-    formal,
-    message: ok ? "" : "AI voice input is enabled but AI_VOICE_PROVIDER is not available.",
-  });
-}
-
 function syntaxChecks() {
   return [
     run("process runner syntax", "node", ["--check", "tools/shared/processRunner.js"]),
@@ -137,7 +123,7 @@ function localProductionTests() {
     run("deploy requires admin api token", "node", ["tools/test-deploy-requires-admin-api-token.js"]),
     run("admin UTF-8", "node", ["tools/test-admin-utf8.js"]),
     run("AI public safety", "node", ["tools/test-public-ai-safety.js"]),
-    run("AI input and voice", "node", ["tools/test-ai-assistant-input-and-voice.js"]),
+    run("AI text input and retired voice surface", "node", ["tools/test-ai-assistant-text-input.js"]),
     run("Agent real-device reliability", "npm", ["run", "test:agent-reliability-convergence"], { timeoutMs: 240000 }),
     run("canonical stable sorting", "node", ["tools/test-staging-fingerprint.js"]),
     run("publisher integration", "node", ["tools/test-fosu-publisher.js"]),
@@ -193,7 +179,6 @@ function experience() {
       run("publisher launcher self-test", "cmd.exe", ["/d", "/s", "/c", "call", "佛课小表一键同步.cmd", "--self-test", "--noninteractive"], { timeoutMs: 120000 }),
       run("miniprogram compile preflight", "node", ["tools/test-miniprogram-compile-preflight.js"]),
       configCheck("CloudBase Hosting ready", cloudbaseRuntimeConfig.CLOUDBASE_HOSTING_READY === true, cloudbaseRuntimeConfig),
-      voiceGateCheck(false),
       run("git diff whitespace", "git", ["diff", "--check"]),
       secretScan(),
     ]);
@@ -255,7 +240,6 @@ function formal() {
     AI_COMPETITION_MODE: cloudbaseRuntimeConfig.AI_COMPETITION_MODE,
     message: "Formal release must not enable competition mode.",
   }));
-  result.checks.push(voiceGateCheck(true));
   if (cloudbaseRuntimeConfig.AI_COMPETITION_MODE === true) {
     blockers.push("Formal release must not enable AI_COMPETITION_MODE.");
   }

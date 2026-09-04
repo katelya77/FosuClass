@@ -123,7 +123,6 @@ flowchart TB
 
   subgraph Optional["仅 trial / dev"]
     Prov["Provider 表达层<br/>DeepSeek / Coze 等"]
-    ASR["CloudBase 语音转写"]
   end
 
   Xiaofu --> Chat
@@ -135,7 +134,6 @@ flowchart TB
   Actions --> Bus
   Events --> Xiaofu
   Intent -.->|trial/dev| Prov
-  Xiaofu -.->|体验版| ASR
   Local -.->|离线| Xiaofu
   Tools --> KB
   Chat --> Mem
@@ -149,7 +147,7 @@ flowchart TB
 | **客户端服务** | 索引缓存、本地过滤、导航、Action 执行 | `releasePackService.js`、`scheduleNavigationService`、`xiaofuActionBus` |
 | **Agent Kernel** | 意图、规划、工具、组合、安全、Run Events | `server/src/services/ai/` |
 | **事实平面** | Release Pack 发布、索引、详情、空教室 | `releaseService`、静态 Pack、版本校验 |
-| **可选表达层** | trial/dev 润色、语音 ASR | Provider 适配器、CloudBase 云函数 |
+| **可选表达层** | trial/dev 结构化理解与表达增强 | Provider 适配器 |
 
 ### 2.3 关键决策：服务端 Kernel 唯一
 
@@ -176,7 +174,7 @@ VPS 容器（Node API，GHCR 镜像）  ← GitHub Actions Deploy
         │
         ├── Release Pack 存储 / 缓存
         ├── 会话记忆（可选 cloud_sync）
-        └── CloudBase（语音等可选能力）
+        └── CloudBase（公开 Release Pack 等可选能力）
 ```
 
 ---
@@ -193,12 +191,11 @@ VPS 容器（Node API，GHCR 镜像）  ← GitHub Actions Deploy
 | M4 个人课表 | XLS 导入、本机摘要 | 最小字段；不进模型明文 |
 | M5 空教室 | 节次 / 楼栋 / 连续节 | `search_empty_rooms` 等工具 |
 | M6 公开知识 | 校园 FAQ 类问答 | Hybrid RAG（禁止向量化课表事实） |
-| M7 语音（体验） | 麦克风 → 转写 → 填框 | 隐私与权限状态机；不自动发送 |
 | M8 会话记忆 | local_only / 可选 cloud_sync | Principal 仅来自已验证 Session |
 
 ### 3.2 M1：自然语言任务（小佛助手）
 
-**输入**：用户文本（或语音转写后的文本）。  
+**输入**：用户文本。
 **输出**：中文答复 + 结果卡 + 建议追问 + 可选 Action Command。
 
 **教师课表主路径（重点）**
@@ -238,19 +235,9 @@ VPS 容器（Node API，GHCR 镜像）  ← GitHub Actions Deploy
 - **禁止**通过 URL 传递完整 `courses[]` 数组。
 - 写操作（设为首页课表）必须用户确认 + Receipt，禁止静默成功。
 
-### 3.5 M7：语音权限状态机（摘要）
+### 3.5 输入边界
 
-顺序：隐私同意 → `scope.record` → RecorderManager → 系统麦克风 → ASR。
-
-| reasonCode | 含义 | UI 动作 |
-|------------|------|---------|
-| PRIVACY_NOT_ACCEPTED | 未同意隐私 | 引导隐私指引 |
-| WECHAT_RECORD_UNDECIDED | 未决定 | 可再次 authorize |
-| WECHAT_RECORD_DENIED | 已拒绝 | 打开设置 |
-| SYSTEM_MIC_DENIED | 系统禁止 | 系统设置 |
-| ASR_FAILED / ASR_NOT_ENABLED | 识别侧 | 与权限错误分离展示 |
-
-转写结果**只填入输入框，不自动发送**，用户可校对。
+校园管家只接受文字输入与受控快捷任务，不申请 `scope.record`，不上传临时音频，也不调用语音转写云函数。这样可缩短主包链路并消除与核心校园任务无关的隐私授权打断。
 
 ---
 

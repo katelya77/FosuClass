@@ -180,7 +180,7 @@ function generateConversationTitle(text) {
     .replace(/\s+/g, " ")
     .replace(/[\r\n]+/g, " ")
     .trim();
-  if (!value) return "新查询";
+  if (!value) return "新对话";
   return value.length > 18 ? `${value.slice(0, 18)}...` : value;
 }
 
@@ -188,7 +188,10 @@ function normalizeConversation(conversation) {
   const source = conversation && typeof conversation === "object" && !Array.isArray(conversation) ? conversation : {};
   const createdAt = safeText(source.createdAt, 40) || nowIso();
   const messages = trimMessages(source.messages);
-  const title = safeText(source.title, 40) || generateTitleFromMessages(messages);
+  const sourceTitle = safeText(source.title, 40);
+  const title = !sourceTitle || sourceTitle === "新查询"
+    ? (generateTitleFromMessages(messages) || "新对话")
+    : sourceTitle;
   return {
     conversationId: safeText(source.conversationId, 80) || createConversationId(),
     title,
@@ -219,7 +222,7 @@ function createEmptyConversation(patch = {}) {
   const at = nowIso();
   return normalizeConversation(Object.assign({
     conversationId: createConversationId(),
-    title: "新查询",
+    title: "新对话",
     createdAt: at,
     updatedAt: at,
     messages: [],
@@ -432,7 +435,7 @@ function updateConversationContext(conversationId, contextSlots) {
 }
 
 function renameConversation(conversationId, title) {
-  const nextTitle = safeText(title, 40) || "新查询";
+  const nextTitle = safeText(title, 40) || "新对话";
   return updateConversation(conversationId, { title: nextTitle });
 }
 
@@ -440,7 +443,7 @@ function clearConversation(conversationId) {
   return updateConversation(conversationId, {
     messages: [],
     contextSlots: createEmptyContextSlots(),
-    title: "新查询",
+    title: "新对话",
   });
 }
 

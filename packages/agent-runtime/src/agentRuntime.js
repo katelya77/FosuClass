@@ -10,7 +10,9 @@ const {
 const DEFAULT_STAGE_BUDGETS = Object.freeze({
   simple: Object.freeze({
     context: 1000,
-    decision: 6500,
+    // Leave enough headroom for the configured 8s structured-output timeout;
+    // the previous 6.5s stage cap consistently cut healthy trial providers off early.
+    decision: 9000,
     skillTool: 1200,
     verification: 500,
     response: 800,
@@ -19,7 +21,7 @@ const DEFAULT_STAGE_BUDGETS = Object.freeze({
   }),
   multi: Object.freeze({
     context: 1000,
-    decision: 6500,
+    decision: 9000,
     skillTool: 5500,
     verification: 1000,
     response: 1500,

@@ -10,7 +10,6 @@ const tests = [
   "tools/test-agent-departure-chain-verification.js",
   "tools/test-agent-event-map-contract.js",
   "tools/test-agent-terminal-truth.js",
-  "tools/test-voice-state-sequence.js",
   "tools/test-provider-readiness.js",
   "tools/test-agent-provider-stage-capabilities.js",
   "tools/test-agent-provider-live-operations.js",

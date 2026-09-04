@@ -20,18 +20,6 @@
       }
     },
     {
-      "name": "aiVoiceTranscribe",
-      "handler": "index.main",
-      "runtime": "Nodejs18.15",
-      "timeout": 30,
-      "memorySize": 256,
-      "description": "Xiaofu voice to Tencent ASR transcribe",
-      "envVariables": {
-        "NODE_ENV": "production"
-      },
-      "installDependency": true
-    },
-    {
       "name": "xiaofuAgentGateway",
       "handler": "index.main",
       "runtime": "Nodejs18.15",

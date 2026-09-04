@@ -101,11 +101,10 @@ npm run check:teacher-search-contract
 
 物理缓存仍按安全作用域包裹该语义键：服务端为 Run/Principal 作用域，小程序为本机 Storage；不会引入第二套缓存。学院筛选是严格匹配，精确姓名在错误学院下不得模糊串到其他教师。
 
-## 6. Schedule、Voice 与 UI
+## 6. Schedule 与 UI
 
 - 教师、班级、教室、课程结果继续复用 `scheduleNavigationService` 和唯一 `schedule-view`；只有缺少 `detailId`/版本时才降级到全校页。
-- Voice 的真实顺序为 `privacy_authorization → record_authorization → ready → recording → transcribing → composer_filled`。
-- 错误码区分隐私拒绝、微信权限未决定/拒绝、系统麦克风、ASR 未开通和 ASR 调用失败；转写结果只填 Composer，不自动发送。
+- 校园管家只保留文字 Composer 与任务入口，不申请录音权限，也不部署或调用语音转写能力。
 - 发送前 UI 只显示中性 `submitting`；`understanding.started` 后才显示理解，只有真实 `provider.started` 才显示 Thinking。
 - 状态岛全宽居中；Composer 是唯一底部胶囊并处于 Flex 流中；消息区与真实测量的 `composerInsetPx` 同步，不保留覆盖式大底部空白。
 

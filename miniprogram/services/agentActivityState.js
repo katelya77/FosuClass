@@ -52,11 +52,11 @@ function terminalActivityPatch(source, options) {
   if (payload.fallback === true || status === "degraded") {
     return {
       agentActivityState: "degraded",
-      sendingStatusText: payload.resultOrigin === "local_device" ? "本机结果" : "已安全降级",
-      statusCapsuleText: payload.resultOrigin === "local_device" ? "本机结果 · 可联网重试" : "已完成 · 使用安全降级链路",
+      sendingStatusText: payload.resultOrigin === "local_device" ? "本机结果" : "校园工具已完成",
+      statusCapsuleText: payload.resultOrigin === "local_device" ? "本机结果 · 可联网重试" : "已完成 · 校园结果可用",
       statusCapsuleDetail: payload.resultOrigin === "local_device"
         ? "结果只来自本机缓存或确定性入口，没有伪装成服务端任务。"
-        : "确定性工具结果已保留；增强推理未被伪装成成功调用。",
+        : "课表与校园事实已由确定性工具核验；复杂问法可稍后重试智能理解。",
       statusCapsuleExpanded: true,
     };
   }
@@ -124,8 +124,8 @@ function activityPatchForRunEvent(status) {
   if (type === "understanding.fallback" || type === "provider.failed") {
     return {
       agentActivityState: "degraded",
-      statusCapsuleText: text || "增强理解暂不可用，已安全降级",
-      statusCapsuleDetail: "确定性工具结果会保留，失败不会被伪装成成功。",
+      statusCapsuleText: text || "正在改用校园工具继续处理",
+      statusCapsuleDetail: "已有工具结果会保留；复杂理解恢复后仍可重试。",
     };
   }
   if (type === "run.status_unavailable") {
