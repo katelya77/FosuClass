@@ -2,6 +2,7 @@ const mockProvider = require("./providers/mockProvider");
 const deepseekProvider = require("./providers/deepseekProvider");
 const cozeProvider = require("./providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("./providers/cloudbaseOpenaiProvider");
+const openrouterProvider = require("./providers/openrouterProvider");
 const providerChainService = require("./providerChainService");
 const capabilityManifestService = require("./capabilityManifestService");
 
@@ -30,13 +31,17 @@ function getProviderName(runtimeMode, runtimeConfig) {
   if (String(configValue(runtimeConfig, "AI_AGENT_ENABLED", "false")).toLowerCase() === "false") {
     return "mock";
   }
+  const disabled = providerChainService.getDisabledProviderSet(runtimeConfig);
+  const isInstalled = (name) => !disabled.has(name);
   const configured = String(configValue(runtimeConfig, "AI_PROVIDER", "")).trim().toLowerCase();
   if (configured === "mock") return "mock";
-  if (["cloudbase-openai", "hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(configured)) return "cloudbase-openai";
-  if (configured === "coze") return "coze";
-  if (configured === "deepseek") return "deepseek";
-  if (cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig) && String(configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false")).toLowerCase() === "true") return "cloudbase-openai";
-  if (deepseekProvider.firstConfiguredKey(runtimeConfig)) return "deepseek";
+  if (["cloudbase-openai", "hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(configured) && isInstalled("cloudbase-openai")) return "cloudbase-openai";
+  if (configured === "coze" && isInstalled("coze")) return "coze";
+  if (configured === "deepseek" && isInstalled("deepseek")) return "deepseek";
+  if (configured === "openrouter" && isInstalled("openrouter")) return "openrouter";
+  if (isInstalled("openrouter") && openrouterProvider.getConfig(runtimeConfig).enabled && openrouterProvider.firstConfiguredKey(runtimeConfig)) return "openrouter";
+  if (isInstalled("cloudbase-openai") && cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig) && String(configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false")).toLowerCase() === "true") return "cloudbase-openai";
+  if (isInstalled("deepseek") && deepseekProvider.firstConfiguredKey(runtimeConfig)) return "deepseek";
   return "mock";
 }
 
@@ -45,6 +50,7 @@ function createProvider(runtimeMode, runtimeConfig) {
   if (provider === "deepseek") return deepseekProvider;
   if (provider === "cloudbase-openai") return cloudbaseOpenaiProvider;
   if (provider === "coze") return cozeProvider;
+  if (provider === "openrouter") return openrouterProvider;
   return mockProvider;
 }
 
@@ -55,5 +61,6 @@ module.exports = {
   getRuntimeMode,
   providerChainService,
   cloudbaseOpenaiProvider,
+  openrouterProvider,
   mockProvider,
 };

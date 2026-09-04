@@ -54,6 +54,8 @@ process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
   "COZE_ENABLED",
   "CLOUDBASE_OPENAI_API_KEY",
   "CLOUDBASE_OPENAI_ENABLED",
+  "OPENROUTER_ENABLED",
+  "OPENROUTER_API_KEY",
   "AI_PROVIDER_CIRCUIT_FAILURES",
   "AI_PROVIDER_CIRCUIT_COOLDOWN_MS",
   "AI_PROVIDER_SHADOW_ENABLED",
@@ -67,6 +69,7 @@ const providerChainService = require("../server/src/services/ai/providerChainSer
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 const cozeProvider = require("../server/src/services/ai/providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("../server/src/services/ai/providers/cloudbaseOpenaiProvider");
+const openrouterProvider = require("../server/src/services/ai/providers/openrouterProvider");
 
 const FAKE_KEY = "unit-test-key-not-real";
 
@@ -478,7 +481,7 @@ async function runGroup9PublicZeroExternalCalls() {
   // 计数桩替换全部外部 Provider 的 generate/generateStructured，finally 恢复。
   const originals = [];
   let externalCalls = 0;
-  [deepseekProvider, cozeProvider, cloudbaseOpenaiProvider].forEach((mod) => {
+  [openrouterProvider, deepseekProvider, cozeProvider, cloudbaseOpenaiProvider].forEach((mod) => {
     ["generate", "generateStructured"].forEach((fnName) => {
       if (typeof mod[fnName] !== "function") return;
       originals.push([mod, fnName, mod[fnName]]);

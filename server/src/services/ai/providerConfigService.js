@@ -10,7 +10,9 @@ const ENV_EXAMPLE_PATH = path.join(SERVER_ROOT, ".env.example");
 const CLOUDBASE_CLIENT_CONFIG_PATH = path.resolve(SERVER_ROOT, "..", "miniprogram", "config", "cloudbase.js");
 
 const ENVIRONMENTS = ["public", "trial", "dev"];
-const EXTERNAL_PROVIDERS = ["cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"];
+const EXTERNAL_PROVIDERS = ["openrouter", "cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"];
+const BUILTIN_PROVIDERS = ["mock", "openrouter", "cloudbase-openai", "deepseek", "coze"];
+const REMOVABLE_BUILTIN_PROVIDERS = ["openrouter", "cloudbase-openai", "deepseek", "coze"];
 
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
@@ -43,6 +45,7 @@ const AI_ENV_KEYS = [
   "AI_PROVIDER_ENVIRONMENTS",
   "AI_PROVIDER_RUNTIME_VERSION",
   "AI_PROVIDER_RUNTIME_UPDATED_AT",
+  "AI_DISABLED_PROVIDERS",
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
   "COZE_ENABLED",
@@ -68,6 +71,12 @@ const AI_ENV_KEYS = [
   "CLOUDBASE_OPENAI_TEXT_MODEL",
   "CLOUDBASE_OPENAI_TIMEOUT_MS",
   "CLOUDBASE_OPENAI_MAX_TOKENS",
+  "OPENROUTER_ENABLED",
+  "OPENROUTER_BASE_URL",
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_MODELS",
+  "OPENROUTER_TIMEOUT_MS",
+  "OPENROUTER_MAX_TOKENS",
   "AI_CUSTOM_PROVIDERS",
   "AI_CUSTOM_ACTIVE_ID",
 ];
@@ -103,6 +112,7 @@ const DEFAULTS = {
   AI_PROVIDER_ENVIRONMENTS: "",
   AI_PROVIDER_RUNTIME_VERSION: "",
   AI_PROVIDER_RUNTIME_UPDATED_AT: "",
+  AI_DISABLED_PROVIDERS: "",
   COZE_ENABLED: "false",
   COZE_EXPIRES_AT: "",
   COZE_PROVIDER_ROLE: "temporary",
@@ -121,6 +131,11 @@ const DEFAULTS = {
   CLOUDBASE_OPENAI_TEXT_MODEL: "hy3-preview",
   CLOUDBASE_OPENAI_TIMEOUT_MS: "15000",
   CLOUDBASE_OPENAI_MAX_TOKENS: "1200",
+  OPENROUTER_ENABLED: "false",
+  OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
+  OPENROUTER_MODELS: "z-ai/glm-5.2:free,nvidia/nemotron-3-super-120b-a12b:free,liquid/lfm-2.5-2.6b:free,openrouter/free",
+  OPENROUTER_TIMEOUT_MS: "12000",
+  OPENROUTER_MAX_TOKENS: "800",
   AI_CUSTOM_PROVIDERS: "",
   AI_CUSTOM_ACTIVE_ID: "",
 };
@@ -172,6 +187,11 @@ const PROFILE_FIELD_TO_ENV = {
   cloudbaseOpenaiTextModel: "CLOUDBASE_OPENAI_TEXT_MODEL",
   cloudbaseOpenaiTimeoutMs: "CLOUDBASE_OPENAI_TIMEOUT_MS",
   cloudbaseOpenaiMaxTokens: "CLOUDBASE_OPENAI_MAX_TOKENS",
+  openrouterEnabled: "OPENROUTER_ENABLED",
+  openrouterBaseUrl: "OPENROUTER_BASE_URL",
+  openrouterModels: "OPENROUTER_MODELS",
+  openrouterTimeoutMs: "OPENROUTER_TIMEOUT_MS",
+  openrouterMaxTokens: "OPENROUTER_MAX_TOKENS",
   activeCustomId: "AI_CUSTOM_ACTIVE_ID",
 };
 
@@ -184,6 +204,7 @@ const BOOLEAN_PROFILE_FIELDS = new Set([
   "cozeEnabled",
   "cozePollEnabled",
   "cloudbaseOpenaiEnabled",
+  "openrouterEnabled",
   "understandingEnabled",
   "shadowEnabled",
 ]);
@@ -274,7 +295,7 @@ function normalizeProvider(value) {
   if (["anthropic", "claude", "custom-claude"].includes(provider)) {
     return "custom-anthropic";
   }
-  return ["mock", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "mock";
+  return ["mock", "openrouter", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "mock";
 }
 
 function normalizeProviderPolicy(value) {
@@ -297,7 +318,7 @@ function normalizeChainName(value) {
   if (["anthropic", "claude", "custom-claude"].includes(provider)) {
     return "custom-anthropic";
   }
-  return ["mock", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "";
+  return ["mock", "openrouter", "deepseek", "coze", "cloudbase-openai", "custom-openai", "custom-anthropic"].includes(provider) ? provider : "";
 }
 
 function parseChainNames(value) {
@@ -306,6 +327,13 @@ function parseChainNames(value) {
     .map((item) => normalizeChainName(item))
     .filter(Boolean);
   return Array.from(new Set(items));
+}
+
+function parseDisabledProviders(value) {
+  return Array.from(new Set(String(value || "")
+    .split(",")
+    .map((item) => normalizeProvider(item))
+    .filter((name) => REMOVABLE_BUILTIN_PROVIDERS.includes(name))));
 }
 
 const STAGE_PROVIDER_FIELDS = ["understandingProvider", "plannerProvider", "responseProvider"];
@@ -344,7 +372,7 @@ function defaultProfile(environment) {
     enabled: false,
     provider: "mock",
     providerPolicy: env === "public" ? "tool-only" : "auto",
-    providerChain: env === "public" ? "mock" : (env === "trial" || env === "dev" ? "hunyuan3,deepseek,coze,mock" : ""),
+    providerChain: env === "public" ? "mock" : (env === "trial" || env === "dev" ? "openrouter,hunyuan3,deepseek,coze,mock" : ""),
     understandingEnabled: true,
     understandingModel: DEFAULTS.AI_UNDERSTANDING_MODEL,
     plannerModel: DEFAULTS.AI_PLANNER_MODEL,
@@ -387,6 +415,11 @@ function defaultProfile(environment) {
     cloudbaseOpenaiTextModel: DEFAULTS.CLOUDBASE_OPENAI_TEXT_MODEL,
     cloudbaseOpenaiTimeoutMs: DEFAULTS.CLOUDBASE_OPENAI_TIMEOUT_MS,
     cloudbaseOpenaiMaxTokens: DEFAULTS.CLOUDBASE_OPENAI_MAX_TOKENS,
+    openrouterEnabled: false,
+    openrouterBaseUrl: DEFAULTS.OPENROUTER_BASE_URL,
+    openrouterModels: DEFAULTS.OPENROUTER_MODELS,
+    openrouterTimeoutMs: DEFAULTS.OPENROUTER_TIMEOUT_MS,
+    openrouterMaxTokens: DEFAULTS.OPENROUTER_MAX_TOKENS,
     activeCustomId: "",
   };
   if (env === "dev") {
@@ -502,6 +535,7 @@ function buildSecretUpdates(payload = {}) {
   if (payload.deepseekApiKey) updates.DEEPSEEK_API_KEY = String(payload.deepseekApiKey).trim();
   if (payload.cozeApiKey) updates.COZE_API_KEY = String(payload.cozeApiKey).trim();
   if (payload.cloudbaseOpenaiApiKey) updates.CLOUDBASE_OPENAI_API_KEY = String(payload.cloudbaseOpenaiApiKey).trim();
+  if (payload.openrouterApiKey) updates.OPENROUTER_API_KEY = String(payload.openrouterApiKey).trim();
   return updates;
 }
 
@@ -614,6 +648,14 @@ function hasCloudbaseOpenAiKey(envFileValues, runtimeValues) {
   );
 }
 
+function hasOpenRouterKey(envFileValues, runtimeValues) {
+  return Boolean(
+    process.env.OPENROUTER_API_KEY ||
+    runtimeValues.OPENROUTER_API_KEY ||
+    envFileValues.OPENROUTER_API_KEY
+  );
+}
+
 function readCloudbaseClientConfig() {
   try {
     const text = fs.readFileSync(CLOUDBASE_CLIENT_CONFIG_PATH, "utf8");
@@ -672,6 +714,8 @@ function getKeyStatus(envFileValues, runtimeValues) {
     cozeKeyLast4: keyLast4(cozeKey),
     cloudbaseOpenaiKeyConfigured: hasCloudbaseOpenAiKey(envFileValues, runtimeValues),
     cloudbaseOpenaiKeyLast4: keyLast4(process.env.CLOUDBASE_OPENAI_API_KEY || runtimeValues.CLOUDBASE_OPENAI_API_KEY || envFileValues.CLOUDBASE_OPENAI_API_KEY),
+    openrouterKeyConfigured: hasOpenRouterKey(envFileValues, runtimeValues),
+    openrouterKeyLast4: keyLast4(process.env.OPENROUTER_API_KEY || runtimeValues.OPENROUTER_API_KEY || envFileValues.OPENROUTER_API_KEY),
     customOpenaiConfigured: customList.some((entry) => entry.protocol === "openai" && customProviderStore.isEntryUsable(entry)),
     customAnthropicConfigured: customList.some((entry) => entry.protocol === "anthropic" && customProviderStore.isEntryUsable(entry)),
   };
@@ -685,6 +729,8 @@ function providerCompleteness(provider, profile, keyStatus) {
     checks.push(["baseUrl", Boolean(profile.baseUrl)], ["apiKey", Boolean(keyStatus.deepseekKeyConfigured)], ["model", Boolean(profile.model)], ["timeout", Boolean(profile.timeoutMs)]);
   } else if (provider === "cloudbase-openai") {
     checks.push(["enabled", profile.cloudbaseOpenaiEnabled === true], ["baseUrl", Boolean(profile.cloudbaseOpenaiBaseUrl)], ["apiKey", Boolean(keyStatus.cloudbaseOpenaiKeyConfigured)], ["model", Boolean(profile.cloudbaseOpenaiTextModel)]);
+  } else if (provider === "openrouter") {
+    checks.push(["enabled", profile.openrouterEnabled === true], ["baseUrl", Boolean(profile.openrouterBaseUrl)], ["apiKey", Boolean(keyStatus.openrouterKeyConfigured)], ["models", Boolean(profile.openrouterModels)]);
   } else if (provider === "custom-openai" || provider === "custom-anthropic") {
     const usable = provider === "custom-openai" ? keyStatus.customOpenaiConfigured : keyStatus.customAnthropicConfigured;
     checks.push(["entry", usable], ["apiKey", usable], ["model", usable]);
@@ -704,13 +750,16 @@ function providerCompleteness(provider, profile, keyStatus) {
   };
 }
 
-function buildEnvironmentStatus(env, profile, keyStatus) {
+function buildEnvironmentStatus(env, profile, keyStatus, disabledProviders = []) {
   const normalized = normalizeProfile(profile, env);
+  const disabled = new Set(disabledProviders);
   const keyFlagFor = (name) => (name === "deepseek"
     ? keyStatus.deepseekKeyConfigured
     : name === "coze"
       ? keyStatus.cozeKeyConfigured
-      : name === "cloudbase-openai"
+        : name === "openrouter"
+          ? keyStatus.openrouterKeyConfigured
+        : name === "cloudbase-openai"
         ? keyStatus.cloudbaseOpenaiKeyConfigured
         : name === "custom-openai"
           ? keyStatus.customOpenaiConfigured
@@ -721,11 +770,15 @@ function buildEnvironmentStatus(env, profile, keyStatus) {
     ? keyStatus.deepseekKeyLast4
     : name === "coze"
       ? keyStatus.cozeKeyLast4
+      : name === "openrouter"
+        ? keyStatus.openrouterKeyLast4
       : name === "cloudbase-openai"
         ? keyStatus.cloudbaseOpenaiKeyLast4
         : "");
-  const providers = ["mock", "cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].map((name) => ({
+  const providers = ["mock", "openrouter", "cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].map((name) => ({
     name,
+    installed: name === "mock" || !disabled.has(name),
+    removable: REMOVABLE_BUILTIN_PROVIDERS.includes(name),
     enabled: normalized.provider === name && normalized.enabled !== false,
     configured: providerCompleteness(name, normalized, keyStatus).percent === 100,
     completeness: providerCompleteness(name, normalized, keyStatus),
@@ -761,7 +814,8 @@ function getStatus(requestedEnvironment) {
   const activeProfile = normalizeProfile(profiles[activeEnvironment], activeEnvironment);
   const activeUpdates = profileToEnvUpdates(activeProfile);
   const keyStatus = getKeyStatus(envFileValues, runtimeValues);
-  const environmentStatuses = ENVIRONMENTS.map((env) => buildEnvironmentStatus(env, profiles[env], keyStatus));
+  const disabledProviders = parseDisabledProviders(value("AI_DISABLED_PROVIDERS"));
+  const environmentStatuses = ENVIRONMENTS.map((env) => buildEnvironmentStatus(env, profiles[env], keyStatus, disabledProviders));
   const activeEnvironmentStatus = environmentStatuses.find((item) => item.environment === activeEnvironment) || environmentStatuses[0];
 
   return Object.assign({}, keyStatus, {
@@ -773,6 +827,12 @@ function getStatus(requestedEnvironment) {
     runtimeVersion: value("AI_PROVIDER_RUNTIME_VERSION"),
     runtimeUpdatedAt: value("AI_PROVIDER_RUNTIME_UPDATED_AT"),
     globalRuntimeMode: computeGlobalRuntimeMode(profiles),
+    disabledProviders,
+    builtinProviders: BUILTIN_PROVIDERS.map((name) => ({
+      name,
+      removable: REMOVABLE_BUILTIN_PROVIDERS.includes(name),
+      installed: name === "mock" || !disabledProviders.includes(name),
+    })),
     environmentProfiles: profiles,
     environments: environmentStatuses,
     activeEnvironmentStatus,
@@ -809,6 +869,11 @@ function getStatus(requestedEnvironment) {
     cloudbaseOpenaiTextModel: activeProfile.cloudbaseOpenaiTextModel,
     cloudbaseOpenaiTimeoutMs: activeProfile.cloudbaseOpenaiTimeoutMs,
     cloudbaseOpenaiMaxTokens: activeProfile.cloudbaseOpenaiMaxTokens,
+    openrouterEnabled: activeProfile.openrouterEnabled,
+    openrouterBaseUrl: activeProfile.openrouterBaseUrl,
+    openrouterModels: activeProfile.openrouterModels,
+    openrouterTimeoutMs: activeProfile.openrouterTimeoutMs,
+    openrouterMaxTokens: activeProfile.openrouterMaxTokens,
     // 自定义 Provider：仅脱敏视图（id/label/协议/baseUrl/模型/key 尾号），永不回传明文密钥。
     customProviders: customProviderStore.publicView(value("AI_CUSTOM_PROVIDERS")),
     activeCustomId: activeProfile.activeCustomId || "",
@@ -837,6 +902,14 @@ function getProfilesForSave() {
 function saveConfig(payload = {}) {
   const current = getProfilesForSave();
   let environment = resolveSaveEnvironment(payload, current.status);
+  const requestedProvider = Object.prototype.hasOwnProperty.call(payload, "provider")
+    ? normalizeProvider(payload.provider)
+    : "";
+  if (requestedProvider && (current.status.disabledProviders || []).includes(requestedProvider)) {
+    const error = new Error("该内置 Provider 已从运行时移除，请先恢复后再启用。");
+    error.code = "BUILTIN_PROVIDER_REMOVED";
+    throw error;
+  }
   let profile = normalizeProfile(Object.assign(
     {},
     current.profiles[environment] || defaultProfile(environment),
@@ -845,6 +918,16 @@ function saveConfig(payload = {}) {
   ), environment);
   profile = applyPreset(profile, payload.preset, payload);
   environment = normalizeEnvironment(profile.environment || environment);
+  const disabledProviders = current.status.disabledProviders || [];
+  const removedReference = [profile.provider]
+    .concat(STAGE_PROVIDER_FIELDS.map((field) => profile[field]))
+    .map((name) => normalizeChainName(name))
+    .find((name) => name && disabledProviders.includes(name));
+  if (removedReference) {
+    const error = new Error("配置仍引用已移除的内置 Provider，请先恢复或选择其他 Provider。");
+    error.code = "BUILTIN_PROVIDER_REMOVED";
+    throw error;
+  }
   if (Object.prototype.hasOwnProperty.call(payload, "provider")) {
     const previousChain = (current.profiles[environment] || {}).providerChain;
     profile.providerChain = recomputeChainForPrimary(profile.provider, previousChain);
@@ -996,6 +1079,70 @@ async function fetchCustomProviderModels(payload = {}) {
 }
 
 /**
+ * 运行时移除/恢复内置外部 Provider。
+ * 移除仅撤销注册和各环境链路引用，保留加密凭据，便于审计后恢复；mock 不可移除。
+ */
+function setBuiltinProviderInstalled(payload = {}, installed) {
+  const provider = normalizeProvider(payload.provider);
+  if (!REMOVABLE_BUILTIN_PROVIDERS.includes(provider)) {
+    const error = new Error("只能移除或恢复受支持的内置外部 Provider，mock 安全锚点不可移除。");
+    error.code = "BUILTIN_PROVIDER_INVALID";
+    throw error;
+  }
+  const status = getStatus();
+  const disabled = new Set(status.disabledProviders || []);
+  if (installed) disabled.delete(provider);
+  else disabled.add(provider);
+
+  const profiles = Object.assign({}, status.environmentProfiles || {});
+  if (!installed) {
+    ["trial", "dev"].forEach((environment) => {
+      const profile = normalizeProfile(profiles[environment] || defaultProfile(environment), environment);
+      const remaining = parseChainNames(profile.providerChain)
+        .filter((name) => name !== provider && !disabled.has(name));
+      if (!remaining.includes("mock")) remaining.push("mock");
+      if (profile.provider === provider) {
+        profile.provider = remaining.find((name) => name !== "mock") || "mock";
+        profile.enabled = profile.provider !== "mock";
+      }
+      profile.providerChain = [profile.provider]
+        .concat(remaining.filter((name) => name !== profile.provider))
+        .join(",");
+      STAGE_PROVIDER_FIELDS.forEach((field) => {
+        if (profile[field] === provider) profile[field] = "";
+      });
+      if (profile.shadowProvider === provider) {
+        profile.shadowProvider = "";
+        profile.shadowEnabled = false;
+      }
+      if (provider === "coze") profile.cozeEnabled = false;
+      if (provider === "cloudbase-openai") profile.cloudbaseOpenaiEnabled = false;
+      if (provider === "openrouter") profile.openrouterEnabled = false;
+      profiles[environment] = normalizeProfile(profile, environment);
+    });
+  }
+  profiles.public = normalizeProfile(profiles.public || defaultProfile("public"), "public");
+  const activeEnvironment = normalizeEnvironment(status.activeEnvironment || "public");
+  const activeProfile = normalizeProfile(profiles[activeEnvironment] || defaultProfile(activeEnvironment), activeEnvironment);
+  const updates = Object.assign({}, profileToEnvUpdates(activeProfile), {
+    AI_DISABLED_PROVIDERS: Array.from(disabled).sort().join(","),
+    AI_PROVIDER_ACTIVE_ENV: activeEnvironment,
+    AI_PROVIDER_ENVIRONMENTS: serializeEnvironmentProfiles(profiles),
+    AI_RUNTIME_MODE: computeGlobalRuntimeMode(profiles),
+  });
+  writeCustomProviderUpdates(updates);
+  return getStatus(activeEnvironment);
+}
+
+function removeBuiltinProvider(payload = {}) {
+  return setBuiltinProviderInstalled(payload, false);
+}
+
+function restoreBuiltinProvider(payload = {}) {
+  return setBuiltinProviderInstalled(payload, true);
+}
+
+/**
  * 权威 Provider 配置五元组：后台选哪个 Provider，实际第一跳就用哪个。
  * - primaryProvider = profile.provider（单选）
  * - fallbackProviders = 链中除 primary 外的有序余项
@@ -1022,9 +1169,17 @@ function getAuthoritativeProviderConfig(environment) {
       configVersion,
     };
   }
-  const primaryProvider = normalizeProvider(profile.provider);
-  const fallbackProviders = parseChainNames(profile.providerChain).filter((name) => name !== primaryProvider);
-  const resolveStage = (value) => normalizeChainName(value) || primaryProvider;
+  const disabled = new Set(status.disabledProviders || []);
+  const configuredPrimary = normalizeProvider(profile.provider);
+  const remainingChain = parseChainNames(profile.providerChain).filter((name) => !disabled.has(name));
+  const primaryProvider = disabled.has(configuredPrimary)
+    ? (remainingChain.find((name) => name !== "mock") || "mock")
+    : configuredPrimary;
+  const fallbackProviders = remainingChain.filter((name) => name !== primaryProvider);
+  const resolveStage = (value) => {
+    const provider = normalizeChainName(value);
+    return provider && !disabled.has(provider) ? provider : primaryProvider;
+  };
   return {
     environment: env,
     primaryProvider,
@@ -1041,6 +1196,7 @@ function getAuthoritativeProviderConfig(environment) {
 
 module.exports = {
   AI_ENV_KEYS,
+  BUILTIN_PROVIDERS,
   DEFAULTS,
   ENVIRONMENTS,
   ENV_PATH,
@@ -1052,11 +1208,14 @@ module.exports = {
   getRuntimeConfigForEnvironment,
   getStatus,
   normalizeEnvironment,
+  parseDisabledProviders,
   parseChainNames,
   parseEnv,
   recomputeChainForPrimary,
   resolveRuntimeProviderConfig,
   saveConfig,
   saveCustomProvider,
+  removeBuiltinProvider,
+  restoreBuiltinProvider,
   setEnvLines,
 };
