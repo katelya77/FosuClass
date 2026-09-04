@@ -13,25 +13,31 @@ async function generateStructured(options = {}) {
   }));
   const started = Date.now();
   try {
+    const requestBody = {
+      stream: false,
+      max_tokens: Math.max(128, Math.min(2000, Number(options.maxTokens || 800) || 800)),
+      temperature: 0,
+      messages,
+      response_format: { type: "json_object" },
+    };
+    const models = Array.isArray(options.models) ? options.models.filter(Boolean).slice(0, 8) : [];
+    if (models.length) requestBody.models = models;
+    else requestBody.model = options.model;
+    if (options.providerRouting && typeof options.providerRouting === "object") {
+      requestBody.provider = options.providerRouting;
+    }
     const response = await axios.post(
       `${String(options.baseUrl).replace(/\/+$/, "")}/chat/completions`,
-      {
-        model: options.model,
-        stream: false,
-        max_tokens: Math.max(128, Math.min(2000, Number(options.maxTokens || 800) || 800)),
-        temperature: 0,
-        messages,
-        response_format: { type: "json_object" },
-      },
+      requestBody,
       {
         timeout: Math.max(50, Math.min(30000, Number(options.timeoutMs || 8000) || 8000)),
         signal: options.signal || undefined,
         httpAgent: options.httpAgent || undefined,
         httpsAgent: options.httpsAgent || undefined,
-        headers: {
+        headers: Object.assign({
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",
-        },
+        }, options.headers || {}),
       }
     );
     const content = response.data && response.data.choices && response.data.choices[0]
@@ -45,6 +51,7 @@ async function generateStructured(options = {}) {
       content: String(content),
       text: String(content),
       provider: options.provider,
+      resolvedModel: String(response.data && response.data.model || ""),
       latencyMs: Date.now() - started,
       usage: response.data && response.data.usage || null,
     };

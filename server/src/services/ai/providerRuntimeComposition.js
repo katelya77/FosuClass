@@ -6,6 +6,7 @@ const {
 const providerChainService = require("./providerChainService");
 
 const PROVIDER_IDS = Object.freeze([
+  "openrouter",
   "deepseek",
   "cloudbase-openai",
   "coze",
@@ -14,6 +15,7 @@ const PROVIDER_IDS = Object.freeze([
 ]);
 
 function providerBaseUrl(id, provider, runtimeConfig = {}) {
+  if (id === "openrouter") return runtimeConfig.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
   if (id === "deepseek") return runtimeConfig.AI_BASE_URL || "https://api.deepseek.com";
   if (id === "cloudbase-openai") {
     return runtimeConfig.CLOUDBASE_OPENAI_BASE_URL || "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase";

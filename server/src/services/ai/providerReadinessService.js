@@ -38,7 +38,11 @@ function evaluateEnvironment(environment = "public") {
   const provider = String(configValue(runtimeConfig, "AI_PROVIDER", "mock")).toLowerCase() || "mock";
   const policy = String(configValue(runtimeConfig, "AI_PROVIDER_POLICY", "auto")).toLowerCase() || "auto";
   const chain = providerChainService.getProviderChain(runtimeMode, runtimeConfig);
-  const model = String(configValue(runtimeConfig, "AI_MODEL", "")).trim();
+  const model = provider === "openrouter"
+    ? String(configValue(runtimeConfig, "OPENROUTER_MODELS", "")).split(",")[0].trim()
+    : provider === "cloudbase-openai"
+      ? String(configValue(runtimeConfig, "CLOUDBASE_OPENAI_TEXT_MODEL", "")).trim()
+      : String(configValue(runtimeConfig, "AI_MODEL", "")).trim();
   const thinkingEnabled = boolish(configValue(runtimeConfig, "AI_THINKING_ENABLED", "false"));
   const keyConfigured = provider === "mock"
     ? true
@@ -56,7 +60,7 @@ function evaluateEnvironment(environment = "public") {
     reasonCode = "PROVIDER_MOCK";
   } else if (!keyConfigured) {
     reasonCode = "PROVIDER_KEY_MISSING";
-  } else if (!model && provider === "deepseek") {
+  } else if (!model && (provider === "deepseek" || provider === "openrouter")) {
     reasonCode = "PROVIDER_MODEL_MISSING";
   } else if (provider === "coze" && cozeExpired) {
     reasonCode = "PROVIDER_EXPIRED";

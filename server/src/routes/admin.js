@@ -636,7 +636,8 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
   } catch (error) {
     safeLog("ai-provider-config-save-failed", { error: error.message, code: error.code || "" });
     const statusCode = error.code === "AI_CONFIG_ENCRYPTION_KEY_REQUIRED" ||
-      error.code === "AI_CONFIG_PLAINTEXT_SECRET_REQUIRES_MIGRATION"
+      error.code === "AI_CONFIG_PLAINTEXT_SECRET_REQUIRES_MIGRATION" ||
+      error.code === "BUILTIN_PROVIDER_REMOVED"
       ? 400
       : 500;
     return res.status(statusCode).json({

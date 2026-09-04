@@ -418,6 +418,149 @@ const AI_CAPABILITY_REGISTRY = Object.freeze([
   }
 ]);
 
+const SLASH_COMMANDS = Object.freeze([
+  {
+    "name": "today",
+    "capabilityId": "today",
+    "label": "今日课表",
+    "description": "查看今天的课程安排",
+    "usage": "/today",
+    "example": "/today",
+    "message": "今天有什么课",
+    "minArgs": 0
+  },
+  {
+    "name": "tomorrow",
+    "capabilityId": "tomorrow",
+    "label": "明日课表",
+    "description": "查看明天的课程安排",
+    "usage": "/tomorrow",
+    "example": "/tomorrow",
+    "message": "明天有什么课",
+    "minArgs": 0
+  },
+  {
+    "name": "week",
+    "capabilityId": "weekSchedule",
+    "label": "本周课表",
+    "description": "查看当前周完整课表",
+    "usage": "/week",
+    "example": "/week",
+    "message": "本周课表",
+    "minArgs": 0
+  },
+  {
+    "name": "next",
+    "capabilityId": "nextCourse",
+    "label": "下一节课",
+    "description": "查看下一节课与地点",
+    "usage": "/next",
+    "example": "/next",
+    "message": "下一节课在哪里",
+    "minArgs": 0
+  },
+  {
+    "name": "teacher",
+    "capabilityId": "teacherSchedule",
+    "label": "教师课表",
+    "description": "教师姓名必填，可继续带周次、星期、时段和校区",
+    "usage": "/teacher 教师姓名 [第8周] [周三] [下午] [江湾校区]",
+    "example": "/teacher 陈芳 第8周 周三 下午 江湾校区",
+    "messagePrefix": "查教师课表 ",
+    "minArgs": 1
+  },
+  {
+    "name": "class",
+    "capabilityId": "classSchedule",
+    "label": "班级课表",
+    "description": "完整班级名称必填，可继续带周次",
+    "usage": "/class 班级名称 [第8周]",
+    "example": "/class 23软件工程1班 第8周",
+    "messagePrefix": "查班级课表 ",
+    "minArgs": 1
+  },
+  {
+    "name": "room",
+    "capabilityId": "emptyRoomNow",
+    "label": "空教室",
+    "description": "至少填写地点和时间，可带连续节数",
+    "usage": "/room 校区或楼栋 时间 [时段] [连续节数]",
+    "example": "/room 江湾校区 C7 后天 下午 连续3节",
+    "messagePrefix": "找空教室 ",
+    "minArgs": 2
+  },
+  {
+    "name": "classroom",
+    "capabilityId": "classroomOccupancy",
+    "label": "教室占用",
+    "description": "教室名和时间必填",
+    "usage": "/classroom 教室名称 时间",
+    "example": "/classroom C7-301 明天",
+    "messagePrefix": "查教室占用 ",
+    "minArgs": 2
+  },
+  {
+    "name": "course",
+    "capabilityId": "courseSchedule",
+    "label": "课程安排",
+    "description": "课程名称必填，可继续带周次",
+    "usage": "/course 课程名称 [第8周]",
+    "example": "/course 高等数学 第8周",
+    "messagePrefix": "查课程安排 ",
+    "minArgs": 1
+  },
+  {
+    "name": "weather",
+    "capabilityId": "campusWeather",
+    "label": "校区天气",
+    "description": "填写校区和日期",
+    "usage": "/weather 校区 日期",
+    "example": "/weather 仙溪校区 今天",
+    "messagePrefix": "查校区天气 ",
+    "minArgs": 2
+  },
+  {
+    "name": "teaching-week",
+    "capabilityId": "teachingWeek",
+    "label": "教学周",
+    "description": "查看当前教学周",
+    "usage": "/teaching-week",
+    "example": "/teaching-week",
+    "message": "当前是第几教学周",
+    "minArgs": 0
+  },
+  {
+    "name": "status",
+    "capabilityId": "dataStatus",
+    "label": "数据状态",
+    "description": "核对课表版本与更新时间",
+    "usage": "/status",
+    "example": "/status",
+    "message": "课表数据是否最新",
+    "minArgs": 0
+  },
+  {
+    "name": "sync",
+    "capabilityId": "personalSync",
+    "label": "导入课表",
+    "description": "打开个人课表导入指引",
+    "usage": "/sync",
+    "example": "/sync",
+    "message": "如何导入个人课表",
+    "minArgs": 0
+  },
+  {
+    "name": "help",
+    "capabilityId": "appHelp",
+    "label": "命令帮助",
+    "description": "查看校园查询能力和准确问法",
+    "usage": "/help",
+    "example": "/help",
+    "message": "如何使用校园查询",
+    "minArgs": 0
+  }
+]);
+
 const AI_CAPABILITY_BY_ID = AI_CAPABILITY_REGISTRY.reduce((map, item) => {
   map[item.id] = item;
   return map;
@@ -451,5 +594,6 @@ module.exports = {
   AI_CAPABILITY_REGISTRY,
   CAPABILITY_KINDS,
   QUICK_ACTIONS,
+  SLASH_COMMANDS,
   buildQuickAction,
 };

@@ -8,6 +8,7 @@
     "xiaofu-conversation-sheet": "/packageXiaofu/components/xiaofu-conversation-sheet/index",
     "xiaofu-settings-sheet": "/packageXiaofu/components/xiaofu-settings-sheet/index",
     "xiaofu-diagnostics-sheet": "/packageXiaofu/components/xiaofu-diagnostics-sheet/index",
+    "xiaofu-command-palette": "/packageXiaofu/components/xiaofu-command-palette/index",
     "xiaofu-result-card": "/packageXiaofu/components/xiaofu-result-card/index",
     "safe-markdown": "/packageXiaofu/components/safe-markdown/index"
   }

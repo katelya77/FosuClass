@@ -320,6 +320,7 @@ function renderMiniprogramRegistry() {
   const mini = manifest.miniprogram || {};
   const kinds = mini.capabilityKinds || {};
   const capabilities = Array.isArray(mini.capabilities) ? mini.capabilities : [];
+  const slashCommands = Array.isArray(mini.slashCommands) ? mini.slashCommands : [];
   const quick = Array.isArray(mini.quickActions) ? mini.quickActions : [];
   const quickLines = quick.map((item) => {
     const args = item.quickId && item.quickId !== item.id
@@ -333,6 +334,8 @@ function renderMiniprogramRegistry() {
     `const CAPABILITY_KINDS = Object.freeze(${JSON.stringify(kinds, null, 2)});`,
     "",
     `const AI_CAPABILITY_REGISTRY = Object.freeze(${JSON.stringify(capabilities, null, 2)});`,
+    "",
+    `const SLASH_COMMANDS = Object.freeze(${JSON.stringify(slashCommands, null, 2)});`,
     "",
     "const AI_CAPABILITY_BY_ID = AI_CAPABILITY_REGISTRY.reduce((map, item) => {",
     "  map[item.id] = item;",
@@ -363,6 +366,7 @@ function renderMiniprogramRegistry() {
     "  AI_CAPABILITY_REGISTRY,",
     "  CAPABILITY_KINDS,",
     "  QUICK_ACTIONS,",
+    "  SLASH_COMMANDS,",
     "  buildQuickAction,",
     "};",
     "",

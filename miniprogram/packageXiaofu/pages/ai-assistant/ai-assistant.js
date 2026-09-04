@@ -23,6 +23,7 @@ const xiaofuConversationViewModel = require("../../services/xiaofuConversationVi
 const { createActionBus } = require("../../services/xiaofuActionBus");
 const uiBlockAdapter = require("../../services/uiBlockAdapter");
 const assistantBrand = require("../../../config/assistantBrand");
+const xiaofuSlashCommand = require("../../../services/xiaofuSlashCommand");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const AUTO_MEMORY_ENABLED_KEY = "xiaofu_auto_memory_enabled";
@@ -1563,6 +1564,9 @@ Page({
     activeConversationContext: contextManager.createEmptyContextSlots(),
     expandedCards: {},
     inputValue: "",
+    slashCommandVisible: false,
+    slashCommandItems: [],
+    slashCommandHint: "",
     inputFocus: false,
     sending: false,
     sendingStatusText: "处理中",
@@ -1595,6 +1599,7 @@ Page({
     inAppReminderAcknowledging: false,
     proactiveInsight: null,
     contextualActions: [],
+    runtimeMode: "public",
     runtimeModeLabel: "校园助手",
     conversationSubtitle: "新对话",
     memoryMode: "local_only",
@@ -2288,7 +2293,14 @@ Page({
   },
 
   onInput(event) {
-    this.setData({ inputValue: event.detail.value });
+    const inputValue = event.detail.value;
+    const isSlashInput = String(inputValue || "").trim().startsWith("/");
+    this.setData({
+      inputValue,
+      slashCommandVisible: isSlashInput,
+      slashCommandItems: isSlashInput ? xiaofuSlashCommand.filterCommands(inputValue) : [],
+      slashCommandHint: "",
+    });
     // Textarea auto-height changes composer size → remeasure single inset
     if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
     this._composerInsetSyncTimer = setTimeout(() => {
@@ -2308,6 +2320,19 @@ Page({
     if (this._isComposing) return;
     const value = event && event.detail && event.detail.value;
     this.sendMessage(value == null ? this.data.inputValue : value, { source: "confirm" });
+  },
+
+  onSlashCommandTap(event) {
+    const command = event && event.detail && event.detail.command;
+    if (!command) return;
+    this.setData({
+      inputValue: command.example || command.usage || command.command,
+      inputFocus: true,
+      slashCommandVisible: true,
+      slashCommandItems: xiaofuSlashCommand.filterCommands(command.command),
+      slashCommandHint: Number(command.minArgs || 0) > 0 ? "示例已填入，可直接修改姓名、班级、地点或时间。" : "这是无参数命令，可直接发送。",
+    });
+    this.syncComposerInset();
   },
 
   onInsertNewline() {
@@ -2850,7 +2875,23 @@ Page({
   sendMessage(rawText, options) {
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
-    if (!this.data.demoMode && isNewConversationCommand(message)) {
+    const commandResult = xiaofuSlashCommand.resolveCommand(message);
+    if (commandResult.isCommand && !commandResult.valid) {
+      this.setData({
+        inputValue: message,
+        inputFocus: true,
+        slashCommandVisible: true,
+        slashCommandItems: commandResult.command
+          ? xiaofuSlashCommand.filterCommands(`/${commandResult.command.name}`)
+          : xiaofuSlashCommand.filterCommands("/"),
+        slashCommandHint: commandResult.error,
+      });
+      this.syncComposerInset();
+      return;
+    }
+    const requestMessage = commandResult.message || message;
+    const displayMessage = commandResult.isCommand ? message : requestMessage;
+    if (!this.data.demoMode && isNewConversationCommand(requestMessage)) {
       this.createNewConversation();
       return;
     }
@@ -2871,7 +2912,7 @@ Page({
       if (retryMessage && retryMessage.role === "assistant") {
         const previous = baseMessages[retryIndex - 1];
         baseMessages.splice(retryIndex, 1);
-        appendUserMessage = !(previous && previous.role === "user" && previous.content === message);
+        appendUserMessage = !(previous && previous.role === "user" && previous.content === displayMessage);
       }
     } else {
       const lastIndex = baseMessages.length - 1;
@@ -2885,19 +2926,22 @@ Page({
         lastCard.variant === "error" &&
         previous &&
         previous.role === "user" &&
-        previous.content === message
+        previous.content === displayMessage
       ) {
         baseMessages.pop();
         appendUserMessage = false;
       }
     }
 
-    const userMessage = appendUserMessage ? makeMessage("user", message) : null;
+    const userMessage = appendUserMessage ? makeMessage("user", displayMessage) : null;
     const nextMessages = appendUserMessage ? baseMessages.concat(userMessage) : baseMessages;
     this._cancelCurrentRun = false;
     this.setMessages(nextMessages, Object.assign({
       inputValue: "",
       inputFocus: false,
+      slashCommandVisible: false,
+      slashCommandItems: [],
+      slashCommandHint: "",
       sending: true,
       slowRequest: false,
       liveRunVisible: true,
@@ -2909,7 +2953,7 @@ Page({
 
     if (this.data.demoMode) {
       setTimeout(() => {
-        const response = demoData.getDemoResponse(this.data.demoMode, message);
+        const response = demoData.getDemoResponse(this.data.demoMode, requestMessage);
         const assistantMessage = makeMessage("assistant", response.answer || "已整理演示结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
@@ -3030,7 +3074,7 @@ Page({
       memoryMode: this.data.memoryMode,
     });
 
-    aiAssistantService.chat(message, clientContext, { callbacks })
+    aiAssistantService.chat(requestMessage, clientContext, { callbacks })
       .then((response) => {
         if (!isRequestActive()) return;
         flushStream(true);
@@ -3065,7 +3109,7 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
-        const built = buildAssistantMessageFromResponse(response, { userQuery: message });
+        const built = buildAssistantMessageFromResponse(response, { userQuery: requestMessage });
         const resolvedIntentName = built.resolvedIntentName;
         const waitingConfirmation = built.waitingConfirmation;
         const assistantMessage = built.assistantMessage;
@@ -3119,7 +3163,7 @@ Page({
       .catch((error) => {
         if (!isRequestActive()) return;
         flushStream(true);
-        const isReminderQuery = /提醒|通知|默认提醒/.test(String(message || ""));
+        const isReminderQuery = /提醒|通知|默认提醒/.test(String(requestMessage || ""));
         const assistantMessage = makeMessage("assistant", "", {
           cards: [{
             type: "generic",
@@ -3133,11 +3177,11 @@ Page({
             actions: isReminderQuery
               ? [
                 { label: "配置课程提醒", type: "manageReminders", url: "", payload: { sheet: "reminders", openCreate: true } },
-                { label: "重试", type: "retry", url: "", payload: { message } },
+                { label: "重试", type: "retry", url: "", payload: { message: displayMessage } },
                 { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
               ]
               : [
-                { label: "重试", type: "retry", url: "", payload: { message } },
+                { label: "重试", type: "retry", url: "", payload: { message: displayMessage } },
                 { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
                 { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
               ],

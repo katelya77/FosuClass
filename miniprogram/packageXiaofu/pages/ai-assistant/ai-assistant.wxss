@@ -2025,6 +2025,22 @@ button.proactive-insight {
   box-shadow: none;
 }
 
+.inline-command {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34rpx;
+  height: 34rpx;
+  margin: 0 4rpx;
+  border: 1rpx solid rgba(152, 48, 45, 0.28);
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--xf-primary-strong);
+  font-family: "DIN Alternate", "SFMono-Regular", monospace;
+  font-weight: 800;
+  line-height: 34rpx;
+}
+
 .composer-pill {
   display: flex;
   align-items: center;
@@ -2034,10 +2050,13 @@ button.proactive-insight {
   min-height: 90rpx;
   max-height: 280rpx;
   padding: var(--xf-space-2) var(--xf-space-3);
-  border: 1rpx solid var(--xf-border-strong);
+  border: 1rpx solid rgba(91, 74, 64, 0.22);
+  border-top-color: rgba(255, 255, 255, 0.96);
   border-radius: var(--xf-radius-xl);
-  background: var(--xf-bg-elevated);
-  box-shadow: 0 8rpx 28rpx var(--xf-border);
+  background: rgba(255, 253, 249, 0.9);
+  box-shadow: 0 14rpx 42rpx rgba(77, 57, 46, 0.13), inset 0 1rpx 0 rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(24rpx) saturate(140%);
+  backdrop-filter: blur(24rpx) saturate(140%);
 }
 
 .composer-icon-btn {
@@ -2536,6 +2555,19 @@ button.proactive-insight {
   .contextual-action {
     border-color: var(--xf-border-strong);
     background: var(--xf-surface-soft);
+  }
+
+  .composer-pill {
+    border-color: rgba(255, 255, 255, 0.14);
+    border-top-color: rgba(255, 255, 255, 0.24);
+    background: rgba(36, 33, 30, 0.9);
+    box-shadow: 0 16rpx 46rpx rgba(0, 0, 0, 0.32), inset 0 1rpx 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .inline-command {
+    border-color: rgba(224, 91, 85, 0.28);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ef7771;
   }
 }
 

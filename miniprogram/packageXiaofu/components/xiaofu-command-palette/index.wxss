@@ -1,0 +1,207 @@
+:host {
+  box-sizing: border-box;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 6rpx);
+  z-index: 45;
+  display: block;
+}
+
+button {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+button::after {
+  border: 0;
+}
+
+.command-panel {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 22rpx 18rpx 14rpx;
+  border: 1rpx solid rgba(91, 74, 64, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.92);
+  border-radius: 30rpx 30rpx 20rpx 20rpx;
+  background: rgba(250, 247, 241, 0.94);
+  box-shadow: 0 24rpx 72rpx rgba(61, 44, 35, 0.18), inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(28rpx) saturate(150%);
+  backdrop-filter: blur(28rpx) saturate(150%);
+}
+
+.command-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 0 8rpx 16rpx;
+  border-bottom: 1rpx solid rgba(74, 61, 53, 0.1);
+}
+
+.command-kicker {
+  color: #98302d;
+  font-family: "DIN Alternate", "SF Pro Text", sans-serif;
+  font-size: 18rpx;
+  font-weight: 800;
+  letter-spacing: 3rpx;
+}
+
+.command-title {
+  margin-top: 4rpx;
+  color: #1d1b19;
+  font-family: "STSong", "Songti SC", serif;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.command-mode {
+  flex: 0 0 auto;
+  padding: 7rpx 10rpx;
+  border: 1rpx solid rgba(45, 104, 86, 0.18);
+  border-radius: 8rpx;
+  background: rgba(45, 104, 86, 0.08);
+  color: #2d6856;
+  font-size: 18rpx;
+  font-weight: 700;
+}
+
+.command-list {
+  max-height: 540rpx;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 112rpx;
+  gap: 16rpx;
+  padding: 16rpx 8rpx;
+  border-bottom: 1rpx solid rgba(74, 61, 53, 0.08);
+}
+
+.command-item:last-child {
+  border-bottom: 0;
+}
+
+.command-item:active {
+  background: rgba(174, 153, 136, 0.1);
+}
+
+.command-mark {
+  display: flex;
+  flex: 0 0 58rpx;
+  align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  border: 1rpx solid rgba(152, 48, 45, 0.2);
+  border-radius: 14rpx;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(244, 232, 226, 0.86));
+  color: #98302d;
+  font-family: "DIN Alternate", "SFMono-Regular", monospace;
+  font-size: 32rpx;
+  font-weight: 800;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.9), 0 5rpx 14rpx rgba(92, 61, 48, 0.08);
+}
+
+.command-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.command-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.command-name {
+  color: #1d1b19;
+  font-family: "DIN Alternate", "SFMono-Regular", monospace;
+  font-size: 25rpx;
+  font-weight: 800;
+}
+
+.command-label {
+  color: #5f5750;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.command-desc,
+.command-example {
+  overflow: hidden;
+  margin-top: 5rpx;
+  color: #8b8279;
+  font-size: 20rpx;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-example {
+  color: #6f5c50;
+  font-family: "DIN Alternate", "PingFang SC", sans-serif;
+}
+
+.command-chevron {
+  flex: 0 0 auto;
+  color: rgba(78, 64, 56, 0.42);
+  font-size: 36rpx;
+  font-weight: 300;
+}
+
+.command-empty,
+.command-hint {
+  padding: 20rpx 8rpx 10rpx;
+  color: #8b8279;
+  font-size: 21rpx;
+  line-height: 1.45;
+}
+
+.command-hint {
+  margin-top: 8rpx;
+  padding: 12rpx 14rpx;
+  border-left: 4rpx solid #b43a37;
+  background: rgba(152, 48, 45, 0.07);
+  color: #5f5750;
+}
+
+@media (prefers-color-scheme: dark) {
+  .command-panel {
+    border-color: rgba(255, 255, 255, 0.13);
+    border-top-color: rgba(255, 255, 255, 0.22);
+    background: rgba(36, 33, 30, 0.94);
+    box-shadow: 0 26rpx 76rpx rgba(0, 0, 0, 0.42), inset 0 1rpx 0 rgba(255, 255, 255, 0.08);
+  }
+  .command-head,
+  .command-item { border-color: rgba(255, 255, 255, 0.08); }
+  .command-title,
+  .command-name,
+  .command-label { color: #f4f0ea; }
+  .command-desc,
+  .command-empty { color: #a69d94; }
+  .command-example { color: #c8b9ae; }
+  .command-mark {
+    border-color: rgba(224, 91, 85, 0.26);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(224, 91, 85, 0.1));
+    color: #ef7771;
+    box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.12), 0 6rpx 16rpx rgba(0, 0, 0, 0.2);
+  }
+  .command-mode {
+    border-color: rgba(104, 169, 130, 0.24);
+    background: rgba(104, 169, 130, 0.12);
+    color: #86c49e;
+  }
+  .command-hint {
+    border-left-color: #e05b55;
+    background: rgba(224, 91, 85, 0.1);
+    color: #cfc5bc;
+  }
+}

@@ -153,7 +153,9 @@ function inferSections(message, clientTime) {
   // A bare “3节” after 连续/连着 is a duration, not 第3节.
   const single = text.match(/第\s*(\d{1,2})\s*节/);
   if (single) return single[1];
-  const minFreeSections = text.includes("连续") ? parseChineseNumber(text, 2) : 1;
+  const minFreeSections = text.includes("连续")
+    ? (followUpResolver.parseContinuousSections(text) || parseChineseNumber(text, 2))
+    : 1;
   if (/现在|当前|马上/.test(text)) {
     const start = getCurrentSection(currentDate);
     const end = Math.min(MAX_SECTION, start + Math.max(1, minFreeSections) - 1);
@@ -262,9 +264,10 @@ function buildTemporalSlots(message, context = {}, options = {}) {
 }
 
 function buildEmptyRoomSlots(message, context = {}, continuous = false) {
+  const parsedContinuous = followUpResolver.parseContinuousSections(message);
   const minFreeSections = continuous
-    ? (followUpResolver.parseContinuousSections(message) || parseChineseDuration(message, 2))
-    : (/\u8fde\u7eed|连着|连堂/.test(message) ? parseChineseDuration(message, 2) : 1);
+    ? (parsedContinuous || parseChineseDuration(message, 2))
+    : (/\u8fde\u7eed|连着|连堂/.test(message) ? (parsedContinuous || parseChineseDuration(message, 2)) : 1);
   return Object.assign(buildTemporalSlots(message, context, { includeDefaultDate: true }), {
     building: extractBuilding(message),
     minFreeSections,

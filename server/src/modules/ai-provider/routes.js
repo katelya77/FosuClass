@@ -190,7 +190,7 @@ router.post("/ai-provider/diagnose-enhanced", adminAuth.verifyAdminAccess, async
       suggestions.push("打开 AI_AGENT_ENABLED=true（仅 trial/dev Profile）。");
     }
     if (envSnapshot.reasonCode === "PROVIDER_MOCK") {
-      suggestions.push("将 AI_PROVIDER 设为 deepseek/coze/cloudbase-openai，并配置 Key。");
+      suggestions.push("将 AI_PROVIDER 设为 openrouter/deepseek/coze/cloudbase-openai，并配置对应 Key。");
     }
     if (envSnapshot.reasonCode === "PROVIDER_KEY_MISSING") {
       suggestions.push("补全 Provider API Key，并确认加密配置可读。");
@@ -249,6 +249,31 @@ router.post("/ai-provider/custom-provider/delete", verifyAdminWriteAccess, (req,
   } catch (error) {
     safeLog("ai-provider-custom-delete-failed", { error: error.message, code: error.code || "" });
     return res.status(500).json({ success: false, code: error.code || "CUSTOM_PROVIDER_DELETE_FAILED", message: "自定义 Provider 删除失败。" });
+  }
+});
+
+// 内置外部 Provider 的运行时移除/恢复：保留加密凭据，撤销链路注册；mock 永不可移除。
+router.post("/ai-provider/builtin-provider/remove", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const status = providerConfigService.removeBuiltinProvider(req.body || {});
+    writeAuditLog(req, "remove", "ai-provider-builtin", String((req.body && req.body.provider) || ""), "Built-in AI provider removed from runtime registry");
+    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
+  } catch (error) {
+    safeLog("ai-provider-builtin-remove-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "BUILTIN_PROVIDER_INVALID" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "BUILTIN_PROVIDER_REMOVE_FAILED", message: "内置 Provider 移除失败。" });
+  }
+});
+
+router.post("/ai-provider/builtin-provider/restore", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const status = providerConfigService.restoreBuiltinProvider(req.body || {});
+    writeAuditLog(req, "restore", "ai-provider-builtin", String((req.body && req.body.provider) || ""), "Built-in AI provider restored to runtime registry");
+    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
+  } catch (error) {
+    safeLog("ai-provider-builtin-restore-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "BUILTIN_PROVIDER_INVALID" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "BUILTIN_PROVIDER_RESTORE_FAILED", message: "内置 Provider 恢复失败。" });
   }
 });
 

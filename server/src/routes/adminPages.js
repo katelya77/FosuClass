@@ -944,6 +944,7 @@ const adminConsoleHtml = `<!doctype html>
       border-color: var(--primary);
       background: var(--primary-soft);
     }
+    .apc-pick-card.is-removed { cursor: default; opacity: 0.68; border-style: dashed; } .apc-pick-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .apc-pick-title {
       display: flex;
       align-items: center;
@@ -14074,6 +14075,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
       };
       var AI_PROVIDER_LABELS = {
         mock: "mock 本地规则",
+        openrouter: "OpenRouter 免费模型路由",
         "cloudbase-openai": "混元 cloudbase-openai",
         deepseek: "deepseek",
         coze: "coze",
@@ -14082,19 +14084,11 @@ ${DAILY_KNOWLEDGE_SCRIPT}
       };
 
       function findAiEnvironment(env) {
-        var cfg = state.aiProviderConfig || {};
-        var list = Array.isArray(cfg.environments) ? cfg.environments : [];
+        var list = Array.isArray((state.aiProviderConfig || {}).environments) ? state.aiProviderConfig.environments : [];
         return list.find(function(item) { return item.environment === env; }) || list[0] || null;
       }
-
-      function activeAiProfile() {
-        var env = findAiEnvironment(state.aiProviderEnvironment || "public");
-        return env && env.profile || {};
-      }
-
-      function aiConfigInput(id, label, valueText, placeholder, type) {
-        return "<div><label>" + label + "</label><input id='" + id + "' type='" + (type || "text") + "' autocomplete='off' value='" + escapeHtml(valueText || "") + "' placeholder='" + escapeHtml(placeholder || "") + "'></div>";
-      }
+      function activeAiProfile() { var env = findAiEnvironment(state.aiProviderEnvironment || "public"); return env && env.profile || {}; }
+      function aiConfigInput(id, label, valueText, placeholder, type) { return "<div><label>" + label + "</label><input id='" + id + "' type='" + (type || "text") + "' autocomplete='off' value='" + escapeHtml(valueText || "") + "' placeholder='" + escapeHtml(placeholder || "") + "'></div>"; }
 
       function renderProviderConfigFields(providerName, profile) {
         if (providerName === "mock") {
@@ -14116,6 +14110,9 @@ ${DAILY_KNOWLEDGE_SCRIPT}
             "<div class='ai-secret-note'>" + escapeHtml(selectedEntry.baseUrl) + " · 模型 <code>" + escapeHtml(selectedEntry.model || "-") + "</code> · 密钥 " + (selectedEntry.apiKeyConfigured ? "****" + escapeHtml(selectedEntry.apiKeyLast4 || "") : "未配置") + "</div>" +
             "<div class='ai-secret-note'>在下方「自定义 Provider」中可编辑条目、拉取模型列表或切换其他条目。阶段模型（上方理解/规划模型）留空时使用该条目模型。</div>" +
           "</div>";
+        }
+        if (providerName === "openrouter") {
+          return "<div class='form-row'>" + aiConfigInput("openrouterBaseUrl", "Base URL", profile.openrouterBaseUrl || "https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1") + aiConfigInput("openrouterTimeoutMs", "timeout / ms", profile.openrouterTimeoutMs || "12000", "12000") + "</div><div class='form-row full'>" + aiConfigInput("openrouterModels", "免费模型故障切换顺序", profile.openrouterModels || "", "model-a:free,model-b:free,openrouter/free") + "</div><div class='form-row'>" + aiConfigInput("openrouterMaxTokens", "max tokens", profile.openrouterMaxTokens || "800", "800") + aiConfigInput("openrouterApiKey", "API Key", "", "留空表示保留原密钥", "password") + "</div><div class='ai-secret-note'>服务端按列表顺序请求，OpenRouter 会在限流、停机或不可用时自动切换；最后一项 openrouter/free 由平台动态挑选免费模型。结构化阶段强制要求参数兼容，并拒绝数据收集端点。</div>";
         }
         if (providerName === "cloudbase-openai") {
           return "<div class='form-row'>" +
@@ -14197,9 +14194,9 @@ ${DAILY_KNOWLEDGE_SCRIPT}
         return cfg.activeEnvironment === "dev" ? "dev" : "trial";
       }
 
-      function isExperienceProvider(name) {
-        return ["cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].indexOf(String(name || "").toLowerCase()) >= 0;
-      }
+      function isExperienceProvider(name) { return ["openrouter", "cloudbase-openai", "deepseek", "coze", "custom-openai", "custom-anthropic"].indexOf(String(name || "").toLowerCase()) >= 0; }
+      function isRuntimeProviderInstalled(name) { if (name === "custom-openai" || name === "custom-anthropic") return true; var list = Array.isArray((state.aiProviderConfig || {}).builtinProviders) ? state.aiProviderConfig.builtinProviders : [], item = list.find(function(entry) { return entry.name === name; }); return !item || item.installed !== false; }
+      function firstInstalledExperienceProvider() { return ["openrouter", "cloudbase-openai", "deepseek", "coze"].find(isRuntimeProviderInstalled) || "custom-openai"; }
 
       function aiModeMetric(label, valueText, foot) {
         return "<div class='provider-metric'><span>" + escapeHtml(label) + "</span><strong>" + valueText + "</strong>" + (foot ? "<small>" + escapeHtml(foot) + "</small>" : "") + "</div>";
@@ -14207,6 +14204,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
 
       var AI_STAGE_PROVIDER_OPTIONS = [
         ["", "跟随主 Provider"],
+        ["openrouter", "OpenRouter 免费模型路由"],
         ["coze", "coze"],
         ["deepseek", "deepseek"],
         ["cloudbase-openai", "混元 cloudbase-openai"],
@@ -14215,21 +14213,11 @@ ${DAILY_KNOWLEDGE_SCRIPT}
         ["mock", "mock 本地规则（强制本阶段 deterministic）"]
       ];
 
-      function renderStageAssignSelect(id, label, current) {
-        var value = String(current || "");
-        return "<div><label>" + escapeHtml(label) + "</label><select id='" + id + "' data-apc-stage='" + id + "'>" +
-          AI_STAGE_PROVIDER_OPTIONS.map(function(pair) {
-            return "<option value='" + pair[0] + "'" + (value === pair[0] ? " selected" : "") + ">" + escapeHtml(pair[1]) + "</option>";
-          }).join("") + "</select></div>";
-      }
+      function renderStageAssignSelect(id, label, current) { var value = String(current || ""), options = AI_STAGE_PROVIDER_OPTIONS.map(function(pair) { return "<option value='" + pair[0] + "'" + (value === pair[0] ? " selected" : "") + ">" + escapeHtml(pair[1]) + "</option>"; }).join(""); return "<div><label>" + escapeHtml(label) + "</label><select id='" + id + "' data-apc-stage='" + id + "'>" + options + "</select></div>"; }
 
       // 简化模型：阶段默认全部「跟随主 Provider」（draft 为空即全部跟随）。
       // 只有用户在高级设置里手动改过某个阶段时才使用 draft；点主 Provider 卡片会重置 draft。
-      function stageCurrentValue(field) {
-        var draft = state.aiProviderStageDraft;
-        if (draft && typeof draft[field] === "string") return draft[field];
-        return "";
-      }
+      function stageCurrentValue(field) { var draft = state.aiProviderStageDraft; return draft && typeof draft[field] === "string" ? draft[field] : ""; }
 
       function renderAiReadinessMatrix() {
         var box = $("aiReadinessMatrixBox");
@@ -14424,14 +14412,10 @@ ${DAILY_KNOWLEDGE_SCRIPT}
         var providers = Array.isArray(envStatus.providers) ? envStatus.providers : [];
         var statusByName = {};
         providers.forEach(function(item) { statusByName[item.name] = item; });
-        var builtin = ["coze", "deepseek", "cloudbase-openai"].map(function(name) {
-          var st = statusByName[name] || {};
-          var configured = st.configured || st.keyConfigured;
-          var active = selectedProvider === name ? " active" : "";
-          return "<div class='apc-pick-card" + active + "' data-apc-pick='" + escapeHtml(name) + "' role='button' tabindex='0'>" +
-            "<div class='apc-pick-title'><span class='apc-dot " + (configured ? "ok" : "off") + "'></span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</div>" +
-            "<div class='apc-pick-sub'>" + escapeHtml(name) + (configured ? " · 已配置" : " · 未配置") + "</div>" +
-          "</div>";
+        var builtin = ["openrouter", "cloudbase-openai", "deepseek", "coze"].map(function(name) {
+          var st = statusByName[name] || {}, configured = st.configured || st.keyConfigured, installed = st.installed !== false;
+          var active = selectedProvider === name ? " active" : "", pickAttrs = installed ? " data-apc-pick='" + escapeHtml(name) + "' role='button' tabindex='0'" : "";
+          return "<div class='apc-pick-card" + active + (installed ? "" : " is-removed") + "'" + pickAttrs + "><div class='apc-pick-title'><span class='apc-dot " + (configured && installed ? "ok" : "off") + "'></span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + (installed ? "" : " <span class='badge muted'>已移除</span>") + "</div><div class='apc-pick-sub'>" + escapeHtml(name) + (installed ? (configured ? " · 已配置" : " · 未配置") : " · 已退出所有运行链") + "</div><div class='apc-pick-actions'><button type='button' class='ghost apc-row-btn " + (installed ? "apc-danger" : "") + "' data-apc-" + (installed ? "remove" : "restore") + "='" + escapeHtml(name) + "'>" + (installed ? "移除" : "恢复") + "</button></div></div>";
         }).join("");
         var custom = apcCustomEntries().map(function(entry) {
           var canonical = entry.protocol === "anthropic" ? "custom-anthropic" : "custom-openai";
@@ -14443,6 +14427,16 @@ ${DAILY_KNOWLEDGE_SCRIPT}
         }).join("");
         return builtin + custom ||
           "<div class='ai-secret-note'>暂无可用 Provider。</div>";
+      }
+
+      function setBuiltinProviderInstalled(name, installed) {
+        var label = AI_PROVIDER_LABELS[name] || name; if (!installed && !window.confirm("确认从体验版/开发版运行链移除「" + label + "」？\\n加密凭据会保留，可随时恢复；正式版不受影响。")) return;
+        api("/api/admin/ai-provider/builtin-provider/" + (installed ? "restore" : "remove"), { method: "POST", body: JSON.stringify({ provider: name }) }).then(function(res) {
+          state.aiProviderConfig = res.data || {}; var envStatus = findAiEnvironment(aiExperienceEnvironment()) || {};
+          state.aiProviderSelectedProvider = isExperienceProvider(envStatus.provider) ? envStatus.provider : "openrouter";
+          state.aiProviderStageDraft = null; renderAiProviderConfig(); ignoreLoadError(loadAiReadinessMatrix()); ignoreLoadError(loadAiAgentStatus());
+          showToast(installed ? "Provider 已恢复，可重新配置或设为主 Provider。" : "Provider 已移除；凭据已保留且不再参与调用。", "success");
+        }).catch(function(error) { showToast(error.message, "error"); });
       }
 
       function renderCustomProviderManager() {
@@ -14628,8 +14622,8 @@ ${DAILY_KNOWLEDGE_SCRIPT}
         var kb = cfg.knowledgeIndex || {};
         var toolCount = cfg.toolCount || cfg.enabledToolCount || cfg.protocolToolCount || 0;
         var selectedProvider = state.aiProviderSelectedProvider;
-        if (!isExperienceProvider(selectedProvider)) selectedProvider = experienceProfile.provider;
-        if (!isExperienceProvider(selectedProvider)) selectedProvider = "coze";
+        if (!isExperienceProvider(selectedProvider) || !isRuntimeProviderInstalled(selectedProvider)) selectedProvider = experienceProfile.provider;
+        if (!isExperienceProvider(selectedProvider) || !isRuntimeProviderInstalled(selectedProvider)) selectedProvider = firstInstalledExperienceProvider();
         state.aiProviderSelectedProvider = selectedProvider;
         state.aiProviderEnvironment = experienceEnvName;
         if (!state.aiProviderSelectedCustomId) state.aiProviderSelectedCustomId = experienceProfile.activeCustomId || cfg.activeCustomId || "";
@@ -14727,6 +14721,8 @@ ${DAILY_KNOWLEDGE_SCRIPT}
             }
           });
         });
+        document.querySelectorAll("[data-apc-remove]").forEach(function(btn) { btn.addEventListener("click", function(event) { event.stopPropagation(); setBuiltinProviderInstalled(btn.dataset.apcRemove, false); }); });
+        document.querySelectorAll("[data-apc-restore]").forEach(function(btn) { btn.addEventListener("click", function(event) { event.stopPropagation(); setBuiltinProviderInstalled(btn.dataset.apcRestore, true); }); });
         document.querySelectorAll("[data-apc-stage]").forEach(function(select) {
           select.addEventListener("change", function() {
             state.aiProviderStageDraft = {
@@ -14784,7 +14780,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           if (value("aiExperienceEnabled") === "true") {
             state.aiProviderDraftExperienceEnabled = true;
             state.aiProviderEnvironment = aiExperienceEnvironment();
-            if (!state.aiProviderSelectedProvider || state.aiProviderSelectedProvider === "mock") state.aiProviderSelectedProvider = "coze";
+            if (!state.aiProviderSelectedProvider || state.aiProviderSelectedProvider === "mock") state.aiProviderSelectedProvider = "openrouter";
             renderAiProviderConfig();
           } else {
             state.aiProviderDraftExperienceEnabled = false;
@@ -14828,7 +14824,10 @@ ${DAILY_KNOWLEDGE_SCRIPT}
           var pickedEntry = apcSelectedEntry();
           payload.activeCustomId = pickedEntry ? pickedEntry.id : (state.aiProviderSelectedCustomId || "");
         }
-        if (provider === "deepseek") {
+        if (provider === "openrouter") {
+          Object.assign(payload, { openrouterEnabled: true, openrouterBaseUrl: value("openrouterBaseUrl") || "https://openrouter.ai/api/v1", openrouterModels: value("openrouterModels"), openrouterTimeoutMs: value("openrouterTimeoutMs") || "12000", openrouterMaxTokens: value("openrouterMaxTokens") || "800" });
+          if (value("openrouterApiKey")) payload.openrouterApiKey = value("openrouterApiKey");
+        } else if (provider === "deepseek") {
           Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
           if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
         } else if (provider === "cloudbase-openai") {

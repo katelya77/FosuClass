@@ -2,6 +2,7 @@ const mockProvider = require("./providers/mockProvider");
 const deepseekProvider = require("./providers/deepseekProvider");
 const cozeProvider = require("./providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("./providers/cloudbaseOpenaiProvider");
+const openrouterProvider = require("./providers/openrouterProvider");
 const customOpenaiProvider = require("./providers/customOpenaiProvider");
 const customAnthropicProvider = require("./providers/customAnthropicProvider");
 const customProviderStore = require("./customProviderStore");
@@ -10,6 +11,7 @@ const PROVIDERS = {
   mock: mockProvider,
   deepseek: deepseekProvider,
   coze: cozeProvider,
+  openrouter: openrouterProvider,
   "cloudbase-openai": cloudbaseOpenaiProvider,
   "custom-openai": customOpenaiProvider,
   "custom-anthropic": customAnthropicProvider,
@@ -25,8 +27,9 @@ const PROVIDER_ALIASES = Object.freeze({
   "custom-claude": "custom-anthropic",
 });
 
-// trial/dev 推荐：Coze Agent → CloudBase 内置模型 → DeepSeek → 确定性 mock
-const DEFAULT_COMPETITION_CHAIN = ["coze", "cloudbase-openai", "deepseek", "mock"];
+// trial/dev 推荐：OpenRouter 免费模型路由 → 既有 Provider → 确定性 mock。
+// OpenRouter 自身再按 models 有序列表自动切换；未配置/移除时会在本层直接跳过。
+const DEFAULT_COMPETITION_CHAIN = ["openrouter", "cloudbase-openai", "deepseek", "coze", "mock"];
 const DEFAULT_PUBLIC_CHAIN = ["mock"];
 // 阶段显式分配：Profile 字段（空 = 跟随主链）对应的运行时配置键。
 const STAGE_CONFIG_KEYS = Object.freeze({
@@ -91,30 +94,46 @@ function normalizeProviderName(name) {
   return PROVIDERS[canonical] ? canonical : "";
 }
 
+function getDisabledProviderSet(runtimeConfig = {}) {
+  const names = String(configValue(runtimeConfig, "AI_DISABLED_PROVIDERS", ""))
+    .split(",")
+    .map((item) => normalizeProviderName(item))
+    .filter((name) => name && name !== "mock");
+  return new Set(names);
+}
+
+function filterDisabledProviders(chain, runtimeConfig = {}) {
+  const disabled = getDisabledProviderSet(runtimeConfig);
+  const result = (Array.isArray(chain) ? chain : []).filter((name) => name === "mock" || !disabled.has(name));
+  if (!result.includes("mock")) result.push("mock");
+  return Array.from(new Set(result));
+}
+
 function getProviderChain(runtimeMode = "public", runtimeConfig = {}) {
   if (runtimeMode === "public") return DEFAULT_PUBLIC_CHAIN.slice();
   const request = runtimeConfig || {};
+  const finish = (chain) => filterDisabledProviders(chain, runtimeConfig);
   const hasRequestChain = Object.prototype.hasOwnProperty.call(request, "AI_PROVIDER_CHAIN");
   const hasRequestProvider = Object.prototype.hasOwnProperty.call(request, "AI_PROVIDER");
   if (hasRequestChain) {
     const requestChain = parseChain(request.AI_PROVIDER_CHAIN, []);
-    if (requestChain.length) return requestChain;
+    if (requestChain.length) return finish(requestChain);
   }
   if (hasRequestProvider) {
     const requestProvider = normalizeProviderName(request.AI_PROVIDER);
     if (requestProvider === "mock") return ["mock"];
-    if (requestProvider) return [requestProvider, "mock"];
+    if (requestProvider) return finish([requestProvider, "mock"]);
   }
   if (!hasRequestChain) {
     const processChain = parseChain(process.env.AI_PROVIDER_CHAIN || "", []);
-    if (processChain.length) return processChain;
+    if (processChain.length) return finish(processChain);
   }
   const configured = normalizeProviderName(process.env.AI_PROVIDER || "");
   if (configured === "mock") return ["mock"];
   if (configured) {
-    return [configured, "mock"];
+    return finish([configured, "mock"]);
   }
-  return DEFAULT_COMPETITION_CHAIN.slice();
+  return finish(DEFAULT_COMPETITION_CHAIN.slice());
 }
 
 function getProviderModule(name) {
@@ -134,7 +153,7 @@ function resolveStageChain(stage, runtimeConfig = {}, runtimeMode = "") {
   const key = STAGE_CONFIG_KEYS[String(stage || "").trim().toLowerCase()];
   if (!key) return mainChain;
   const stageProvider = normalizeProviderName(configValue(runtimeConfig, key, ""));
-  if (!stageProvider) return mainChain;
+  if (!stageProvider || getDisabledProviderSet(runtimeConfig).has(stageProvider)) return mainChain;
   return [stageProvider].concat(mainChain.filter((name) => name !== stageProvider));
 }
 
@@ -160,7 +179,12 @@ function getLastExternalCall() {
 function isProviderConfigured(name, runtimeConfig = {}) {
   name = normalizeProviderName(name);
   if (name === "mock") return true;
+  if (getDisabledProviderSet(runtimeConfig).has(name)) return false;
   if (name === "deepseek") return Boolean(deepseekProvider.firstConfiguredKey(runtimeConfig));
+  if (name === "openrouter") {
+    const config = openrouterProvider.getConfig(runtimeConfig);
+    return config.enabled && Boolean(config.apiKey && config.models.length);
+  }
   if (name === "coze") {
     if (typeof cozeProvider.isEnabled === "function" && !cozeProvider.isEnabled(runtimeConfig)) {
       return false;
@@ -676,6 +700,7 @@ module.exports = {
   generateWithChain,
   getLastExternalCall,
   getProviderChain,
+  getDisabledProviderSet,
   getProviderModule,
   getRecentCallEvents,
   getStatus,
