@@ -201,6 +201,9 @@ function createDecisionService(options = {}) {
       selection: providers,
       providerAttemptLedger: input.providerAttemptLedger || null,
     });
+    const configuredStructuredMaxTokens = Math.max(128, Math.min(2000, Number(
+      input.providerRuntimeConfig && input.providerRuntimeConfig.AI_STRUCTURED_MAX_TOKENS || 1000
+    ) || 1000));
     const startedAt = Date.now();
     try {
       if (!providers.intendedProvider) throw codedError("DECISION_PROVIDER_UNAVAILABLE", "No external Decision Provider is configured");
@@ -228,7 +231,7 @@ function createDecisionService(options = {}) {
           providerRuntimeConfig: input.providerRuntimeConfig || {},
           principal: input.principal || null,
           conversationId: input.conversationId || "",
-          maxTokens: Math.max(128, Math.min(2000, Number(input.providerRuntimeConfig && input.providerRuntimeConfig.AI_STRUCTURED_MAX_TOKENS || 1000) || 1000)),
+          maxTokens: compactDecision ? Math.min(320, configuredStructuredMaxTokens) : configuredStructuredMaxTokens,
         },
         validate(value) {
           const contract = normalizeDecisionContract(

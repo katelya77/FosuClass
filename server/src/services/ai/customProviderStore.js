@@ -216,11 +216,20 @@ function normalizeOpenRouterItem(item) {
   const supportsJsonSchema = supported.has("structured_outputs") || supported.has("json_schema");
   const supportsStructured = supported.has("response_format") || supportsJsonSchema;
   const supportsTools = supported.has("tools") || supported.has("tool_choice");
+  const reasoning = raw.reasoning && typeof raw.reasoning === "object" ? raw.reasoning : {};
+  const reasoningMandatory = reasoning.mandatory === true;
+  const reasoningDefaultEnabled = reasoning.default_enabled === true;
   const contextLength = Math.max(0, Number(raw.context_length || raw.contextLength || 0) || 0);
   let score = Math.min(30, Math.round(Math.log2(Math.max(1, contextLength))));
   if (supportsJsonSchema) score += 90;
   else if (supportsStructured) score += 25;
   if (supportsTools) score += 35;
+  // For intent extraction, low latency is more valuable than long-form
+  // reasoning. Prefer endpoints where thinking is optional and not enabled by
+  // default; mandatory reasoning remains discoverable but ranks as a fallback.
+  if (reasoningMandatory) score -= 80;
+  else if (reasoningDefaultEnabled) score -= 30;
+  else score += 20;
   if (!/(?:preview|experimental|beta)/i.test(`${id} ${name}`)) score += 12;
   if (!expiresAtMs) score += 8;
   return {
@@ -233,6 +242,8 @@ function normalizeOpenRouterItem(item) {
     supportsStructured,
     supportsJsonSchema,
     supportsTools,
+    reasoningMandatory,
+    reasoningDefaultEnabled,
     expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : "",
     score,
   };
@@ -280,16 +291,17 @@ async function fetchModelList(options = {}) {
         .sort((a, b) => b.score - a.score || b.contextLength - a.contextLength || a.id.localeCompare(b.id))
         .slice(0, 200)
         .map(({ score, textOutput, expired, ...item }) => item);
-      // The free router is the durable primary: OpenRouter can select a live
-      // zero-cost text model as catalogue entries rotate. Keep concrete,
-      // capability-ranked IDs as explicit fallbacks for transparency.
+      // Prefer a concrete strict-schema model so the semantic request is
+      // predictable, then keep OpenRouter's rotating free router as the final
+      // durable fallback when catalogue entries change.
       const concreteItems = items.filter((item) => !/^openrouter\//i.test(item.id));
       const structuredItems = concreteItems.filter((item) => item.supportsJsonSchema);
-      const recommendedModels = Array.from(new Set(["openrouter/free"].concat(
+      const recommendedModels = Array.from(new Set(
         (structuredItems.length ? structuredItems : concreteItems)
           .slice(0, 4)
           .map((item) => item.id)
-      )));
+          .concat("openrouter/free")
+      ));
       return {
         models: items.map((item) => item.id),
         items,

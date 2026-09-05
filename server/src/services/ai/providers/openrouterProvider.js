@@ -212,6 +212,12 @@ async function generateStructured(input = {}) {
         preferJsonSchema: Boolean(input.responseSchema),
         responseSchema: input.responseSchema,
         responseSchemaName: input.responseSchemaName,
+        // Semantic extraction needs classification, not chain-of-thought. Free
+        // reasoning models otherwise spend most of the stage lease thinking
+        // before emitting a tiny schema-bound result. OpenRouter normalizes
+        // `none` for non-mandatory models and the next configured model remains
+        // available when an endpoint rejects it.
+        reasoning: { effort: "none", exclude: true },
         headers: headers(),
         classifyError: deepseekProvider.classifyHttpError,
         signal: input.signal || null,
