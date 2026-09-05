@@ -47,13 +47,23 @@ async function run() {
     const result = await openrouterProvider.generateStructured({
       providerRuntimeConfig: runtime,
       messages: [{ role: "user", content: "今天有什么课" }],
+      responseSchemaName: "unit_decision",
+      responseSchema: {
+        type: "object",
+        properties: { intent: { type: "string" } },
+        required: ["intent"],
+        additionalProperties: false,
+      },
     });
     assert.strictEqual(result.provider, "openrouter");
     assert.strictEqual(result.resolvedModel, "unit/free-model");
     assert(captured.url.endsWith("/chat/completions"));
     assert.deepStrictEqual(captured.body.models, ["unit/model-a:free", "unit/model-b:free"]);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(captured.body, "model"), false);
-    assert.deepStrictEqual(captured.body.response_format, { type: "json_object" });
+    assert.strictEqual(captured.body.response_format.type, "json_schema");
+    assert.strictEqual(captured.body.response_format.json_schema.name, "unit_decision");
+    assert.strictEqual(captured.body.response_format.json_schema.strict, true);
+    assert.deepStrictEqual(captured.body.response_format.json_schema.schema.required, ["intent"]);
     assert.strictEqual(captured.body.provider.allow_fallbacks, true);
     assert.strictEqual(captured.body.provider.require_parameters, true);
     assert.strictEqual(captured.body.provider.data_collection, "deny");

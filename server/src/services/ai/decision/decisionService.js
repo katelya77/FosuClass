@@ -12,6 +12,7 @@ const { normalizeConstraints, normalizeGoalContract } = require("../understandin
 const { fromV1Contract } = require("../understanding/goalContractV2");
 const { resolveGoalContract } = require("../understanding/goalResolver");
 const { buildDecisionMessages } = require("./decisionPrompt");
+const { buildDecisionResponseSchema } = require("./decisionResponseSchema");
 const { resolveDecisionProviders } = require("../providerRuntimeComposition");
 
 const ENTITY_TYPES = new Set(["teacher", "class", "classroom", "course", "campus"]);
@@ -217,6 +218,8 @@ function createDecisionService(options = {}) {
             contextView: input.contextView,
             allowedSkills: skills,
           }),
+          responseSchema: buildDecisionResponseSchema(skills),
+          responseSchemaName: "fosu_decision_v2",
           providerRuntimeConfig: input.providerRuntimeConfig || {},
           principal: input.principal || null,
           conversationId: input.conversationId || "",
