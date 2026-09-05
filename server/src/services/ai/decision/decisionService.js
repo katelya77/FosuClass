@@ -115,6 +115,39 @@ function isAdaptiveFastPath(intent) {
     || Number(intent && intent.ruleScore || 0) >= 8;
 }
 
+function isAuthoritativeFactualHint(intent) {
+  const name = String(intent && intent.name || "");
+  const metadata = capabilityManifestService.getIntent(name);
+  if (!metadata || metadata.factualTask !== true) return false;
+  if (name !== "search_school_index") return true;
+  const slots = intent && intent.slots && typeof intent.slots === "object" ? intent.slots : {};
+  return ["teacher", "class", "classroom", "course"].includes(String(slots.type || slots.lockedEntityType || "").toLowerCase())
+    && Boolean(String(slots.q || slots.name || slots.teacherName || slots.className || slots.classroom || slots.courseName || "").trim());
+}
+
+function reconcileModelContract(input, modelContract, catalog, deterministicHint) {
+  const modelGoal = String(modelContract && modelContract.goal && modelContract.goal.name || "");
+  const hintedGoal = String(deterministicHint && deterministicHint.name || "");
+  if (!hintedGoal || hintedGoal === modelGoal || !isAuthoritativeFactualHint(deterministicHint)) {
+    return { contract: modelContract, corrected: false, reasonCode: "" };
+  }
+  // The LLM is still the first semantic stage, but campus-fact routing is
+  // checked against the server's deterministic intent contract before any
+  // Tool executes. This prevents a small/free model from turning a named
+  // teacher/class query into a personal-schedule Tool with incompatible args.
+  const validatedUnderstanding = defaultUnderstandingService.deterministicResult({
+    message: input.message,
+    context: input.context,
+    conversationState: input.conversationState,
+    deterministicIntent: deterministicHint,
+  }, "model_validated", "MODEL_GOAL_CONTRACT_CORRECTED");
+  return {
+    contract: decisionFromUnderstanding(validatedUnderstanding, catalog, "model_validated"),
+    corrected: true,
+    reasonCode: "MODEL_GOAL_CONTRACT_CORRECTED",
+  };
+}
+
 function createDecisionService(options = {}) {
   const providerRuntime = options.providerRuntime;
   const skillCatalog = options.skillCatalog;
@@ -244,10 +277,18 @@ function createDecisionService(options = {}) {
         },
         onEvent: input.onEvent,
       });
-      const legacyContract = projectDecisionContract(generated.contract);
       const deterministicHint = typeof input.deterministicResolve === "function"
         ? input.deterministicResolve(input.message, input.context || {})
         : deterministicResolve(input.message, input.context || {});
+      const reconciled = reconcileModelContract(
+        input,
+        generated.contract,
+        input.skillCatalog || skillCatalog,
+        deterministicHint
+      );
+      const decisionContract = reconciled.contract;
+      const decisionSource = reconciled.corrected ? "model_validated" : "model";
+      const legacyContract = projectDecisionContract(decisionContract);
       const resolved = resolveGoalContract({
         contract: legacyContract,
         message: input.message,
@@ -255,19 +296,19 @@ function createDecisionService(options = {}) {
         conversationState: input.conversationState,
         deterministicHint,
       });
-      const selectedSkill = selectedSkillFor(input.skillCatalog || skillCatalog, generated.contract);
-      if (resolved.intent.name !== generated.contract.goal.name) {
+      const selectedSkill = selectedSkillFor(input.skillCatalog || skillCatalog, decisionContract);
+      if (resolved.intent.name !== decisionContract.goal.name) {
         throw codedError("DECISION_GOAL_RESOLUTION_MISMATCH", "Goal resolution changed the Provider-selected Goal");
       }
       const understanding = {
         contract: resolved.contract,
-        decisionContract: generated.contract,
+        decisionContract,
         intent: resolved.intent,
-        source: "model",
+        source: decisionSource,
         providerUsed: generated.provider,
         externalProviderUsed: true,
         fallback: generated.provider !== generated.intendedProvider,
-        reasonCode: "",
+        reasonCode: reconciled.reasonCode,
         latencyMs: Date.now() - startedAt,
         providerChain: providerChainFromPath(generated.fallbackPath),
         intendedProvider: generated.intendedProvider,
@@ -279,17 +320,17 @@ function createDecisionService(options = {}) {
         intendedProvider: generated.intendedProvider,
         actualFirstProvider: generated.actualFirstProvider,
         fallbackPath: generated.fallbackPath,
-        decisionSource: "model",
+        decisionSource,
         selectedSkillId: selectedSkill.id,
-        taskComplexity: generated.contract.plan.steps.length > 1 || selectedSkill.allowedTools.length > 1 ? "multi" : "simple",
-        goal: generated.contract.goal,
-        decisionContract: generated.contract,
-        goalContractV2: fromV1Contract(resolved.contract, { source: "model", provider: generated.provider }),
+        taskComplexity: decisionContract.plan.steps.length > 1 || selectedSkill.allowedTools.length > 1 ? "multi" : "simple",
+        goal: decisionContract.goal,
+        decisionContract,
+        goalContractV2: fromV1Contract(resolved.contract, { source: decisionSource, provider: generated.provider }),
         understanding,
         intent: resolved.intent,
       };
-      emit(input.onEvent, { type: "understanding.completed", status: "success", runtimeMode, understandingSource: "model", provider: generated.provider, providerUsed: true, latencyMs: understanding.latencyMs });
-      emit(input.onEvent, { type: "decision.completed", status: "success", runtimeMode, executionPolicy, decisionSource: "model", provider: generated.provider, providerUsed: true, latencyMs: understanding.latencyMs });
+      emit(input.onEvent, { type: "understanding.completed", status: "success", runtimeMode, understandingSource: decisionSource, reasonCode: reconciled.reasonCode, provider: generated.provider, providerUsed: true, latencyMs: understanding.latencyMs });
+      emit(input.onEvent, { type: "decision.completed", status: "success", runtimeMode, executionPolicy, decisionSource, reasonCode: reconciled.reasonCode, provider: generated.provider, providerUsed: true, latencyMs: understanding.latencyMs });
       return result;
     } catch (error) {
       if (error && error.code === "ABORTED") throw error;

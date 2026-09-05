@@ -34,10 +34,23 @@ async function main() {
       supportedGoals: ["get_teaching_week"],
       runtimeModes: ["public", "trial", "dev"],
       allowedTools: ["get_teaching_week"],
+    }, {
+      id: "week_schedule",
+      supportedGoals: ["get_week_schedule"],
+      runtimeModes: ["public", "trial", "dev"],
+      allowedTools: ["get_week_schedule"],
+    }, {
+      id: "search_school_schedule",
+      supportedGoals: ["search_school_index"],
+      runtimeModes: ["public", "trial", "dev"],
+      allowedTools: ["search_school_index"],
     }],
   });
-  const deterministicResolve = () => {
+  const deterministicResolve = (message) => {
     order.push("rule");
+    if (/陈芳/.test(String(message || ""))) {
+      return { name: "search_school_index", confidence: 1, slots: { type: "teacher", q: "陈芳" } };
+    }
     return { name: "get_teaching_week", confidence: 1, slots: {}, ruleScore: 10 };
   };
   const service = createDecisionService({ providerRuntime, skillCatalog, deterministicResolve });
@@ -68,17 +81,18 @@ async function main() {
   assert.deepStrictEqual(order, ["provider", "rule"], "rules are allowed only as post-Decision validation hints");
 
   let openrouterRequest = null;
+  let compactContract = {
+    schemaVersion: "decision.intent.v1",
+    goal: { name: "get_teaching_week", confidence: 0.96, requiresClarification: false },
+    entities: [],
+    constraints: [{ key: "week", value: 3 }],
+    responseMode: "deterministic",
+  };
   const openrouterService = createDecisionService({
     providerRuntime: {
       async generateStructured(input) {
         openrouterRequest = input.request;
-        const validated = input.validate({
-          schemaVersion: "decision.intent.v1",
-          goal: { name: "get_teaching_week", confidence: 0.96, requiresClarification: false },
-          entities: [],
-          constraints: [{ key: "week", value: 3 }],
-          responseMode: "deterministic",
-        });
+        const validated = input.validate(compactContract);
         return {
           contract: validated,
           provider: "openrouter",
@@ -119,12 +133,50 @@ async function main() {
   assert.strictEqual(Object.prototype.hasOwnProperty.call(openrouterRequest.responseSchema.properties, "plan"), false);
   const compactPrompt = JSON.stringify(openrouterRequest.messages);
   assert.ok(/allowedGoals/.test(compactPrompt));
+  assert.ok(/goalCatalog/.test(compactPrompt));
+  assert.ok(/needsPersonalScheduleSummary/.test(compactPrompt));
+  assert.ok(/named teacher, class, classroom, or course/.test(compactPrompt));
   assert.ok(!/allowedSkills/.test(compactPrompt));
   assert.ok(/Never output Skill ids, Tool names, a plan/.test(compactPrompt));
   assert.strictEqual(compactResult.decisionContract.schemaVersion, "decision.v2");
   assert.deepStrictEqual(compactResult.decisionContract.constraints, { week: 3 });
   assert.deepStrictEqual(compactResult.decisionContract.skillCandidates.map((item) => item.skillId), ["teaching_week"]);
   assert.deepStrictEqual(compactResult.decisionContract.plan.steps.map((step) => step.skillId), ["teaching_week"]);
+
+  compactContract = {
+    schemaVersion: "decision.intent.v1",
+    goal: { name: "get_week_schedule", confidence: 0.91, requiresClarification: false },
+    entities: [{ type: "teacher", value: "陈芳", source: "user" }],
+    constraints: [{ key: "teacherName", value: "陈芳" }],
+    responseMode: "deterministic",
+  };
+  const corrected = await openrouterService.decide({
+    message: "帮我查一下陈芳老师的课表",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    providerRuntimeConfig: {
+      AI_AGENT_ENABLED: "true",
+      AI_DECISION_PROVIDER: "openrouter",
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_ENABLED: "true",
+      OPENROUTER_API_KEY: "unit-test-placeholder",
+    },
+    context: {},
+    conversationState: {},
+    contextView: {
+      contextId: "ctx_openrouter_contract_validation",
+      currentTurn: { message: "帮我查一下陈芳老师的课表", runtimeMode: "trial" },
+      workingState: {}, recentMessages: [], rollingSummary: "", memories: [], episodes: [],
+    },
+  });
+  assert.strictEqual(corrected.decisionSource, "model_validated");
+  assert.strictEqual(corrected.understanding.externalProviderUsed, true);
+  assert.strictEqual(corrected.understanding.reasonCode, "MODEL_GOAL_CONTRACT_CORRECTED");
+  assert.strictEqual(corrected.intent.name, "search_school_index");
+  assert.strictEqual(corrected.intent.slots.type, "teacher");
+  assert.strictEqual(corrected.intent.slots.q, "陈芳");
+  assert.strictEqual(corrected.selectedSkillId, "search_school_schedule");
+  assert.strictEqual(corrected.decisionContract.goal.name, "search_school_index");
 
   const conversationMemory = {
     loadForChat() {
