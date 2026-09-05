@@ -12,7 +12,7 @@ const { normalizeConstraints, normalizeGoalContract } = require("../understandin
 const { fromV1Contract } = require("../understanding/goalContractV2");
 const { resolveGoalContract } = require("../understanding/goalResolver");
 const { buildDecisionMessages } = require("./decisionPrompt");
-const { buildDecisionResponseSchema } = require("./decisionResponseSchema");
+const { buildDecisionResponseSchema, expandDecisionResponse } = require("./decisionResponseSchema");
 const { resolveDecisionProviders } = require("../providerRuntimeComposition");
 
 const ENTITY_TYPES = new Set(["teacher", "class", "classroom", "course", "campus"]);
@@ -190,6 +190,10 @@ function createDecisionService(options = {}) {
     const skills = skillOptions(input.skillCatalog || skillCatalog, runtimeMode);
     const validatorOptions = validationOptions(skills);
     const providers = resolveDecisionProviders(runtimeMode, input.providerRuntimeConfig || {});
+    // OpenRouter free models are used only as a semantic parser. The server
+    // expands their compact intent into an authorized Skill/Plan from the
+    // published catalog, so a model can neither invent nor select capabilities.
+    const compactDecision = providers.intendedProvider === "openrouter";
     const decisionBudgetMs = Math.max(1, Number(input.decisionBudgetMs || 9000) || 9000);
     const providerLease = deriveProviderStageLease({
       outerBudgetMs: decisionBudgetMs,
@@ -217,16 +221,20 @@ function createDecisionService(options = {}) {
             message: input.message,
             contextView: input.contextView,
             allowedSkills: skills,
+            contractMode: compactDecision ? "intent" : "decision.v2",
           }),
-          responseSchema: buildDecisionResponseSchema(skills),
-          responseSchemaName: "fosu_decision_v2",
+          responseSchema: compactDecision ? buildDecisionResponseSchema(skills) : null,
+          responseSchemaName: compactDecision ? "fosu_decision_intent_v1" : "fosu_decision_v2",
           providerRuntimeConfig: input.providerRuntimeConfig || {},
           principal: input.principal || null,
           conversationId: input.conversationId || "",
           maxTokens: Math.max(128, Math.min(2000, Number(input.providerRuntimeConfig && input.providerRuntimeConfig.AI_STRUCTURED_MAX_TOKENS || 1000) || 1000)),
         },
         validate(value) {
-          const contract = normalizeDecisionContract(value, validatorOptions);
+          const contract = normalizeDecisionContract(
+            expandDecisionResponse(value, input.skillCatalog || skillCatalog),
+            validatorOptions
+          );
           projectDecisionContract(contract);
           selectedSkillFor(input.skillCatalog || skillCatalog, contract);
           return contract;

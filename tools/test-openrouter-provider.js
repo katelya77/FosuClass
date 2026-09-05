@@ -17,6 +17,12 @@ const openrouterProvider = require("../server/src/services/ai/providers/openrout
 const providerChainService = require("../server/src/services/ai/providerChainService");
 const providerConfigService = require("../server/src/services/ai/providerConfigService");
 const providerFactory = require("../server/src/services/ai/providerFactory");
+const {
+  COMPACT_DECISION_VERSION,
+  buildDecisionResponseSchema,
+  expandDecisionResponse,
+} = require("../server/src/services/ai/decision/decisionResponseSchema");
+const { createSkillCatalog } = require("../packages/skill-runtime");
 
 async function run() {
   await assert.rejects(
@@ -105,6 +111,32 @@ async function run() {
       [{ model: "openrouter/free" }, { models: ["unit/model-a:free", "unit/model-b:free"] }],
       "configured router/concrete priority must be preserved"
     );
+
+    const catalog = createSkillCatalog({
+      skills: [{
+        id: "teaching_week",
+        supportedGoals: ["get_teaching_week"],
+        runtimeModes: ["trial", "dev"],
+        allowedTools: ["get_teaching_week"],
+      }],
+    });
+    const compactSchema = buildDecisionResponseSchema(catalog.list());
+    assert.strictEqual(compactSchema.properties.schemaVersion.const, COMPACT_DECISION_VERSION);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(compactSchema.properties, "skillCandidates"), false,
+      "OpenRouter semantic schema must not allow the model to select Skills");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(compactSchema.properties, "plan"), false,
+      "OpenRouter semantic schema must not ask a free model to author a Plan");
+    const expanded = expandDecisionResponse({
+      schemaVersion: COMPACT_DECISION_VERSION,
+      goal: { name: "get_teaching_week", confidence: 0.94, requiresClarification: false },
+      entities: [],
+      constraints: [{ key: "week", value: 3 }],
+      responseMode: "deterministic",
+    }, catalog);
+    assert.strictEqual(expanded.schemaVersion, "decision.v2");
+    assert.deepStrictEqual(expanded.constraints, { week: 3 });
+    assert.deepStrictEqual(expanded.skillCandidates, [{ skillId: "teaching_week", confidence: 0.94 }]);
+    assert.deepStrictEqual(expanded.plan.steps.map((step) => step.skillId), ["teaching_week"]);
 
     assert.deepStrictEqual(providerChainService.getProviderChain("public", Object.assign({ AI_PROVIDER: "openrouter" }, runtime)), ["mock"]);
     assert.deepStrictEqual(

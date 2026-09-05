@@ -67,6 +67,65 @@ async function main() {
   assert.strictEqual(order[0], "provider", "strict_model_first may not run semantic rules before Provider Decision");
   assert.deepStrictEqual(order, ["provider", "rule"], "rules are allowed only as post-Decision validation hints");
 
+  let openrouterRequest = null;
+  const openrouterService = createDecisionService({
+    providerRuntime: {
+      async generateStructured(input) {
+        openrouterRequest = input.request;
+        const validated = input.validate({
+          schemaVersion: "decision.intent.v1",
+          goal: { name: "get_teaching_week", confidence: 0.96, requiresClarification: false },
+          entities: [],
+          constraints: [{ key: "week", value: 3 }],
+          responseMode: "deterministic",
+        });
+        return {
+          contract: validated,
+          provider: "openrouter",
+          intendedProvider: "openrouter",
+          actualFirstProvider: "openrouter",
+          fallbackPath: ["openrouter:success"],
+        };
+      },
+    },
+    skillCatalog,
+    deterministicResolve,
+  });
+  const compactResult = await openrouterService.decide({
+    message: "现在第几教学周？",
+    runtimeMode: "trial",
+    executionPolicy: "strict_model_first",
+    providerRuntimeConfig: {
+      AI_AGENT_ENABLED: "true",
+      AI_DECISION_PROVIDER: "openrouter",
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_ENABLED: "true",
+      OPENROUTER_API_KEY: "unit-test-placeholder",
+    },
+    context: {},
+    conversationState: {},
+    contextView: {
+      contextId: "ctx_openrouter_compact",
+      currentTurn: { message: "现在第几教学周？", runtimeMode: "trial" },
+      workingState: {},
+      recentMessages: [],
+      rollingSummary: "",
+      memories: [],
+      episodes: [],
+    },
+  });
+  assert.strictEqual(openrouterRequest.responseSchemaName, "fosu_decision_intent_v1");
+  assert.strictEqual(openrouterRequest.responseSchema.properties.schemaVersion.const, "decision.intent.v1");
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(openrouterRequest.responseSchema.properties, "plan"), false);
+  const compactPrompt = JSON.stringify(openrouterRequest.messages);
+  assert.ok(/allowedGoals/.test(compactPrompt));
+  assert.ok(!/allowedSkills/.test(compactPrompt));
+  assert.ok(/Never output Skill ids, Tool names, a plan/.test(compactPrompt));
+  assert.strictEqual(compactResult.decisionContract.schemaVersion, "decision.v2");
+  assert.deepStrictEqual(compactResult.decisionContract.constraints, { week: 3 });
+  assert.deepStrictEqual(compactResult.decisionContract.skillCandidates.map((item) => item.skillId), ["teaching_week"]);
+  assert.deepStrictEqual(compactResult.decisionContract.plan.steps.map((step) => step.skillId), ["teaching_week"]);
+
   const conversationMemory = {
     loadForChat() {
       return {

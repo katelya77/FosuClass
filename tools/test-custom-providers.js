@@ -241,6 +241,14 @@ async function main() {
                 supported_parameters: []
               },
               {
+                id: "openrouter/free",
+                name: "OpenRouter Free Models Router",
+                context_length: 16384,
+                pricing: { prompt: "0", completion: "0" },
+                architecture: { output_modalities: ["text"] },
+                supported_parameters: ["response_format"]
+              },
+              {
                 id: "vendor/embedding:free",
                 name: "Embedding (free)",
                 pricing: { prompt: "0", completion: "0" },
@@ -279,11 +287,12 @@ async function main() {
         baseUrl: "https://openrouter.ai/api/v1",
         catalog: "openrouter-free"
       });
-      assert.deepStrictEqual(openrouter.models, ["vendor/strong-text:free", "vendor/basic-text:free"], "g7b filters paid, expired and non-text models");
+      assert.deepStrictEqual(openrouter.models, ["vendor/strong-text:free", "openrouter/free", "vendor/basic-text:free"], "g7b filters paid, expired and non-text models");
       assert.strictEqual(openrouter.items[0].supportsStructured, true, "g7b structured capability exposed");
       assert.strictEqual(openrouter.items[0].supportsJsonSchema, true, "g7b strict JSON-Schema capability exposed");
       assert.strictEqual(openrouter.items[0].supportsTools, true, "g7b tool capability exposed");
       assert.deepStrictEqual(openrouter.recommendedModels, ["openrouter/free", "vendor/strong-text:free"], "g7b durable free router precedes strict JSON-Schema concrete fallbacks");
+      assert.strictEqual(new Set(openrouter.recommendedModels).size, openrouter.recommendedModels.length, "g7b router must not be duplicated when the upstream catalogue also lists it");
       assert.ok(!calls[1].options.headers.Authorization, "g7b public OpenRouter catalog does not require or invent a key");
 
       const throughService = await providerConfigService.fetchProviderModels({

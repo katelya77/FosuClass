@@ -33,40 +33,59 @@ const NUMBER_CONSTRAINTS = Object.freeze([
   "durationSections",
 ]);
 
-function nullable(type, extra = {}) {
-  return Object.assign({ type: [type, "null"] }, extra);
+const COMPACT_DECISION_VERSION = "decision.intent.v1";
+const FULL_DECISION_VERSION = "decision.v2";
+const CONSTRAINT_KEYS = Object.freeze(STRING_CONSTRAINTS.concat(NUMBER_CONSTRAINTS, ["sections"]));
+
+function codedError(code, message) {
+  const error = new Error(message || code);
+  error.code = code;
+  return error;
 }
 
-function constraintsSchema() {
-  const properties = {};
-  STRING_CONSTRAINTS.forEach((key) => {
-    properties[key] = nullable("string", { maxLength: key === "q" ? 120 : 80 });
+function exactObject(value, keys, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw codedError("DECISION_INTENT_INVALID", `${label} must be an object`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = keys.slice().sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw codedError("DECISION_INTENT_INVALID", `${label} contains missing or unknown fields`);
+  }
+}
+
+function normalizeConstraintPairs(pairs) {
+  if (!Array.isArray(pairs) || pairs.length > 16) {
+    throw codedError("DECISION_INTENT_INVALID", "constraints must be an array with at most 16 items");
+  }
+  const constraints = {};
+  pairs.forEach((pair) => {
+    exactObject(pair, ["key", "value"], "constraint");
+    const key = String(pair.key || "");
+    if (!CONSTRAINT_KEYS.includes(key) || Object.prototype.hasOwnProperty.call(constraints, key)) {
+      throw codedError("DECISION_INTENT_INVALID", "constraint key is unknown or duplicated");
+    }
+    const value = pair.value;
+    if (STRING_CONSTRAINTS.includes(key) && typeof value !== "string") {
+      throw codedError("DECISION_INTENT_INVALID", "string constraint has an invalid value");
+    }
+    if (NUMBER_CONSTRAINTS.includes(key) && (typeof value !== "number" || !Number.isFinite(value))) {
+      throw codedError("DECISION_INTENT_INVALID", "numeric constraint has an invalid value");
+    }
+    if (key === "sections") {
+      const validArray = Array.isArray(value)
+        && value.length <= 20
+        && value.every((item) => Number.isInteger(item) && item >= 1 && item <= 20);
+      if (!(typeof value === "string" || validArray)) {
+        throw codedError("DECISION_INTENT_INVALID", "sections constraint has an invalid value");
+      }
+    }
+    constraints[key] = value;
   });
-  NUMBER_CONSTRAINTS.forEach((key) => {
-    properties[key] = nullable("number");
-  });
-  properties.sections = {
-    anyOf: [
-      { type: "array", items: { type: "integer", minimum: 1, maximum: 20 }, maxItems: 20 },
-      { type: "string", maxLength: 80 },
-      { type: "null" },
-    ],
-  };
-  return {
-    type: "object",
-    properties,
-    // OpenAI-compatible strict schema implementations require every declared
-    // property to be required. Null means that the constraint was not present;
-    // projectDecisionContract removes nulls before the V1 compatibility gate.
-    required: Object.keys(properties),
-    additionalProperties: false,
-  };
+  return constraints;
 }
 
 function buildDecisionResponseSchema(skills = []) {
-  const allowedSkills = (Array.isArray(skills) ? skills : [])
-    .map((skill) => String(skill && skill.id || "").trim())
-    .filter(Boolean);
   const allowedGoals = Array.from(new Set((Array.isArray(skills) ? skills : [])
     .flatMap((skill) => Array.isArray(skill && skill.supportedGoals) ? skill.supportedGoals : [])
     .map((goal) => String(goal || "").trim())
@@ -74,7 +93,7 @@ function buildDecisionResponseSchema(skills = []) {
   return {
     type: "object",
     properties: {
-      schemaVersion: { type: "string", const: "decision.v2" },
+      schemaVersion: { type: "string", const: COMPACT_DECISION_VERSION },
       goal: {
         type: "object",
         properties: {
@@ -100,48 +119,66 @@ function buildDecisionResponseSchema(skills = []) {
         },
       },
       constraints: constraintsSchema(),
-      skillCandidates: {
-        type: "array",
-        minItems: 1,
-        maxItems: 8,
-        items: {
-          type: "object",
-          properties: {
-            skillId: { type: "string", enum: allowedSkills },
-            confidence: { type: "number", minimum: 0, maximum: 1 },
-          },
-          required: ["skillId", "confidence"],
-          additionalProperties: false,
-        },
-      },
-      plan: {
-        type: "object",
-        properties: {
-          steps: {
-            type: "array",
-            maxItems: 8,
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", minLength: 1, maxLength: 80 },
-                skillId: { type: "string", enum: allowedSkills },
-                purpose: { type: "string", minLength: 1, maxLength: 240 },
-              },
-              required: ["id", "skillId", "purpose"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["steps"],
-        additionalProperties: false,
-      },
       responseMode: { type: "string", enum: ["deterministic", "natural_language", "none"] },
     },
-    required: ["schemaVersion", "goal", "entities", "constraints", "skillCandidates", "plan", "responseMode"],
+    required: ["schemaVersion", "goal", "entities", "constraints", "responseMode"],
     additionalProperties: false,
   };
 }
 
+function constraintsSchema() {
+  return {
+    type: "array",
+    maxItems: 16,
+    items: {
+      type: "object",
+      properties: {
+        key: { type: "string", enum: CONSTRAINT_KEYS.slice() },
+        value: {
+          anyOf: [
+            { type: "string", minLength: 1, maxLength: 120 },
+            { type: "number" },
+            { type: "array", items: { type: "integer", minimum: 1, maximum: 20 }, maxItems: 20 },
+          ],
+        },
+      },
+      required: ["key", "value"],
+      additionalProperties: false,
+    },
+  };
+}
+
+function expandDecisionResponse(value, skillCatalog) {
+  if (!value || value.schemaVersion !== COMPACT_DECISION_VERSION) return value;
+  exactObject(value, ["schemaVersion", "goal", "entities", "constraints", "responseMode"], "decision intent");
+  exactObject(value.goal, ["name", "confidence", "requiresClarification"], "goal");
+  if (!Array.isArray(value.entities) || value.entities.length > 16) {
+    throw codedError("DECISION_INTENT_INVALID", "entities must be an array with at most 16 items");
+  }
+  value.entities.forEach((entity) => exactObject(entity, ["type", "value", "source"], "entity"));
+  if (!skillCatalog || typeof skillCatalog.getSkillForIntent !== "function") {
+    throw codedError("DECISION_SKILL_CATALOG_REQUIRED", "A published Skill catalog is required");
+  }
+  const skill = skillCatalog.getSkillForIntent(value.goal.name);
+  if (!skill || !skill.id) {
+    throw codedError("DECISION_SKILL_NOT_FOUND", "No published Skill supports the model-selected Goal");
+  }
+  const confidence = Number(value.goal.confidence);
+  return {
+    schemaVersion: FULL_DECISION_VERSION,
+    goal: value.goal,
+    entities: value.entities,
+    constraints: normalizeConstraintPairs(value.constraints),
+    skillCandidates: [{ skillId: skill.id, confidence }],
+    plan: {
+      steps: [{ id: "resolve-goal", skillId: skill.id, purpose: "Resolve the model-selected goal" }],
+    },
+    responseMode: value.responseMode,
+  };
+}
+
 module.exports = {
+  COMPACT_DECISION_VERSION,
   buildDecisionResponseSchema,
+  expandDecisionResponse,
 };
