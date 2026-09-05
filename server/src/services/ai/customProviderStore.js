@@ -283,10 +283,13 @@ async function fetchModelList(options = {}) {
       // The free router is the durable primary: OpenRouter can select a live
       // zero-cost text model as catalogue entries rotate. Keep concrete,
       // capability-ranked IDs as explicit fallbacks for transparency.
-      const structuredItems = items.filter((item) => item.supportsJsonSchema);
-      const recommendedModels = ["openrouter/free"].concat((structuredItems.length ? structuredItems : items)
-        .slice(0, 4)
-        .map((item) => item.id));
+      const concreteItems = items.filter((item) => !/^openrouter\//i.test(item.id));
+      const structuredItems = concreteItems.filter((item) => item.supportsJsonSchema);
+      const recommendedModels = Array.from(new Set(["openrouter/free"].concat(
+        (structuredItems.length ? structuredItems : concreteItems)
+          .slice(0, 4)
+          .map((item) => item.id)
+      )));
       return {
         models: items.map((item) => item.id),
         items,
