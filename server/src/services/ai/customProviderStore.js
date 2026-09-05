@@ -213,11 +213,13 @@ function normalizeOpenRouterItem(item) {
   const expired = Boolean(expiresAtMs && expiresAtMs <= Date.now());
   const supported = new Set((Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [])
     .map((value) => String(value).trim().toLowerCase()));
-  const supportsStructured = supported.has("response_format") || supported.has("structured_outputs") || supported.has("json_schema");
+  const supportsJsonSchema = supported.has("structured_outputs") || supported.has("json_schema");
+  const supportsStructured = supported.has("response_format") || supportsJsonSchema;
   const supportsTools = supported.has("tools") || supported.has("tool_choice");
   const contextLength = Math.max(0, Number(raw.context_length || raw.contextLength || 0) || 0);
   let score = Math.min(30, Math.round(Math.log2(Math.max(1, contextLength))));
-  if (supportsStructured) score += 50;
+  if (supportsJsonSchema) score += 90;
+  else if (supportsStructured) score += 25;
   if (supportsTools) score += 35;
   if (!/(?:preview|experimental|beta)/i.test(`${id} ${name}`)) score += 12;
   if (!expiresAtMs) score += 8;
@@ -229,6 +231,7 @@ function normalizeOpenRouterItem(item) {
     expired,
     contextLength,
     supportsStructured,
+    supportsJsonSchema,
     supportsTools,
     expiresAt: expiresAtMs ? new Date(expiresAtMs).toISOString() : "",
     score,
@@ -280,7 +283,10 @@ async function fetchModelList(options = {}) {
       // The free router is the durable primary: OpenRouter can select a live
       // zero-cost text model as catalogue entries rotate. Keep concrete,
       // capability-ranked IDs as explicit fallbacks for transparency.
-      const recommendedModels = ["openrouter/free"].concat(items.slice(0, 4).map((item) => item.id));
+      const structuredItems = items.filter((item) => item.supportsJsonSchema);
+      const recommendedModels = ["openrouter/free"].concat((structuredItems.length ? structuredItems : items)
+        .slice(0, 4)
+        .map((item) => item.id));
       return {
         models: items.map((item) => item.id),
         items,

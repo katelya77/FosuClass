@@ -78,6 +78,8 @@ async function run() {
     assert.ok(/DecisionContract V2/.test(prompt));
     assert.ok(/allowedSkills/.test(prompt));
     assert.ok(!/toolName/.test(prompt), "Decision prompt must not expose Tool names");
+    assert.deepStrictEqual(requests[0].response_format, { type: "json_object" },
+      "providers without an explicit JSON-Schema capability flag keep the compatible JSON-object request");
     const types = events.map((event) => event.type);
     assert.ok(types.indexOf("provider.started") >= 0);
     assert.ok(types.indexOf("provider.started") < types.indexOf("intent.resolved"), "Provider Decision must precede semantic routing");

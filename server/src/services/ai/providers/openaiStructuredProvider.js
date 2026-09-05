@@ -1,6 +1,20 @@
 const axios = require("axios");
 const safetyGuard = require("../safetyGuard");
 
+function responseFormat(options = {}) {
+  if (options.preferJsonSchema === true && options.responseSchema && typeof options.responseSchema === "object") {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: String(options.responseSchemaName || "structured_response").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64),
+        strict: true,
+        schema: options.responseSchema,
+      },
+    };
+  }
+  return { type: "json_object" };
+}
+
 async function generateStructured(options = {}) {
   if (!options.baseUrl || !options.apiKey) {
     const error = new Error("Structured provider is not configured");
@@ -18,7 +32,7 @@ async function generateStructured(options = {}) {
       max_tokens: Math.max(128, Math.min(2000, Number(options.maxTokens || 800) || 800)),
       temperature: 0,
       messages,
-      response_format: { type: "json_object" },
+      response_format: responseFormat(options),
     };
     const models = Array.isArray(options.models) ? options.models.filter(Boolean).slice(0, 8) : [];
     if (models.length) requestBody.models = models;
@@ -69,4 +83,5 @@ async function generateStructured(options = {}) {
 
 module.exports = {
   generateStructured,
+  responseFormat,
 };
