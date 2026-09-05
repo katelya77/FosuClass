@@ -251,7 +251,7 @@ function buildSchoolIndex(result, detailResult) {
     const openUrl = buildScheduleViewUrl(type, only, meta) || schoolUrl;
     const name = itemName(only, type) || "未命名";
     return {
-      answer: `在全校索引里命中 1 位${typeText}「${name}」。可点卡片打开课表核对，事实来自 Release Pack。`,
+      answer: `在全校索引里命中 1 位${typeText}「${name}」。可点卡片打开课表核对，事实来自校内已发布课表数据。`,
       cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}：${name}`, [
         only.college || only.collegeName,
         only.campus,
@@ -282,7 +282,7 @@ function buildSchoolIndex(result, detailResult) {
       ? detailResult.actionUrl
       : (items[0] ? (buildScheduleViewUrl(type, items[0], meta) || schoolUrl) : schoolUrl);
     return {
-      answer: `在全校索引里命中 1 条${typeText}结果，并读取到课表详情。事实来自 Release Pack 索引和详情缓存。`,
+      answer: `在全校索引里命中 1 条${typeText}结果，并读取到课表详情。事实来自校内已发布课表数据。`,
       cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}课表摘要`, result.q ? `关键词：${result.q}` : "课表详情", {
         badges: metaBadges(result),
         items: detailCourses.slice(0, 6).map((course) => ({
@@ -307,7 +307,7 @@ function buildSchoolIndex(result, detailResult) {
       return makeAction(`打开${short}`, "navigate", url);
     }).filter(Boolean);
     return {
-      answer: `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。可点下方某一位打开课表，或到全校页继续筛选。事实来自 Release Pack。`,
+      answer: `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。可点下方某一位打开课表，或到全校页继续筛选。事实来自校内已发布课表数据。`,
       cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}查询结果（${result.total || items.length}）`, result.q ? `关键词：${result.q} · 点选一位打开课表` : "点选一位打开课表", {
         badges: metaBadges(result),
         items: listed.map((item) => {
