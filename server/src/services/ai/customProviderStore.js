@@ -277,8 +277,10 @@ async function fetchModelList(options = {}) {
         .sort((a, b) => b.score - a.score || b.contextLength - a.contextLength || a.id.localeCompare(b.id))
         .slice(0, 200)
         .map(({ score, textOutput, expired, ...item }) => item);
-      const recommendedModels = items.slice(0, 4).map((item) => item.id);
-      if (!recommendedModels.includes("openrouter/free")) recommendedModels.push("openrouter/free");
+      // The free router is the durable primary: OpenRouter can select a live
+      // zero-cost text model as catalogue entries rotate. Keep concrete,
+      // capability-ranked IDs as explicit fallbacks for transparency.
+      const recommendedModels = ["openrouter/free"].concat(items.slice(0, 4).map((item) => item.id));
       return {
         models: items.map((item) => item.id),
         items,

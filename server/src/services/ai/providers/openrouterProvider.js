@@ -5,10 +5,10 @@ const openaiStructuredProvider = require("./openaiStructuredProvider");
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODELS = Object.freeze([
+  "openrouter/free",
   "z-ai/glm-5.2:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "liquid/lfm-2.5-2.6b:free",
-  "openrouter/free",
 ]);
 
 function configValue(runtimeConfig, key, fallback = "") {

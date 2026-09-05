@@ -156,12 +156,17 @@ function getProviderRuntimeDiagnostics() {
   });
 }
 
+function resetProviderRuntimeState() {
+  if (typeof providerRuntime.resetCircuits === "function") providerRuntime.resetCircuits();
+}
+
 module.exports = {
   PROVIDER_IDS,
   createProviderAdapters,
   getProviderRuntime,
   getProviderRuntimeDiagnostics,
   keepAliveRegistry,
+  resetProviderRuntimeState,
   resolveDecisionProviders,
   resolveResponseProviders,
   resolveStageProviders,

@@ -296,7 +296,11 @@ function createProviderRuntime(options = {}) {
     });
   }
 
-  return Object.freeze({ diagnostics, generate, generateStructured, probe });
+  function resetCircuits() {
+    circuits.clear();
+  }
+
+  return Object.freeze({ diagnostics, generate, generateStructured, probe, resetCircuits });
 }
 
 module.exports = {

@@ -133,7 +133,7 @@ const DEFAULTS = {
   CLOUDBASE_OPENAI_MAX_TOKENS: "1200",
   OPENROUTER_ENABLED: "false",
   OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
-  OPENROUTER_MODELS: "z-ai/glm-5.2:free,nvidia/nemotron-3-super-120b-a12b:free,liquid/lfm-2.5-2.6b:free,openrouter/free",
+  OPENROUTER_MODELS: "openrouter/free,z-ai/glm-5.2:free,nvidia/nemotron-3-super-120b-a12b:free,liquid/lfm-2.5-2.6b:free",
   OPENROUTER_TIMEOUT_MS: "12000",
   OPENROUTER_MAX_TOKENS: "800",
   AI_CUSTOM_PROVIDERS: "",
@@ -899,6 +899,12 @@ function getProfilesForSave() {
   };
 }
 
+function resetProviderHealthState() {
+  require("./providerChainService").resetCircuitState();
+  require("./providerRuntimeComposition").resetProviderRuntimeState();
+  require("./planner/plannerModelAdapter").resetCircuitState();
+}
+
 function saveConfig(payload = {}) {
   const current = getProfilesForSave();
   let environment = resolveSaveEnvironment(payload, current.status);
@@ -955,7 +961,7 @@ function saveConfig(payload = {}) {
   applyUpdatesToProcessEnv(updates);
   // 配置已变更：旧配置时期积累的熔断/失败态不再代表新配置，立即清空，
   // 保证后台切换 Provider 实时生效（无需等待熔断冷却或重启）。
-  require("./providerChainService").resetCircuitState();
+  resetProviderHealthState();
 
   if (String(process.env.FOSU_AI_PROVIDER_WRITE_ENV || "").toLowerCase() === "true") {
     const currentText = ensureEnvFile();
@@ -1018,7 +1024,7 @@ function writeCustomProviderUpdates(updates) {
   runtimeStore.writeRuntimeConfig(updates);
   applyUpdatesToProcessEnv(updates);
   // 配置变更即时生效：清熔断，避免旧失败态遮盖新配置。
-  require("./providerChainService").resetCircuitState();
+  resetProviderHealthState();
 }
 
 /**

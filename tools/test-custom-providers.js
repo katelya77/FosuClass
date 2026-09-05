@@ -282,7 +282,7 @@ async function main() {
       assert.deepStrictEqual(openrouter.models, ["vendor/strong-text:free", "vendor/basic-text:free"], "g7b filters paid, expired and non-text models");
       assert.strictEqual(openrouter.items[0].supportsStructured, true, "g7b structured capability exposed");
       assert.strictEqual(openrouter.items[0].supportsTools, true, "g7b tool capability exposed");
-      assert.deepStrictEqual(openrouter.recommendedModels, ["vendor/strong-text:free", "vendor/basic-text:free", "openrouter/free"], "g7b recommended fallback ends with free router");
+      assert.deepStrictEqual(openrouter.recommendedModels, ["openrouter/free", "vendor/strong-text:free", "vendor/basic-text:free"], "g7b durable free router precedes ranked concrete fallbacks");
       assert.ok(!calls[1].options.headers.Authorization, "g7b public OpenRouter catalog does not require or invent a key");
 
       const throughService = await providerConfigService.fetchProviderModels({
