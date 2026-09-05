@@ -49,5 +49,9 @@ assert(text.includes("item.environment"), "provider log must show the runtime en
 assert(text.includes("item.runId") && text.includes("item.requestId"),
   "provider events must be correlatable to durable Run/request ids");
 assert(!afterDynamic.includes("调用日志（进程内"), "the UI must not claim durable events are process-local");
+assert(afterDynamic.includes("openrouterFetchModelsBtn"), "OpenRouter config must expose free-model discovery");
+assert(afterDynamic.includes("deepseekFetchModelsBtn"), "DeepSeek config must expose generic /models discovery");
+assert(text.includes('recommended.join(",")'), "OpenRouter recommendations must auto-fill the fallback chain");
+assert(text.includes("openrouter-free"), "OpenRouter discovery must describe its free catalog source");
 
 console.log("test-admin-ai-provider-ux passed");

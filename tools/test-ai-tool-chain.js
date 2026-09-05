@@ -59,6 +59,7 @@ async function run() {
     },
   };
   const meetingIntent = toolRegistry.resolveIntent("帮我推荐连续 2 节自习时间", context);
+  assert(!meetingIntent.slots.date, "undated recommendation must search the remaining week instead of pinning today");
   const meetingCalls = toolRegistry.runToolChainForIntent(meetingIntent, "帮我推荐连续 2 节自习时间", context);
   const meetingNames = meetingCalls.map((item) => item.name);
   assert(meetingNames.includes("recommend_meeting_time"), "meeting chain should calculate candidates");

@@ -277,10 +277,11 @@ router.post("/ai-provider/builtin-provider/restore", verifyAdminWriteAccess, (re
   }
 });
 
-// 拉取端点模型列表（OpenAI GET /models；Anthropic GET /v1/models）。密钥仅用于本次出站请求。
+// 通用模型发现：OpenAI / Anthropic 兼容端点走 /models；OpenRouter 走官方免费目录。
+// 密钥仅在服务端读取并用于本次出站请求，永不回传浏览器或日志。
 router.post("/ai-provider/fetch-models", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
-    const result = await providerConfigService.fetchCustomProviderModels(req.body || {});
+    const result = await providerConfigService.fetchProviderModels(req.body || {});
     return res.json({ success: true, data: result });
   } catch (error) {
     safeLog("ai-provider-fetch-models-failed", { error: error.message, code: error.code || "" });

@@ -22,7 +22,7 @@
         <text>{{item.statusText}}</text>
         <text wx:if="{{item.sourceCategory}}"> · {{item.sourceCategory}}</text>
         <text wx:if="{{item.durationText}}"> · {{item.durationText}}</text>
-        <text wx:if="{{item.degraded}}"> · 已降级</text>
+        <text wx:if="{{item.degraded}}"> · 已切换校园工具</text>
       </view>
     </view>
     <view class="agent-run-evidence" wx:if="{{evidenceText}}">{{evidenceText}}</view>

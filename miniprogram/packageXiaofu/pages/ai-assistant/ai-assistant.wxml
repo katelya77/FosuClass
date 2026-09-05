@@ -1,4 +1,9 @@
 <view class="page ai-page">
+  <view class="liquid-atmosphere" aria-hidden="true">
+    <view class="liquid-orb liquid-orb-blush"></view>
+    <view class="liquid-orb liquid-orb-jade"></view>
+    <view class="liquid-glint"></view>
+  </view>
   <!-- Calm task header: conversation title primary; at most two actions. -->
   <view class="xiaofu-header xiaofu-header-compact">
     <view class="xiaofu-avatar-wrap" aria-hidden="true">
@@ -77,6 +82,14 @@
       <view class="empty-brand">今天想先处理哪件校园小事？</view>
       <view class="empty-title" wx:if="{{runtimeMode == 'public'}}">输入 <text class="inline-command">/</text> 选择固定命令，照着示例改参数，就能稳定调用校园工具。</view>
       <view class="empty-title" wx:else>自然描述任务，或输入 <text class="inline-command">/</text> 选择命令；校园事实仍会由工具核验。</view>
+      <button class="empty-command-cue" bindtap="onShowSlashCommands" aria-label="打开校园命令">
+        <view class="empty-command-key">/</view>
+        <view class="empty-command-copy">
+          <view class="empty-command-title">打开校园命令</view>
+          <view class="empty-command-desc">{{runtimeMode == 'public' ? '选示例、改参数、稳定执行' : '快速填写任务，也可直接自然提问'}}</view>
+        </view>
+        <view class="empty-command-arrow" aria-hidden="true">›</view>
+      </button>
       <button
         wx:if="{{proactiveInsight}}"
         class="proactive-insight {{proactiveInsight.kind}}"
