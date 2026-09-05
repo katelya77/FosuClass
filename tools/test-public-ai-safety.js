@@ -23,6 +23,7 @@ const forbidden = [
   /发布流程/,
   /Docker/i,
   /GitHub\s*Actions/i,
+  /Release\s*Pack/i,
 ];
 
 function assertPublicSafe(text, label) {
@@ -74,6 +75,29 @@ async function run() {
   assertPublicSafe(serializedV2, "public agent.v2 response");
   assert(!("providerStages" in v2Response), "public agent.v2 response must omit provider diagnostics");
   assert(!("understanding" in v2Response), "public agent.v2 response must omit model understanding diagnostics");
+
+  const mockProvider = require("../server/src/services/ai/providers/mockProvider");
+  const teacherResult = mockProvider.generate({
+    message: "帮我查一下陈芳老师的课表",
+    intent: { name: "search_school_index" },
+    toolResults: [{
+      name: "search_school_index",
+      status: "success",
+      result: {
+        type: "teacher",
+        q: "陈芳",
+        total: 1,
+        items: [{ id: "teacher-chen-fang", name: "陈芳", courseCount: 1 }],
+      },
+    }],
+  });
+  assertPublicSafe(JSON.stringify({
+    answer: teacherResult.answer,
+    cards: teacherResult.cards,
+    suggestions: teacherResult.suggestions,
+  }), "public teacher factual response");
+  assert(teacherResult.answer.includes("校内已发布课表数据"), "public factual copy should use a user-facing source label");
+  assert(!teacherResult.answer.startsWith("我不能提供"), "a successful public factual Tool must not become a safety refusal");
 
   const tools = require("../server/src/services/ai/toolRegistry");
   const expectedTools = [
