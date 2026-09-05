@@ -227,6 +227,9 @@ async function testProviderRuntime() {
   const afterOpen = await circuitRuntime.generateStructured(circuitInput);
   assert.strictEqual(circuitPrimaryCalls, 1, "an open circuit must not invoke the adapter again");
   assert.strictEqual(afterOpen.actualFirstProvider, "circuit-fallback", "actualFirstProvider must name the first adapter really invoked");
+  circuitRuntime.resetCircuits();
+  await circuitRuntime.generateStructured(circuitInput);
+  assert.strictEqual(circuitPrimaryCalls, 2, "config changes must be able to clear stale runtime circuits");
   console.log("✓ Provider Runtime owns attempts, fallback, abort, probe, and metrics");
 }
 

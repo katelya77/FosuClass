@@ -284,7 +284,7 @@ function createModelGenerate(options = {}) {
   return boundGenerate;
 }
 
-function resetCircuitForTests() {
+function resetCircuitState() {
   plannerCircuit.failures = 0;
   plannerCircuit.openedAt = 0;
   plannerCircuit.state = "closed";
@@ -296,6 +296,7 @@ module.exports = {
   selectPlannerProviderName,
   sanitizeMessages,
   isCircuitOpen,
-  resetCircuitForTests,
+  resetCircuitState,
+  resetCircuitForTests: resetCircuitState,
   PLANNER_SYSTEM,
 };

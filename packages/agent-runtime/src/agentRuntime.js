@@ -15,7 +15,12 @@ const DEFAULT_STAGE_BUDGETS = Object.freeze({
     decision: 9000,
     skillTool: 1200,
     verification: 500,
-    response: 800,
+    // Free OpenAI-compatible providers routinely need 1.5-3s before the first
+    // token. 800ms was below the measured healthy OpenRouter probe latency and
+    // became ~275ms after reserving one fallback attempt. The global 15s
+    // deadline still caps the turn, so this is a usable stage allowance rather
+    // than an unbounded latency increase.
+    response: 7000,
     ui: 300,
     finishReserve: 500,
   }),
@@ -24,7 +29,7 @@ const DEFAULT_STAGE_BUDGETS = Object.freeze({
     decision: 9000,
     skillTool: 5500,
     verification: 1000,
-    response: 1500,
+    response: 7000,
     ui: 500,
     finishReserve: 1000,
   }),
