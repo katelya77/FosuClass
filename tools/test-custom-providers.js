@@ -291,7 +291,7 @@ async function main() {
       assert.strictEqual(openrouter.items[0].supportsStructured, true, "g7b structured capability exposed");
       assert.strictEqual(openrouter.items[0].supportsJsonSchema, true, "g7b strict JSON-Schema capability exposed");
       assert.strictEqual(openrouter.items[0].supportsTools, true, "g7b tool capability exposed");
-      assert.deepStrictEqual(openrouter.recommendedModels, ["openrouter/free", "vendor/strong-text:free"], "g7b durable free router precedes strict JSON-Schema concrete fallbacks");
+      assert.deepStrictEqual(openrouter.recommendedModels, ["vendor/strong-text:free", "openrouter/free"], "g7b fast strict JSON-Schema model precedes the durable free router fallback");
       assert.strictEqual(new Set(openrouter.recommendedModels).size, openrouter.recommendedModels.length, "g7b router must not be duplicated when the upstream catalogue also lists it");
       assert.ok(!calls[1].options.headers.Authorization, "g7b public OpenRouter catalog does not require or invent a key");
 

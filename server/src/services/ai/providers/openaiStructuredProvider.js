@@ -40,6 +40,9 @@ async function generateStructured(options = {}) {
     if (options.providerRouting && typeof options.providerRouting === "object") {
       requestBody.provider = options.providerRouting;
     }
+    if (options.reasoning && typeof options.reasoning === "object") {
+      requestBody.reasoning = options.reasoning;
+    }
     const response = await axios.post(
       `${String(options.baseUrl).replace(/\/+$/, "")}/chat/completions`,
       requestBody,

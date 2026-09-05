@@ -73,6 +73,7 @@ async function run() {
     assert.strictEqual(captured.body.provider.allow_fallbacks, true);
     assert.strictEqual(captured.body.provider.require_parameters, true);
     assert.strictEqual(captured.body.provider.data_collection, "deny");
+    assert.deepStrictEqual(captured.body.reasoning, { effort: "none", exclude: true });
     assert.strictEqual(captured.options.timeout, 4321);
     assert.strictEqual(captured.options.headers["X-OpenRouter-Title"], "FosuClass Xiaoxu");
 
