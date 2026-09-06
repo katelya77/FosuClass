@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { Activity, ArrowLeft, Bot, CheckCircle2, CircleDashed, Wrench } from "lucide-react";
 
-import type { DiagnosticsSnapshot } from "../components/AdpExperience";
+import type { DiagnosticsSnapshot } from "../lib/experience-session";
 import { ADP_DIAGNOSTICS_STORAGE_KEY, getPersistentConversationId } from "../lib/adp";
 import type { Route } from "../lib/router";
 
