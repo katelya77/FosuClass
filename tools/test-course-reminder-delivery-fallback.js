@@ -110,6 +110,28 @@ async function run() {
   assert.strictEqual(afterUnauthorized.status, "enabled");
   assert.strictEqual(unauthorizedScenario.service.listInAppEvents({ principal: unauthorizedScenario.principal, now: unauthorizedDueAt }).items.length, 1);
 
+  const invalidTemplateDataScenario = setup("invalid-template-data");
+  const invalidTemplateDataDispatch = new CourseReminderDispatchService({
+    reminderService: invalidTemplateDataScenario.service,
+    send: async () => ({
+      success: false,
+      code: "WECHAT_TEMPLATE_DATA_INVALID",
+      retryable: false,
+    }),
+  });
+  const invalidTemplateDataDueAt = Date.parse(invalidTemplateDataScenario.created.reminder.nextTriggerAt);
+  await invalidTemplateDataDispatch.dispatchDue({ now: invalidTemplateDataDueAt, limit: 10 });
+  const afterInvalidTemplateData = invalidTemplateDataScenario.service.get({
+    principal: invalidTemplateDataScenario.principal,
+    reminderId: invalidTemplateDataScenario.created.reminder.id,
+  }).reminder;
+  assert.strictEqual(afterInvalidTemplateData.authorizationCredits, 0);
+  assert.strictEqual(afterInvalidTemplateData.authorizationState, "configuration_required");
+  assert.strictEqual(invalidTemplateDataScenario.service.listInAppEvents({
+    principal: invalidTemplateDataScenario.principal,
+    now: invalidTemplateDataDueAt,
+  }).items.length, 1);
+
   const retryScenario = setup("retry");
   let retryCalls = 0;
   const retryDispatch = new CourseReminderDispatchService({

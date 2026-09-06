@@ -684,6 +684,8 @@ class CourseReminderService {
       const authorizationInvalid = [
         "WECHAT_SUBSCRIPTION_NOT_AUTHORIZED",
         "WECHAT_TEMPLATE_INVALID",
+        "WECHAT_TEMPLATE_DATA_INVALID",
+        "WECHAT_PAGE_INVALID",
         "WECHAT_RECIPIENT_INVALID",
       ].includes(String(result.code || ""));
       if (appOnly) {
@@ -723,7 +725,11 @@ class CourseReminderService {
         if (reminder.authorizationCredits < 1) reminder.authorizationState = "authorization_required";
       } else if (authorizationInvalid) {
         reminder.authorizationCredits = 0;
-        reminder.authorizationState = result.code === "WECHAT_TEMPLATE_INVALID"
+        reminder.authorizationState = [
+          "WECHAT_TEMPLATE_INVALID",
+          "WECHAT_TEMPLATE_DATA_INVALID",
+          "WECHAT_PAGE_INVALID",
+        ].includes(String(result.code || ""))
           ? "configuration_required"
           : "authorization_required";
       } else if (result.code === "APP_ONLY_DUE"
