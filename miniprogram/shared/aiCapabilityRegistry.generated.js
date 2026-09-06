@@ -421,6 +421,11 @@ const AI_CAPABILITY_REGISTRY = Object.freeze([
 const SLASH_COMMANDS = Object.freeze([
   {
     "name": "today",
+    "aliases": [
+      "tdy",
+      "今天",
+      "今日"
+    ],
     "capabilityId": "today",
     "label": "今日课表",
     "description": "查看今天的课程安排",
@@ -431,6 +436,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "tomorrow",
+    "aliases": [
+      "tmr",
+      "明天",
+      "明日"
+    ],
     "capabilityId": "tomorrow",
     "label": "明日课表",
     "description": "查看明天的课程安排",
@@ -441,6 +451,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "week",
+    "aliases": [
+      "weekly",
+      "本周",
+      "周课表"
+    ],
     "capabilityId": "weekSchedule",
     "label": "本周课表",
     "description": "查看当前周完整课表",
@@ -451,6 +466,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "next",
+    "aliases": [
+      "next-course",
+      "下一节",
+      "下节课"
+    ],
     "capabilityId": "nextCourse",
     "label": "下一节课",
     "description": "查看下一节课与地点",
@@ -461,16 +481,25 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "teacher",
+    "aliases": [
+      "teachers",
+      "教师",
+      "老师"
+    ],
     "capabilityId": "teacherSchedule",
     "label": "教师课表",
     "description": "教师姓名必填，可继续带周次、星期、时段和校区",
     "usage": "/teacher 教师姓名 [第8周] [周三] [下午] [江湾校区]",
-    "example": "/teacher 陈芳 第8周 周三 下午 江湾校区",
+    "example": "/teacher 教师姓名 第8周 周三 下午 江湾校区",
     "messagePrefix": "查教师课表 ",
     "minArgs": 1
   },
   {
     "name": "class",
+    "aliases": [
+      "classes",
+      "班级"
+    ],
     "capabilityId": "classSchedule",
     "label": "班级课表",
     "description": "完整班级名称必填，可继续带周次",
@@ -481,6 +510,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "room",
+    "aliases": [
+      "empty-room",
+      "empty",
+      "空教室"
+    ],
     "capabilityId": "emptyRoomNow",
     "label": "空教室",
     "description": "至少填写地点和时间，可带连续节数",
@@ -491,6 +525,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "classroom",
+    "aliases": [
+      "occupancy",
+      "教室",
+      "占用"
+    ],
     "capabilityId": "classroomOccupancy",
     "label": "教室占用",
     "description": "教室名和时间必填",
@@ -501,6 +540,10 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "course",
+    "aliases": [
+      "courses",
+      "课程"
+    ],
     "capabilityId": "courseSchedule",
     "label": "课程安排",
     "description": "课程名称必填，可继续带周次",
@@ -511,6 +554,10 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "weather",
+    "aliases": [
+      "forecast",
+      "天气"
+    ],
     "capabilityId": "campusWeather",
     "label": "校区天气",
     "description": "填写校区和日期",
@@ -521,6 +568,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "teaching-week",
+    "aliases": [
+      "week-number",
+      "teachingweek",
+      "教学周"
+    ],
     "capabilityId": "teachingWeek",
     "label": "教学周",
     "description": "查看当前教学周",
@@ -531,6 +583,10 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "status",
+    "aliases": [
+      "state",
+      "数据状态"
+    ],
     "capabilityId": "dataStatus",
     "label": "数据状态",
     "description": "核对课表版本与更新时间",
@@ -541,6 +597,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "sync",
+    "aliases": [
+      "import",
+      "导入",
+      "同步"
+    ],
     "capabilityId": "personalSync",
     "label": "导入课表",
     "description": "打开个人课表导入指引",
@@ -551,6 +612,11 @@ const SLASH_COMMANDS = Object.freeze([
   },
   {
     "name": "help",
+    "aliases": [
+      "commands",
+      "帮助",
+      "命令"
+    ],
     "capabilityId": "appHelp",
     "label": "命令帮助",
     "description": "查看校园查询能力和准确问法",

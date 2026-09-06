@@ -2337,12 +2337,18 @@ Page({
   onSlashCommandTap(event) {
     const command = event && event.detail && event.detail.command;
     if (!command) return;
+    const commandDraft = xiaofuSlashCommand.buildCommandDraft(command, this.data.activeConversationContext);
+    const reusedContextText = commandDraft.reusedContext.length
+      ? ` 已沿用本会话的${commandDraft.reusedContext.join("、")}。`
+      : "";
     this.setData({
-      inputValue: command.example || command.usage || command.command,
+      inputValue: commandDraft.value,
       inputFocus: true,
       slashCommandVisible: true,
       slashCommandItems: xiaofuSlashCommand.filterCommands(command.command),
-      slashCommandHint: Number(command.minArgs || 0) > 0 ? "示例已填入，可直接修改姓名、班级、地点或时间。" : "这是无参数命令，可直接发送。",
+      slashCommandHint: Number(command.minArgs || 0) > 0
+        ? `示例已填入，请替换参数占位文字后发送。${reusedContextText}`
+        : "这是无参数命令，可直接发送。",
     });
     this.syncComposerInset();
   },
@@ -2895,7 +2901,9 @@ Page({
         slashCommandVisible: true,
         slashCommandItems: commandResult.command
           ? xiaofuSlashCommand.filterCommands(`/${commandResult.command.name}`)
-          : xiaofuSlashCommand.filterCommands("/"),
+          : (Array.isArray(commandResult.suggestions) && commandResult.suggestions.length
+            ? commandResult.suggestions
+            : xiaofuSlashCommand.filterCommands("/")),
         slashCommandHint: commandResult.error,
       });
       this.syncComposerInset();
@@ -2903,6 +2911,9 @@ Page({
     }
     const requestMessage = commandResult.message || message;
     const displayMessage = commandResult.isCommand ? message : requestMessage;
+    if (commandResult.isCommand && commandResult.command) {
+      xiaofuSlashCommand.recordRecentCommand(commandResult.command);
+    }
     if (!this.data.demoMode && isNewConversationCommand(requestMessage)) {
       this.createNewConversation();
       return;

@@ -18,13 +18,19 @@
     >
       <view class="command-mark">/</view>
       <view class="command-copy">
-        <view class="command-row"><text class="command-name">{{item.command}}</text><text class="command-label">{{item.label}}</text></view>
+        <view class="command-row">
+          <text class="command-name">{{item.command}}</text>
+          <text class="command-label">{{item.label}}</text>
+          <text class="command-recent" wx:if="{{item.recent}}">最近</text>
+          <text class="command-match" wx:if="{{item.matchKind === 'fuzzy'}}">拼写建议</text>
+          <text class="command-match" wx:elif="{{item.matchKind === 'alias'}}">别名</text>
+        </view>
         <view class="command-desc">{{item.description}}</view>
         <view class="command-example">示例 · {{item.example}}</view>
       </view>
       <view class="command-chevron">›</view>
     </button>
   </scroll-view>
-  <view class="command-empty" wx:else>没有匹配命令。删除关键词可查看完整列表，或输入 /help。</view>
+  <view class="command-empty" wx:else>没有可靠匹配。删除关键词查看完整列表，或输入 /help。</view>
   <view class="command-hint" wx:if="{{hint}}">{{hint}}</view>
 </view>
