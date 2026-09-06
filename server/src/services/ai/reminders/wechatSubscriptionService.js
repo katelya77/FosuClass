@@ -2,12 +2,14 @@ const axios = require("axios");
 const { defaultWechatRecipientVault } = require("./wechatRecipientVault");
 
 const DEFAULT_FIELD_MAP = Object.freeze({
-  courseName: "thing8",
-  startTime: "time15",
-  duration: "thing2",
-  teacherName: "thing14",
-  classroom: "thing4",
+  courseName: "thing12",
+  teacherName: "thing17",
+  classroom: "thing3",
+  startTime: "time19",
+  endTime: "time20",
 });
+
+const REFRESHABLE_ACCESS_TOKEN_CODES = new Set([40014, 42001]);
 
 function mapWechatSendError(payload = {}) {
   const code = Number(payload.errcode || 0);
@@ -15,6 +17,11 @@ function mapWechatSendError(payload = {}) {
   if (code === 43101) return { success: false, code: "WECHAT_SUBSCRIPTION_NOT_AUTHORIZED", retryable: false };
   if (code === 40037) return { success: false, code: "WECHAT_TEMPLATE_INVALID", retryable: false };
   if (code === 40003) return { success: false, code: "WECHAT_RECIPIENT_INVALID", retryable: false };
+  if (code === 41030) return { success: false, code: "WECHAT_PAGE_INVALID", retryable: false };
+  if (code === 47003) return { success: false, code: "WECHAT_TEMPLATE_DATA_INVALID", retryable: false };
+  if (REFRESHABLE_ACCESS_TOKEN_CODES.has(code)) {
+    return { success: false, code: "WECHAT_ACCESS_TOKEN_EXPIRED", retryable: true };
+  }
   if (code === 45009) return { success: false, code: "WECHAT_RATE_LIMITED", retryable: true };
   if (code === -1) return { success: false, code: "WECHAT_SYSTEM_BUSY", retryable: true };
   return { success: false, code: "WECHAT_SEND_REJECTED", retryable: false };
@@ -49,22 +56,28 @@ function fieldMax(field) {
   return 20;
 }
 
+function formatTemplateDateTime(dateValue, timeValue) {
+  const rawDate = String(dateValue || "").trim();
+  const rawTime = String(timeValue || "").trim();
+  const match = rawDate.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  const date = match
+    ? `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`
+    : rawDate;
+  return [date, rawTime].filter(Boolean).join(" ");
+}
+
 function buildTemplateData(occurrence, fieldMap) {
   const source = occurrence && typeof occurrence === "object" ? occurrence : {};
   const location = [source.campus, source.classroom]
     .map((item) => String(item || "").trim())
     .filter((item, index, items) => item && items.indexOf(item) === index)
     .join(" ");
-  const durationMinutes = Math.max(0, Number(source.durationMinutes || 0) || 0);
-  const durationFallback = durationMinutes
-    ? [Math.floor(durationMinutes / 60) ? `${Math.floor(durationMinutes / 60)}小时` : "", durationMinutes % 60 ? `${durationMinutes % 60}分钟` : ""].filter(Boolean).join("")
-    : "";
   const logical = {
     courseName: source.courseName || "课程提醒",
-    startTime: [source.date, source.startTime].filter(Boolean).join(" "),
-    duration: source.durationText || durationFallback || "以课表为准",
     teacherName: source.teacherName || "教师待定",
     classroom: location || "地点待定",
+    startTime: formatTemplateDateTime(source.date, source.startTime),
+    endTime: formatTemplateDateTime(source.date, source.endTime || source.startTime),
   };
   const output = {};
   Object.keys(fieldMap).forEach((key) => {
@@ -150,7 +163,6 @@ class WechatSubscriptionService {
       ? reminder.nextOccurrence
       : {};
     try {
-      const accessToken = await this.accessTokenProvider();
       const body = {
         touser: recipient.openid,
         template_id: this.templateId,
@@ -159,12 +171,26 @@ class WechatSubscriptionService {
         lang: "zh_CN",
         data: buildTemplateData(occurrence, this.fieldMap),
       };
-      const response = await this.request(
-        `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(accessToken)}`,
-        body,
-        { timeout: Number(process.env.WECHAT_REMINDER_TIMEOUT_MS || 5000) || 5000 }
-      );
-      return mapWechatSendError(response && response.data || {});
+      const send = async (forceRefresh) => {
+        if (forceRefresh) {
+          this.accessToken = "";
+          this.accessTokenExpiresAt = 0;
+        }
+        const accessToken = await this.accessTokenProvider({ forceRefresh: forceRefresh === true });
+        return this.request(
+          `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(accessToken)}`,
+          body,
+          { timeout: Number(process.env.WECHAT_REMINDER_TIMEOUT_MS || 5000) || 5000 }
+        );
+      };
+      let response = await send(false);
+      let mapped = mapWechatSendError(response && response.data || {});
+      const responseCode = Number(response && response.data && response.data.errcode || 0);
+      if (REFRESHABLE_ACCESS_TOKEN_CODES.has(responseCode)) {
+        response = await send(true);
+        mapped = mapWechatSendError(response && response.data || {});
+      }
+      return mapped;
     } catch (error) {
       if (error && error.code && /^WECHAT_/.test(error.code)) {
         return { success: false, code: error.code, retryable: error.retryable !== false };
@@ -179,9 +205,11 @@ const defaultWechatSubscriptionService = new WechatSubscriptionService();
 
 module.exports = {
   DEFAULT_FIELD_MAP,
+  REFRESHABLE_ACCESS_TOKEN_CODES,
   WechatSubscriptionService,
   buildTemplateData,
   defaultWechatSubscriptionService,
+  formatTemplateDateTime,
   loadFieldMap,
   mapWechatSendError,
 };

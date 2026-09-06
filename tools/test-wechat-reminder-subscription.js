@@ -17,18 +17,18 @@ const {
 
 async function run() {
   assert.deepStrictEqual(DEFAULT_FIELD_MAP, {
-    courseName: "thing8",
-    startTime: "time15",
-    duration: "thing2",
-    teacherName: "thing14",
-    classroom: "thing4",
+    courseName: "thing12",
+    teacherName: "thing17",
+    classroom: "thing3",
+    startTime: "time19",
+    endTime: "time20",
   });
   assert.deepStrictEqual(loadFieldMap({
-    courseName: "thing8",
-    startTime: "time15",
-    duration: "thing2",
-    teacherName: "thing14",
-    classroom: "thing4",
+    courseName: "thing12",
+    teacherName: "thing17",
+    classroom: "thing3",
+    startTime: "time19",
+    endTime: "time20",
     campus: "thing99",
     unexpected: "thing100",
   }), DEFAULT_FIELD_MAP, "only supported template fields should be emitted");
@@ -36,16 +36,17 @@ async function run() {
     courseName: "动物解剖学",
     date: "2026-07-23",
     startTime: "13:30",
+    endTime: "14:55",
     durationText: "1小时25分钟",
     teacherName: "张老师",
     campus: "仙溪校区",
     classroom: "B8-203",
   }, DEFAULT_FIELD_MAP), {
-    thing8: { value: "动物解剖学" },
-    time15: { value: "2026-07-23 13:30" },
-    thing2: { value: "1小时25分钟" },
-    thing14: { value: "张老师" },
-    thing4: { value: "仙溪校区 B8-203" },
+    thing12: { value: "动物解剖学" },
+    thing17: { value: "张老师" },
+    thing3: { value: "仙溪校区 B8-203" },
+    time19: { value: "2026年7月23日 13:30" },
+    time20: { value: "2026年7月23日 14:55" },
   });
 
   const vault = new WechatRecipientVault({
@@ -116,12 +117,41 @@ async function run() {
   assert.strictEqual(sentBody.template_id, "tmpl-course-reminder");
   assert.strictEqual(sentBody.page, "pages/today/today");
   assert.deepStrictEqual(sentBody.data, {
-    thing8: { value: "动物解剖学" },
-    time15: { value: "2026-07-23 13:30" },
-    thing2: { value: "1小时25分钟" },
-    thing14: { value: "张老师" },
-    thing4: { value: "仙溪校区 B8-203" },
+    thing12: { value: "动物解剖学" },
+    thing17: { value: "张老师" },
+    thing3: { value: "仙溪校区 B8-203" },
+    time19: { value: "2026年7月23日 13:30" },
+    time20: { value: "2026年7月23日 14:55" },
   });
+
+  let tokenCalls = 0;
+  let sendCalls = 0;
+  const refreshService = new WechatSubscriptionService({
+    appid: "wx-test-app",
+    appSecret: "server-only-secret",
+    templateId: "tmpl-course-reminder",
+    recipientVault: vault,
+    accessTokenProvider: async ({ forceRefresh } = {}) => {
+      tokenCalls += 1;
+      return forceRefresh ? "fresh-access-token" : "stale-access-token";
+    },
+    request: async (url) => {
+      sendCalls += 1;
+      if (sendCalls === 1) {
+        assert.ok(url.includes("stale-access-token"));
+        return { data: { errcode: 42001, errmsg: "access_token expired" } };
+      }
+      assert.ok(url.includes("fresh-access-token"));
+      return { data: { errcode: 0, errmsg: "ok" } };
+    },
+  });
+  const refreshed = await refreshService.sendCourseReminder({
+    principalKey: "principal_wechat_a",
+    reminder: { nextOccurrence: { courseName: "动物解剖学", date: "2026-07-23", startTime: "13:30", endTime: "14:55" } },
+  });
+  assert.strictEqual(refreshed.success, true);
+  assert.strictEqual(tokenCalls, 2);
+  assert.strictEqual(sendCalls, 2);
 
   assert.deepStrictEqual(mapWechatSendError({ errcode: 43101 }), {
     success: false,
@@ -129,6 +159,8 @@ async function run() {
     retryable: false,
   });
   assert.strictEqual(mapWechatSendError({ errcode: 45009 }).retryable, true);
+  assert.strictEqual(mapWechatSendError({ errcode: 47003 }).code, "WECHAT_TEMPLATE_DATA_INVALID");
+  assert.strictEqual(mapWechatSendError({ errcode: 41030 }).code, "WECHAT_PAGE_INVALID");
 
   const apiSecuritySource = fs.readFileSync(
     path.join(__dirname, "../server/src/utils/apiSecurity.js"),

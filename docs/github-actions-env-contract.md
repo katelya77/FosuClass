@@ -75,7 +75,7 @@
 | `COZE_BOT_ID` | 空 | Coze Bot/Agent ID | 允许为空 |
 | `COZE_PROVIDER_ROLE` | `temporary` | Coze 角色标记，默认 temporary | 使用 temporary |
 | `WECHAT_COURSE_REMINDER_TEMPLATE_ID` | 空 | 微信一次性订阅消息模板 ID | 空时只保留应用内提醒，不声称已获推送能力 |
-| `WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON` | 空 | 课程名、时间、时长、教师、地点到模板字段的 JSON 映射 | 当前模板默认使用 `thing8/time15/thing2/thing14/thing4`；校区与教室合并写入地点 |
+| `WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON` | 空 | 课程名、教师、地点、上下课时间到模板字段的 JSON 映射 | 当前模板默认使用 `thing12/thing17/thing3/time19/time20`；校区与教室合并写入地点 |
 | `WECHAT_REMINDER_MINIPROGRAM_STATE` | `formal` | 订阅消息跳转的小程序版本 | 使用 formal；开发验收可显式改为 developer/trial |
 | `WECHAT_REMINDER_TIMEOUT_MS` | `5000` | 微信接口超时 | 使用默认值 |
 | `FOSU_COURSE_REMINDER_DISPATCH_ENABLED` | `false` | 是否启动安全定时发送器 | 默认关闭，模板、密钥和单实例调度确认完成后再开启 |

@@ -165,6 +165,7 @@ jobs:
           node --check src/security/routeSecurityPolicy.js
           node --check src/workers/releaseWorker.js
           node --check scripts/security-postdeploy-check.js
+          node --check scripts/verify-course-reminder.js
           node --check scripts/reconcile-static-release.js
           node --check scripts/configure-coze-workload.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
@@ -466,6 +467,16 @@ jobs:
               rm -f "$tmp_env"
               exit 1
             fi
+            effective_reminder_dispatch="$(grep '^FOSU_COURSE_REMINDER_DISPATCH_ENABLED=' "$tmp_env" | cut -d= -f2-)"
+            if [ "$effective_reminder_dispatch" = "true" ]; then
+              for key in WECHAT_APPID WECHAT_APPSECRET FOSU_AGENT_REMINDER_SECRET FOSU_WECHAT_RECIPIENT_SECRET WECHAT_COURSE_REMINDER_TEMPLATE_ID WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON; do
+                if ! grep -q "^${key}=.\+" "$tmp_env"; then
+                  echo "::error::.env missing ${key} while course reminder dispatch is enabled"
+                  rm -f "$tmp_env"
+                  exit 1
+                fi
+              done
+            fi
             mv "$tmp_env" .env
 
             node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')"
@@ -541,6 +552,7 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | bash "$GUARD" sanitize
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-course-reminder.js --require-ready --probe-token' 2>&1 | bash "$GUARD" sanitize
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
             read_reconcile() {

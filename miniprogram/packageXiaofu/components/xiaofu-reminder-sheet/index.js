@@ -359,11 +359,12 @@ Component({
       if (!reminderId || this.data.operatingId) return;
       const nextStatus = status === "paused" ? "enabled" : "paused";
       this.setData({ operatingId: reminderId });
+      const idempotencyKey = reminderClient.makeIdempotencyKey("toggle", reminderId);
       const confirmation = await reminderClient.requestOperationConfirmation({
         reminderId,
         operation: "update",
         patch: { status: nextStatus },
-        idempotencyKey: reminderClient.makeIdempotencyKey("toggle", reminderId),
+        idempotencyKey,
       });
       if (!confirmation.success) {
         this.setData({ operatingId: "" });
@@ -374,7 +375,7 @@ Component({
         reminderId,
         patch: { status: nextStatus },
         confirmationProof: confirmation.confirmationProof,
-        idempotencyKey: reminderClient.makeIdempotencyKey("toggle-apply", reminderId),
+        idempotencyKey,
       });
       this.setData({ operatingId: "" });
       if (!result.success) {
@@ -395,11 +396,12 @@ Component({
           const leadMinutes = LEAD_OPTIONS[res.tapIndex];
           if (!leadMinutes) return;
           that.setData({ operatingId: reminderId });
+          const idempotencyKey = reminderClient.makeIdempotencyKey("lead", reminderId);
           const confirmation = await reminderClient.requestOperationConfirmation({
             reminderId,
             operation: "update",
             patch: { leadMinutes },
-            idempotencyKey: reminderClient.makeIdempotencyKey("lead", reminderId),
+            idempotencyKey,
           });
           if (!confirmation.success) {
             that.setData({ operatingId: "" });
@@ -410,7 +412,7 @@ Component({
             reminderId,
             patch: { leadMinutes },
             confirmationProof: confirmation.confirmationProof,
-            idempotencyKey: reminderClient.makeIdempotencyKey("lead-apply", reminderId),
+            idempotencyKey,
           });
           that.setData({ operatingId: "" });
           if (!result.success) {
@@ -436,11 +438,12 @@ Component({
         success: async (res) => {
           if (!res.confirm) return;
           that.setData({ operatingId: reminderId });
+          const idempotencyKey = reminderClient.makeIdempotencyKey("delete", reminderId);
           const confirmation = await reminderClient.requestOperationConfirmation({
             reminderId,
             operation: "delete",
             patch: {},
-            idempotencyKey: reminderClient.makeIdempotencyKey("delete", reminderId),
+            idempotencyKey,
           });
           if (!confirmation.success) {
             that.setData({ operatingId: "" });
@@ -450,7 +453,7 @@ Component({
           const result = await reminderClient.deleteReminder({
             reminderId,
             confirmationProof: confirmation.confirmationProof,
-            idempotencyKey: reminderClient.makeIdempotencyKey("delete-apply", reminderId),
+            idempotencyKey,
           });
           that.setData({ operatingId: "" });
           if (!result.success) {
