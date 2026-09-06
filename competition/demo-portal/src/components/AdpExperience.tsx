@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect } from "react";
 import {
   ArrowUp,
   Bot,
@@ -11,20 +11,8 @@ import {
 } from "lucide-react";
 
 import { VERIFIED_REPLAY } from "../data/verifiedReplay";
-import {
-  ADP_CHAT_API_URL,
-  ADP_DIAGNOSTICS_STORAGE_KEY,
-  getPersistentConversationId,
-} from "../lib/adp";
-import {
-  consumeSseBuffer,
-  INITIAL_ADP_EXECUTION,
-  parseAdpEvent,
-  reduceAdpExecution,
-  type AdpExecutionState,
-  type AdpWidgetPayload,
-} from "../lib/adp-stream";
 import { cn } from "../lib/cn";
+import { useExperienceSession } from "../lib/experience-session";
 import { AdpWidget, type AdpWidgetAction } from "./AdpWidget";
 
 interface AdpExperienceProps {
@@ -34,75 +22,14 @@ interface AdpExperienceProps {
   recordMode?: boolean;
 }
 
-interface ChatTurn {
-  id: string;
-  question?: string;
-  answer: string;
-  widget?: AdpWidgetPayload;
-}
-
-type ExperienceMode = "live" | "replay";
-
-const RATE_LIMIT_COOLDOWN_SECONDS = 30;
-
-export interface DiagnosticsSnapshot {
-  api: "idle" | "connecting" | "ok" | "error";
-  sse: "idle" | "connecting" | "streaming" | "completed" | "error";
-  conversationId: string;
-  eventCount: number;
-  eventTypes: string[];
-  agentNames: string[];
-  subAgentFlags: boolean[];
-  toolNames: string[];
-  multiAgent: boolean;
-  widgetSdk: boolean;
-  widgetReceived: boolean;
-  widgetRendered: boolean;
-  requestId?: string;
-  lastError?: string;
-  updatedAt: string;
-}
-
 const QUICK_PROMPTS = [
   { role: "学生", prompt: "查看2025级计算机类01班第1周课表。" },
   { role: "教师", prompt: "帮教师005、006、014找第1周周四上午的共同空闲，并推荐容量不少于120座的教室。" },
   { role: "教学管理", prompt: "未来四周谁的教学负载最高？" },
 ];
 
-export function saveDiagnostics(snapshot: DiagnosticsSnapshot): void {
-  try {
-    window.sessionStorage.setItem(ADP_DIAGNOSTICS_STORAGE_KEY, JSON.stringify(snapshot));
-    window.dispatchEvent(new CustomEvent("adp-diagnostics", { detail: snapshot }));
-  } catch {
-    // Diagnostics must never interrupt the real conversation.
-  }
-}
-
-export function buildDiagnostics(
-  state: AdpExecutionState,
-  conversationId: string,
-  widgetRendered: boolean,
-): DiagnosticsSnapshot {
-  return {
-    api: state.status === "error" ? "error" : state.status === "connecting" ? "connecting" : state.status === "idle" ? "idle" : "ok",
-    sse: state.status,
-    conversationId,
-    eventCount: state.eventCount,
-    eventTypes: state.eventTypes,
-    agentNames: state.agentNames,
-    subAgentFlags: state.subAgentFlags,
-    toolNames: state.toolNames,
-    multiAgent: state.agentNames.length > 1,
-    widgetSdk: typeof customElements !== "undefined" && Boolean(customElements.get("adp-widget")),
-    widgetReceived: Boolean(state.widget),
-    widgetRendered,
-    requestId: state.requestId,
-    lastError: state.error,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
 function userFacingError(message: string): string {
+  if (/页面刷新中断/.test(message)) return message;
   if (/400429|rate\s*limit/i.test(message)) {
     return "当前体验请求较多，ADP 已返回限流；问题已保留，请稍后重试。";
   }
@@ -172,179 +99,30 @@ export function AdpExperience({
   showHeader = true,
   recordMode = false,
 }: AdpExperienceProps): React.ReactElement {
-  const conversationId = useMemo(() => getPersistentConversationId(), []);
-  const [input, setInput] = useState(initialPrompt);
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const [execution, setExecution] = useState<AdpExecutionState>(INITIAL_ADP_EXECUTION);
-  const [mode, setMode] = useState<ExperienceMode>("live");
-  const [cooldownUntil, setCooldownUntil] = useState(0);
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
-  const [widgetRendered, setWidgetRendered] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const pendingExecutionRef = useRef<AdpExecutionState | null>(null);
-  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session = useExperienceSession();
+  const {
+    input,
+    turns,
+    execution,
+    mode,
+    cooldownRemaining,
+    isRunning,
+    restored,
+    applySuggestedPrompt,
+    editInput,
+    replaceInput,
+    setMode,
+    submit,
+    runWidgetAction,
+    stop,
+    markWidgetRendered,
+  } = session;
 
   useEffect(() => {
-    if (!abortRef.current) setInput(initialPrompt);
-  }, [initialPrompt]);
+    applySuggestedPrompt(initialPrompt);
+  }, [applySuggestedPrompt, initialPrompt, isRunning]);
 
-  const commitExecution = useCallback(
-    (next: AdpExecutionState) => {
-      setExecution(next);
-      saveDiagnostics(buildDiagnostics(next, conversationId, widgetRendered));
-      setTurns((current) => {
-        if (!current.length) return current;
-        const copy = [...current];
-        const last = copy[copy.length - 1];
-        copy[copy.length - 1] = {
-          ...last,
-          answer: next.reply || last.answer,
-          widget: next.widget ?? last.widget,
-        };
-        return copy;
-      });
-    },
-    [conversationId, widgetRendered],
-  );
-
-  const updateExecution = useCallback(
-    (next: AdpExecutionState, immediate = false) => {
-      pendingExecutionRef.current = next;
-      if (immediate) {
-        if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-        renderTimerRef.current = null;
-        pendingExecutionRef.current = null;
-        commitExecution(next);
-        return;
-      }
-      if (renderTimerRef.current) return;
-      renderTimerRef.current = setTimeout(() => {
-        renderTimerRef.current = null;
-        const pending = pendingExecutionRef.current;
-        pendingExecutionRef.current = null;
-        if (pending) commitExecution(pending);
-      }, 48);
-    },
-    [commitExecution],
-  );
-
-  useEffect(
-    () => () => {
-      abortRef.current?.abort();
-      if (renderTimerRef.current) clearTimeout(renderTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!cooldownUntil) {
-      setCooldownRemaining(0);
-      return;
-    }
-    const update = () => {
-      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-      setCooldownRemaining(remaining);
-      if (!remaining) setCooldownUntil(0);
-    };
-    update();
-    const timer = window.setInterval(update, 250);
-    return () => window.clearInterval(timer);
-  }, [cooldownUntil]);
-
-  const beginRateLimitCooldown = useCallback(() => {
-    setCooldownRemaining(RATE_LIMIT_COOLDOWN_SECONDS);
-    setCooldownUntil(Date.now() + RATE_LIMIT_COOLDOWN_SECONDS * 1000);
-  }, []);
-
-  const runRequest = useCallback(
-    async (payload: { message?: string; widgetAction?: AdpWidgetAction }) => {
-      // Strict single-flight: an in-flight request may only be stopped by the
-      // explicit stop control. A second send never replaces or retries it.
-      if (abortRef.current) return;
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setWidgetRendered(false);
-      const turnId = crypto.randomUUID();
-      setTurns((current) => [
-        ...current,
-        { id: turnId, question: payload.message, answer: "" },
-      ]);
-
-      let currentState: AdpExecutionState = { ...INITIAL_ADP_EXECUTION, status: "connecting" };
-      updateExecution(currentState, true);
-      try {
-        const response = await fetch(ADP_CHAT_API_URL, {
-          method: "POST",
-          headers: { accept: "text/event-stream", "content-type": "application/json" },
-          body: JSON.stringify({ conversationId, ...payload }),
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) {
-          const detail = (await response.json().catch(() => null)) as { message?: string } | null;
-          throw new Error(detail?.message || `ADP API ${response.status}`);
-        }
-        currentState = {
-          ...currentState,
-          status: "streaming",
-          requestId: response.headers.get("x-adp-request-id") || undefined,
-        };
-        updateExecution(currentState, true);
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          buffer = consumeSseBuffer(buffer, (event, eventName) => {
-            currentState = reduceAdpExecution(currentState, parseAdpEvent(event, eventName));
-            updateExecution(currentState);
-          });
-        }
-        buffer += decoder.decode();
-        consumeSseBuffer(`${buffer}\n\n`, (event, eventName) => {
-          currentState = reduceAdpExecution(currentState, parseAdpEvent(event, eventName));
-        });
-        if (currentState.status !== "error") currentState = { ...currentState, status: "completed" };
-        if (currentState.error && payload.message) {
-          setInput((current) => current || payload.message || "");
-        }
-        if (isRateLimited(currentState.error)) beginRateLimitCooldown();
-        updateExecution(currentState, true);
-      } catch (error) {
-        if (controller.signal.aborted) {
-          currentState = { ...currentState, status: "completed" };
-        } else {
-          currentState = {
-            ...currentState,
-            status: "error",
-            error: error instanceof Error ? error.message : "实时对话失败",
-          };
-          if (payload.message) setInput((current) => current || payload.message || "");
-          if (isRateLimited(currentState.error)) beginRateLimitCooldown();
-        }
-        updateExecution(currentState, true);
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-      }
-    },
-    [beginRateLimitCooldown, conversationId, updateExecution],
-  );
-
-  const submit = () => {
-    const message = input.trim();
-    if (!message || cooldownRemaining > 0 || abortRef.current || execution.status === "connecting" || execution.status === "streaming") return;
-    setInput("");
-    void runRequest({ message });
-  };
-
-  const onWidgetAction = (action: AdpWidgetAction) => {
-    if (cooldownRemaining > 0 || abortRef.current || execution.status === "connecting" || execution.status === "streaming") return;
-    void runRequest({ widgetAction: action });
-  };
-
-  const isRunning = execution.status === "connecting" || execution.status === "streaming";
+  const onWidgetAction = (action: AdpWidgetAction) => runWidgetAction(action);
   const rateLimited = isRateLimited(execution.error);
   const lastAgent = execution.agentNames.at(-1);
   const childAgent = execution.agentNames.find((name) => name !== execution.agentNames[0]);
@@ -370,7 +148,7 @@ export function AdpExperience({
               <span className={cn("native-adp__live", isRunning && "animate-pulse")} />
               <p className="text-sm font-semibold text-ink">{recordMode ? "真实智能体运行" : "真实智能体对话"}</p>
             </div>
-            <p className="mt-1 text-[11px] text-mute">{recordMode ? "问题、协作、工具与结果依次到达" : "访问凭证仅保存在服务端 · 执行过程实时返回"}</p>
+            <p className="mt-1 text-[11px] text-mute">{recordMode ? "问题、协作、工具与结果依次到达" : restored ? "已恢复本次会话 · 执行过程实时返回" : "访问凭证仅保存在服务端 · 执行过程实时返回"}</p>
           </div>
           {!recordMode && <div className="native-adp__header-actions flex items-center gap-2">
             <div className="native-adp__mode-switch" aria-label="体验模式">
@@ -432,10 +210,7 @@ export function AdpExperience({
                   {turn.widget && (
                     <div className="native-adp__widget">
                       <div className="native-adp__widget-label"><CheckCircle2 size={14} /> {recordMode ? "已核验结果" : "官方结果卡"}</div>
-                      <AdpWidget widget={turn.widget} disabled={isRunning} onAction={onWidgetAction} onRendered={() => {
-                        setWidgetRendered(true);
-                        saveDiagnostics(buildDiagnostics(execution, conversationId, true));
-                      }} />
+                      <AdpWidget widget={turn.widget} disabled={isRunning} onAction={onWidgetAction} onRendered={markWidgetRendered} />
                     </div>
                   )}
                 </div>
@@ -453,17 +228,17 @@ export function AdpExperience({
         )}
         {!recordMode && <div className="native-adp__quick-prompts">
           {QUICK_PROMPTS.map(({ role, prompt }) => (
-            <button key={role} aria-label={`Quick Start · ${role}`} onClick={() => setInput(prompt)} disabled={isRunning}>
+            <button key={role} aria-label={`Quick Start · ${role}`} onClick={() => replaceInput(prompt)} disabled={isRunning}>
               <strong>{role}</strong><span>{prompt}</span>
             </button>
           ))}
         </div>}
         <div className="native-adp__input-row">
-          <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {
+          <textarea value={input} onChange={(event) => editInput(event.target.value)} onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); }
           }} placeholder="向小序提问…" rows={2} disabled={isRunning} />
           {isRunning ? (
-            <button className="native-adp__send" onClick={() => abortRef.current?.abort()} aria-label="停止生成"><Square size={15} /></button>
+            <button className="native-adp__send" onClick={stop} aria-label="停止生成"><Square size={15} /></button>
           ) : (
             <button className="native-adp__send" onClick={submit} disabled={!input.trim() || cooldownRemaining > 0} aria-label="发送"><ArrowUp size={18} /></button>
           )}

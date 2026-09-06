@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { ExperienceSessionProvider } from "../lib/experience-session";
 import { AdpExperience } from "./AdpExperience";
+
+function renderExperience(element = <AdpExperience />) {
+  return render(<ExperienceSessionProvider>{element}</ExperienceSessionProvider>);
+}
 
 afterEach(() => {
   cleanup();
@@ -12,14 +17,14 @@ afterEach(() => {
 
 describe("AdpExperience native API mode", () => {
   it("starts with a real same-origin composer instead of an iframe", () => {
-    const { container } = render(<AdpExperience />);
+    const { container } = renderExperience();
     expect(screen.getByText("真实智能体对话")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("textbox")).toBeTruthy();
   });
 
   it("record mode removes replay, diagnostics and API jargon", () => {
-    render(<AdpExperience recordMode />);
+    renderExperience(<AdpExperience recordMode />);
     expect(screen.getByText("真实智能体运行")).toBeTruthy();
     expect(screen.getByText("用户问题")).toBeTruthy();
     expect(screen.getByText("专业智能体")).toBeTruthy();
@@ -31,7 +36,7 @@ describe("AdpExperience native API mode", () => {
   it("does not prefetch and exposes a clearly labelled verified replay", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    render(<AdpExperience />);
+    renderExperience();
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "已核验回放" }));
     expect(screen.getAllByText("已核验实录回放").length).toBeGreaterThan(0);
@@ -54,7 +59,7 @@ describe("AdpExperience native API mode", () => {
       headers: { "content-type": "text/event-stream", "x-adp-request-id": "request-test" },
     })));
 
-    render(<AdpExperience />);
+    renderExperience();
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
     await waitFor(() => expect(screen.getByText("Top1 为教师025。")).toBeTruthy());
@@ -73,7 +78,7 @@ describe("AdpExperience native API mode", () => {
       headers: { "content-type": "text/event-stream" },
     })));
 
-    render(<AdpExperience />);
+    renderExperience();
     const originalQuestion = (screen.getByRole("textbox") as HTMLTextAreaElement).value;
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
@@ -90,7 +95,7 @@ describe("AdpExperience native API mode", () => {
   it("enforces single-flight when two sends happen in the same turn", async () => {
     const fetchMock = vi.fn(() => new Promise<Response>(() => undefined));
     vi.stubGlobal("fetch", fetchMock);
-    render(<AdpExperience />);
+    renderExperience();
     const send = screen.getByRole("button", { name: "发送" });
     fireEvent.click(send);
     fireEvent.click(send);

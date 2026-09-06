@@ -6,7 +6,8 @@ import { BrandMark } from "./components/BrandMark";
 import { GuidedDemo } from "./components/GuidedDemo";
 import { MobileNav } from "./components/MobileNav";
 import { Sidebar } from "./components/Sidebar";
-import { useHashRoute, useNavigate, type Route } from "./lib/router";
+import { ExperienceSessionProvider } from "./lib/experience-session";
+import { useHashRoute, useNavigate, useRouteScrollReset, type Route } from "./lib/router";
 import { AdpDiagnosticsPage } from "./pages/AdpDiagnosticsPage";
 import { CapabilityPage } from "./pages/CapabilityPage";
 import { CasesPage } from "./pages/CasesPage";
@@ -25,7 +26,6 @@ function PageOutlet({ route, onNavigate, onQuickDemo, recordMode }: PageOutletPr
     case "experience":
       return (
         <ExperiencePage
-          key={`experience-${route.caseKey ?? "default"}`}
           caseKey={route.caseKey}
           onNavigate={onNavigate}
           recordMode={recordMode}
@@ -45,6 +45,7 @@ function PageOutlet({ route, onNavigate, onQuickDemo, recordMode }: PageOutletPr
 export function App({ search }: { search?: string } = {}): ReactElement {
   const route = useHashRoute();
   const onNavigate = useNavigate();
+  useRouteScrollReset(route);
   const [demoOpen, setDemoOpen] = useState(false);
   const recordMode = new URLSearchParams(search ?? window.location.search).get("mode") === "record";
 
@@ -52,6 +53,7 @@ export function App({ search }: { search?: string } = {}): ReactElement {
   const closeDemo = () => setDemoOpen(false);
 
   return (
+    <ExperienceSessionProvider>
     <div className="app-shell relative min-h-screen" data-route={route.name} data-record-mode={recordMode ? "true" : "false"}>
       <div className="app-backdrop" aria-hidden />
       <span className="app-blob animate-drift-slow left-[-7rem] top-[-5rem] h-[26rem] w-[26rem] bg-rose/60" />
@@ -87,7 +89,7 @@ export function App({ search }: { search?: string } = {}): ReactElement {
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${route.name}:${route.name === "experience" ? (route.caseKey ?? "default") : ""}`}
+            key={route.name}
             className="route-frame"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -102,5 +104,6 @@ export function App({ search }: { search?: string } = {}): ReactElement {
       {!recordMode && <MobileNav current={route} onNavigate={onNavigate} />}
       {!recordMode && <GuidedDemo open={demoOpen} onClose={closeDemo} onReplay={() => undefined} />}
     </div>
+    </ExperienceSessionProvider>
   );
 }

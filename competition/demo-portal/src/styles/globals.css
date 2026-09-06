@@ -20,6 +20,63 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Quiet coral glass scrollbars for the page and scrollable workspaces. */
+html,
+body,
+* {
+  scrollbar-width: thin;
+  scrollbar-color:
+    color-mix(in srgb, var(--brand) 42%, transparent)
+    color-mix(in srgb, var(--surface) 52%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background:
+    linear-gradient(var(--glass-bg), var(--glass-bg)),
+    color-mix(in srgb, var(--surface) 48%, transparent);
+}
+
+::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand) 40%, var(--rose)),
+      color-mix(in srgb, var(--brand-strong) 48%, var(--peach))
+    ) padding-box;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface) 58%, transparent);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand) 58%, var(--rose)),
+      color-mix(in srgb, var(--brand-strong) 64%, var(--peach))
+    ) padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand-strong) 72%, var(--rose)),
+      color-mix(in srgb, var(--brand-deep) 70%, var(--peach))
+    ) padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 body {
   margin: 0;
   background: var(--bg-warm) fixed;

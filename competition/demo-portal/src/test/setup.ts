@@ -23,6 +23,7 @@ class MockResizeObserver {
 globalThis.IntersectionObserver =
   MockIntersectionObserver as unknown as typeof IntersectionObserver;
 globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+window.scrollTo = () => undefined;
 
 if (typeof window.matchMedia !== "function") {
   window.matchMedia = ((query: string) => ({
