@@ -107,12 +107,13 @@
       <text class="unplaced-entry-arrow">›</text>
     </view>
 
-    <view class="table-shell">
-      <!-- 左右滑动查看周末提示 -->
-      <view class="swipe-hint-bar" wx:if="{{showWeekend && weekendShowMode === 'detail'}}" style="background: #fff5f5; border-bottom: 1rpx solid #edf0f5; padding: 12rpx 24rpx; text-align: center;">
-        <text class="swipe-hint-text" style="font-size: 20rpx; color: #c62828; font-weight: bold;">💡 左右滑动查看周末课表</text>
-      </view>
-
+    <view
+      class="table-shell schedule-gesture-region"
+      bindtouchstart="onScheduleTouchStart"
+      bindtouchmove="onScheduleTouchMove"
+      bindtouchend="onScheduleTouchEnd"
+      bindtouchcancel="onScheduleTouchCancel"
+    >
       <view class="schedule-grid-shell">
         <view class="time-axis-layer">
           <view class="time-axis">
@@ -243,7 +244,7 @@
           <block wx:if="{{todayReminderData.courses.length === 0}}">
             <view class="no-course-card">
               <view class="no-course-title">今天没有课程安排</view>
-              <view class="no-course-desc">好好休息，享受你的自由时光吧☕️</view>
+              <view class="no-course-desc">今天没有课程安排，可以轻松一点。</view>
               
               <!-- 下一节课预告 -->
               <view class="next-course-preview-box" wx:if="{{todayReminderData.nextCoursePreview}}">
@@ -272,9 +273,7 @@
                   <text class="focus-time-label">{{todayReminderData.courses[0].timeText}} ({{todayReminderData.courses[0].sectionText}})</text>
                 </view>
                 <view class="focus-course-name">{{todayReminderData.courses[0].courseName}}</view>
-                <view class="focus-course-room" wx:if="{{todayReminderData.courses[0].classroom}}">
-                  📍 {{todayReminderData.courses[0].classroom}}
-                </view>
+                <view class="focus-course-room" wx:if="{{todayReminderData.courses[0].classroom}}">{{todayReminderData.courses[0].classroom}}</view>
               </view>
 
               <!-- 其他课程列表 (最多展示剩余的 2 条) -->
@@ -330,9 +329,6 @@
   <!-- 更多菜单模态框 -->
   <view class="popup-mask menu-popup" wx:if="{{showMoreMenu}}" bindtap="hideMoreMenu">
     <view class="menu-panel" catchtap="noop">
-      <view class="menu-item" bindtap="refreshData">
-        <text class="menu-icon">↻</text>刷新课程数据
-      </view>
       <view class="menu-item" bindtap="showDisclaimer">
         <text class="menu-icon">i</text>查看免责声明
       </view>
@@ -341,9 +337,6 @@
       </view>
       <view class="menu-item" bindtap="goAiAssistant">
         <image class="menu-icon-img" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />校园服务管家
-      </view>
-      <view class="menu-item danger-item" bindtap="clearLocalCache">
-        <text class="menu-icon">🗑</text>清除本地缓存
       </view>
       <view class="menu-cancel" bindtap="hideMoreMenu">取消</view>
     </view>

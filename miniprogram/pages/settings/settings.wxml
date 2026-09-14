@@ -1,267 +1,162 @@
 <view class="page settings-page">
-  <view class="settings-overview card">
+  <view class="settings-overview">
     <view class="overview-head">
       <image class="settings-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
       <view class="settings-brand-info">
         <view class="settings-app-title">{{brand.appName}}</view>
-        <view class="settings-app-version">设置 · Version 1.0.0</view>
-      </view>
-    </view>
-
-    <view class="overview-schedule" bindtap="goSchool">
-      <view class="overview-label">当前课表</view>
-      <view class="overview-title" wx:if="{{selectedScheduleText !== '未绑定课表'}}">{{selectedScheduleText}}</view>
-      <view class="overview-title muted" wx:else>尚未绑定课表</view>
-      <view class="overview-meta" wx:if="{{selectedScheduleSourceText}}">{{selectedScheduleSourceText}}</view>
-      <view class="overview-meta" wx:if="{{selectedScheduleImportText}}">{{selectedScheduleImportText}}</view>
-    </view>
-
-    <view class="term-summary">
-      <view class="term-summary-item">
-        <view class="term-summary-label">学期</view>
-        <view class="term-summary-value">{{settings.semester || "待同步"}}</view>
-      </view>
-      <view class="term-summary-item">
-        <view class="term-summary-label">本周</view>
-        <view class="term-summary-value">{{teachingPeriodText}}</view>
-      </view>
-      <view class="term-summary-item">
-        <view class="term-summary-label">开学</view>
-        <view class="term-summary-value">{{termStartDate}}</view>
-      </view>
-      <view class="term-summary-item">
-        <view class="term-summary-label">总周数</view>
-        <view class="term-summary-value">{{totalTeachingWeeks}}</view>
+        <view class="overview-title {{selectedScheduleText === '未绑定课表' ? 'muted' : ''}}">{{selectedScheduleText}}</view>
+        <view class="overview-term">{{semesterDisplayText || "学期待同步"}} · {{teachingPeriodText}}</view>
       </view>
     </view>
 
     <view class="overview-actions">
-      <button class="overview-action primary" bindtap="goSchool">选择课表</button>
+      <button class="overview-action primary" bindtap="goSchool">切换课表</button>
       <button class="overview-action" bindtap="goImportXls">同步课表</button>
-      <button class="overview-action" bindtap="goCustomCourses">个性化</button>
     </view>
   </view>
 
   <notice-ticker notices="{{appConfig.notices}}" page-key="settings" max-count="1" />
 
-  <!-- 2. 课表设置 -->
-  <view class="settings-card card">
-    <view class="group-title">课表设置</view>
-    <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
+  <view class="settings-section">
+    <view class="group-title">课表显示</view>
+    <view class="settings-list">
       <view class="setting-row">
-        <view>
-          <view class="row-title">手动修正当前周</view>
-          <view class="row-desc"><text wx:if="{{settings.manualWeekOverride}}">第{{settings.currentWeek}}周 · 已手动覆盖</text><text wx:else>{{teachingPeriodText}} · 自动计算</text></view>
+        <view class="row-copy">
+          <view class="row-title">隐藏非本周课程</view>
+          <view class="row-desc">只显示本周实际上课的课程</view>
+        </view>
+        <switch
+          checked="{{settings.hideInactiveCourses}}"
+          color="#c62828"
+          data-key="hideInactiveCourses"
+          bindchange="onSwitchChange"
+        />
+      </view>
+      <view class="setting-row">
+        <view class="row-copy">
+          <view class="row-title">显示完整一周</view>
+          <view class="row-desc">显示周一至周日</view>
+        </view>
+        <switch
+          checked="{{settings.showWeekend}}"
+          color="#c62828"
+          data-key="showWeekend"
+          bindchange="onSwitchChange"
+        />
+      </view>
+      <view class="setting-row" bindtap="showMoreSettings" role="button">
+        <view class="row-copy">
+          <view class="row-title">更多显示设置</view>
+          <view class="row-desc">当前周次与七天显示方式</view>
         </view>
         <view class="row-arrow">›</view>
       </view>
-    </picker>
-    <view wx:if="{{settings.manualWeekOverride}}" class="setting-row" bindtap="restoreAutoWeek">
-      <view>
-        <view class="row-title">恢复自动周次</view>
-        <view class="row-desc">重新按教学日历和当前日期计算</view>
-      </view>
-      <view class="row-arrow">›</view>
     </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">隐藏非当前周课程</view>
-        <view class="row-desc">关闭时会灰显未上课课程</view>
+  </view>
+
+  <view class="settings-section">
+    <view class="group-title">课程提醒</view>
+    <view class="settings-list">
+      <view class="setting-row" bindtap="goSmartCourseReminders" role="button" aria-label="打开课程提醒设置">
+        <view class="row-copy">
+          <view class="row-title">课程提醒</view>
+          <view class="row-desc">上课前提醒、微信通知</view>
+        </view>
+        <view class="row-arrow">›</view>
       </view>
-      <switch
-        checked="{{settings.hideInactiveCourses}}"
-        color="#c62828"
-        data-key="hideInactiveCourses"
-        bindchange="onSwitchChange"
-      />
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">显示周末</view>
-        <view class="row-desc">默认开启，避免漏看周六、周日课程；确认无课可关闭</view>
-      </view>
-      <switch
-        checked="{{settings.showWeekend}}"
-        color="#c62828"
-        data-key="showWeekend"
-        bindchange="onSwitchChange"
-      />
-    </view>
-    <picker wx:if="{{settings.showWeekend}}" mode="selector" range="{{['七天概览', '七天详细']}}" value="{{settings.weekendShowMode === 'detail' ? 1 : 0}}" bindchange="onWeekendModeChange">
       <view class="setting-row">
-        <view>
-          <view class="row-title">周末显示模式</view>
-          <view class="row-desc">概览一屏展示，详细横向滑动</view>
+        <view class="row-copy">
+          <view class="row-title">打开小程序时显示今日课程</view>
         </view>
-        <view class="picker-value-wrapper" style="display: flex; align-items: center; gap: 8rpx;">
-          <text class="row-desc" style="color: #c62828; font-weight: bold;">{{settings.weekendShowMode === 'detail' ? '七天详细' : '七天概览'}}</text>
-          <text class="row-arrow" style="margin-top: 0;">›</text>
-        </view>
+        <switch
+          checked="{{settings.enableTodayStartupReminder}}"
+          color="#c62828"
+          data-key="enableTodayStartupReminder"
+          bindchange="onSwitchChange"
+        />
       </view>
-    </picker>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">显示历史年级</view>
-        <view class="row-desc">开启后将在全校查询中显示毕业历史年级</view>
-      </view>
-      <switch
-        checked="{{settings.showHistoricalGrades}}"
-        color="#c62828"
-        data-key="showHistoricalGrades"
-        bindchange="onSwitchChange"
-      />
     </view>
   </view>
 
-  <!-- 3. 今日提醒 -->
-  <view class="settings-card card">
-    <view class="group-title">今日提醒</view>
-    <view class="setting-row smart-reminder-entry" bindtap="goSmartCourseReminders" role="button" aria-label="打开智能课程提醒设置">
-      <view class="smart-reminder-copy">
-        <view class="row-title-line">
-          <view class="row-title">智能课程提醒</view>
-          <view class="service-notice-chip">服务通知</view>
+  <view class="settings-section">
+    <view class="group-title">常用工具</view>
+    <view class="settings-list">
+      <view class="setting-row">
+        <view class="row-copy">
+          <view class="row-title">{{assistantBrand.assistantName}}浮窗</view>
+          <view class="row-desc">{{xiaofuFloatEnabledText}}</view>
         </view>
-        <view class="row-desc">管理上课前提醒、微信服务通知与应用内兜底</view>
+        <switch
+          checked="{{xiaofuFloatEnabled}}"
+          color="#c62828"
+          bindchange="onXiaofuFloatToggle"
+        />
       </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">打开小程序时显示今日提醒</view>
-        <view class="row-desc">每日首次打开时智能弹出今日课程提醒总览</view>
+      <view class="setting-row" bindtap="goCampusMap">
+        <view class="row-copy">
+          <view class="row-title">校园地图</view>
+          <view class="row-desc">查看校区与教学楼</view>
+        </view>
+        <view class="row-arrow">›</view>
       </view>
-      <switch
-        checked="{{settings.enableTodayStartupReminder}}"
-        color="#c62828"
-        data-key="enableTodayStartupReminder"
-        bindchange="onSwitchChange"
-      />
     </view>
   </view>
 
-  <!-- 4. 数据与公告 -->
-  <view class="settings-card card">
-    <view class="group-title">数据与公告</view>
-    <view class="setting-row" bindtap="showDataVersionDetail">
-      <view>
-        <view class="row-title">当前数据版本</view>
-        <view class="row-desc">{{appConfig.dataVersion.releaseVersion || versionData.snapshotVersion || "待同步"}}</view>
+  <view class="settings-section">
+    <view class="group-title">帮助与关于</view>
+    <view class="settings-list">
+      <view class="setting-row" bindtap="showFeedback">
+        <view class="row-title">问题反馈</view>
+        <view class="row-arrow">›</view>
       </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">最近更新时间</view>
-        <view class="row-desc">{{appConfigUpdatedText || "暂无更新时间"}}</view>
+      <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
+        <view class="row-title">联系客服</view>
+        <view class="row-arrow">›</view>
+      </button>
+      <view class="setting-row" bindtap="showPrivacy">
+        <view class="row-title">隐私说明</view>
+        <view class="row-arrow">›</view>
       </view>
-    </view>
-    <view class="setting-row" bindtap="showNewsList">
-      <view>
-        <view class="row-title">查看最新动态</view>
-        <view class="row-desc">{{newsList.length ? newsList.length + " 条动态" : "暂无动态"}}</view>
+      <view class="setting-row" bindtap="showAbout">
+        <view class="row-title">关于{{brand.appName}}</view>
+        <view class="row-arrow">›</view>
       </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="showNoticeHistory">
-      <view>
-        <view class="row-title">查看公告历史</view>
-        <view class="row-desc">{{noticeHistory.length ? noticeHistory.length + " 条公告" : "暂无公告"}}</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="refreshBootstrapData">
-      <view>
-        <view class="row-title">手动刷新数据</view>
-        <view class="row-desc">清理缓存并重新拉取学校最新数据</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row danger" bindtap="clearLocalSelectionOnly">
-      <view>
-        <view class="row-title">清除本地选择</view>
-        <view class="row-desc">清空当前课表绑定和全校页筛选缓存</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row danger" bindtap="resetToNewUser">
-      <view>
-        <view class="row-title">重置为新用户状态</view>
-        <view class="row-desc">清空所有状态并重置为首次打开的引导状态</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-  </view>
-
-  <!-- 6. 反馈与联系 -->
-  <view class="settings-card card">
-    <view class="group-title">反馈与联系</view>
-    <view class="setting-row" bindtap="showFeedback">
-      <view>
-        <view class="row-title">问题反馈 / 建议反馈</view>
-        <view class="row-desc">课表错误、页面问题或新功能建议都可以告诉我们</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
-      <view>
-        <view class="row-title">联系在线客服</view>
-        <view class="row-desc">优先使用微信小程序在线客服系统进行留言</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </button>
-    <view class="setting-row" bindtap="showContactFallback">
-      <view>
-        <view class="row-title">备用联系邮箱</view>
-        <view class="row-desc">邮箱：katelya77@protonmail.com</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <button class="setting-row setting-row-button" open-type="share">
-      <view>
+      <button class="setting-row setting-row-button" open-type="share">
         <view class="row-title">分享给同学</view>
-        <view class="row-desc">将这个课表小程序推荐给你的同班同学</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </button>
-  </view>
-
-  <view class="settings-card card">
-    <view class="group-title">工具与帮助</view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">{{assistantBrand.assistantName}}浮窗</view>
-        <view class="row-desc">{{xiaofuFloatEnabledText}}</view>
-      </view>
-      <switch
-        checked="{{xiaofuFloatEnabled}}"
-        color="#2f855a"
-        bindchange="onXiaofuFloatToggle"
-      />
-    </view>
-    <view class="setting-row" bindtap="goCampusMap">
-      <view>
-        <view class="row-title">校园地图</view>
-        <view class="row-desc">查看仙溪、江湾、河滨校区地图和教学楼位置</view>
-      </view>
-      <view class="row-arrow">›</view>
+        <view class="row-arrow">›</view>
+      </button>
     </view>
   </view>
 
-  <!-- 7. 其他 -->
-  <view class="settings-card card">
-    <view class="group-title">其他</view>
-    <view class="setting-row" bindtap="showPrivacy">
-      <view class="row-title">隐私说明</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="showAbout">
-      <view class="row-title">关于{{brand.appName}}</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row danger" bindtap="clearCache">
-      <view class="row-title">恢复默认设置 (重置缓存)</view>
-      <view class="row-arrow">›</view>
+  <view wx:if="{{moreSettingsVisible}}" class="popup-mask" bindtap="hideMoreSettings">
+    <view class="popup-panel more-settings-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header compact-popup-header">
+        <view class="popup-title">更多设置</view>
+        <button class="close-button" bindtap="hideMoreSettings">×</button>
+      </view>
+      <view class="settings-list more-settings-list">
+        <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
+          <view class="setting-row">
+            <view class="row-title">当前周次</view>
+            <view class="row-value">{{settings.manualWeekOverride ? "第" + settings.currentWeek + "周" : "跟随当前日期"}} <text class="row-arrow">›</text></view>
+          </view>
+        </picker>
+        <view wx:if="{{settings.manualWeekOverride}}" class="setting-row" bindtap="restoreAutoWeek">
+          <view class="row-title">跟随当前日期</view>
+          <view class="row-arrow">›</view>
+        </view>
+        <picker wx:if="{{settings.showWeekend}}" mode="selector" range="{{['七天概览', '七天详细']}}" value="{{settings.weekendShowMode === 'detail' ? 1 : 0}}" bindchange="onWeekendModeChange">
+          <view class="setting-row">
+            <view class="row-title">课表显示方式</view>
+            <view class="row-value">{{settings.weekendShowMode === 'detail' ? '七天详细' : '七天概览'}} <text class="row-arrow">›</text></view>
+          </view>
+        </picker>
+        <view class="setting-row danger" bindtap="clearCache">
+          <view class="row-title">恢复默认设置</view>
+          <view class="row-arrow">›</view>
+        </view>
+      </view>
     </view>
   </view>
 
@@ -270,8 +165,8 @@
       <view class="popup-handle"></view>
       <view class="popup-header">
         <view class="popup-title-block">
-          <view class="popup-title">数据版本详情</view>
-          <view class="popup-subtitle">本地及服务器运行状态监控</view>
+          <view class="popup-title">数据与诊断</view>
+          <view class="popup-subtitle">仅用于排查课表问题</view>
         </view>
         <button class="close-button" bindtap="hideDataVersionDetail">×</button>
       </view>
@@ -509,48 +404,6 @@
       <view class="popup-footer">
         <button class="footer-btn" bindtap="hideDataVersionDetail">知道了</button>
       </view>
-    </view>
-  </view>
-
-  <view wx:if="{{newsVisible}}" class="popup-mask" bindtap="hideNewsList">
-    <view class="popup-panel" catchtap="noop">
-      <view class="popup-handle"></view>
-      <view class="popup-header">
-        <view class="popup-title-block">
-          <view class="popup-title">最新动态</view>
-          <view class="popup-subtitle">来自维护后台的实时状态</view>
-        </view>
-        <button class="close-button" bindtap="hideNewsList">×</button>
-      </view>
-      <scroll-view scroll-y class="detail-scroll">
-        <view class="news-item" wx:for="{{newsList}}" wx:key="id">
-          <view class="news-title">{{item.title}}</view>
-          <view class="news-meta">{{item.tag || "动态"}} · {{item.date}}</view>
-          <view class="news-summary">{{item.summary || item.detail}}</view>
-        </view>
-        <view wx:if="{{!newsList.length}}" class="modal-empty">暂无最新动态</view>
-      </scroll-view>
-    </view>
-  </view>
-
-  <view wx:if="{{noticeHistoryVisible}}" class="popup-mask" bindtap="hideNoticeHistory">
-    <view class="popup-panel" catchtap="noop">
-      <view class="popup-handle"></view>
-      <view class="popup-header">
-        <view class="popup-title-block">
-          <view class="popup-title">公告历史</view>
-          <view class="popup-subtitle">仅展示当前有效公告</view>
-        </view>
-        <button class="close-button" bindtap="hideNoticeHistory">×</button>
-      </view>
-      <scroll-view scroll-y class="detail-scroll">
-        <view class="news-item" wx:for="{{noticeHistory}}" wx:key="id">
-          <view class="news-title">{{item.title}}</view>
-          <view class="news-meta">{{item.priority}} · {{item.targetPage}} · {{item.displayMode}}</view>
-          <view class="news-summary">{{item.content}}</view>
-        </view>
-        <view wx:if="{{!noticeHistory.length}}" class="modal-empty">暂无公告</view>
-      </scroll-view>
     </view>
   </view>
 

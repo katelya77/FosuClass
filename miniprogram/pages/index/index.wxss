@@ -722,7 +722,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12rpx 18rpx;
+  padding: 14rpx 18rpx;
 }
 
 .schedule-control-wrapper {

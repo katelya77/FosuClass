@@ -10,9 +10,9 @@
   width: 100%;
   min-width: 0;
   padding: 6rpx;
-  border: 1rpx solid #e4eaf2;
+  border: 1rpx solid #e8ebef;
   border-radius: 16rpx;
-  background: #f7f9fc;
+  background: #f7f8fa;
 }
 
 .week-button,
@@ -29,9 +29,14 @@
 .week-button {
   flex: 0 0 52rpx;
   width: 52rpx;
-  color: #5a6678;
-  font-size: 40rpx;
-  font-weight: 600;
+  color: #68707d;
+  font-size: 36rpx;
+  font-weight: 500;
+}
+
+.week-button.is-disabled {
+  color: #c9cdd3;
+  opacity: 1;
 }
 
 .week-current {
@@ -40,11 +45,11 @@
   margin: 0 6rpx;
   padding: 0 12rpx;
   background: #ffffff;
-  color: #c62828;
+  color: #1f2329;
   font-size: 24rpx;
-  font-weight: 800;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  box-shadow: 0 6rpx 16rpx rgba(16, 31, 55, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(16, 31, 55, 0.04);
 }

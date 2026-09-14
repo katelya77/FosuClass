@@ -1,7 +1,7 @@
 const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
-const { getSettings, getCurrentScheduleTarget, setCurrentScheduleTarget } = require("../../utils/storage");
+const { getSettings, getCurrentScheduleTarget, saveSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
@@ -120,7 +120,8 @@ Page({
     dayColumnWidth: 128,
     weekdays: [],
     dayColumns: [],
-    showWeekend: false,
+    showWeekend: true,
+    weekendShowMode: "overview",
     detailVisible: false,
     selectedCourse: null,
     isFromShare: false,
@@ -499,12 +500,21 @@ Page({
   },
 
   onWeekChange(event) {
-    const type = event.detail.type;
+    const detail = event && event.detail || {};
+    const type = detail.type;
+    if (type !== "prev" && type !== "next" && type !== "current") return;
     const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
-      : clampWeek(event.detail.week, termConfig);
+      : clampWeek(detail.week, termConfig);
+    if (type !== "current" && nextWeek === this.data.currentWeek) return;
+
+    this._initialWeek = null;
+    saveSettings({
+      currentWeek: nextWeek,
+      manualWeekOverride: type !== "current",
+    });
     
     this.setData({
       currentWeek: nextWeek,

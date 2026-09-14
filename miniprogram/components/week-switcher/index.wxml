@@ -1,5 +1,5 @@
 <view class="week-switcher">
-  <button class="week-button" bindtap="prevWeek">‹</button>
-  <button class="week-current" bindtap="backToCurrent">{{weekLabel || "第" + currentWeek + "周"}}</button>
-  <button class="week-button" bindtap="nextWeek">›</button>
+  <button class="week-button {{currentWeek <= 1 ? 'is-disabled' : ''}}" disabled="{{currentWeek <= 1}}" bindtap="prevWeek" aria-label="上一周">‹</button>
+  <button class="week-current" bindtap="backToCurrent" aria-label="回到本周">{{weekLabel || "第" + currentWeek + "周"}}</button>
+  <button class="week-button {{currentWeek >= totalWeeks ? 'is-disabled' : ''}}" disabled="{{currentWeek >= totalWeeks}}" bindtap="nextWeek" aria-label="下一周">›</button>
 </view>

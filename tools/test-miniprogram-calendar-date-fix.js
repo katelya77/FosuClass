@@ -211,6 +211,7 @@ const settingsPage = createPage(pages[1]);
 settingsPage.loadSettings();
 assert.strictEqual(settingsPage.data.settings.currentWeek, 14);
 assert.strictEqual(settingsPage.data.settings.semester, "2025-2026-2");
+assert.strictEqual(settingsPage.data.semesterDisplayText, "2025-2026学年第二学期");
 assert.strictEqual(settingsPage.data.settings.showWeekend, true);
 assert.strictEqual(settingsPage.data.teachingInfo.dateLabel, "6月11日");
 assert.strictEqual(settingsPage.data.teachingInfo.weekdayLabel, "周四");
