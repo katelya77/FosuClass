@@ -22,10 +22,12 @@ Component({
       });
     },
     prevWeek() {
-      this.emitChange("prev", Math.max(1, this.data.currentWeek - 1));
+      if (this.data.currentWeek <= 1) return;
+      this.emitChange("prev", this.data.currentWeek - 1);
     },
     nextWeek() {
-      this.emitChange("next", Math.min(this.data.totalWeeks, this.data.currentWeek + 1));
+      if (this.data.currentWeek >= this.data.totalWeeks) return;
+      this.emitChange("next", this.data.currentWeek + 1);
     },
     backToCurrent() {
       this.emitChange("current", this.data.currentWeek);
