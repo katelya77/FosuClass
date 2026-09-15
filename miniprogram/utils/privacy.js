@@ -1,27 +1,42 @@
-function canUse(name) {
-  return typeof wx !== "undefined" && wx && typeof wx[name] === "function";
+const platform = require("./platform");
+
+function getRuntime() {
+  return typeof wx !== "undefined" ? wx : null;
+}
+
+function getApi(name) {
+  const runtime = getRuntime();
+  if (!runtime) return null;
+  const owner = platform.isMultiEndApp(runtime) ? runtime.miniapp : runtime;
+  if (!owner || typeof owner[name] !== "function") return null;
+  return owner[name].bind(owner);
 }
 
 function getPrivacySetting() {
   return new Promise((resolve) => {
-    if (!canUse("getPrivacySetting")) {
-      resolve({ needAuthorization: false, privacyContractName: "" });
+    const isMultiEndApp = platform.isMultiEndApp(getRuntime());
+    const api = getApi("getPrivacySetting");
+    if (!api) {
+      resolve({ needAuthorization: false, privacyContractName: "", unavailable: true });
       return;
     }
-    wx.getPrivacySetting({
+    api({
       success: (res) => resolve(res || { needAuthorization: false }),
-      fail: () => resolve({ needAuthorization: false, privacyContractName: "" }),
+      fail: () => resolve({ needAuthorization: isMultiEndApp, privacyContractName: "", unavailable: true }),
     });
   });
 }
 
 function requirePrivacyAuthorize() {
   return new Promise((resolve) => {
-    if (!canUse("requirePrivacyAuthorize")) {
+    const api = getApi(platform.isMultiEndApp(getRuntime()) ? "agreePrivacyAuthorization" : "requirePrivacyAuthorize");
+    if (!api) {
+      // Non-browse native privacy mode blocks app entry until consent, so an older SDK
+      // without the query API has already enforced the gate before JavaScript starts.
       resolve(true);
       return;
     }
-    wx.requirePrivacyAuthorize({
+    api({
       success: () => resolve(true),
       fail: () => resolve(false),
     });
@@ -36,11 +51,12 @@ async function ensurePrivacyAuthorized() {
 
 function openPrivacyContract() {
   return new Promise((resolve, reject) => {
-    if (!canUse("openPrivacyContract")) {
+    const api = platform.isMultiEndApp(getRuntime()) ? null : getApi("openPrivacyContract");
+    if (!api) {
       reject(new Error("OPEN_PRIVACY_CONTRACT_UNSUPPORTED"));
       return;
     }
-    wx.openPrivacyContract({
+    api({
       success: resolve,
       fail: reject,
     });

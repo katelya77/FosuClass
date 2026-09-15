@@ -433,6 +433,7 @@
     "test:openresty-ticket-observe-mode": "node tools/test-openresty-security-config.js",
     "test:openresty-ticket-enforce-mode": "node tools/test-openresty-security-config.js",
     "test:miniprogram-session-singleflight": "node tools/test-miniprogram-session-security.js",
+    "test:miniprogram-multi-platform": "node tools/test-miniprogram-multi-platform.js && node tools/test-miniprogram-privacy-readiness.js",
     "test:miniprogram-request-final-header": "node tools/test-miniprogram-url-compatibility.js",
     "test:raw-wx-request-whitelist": "node tools/test-raw-wx-request-whitelist.js",
     "test:miniprogram-build-entry": "node tools/test-miniprogram-build-entry.js",

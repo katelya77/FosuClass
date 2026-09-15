@@ -24,6 +24,7 @@ const releasePackService = require("../../services/releasePackService");
 const staticOriginService = require("../../services/staticOriginService");
 const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const platformUtils = require("../../utils/platform");
+const multiPlatform = require("../../utils/multiPlatform");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
 
@@ -193,9 +194,13 @@ Page({
     diagnosisCanShowFull: false,
     xiaofuFloatEnabled: true,
     xiaofuFloatEnabledText: "在页面右下角快速打开",
+    isMultiEndApp: platformUtils.isMultiEndApp(),
+    runtimePlatform: platformUtils.getRuntimePlatform(),
     versionData: {
       appVersion: APP_VERSION,
       sdkVersion: "",
+      runtimePlatform: "miniprogram",
+      envVersion: "release",
       courseTimesVersion: "",
       courseTimesUpdatedAt: "",
       snapshotVersion: "-",
@@ -237,7 +242,12 @@ Page({
   },
 
   onShow() {
-    if (wx.showShareMenu) {
+    const isMultiEndApp = platformUtils.isMultiEndApp();
+    this.setData({
+      isMultiEndApp,
+      runtimePlatform: platformUtils.getRuntimePlatform(),
+    });
+    if (!isMultiEndApp && wx.showShareMenu) {
       wx.showShareMenu({
         withShareTicket: true,
         menus: ["shareAppMessage", "shareTimeline"],
@@ -494,6 +504,27 @@ Page({
     });
   },
 
+  async shareWithClassmates() {
+    const envVersion = platformUtils.getMiniProgramEnvVersion();
+    const miniprogramType = multiPlatform.getMiniProgramType(envVersion);
+    try {
+      await multiPlatform.shareMiniProgram({
+        title: BRAND.appName + "｜查看课程安排",
+        path: "pages/index/index",
+        miniprogramType,
+      });
+    } catch (error) {
+      const errorText = String(error && (error.originalError && error.originalError.errMsg || error.message) || "");
+      if (errorText.indexOf("cancel") >= 0) return;
+      wx.showModal({
+        title: "暂时无法分享",
+        content: "请确认已安装微信，且当前移动应用已在微信开放平台完成绑定。",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+    }
+  },
+
   refreshBootstrapData() {
     wx.showLoading({ title: "正在刷新..." });
     clearDataCaches();
@@ -615,7 +646,7 @@ Page({
   showPrivacy() {
     wx.showModal({
       title: "隐私说明",
-      content: BRAND.appName + "严格保护您的隐私，小程序绝不会在前端保存您的学校账号密码。学号导入仅用于本次登录读取本人课表数据，导入完成后会清除临时状态。",
+      content: BRAND.appName + "不会在小程序或 App 前端保存您的学校账号密码。学号导入仅用于本次登录读取本人课表数据，导入完成后会清除临时状态；移动端首次启动还会由系统隐私门禁征求授权。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -661,6 +692,8 @@ Page({
       versionDetailVisible: true,
       diagnosisCanShowFull: isDeveloperEnv,
       "versionData.sdkVersion": sysInfo.SDKVersion || "未知",
+      "versionData.runtimePlatform": platformUtils.getRuntimePlatform(),
+      "versionData.envVersion": platformUtils.getMiniProgramEnvVersion(),
       "versionData.courseTimesVersion": courseTimesMeta.version,
       "versionData.courseTimesUpdatedAt": courseTimesMeta.updatedAt,
       "versionData.localActiveReleaseVersion": localReleaseVersion || "-",
@@ -721,6 +754,8 @@ Page({
             versionData: {
               appVersion: APP_VERSION,
               sdkVersion: sysInfo.SDKVersion || "未知",
+              runtimePlatform: platformUtils.getRuntimePlatform(),
+              envVersion: platformUtils.getMiniProgramEnvVersion(),
               courseTimesVersion: courseTimesMeta.version,
               courseTimesUpdatedAt: courseTimesMeta.updatedAt,
               

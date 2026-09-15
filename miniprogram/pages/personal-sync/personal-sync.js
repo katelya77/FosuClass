@@ -1,5 +1,6 @@
 const request = require("../../utils/request");
 const privacy = require("../../utils/privacy");
+const multiPlatform = require("../../utils/multiPlatform");
 const { getCurrentScheduleTarget, getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const platform = require("../../utils/platform");
 const aiAssistantService = require("../../services/aiAssistantService");
@@ -1850,36 +1851,44 @@ Page({
   async chooseXlsFile() {
     const privacyAllowed = await this.ensureStudentPrivacyAuthorized();
     if (!privacyAllowed) return;
-    wx.chooseMessageFile({
-      count: 1,
-      type: "file",
-      extension: ["xls", "xlsx", "html", "htm", "txt", "csv"],
-      success: (res) => {
-        const file = res.tempFiles && res.tempFiles[0];
-        if (!file) return;
-        if (file.size > MAX_FILE_SIZE) {
-          wx.showModal({
-            title: "文件过大",
-            content: "课表文件大小不能超过 5MB，请重新选择。",
-            showCancel: false,
-          });
-          return;
-        }
-        this.setData({
-          selectedFile: {
-            name: file.name,
-            path: file.path,
-            size: file.size,
-            sizeStr: formatFileSize(file.size),
-          },
+    try {
+      const res = await multiPlatform.chooseDocument({
+        count: 1,
+        type: "file",
+        extension: multiPlatform.DOCUMENT_EXTENSIONS,
+      });
+      const file = res.tempFiles && res.tempFiles[0];
+      if (!file) return;
+      if (!multiPlatform.isSupportedDocument(file)) {
+        wx.showModal({
+          title: "文件格式不支持",
+          content: "请选择 xls、xlsx、html、htm、txt 或 csv 格式的课表文件。",
+          showCancel: false,
         });
-      },
-      fail: (error) => {
-        if (String(error && error.errMsg || "").indexOf("cancel") < 0) {
-          wx.showToast({ title: "文件选择失败", icon: "none" });
-        }
-      },
-    });
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        wx.showModal({
+          title: "文件过大",
+          content: "课表文件大小不能超过 5MB，请重新选择。",
+          showCancel: false,
+        });
+        return;
+      }
+      this.setData({
+        selectedFile: {
+          name: file.name,
+          path: file.path,
+          size: file.size,
+          sizeStr: formatFileSize(file.size),
+        },
+      });
+    } catch (error) {
+      const errorText = String(error && (error.originalError && error.originalError.errMsg || error.errMsg || error.message) || "");
+      if (errorText.indexOf("cancel") < 0) {
+        wx.showToast({ title: "文件选择失败", icon: "none" });
+      }
+    }
   },
 
   clearSelectedFile() {

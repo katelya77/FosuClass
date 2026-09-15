@@ -109,8 +109,12 @@
         <view class="row-title">问题反馈</view>
         <view class="row-arrow">›</view>
       </view>
-      <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
+      <button wx:if="{{!isMultiEndApp}}" class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
         <view class="row-title">联系客服</view>
+        <view class="row-arrow">›</view>
+      </button>
+      <button wx:else class="setting-row setting-row-button" bindtap="showContactFallback">
+        <view class="row-title">联系开发者</view>
         <view class="row-arrow">›</view>
       </button>
       <view class="setting-row" bindtap="showPrivacy">
@@ -121,8 +125,12 @@
         <view class="row-title">关于{{brand.appName}}</view>
         <view class="row-arrow">›</view>
       </view>
-      <button class="setting-row setting-row-button" open-type="share">
+      <button wx:if="{{!isMultiEndApp}}" class="setting-row setting-row-button" open-type="share">
         <view class="row-title">分享给同学</view>
+        <view class="row-arrow">›</view>
+      </button>
+      <button wx:else class="setting-row setting-row-button" bindtap="shareWithClassmates">
+        <view class="row-title">分享到微信</view>
         <view class="row-arrow">›</view>
       </button>
     </view>
@@ -180,6 +188,10 @@
           <view class="detail-row">
             <view class="detail-label">基础库版本</view>
             <view class="detail-value">{{versionData.sdkVersion}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">运行平台</view>
+            <view class="detail-value">{{versionData.runtimePlatform}} · {{versionData.envVersion}}</view>
           </view>
           <view class="detail-row">
             <view class="detail-label">作息时间版本</view>

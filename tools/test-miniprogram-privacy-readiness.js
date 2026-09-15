@@ -47,6 +47,34 @@ async function runPrivacyHelperContract() {
   delete global.wx;
 }
 
+async function runMultiEndPrivacyHelperContract() {
+  delete require.cache[require.resolve("../miniprogram/utils/privacy")];
+  const calls = [];
+  global.wx = {
+    getAppBaseInfo() {
+      return { host: { env: "SAAASDK" } };
+    },
+    miniapp: {
+      getPrivacySetting(options) {
+        calls.push("miniapp.getPrivacySetting");
+        options.success({ needAuthorization: true });
+      },
+      agreePrivacyAuthorization(options) {
+        calls.push("miniapp.agreePrivacyAuthorization");
+        options.success({});
+      },
+    },
+  };
+
+  const privacy = require("../miniprogram/utils/privacy");
+  assert.strictEqual(await privacy.ensurePrivacyAuthorized(), true, "multi-end app should authorize through wx.miniapp");
+  assert.deepStrictEqual(calls, [
+    "miniapp.getPrivacySetting",
+    "miniapp.agreePrivacyAuthorization",
+  ]);
+  delete global.wx;
+}
+
 async function main() {
   const appJson = readJson("miniprogram/app.json");
   assert.strictEqual(appJson.__usePrivacyCheck__, true, "app.json must enable WeChat privacy check");
@@ -60,17 +88,19 @@ async function main() {
 
   assert(js.includes("ensureStudentPrivacyAuthorized"), "personal sync page should guard sensitive import actions");
   assert(js.includes("privacy.ensurePrivacyAuthorized()"), "personal sync should use wx privacy authorization helper");
+  assert(js.includes("multiPlatform.chooseDocument"), "personal sync should use the cross-platform file picker");
   assert(js.includes("timeout: 60000"), "student preview request should use the longer timeout");
   const chooseXlsStart = js.indexOf("async chooseXlsFile()");
-  const chooseMessageFile = js.indexOf("wx.chooseMessageFile");
+  const chooseDocument = js.indexOf("multiPlatform.chooseDocument", chooseXlsStart);
   assert(chooseXlsStart >= 0, "chooseXlsFile should be async so it can await privacy authorization");
-  assert(chooseMessageFile >= 0, "file import should still call wx.chooseMessageFile");
-  assert(chooseXlsStart < chooseMessageFile, "file import should check privacy before opening file picker");
+  assert(chooseDocument >= 0, "file import should call the cross-platform file picker");
+  assert(chooseXlsStart < chooseDocument, "file import should check privacy before opening file picker");
   assert(!wxml.includes("openStudentPrivacyContract"), "student import page should not bind a forced privacy guide link");
   assert(!wxml.includes("studentPrivacyContractName"), "student import page should not render the privacy guide name");
   assert(!wxml.includes("隐私保护指引"), "student import page should not show forced privacy guide copy");
 
   await runPrivacyHelperContract();
+  await runMultiEndPrivacyHelperContract();
   console.log("test-miniprogram-privacy-readiness passed");
 }
 
