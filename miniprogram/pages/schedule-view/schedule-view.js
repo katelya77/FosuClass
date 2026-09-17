@@ -5,6 +5,7 @@ const { getSettings, getCurrentScheduleTarget, saveSettings, setCurrentScheduleT
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
 const {
   TOTAL_WEEKS,
   addLocalDays,
@@ -112,6 +113,8 @@ Page({
     weekRangeText: "",
     weekScopeText: "周一至周五",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: SECTION_HEIGHT,
     scheduleHeight: courseTimes.length * SECTION_HEIGHT,
@@ -484,6 +487,7 @@ Page({
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -502,7 +506,7 @@ Page({
   onWeekChange(event) {
     const detail = event && event.detail || {};
     const type = detail.type;
-    if (type !== "prev" && type !== "next" && type !== "current") return;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
@@ -521,6 +525,10 @@ Page({
     }, () => {
       this.renderSchedule();
     });
+  },
+
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
   },
 
   toggleBindTarget() {

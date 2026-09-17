@@ -1,3 +1,4 @@
+<page-meta page-style="{{weekPickerOpen || detailVisible ? 'overflow: hidden;' : ''}}" />
 <view class="page schedule-view-page">
   <!-- 分享来源预览提示条 -->
   <view class="share-preview-bar" wx:if="{{isFromShare && !isCurrentTarget}}">
@@ -29,7 +30,9 @@
         current-week="{{currentWeek}}"
         total-weeks="{{totalWeeks}}"
         week-label="{{weekSwitcherLabel}}"
+        week-options="{{weekOptions}}"
         bind:change="onWeekChange"
+        bind:modalchange="onWeekPickerModalChange"
       />
     </view>
   </view>

@@ -1,3 +1,4 @@
+<page-meta page-style="{{weekPickerOpen || detailVisible || showUnplacedCourses || showTodayReminder || showInitModal || showMoreMenu || showDisclaimerPopup || showNoticeDetail || showAppNoticeModal ? 'overflow: hidden;' : ''}}" />
 <view class="page index-page">
   <!-- 顶部压缩状态卡 -->
   <view class="compact-header card">
@@ -94,7 +95,9 @@
           current-week="{{currentWeek}}"
           total-weeks="{{totalWeeks}}"
           week-label="{{weekSwitcherLabel}}"
+          week-options="{{weekOptions}}"
           bind:change="onWeekChange"
+          bind:modalchange="onWeekPickerModalChange"
         />
       </view>
     </view>
@@ -191,9 +194,11 @@
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
     bind:copycustom="onCopyCourseToCustom"
+    bind:editcourse="onEditExistingCourse"
+    editable="{{selectedCourse.source !== 'custom' && selectedCourse.sourceType !== 'custom'}}"
   />
 
-  <view class="popup-mask unplaced-popup" wx:if="{{showUnplacedCourses}}" bindtap="closeUnplacedCourses">
+  <view class="popup-mask unplaced-popup" wx:if="{{showUnplacedCourses}}" bindtap="closeUnplacedCourses" catchtouchmove="noop">
     <view class="popup-panel unplaced-panel" catchtap="noop">
       <view class="popup-handle"></view>
       <view class="popup-header">
@@ -203,7 +208,7 @@
         </view>
         <button class="close-button" bindtap="closeUnplacedCourses">×</button>
       </view>
-      <scroll-view scroll-y class="unplaced-scroll">
+      <scroll-view scroll-y enhanced bounces="{{false}}" class="unplaced-scroll">
         <view class="unplaced-course-card" wx:for="{{unplacedCourses}}" wx:key="id">
           <view class="unplaced-course-name">{{item.courseName}}</view>
           <view class="unplaced-course-meta">{{item.weekText}} · {{item.sectionText}} · {{item.roomName}}</view>
@@ -218,7 +223,7 @@
   </view>
 
   <!-- 今日课程提醒总览弹窗 -->
-  <view class="popup-mask reminder-popup" wx:if="{{showTodayReminder}}" bindtap="closeTodayReminder">
+  <view class="popup-mask reminder-popup" wx:if="{{showTodayReminder}}" bindtap="closeTodayReminder" catchtouchmove="noop">
     <view class="popup-panel reminder-panel" catchtap="noop">
       <view class="popup-handle"></view>
       
@@ -231,7 +236,7 @@
         <button class="close-button" bindtap="closeTodayReminder">×</button>
       </view>
 
-      <scroll-view scroll-y class="reminder-scroll">
+      <scroll-view scroll-y enhanced bounces="{{false}}" class="reminder-scroll">
         <view class="reminder-content">
           <!-- 基础元信息区 -->
           <view class="reminder-meta-banner">
@@ -308,7 +313,7 @@
   </view>
 
   <!-- 选择课表引导弹窗 -->
-  <view class="popup-mask init-popup" wx:if="{{showInitModal}}">
+  <view class="popup-mask init-popup" wx:if="{{showInitModal}}" catchtouchmove="noop">
     <view class="popup-panel init-panel">
       <view class="init-header">
         <image class="init-logo" src="{{logoPath}}" mode="aspectFill" />
@@ -327,7 +332,7 @@
   </view>
  
   <!-- 更多菜单模态框 -->
-  <view class="popup-mask menu-popup" wx:if="{{showMoreMenu}}" bindtap="hideMoreMenu">
+  <view class="popup-mask menu-popup" wx:if="{{showMoreMenu}}" bindtap="hideMoreMenu" catchtouchmove="noop">
     <view class="menu-panel" catchtap="noop">
       <view class="menu-item" bindtap="showDisclaimer">
         <text class="menu-icon">i</text>查看免责声明
@@ -343,13 +348,13 @@
   </view>
  
   <!-- 完整免责声明弹窗 -->
-  <view class="popup-mask disclaimer-popup" wx:if="{{showDisclaimerPopup}}" bindtap="closeDisclaimer">
+  <view class="popup-mask disclaimer-popup" wx:if="{{showDisclaimerPopup}}" bindtap="closeDisclaimer" catchtouchmove="noop">
     <view class="popup-panel disclaimer-panel" catchtap="noop">
       <view class="popup-header">
         <view class="popup-title">免责声明</view>
         <button class="close-button" bindtap="closeDisclaimer">×</button>
       </view>
-      <scroll-view scroll-y class="disclaimer-scroll">
+      <scroll-view scroll-y enhanced bounces="{{false}}" class="disclaimer-scroll">
         <view class="disclaimer-text">
           本程序（{{brand.appName}}）为个人开发的课程表查询与管理工具，非官方发布产品。
         </view>
@@ -366,7 +371,7 @@
     </view>
   </view>
 
-  <view class="popup-mask notice-detail-popup" wx:if="{{showNoticeDetail}}" bindtap="closeNoticeDetail">
+  <view class="popup-mask notice-detail-popup" wx:if="{{showNoticeDetail}}" bindtap="closeNoticeDetail" catchtouchmove="noop">
     <view class="popup-panel notice-detail-panel" catchtap="noop">
       <view class="popup-handle"></view>
       <view class="popup-header">
@@ -376,7 +381,7 @@
         </view>
         <button class="close-button" bindtap="closeNoticeDetail">×</button>
       </view>
-      <scroll-view scroll-y class="disclaimer-scroll">
+      <scroll-view scroll-y enhanced bounces="{{false}}" class="disclaimer-scroll">
         <view class="disclaimer-text">{{selectedNotice.content}}</view>
       </scroll-view>
       <view class="popup-footer">
@@ -385,7 +390,7 @@
     </view>
   </view>
 
-  <view class="popup-mask notice-detail-popup" wx:if="{{showAppNoticeModal}}" bindtap="closeAppNoticeModal">
+  <view class="popup-mask notice-detail-popup" wx:if="{{showAppNoticeModal}}" bindtap="closeAppNoticeModal" catchtouchmove="noop">
     <view class="popup-panel app-notice-panel" catchtap="noop">
       <view class="notice-modal-icon">告</view>
       <view class="notice-modal-title">{{modalNotice.title}}</view>

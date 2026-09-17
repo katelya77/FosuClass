@@ -8,6 +8,8 @@ const dailyKnowledgeCloudService = require("../../services/dailyKnowledgeCloudSe
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
+const courseOverrideService = require("../../services/courseOverrideService");
 const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
@@ -105,6 +107,8 @@ Page({
     weekScopeText: "周一至周五",
     todayText: "",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: 90,
     scheduleHeight: courseTimes.length * 90,
@@ -360,6 +364,7 @@ Page({
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       todayText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel}`,
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -378,7 +383,7 @@ Page({
   onWeekChange(event) {
     const detail = event && event.detail || {};
     const type = detail.type;
-    if (type !== "prev" && type !== "next" && type !== "current") return;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = teachingCalendarService.getImmediateActiveCalendar();
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
@@ -392,8 +397,13 @@ Page({
     this.loadSchedule();
   },
 
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
+  },
+
   canHandleScheduleSwipe() {
     return !(this.data.showWeekend && this.data.weekendShowMode === "detail") &&
+      !this.data.weekPickerOpen &&
       !this.data.detailVisible &&
       !this.data.showUnplacedCourses &&
       !this.data.showTodayReminder &&
@@ -486,6 +496,16 @@ Page({
         title: "课程信息不完整",
         icon: "none",
       });
+    }
+  },
+
+  onEditExistingCourse(event) {
+    try {
+      courseOverrideService.saveEditDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
+    } catch (error) {
+      wx.showToast({ title: "请从个性化页面选择课程", icon: "none" });
     }
   },
 

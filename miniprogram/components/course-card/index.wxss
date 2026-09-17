@@ -110,6 +110,8 @@
   border: 1rpx solid #dbe4ff;
 }
 
+.personalized-pill { background: #fff0f0 !important; color: #b4232b !important; border: 1rpx solid #f4c7c7; }
+
 .event-pill {
   background: #ecfeff !important;
   color: #0e7490 !important;
@@ -139,6 +141,8 @@
   height: 20rpx;
   pointer-events: none;
 }
+
+.grid-personalized-tag { color: #b4232b; }
 
 .status-ongoing {
   background: #2e7d32;
