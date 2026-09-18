@@ -1,6 +1,14 @@
 const { API_BASE_URL, SESSION_STORAGE_KEY } = require('./runtime-config');
 
 const ORIGIN = String(API_BASE_URL || '').replace(/\/+$/, '');
+const READ_ENDPOINTS = new Set([
+  '/api/fosu/teaching-calendar',
+  '/api/fosu/release-pack/search',
+  '/api/fosu/empty-classrooms',
+  '/api/fosu/app-config',
+  '/api/ai/weather',
+  '/api/ai/campus-map/published',
+]);
 let sessionInflight = null;
 
 function text(value, max) {
@@ -23,7 +31,7 @@ function resultOk(message, structuredContent, handoff) {
 
 function pageHandoff(pagePath) {
   const value = String(pagePath || '');
-  const match = value.match(/^(\/(?:pages|packageXiaofu)\/[a-zA-Z0-9/-]+)(?:\?([^#]*))?$/);
+  const match = value.match(/^(\/(?:pages|packageXiaofu|packageMaps)\/[a-zA-Z0-9/-]+)(?:\?([^#]*))?$/);
   if (!match) return null;
   const path = match[1];
   const query = match[2] || '';
@@ -133,7 +141,7 @@ function requestPublic(path, params, session, retry) {
 }
 
 function get(path, params) {
-  if (!ORIGIN || !/^https:\/\//.test(ORIGIN) || !/^\/api\/fosu\/[a-z/-]+$/.test(path)) {
+  if (!ORIGIN || !/^https:\/\//.test(ORIGIN) || !READ_ENDPOINTS.has(path)) {
     return Promise.reject(new Error('INVALID_PUBLIC_ENDPOINT'));
   }
   return ensureSession(false).then((session) => requestPublic(path, params, session, true));

@@ -6,6 +6,8 @@ const { build } = require('./build-wechat-ai-preview');
 const root = path.resolve(__dirname, '..');
 const productionAppPath = path.join(root, 'miniprogram/app.json');
 const productionBefore = fs.readFileSync(productionAppPath);
+const knowledgeFile = path.join(root, 'experiments/wechat-ai/knowledge/fosu-xiaoxu-public-faq.md');
+assert(fs.statSync(knowledgeFile).size < 10 * 1024 * 1024, 'single knowledge file must stay under the WeChat 10 MB limit');
 const output = build({ output: path.join(root, 'dist', `wechat-ai-preview-test-${process.pid}`) });
 assert(fs.readFileSync(productionAppPath).equals(productionBefore), 'production app.json must remain unchanged');
 assert(!JSON.parse(productionBefore.toString()).agent, 'production app must not include beta agent');
@@ -21,8 +23,22 @@ assert.strictEqual(previewProject.libVersion, '3.16.2');
 assert(!previewProject.packOptions.ignore.some((item) => item.type === 'suffix' && item.value === '.md'));
 assert(fs.existsSync(path.join(previewRoot, previewApp.agent.instruction)));
 assert(fs.existsSync(path.join(previewRoot, previewApp.agent.skills[0].path, 'SKILL.md')));
-assert.strictEqual(schema.apis.length, 4);
-assert(schema.apis.every((item) => item._meta && item._meta.ui && item._meta.ui.pagePath));
+assert.strictEqual(schema.apis.length, 9);
+const capabilityManifest = JSON.parse(fs.readFileSync(path.join(root, 'server/config/agent-capability-manifest.json'), 'utf8'));
+for (const [apiName, toolId] of Object.entries({
+  searchCampusSchedule: 'search_school_index',
+  findEmptyClassrooms: 'search_empty_rooms',
+  getTeachingWeek: 'get_teaching_week',
+  getTermCalendar: 'get_term_calendar',
+  getDataStatus: 'diagnose_data_status',
+  getCampusWeather: 'get_campus_weather',
+  searchCampusPlace: 'search_campus_place',
+})) {
+  assert(schema.apis.some((api) => api.name === apiName));
+  assert(capabilityManifest.tools[toolId], `missing authoritative Xiaoxu Tool ${toolId}`);
+}
+assert(schema.apis.filter((item) => item.name !== 'getCampusWeather')
+  .every((item) => item._meta && item._meta.ui && item._meta.ui.pagePath));
 assert(pageMeta.pages.some((item) => item.path === 'packageXiaofu/pages/ai-assistant/ai-assistant'));
 assert(!pageMeta.pages.some((item) => item.path === 'pages/today/today'));
 assert(pageMeta.pages.every((item) => !item.path.startsWith('/')),
@@ -59,12 +75,13 @@ global.wx = {
       const response = url.pathname === '/api/fosu/session/bootstrap'
         ? { success: true, sessionToken: 'MOCK_SESSION_TOKEN', expiresAt: new Date(Date.now() + 3600000).toISOString() }
         : responder(url);
-      options.success({ statusCode: response.statusCode || 200, data: response.data || response });
+      options.success({ statusCode: response.statusCode || 200, data: response });
     } catch (error) { options.fail(error); }
   },
 };
 require(path.join(previewRoot, 'skills/fosu-campus/index.js'));
 assert.deepStrictEqual(Object.keys(handlers).sort(), schema.apis.map((item) => item.name).sort());
+const skillClient = require(path.join(previewRoot, 'skills/fosu-campus/client.js'));
 
 async function run() {
   const beforePersonal = requests.length;
@@ -85,6 +102,51 @@ async function run() {
   assert.deepStrictEqual(importing.handoff(), { path: '/pages/personal-sync/personal-sync', query: '' });
   assert.strictEqual((await handlers.openPersonalTask({ task: 'unknown' })).isError, true);
   assert.strictEqual(requests.length, beforePersonal, 'personal handoff must not read private data');
+
+  const broader = await handlers.openXiaoxuTask({ question: '检查我的课表冲突' });
+  assert.strictEqual(broader.isError, false);
+  assert.strictEqual(new URLSearchParams(broader.handoff().query).get('q'), '检查我的课表冲突');
+  assert.strictEqual((await handlers.openXiaoxuTask({ question: '学号 123456789012 的课程' })).isError, true);
+  assert.strictEqual(requests.length, beforePersonal, 'broader Xiaoxu handoff must not read private data');
+  await assert.rejects(skillClient.get('/api/fosu/admin'), /INVALID_PUBLIC_ENDPOINT/);
+  assert.strictEqual(requests.length, beforePersonal, 'unlisted endpoint must be rejected before network');
+
+  responder = (url) => {
+    if (url.pathname === '/api/fosu/teaching-calendar') return {
+      success: true, term: '2026-2027-1', releaseVersion: 'release-1',
+      weeks: [{ weekNo: 2, startDate: '2026-09-14', endDate: '2026-09-20', title: '正常教学周', note: '公开周历标注', privateToken: 'DO_NOT_EXPOSE' }],
+    };
+    if (url.pathname === '/api/fosu/app-config') return {
+      success: true, data: { term: '2026-2027-1', releaseVersion: 'release-1', publishedAt: '2026-09-17T00:00:00Z', adminToken: 'DO_NOT_EXPOSE' },
+    };
+    if (url.pathname === '/api/ai/weather') return {
+      success: true, weather: { success: true, campus: '仙溪校区', weatherText: '多云', temperatureC: 28,
+        updatedAt: '2026-09-17T10:00:00Z', sourceId: 'weather-test', rawForecast: 'DO_NOT_EXPOSE' },
+    };
+    if (url.pathname === '/api/ai/campus-map/published') return {
+      success: true, data: { version: 'map-1', places: [
+        { name: '图书馆', campus: '江湾校区', area: '江湾校区', aliases: ['江湾图书馆'], verified: true, description: '已核验地点', internalNote: 'DO_NOT_EXPOSE' },
+        { name: '图书馆旧址', campus: '江湾校区', verified: false, description: '不可见' },
+      ] },
+    };
+    throw new Error(`unexpected read endpoint ${url.pathname}`);
+  };
+  const termCalendar = await handlers.getTermCalendar({});
+  assert.strictEqual(termCalendar.structuredContent.weeks[0].weekNo, 2);
+  assert(!JSON.stringify(termCalendar).includes('DO_NOT_EXPOSE'));
+  const dataStatus = await handlers.getDataStatus({});
+  assert.strictEqual(dataStatus.structuredContent.releaseVersion, 'release-1');
+  assert(!JSON.stringify(dataStatus).includes('DO_NOT_EXPOSE'));
+  const weather = await handlers.getCampusWeather({ campus: '仙溪校区', dateHint: 'tomorrow' });
+  assert.strictEqual(weather.structuredContent.weatherText, '多云');
+  assert.strictEqual(weather.structuredContent.dateLabel, '明天');
+  assert(!JSON.stringify(weather).includes('DO_NOT_EXPOSE'));
+  assert.strictEqual((await handlers.getCampusWeather({ campus: '未知校区' })).isError, true);
+  const place = await handlers.searchCampusPlace({ keyword: '图书馆' });
+  assert.strictEqual(place.structuredContent.matches.length, 1, 'unverified places stay outside model results');
+  assert.strictEqual(place.handoff().path, '/packageMaps/pages/campus-map/campus-map');
+  assert(!JSON.stringify(place).includes('DO_NOT_EXPOSE'));
+  assert.strictEqual((await handlers.searchCampusPlace({ keyword: '学号 123456789012' })).isError, true);
 
   const beforeSensitive = requests.length;
   const sensitive = await handlers.searchCampusSchedule({ type: 'teacher', keyword: '学号 123456789012' });
@@ -149,7 +211,12 @@ async function run() {
 
   const publicRequests = requests.filter((item) => item.method === 'GET');
   assert.strictEqual(requests.filter((item) => item.method === 'POST').length, 1, 'only session bootstrap may write');
-  assert(requests.every((item) => new URL(item.url).pathname.startsWith('/api/fosu/')));
+  const allowedReadPaths = new Set([
+    '/api/fosu/teaching-calendar', '/api/fosu/release-pack/search',
+    '/api/fosu/empty-classrooms', '/api/fosu/app-config',
+    '/api/ai/weather', '/api/ai/campus-map/published',
+  ]);
+  assert(publicRequests.every((item) => allowedReadPaths.has(new URL(item.url).pathname)));
   assert(publicRequests.every((item) => item.header['X-Fosu-Session'] === 'MOCK_SESSION_TOKEN'));
   console.log(`test-wechat-ai-preview passed (${publicRequests.length} read-only requests, 1 session bootstrap)`);
 }

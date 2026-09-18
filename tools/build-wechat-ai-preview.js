@@ -58,7 +58,7 @@ function build(options = {}) {
   app.agent = {
     skills: [{
       name: 'fosuCampus',
-      description: '查询佛山大学已发布的全校课表索引、空教室与教学周；遇到我的今日、明日、下一节、本周课程、提醒或导入时调用个人任务入口，转到佛课小表内处理。',
+      description: '查询佛山大学已发布的课表索引、空教室、校历、数据版本、校区天气和校园地点；个人课表、提醒、记忆及写操作转到佛课小表内的小序处理。',
       path: 'skills/fosu-campus',
     }],
     instruction: 'AI-INSTRUCTION.md',
