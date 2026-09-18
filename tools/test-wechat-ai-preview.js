@@ -27,6 +27,16 @@ assert(pageMeta.pages.some((item) => item.path === 'packageXiaofu/pages/ai-assis
 assert(!pageMeta.pages.some((item) => item.path === 'pages/today/today'));
 assert(pageMeta.pages.every((item) => !item.path.startsWith('/')),
   'page metadata paths must follow the relative path convention in the WeChat guide');
+assert(Buffer.byteLength(JSON.stringify(pageMeta), 'utf8') <= 8000,
+  'WeChat page metadata must stay below the documented 8000-byte limit');
+const declaredPages = new Set([
+  ...previewApp.pages,
+  ...previewApp.subPackages.flatMap((pkg) => pkg.pages.map((page) => `${pkg.root}/${page}`)),
+]);
+for (const page of pageMeta.pages) {
+  assert(declaredPages.has(page.path.split('?')[0]), `undeclared AI destination: ${page.path}`);
+  assert(!page.path.includes('pages/today/today'), 'AI card must not land on the Today tab');
+}
 
 const requests = [];
 let responder = () => ({ success: false });
@@ -63,6 +73,8 @@ async function run() {
     assert.strictEqual(personal.isError, false);
     assert.strictEqual(personal.handoff().path, '/packageXiaofu/pages/ai-assistant/ai-assistant');
     assert.strictEqual(personal.handoff().query, personal.structuredContent.pagePath.split('?')[1]);
+    assert(pageMeta.pages.some((page) => `/${page.path}` === personal.structuredContent.pagePath),
+      `${task} account-card route must match its Tool handoff exactly`);
     assert(!JSON.stringify(personal).includes('MOCK_SESSION_TOKEN'));
   }
   const tomorrow = await handlers.openPersonalTask({ task: 'tomorrow' });
