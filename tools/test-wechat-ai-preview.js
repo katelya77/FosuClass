@@ -21,10 +21,12 @@ assert.strictEqual(previewProject.libVersion, '3.16.2');
 assert(!previewProject.packOptions.ignore.some((item) => item.type === 'suffix' && item.value === '.md'));
 assert(fs.existsSync(path.join(previewRoot, previewApp.agent.instruction)));
 assert(fs.existsSync(path.join(previewRoot, previewApp.agent.skills[0].path, 'SKILL.md')));
-assert.strictEqual(schema.apis.length, 3);
+assert.strictEqual(schema.apis.length, 4);
 assert(schema.apis.every((item) => item._meta && item._meta.ui && item._meta.ui.pagePath));
-assert(pageMeta.pages.some((item) => item.path.includes('ai-assistant')));
-assert(pageMeta.pages.some((item) => item.path === '/pages/schedule-view/schedule-view'));
+assert(pageMeta.pages.some((item) => item.path === 'packageXiaofu/pages/ai-assistant/ai-assistant'));
+assert(!pageMeta.pages.some((item) => item.path === 'pages/today/today'));
+assert(pageMeta.pages.every((item) => !item.path.startsWith('/')),
+  'page metadata paths must follow the relative path convention in the WeChat guide');
 
 const requests = [];
 let responder = () => ({ success: false });
@@ -55,6 +57,23 @@ require(path.join(previewRoot, 'skills/fosu-campus/index.js'));
 assert.deepStrictEqual(Object.keys(handlers).sort(), schema.apis.map((item) => item.name).sort());
 
 async function run() {
+  const beforePersonal = requests.length;
+  for (const task of ['tomorrow', 'next', 'today', 'week', 'reminder']) {
+    const personal = await handlers.openPersonalTask({ task });
+    assert.strictEqual(personal.isError, false);
+    assert.strictEqual(personal.handoff().path, '/packageXiaofu/pages/ai-assistant/ai-assistant');
+    assert.strictEqual(personal.handoff().query, personal.structuredContent.pagePath.split('?')[1]);
+    assert(!JSON.stringify(personal).includes('MOCK_SESSION_TOKEN'));
+  }
+  const tomorrow = await handlers.openPersonalTask({ task: 'tomorrow' });
+  assert.strictEqual(new URLSearchParams(tomorrow.handoff().query).get('q'), '明天有什么课');
+  const next = await handlers.openPersonalTask({ task: 'next' });
+  assert.strictEqual(new URLSearchParams(next.handoff().query).get('q'), '我的下一节课');
+  const importing = await handlers.openPersonalTask({ task: 'import' });
+  assert.deepStrictEqual(importing.handoff(), { path: '/pages/personal-sync/personal-sync', query: '' });
+  assert.strictEqual((await handlers.openPersonalTask({ task: 'unknown' })).isError, true);
+  assert.strictEqual(requests.length, beforePersonal, 'personal handoff must not read private data');
+
   const beforeSensitive = requests.length;
   const sensitive = await handlers.searchCampusSchedule({ type: 'teacher', keyword: '学号 123456789012' });
   assert.strictEqual(sensitive.isError, true);

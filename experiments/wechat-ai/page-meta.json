@@ -1,39 +1,14 @@
 {
   "pages": [
     {
-      "path": "/packageXiaofu/pages/ai-assistant/ai-assistant",
+      "path": "packageXiaofu/pages/ai-assistant/ai-assistant",
       "name": "小序校园管家",
-      "description": "在佛课小表内查询个人课表、下一节课、提醒和校园服务；个人数据留在小程序受控流程内。"
+      "description": "进入佛课小表小程序内查询自己的今日、明日、下一节或本周课程，处理课程提醒及个人课表问题。所有个人数据只在小程序内读取；明日与下一节课都应进入此页。"
     },
     {
-      "path": "/pages/personal-sync/personal-sync",
+      "path": "pages/personal-sync/personal-sync",
       "name": "导入个人课表",
-      "description": "在佛课小表内完成个人课表导入与同步，不在微信 AI 对话里提交学号、密码或文件。"
-    },
-    {
-      "path": "/pages/today/today",
-      "name": "我的今日安排",
-      "description": "在佛课小表内查看已导入的个人今日课程。"
-    },
-    {
-      "path": "/pages/schedule-view/schedule-view",
-      "name": "课表详情",
-      "description": "打开已发布索引中的班级、教师、教室或课程详情。"
-    },
-    {
-      "path": "/pages/school/school",
-      "name": "全校课表",
-      "description": "按班级、教师、教室和课程搜索已发布课表。"
-    },
-    {
-      "path": "/pages/empty-room/empty-room",
-      "name": "空教室",
-      "description": "按日期、节次和楼栋查看候选空教室。"
-    },
-    {
-      "path": "/pages/calendar/calendar",
-      "name": "教学周历",
-      "description": "查看已发布的教学周和周历信息。"
+      "description": "在佛课小表小程序内完成个人课表导入与同步，不在微信 AI 对话中提交学号、密码或文件。"
     }
   ]
 }

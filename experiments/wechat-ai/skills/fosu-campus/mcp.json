@@ -1,6 +1,30 @@
 {
   "apis": [
     {
+      "name": "openPersonalTask",
+      "_meta": { "ui": { "pagePath": "/packageXiaofu/pages/ai-assistant/ai-assistant" } },
+      "description": "用户要看自己的今日、明日、下一节或本周课程、提醒，或导入个人课表时调用。只返回小程序内部入口，不读取私人课表；明日课程和下一节课不得跳到仅显示今天的今日安排页。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": ["today", "tomorrow", "next", "week", "reminder", "import"],
+            "description": "用户要完成的个人任务。明天的课=tomorrow，下一节课=next，不把它们归为 today。"
+          }
+        },
+        "required": ["task"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "task": { "type": "string" },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    },
+    {
       "name": "searchCampusSchedule",
       "_meta": { "ui": { "pagePath": "/pages/schedule-view/schedule-view" } },
       "description": "检索佛山大学已发布的班级、教师、教室或课程课表索引。用户给出公开名称时调用；个人今日课表、下一节课或私人导入内容应引导进入佛课小表页面。",
