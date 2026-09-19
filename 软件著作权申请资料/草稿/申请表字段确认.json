@@ -1,0 +1,7 @@
+{
+  "application_md_sha256": "21172edd12d774c2e5f19647f2cd4750eddd13361121b9cccb944a71df3dc126",
+  "application_fields_confirmed": true,
+  "confirmation_note": "用户此前已确认全部申请表字段；本次仅移除申请表草稿末尾内部流程提示块，字段值和业务内容均未变。",
+  "confirmed_at": "2026-09-19T06:01:19+00:00",
+  "confirmed_content_sha256": "19804f406ea99ccde55db976eecc556648e7c2a08e48aa3b2a6f1b4695538643"
+}

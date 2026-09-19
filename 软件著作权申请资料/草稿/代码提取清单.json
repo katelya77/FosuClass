@@ -1,0 +1,103 @@
+{
+  "software_name": "佛课小表校园课表服务软件",
+  "version": "V1.0",
+  "project_root": "C:\\Users\\Katelya\\Documents\\VScode\\FosuClass",
+  "file_count": 7,
+  "material_line_count": 3386,
+  "source_line_count": 3486,
+  "selected_source_line_count": 3211,
+  "lines_per_page": 55,
+  "max_code_columns": 90,
+  "total_pages": 62,
+  "submitted_page_count": 60,
+  "target_pages": 60,
+  "available_candidate_line_count": 1580583,
+  "available_candidate_pages": 28738,
+  "supplement_status": "候选源码可达到前30页/后30页要求",
+  "mode": "front30_back30",
+  "selection_file": "软件著作权申请资料\\草稿\\代码文件选择.json",
+  "outputs": [
+    "代码-前30页.md",
+    "代码-后30页.md"
+  ],
+  "files": [
+    {
+      "path": "miniprogram/packageMaps/pages/campus-map/campus-map.js",
+      "source_line_count": 409,
+      "blank_line_count": 37,
+      "selected_line_start": 1,
+      "selected_line_end": 409,
+      "selected_line_count": 372,
+      "material_line_count": 386,
+      "material_line_start": 1,
+      "material_line_end": 386
+    },
+    {
+      "path": "miniprogram/pages/calendar/calendar.js",
+      "source_line_count": 186,
+      "blank_line_count": 13,
+      "selected_line_start": 1,
+      "selected_line_end": 186,
+      "selected_line_count": 173,
+      "material_line_count": 181,
+      "material_line_start": 387,
+      "material_line_end": 567
+    },
+    {
+      "path": "miniprogram/pages/custom-courses/custom-courses.js",
+      "source_line_count": 359,
+      "blank_line_count": 29,
+      "selected_line_start": 1,
+      "selected_line_end": 359,
+      "selected_line_count": 330,
+      "material_line_count": 339,
+      "material_line_start": 568,
+      "material_line_end": 906
+    },
+    {
+      "path": "miniprogram/pages/empty-room/empty-room.js",
+      "source_line_count": 927,
+      "blank_line_count": 60,
+      "selected_line_start": 1,
+      "selected_line_end": 927,
+      "selected_line_count": 867,
+      "material_line_count": 930,
+      "material_line_start": 907,
+      "material_line_end": 1836
+    },
+    {
+      "path": "miniprogram/pages/index/index.js",
+      "source_line_count": 702,
+      "blank_line_count": 62,
+      "selected_line_start": 1,
+      "selected_line_end": 702,
+      "selected_line_count": 640,
+      "material_line_count": 667,
+      "material_line_start": 1837,
+      "material_line_end": 2503
+    },
+    {
+      "path": "miniprogram/pages/schedule-view/schedule-view.js",
+      "source_line_count": 644,
+      "blank_line_count": 52,
+      "selected_line_start": 1,
+      "selected_line_end": 644,
+      "selected_line_count": 592,
+      "material_line_count": 634,
+      "material_line_start": 2504,
+      "material_line_end": 3137
+    },
+    {
+      "path": "miniprogram/pages/today/today.js",
+      "source_line_count": 259,
+      "blank_line_count": 22,
+      "selected_line_start": 1,
+      "selected_line_end": 259,
+      "selected_line_count": 237,
+      "material_line_count": 249,
+      "material_line_start": 3138,
+      "material_line_end": 3386
+    }
+  ],
+  "safe_software_filename": "佛课小表校园课表服务软件"
+}

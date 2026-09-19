@@ -1,0 +1,7 @@
+{
+  "screenshot_method": "user-supplied",
+  "screenshot_method_confirmed": true,
+  "confirmation_note": "用户选择自行截图，并提供5张真实微信小程序界面截图：课表选择、全校查询、今日课程、教学周历、设置",
+  "confirmed_at": "2026-09-19T05:36:59+00:00",
+  "confirmed_content_sha256": "2bb8cdb520ee045a0f9db59023d95f7ddad8bb0d23bf166233b6edb9f8927809"
+}
