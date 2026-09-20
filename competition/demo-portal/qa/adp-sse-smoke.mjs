@@ -3,15 +3,15 @@ import { randomUUID } from "node:crypto";
 
 const endpoint = process.argv[2] || "https://wss.lke.cloud.tencent.com/adp/v2/chat";
 const prompt = process.argv[3] || "未来四周教师负载最高的是谁？";
+const isPortalEndpoint = /\/api\/adp\/chat(?:\?|$)/.test(endpoint);
 const varsPath = new URL("../.dev.vars", import.meta.url);
-const vars = readFileSync(varsPath, "utf8");
+const vars = isPortalEndpoint ? "" : readFileSync(varsPath, "utf8");
 const appKey = vars
   .split(/\r?\n/)
   .find((line) => line.startsWith("ADP_APP_KEY="))
   ?.slice("ADP_APP_KEY=".length)
   .trim();
 
-const isPortalEndpoint = /\/api\/adp\/chat(?:\?|$)/.test(endpoint);
 if (!isPortalEndpoint && !appKey) throw new Error("ADP_APP_KEY is missing from .dev.vars");
 
 const controller = new AbortController();
@@ -187,3 +187,10 @@ try {
 }
 
 console.log(JSON.stringify(summary, null, 2));
+
+const passed =
+  summary.status === 200 &&
+  summary.contentType?.toLowerCase().includes("text/event-stream") &&
+  summary.eventCount > 0 &&
+  summary.errors.length === 0;
+if (!passed) process.exitCode = 1;
