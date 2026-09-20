@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
-const endpoint = process.argv[2] || "https://wss.lke.cloud.tencent.com/adp/v2/chat";
+const endpoint = process.argv[2] || "https://adp.gaoxiaobang.com/adp/v2/chat";
 const prompt = process.argv[3] || "未来四周教师负载最高的是谁？";
 const isPortalEndpoint = /\/api\/adp\/chat(?:\?|$)/.test(endpoint);
 const varsPath = new URL("../.dev.vars", import.meta.url);

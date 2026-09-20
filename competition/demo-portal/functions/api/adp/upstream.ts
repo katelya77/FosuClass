@@ -1,5 +1,5 @@
 export const ADP_CHAT_URL =
-  "https://wss.lke.cloud.tencent.com/adp/v2/chat?language=zh-CN";
+  "https://adp.gaoxiaobang.com/adp/v2/chat?language=zh-CN";
 
 const UPSTREAM_CONNECT_TIMEOUT_MS = 12_000;
 

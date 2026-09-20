@@ -4,7 +4,7 @@ import { onRequest } from "../../functions/api/adp/chat";
 import { fetchAdp } from "../../functions/api/adp/upstream";
 
 const OFFICIAL_ADP_CHAT_URL =
-  "https://wss.lke.cloud.tencent.com/adp/v2/chat?language=zh-CN";
+  "https://adp.gaoxiaobang.com/adp/v2/chat?language=zh-CN";
 
 describe("ADP Pages Function upstream", () => {
   afterEach(() => {
