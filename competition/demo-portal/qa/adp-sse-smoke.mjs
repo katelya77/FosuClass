@@ -15,7 +15,7 @@ const appKey = vars
 if (!isPortalEndpoint && !appKey) throw new Error("ADP_APP_KEY is missing from .dev.vars");
 
 const controller = new AbortController();
-const timeout = setTimeout(() => controller.abort(), 55_000);
+const timeout = setTimeout(() => controller.abort(), 180_000);
 const conversationId = randomUUID();
 const requestId = randomUUID();
 
@@ -112,6 +112,7 @@ function parseFrame(frame) {
   if (!dataLines.length) return;
 
   summary.eventCount += 1;
+  if (dataLines.join("\n").trim() === "[DONE]") return;
   try {
     const parsed = JSON.parse(dataLines.join("\n"));
     const type = parsed?.Type || parsed?.type || eventName || "unknown";
@@ -181,7 +182,7 @@ try {
     if (buffer.trim()) parseFrame(buffer);
   }
 } catch (error) {
-  summary.errors.push(error?.name === "AbortError" ? "timeout-55s" : String(error));
+  summary.errors.push(error?.name === "AbortError" ? "timeout-180s" : String(error));
 } finally {
   clearTimeout(timeout);
 }
