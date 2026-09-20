@@ -1,5 +1,6 @@
 export const ADP_CHAT_URL =
   "https://adp.gaoxiaobang.com/adp/v2/chat?language=zh-CN";
+export const ADP_STATUS_URL = "https://adp.gaoxiaobang.com/webim/config.js";
 
 const UPSTREAM_CONNECT_TIMEOUT_MS = 12_000;
 

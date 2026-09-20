@@ -12,6 +12,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4174 --strictPort",
     "test": "vitest run",
+    "qa:adp-smoke": "node qa/adp-sse-smoke.mjs https://adp.katelya.top/api/adp/chat 你好",
     "test:watch": "vitest",
     "qa:capture": "node qa/capture.mjs",
     "qa:final": "node qa/final-capture.mjs",

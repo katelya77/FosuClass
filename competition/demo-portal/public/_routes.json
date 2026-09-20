@@ -1,7 +1,7 @@
 {
   "version": 1,
   "include": [
-    "/api/adp/chat"
+    "/api/adp/*"
   ],
   "exclude": []
 }
