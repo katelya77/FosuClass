@@ -1,21 +1,19 @@
 #!/bin/sh
 set -eu
 SRC=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-REPO=$(CDPATH= cd -- "$SRC/../.." && pwd)
+if [ ! -f "$SRC/vendor/fosuDirectClient.js" ]; then
+  echo "vendor/fosuDirectClient.js is missing. Install from the built wyz-campus-agent bundle."
+  exit 1
+fi
 DEST=/opt/wyz-campus-agent
 install -d -m 755 "$DEST/src" "$DEST/vendor"
-cp "$SRC/package.json" "$SRC/package-lock.json" "$SRC/verify-wyz.sh" "$DEST/"
+cp "$SRC/package.json" "$SRC/package-lock.json" "$DEST/"
 cp "$SRC/src/index.js" "$SRC/src/signature.js" "$DEST/src/"
-cp "$REPO/miniprogram/services/fosuDirectClient.js" \
-  "$REPO/miniprogram/services/fosuDirectConfig.js" \
-  "$REPO/miniprogram/services/fosuDirectCookieJar.js" \
-  "$REPO/miniprogram/services/fosuDirectDiagnostics.js" \
-  "$REPO/miniprogram/services/fosuDirectHtml.js" \
-  "$REPO/miniprogram/services/fosuDirectPasswordCrypto.js" \
-  "$REPO/miniprogram/services/fosuDirectRedirect.js" \
-  "$REPO/miniprogram/services/fosuDirectUrl.js" \
-  "$DEST/vendor/"
+cp "$SRC/vendor/"*.js "$DEST/vendor/"
 install -m 644 "$SRC/wyz-campus-agent.service" /etc/systemd/system/wyz-campus-agent.service
+if [ -f "$SRC/verify-wyz.sh" ]; then
+  install -m 755 "$SRC/verify-wyz.sh" "$DEST/verify-wyz.sh"
+fi
 if [ ! -f /etc/fosu-campus-agent.env ]; then
   umask 077
   cat > /etc/fosu-campus-agent.env <<'EOF'
@@ -28,7 +26,9 @@ EOF
 fi
 chown root:root /etc/fosu-campus-agent.env
 chmod 600 /etc/fosu-campus-agent.env
-systemctl daemon-reload
-echo "Fill CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET in /etc/fosu-campus-agent.env from the Oracle secrets file."
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl daemon-reload
+fi
+echo "Fill CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET in /etc/fosu-campus-agent.env."
 echo "Then: systemctl enable --now wyz-campus-agent.service"
 echo "This install does not change wyz-campus-api.service or the WYZ web UI."

@@ -2,7 +2,7 @@ const assert = require("assert");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { signRequest, resetNonces, verifySignedRequest } = require("../deploy/wyz-campus-agent/src/signature");
+const { signRequest, resetNonces, verifySignedRequest } = require("../server/src/security/campusAgentSignature");
 const broker = require("../server/src/services/campusSyncBroker");
 
 const TOKEN = "0123456789abcdef0123456789abcdef";

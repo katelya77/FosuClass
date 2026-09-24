@@ -1,5 +1,7 @@
 const assert = require("assert");
+const { spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
@@ -203,5 +205,37 @@ assert(
 ].forEach((pattern) => {
   assert(!pattern.test(workflow), `workflow appears to contain a hard-coded secret: ${pattern}`);
 });
+
+[
+  "CAMPUS_AGENT_ENABLED=${{ vars.CAMPUS_AGENT_ENABLED || 'true' }}",
+  "CAMPUS_AGENT_ID=${{ vars.CAMPUS_AGENT_ID || 'wyz-campus-01' }}",
+  "CAMPUS_AGENT_TOKEN=${{ secrets.CAMPUS_AGENT_TOKEN }}",
+  "CAMPUS_AGENT_SIGNING_SECRET=${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}",
+  "CAMPUS_SYNC_JOB_TTL_SECONDS=${{ vars.CAMPUS_SYNC_JOB_TTL_SECONDS || '120' }}",
+  "CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET must be different.",
+  "node server/scripts/check-campus-agent-env.js",
+  "node scripts/verify-campus-agent-broker.js",
+  "wyz-campus-agent-${{ github.sha }}",
+].forEach((needle) => {
+  assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
+});
+assert(!workflow.includes("source: deploy/**"), "production API upload must not ship deploy/");
+
+function checkCampusEnv(body) {
+  const file = path.join(os.tmpdir(), `fosu-campus-env-${process.pid}-${Date.now()}.tmp`);
+  fs.writeFileSync(file, body, { mode: 0o600 });
+  const result = spawnSync(process.execPath, [path.join(root, "server", "scripts", "check-campus-agent-env.js"), file], { encoding: "utf8" });
+  return { status: result.status, stderr: result.stderr || "", exists: fs.existsSync(file), file };
+}
+const accepted = checkCampusEnv(`CAMPUS_AGENT_ENABLED=true\nCAMPUS_AGENT_TOKEN=${"a".repeat(32)}\nCAMPUS_AGENT_SIGNING_SECRET=${"b".repeat(32)}\n`);
+assert.strictEqual(accepted.status, 0, accepted.stderr);
+fs.unlinkSync(accepted.file);
+const rejected = checkCampusEnv(`CAMPUS_AGENT_ENABLED=true\nCAMPUS_AGENT_TOKEN=${"c".repeat(32)}\nCAMPUS_AGENT_SIGNING_SECRET=${"c".repeat(32)}\n`);
+assert.strictEqual(rejected.status, 1);
+assert.strictEqual(rejected.exists, false);
+assert.ok(!rejected.stderr.includes("c".repeat(8)));
+const disabled = checkCampusEnv("CAMPUS_AGENT_ENABLED=false\n");
+assert.strictEqual(disabled.status, 0);
+fs.unlinkSync(disabled.file);
 
 console.log("test-deploy-static-env-contract passed");

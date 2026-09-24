@@ -73,6 +73,16 @@ jobs:
           })().catch((error) => { console.error(error); process.exit(1); });
           NODE
 
+      - name: Build WYZ campus agent bundle
+        run: node tools/build-wyz-campus-agent-bundle.js "${{ github.sha }}"
+
+      - name: Upload WYZ campus agent bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: wyz-campus-agent-${{ github.sha }}
+          path: .local/wyz-campus-agent-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
       - name: Upload release truth
         uses: actions/upload-artifact@v6
         with:
@@ -131,6 +141,17 @@ jobs:
             has_missing_required=true
           fi
 
+          campus_agent_enabled="${{ vars.CAMPUS_AGENT_ENABLED || 'true' }}"
+          if [ "$campus_agent_enabled" = "true" ]; then
+            if [ -z "${{ secrets.CAMPUS_AGENT_TOKEN }}" ] || [ -z "${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}" ]; then
+              echo "::error::CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET are required when CAMPUS_AGENT_ENABLED=true."
+              has_missing_required=true
+            elif [ "${{ secrets.CAMPUS_AGENT_TOKEN }}" = "${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}" ]; then
+              echo "::error::CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET must be different."
+              has_missing_required=true
+            fi
+          fi
+
           if [ "$has_missing_required" = true ]; then
             exit 1
           fi
@@ -166,6 +187,8 @@ jobs:
           node --check src/workers/releaseWorker.js
           node --check scripts/security-postdeploy-check.js
           node --check scripts/verify-course-reminder.js
+          node --check scripts/verify-campus-agent-broker.js
+          node --check scripts/check-campus-agent-env.js
           node --check scripts/reconcile-static-release.js
           node --check scripts/configure-coze-workload.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
@@ -283,6 +306,11 @@ jobs:
             FOSU_AUTH_BASE=https://authserver.fosu.edu.cn
             FOSU_IMPORT_PREVIEW_TTL_SECONDS=600
             FOSU_IMPORT_ENABLE=${{ vars.FOSU_IMPORT_ENABLE || 'true' }}
+            CAMPUS_AGENT_ENABLED=${{ vars.CAMPUS_AGENT_ENABLED || 'true' }}
+            CAMPUS_AGENT_ID=${{ vars.CAMPUS_AGENT_ID || 'wyz-campus-01' }}
+            CAMPUS_AGENT_TOKEN=${{ secrets.CAMPUS_AGENT_TOKEN }}
+            CAMPUS_AGENT_SIGNING_SECRET=${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}
+            CAMPUS_SYNC_JOB_TTL_SECONDS=${{ vars.CAMPUS_SYNC_JOB_TTL_SECONDS || '120' }}
             FOSU_IMPORT_RATE_LIMIT_ENABLED=true
             FOSU_IMPORT_IP_RATE_LIMIT_10M=12
             CACHE_TTL_CATALOG=600
@@ -430,6 +458,7 @@ jobs:
               FOSU_DISK_WARNING_PERCENT
               FOSU_DISK_CRITICAL_PERCENT
               FOSU_MIN_FREE_DISK_GB
+              CAMPUS_AGENT_ENABLED CAMPUS_AGENT_ID CAMPUS_AGENT_TOKEN CAMPUS_AGENT_SIGNING_SECRET CAMPUS_SYNC_JOB_TTL_SECONDS
             )
             for key in "${required_env_keys[@]}"; do
               if ! grep -q "^${key}=" "$tmp_env"; then
@@ -443,6 +472,7 @@ jobs:
               rm -f "$tmp_env"
               exit 1
             fi
+            node server/scripts/check-campus-agent-env.js "$tmp_env"
             effective_security_mode="$(grep '^FOSU_SECURITY_MODE=' "$tmp_env" | cut -d= -f2-)"
             if [ "$effective_security_mode" != "observe" ]; then
               for key in WECHAT_APPID WECHAT_APPSECRET FOSU_SESSION_SECRET_CURRENT; do
@@ -542,6 +572,7 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true" && test "$FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB" = "3072"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
+            sudo docker exec "$CONTAINER_NAME" node scripts/verify-campus-agent-broker.js
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | bash "$GUARD" sanitize
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-course-reminder.js --require-ready --probe-token' 2>&1 | bash "$GUARD" sanitize
 

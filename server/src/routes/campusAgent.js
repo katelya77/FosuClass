@@ -1,5 +1,5 @@
 const express = require("express");
-const { verifySignedRequest } = require("../../../deploy/wyz-campus-agent/src/signature");
+const { verifySignedRequest } = require("../security/campusAgentSignature");
 const { claimJob, claimPayload, finishJob, heartbeat } = require("../services/campusSyncBroker");
 
 const router = express.Router();

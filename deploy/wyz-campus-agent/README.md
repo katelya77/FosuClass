@@ -2,8 +2,10 @@
 
 Outbound-only process for `agent-broker.katelya.eu.org`. It does not open an inbound port and it does not replace `wyz-campus-api.service`.
 
+Download `wyz-campus-agent-<sha>.tar.gz` from the GitHub Actions artifact, unpack it, and install that directory. It already contains `vendor/` and does not need a git checkout.
+
 ```sh
-sudo sh deploy/wyz-campus-agent/install-wyz.sh
+sudo sh install.sh
 sudoedit /etc/fosu-campus-agent.env
 sudo systemctl enable --now wyz-campus-agent.service
 sudo sh /opt/wyz-campus-agent/verify-wyz.sh
