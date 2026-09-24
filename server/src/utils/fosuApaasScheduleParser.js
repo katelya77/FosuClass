@@ -11,6 +11,7 @@ const FIELD_ALIASES = {
   className: ["上课班级", "班级", "className", "teachingClass"],
   campus: ["校区", "campus"],
   specialNote: ["特别说明", "说明", "备注", "specialNote", "note"],
+  teacherName: ["任课教师", "授课教师", "教师", "teacherName"],
 };
 
 Object.assign(FIELD_ALIASES, {
@@ -252,16 +253,23 @@ function normalizeScheduleRows(rawRows, options = {}) {
   const term = toText(options.semester || options.term || "当前学期");
   const importedAt = options.importedAt || new Date().toISOString();
   const normalizedRows = (Array.isArray(rawRows) ? rawRows : [])
-    .map(normalizeRawRow)
+    .map((raw) => {
+      const row = normalizeRawRow(raw);
+      if (Array.isArray(raw && raw.weeks) && raw.weeks.length) row.weeks = raw.weeks;
+      if (Array.isArray(raw && raw.sections) && raw.sections.length) row.sections = raw.sections;
+      row.weekday = raw && (raw.weekday || raw.weekDay) || row.weekday || "";
+      if (!row.teacherName && raw && raw.teacherName) row.teacherName = toText(raw.teacherName);
+      return row;
+    })
     .filter((row) => row.courseName);
 
   const scheduled = [];
   const unscheduled = [];
 
   normalizedRows.forEach((row, index) => {
-    const weeks = parseWeeks(row.weekText);
-    const weekday = parseWeekday(row.weekdayText);
-    const sections = parseSections(row.sectionText);
+    const weeks = Array.isArray(row.weeks) && row.weeks.length ? uniqSorted(row.weeks) : parseWeeks(row.weekText);
+    const weekday = Number(row.weekday || row.weekDay || 0) || parseWeekday(row.weekdayText);
+    const sections = Array.isArray(row.sections) && row.sections.length ? uniqSorted(row.sections) : parseSections(row.sectionText);
     const sourceHash = buildSourceHash(row, studentId);
     const isScheduled = Boolean(row.courseName && weeks.length && weekday && sections.length);
     const base = {
@@ -280,7 +288,7 @@ function normalizeScheduleRows(rawRows, options = {}) {
       endSection: sections[sections.length - 1] || null,
       roomName: row.roomName,
       classroom: row.roomName,
-      teacherName: "",
+      teacherName: row.teacherName || "",
       className: row.className,
       campus: row.campus,
       specialNote: row.specialNote,

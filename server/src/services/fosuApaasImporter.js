@@ -8,7 +8,7 @@ const path = require("path");
 const config = require("../config");
 const { encryptFosuPassword } = require("../utils/fosu-password-encrypt");
 const { safeLog, maskStudentId } = require("../utils/safeLogger");
-const { buildScheduleImportPreview } = require("./scheduleImportNormalizer");
+const { createNormalizedPreviewFromImportedData } = require("./scheduleImportNormalizer");
 const { getClassSchedule } = require("./scheduleService");
 
 const axiosClient = wrapper(axios.default || axios);
@@ -1338,7 +1338,7 @@ async function fetchScheduleRows(session, appEntry) {
 }
 
 function normalizeRowsForPreview(rawRows, options = {}) {
-  return buildScheduleImportPreview(rawRows, options);
+  return createNormalizedPreviewFromImportedData(rawRows, options);
 }
 
 async function loadLocalClassCourses(targetClassName, semester) {

@@ -659,7 +659,7 @@ function toImportCourse(arrangement, context = {}) {
     remark: arrangement.specialNote || "",
     semester: context.semester || "",
     term: context.semester || "",
-    source: "fosu_apaas",
+    source: context.source || "fosu_apaas",
     sourceType: "personal",
     sourceStudentId: context.studentId || "",
     sourceHash: arrangement.sourceHash,
@@ -869,6 +869,10 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     options.existingSelectedClassName || options.targetClassName || "",
     options.localCourses || []
   );
+  if (options.scheduleOwnership === "personal" && !targetInference.targetClassName) {
+    targetInference.classNameConfidence = "high";
+    targetInference.source = "personal-timetable";
+  }
   const targetClassName = targetInference.targetClassName || "";
   const localIndex = buildLocalScheduleIndex(options.localCourses || []);
   const groupMap = new Map();
@@ -896,6 +900,9 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       index,
     });
     const classInfo = classifyRowByClassScope({ className: classNameRaw }, targetClassName);
+    if (options.scheduleOwnership === "personal" && classInfo.matchStatus !== "not_match") {
+      classInfo.matchStatus = "match";
+    }
     const courseGroupId = `group_${stableHash({ normalizedCourseName, targetClassName, semester }, 20)}`;
     const exactKey = [
       normalizedCourseName,
@@ -1026,6 +1033,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     semester,
     importedAt,
     targetClassName,
+    source: options.source || "",
   }));
   const unscheduledCourses = allArrangements
     .filter((item) => item.importDecision === IMPORT_DECISION.UNSCHEDULED || item.importDecision === IMPORT_DECISION.NEEDS_CONFIRM)
@@ -1034,7 +1042,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       sections: arrangement.sections || [],
       startSection: arrangement.startSection || null,
       endSection: arrangement.endSection || null,
-    }), { studentId, semester, importedAt, targetClassName }), {
+    }), { studentId, semester, importedAt, targetClassName, source: options.source || "" }), {
       reason: arrangement.reason,
       isScheduled: false,
     }));
@@ -1105,6 +1113,7 @@ module.exports = {
   buildLocalScheduleIndex,
   buildPreviewGrid,
   buildScheduleImportPreview,
+  createNormalizedPreviewFromImportedData: buildScheduleImportPreview,
   classifyRowByClassScope,
   inferTargetClassName,
   isClassScopeMatch,

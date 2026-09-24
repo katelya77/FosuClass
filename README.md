@@ -133,7 +133,7 @@ CAMPUS_AGENT_TOKEN=your_secure_agent_token_here
 
 ### 个人课表导入
 
-v0.5 起个人课表后端仅保留 `POST /api/fosu/personal/import-xls`。学号密码同步、滑块验证和登录抓取接口已下线；旧客户端访问 `/diagnose`、`/session/start`、`/session/verify-slider`、`/session/login-and-sync` 会收到 `410 XLS_ONLY`，提示改用 XLS 导入。XLS 导入只解析课程名、教师、教室、星期、节次、教学周和学期元数据，不接收教务密码，也不把原始 XLS/base64 交给外部 Provider。
+个人课表同步 V1 的主路径是客户端直连：手机已连接校园网或校园 VPN 时，学号和密码只留在个人课表同步页，小程序直接读取 100 网课表，class 后端只解析非凭据的课表响应。旧的 `/diagnose`、`/session/start`、`/session/verify-slider`、`/session/login-and-sync` 仍返回 `410 XLS_ONLY`。XLS 导入始终保留，只解析课程名、教师、教室、星期、节次、教学周和学期元数据，不接收教务密码，也不把原始 XLS/base64 交给外部 Provider。
 
 ## 可靠性与缓存策略
 

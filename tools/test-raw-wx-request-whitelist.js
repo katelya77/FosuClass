@@ -8,6 +8,7 @@ const whitelist = new Set([
   path.normalize(path.join(miniprogramRoot, "utils", "request.js")),
   path.normalize(path.join(miniprogramRoot, "services", "securitySessionService.js")),
   path.normalize(path.join(miniprogramRoot, "services", "staticAccessService.js")),
+  path.normalize(path.join(miniprogramRoot, "services", "fosuDirectClient.js")),
 ]);
 
 function walk(dir, output = []) {
@@ -112,6 +113,6 @@ assert.deepStrictEqual(
   [path.join("miniprogram", "utils", "request.js")],
   "miniprogram should only contain one request.js"
 );
-assert.deepStrictEqual(offenders, [], `raw wx.request is only allowed in the transport/bootstrap whitelist: ${offenders.join(", ")}`);
+assert.deepStrictEqual(offenders, [], `raw wx.request is only allowed in the class transport whitelist or fosuDirectClient: ${offenders.join(", ")}`);
 
 console.log("test-raw-wx-request-whitelist passed");

@@ -20,16 +20,36 @@ function run() {
   const cryptoService = read("miniprogram/services/fosuStudentImportCrypto.js");
   const recentImportService = read("miniprogram/services/recentStudentImportService.js");
 
+  const directClient = read("miniprogram/services/fosuDirectClient.js");
+  const directConfig = read("miniprogram/services/fosuDirectConfig.js");
+  const cookieJar = read("miniprogram/services/fosuDirectCookieJar.js");
+  const passwordCrypto = read("miniprogram/services/fosuDirectPasswordCrypto.js");
+  const scheduleSource = read("miniprogram/services/studentScheduleSource.js");
+  const directPreviewRoute = read("server/src/routes/fosuApaasImport.js");
+  const requestUtil = read("miniprogram/utils/request.js");
+  const validateStart = js.indexOf("async validateAndPreviewStudentImport");
+  const validateBody = js.slice(validateStart, js.indexOf("recheckCampusNetwork"));
   assert(!/startLoginFlow|loginAndSyncSchedule|showCaptchaModal|\/api\/fosu\/personal\/login/.test(js + wxml),
     "personal-sync page should not expose deprecated direct account/password sync flow");
-  assert(!/authserver\.fosu\.edu\.cn|apaas\.fosu\.edu\.cn/.test(js + wxml + cryptoService),
-    "mini program must not request Fosu authserver/APaaS directly");
-  assert(js.includes("encryptCredentialPayload"), "student import should encrypt credentials before preview");
-  assert(js.includes("/api/schedule-import/fosu/public-key"), "student import should fetch a one-time public key from backend");
-  assert(js.includes("/api/schedule-import/fosu/preview/start"), "student import should start async preview jobs");
-  assert(js.includes("/api/schedule-import/fosu/preview/status"), "student import should poll async preview job status");
-  assert(js.includes("/api/schedule-import/fosu/preview"), "student import should keep legacy preview fallback");
-  assert(js.includes("requestStudentSchedulePreview"), "student import should isolate public-key/encrypt/preview into a retryable attempt");
+  assert(!/authserver\.fosu\.edu\.cn|100\.fosu\.edu\.cn|apaas\.fosu\.edu\.cn/.test(js + wxml + cryptoService + requestUtil + aiService),
+    "school hosts must stay inside the direct client, not pages, AI, or common request");
+  assert(/authserver\.fosu\.edu\.cn/.test(directConfig) && /100\.fosu\.edu\.cn/.test(directConfig),
+    "direct config should name the school allowlist");
+  assert(directClient.includes('redirect: "manual"'), "school requests must use manual redirects");
+  assert(!directClient.includes("utils/request"), "school requests must not use the class request client");
+  assert(!/wx\.setStorage(Sync)?\(/.test(cookieJar + passwordCrypto + directClient), "cookie jar and password crypto must not touch storage");
+  assert(cookieJar.includes("clear("), "cookie jar must be clearable");
+  assert(validateBody.includes("client-direct") || validateBody.includes("SOURCE.CLIENT_DIRECT"), "default sync must use client direct");
+  assert(validateBody.includes("/api/schedule-import/fosu/direct/preview"), "default sync must upload only the timetable body");
+  assert(!validateBody.includes("/preview/start"), "default sync must not send school credentials to the relay preview");
+  assert(validateBody.includes("studentForm.password\": \"\""), "password must be cleared after client direct sync");
+  assert(scheduleSource.includes("OUTBOUND_AGENT_NOT_IMPLEMENTED"), "outbound agent must stay unimplemented");
+  assert(directPreviewRoute.includes("DIRECT_SECRET_REJECTED"), "direct preview must reject credential fields");
+  assert(js.includes("encryptCredentialPayload"), "server relay helper may keep encrypted credential payload code");
+  assert(js.includes("/api/schedule-import/fosu/public-key"), "server relay helper may keep the public-key channel");
+  assert(js.includes("/api/schedule-import/fosu/preview/start"), "server relay route helper may remain for a future channel");
+  assert(js.includes("/api/schedule-import/fosu/preview/status"), "server relay status helper may remain unused by client direct");
+  assert(js.includes("requestStudentSchedulePreview"), "server relay attempt helper may remain for the future channel");
   assert(!wxml.includes("使用前请阅读"), "student import page should not show forced privacy guide reading copy");
   assert(!wxml.includes("隐私保护指引"), "student import page should not show privacy guide link copy");
   assert(!wxml.includes("openStudentPrivacyContract"), "student import page should not bind privacy guide opening");

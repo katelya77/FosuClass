@@ -8,6 +8,9 @@ const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const recentStudentImportService = require("../../services/recentStudentImportService");
 const { encryptCredentialPayload } = require("../../services/fosuStudentImportCrypto");
+const studentScheduleSource = require("../../services/studentScheduleSource");
+const { createFosuDirectClient } = require("../../services/fosuDirectClient");
+const { buildSafeDiagnostic } = require("../../services/fosuDirectDiagnostics");
 const { getRuntimeTermConfig, getTodayTeachingInfo } = require("../../utils/week");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -916,6 +919,17 @@ async function requestStudentSchedulePreview(form, password, extra = {}, onStatu
   }
 }
 
+function isDirectDebugEnabled() {
+  const env = platform.getMiniProgramEnvVersion();
+  const info = platform.getWxSystemInfo();
+  return info.platform === "devtools" || env === "develop";
+}
+
+function noteDirectStage(stage, extra) {
+  if (!isDirectDebugEnabled()) return;
+  console.info("[Fosu direct]", buildSafeDiagnostic(Object.assign({ stage: stage || "" }, extra || {})));
+}
+
 function logStudentImportDiagnostics(preview) {
   if (!platform.isDeveloperEnv()) return;
   const diagnostics = preview && (preview.importDiagnostics || preview.timing) || {};
@@ -1785,21 +1799,31 @@ Page({
     this.startStudentLoadingSteps();
 
     let plainPassword = form.password;
+    let timetable = null;
+    const directClient = createFosuDirectClient({ debug: isDirectDebugEnabled() });
+    this.directSyncAbandoned = false;
+    this.activeDirectClient = directClient;
     try {
-      let preview;
-      try {
-        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra, (status) => {
-          this.applyStudentImportJobStatus(status);
-        });
-      } catch (error) {
-        if (!shouldRetryStudentPreview(error)) {
-          throw error;
-        }
-        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra, (status) => {
-          this.applyStudentImportJobStatus(status);
-        });
-      }
+      this.applyStudentImportJobStatus({ progress: 18, message: "正在连接佛大教务系统" });
+      timetable = await studentScheduleSource.readPersonalTimetable({
+        client: directClient,
+        mode: studentScheduleSource.SOURCE.CLIENT_DIRECT,
+        studentId: form.studentId,
+        password: plainPassword,
+        semester: previewExtra.semester,
+      });
       plainPassword = "";
+      this.applyStudentImportJobStatus({ progress: 72, message: "正在整理课表" });
+      noteDirectStage("direct-preview");
+      const preview = await request.post("/api/schedule-import/fosu/direct/preview", timetable, {
+        showLoading: false,
+        silentError: true,
+        timeout: 20000,
+        retries: 0,
+        dedupe: false,
+      });
+      timetable = null;
+      noteDirectStage("direct-preview", { httpStatus: 200 });
       this.setData({ "studentForm.password": "" });
       logStudentImportDiagnostics(preview);
 
@@ -1815,7 +1839,7 @@ Page({
         studentPreviewResult: Object.assign({}, preview, {
           displayInfo,
           metadata,
-          displayStudentId: resolveDisplayStudentId(metadata, preview.profile || {}),
+          displayStudentId: form.studentId || resolveDisplayStudentId(metadata, preview.profile || {}),
           maskedStudentId: metadata.studentIdMasked,
         }),
       };
@@ -1828,6 +1852,10 @@ Page({
       wx.showToast({ title: "读取成功", icon: "success" });
     } catch (error) {
       plainPassword = "";
+      timetable = null;
+      const code = error && (error.code || (error.payload && error.payload.code)) || "";
+      if (this.directSyncAbandoned || code === "DIRECT_SYNC_CANCELLED") return;
+      noteDirectStage("direct-preview", { errorCode: code });
       this.stopStudentLoadingSteps();
       this.setData({
         studentImportLoading: false,
@@ -1837,7 +1865,38 @@ Page({
       });
       const payload = error && error.payload || {};
       this.showStudentImportError(payload.code || error.code, payload.message || error.message);
+    } finally {
+      plainPassword = "";
+      timetable = null;
+      if (directClient) directClient.clearSecrets();
+      if (this.activeDirectClient === directClient) this.activeDirectClient = null;
+      this.setData({ "studentForm.password": "" });
     }
+  },
+
+  clearActiveDirectSecrets() {
+    const client = this.activeDirectClient;
+    this.activeDirectClient = null;
+    if (client && client.clearSecrets) client.clearSecrets();
+    this.setData({ "studentForm.password": "" });
+  },
+
+  recheckCampusNetwork() {
+    const client = createFosuDirectClient({ debug: isDirectDebugEnabled() });
+    this.activeDirectClient = client;
+    studentScheduleSource.preflightPersonalNetwork({ client })
+      .then(() => {
+        wx.showToast({ title: "校园网已连通", icon: "success" });
+      })
+      .catch((error) => {
+        if (this.directSyncAbandoned || (error && error.code === "DIRECT_SYNC_CANCELLED")) return;
+        noteDirectStage("preflight", { errorCode: error && error.code || "" });
+        this.showStudentImportError(error && error.code, error && error.message);
+      })
+      .finally(() => {
+        client.clearSecrets();
+        if (this.activeDirectClient === client) this.activeDirectClient = null;
+      });
   },
 
   onXlsBtnTap() {
@@ -2155,6 +2214,7 @@ Page({
             studentSelectionMode: false,
             studentEditingArrangement: null,
           });
+          noteDirectStage("confirm", { httpStatus: 200 });
           wx.showToast({ title: "导入成功", icon: "success" });
           setTimeout(() => {
             wx.switchTab({ url: "/pages/index/index" });
@@ -2166,6 +2226,7 @@ Page({
       .catch((error) => {
         this.setData({ studentImportConfirming: false });
         const payload = error && error.payload || {};
+        noteDirectStage("confirm", { errorCode: payload.code || error.code || "" });
         this.showStudentImportError(payload.code || error.code, payload.message || error.message);
       });
   },
@@ -2211,8 +2272,27 @@ Page({
   },
 
   showStudentImportError(code, defaultMsg) {
+    if (code === "CAMPUS_NETWORK_REQUIRED") {
+      wx.showModal({
+        title: "提示",
+        content: "当前设备无法连接佛大教务系统，请先连接校园网或校园 VPN 后重试。",
+        confirmText: "重新检测",
+        cancelText: "XLS导入",
+        success: (res) => {
+          if (res.confirm) this.recheckCampusNetwork();
+          else this.selectImportMethod({ currentTarget: { dataset: { method: "xls" } } });
+        },
+      });
+      return;
+    }
     let content = defaultMsg || "学号导入暂时不可用，请稍后再试。";
-    if (code === "CLIENT_CRYPTO_UNAVAILABLE") {
+    if (code === "DIRECT_MODE_UNSUPPORTED") {
+      content = "当前微信版本暂不支持直接同步，请更新微信或使用 XLS 导入。";
+    } else if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
+      content = "学校统一认证要求进行额外安全验证，本次暂不能自动同步。你可以稍后重试或使用 XLS 导入。";
+    } else if (code === "CAS_HTTPS_CALLBACK_UNSUPPORTED") {
+      content = "学校登录回跳未能建立课表会话，暂时无法直接同步。请改用 XLS 导入。";
+    } else if (code === "CLIENT_CRYPTO_UNAVAILABLE" || code === "DIRECT_CRYPTO_UNAVAILABLE") {
       content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
     } else if (code === "INVALID_CREDENTIALS") {
       content = "学号或密码不正确，请检查后重试。";
@@ -2255,8 +2335,17 @@ Page({
     wx.navigateBack();
   },
 
+  onHide() {
+    if (this.data.studentImportLoading || this.activeDirectClient) {
+      this.directSyncAbandoned = true;
+      this.clearActiveDirectSecrets();
+    }
+  },
+
   onUnload() {
+    this.directSyncAbandoned = true;
     this.stopStudentLoadingSteps();
+    this.clearActiveDirectSecrets();
     if (this.data.studentPreviewToken) {
       request.post("/api/schedule-import/fosu/cancel", {
         importPreviewToken: this.data.studentPreviewToken,

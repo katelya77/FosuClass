@@ -68,6 +68,7 @@
     <view class="sync-hero" wx:if="{{studentImportStage == 'form'}}">
       <view class="sync-title">学号导入个人课表</view>
       <view class="sync-desc">仅用于本次登录学校课表系统并读取本人课表数据。</view>
+      <view class="sync-desc">需连接佛山大学校园网或校园 VPN</view>
     </view>
 
     <view class="card student-form-card" wx:if="{{studentImportStage == 'form'}}">

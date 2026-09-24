@@ -393,7 +393,7 @@ function buildPreviewRecord(context, preview) {
     scheduledCourses: preview.scheduledCourses,
     unscheduledCourses: preview.unscheduledCourses,
     timing: preview.timing,
-    source: "fosu_apaas",
+    source: context.source || "fosu_apaas",
   };
 }
 
@@ -753,6 +753,7 @@ function buildSelectedImportCourses(record, body = {}, importedAt) {
       semester: record.summary && record.summary.semester,
       importedAt,
       targetClassName: record.profile && (record.profile.targetClassName || record.profile.className),
+      source: record.source || "",
     }));
   });
 
@@ -769,6 +770,7 @@ function buildSelectedImportCourses(record, body = {}, importedAt) {
       semester: record.summary && record.summary.semester,
       importedAt,
       targetClassName: record.profile && (record.profile.targetClassName || record.profile.className),
+      source: record.source || "",
     }), {
       isScheduled: false,
       reason: arrangement.reason || "",
@@ -788,7 +790,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
   const sourceCourses = selectedOptions.incomingCourses || record.scheduledCourses || [];
   const incomingCourses = sourceCourses.map((course) => Object.assign({}, course, {
     importedAt,
-    source: "fosu_apaas",
+    source: course.source || record.source || "fosu_apaas",
     sourceStudentId: studentIdMasked,
   }));
   const courses = applyImportMode(existingCourses, incomingCourses, mode);
@@ -812,7 +814,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
     updateTime: formatImportTime(importedAt),
     importedAt,
     sourceText: "学校课表系统",
-    source: "fosu_apaas",
+    source: record.source || "fosu_apaas",
     sourceStudentId: studentIdMasked,
     metadata: {
       studentId: studentIdMasked,
@@ -821,7 +823,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
       className: record.profile.className || "",
       classNameConfidence: record.profile.classNameConfidence || "low",
       term: record.summary.semester || "",
-      source: "fosu_apaas",
+      source: record.source || "fosu_apaas",
       rawRowCount: record.summary.rawRowCount,
       scheduledCourseCount: incomingCourses.length,
       totalCourseCount: courses.length,
@@ -1163,6 +1165,23 @@ function confirmRecentStudentScheduleImport(req, body = {}) {
   };
 }
 
+function createStoredPreviewFromNormalized(req, preview, meta = {}) {
+  const context = {
+    ownerKey: getOwnerKey(req),
+    taskId: crypto.randomBytes(8).toString("hex"),
+    credentials: { studentId: "" },
+    fosuSession: req && req.fosuSession || null,
+    source: meta.source || "client-direct",
+  };
+  const previewRecord = buildPreviewRecord(context, preview);
+  const tokenInfo = createPreviewToken(previewRecord);
+  const recentImport = saveRecentImportFromPreview(context, previewRecord);
+  return Object.assign(publicPreviewPayload(preview, tokenInfo), {
+    recentImport,
+    source: previewRecord.source,
+  });
+}
+
 function cancelStudentScheduleImport(req, body = {}) {
   const token = toText(body.importPreviewToken);
   const record = getPreview(token);
@@ -1179,6 +1198,7 @@ module.exports = {
   cancelStudentScheduleImport,
   confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
+  createStoredPreviewFromNormalized,
   createStudentSchedulePreview,
   decryptCredentialPayload,
   getStudentSchedulePreviewJobStatus,

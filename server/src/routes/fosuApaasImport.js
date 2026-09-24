@@ -12,6 +12,7 @@ const {
   startStudentSchedulePreviewJob,
 } = require("../services/fosuApaasImportService");
 const { getRecentImportForSession } = require("../services/fosuApaasRecentImportStore");
+const { createDirectStudentSchedulePreview } = require("../services/fosuDirectPreviewService");
 
 const router = express.Router();
 
@@ -248,6 +249,24 @@ router.post("/recent/confirm", (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     return res.json(confirmRecentStudentScheduleImport(req, req.body || {}));
   } catch (error) {
+    return sendImportError(res, error);
+  }
+});
+
+router.post("/direct/preview", (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    return res.json(createDirectStudentSchedulePreview(req, req.body || {}));
+  } catch (error) {
+    const code = error && error.code || "";
+    if (code === "DIRECT_SECRET_REJECTED" || code === "DIRECT_BODY_TOO_LARGE" || code === "DIRECT_BODY_INVALID" || code === "DIRECT_PAYLOAD_NOT_TIMETABLE") {
+      safeLog("fosu-direct-preview-failed", { code });
+      return res.status(400).json({
+        success: false,
+        code,
+        message: code === "DIRECT_SECRET_REJECTED" ? "请求包含不允许的字段。" : "课表内容无法读取。",
+      });
+    }
     return sendImportError(res, error);
   }
 });
