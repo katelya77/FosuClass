@@ -13,9 +13,9 @@ process.env.FOSU_RECENT_IMPORT_STORE_FILE = path.join(os.tmpdir(), `fosu-direct-
 
 const express = requireServerDependency("express");
 const iconv = requireServerDependency("iconv-lite");
-const router = require("../server/src/routes/fosuApaasImport");
+const router = require("../server/src/routes/studentScheduleImport");
 const { createSessionToken } = require("../server/src/utils/apiSecurity");
-const { confirmStudentScheduleImport } = require("../server/src/services/fosuApaasImportService");
+const { confirmStudentScheduleImport } = require("../server/src/services/studentScheduleImportService");
 
 const HTML = [
   "<meta charset=\"utf-8\">",

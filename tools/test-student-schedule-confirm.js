@@ -9,7 +9,7 @@ try { fs.unlinkSync(tempRecentStoreFile); } catch (error) {}
 const {
   __resetForTest: resetRecentImportStore,
   __setStoreFileForTest,
-} = require("../server/src/services/fosuApaasRecentImportStore");
+} = require("../server/src/services/studentScheduleRecentImportStore");
 __setStoreFileForTest(tempRecentStoreFile);
 resetRecentImportStore();
 
@@ -17,11 +17,11 @@ const {
   __resetForTest,
   __setPreviewForTest,
   createPreviewToken,
-} = require("../server/src/services/fosuApaasImportSessionStore");
+} = require("../server/src/services/studentScheduleImportSessionStore");
 const {
   applyImportMode,
   confirmStudentScheduleImport,
-} = require("../server/src/services/fosuApaasImportService");
+} = require("../server/src/services/studentScheduleImportService");
 
 function makeCourse(patch) {
   return Object.assign({

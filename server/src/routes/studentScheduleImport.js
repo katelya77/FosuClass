@@ -2,16 +2,12 @@ const express = require("express");
 const { getClientIpInfo } = require("../utils/clientIp");
 const { safeLog } = require("../utils/safeLogger");
 const { verifySessionTokenDetailed } = require("../utils/apiSecurity");
-const { createPublicKeyChallenge } = require("../services/fosuApaasImportSessionStore");
 const {
   cancelStudentScheduleImport,
   confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
-  createStudentSchedulePreview,
-  getStudentSchedulePreviewJobStatus,
-  startStudentSchedulePreviewJob,
-} = require("../services/fosuApaasImportService");
-const { getRecentImportForSession } = require("../services/fosuApaasRecentImportStore");
+} = require("../services/studentScheduleImportService");
+const { getRecentImportForSession } = require("../services/studentScheduleRecentImportStore");
 const { createDirectStudentSchedulePreview } = require("../services/fosuDirectPreviewService");
 
 const router = express.Router();
@@ -176,62 +172,6 @@ function setPreviewDiagnosticsHeaders(res, payload) {
 
 router.use(requireMiniProgramSession);
 
-router.get("/public-key", (req, res) => {
-  const startedAt = Date.now();
-  try {
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    const payload = Object.assign({ success: true }, createPublicKeyChallenge());
-    safeLog("fosu-apaas-public-key-timing", { elapsedMs: Date.now() - startedAt });
-    return res.json(payload);
-  } catch (error) {
-    safeLog("fosu-apaas-public-key-failed", { code: error.code || error.message, elapsedMs: Date.now() - startedAt });
-    return sendImportError(res, error);
-  }
-});
-
-router.post("/preview/start", (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
-    const payload = startStudentSchedulePreviewJob(req, req.body || {});
-    return res.json(Object.assign({
-      pollAfterMs: 1200,
-      maxWaitMs: 60000,
-    }, payload));
-  } catch (error) {
-    return sendImportError(res, error);
-  }
-});
-
-router.get("/preview/status", (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
-    const payload = getStudentSchedulePreviewJobStatus(req, req.query && req.query.jobId);
-    if (payload.status === "failed") {
-      const errorPayload = enhanceImportErrorPayload(payload.error || { code: payload.code }, {
-        success: false,
-        code: payload.code || payload.error && payload.error.code || "UNKNOWN_IMPORT_ERROR",
-        message: payload.message || "",
-        retryAfter: payload.retryAfter || 0,
-      });
-      if (errorPayload.retryAfter) {
-        res.setHeader("Retry-After", String(errorPayload.retryAfter));
-      }
-      return res.json(Object.assign({}, payload, {
-        success: false,
-        code: errorPayload.code,
-        message: errorPayload.message,
-        retryAfter: errorPayload.retryAfter || 0,
-        retriable: errorPayload.retriable === true,
-      }));
-    }
-    return res.json(payload);
-  } catch (error) {
-    return sendImportError(res, error);
-  }
-});
-
 router.get("/recent", (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store");
@@ -267,17 +207,6 @@ router.post("/direct/preview", (req, res) => {
         message: code === "DIRECT_SECRET_REJECTED" ? "请求包含不允许的字段。" : "课表内容无法读取。",
       });
     }
-    return sendImportError(res, error);
-  }
-});
-
-router.post("/preview", async (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
-    const payload = await createStudentSchedulePreview(req, req.body || {});
-    setPreviewDiagnosticsHeaders(res, payload);
-    return res.json(payload);
-  } catch (error) {
     return sendImportError(res, error);
   }
 });

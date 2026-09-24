@@ -1,148 +1,25 @@
 const crypto = require("crypto");
-const { sm2 } = require("sm-crypto");
-const config = require("../config");
 const { maskStudentId, safeLog } = require("../utils/safeLogger");
 const {
-  clearPrivateKeyChallenge,
   createPreviewToken,
   deletePreview,
   getPreview,
   takePreview,
-  takePrivateKeyChallenge,
-} = require("./fosuApaasImportSessionStore");
+} = require("./studentScheduleImportSessionStore");
 const {
   getRecentImportForSession,
   saveRecentImportForSession,
-} = require("./fosuApaasRecentImportStore");
-const {
-  assertImportAttemptAllowed,
-  recordImportFailure,
-} = require("./fosuApaasImportRateLimiter");
-const { importSchedulePreview } = require("./fosuApaasImporter");
+} = require("./studentScheduleRecentImportStore");
 const { IMPORT_DECISION, toImportCourse } = require("./scheduleImportNormalizer");
-const { parseSections, parseWeeks } = require("../utils/fosuApaasScheduleParser");
+const { parseSections, parseWeeks } = require("../utils/studentScheduleRowParser");
 
 const ALLOWED_CONFIRM_MODES = new Set(["replace_fosu_source", "merge", "replace_all_personal"]);
 const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
-const PREVIEW_JOB_TTL_MS = Math.max(2 * 60 * 1000, Number(process.env.FOSU_IMPORT_PREVIEW_JOB_TTL_SECONDS || 10 * 60) * 1000 || 10 * 60 * 1000);
-const PREVIEW_JOB_REUSE_TTL_MS = Math.max(
-  2 * 60 * 1000,
-  Math.min(5 * 60 * 1000, Number(process.env.FOSU_IMPORT_PREVIEW_REUSE_SECONDS || 4 * 60) * 1000 || 4 * 60 * 1000)
-);
-const previewJobs = new Map();
 
 function toText(value) {
   return String(value == null ? "" : value).trim();
 }
 
-function fromBase64(value) {
-  return Buffer.from(String(value || ""), "base64");
-}
-
-function safeJsonParse(text) {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    return null;
-  }
-}
-
-function importPayloadError(code) {
-  const error = new Error(code);
-  error.code = code;
-  return error;
-}
-
-function previewJobError(code) {
-  const error = new Error(code);
-  error.code = code;
-  return error;
-}
-
-function normalizeCredentialAlgorithm(value) {
-  const text = toText(value).toUpperCase();
-  if (!text) return "RSA-OAEP";
-  if (text === "SM2" || text === "SM2-C1C3C2") return "SM2";
-  if (text === "RSA-OAEP" || text === "RSA-OAEP-256/AES-256-GCM") return "RSA-OAEP";
-  return text;
-}
-
-function validateCredentialPayload(payload, keyRecord) {
-  if (!payload || typeof payload !== "object") {
-    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
-  }
-
-  const studentId = toText(payload.studentId);
-  const password = String(payload.password || "");
-  const nonce = toText(payload.nonce);
-  const timestamp = Number(payload.timestamp || 0);
-  if (!studentId || !password || nonce !== keyRecord.nonce) {
-    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
-  }
-  if (!/^\d{6,20}$/.test(studentId)) {
-    throw importPayloadError("INVALID_STUDENT_ID");
-  }
-  if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) {
-    throw importPayloadError("IMPORT_KEY_EXPIRED");
-  }
-
-  return {
-    studentId,
-    password,
-    nonce,
-    timestamp,
-  };
-}
-
-function decryptRsaHybridCredentialPayload(body, keyRecord) {
-  const encryptedKey = fromBase64(body.encryptedKey);
-  const encryptedPayload = fromBase64(body.encryptedPayload);
-  const iv = fromBase64(body.iv);
-  const tag = fromBase64(body.tag);
-  if (!encryptedKey.length || !encryptedPayload.length || iv.length < 12 || tag.length !== 16) {
-    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
-  }
-
-  const aesKey = crypto.privateDecrypt({
-    key: keyRecord.rsaPrivateKey || keyRecord.privateKey,
-    padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-    oaepHash: "sha256",
-  }, encryptedKey);
-
-  const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, iv);
-  decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(encryptedPayload), decipher.final()]);
-  return safeJsonParse(decrypted.toString("utf8"));
-}
-
-function decryptSm2CredentialPayload(body, keyRecord) {
-  const encryptedPayload = toText(body.encryptedPayload || body.ciphertext);
-  if (!encryptedPayload || !/^[0-9a-f]+$/i.test(encryptedPayload) || !keyRecord.sm2PrivateKey) {
-    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
-  }
-  const decrypted = sm2.doDecrypt(encryptedPayload, keyRecord.sm2PrivateKey, 1);
-  return safeJsonParse(decrypted);
-}
-
-function decryptCredentialPayload(body = {}) {
-  const keyRecord = takePrivateKeyChallenge(body.keyId);
-  if (!keyRecord) {
-    throw importPayloadError("IMPORT_KEY_EXPIRED");
-  }
-
-  try {
-    const algorithm = normalizeCredentialAlgorithm(body.algorithm);
-    if (algorithm === "SM2") {
-      return validateCredentialPayload(decryptSm2CredentialPayload(body, keyRecord), keyRecord);
-    }
-    if (algorithm === "RSA-OAEP") {
-      return validateCredentialPayload(decryptRsaHybridCredentialPayload(body, keyRecord), keyRecord);
-    }
-    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
-  } finally {
-    clearPrivateKeyChallenge(keyRecord);
-  }
-}
 
 function getOwnerKey(req) {
   const session = req && req.fosuSession || {};
@@ -179,202 +56,6 @@ function publicPreviewPayload(preview, tokenInfo) {
   };
 }
 
-function cleanupPreviewJobs(now = Date.now()) {
-  for (const [jobId, record] of previewJobs.entries()) {
-    if (!record || Number(record.expiresAtMs || 0) <= now) {
-      previewJobs.delete(jobId);
-    }
-  }
-}
-
-function createPreviewJobId() {
-  return `fosu_preview_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
-}
-
-function createPreviewReuseKey(context) {
-  return crypto
-    .createHash("sha256")
-    .update([
-      context.ownerKey || "",
-      context.credentials && context.credentials.studentId || "",
-      context.options && context.options.semester || "",
-      context.options && context.options.existingSelectedClassName || "",
-    ].join("|"))
-    .digest("hex");
-}
-
-function isReusablePreviewJob(record, context, now = Date.now()) {
-  if (!record || !context || !record.reuseKey) return false;
-  if (record.ownerKey !== context.ownerKey) return false;
-  if (record.reuseKey !== context.reuseKey) return false;
-  if (Number(record.reuseUntilMs || 0) <= now) return false;
-  if (record.status === "success") {
-    const preview = getPreview(record.result && record.result.importPreviewToken);
-    return Boolean(preview && preview.ownerKey === context.ownerKey);
-  }
-  return record.status === "pending" || record.status === "running";
-}
-
-function findReusablePreviewJob(context) {
-  cleanupPreviewJobs();
-  const now = Date.now();
-  context.reuseKey = context.reuseKey || createPreviewReuseKey(context);
-  for (const record of previewJobs.values()) {
-    if (isReusablePreviewJob(record, context, now)) return record;
-  }
-  return null;
-}
-
-function safeJobTiming(timing) {
-  const source = timing || {};
-  return {
-    channel: source.channel || "",
-    fallbackReason: source.fallbackReason || "",
-    hitCache: Boolean(source.hitCache),
-    retryCount: Number(source.retryCount || 0) || 0,
-    decryptMs: Number(source.decryptMs || 0) || 0,
-    loginMs: Number(source.loginMs || 0) || 0,
-    discoverMs: Number(source.discoverMs || source.discoverAppMs || 0) || 0,
-    fetchRowsMs: Number(source.fetchRowsMs || 0) || 0,
-    relayMs: Number(source.relayMs || 0) || 0,
-    rowsCount: Number(source.rowsCount || source.rawRowCount || 0) || 0,
-    bytesApprox: Number(source.bytesApprox || 0) || 0,
-    normalizeMs: Number(source.normalizeMs || 0) || 0,
-    totalMs: Number(source.totalMs || 0) || 0,
-  };
-}
-
-function publicPreviewJob(record) {
-  const payload = {
-    success: record.status !== "failed",
-    jobId: record.jobId,
-    status: record.status,
-    progress: Math.max(0, Math.min(100, Number(record.progress || 0) || 0)),
-    step: record.step || "",
-    message: record.message || "",
-    timing: safeJobTiming(record.timing),
-    hitCache: Boolean(record.hitCache),
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-  if (record.status === "success" && record.result) {
-    payload.result = record.result;
-    Object.assign(payload, record.result);
-  }
-  if (record.status === "failed" && record.error) {
-    payload.error = record.error;
-    payload.code = record.error.code || record.error.message || "UNKNOWN_IMPORT_ERROR";
-    payload.retryAfter = record.error.retryAfterSeconds || 0;
-  }
-  return payload;
-}
-
-function updatePreviewJob(jobId, patch = {}) {
-  const record = previewJobs.get(jobId);
-  if (!record) return null;
-  Object.assign(record, patch, {
-    updatedAt: new Date().toISOString(),
-  });
-  previewJobs.set(jobId, record);
-  return record;
-}
-
-function createPreviewJobRecord(context) {
-  cleanupPreviewJobs();
-  const now = new Date().toISOString();
-  const jobId = createPreviewJobId();
-  const record = {
-    jobId,
-    taskId: context.taskId,
-    ownerKey: context.ownerKey,
-    studentIdMasked: maskStudentId(context.credentials && context.credentials.studentId),
-    status: "pending",
-    progress: 8,
-    step: "queued",
-    message: "已创建读取任务，正在准备连接学校系统。",
-    reuseKey: context.reuseKey || createPreviewReuseKey(context),
-    reuseUntilMs: Date.now() + PREVIEW_JOB_REUSE_TTL_MS,
-    hitCache: false,
-    timing: { decryptMs: context.decryptMs || 0, hitCache: false },
-    result: null,
-    error: null,
-    createdAt: now,
-    updatedAt: now,
-    expiresAtMs: Date.now() + PREVIEW_JOB_TTL_MS,
-  };
-  previewJobs.set(jobId, record);
-  return record;
-}
-
-function getStudentSchedulePreviewJobStatus(req, jobId) {
-  cleanupPreviewJobs();
-  const id = toText(jobId);
-  const record = id ? previewJobs.get(id) : null;
-  if (!record) {
-    throw previewJobError("IMPORT_PREVIEW_JOB_NOT_FOUND");
-  }
-  if (record.ownerKey !== getOwnerKey(req)) {
-    throw previewJobError("IMPORT_PREVIEW_JOB_NOT_FOUND");
-  }
-  return publicPreviewJob(record);
-}
-
-function getPreviewRequestOptions(encryptedBody = {}) {
-  return {
-    semester: encryptedBody.semester || "\u5f53\u524d\u5b66\u671f",
-    existingSelectedClassName: encryptedBody && (encryptedBody.selectedClassName || encryptedBody.currentClassName) || "",
-    forceRefresh: encryptedBody.forceRefresh === true || encryptedBody.noCache === true || encryptedBody.fresh === true,
-  };
-}
-
-function prepareStudentSchedulePreview(req, encryptedBody = {}) {
-  if (String(config.FOSU_IMPORT_ENABLE) === "false") {
-    const error = new Error("FOSU_IMPORT_DISABLED");
-    error.code = "FOSU_IMPORT_DISABLED";
-    throw error;
-  }
-
-  let credentials = null;
-  const taskId = crypto.randomBytes(8).toString("hex");
-  const startedAt = Date.now();
-  let decryptMs = 0;
-  try {
-    const decryptStartedAt = Date.now();
-    credentials = decryptCredentialPayload(encryptedBody);
-    decryptMs = Date.now() - decryptStartedAt;
-    const ownerKey = getOwnerKey(req);
-    const ipInfo = req.clientIpInfo || {};
-    assertImportAttemptAllowed({
-      userKey: ownerKey,
-      studentId: credentials.studentId,
-      ip: ipInfo.effectiveIp || req.ip || "",
-    });
-    return {
-      credentials,
-      ownerKey,
-      ipInfo,
-      reqIp: req.ip || "",
-      fosuSession: req.fosuSession || null,
-      taskId,
-      startedAt,
-      decryptMs,
-      options: getPreviewRequestOptions(encryptedBody),
-    };
-  } catch (error) {
-    if (credentials) {
-      credentials.password = null;
-      credentials.nonce = null;
-    }
-    safeLog("fosu-apaas-preview-prepare-failed", {
-      taskId,
-      code: error.code || error.message,
-      studentId: credentials && maskStudentId(credentials.studentId),
-      decryptMs,
-      elapsedMs: Date.now() - startedAt,
-    });
-    throw error;
-  }
-}
 
 function buildPreviewRecord(context, preview) {
   return {
@@ -393,7 +74,7 @@ function buildPreviewRecord(context, preview) {
     scheduledCourses: preview.scheduledCourses,
     unscheduledCourses: preview.unscheduledCourses,
     timing: preview.timing,
-    source: context.source || "fosu_apaas",
+    source: context.source || "client-direct",
   };
 }
 
@@ -409,7 +90,7 @@ function saveRecentImportFromPreview(context, record) {
       importedCourseCount: selection.incomingCourses.length,
     });
   } catch (error) {
-    safeLog("fosu-apaas-preview-recent-import-save-failed", {
+    safeLog("student-schedule-preview-recent-import-save-failed", {
       taskId: record && record.taskId,
       code: error.code || error.message,
     });
@@ -417,172 +98,6 @@ function saveRecentImportFromPreview(context, record) {
   }
 }
 
-async function runPreparedStudentSchedulePreview(context, progress) {
-  const credentials = context.credentials;
-  const taskId = context.taskId;
-  const startedAt = context.startedAt || Date.now();
-  const ownerKey = context.ownerKey || "";
-  const ipInfo = context.ipInfo || {};
-  const reportProgress = typeof progress === "function" ? progress : () => {};
-  try {
-    reportProgress({
-      status: "running",
-      progress: 22,
-      step: "login",
-      message: "正在登录学校系统并验证会话。",
-      timing: { decryptMs: context.decryptMs || 0 },
-    });
-    const preview = await importSchedulePreview(credentials.studentId, credentials.password, {
-      semester: context.options.semester,
-      existingSelectedClassName: context.options.existingSelectedClassName,
-    });
-    reportProgress({
-      status: "running",
-      progress: 86,
-      step: "normalize",
-      message: "已读取课表，正在整理预览结果。",
-      timing: Object.assign({ decryptMs: context.decryptMs || 0 }, preview.timing || {}),
-    });
-
-    const previewRecord = buildPreviewRecord(context, preview);
-    const tokenInfo = createPreviewToken(previewRecord);
-    const recentImport = saveRecentImportFromPreview(context, previewRecord);
-
-    const payload = Object.assign(publicPreviewPayload(preview, tokenInfo), {
-      recentImport,
-    });
-    safeLog("fosu-apaas-preview-success", {
-      taskId,
-      userKey: ownerKey ? `${ownerKey.slice(0, 8)}...` : "",
-      studentId: maskStudentId(credentials.studentId),
-      rawRowCount: preview.summary.rawRowCount,
-      scheduledCourseCount: preview.summary.scheduledCourseCount,
-      unscheduledCourseCount: preview.summary.unscheduledCourseCount,
-      channel: preview.timing && preview.timing.channel,
-      loginMs: preview.timing && preview.timing.loginMs,
-      discoverMs: preview.timing && preview.timing.discoverMs,
-      fetchRowsMs: preview.timing && preview.timing.fetchRowsMs,
-      relayMs: preview.timing && preview.timing.relayMs,
-      rowsCount: preview.timing && (preview.timing.rowsCount || preview.timing.rawRowCount),
-      bytesApprox: preview.timing && preview.timing.bytesApprox,
-      fallbackReason: preview.timing && preview.timing.fallbackReason,
-      hitCache: preview.timing && preview.timing.hitCache,
-      normalizeMs: preview.timing && preview.timing.normalizeMs,
-      totalMs: preview.timing && preview.timing.totalMs,
-      retryCount: preview.timing && preview.timing.retryCount,
-      decryptMs: context.decryptMs || 0,
-      elapsedMs: Date.now() - startedAt,
-    });
-
-    return payload;
-  } catch (error) {
-    if (credentials) {
-      recordImportFailure({
-        userKey: ownerKey,
-        studentId: credentials.studentId,
-        ip: ipInfo.effectiveIp || context.reqIp || "",
-      }, error.code || error.message);
-    }
-    safeLog("fosu-apaas-preview-failed", {
-      taskId,
-      code: error.code || error.message,
-      studentId: credentials && maskStudentId(credentials.studentId),
-      decryptMs: context.decryptMs || 0,
-      elapsedMs: Date.now() - startedAt,
-    });
-    throw error;
-  } finally {
-    if (credentials) {
-      credentials.password = null;
-      credentials.nonce = null;
-    }
-  }
-}
-
-async function createStudentSchedulePreview(req, encryptedBody) {
-  const context = prepareStudentSchedulePreview(req, encryptedBody);
-  return runPreparedStudentSchedulePreview(context);
-}
-
-function startStudentSchedulePreviewJob(req, encryptedBody) {
-  const context = prepareStudentSchedulePreview(req, encryptedBody);
-  context.reuseKey = createPreviewReuseKey(context);
-  const reusable = context.options && context.options.forceRefresh ? null : findReusablePreviewJob(context);
-  if (reusable) {
-    reusable.hitCache = true;
-    reusable.updatedAt = new Date().toISOString();
-    reusable.timing = Object.assign({}, reusable.timing || {}, {
-      hitCache: true,
-      decryptMs: context.decryptMs || reusable.timing && reusable.timing.decryptMs || 0,
-    });
-    if (reusable.result) {
-      reusable.result.hitCache = true;
-      reusable.result.timing = Object.assign({}, reusable.result.timing || {}, { hitCache: true });
-    }
-    previewJobs.set(reusable.jobId, reusable);
-    if (context.credentials) {
-      context.credentials.password = null;
-      context.credentials.nonce = null;
-    }
-    safeLog("fosu-apaas-preview-job-reused", {
-      taskId: context.taskId,
-      jobId: reusable.jobId,
-      status: reusable.status,
-      userKey: context.ownerKey ? `${context.ownerKey.slice(0, 8)}...` : "",
-      studentId: maskStudentId(context.credentials && context.credentials.studentId),
-      decryptMs: context.decryptMs,
-    });
-    return publicPreviewJob(reusable);
-  }
-  const record = createPreviewJobRecord(context);
-  const jobId = record.jobId;
-
-  setTimeout(() => {
-    runPreparedStudentSchedulePreview(context, (patch) => {
-      const current = previewJobs.get(jobId);
-      const timing = Object.assign({}, current && current.timing || {}, patch.timing || {});
-      updatePreviewJob(jobId, Object.assign({}, patch, { timing }));
-    })
-      .then((payload) => {
-        updatePreviewJob(jobId, {
-          status: "success",
-          progress: 100,
-          step: "success",
-          message: "课表读取成功。",
-          result: payload,
-          timing: Object.assign({}, previewJobs.get(jobId) && previewJobs.get(jobId).timing || {}, payload.timing || {}),
-        });
-      })
-      .catch((error) => {
-        const current = previewJobs.get(jobId);
-        updatePreviewJob(jobId, {
-          status: "failed",
-          progress: Math.max(Number(current && current.progress || 0) || 0, 100),
-          step: "failed",
-          message: error.code || error.message || "UNKNOWN_IMPORT_ERROR",
-          error: {
-            code: error.code || error.message || "UNKNOWN_IMPORT_ERROR",
-            message: error.message || "",
-            kind: error.kind || "",
-            retryAfterSeconds: error.retryAfterSeconds || 0,
-          },
-          timing: Object.assign({}, current && current.timing || {}, {
-            totalMs: Date.now() - context.startedAt,
-          }),
-        });
-      });
-  }, 0);
-
-  safeLog("fosu-apaas-preview-job-started", {
-    taskId: context.taskId,
-    jobId,
-    userKey: context.ownerKey ? `${context.ownerKey.slice(0, 8)}...` : "",
-    studentId: maskStudentId(context.credentials.studentId),
-    decryptMs: context.decryptMs,
-  });
-
-  return publicPreviewJob(record);
-}
 
 function courseDedupKey(course) {
   return [
@@ -620,7 +135,7 @@ function applyImportMode(existingCourses, importedCourses, mode) {
     return dedupeCourses(existing.concat(incoming));
   }
   return existing
-    .filter((course) => course && course.source !== "fosu_apaas")
+    .filter((course) => course && course.source !== "fosu_apaas" && course.source !== "client-direct" && course.source !== "campus-agent")
     .concat(incoming);
 }
 
@@ -790,7 +305,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
   const sourceCourses = selectedOptions.incomingCourses || record.scheduledCourses || [];
   const incomingCourses = sourceCourses.map((course) => Object.assign({}, course, {
     importedAt,
-    source: course.source || record.source || "fosu_apaas",
+    source: course.source || record.source || "client-direct",
     sourceStudentId: studentIdMasked,
   }));
   const courses = applyImportMode(existingCourses, incomingCourses, mode);
@@ -814,7 +329,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
     updateTime: formatImportTime(importedAt),
     importedAt,
     sourceText: "学校课表系统",
-    source: record.source || "fosu_apaas",
+    source: record.source || "client-direct",
     sourceStudentId: studentIdMasked,
     metadata: {
       studentId: studentIdMasked,
@@ -823,7 +338,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
       className: record.profile.className || "",
       classNameConfidence: record.profile.classNameConfidence || "low",
       term: record.summary.semester || "",
-      source: record.source || "fosu_apaas",
+      source: record.source || "client-direct",
       rawRowCount: record.summary.rawRowCount,
       scheduledCourseCount: incomingCourses.length,
       totalCourseCount: courses.length,
@@ -860,7 +375,7 @@ function confirmStudentScheduleImport(req, body = {}) {
     studentId: studentIdMasked,
     studentIdMasked,
   });
-  safeLog("fosu-apaas-confirm-success", {
+  safeLog("student-schedule-confirm-success", {
     taskId: record.taskId,
     userKey: record.ownerKey ? `${record.ownerKey.slice(0, 8)}...` : "",
     studentId: maskStudentId(record.studentId),
@@ -878,7 +393,7 @@ function confirmStudentScheduleImport(req, body = {}) {
       importedCourseCount,
     });
   } catch (error) {
-    safeLog("fosu-apaas-recent-import-save-failed", {
+    safeLog("student-schedule-recent-import-save-failed", {
       taskId: record.taskId,
       code: error.code || error.message,
     });
@@ -1199,8 +714,4 @@ module.exports = {
   confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
   createStoredPreviewFromNormalized,
-  createStudentSchedulePreview,
-  decryptCredentialPayload,
-  getStudentSchedulePreviewJobStatus,
-  startStudentSchedulePreviewJob,
 };

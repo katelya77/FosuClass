@@ -11,15 +11,15 @@ const {
   __setStoreFileForTest,
   getRecentImportForSession,
   saveRecentImportForSession,
-} = require("../server/src/services/fosuApaasRecentImportStore");
+} = require("../server/src/services/studentScheduleRecentImportStore");
 const {
   __resetForTest: resetPreviewStore,
   createPreviewToken,
-} = require("../server/src/services/fosuApaasImportSessionStore");
+} = require("../server/src/services/studentScheduleImportSessionStore");
 const {
   confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
-} = require("../server/src/services/fosuApaasImportService");
+} = require("../server/src/services/studentScheduleImportService");
 
 __setStoreFileForTest(tempFile);
 __resetForTest();

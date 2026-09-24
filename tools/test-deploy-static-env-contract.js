@@ -29,10 +29,7 @@ const dockerfile = fs.readFileSync(path.join(root, "server", "Dockerfile"), "utf
   "FOSU_DISK_CRITICAL_PERCENT=90",
   "FOSU_MIN_FREE_DISK_GB=5",
   "FOSU_AUTH_BASE=https://authserver.fosu.edu.cn",
-  "FOSU_APAAS_BASE=https://apaas.fosu.edu.cn",
-  "FOSU_IMPORT_TIMEOUT_MS=30000",
   "FOSU_IMPORT_PREVIEW_TTL_SECONDS=600",
-  "FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK=false",
   "FOSU_IMPORT_RATE_LIMIT_ENABLED=true",
   "FOSU_IMPORT_IP_RATE_LIMIT_10M=12",
 ].forEach((line) => {
@@ -50,12 +47,6 @@ const dockerfile = fs.readFileSync(path.join(root, "server", "Dockerfile"), "utf
   "FOSU_DEPLOY_COMMIT_SHA=",
   "FOSU_CLIENT_BUILD_ID=",
   "FOSU_IMPORT_ENABLE=true",
-  "FOSU_IMPORT_CHANNEL=auto",
-  "FOSU_CLOUDBASE_IMPORT_ENABLE=true",
-  "FOSU_CLOUDBASE_IMPORT_URL=",
-  "FOSU_IMPORT_CHANNEL_TIMEOUT_MS=25000",
-  "FOSU_IMPORT_ORACLE_FALLBACK=true",
-  "FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN=",
 ].forEach((line) => {
   assert(envExample.includes(line), `.env.example should include ${line}`);
   const key = line.split("=")[0];

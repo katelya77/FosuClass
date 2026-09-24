@@ -6,7 +6,7 @@ const {
   parseSections,
   parseWeekday,
   parseWeeks,
-} = require("../utils/fosuApaasScheduleParser");
+} = require("../utils/studentScheduleRowParser");
 
 const DEFAULT_PREVIEW_WEEK = 16;
 const MAX_PREVIEW_WEEKS = 19;

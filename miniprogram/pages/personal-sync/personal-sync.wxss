@@ -192,11 +192,11 @@
   min-width: 0;
   flex-shrink: 1;
   width: 100%;
-  height: 78rpx;
-  border-radius: 14rpx;
-  font-size: 26rpx;
-  font-weight: 900;
-  line-height: 78rpx;
+  height: 88rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 88rpx;
 }
 
 .btn-primary {
@@ -550,7 +550,7 @@
 .form-input {
   box-sizing: border-box;
   width: 100%;
-  height: 78rpx;
+  height: 88rpx;
   padding: 0 22rpx;
   border: 1rpx solid #dbe3ee;
   border-radius: 14rpx;
@@ -1760,4 +1760,138 @@
   100% {
     background-position: -100% 0;
   }
+}
+
+.campus-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.campus-dot {
+  width: 14rpx;
+  height: 14rpx;
+  margin-top: 10rpx;
+  border-radius: 50%;
+  background: #98a2b3;
+  flex: 0 0 auto;
+}
+
+.campus-status-connected .campus-dot {
+  background: #16803c;
+}
+
+.campus-status-offline .campus-dot {
+  background: #c62828;
+}
+
+.campus-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.campus-title {
+  color: #142033;
+  font-size: 26rpx;
+  line-height: 1.4;
+}
+
+.campus-hint {
+  color: #667085;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.btn-text {
+  margin-top: 12rpx;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c62828;
+  font-size: 26rpx;
+  line-height: 88rpx;
+  height: 88rpx;
+}
+
+.btn-text::after {
+  border: 0;
+}
+
+.recent-sync {
+  margin: 8rpx 4rpx 28rpx;
+}
+
+.recent-sync-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.recent-sync-title {
+  color: #142033;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.recent-sync-time {
+  color: #667085;
+  font-size: 24rpx;
+}
+
+.recent-sync-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.recent-sync-actions .recent-import-btn {
+  flex: 1;
+  min-width: 0;
+  height: 88rpx;
+  margin: 0;
+  padding: 0 8rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  line-height: 88rpx;
+}
+
+.other-imports {
+  margin-top: 12rpx;
+  padding-top: 8rpx;
+}
+
+.other-imports-title {
+  margin: 0 4rpx 8rpx;
+  color: #667085;
+  font-size: 24rpx;
+}
+
+.other-import-row {
+  min-height: 88rpx;
+  padding: 0 4rpx;
+  border-bottom: 1rpx solid #e5ebf3;
+  color: #142033;
+  font-size: 28rpx;
+  line-height: 88rpx;
+}
+
+.sync-status-card {
+  margin-top: 12rpx;
+}
+
+.sync-status-title {
+  color: #142033;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sync-status-hint {
+  margin-top: 8rpx;
+  color: #667085;
+  font-size: 24rpx;
+  line-height: 1.45;
 }

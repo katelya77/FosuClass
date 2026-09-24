@@ -2,133 +2,73 @@
   <block wx:if="{{activeImportMethod == 'method'}}">
     <view class="sync-hero">
       <view class="sync-title">个人课表同步</view>
-      <view class="sync-desc">选择一种适合你的方式同步本人课程安排。</view>
+      <view class="sync-desc">同步学校最新课程安排</view>
     </view>
 
-    <view class="recent-import-card card" wx:if="{{recentStudentImport}}">
-      <view class="recent-import-main">
-        <view class="recent-import-title-row">
-          <view class="recent-import-title">最近一次学号导入</view>
-          <view class="recent-import-status" wx:if="{{recentStudentImportChecking}}">校验中</view>
-        </view>
-        <view class="recent-import-meta">最近同步：{{recentStudentImport.importedAtText}}</view>
-        <view class="recent-import-meta" wx:if="{{recentStudentImport.className}}">班级：{{recentStudentImport.className}}</view>
-        <view class="recent-import-meta">课程：{{recentStudentImport.courseCount}} 个</view>
-        <view class="recent-import-warning" wx:if="{{recentStudentImport.staleText}}">{{recentStudentImport.staleText}}</view>
+    <view class="card student-form-card">
+      <view class="form-group">
+        <text class="form-label">学号</text>
+        <input class="form-input" type="number" maxlength="20" placeholder="请输入学号" value="{{studentForm.studentId}}" bindinput="onStudentIdInput" adjust-position="{{true}}" cursor-spacing="120" />
       </view>
-      <view class="recent-import-actions">
-        <button class="recent-import-btn primary wide" bindtap="openRecentStudentImportEditor">查看调整</button>
+      <view class="form-group">
+        <text class="form-label">学校账号密码</text>
+        <input class="form-input" password placeholder="学校账号密码" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" adjust-position="{{true}}" cursor-spacing="120" />
+      </view>
+      <checkbox-group bindchange="onStudentPrivacyChange">
+        <label class="privacy-row">
+          <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
+          <text>仅用于本次读取，不会保存密码</text>
+        </label>
+      </checkbox-group>
+      <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">同步最新课表</button>
+      <view class="campus-status campus-status-{{campusLinkStatus}}">
+        <view class="campus-dot"></view>
+        <view class="campus-copy">
+          <text class="campus-title" wx:if="{{campusLinkStatus == 'connected'}}">已连接学校系统</text>
+          <text class="campus-title" wx:elif="{{campusLinkStatus == 'offline'}}">未连接校园网络</text>
+          <text class="campus-title" wx:else>校园网直连</text>
+          <text class="campus-hint" wx:if="{{campusLinkStatus != 'connected'}}">需连接佛山大学校园网或校园 VPN</text>
+        </view>
+      </view>
+      <button class="btn-text" wx:if="{{enableCampusAgentSync && campusLinkStatus == 'offline'}}" bindtap="tryRemoteSync">尝试远程同步</button>
+    </view>
+
+    <view class="recent-sync" wx:if="{{recentStudentImport}}">
+      <view class="recent-sync-copy">
+        <text class="recent-sync-title">最近同步</text>
+        <text class="recent-sync-time">{{recentStudentImport.importedAtText}}</text>
+      </view>
+      <view class="recent-sync-actions">
         <button class="recent-import-btn" bindtap="useRecentStudentImport">直接使用</button>
         <button class="recent-import-btn" bindtap="resyncStudentImport">重新同步</button>
+        <button class="recent-import-btn" bindtap="openRecentStudentImportEditor">查看调整</button>
       </view>
     </view>
 
-    <view class="method-card primary-method" data-method="student" bindtap="selectImportMethod">
-      <view class="method-main">
-        <view class="method-title-row">
-          <view class="method-title">学号导入个人课表</view>
-          <view class="method-badges">
-            <text class="method-badge recommend">推荐</text>
-            <text class="method-badge">个人课表</text>
-            <text class="method-badge">不保存密码</text>
-          </view>
-        </view>
-        <view class="method-desc">登录学校账号读取本人课表数据。</view>
-        <view class="method-safe">本人授权 · 本次登录读取 · 导入后清除临时状态</view>
-      </view>
-      <button class="method-action" data-method="student" bindtap="selectImportMethod" disabled="{{!studentImportEnabled}}">{{studentImportEnabled ? '开始导入' : '暂未开放'}}</button>
-    </view>
-
-    <view class="method-card" data-method="xls" bindtap="selectImportMethod">
-      <view class="method-main">
-        <view class="method-title">导入 XLS</view>
-        <view class="method-desc">上传学校导出的课表文件。</view>
-      </view>
-      <button class="method-action light" data-method="xls" bindtap="selectImportMethod">选择文件</button>
-    </view>
-
-    <view class="method-card" data-method="class" bindtap="selectImportMethod">
-      <view class="method-main">
-        <view class="method-title">选择班级课表</view>
-        <view class="method-desc">从已收录班级课表中选择。</view>
-      </view>
-      <button class="method-action light" data-method="class" bindtap="selectImportMethod">去选择</button>
-    </view>
-
-    <view class="method-card" data-method="custom" bindtap="selectImportMethod">
-      <view class="method-main">
-        <view class="method-title">手动编辑</view>
-        <view class="method-desc">自行添加或调整课程。</view>
-      </view>
-      <button class="method-action light" data-method="custom" bindtap="selectImportMethod">去编辑</button>
+    <view class="other-imports">
+      <view class="other-imports-title">其他导入方式</view>
+      <view class="other-import-row" data-method="xls" bindtap="selectImportMethod">XLS 文件导入</view>
+      <view class="other-import-row" data-method="class" bindtap="selectImportMethod">班级课表</view>
+      <view class="other-import-row" data-method="custom" bindtap="selectImportMethod">手动添加课程</view>
     </view>
   </block>
 
   <block wx:elif="{{activeImportMethod == 'student'}}">
-    <view class="sync-hero" wx:if="{{studentImportStage == 'form'}}">
-      <view class="sync-title">学号导入个人课表</view>
-      <view class="sync-desc">仅用于本次登录学校课表系统并读取本人课表数据。</view>
-      <view class="sync-desc">需连接佛山大学校园网或校园 VPN</view>
-    </view>
-
-    <view class="card student-form-card" wx:if="{{studentImportStage == 'form'}}">
-      <view class="form-group">
-        <text class="form-label">学号</text>
-        <input class="form-input" type="number" maxlength="20" placeholder="请输入本人学号" value="{{studentForm.studentId}}" bindinput="onStudentIdInput" />
-      </view>
-
-      <view class="form-group">
-        <text class="form-label">学校账号密码</text>
-        <input class="form-input" password placeholder="仅用于本次读取，不会保存" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" />
-      </view>
-
-      <view class="safe-note strong-note">密码仅用于本次登录学校课表系统并读取本人课表数据，系统不会保存密码，导入完成后会清除临时状态。</view>
-
-      <checkbox-group bindchange="onStudentPrivacyChange">
-        <label class="privacy-row">
-          <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
-          <text>我确认导入的是本人课表，同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
-        </label>
-      </checkbox-group>
-
-      <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">验证并读取课表</button>
-      <button class="btn-secondary" bindtap="backToImportMethods">返回导入方式</button>
-    </view>
-
-    <view class="card loading-card enhanced-loading" wx:if="{{studentImportStage == 'loading'}}">
-      <view class="loading-kicker">学号导入</view>
-      <view class="loading-title">正在为你整理课表</view>
-      <view class="loading-subtitle">{{studentImportStatusMessage || '已开始读取并整理课程，请保持页面打开。'}}</view>
+    <view class="card sync-status-card" wx:if="{{studentImportStage == 'loading'}}">
+      <view class="sync-status-title">{{studentImportStatusMessage || '正在读取个人课表'}}</view>
+      <view class="sync-status-hint">请保持校园网或校园 VPN 连接</view>
       <view class="loading-progress-track">
         <view class="loading-progress-fill" style="{{studentLoadingProgressStyle}}"></view>
       </view>
-      <view class="loading-steps">
-        <view wx:for="{{studentImportSteps}}" wx:key="*this" class="loading-step {{index < studentLoadingStepIndex ? 'done' : ''}} {{index == studentLoadingStepIndex ? 'active' : ''}}">
-          <view class="step-dot">
-            <view class="step-pulse" wx:if="{{index == studentLoadingStepIndex}}"></view>
-            <text wx:if="{{index < studentLoadingStepIndex}}">✓</text>
-            <text wx:else>{{index + 1}}</text>
-          </view>
-          <view class="step-copy">{{item}}</view>
-        </view>
-      </view>
       <view class="slow-note" wx:if="{{studentImportSlow}}">学校系统响应较慢，仍在尝试。</view>
-      <view class="loading-skeleton">
-        <view class="skeleton-line wide"></view>
-        <view class="skeleton-grid">
-          <view class="skeleton-cell"></view>
-          <view class="skeleton-cell"></view>
-          <view class="skeleton-cell"></view>
-        </view>
-      </view>
     </view>
 
     <view class="student-preview-page" wx:if="{{studentImportStage == 'preview' && studentPreviewResult}}">
       <view class="student-success-panel">
         <view class="success-mark">✓</view>
         <view class="success-copy">
-          <view class="success-title">验证成功</view>
-          <view class="success-subtitle">已为你整理好个人课表</view>
+          <view class="success-title">课表读取完成</view>
+          <view class="success-subtitle">确认后即可用作当前课表</view>
         </view>
       </view>
 

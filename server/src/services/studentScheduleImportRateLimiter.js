@@ -87,7 +87,7 @@ function cooldownError(kind, result) {
 
 function assertBucketAvailable(prefix, input, limit, kind) {
   for (const [scope, keyPart] of scopedKeys(input)) {
-    const result = peekBucket(`fosu-apaas-import:${prefix}:${scope}:${keyPart}`, limit);
+    const result = peekBucket(`student-schedule-import:${prefix}:${scope}:${keyPart}`, limit);
     if (!result.allowed) {
       throw cooldownError(kind || prefix, result);
     }
@@ -128,7 +128,7 @@ function assertImportAttemptAllowed(input = {}) {
 
   const ipKey = hashValue(input.ip);
   if (ipKey) {
-    const result = checkBucket(`fosu-apaas-import:request:ip:${ipKey}`, ipLimit, AUTH_FAILURE_WINDOW_MS);
+    const result = checkBucket(`student-schedule-import:request:ip:${ipKey}`, ipLimit, AUTH_FAILURE_WINDOW_MS);
     if (!result.allowed) {
       throw cooldownError("ip", result);
     }
@@ -164,7 +164,7 @@ function recordImportFailure(input = {}, code = "") {
     return { recorded: false, code: normalizeFailureCode(code) };
   }
   scopedKeys(input).forEach(([scope, keyPart]) => {
-    checkBucket(`fosu-apaas-import:${prefix}:${scope}:${keyPart}`, limit, windowMs);
+    checkBucket(`student-schedule-import:${prefix}:${scope}:${keyPart}`, limit, windowMs);
   });
   return { recorded: true, code: normalizeFailureCode(code), bucket: prefix };
 }

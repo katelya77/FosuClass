@@ -13,7 +13,7 @@ assert.ok(page.includes("clearActiveDirectSecrets"));
 assert.ok(page.includes("DIRECT_SYNC_CANCELLED"));
 assert.ok(page.includes("CAMPUS_NETWORK_REQUIRED"));
 assert.ok(page.includes("重新检测"));
-assert.ok(page.includes("XLS导入"));
+assert.ok(page.includes("使用 XLS 导入"));
 assert.ok(page.includes("DIRECT_MODE_UNSUPPORTED"));
 assert.ok(page.includes("INTERACTIVE_CHALLENGE_REQUIRED"));
 assert.ok(page.includes("/api/schedule-import/fosu/confirm"));

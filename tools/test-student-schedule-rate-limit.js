@@ -5,7 +5,7 @@ const {
   assertImportAttemptAllowed,
   recordImportFailure,
   recordImportCredentialFailure,
-} = require("../server/src/services/fosuApaasImportRateLimiter");
+} = require("../server/src/services/studentScheduleImportRateLimiter");
 
 function withRateLimitEnv(fn) {
   const oldEnabled = process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED;

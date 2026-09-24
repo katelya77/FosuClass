@@ -1,8 +1,10 @@
 const iconv = require("iconv-lite");
+const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
+const { assertImportAttemptAllowed } = require("./studentScheduleImportRateLimiter");
 const { parsePersonalScheduleHtml } = require("../utils/personal-schedule-parser");
 const { createNormalizedPreviewFromImportedData } = require("./scheduleImportNormalizer");
-const { createStoredPreviewFromNormalized } = require("./fosuApaasImportService");
+const { createStoredPreviewFromNormalized } = require("./studentScheduleImportService");
 
 const MAX_TIMETABLE_BYTES = 1200000;
 const MAX_BASE64_CHARS = 1700000;
@@ -61,6 +63,13 @@ function coursesToRawRows(courses) {
 }
 
 function createDirectStudentSchedulePreview(req, body) {
+  if (String(config.FOSU_IMPORT_ENABLE) === "false") throw previewError("FOSU_IMPORT_DISABLED");
+  const session = req && req.fosuSession || {};
+  const ipInfo = req && req.clientIpInfo || {};
+  assertImportAttemptAllowed({
+    userKey: session.openidHash || session.sessionIdHash || "",
+    ip: ipInfo.effectiveIp || (req && req.ip) || "",
+  });
   const payload = body || {};
   rejectSecretKeys(payload);
   if (payload.source !== "client-direct-fosu100") throw previewError("INVALID_IMPORT_MODE");

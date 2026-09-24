@@ -2,14 +2,13 @@
 
 ## 当前结论
 
-Personal Sync V1 的主路径是 Client Direct：用户手机连接佛山大学校园网或校园 VPN 后，在个人课表同步页完成本人授权，由小程序直接登录学校统一认证并读取 100 网个人课表。学校学号和密码只留在当次页面内存里。`class.katelya.eu.org` 只接收课表页面响应，负责解析和生成与原来一致的预览。
+Personal Sync V2 的自动同步只有两条来源：当前启用的校园网直连（client-direct），以及尚未实现的远程同步（campus-agent，`enableCampusAgentSync=false`）。用户在个人课表同步页输入学号和学校密码。学校凭据只留在当次页面内存。`class.katelya.eu.org` 只接收课表页面响应，负责解析和预览。
 
-- 小程序 `/pages/personal-sync/personal-sync` 保留学号同步、预览整理、确认导入，以及 XLS 导入。
-- Client Direct 调用 `POST /api/schedule-import/fosu/direct/preview`。请求体只有课表响应，不包含学校密码、Cookie 或登录票据。
-- XLS 导入始终保留。
-- 旧接口 `/diagnose`、`/session/start`、`/session/verify-slider`、`/session/login-and-sync` 仍返回 `410 XLS_ONLY`，不作为这条线路的入口。
-- `/api/schedule-import/fosu/public-key`、`/preview/start`、`/preview/status` 保留给以后的 Server Relay，Client Direct 默认不调用。
-- Outbound Campus Agent 只保留来源名称，本阶段不实现。
+- 小程序首页是一个同步按钮。XLS、班级课表、手动添加课程是其他导入方式，不是第三条自动同步线路。
+- Client Direct 调用 `POST /api/schedule-import/fosu/direct/preview`。请求体只有课表响应。
+- APaaS、CloudBase relay、Oracle fallback 和服务端代登录已经从运行时删除。
+- `/api/schedule-import/fosu` 只保留 `direct/preview`、`recent`、`recent/confirm`、`confirm`、`cancel`。
+- campus-agent 调用会返回 `CAMPUS_AGENT_NOT_AVAILABLE`，不会伪造成功。
 - 学校要求验证码或滑块时，本次直接失败并提示改用 XLS，不自动破解。
 
 ## 安全边界

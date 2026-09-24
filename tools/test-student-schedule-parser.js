@@ -6,7 +6,7 @@ const {
   parseSections,
   parseWeekday,
   parseWeeks,
-} = require("../server/src/utils/fosuApaasScheduleParser");
+} = require("../server/src/utils/studentScheduleRowParser");
 
 function testParseWeeks() {
   assert.deepStrictEqual(parseWeeks("1-16"), Array.from({ length: 16 }, (_, index) => index + 1));
