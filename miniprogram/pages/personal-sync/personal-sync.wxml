@@ -12,7 +12,16 @@
       </view>
       <view class="form-group">
         <text class="form-label">学校账号密码</text>
-        <input class="form-input" password placeholder="学校账号密码" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" adjust-position="{{true}}" cursor-spacing="120" />
+        <view class="password-field">
+          <input class="form-input password-input" password="{{!passwordVisible}}" placeholder="学校账号密码" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" adjust-position="{{true}}" cursor-spacing="120" />
+          <view class="password-eye {{passwordVisible ? 'is-open' : ''}}" catchtap="togglePasswordVisible" aria-role="button" aria-label="{{passwordVisible ? '隐藏密码' : '显示密码'}}">
+            <view class="eye-glyph">
+              <view class="eye-shape"></view>
+              <view class="eye-pupil" wx:if="{{passwordVisible}}"></view>
+              <view class="eye-slash" wx:if="{{!passwordVisible}}"></view>
+            </view>
+          </view>
+        </view>
       </view>
       <checkbox-group bindchange="onStudentPrivacyChange">
         <label class="privacy-row">
@@ -21,13 +30,14 @@
         </label>
       </checkbox-group>
       <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">同步最新课表</button>
-      <view class="campus-status campus-status-{{campusLinkStatus}}">
+      <view class="campus-status campus-status-{{campusLinkStatus}}" wx:if="{{showCampusLinkStatus}}">
         <view class="campus-dot"></view>
         <view class="campus-copy">
           <text class="campus-title" wx:if="{{campusLinkStatus == 'connected'}}">已连接学校系统</text>
-          <text class="campus-title" wx:elif="{{campusLinkStatus == 'offline'}}">未连接校园网络</text>
-          <text class="campus-title" wx:else>校园网直连</text>
-          <text class="campus-hint" wx:if="{{campusLinkStatus != 'connected'}}">需连接佛山大学校园网或校园 VPN</text>
+          <text class="campus-title" wx:elif="{{campusLinkStatus == 'unavailable'}}">无法连接学校系统</text>
+          <text class="campus-title" wx:else>校园网 / VPN</text>
+          <text class="campus-hint" wx:if="{{campusLinkStatus == 'unknown'}}">同步时自动检测</text>
+          <text class="campus-hint" wx:elif="{{campusLinkStatus == 'unavailable'}}">请连接佛山大学校园网或校园 VPN 后再同步</text>
         </view>
       </view>
       <button class="btn-text" wx:if="{{enableCampusAgentSync && campusLinkStatus == 'offline'}}" bindtap="tryRemoteSync">尝试远程同步</button>

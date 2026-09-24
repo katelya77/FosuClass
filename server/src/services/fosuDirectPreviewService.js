@@ -62,7 +62,7 @@ function coursesToRawRows(courses) {
   }));
 }
 
-function createDirectStudentSchedulePreview(req, body) {
+function createTimetablePreview(req, body, source) {
   if (String(config.FOSU_IMPORT_ENABLE) === "false") throw previewError("FOSU_IMPORT_DISABLED");
   const session = req && req.fosuSession || {};
   const ipInfo = req && req.clientIpInfo || {};
@@ -72,7 +72,6 @@ function createDirectStudentSchedulePreview(req, body) {
   });
   const payload = body || {};
   rejectSecretKeys(payload);
-  if (payload.source !== "client-direct-fosu100") throw previewError("INVALID_IMPORT_MODE");
   const encoded = String(payload.timetableBodyBase64 || "");
   if (!encoded || encoded.length > MAX_BASE64_CHARS) throw previewError("DIRECT_BODY_TOO_LARGE");
   let buffer;
@@ -91,12 +90,13 @@ function createDirectStudentSchedulePreview(req, body) {
     source: "personal-xskb",
   });
   if (!courses.length) throw previewError("SCHEDULE_ROWS_EMPTY");
+  const channel = source === "campus-agent" ? "campus-agent" : "client-direct";
   const preview = createNormalizedPreviewFromImportedData(coursesToRawRows(courses), {
     semester: payload.semester || "当前学期",
     scheduleOwnership: "personal",
-    source: "client-direct",
+    source: channel,
     timing: {
-      channel: "client-direct",
+      channel,
       bytesApprox: buffer.length,
       rowsCount: courses.length,
     },
@@ -110,11 +110,22 @@ function createDirectStudentSchedulePreview(req, body) {
     bytes: buffer.length,
     charset: decoded.charset,
     courseCount: courses.length,
+    channel,
   });
-  return createStoredPreviewFromNormalized(req, preview, { source: "client-direct" });
+  return createStoredPreviewFromNormalized(req, preview, { source: channel });
+}
+
+function createDirectStudentSchedulePreview(req, body) {
+  if (body && body.source !== "client-direct-fosu100") throw previewError("INVALID_IMPORT_MODE");
+  return createTimetablePreview(req, body, "client-direct");
+}
+
+function createCampusAgentStudentSchedulePreview(req, body) {
+  return createTimetablePreview(req, body, "campus-agent");
 }
 
 module.exports = {
+  createCampusAgentStudentSchedulePreview,
   createDirectStudentSchedulePreview,
   detectCharset,
   rejectSecretKeys,

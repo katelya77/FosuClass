@@ -21,30 +21,62 @@ function isCampusAgentEnabled() {
 }
 
 function getPreferredSource() {
-  if (isClientDirectEnabled()) return SOURCE.CLIENT_DIRECT;
   if (isCampusAgentEnabled()) return SOURCE.CAMPUS_AGENT;
-  return SOURCE.CLIENT_DIRECT;
+  if (isClientDirectEnabled()) return SOURCE.CLIENT_DIRECT;
+  return SOURCE.CAMPUS_AGENT;
 }
 
 function isSourceAvailable(source) {
   if (source === SOURCE.CLIENT_DIRECT) return isClientDirectEnabled();
-  if (source === SOURCE.CAMPUS_AGENT) return false;
+  if (source === SOURCE.CAMPUS_AGENT) return isCampusAgentEnabled();
   return false;
 }
 
 async function preflightPersonalNetwork(options) {
   const client = options && options.client || createFosuDirectClient({ transport: options && options.transport });
   try {
-    return await client.preflight();
+    return await client.checkSchoolLink();
   } finally {
     client.clearSecrets();
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readViaCampusAgent(options) {
+  const http = options && options.http;
+  if (!http || typeof http.post !== "function" || typeof http.get !== "function") {
+    throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
+  }
+  const created = await http.post("/api/campus-sync/jobs", {
+    studentId: options.studentId,
+    password: options.password,
+    semester: options.semester || "",
+  });
+  const jobId = created && (created.jobId || created.data && created.data.jobId);
+  if (!jobId) throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
+  const started = Date.now();
+  while (Date.now() - started < 60000) {
+    const job = await http.get(`/api/campus-sync/jobs/${jobId}`);
+    const status = job && (job.status || job.data && job.data.status);
+    const payload = job && job.preview ? job : (job && job.data) || job;
+    if (status === "completed" && payload && payload.preview) return payload.preview;
+    if (status === "completed") return payload;
+    if (status === "failed" || status === "expired") {
+      throw unsupported((payload && payload.errorCode) || "AGENT_OFFLINE");
+    }
+    await sleep(1000);
+  }
+  throw unsupported("TIMEOUT");
+}
+
 async function readPersonalTimetable(options) {
   const source = options && options.source || options && options.mode || getPreferredSource();
   if (source === SOURCE.CAMPUS_AGENT) {
-    throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
+    if (!isCampusAgentEnabled()) throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
+    return readViaCampusAgent(options);
   }
   if (source !== SOURCE.CLIENT_DIRECT) {
     throw unsupported("INVALID_IMPORT_MODE");
@@ -61,11 +93,7 @@ async function readPersonalTimetable(options) {
 }
 
 async function loadSchedulePreview(options) {
-  const source = options && options.source || getPreferredSource();
-  if (source === SOURCE.CAMPUS_AGENT || !isClientDirectEnabled()) {
-    throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
-  }
-  return readPersonalTimetable(Object.assign({}, options, { source: SOURCE.CLIENT_DIRECT }));
+  return readPersonalTimetable(options || {});
 }
 
 module.exports = {

@@ -1,0 +1,6 @@
+CAMPUS_AGENT_ENABLED=true
+CAMPUS_AGENT_BROKER_URL=https://agent-broker.katelya.eu.org
+CAMPUS_AGENT_ID=wyz-campus-01
+CAMPUS_AGENT_TOKEN=replace-with-32-byte-hex
+CAMPUS_AGENT_SIGNING_SECRET=replace-with-different-32-byte-hex
+CAMPUS_SYNC_JOB_TTL_SECONDS=120

@@ -1,4 +1,5 @@
 const { ALLOWED_HOSTS } = require("./fosuDirectConfig");
+const { splitUrl } = require("./fosuDirectUrl");
 
 function parseHttpDate(value) {
   const time = Date.parse(value);
@@ -25,11 +26,12 @@ function parseSetCookie(line, requestUrl, now) {
   const name = parts[0].slice(0, separator).trim();
   const value = parts[0].slice(separator + 1).trim();
   if (!name || /[\s;]/.test(name)) return null;
-  const url = new URL(requestUrl);
+  const url = splitUrl(requestUrl);
+  if (!url) return null;
   const cookie = {
     name,
     value,
-    domain: url.hostname,
+    domain: url.host,
     path: defaultPath(url.pathname),
     secure: false,
     expiresAt: 0,
@@ -87,8 +89,9 @@ function createCookieJar(options) {
     lines.forEach((line) => {
       const parsed = parseSetCookie(line, requestUrl, now);
       if (!parsed) return;
-      const url = new URL(requestUrl);
-      if (!domainMatches(parsed.domain, url.hostname) && parsed.domain !== url.hostname) return;
+      const url = splitUrl(requestUrl);
+      if (!url) return;
+      if (!domainMatches(parsed.domain, url.host) && parsed.domain !== url.host) return;
       const index = cookies.findIndex((item) => item.name === parsed.name && item.domain === parsed.domain && item.path === parsed.path);
       if (index >= 0) cookies.splice(index, 1);
       if (parsed.expiresAt && parsed.expiresAt <= now()) return;
@@ -97,12 +100,13 @@ function createCookieJar(options) {
   }
 
   function matchingCookies(requestUrl) {
-    const url = new URL(requestUrl);
+    const url = splitUrl(requestUrl);
+    if (!url) return [];
     return cookies.filter((cookie) => {
       if (!cookie.name) return false;
       if (cookie.expiresAt && cookie.expiresAt <= now()) return false;
-      if (cookie.secure && url.protocol !== "https:") return false;
-      if (!domainMatches(cookie.domain, url.hostname)) return false;
+      if (cookie.secure && url.scheme !== "https") return false;
+      if (!domainMatches(cookie.domain, url.host)) return false;
       return pathMatches(cookie.path, url.pathname);
     });
   }

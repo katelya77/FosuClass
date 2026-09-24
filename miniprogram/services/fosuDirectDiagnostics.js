@@ -1,14 +1,9 @@
+const { splitUrl } = require("./fosuDirectUrl");
+
 function redirectFromUrl(value) {
-  try {
-    const url = new URL(value);
-    return {
-      scheme: String(url.protocol || "").replace(":", ""),
-      host: url.hostname,
-      pathname: url.pathname,
-    };
-  } catch (error) {
-    return { scheme: "", host: "", pathname: "" };
-  }
+  const url = splitUrl(value);
+  if (!url) return { scheme: "", host: "", pathname: "" };
+  return { scheme: url.scheme, host: url.host, pathname: url.pathname };
 }
 
 function cookieNamesFromHeader(header) {
@@ -31,7 +26,7 @@ function buildSafeDiagnostic(input) {
     ? {
       scheme: String(source.redirect.scheme || "").replace(":", ""),
       host: String(source.redirect.host || ""),
-      pathname: String(source.redirect.pathname || "").split("?")[0],
+      pathname: String(source.redirect.pathname || "").split("?")[0].split("#")[0],
     }
     : { scheme: "", host: "", pathname: "" };
   const network = source.networkEnvironment || {};
@@ -43,11 +38,31 @@ function buildSafeDiagnostic(input) {
     cookieNames: cookieNamesFromHeader((source.cookieNames || []).join("; ")),
     elapsedMs: Number(source.elapsedMs || 0) || 0,
     errorCode: String(source.errorCode || ""),
+    transportPhase: String(source.transportPhase || ""),
+    targetHost: String(source.targetHost || ""),
+    redirectHost: String(source.redirectHost || redirect.host || ""),
+    wxErrno: Number(source.wxErrno || 0) || 0,
+    wxErrorCategory: String(source.wxErrorCategory || ""),
+    wxErrMsgSafe: sanitizeWxErrMsg(source.wxErrMsgSafe),
+    exceptionName: String(source.exceptionName || "").slice(0, 80),
+    exceptionMessageSafe: sanitizeWxErrMsg(source.exceptionMessageSafe),
+    stackTop: sanitizeWxErrMsg(source.stackTop).slice(0, 240),
     networkEnvironment: {
       authReachable: network.authReachable === true,
       eduReachable: network.eduReachable === true,
+      preflightReachable: network.preflightReachable === true,
     },
   };
+}
+
+function sanitizeWxErrMsg(value) {
+  return String(value || "")
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/[?#][^\s]*/g, "")
+    .replace(/(ticket|password|cookie|execution|pwdencryptsalt)=[^\s&]*/gi, "$1=[redacted]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
 }
 
 function createDiagnosticSink(options) {
@@ -61,7 +76,24 @@ function createDiagnosticSink(options) {
       }));
       entries.push(entry);
       if (enabled && typeof console !== "undefined" && console.info) {
-        console.info("[Fosu direct]", entry);
+        const redirect = entry.redirect || {};
+        console.info(`[FosuDirect][${entry.stage || "request"}]`, {
+          stage: entry.stage || "",
+          transportPhase: entry.transportPhase || "",
+          targetHost: entry.targetHost || "",
+          redirectHost: entry.redirectHost || "",
+          httpStatus: entry.httpStatus || 0,
+          pathname: redirect.pathname || "",
+          cookieNames: entry.cookieNames || [],
+          elapsedMs: entry.elapsedMs || 0,
+          errorCode: entry.errorCode || "",
+          wxErrno: entry.wxErrno || 0,
+          wxErrorCategory: entry.wxErrorCategory || "",
+          wxErrMsgSafe: entry.wxErrMsgSafe || "",
+          exceptionName: entry.exceptionName || "",
+          exceptionMessageSafe: entry.exceptionMessageSafe || "",
+          stackTop: entry.stackTop || "",
+        });
       }
       return entry;
     },
@@ -73,6 +105,7 @@ function createDiagnosticSink(options) {
 
 module.exports = {
   buildSafeDiagnostic,
+  sanitizeWxErrMsg,
   cookieNamesFromHeader,
   createDiagnosticSink,
   redirectFromUrl,

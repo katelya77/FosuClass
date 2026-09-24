@@ -13,15 +13,33 @@ function inputValue(html, name) {
   return "";
 }
 
-function parseCasLoginFields(html) {
+function parseCasLoginFields(html, pageUrl) {
+  const source = String(html || "");
+  const formMatch = source.match(/<form\b[^>]*\bid=["']pwdFromId["'][^>]*>([\s\S]*?)<\/form>/i);
+  const scope = formMatch ? formMatch[0] : source;
+  const action = (scope.match(/\baction=["']([^"']+)["']/i) || [])[1] || "";
   return {
-    execution: inputValue(html, "execution"),
-    pwdEncryptSalt: inputValue(html, "pwdEncryptSalt"),
-    lt: inputValue(html, "lt"),
-    _eventId: inputValue(html, "_eventId") || "submit",
-    cllt: inputValue(html, "cllt") || "userNameLogin",
-    dllt: inputValue(html, "dllt") || "generalLogin",
+    execution: inputValue(scope, "execution") || inputValue(source, "execution"),
+    pwdEncryptSalt: inputValue(source, "pwdEncryptSalt"),
+    lt: inputValue(scope, "lt") || inputValue(source, "lt"),
+    _eventId: inputValue(scope, "_eventId") || "submit",
+    cllt: inputValue(scope, "cllt") || "userNameLogin",
+    dllt: inputValue(scope, "dllt") || "generalLogin",
+    postUrl: resolveLoginPostUrl(pageUrl, action),
   };
+}
+
+const { resolveRelativeUrl, splitUrl } = require("./fosuDirectUrl");
+
+function resolveLoginPostUrl(pageUrl, action) {
+  const page = String(pageUrl || "");
+  if (!page) return String(action || "");
+  if (!action) return page;
+  const resolved = splitUrl(resolveRelativeUrl(page, action));
+  const current = splitUrl(page);
+  if (!resolved || !current) return page;
+  if (!resolved.search && current.search && resolved.pathname === current.pathname) return page;
+  return resolveRelativeUrl(page, action);
 }
 
 function captchaRequiredFromCheck(payload) {
@@ -52,9 +70,15 @@ function hasTicket(location) {
   return /(?:^|[?&])ticket=/.test(String(location || ""));
 }
 
+function looksLikeLoginPage(html) {
+  const text = String(html || "");
+  return /name=["']password["']/i.test(text) || /id=["']pwdFrom["']/i.test(text);
+}
+
 function isAuthenticatedHome(html, statusCode) {
   const text = String(html || "");
-  return statusCode === 200 && (text.includes("桌面") || text.includes("教学综合信息服务平台"));
+  if (Number(statusCode || 0) !== 200 || looksLikeLoginPage(text)) return false;
+  return text.includes("桌面") || text.includes("教学综合信息服务平台");
 }
 
 function parseSemesterOptions(html) {
@@ -90,8 +114,10 @@ module.exports = {
   classifyLoginPage,
   hasTicket,
   isAuthenticatedHome,
+  looksLikeLoginPage,
   looksLikeTimetable,
   maskStudentId,
   parseCasLoginFields,
+  resolveLoginPostUrl,
   parseSemesterOptions,
 };

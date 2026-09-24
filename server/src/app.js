@@ -87,8 +87,18 @@ const DEFAULT_JSON_BODY_LIMIT = process.env.FOSU_JSON_BODY_LIMIT || "2mb";
 const LARGE_JSON_BODY_LIMIT = process.env.FOSU_LARGE_JSON_BODY_LIMIT || "30mb";
 const PERSONAL_XLS_BODY_LIMIT = process.env.FOSU_PERSONAL_XLS_BODY_LIMIT || "20mb";
 const DEFAULT_URLENCODED_BODY_LIMIT = process.env.FOSU_URLENCODED_BODY_LIMIT || "1mb";
-const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
-const largeJsonParser = express.json({ limit: LARGE_JSON_BODY_LIMIT });
+const defaultJsonParser = express.json({
+  limit: DEFAULT_JSON_BODY_LIMIT,
+  verify(req, res, buf) {
+    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0) req.rawBody = buf;
+  },
+});
+const largeJsonParser = express.json({
+  limit: LARGE_JSON_BODY_LIMIT,
+  verify(req, res, buf) {
+    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0) req.rawBody = buf;
+  },
+});
 const personalXlsJsonParser = express.json({ limit: PERSONAL_XLS_BODY_LIMIT });
 
 function selectJsonParser(req) {
@@ -98,7 +108,8 @@ function selectJsonParser(req) {
     routePath.indexOf("/api/admin/sync/") === 0 ||
     routePath.indexOf("/api/admin/release/activate") === 0 ||
     routePath.indexOf("/api/relay/staging/upload") === 0 ||
-    routePath === "/api/admin/campus-map/assets/upload"
+    routePath === "/api/admin/campus-map/assets/upload" ||
+    /\/api\/campus-agent\/v1\/jobs\/[^/]+\/result$/.test(routePath)
   ) {
     return largeJsonParser;
   }
@@ -235,6 +246,8 @@ app.use("/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
 app.use("/api/schedule-import/fosu", studentScheduleImportRouter);
+app.use("/api/campus-sync", require("./routes/campusSync"));
+app.use("/api/campus-agent/v1", require("./routes/campusAgent"));
 app.use("/api/ai", aiRouter);
 app.use("/api/coze/tools", cozeToolGatewayRouter);
 app.use("/api/admin", adminRouter);

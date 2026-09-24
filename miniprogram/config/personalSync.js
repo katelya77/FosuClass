@@ -1,4 +1,4 @@
 module.exports = {
-  enableClientDirectSync: true,
-  enableCampusAgentSync: false,
+  enableClientDirectSync: false,
+  enableCampusAgentSync: true,
 };
