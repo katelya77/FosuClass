@@ -13,7 +13,15 @@ const listed = spawnSync("tar", ["-tzf", archive], { encoding: "utf8" });
 assert.strictEqual(listed.status, 0, listed.stderr);
 const names = listed.stdout.split(/\r?\n/);
 for (const required of [
+  "package.json",
+  "package-lock.json",
   "vendor/fosuDirectClient.js",
+  "vendor/fosuDirectConfig.js",
+  "vendor/fosuDirectCookieJar.js",
+  "vendor/fosuDirectDiagnostics.js",
+  "vendor/fosuDirectHtml.js",
+  "vendor/fosuDirectPasswordCrypto.js",
+  "vendor/fosuDirectRedirect.js",
   "vendor/fosuDirectUrl.js",
   "src/index.js",
   "src/signature.js",

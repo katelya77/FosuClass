@@ -5,6 +5,11 @@ const path = require("path");
 const { URL } = require("url");
 const { signRequest } = require("./signature");
 
+const DEFAULT_POLL_MS = 3000;
+const DEFAULT_HEARTBEAT_MS = 30000;
+const HEARTBEAT_PATH = "/api/campus-agent/v1/heartbeat";
+const CLAIM_PATH = "/api/campus-agent/v1/jobs/claim";
+
 function clientFactory() {
   const root = process.env.FOSU_DIRECT_CLIENT_DIR || path.join(__dirname, "..", "vendor");
   return require(path.join(root, "fosuDirectClient")).createFosuDirectClient;
@@ -52,6 +57,34 @@ function createNodeTransport() {
   };
 }
 
+function intervalMs(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1000) return fallback;
+  return Math.floor(parsed);
+}
+
+function parseRetryAfter(value) {
+  if (value == null || value === "") return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.floor(seconds * 1000));
+  const when = Date.parse(String(value));
+  if (Number.isNaN(when)) return 0;
+  return Math.max(0, when - Date.now());
+}
+
+function retryDelay(statusCode, retryAfter) {
+  if (statusCode === 429) return Math.max(10000, parseRetryAfter(retryAfter));
+  if (statusCode === 404 || statusCode === 403) return 10000;
+  return 3000;
+}
+
+function brokerFailure(statusCode, retryAfter) {
+  const error = new Error("BROKER_STATUS");
+  error.statusCode = statusCode || 0;
+  error.delayMs = retryDelay(error.statusCode, retryAfter);
+  return error;
+}
+
 function brokerRequest(method, pathname, bodyObject) {
   const base = new URL(process.env.CAMPUS_AGENT_BROKER_URL);
   const body = bodyObject == null ? Buffer.alloc(0) : Buffer.from(JSON.stringify(bodyObject));
@@ -91,10 +124,15 @@ function brokerRequest(method, pathname, bodyObject) {
         if (text) {
           try { parsed = JSON.parse(text); } catch (error) { parsed = null; }
         }
-        resolve({ statusCode: res.statusCode, body: parsed });
+        resolve({
+          statusCode: res.statusCode,
+          body: parsed,
+          retryAfter: res.headers["retry-after"] || "",
+        });
       });
     });
     req.on("error", reject);
+    req.on("timeout", () => req.destroy(new Error("timeout")));
     if (body.length) req.write(body);
     req.end();
   });
@@ -108,10 +146,27 @@ function safeCode(error) {
   return "AGENT_OFFLINE";
 }
 
-async function runClaimedJob(job) {
+function defaultLog(entry) {
+  const hidden = /token|secret|password|authorization|signature|cookie|ticket|studentid/i;
+  const banned = [process.env.CAMPUS_AGENT_TOKEN, process.env.CAMPUS_AGENT_SIGNING_SECRET].filter(Boolean);
+  const out = {};
+  Object.entries(entry || {}).forEach(([key, value]) => {
+    if (hidden.test(key)) return;
+    if (typeof value === "string" && (hidden.test(value) || banned.some((item) => item && value.includes(item)))) return;
+    out[key] = value;
+  });
+  console.log(JSON.stringify(out));
+}
+
+function shortId(value) {
+  return String(value || "").slice(0, 8);
+}
+
+async function runClaimedJob(job, request, log) {
   const createFosuDirectClient = clientFactory();
   const client = createFosuDirectClient({ transport: createNodeTransport() });
   let password = job.password;
+  const jobId = shortId(job.jobId);
   try {
     const result = await client.readTimetable({
       studentId: job.studentId,
@@ -119,7 +174,7 @@ async function runClaimedJob(job) {
       semester: job.semester || "",
     });
     password = "";
-    await brokerRequest("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
+    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
       jobId: job.jobId,
       success: true,
       semester: job.semester || "",
@@ -127,23 +182,108 @@ async function runClaimedJob(job) {
       contentType: result.contentType || "text/html",
       profileHint: { studentIdMasked: result.profileHint && result.profileHint.studentIdMasked || "" },
     });
+    if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
+      throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
+    }
+    log({ event: "job-finished", jobId, code: "OK", status: posted.statusCode });
   } catch (error) {
     password = "";
-    await brokerRequest("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
+    if (error && error.delayMs) throw error;
+    const code = safeCode(error);
+    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
       jobId: job.jobId,
       success: false,
-      code: safeCode(error),
+      code,
     });
+    log({ event: "job-finished", jobId, code, status: posted && posted.statusCode || 0 });
+    if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
+      throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
+    }
   } finally {
+    password = "";
     client.clearSecrets();
   }
 }
 
-async function loop() {
-  await brokerRequest("POST", "/api/campus-agent/v1/heartbeat", {});
-  const claimed = await brokerRequest("POST", "/api/campus-agent/v1/jobs/claim", {});
-  if (claimed.statusCode === 204 || !claimed.body || !claimed.body.jobId) return;
-  await runClaimedJob(claimed.body);
+function createRunControl() {
+  let stopped = false;
+  let wake = null;
+  return {
+    stop() {
+      stopped = true;
+      if (wake) wake();
+    },
+    stopped() {
+      return stopped;
+    },
+    sleep(ms) {
+      if (stopped) return Promise.resolve();
+      return new Promise((resolve) => {
+        const timer = setTimeout(finish, ms);
+        wake = () => {
+          clearTimeout(timer);
+          finish();
+        };
+        function finish() {
+          wake = null;
+          resolve();
+        }
+      });
+    },
+  };
+}
+
+async function runAgentLoop(options) {
+  const pollMs = intervalMs(options.pollMs, DEFAULT_POLL_MS);
+  const heartbeatMs = intervalMs(options.heartbeatMs, DEFAULT_HEARTBEAT_MS);
+  const request = options.brokerRequest;
+  const sleep = options.sleep;
+  const now = options.now || (() => Date.now());
+  const log = options.log || defaultLog;
+  const shouldStop = options.shouldStop || (() => false);
+  const runJob = options.runJob;
+  let lastHeartbeatAt = null;
+
+  log({
+    event: "agent-started",
+    brokerHost: options.brokerHost || "",
+    agentId: options.agentId || "",
+    pollMs,
+    heartbeatMs,
+  });
+
+  while (!shouldStop()) {
+    let delay = pollMs;
+    try {
+      const clock = now();
+      if (lastHeartbeatAt == null || clock - lastHeartbeatAt >= heartbeatMs) {
+        const heartbeat = await request("POST", HEARTBEAT_PATH, {});
+        if (!heartbeat || heartbeat.statusCode < 200 || heartbeat.statusCode >= 300) {
+          throw brokerFailure(heartbeat && heartbeat.statusCode, heartbeat && heartbeat.retryAfter);
+        }
+        lastHeartbeatAt = now();
+        log({ event: "heartbeat", status: heartbeat.statusCode });
+      }
+      if (shouldStop()) break;
+      const claimed = await request("POST", CLAIM_PATH, {});
+      if (claimed && claimed.statusCode === 204) {
+        // Idle. Do not log every empty claim.
+      } else if (claimed && claimed.statusCode === 200 && claimed.body && claimed.body.jobId) {
+        log({ event: "job-claimed", jobId: shortId(claimed.body.jobId) });
+        await runJob(claimed.body);
+      } else {
+        throw brokerFailure(claimed && claimed.statusCode, claimed && claimed.retryAfter);
+      }
+    } catch (error) {
+      delay = error && error.delayMs ? error.delayMs : 3000;
+      const status = error && error.statusCode || 0;
+      const event = status === 429 ? "broker-rate-limited" : (status === 404 || status === 403 ? "broker-auth-failed" : "broker-failed");
+      log({ event, status, retryMs: delay });
+    }
+    if (shouldStop()) break;
+    await sleep(delay);
+  }
+  log({ event: "agent-stopped" });
 }
 
 async function main() {
@@ -151,17 +291,33 @@ async function main() {
   if (!process.env.CAMPUS_AGENT_BROKER_URL || !process.env.CAMPUS_AGENT_TOKEN || !process.env.CAMPUS_AGENT_SIGNING_SECRET) {
     throw new Error("CAMPUS_AGENT_CONFIG_REQUIRED");
   }
-  for (;;) {
-    try {
-      await loop();
-    } catch (error) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-  }
+  const broker = new URL(process.env.CAMPUS_AGENT_BROKER_URL);
+  const control = createRunControl();
+  process.on("SIGTERM", () => control.stop());
+  process.on("SIGINT", () => control.stop());
+  await runAgentLoop({
+    brokerRequest,
+    sleep: (ms) => control.sleep(ms),
+    shouldStop: () => control.stopped(),
+    pollMs: process.env.CAMPUS_AGENT_POLL_INTERVAL_MS,
+    heartbeatMs: process.env.CAMPUS_AGENT_HEARTBEAT_INTERVAL_MS,
+    brokerHost: broker.host,
+    agentId: process.env.CAMPUS_AGENT_ID || "wyz-campus-01",
+    runJob: (job) => runClaimedJob(job, brokerRequest, defaultLog),
+  });
 }
 
 if (require.main === module) {
   main().catch(() => process.exit(1));
 }
 
-module.exports = { brokerRequest, safeCode };
+module.exports = {
+  brokerRequest,
+  createRunControl,
+  intervalMs,
+  retryDelay,
+  runAgentLoop,
+  safeCode,
+  DEFAULT_POLL_MS,
+  DEFAULT_HEARTBEAT_MS,
+};
