@@ -38,30 +38,30 @@ case "$IMAGE" in
     ;;
 esac
 
-SECRETS=/root/fosu-route2-secrets.env
-if [ ! -f "$SECRETS" ]; then
+ROUTE2_ENV_FILE=/root/fosu-route2-secrets.env
+if [ ! -f "$ROUTE2_ENV_FILE" ]; then
   TOKEN=$(od -An -N 32 -tx1 /dev/urandom | tr -d ' \n')
   SIGN=$(od -An -N 32 -tx1 /dev/urandom | tr -d ' \n')
   umask 077
-  cat > "$SECRETS" <<EOF
+  cat > "$ROUTE2_ENV_FILE" <<EOF
 CAMPUS_AGENT_ENABLED=true
 CAMPUS_AGENT_ID=wyz-campus-01
 CAMPUS_AGENT_TOKEN=$TOKEN
 CAMPUS_AGENT_SIGNING_SECRET=$SIGN
 CAMPUS_SYNC_JOB_TTL_SECONDS=120
 EOF
-  chmod 600 "$SECRETS"
-  echo "Wrote $SECRETS mode 0600. Token values were not printed."
+  chmod 600 "$ROUTE2_ENV_FILE"
+  echo "Wrote $ROUTE2_ENV_FILE mode 0600. Token values were not printed."
 else
-  echo "Kept existing $SECRETS"
+  echo "Kept existing $ROUTE2_ENV_FILE"
 fi
 
 echo "STOP automatic container upgrade is not safe for the 1Panel-managed container."
 echo "Add these environment fields to fosuclass-api in 1Panel, then restart only that container:"
 echo "  CAMPUS_AGENT_ENABLED=true"
 echo "  CAMPUS_AGENT_ID=wyz-campus-01"
-echo "  CAMPUS_AGENT_TOKEN from $SECRETS"
-echo "  CAMPUS_AGENT_SIGNING_SECRET from $SECRETS"
+echo "  CAMPUS_AGENT_TOKEN from $ROUTE2_ENV_FILE"
+echo "  CAMPUS_AGENT_SIGNING_SECRET from $ROUTE2_ENV_FILE"
 echo "  CAMPUS_SYNC_JOB_TTL_SECONDS=120"
 echo "Create a separate site agent-broker.katelya.eu.org with the vhost in:"
 echo "  $ROOT/nginx.conf"

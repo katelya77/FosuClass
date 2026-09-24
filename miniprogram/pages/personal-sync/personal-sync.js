@@ -1711,7 +1711,7 @@ Page({
         const preview = await studentScheduleSource.readPersonalTimetable({
           source: preferredSource,
           http: {
-            post: (url, data) => request.post(url, data, { showLoading: false, silentError: true, timeout: 20000, retries: 0, dedupe: false }),
+            post: (url, data) => request.post(url, data, { showLoading: false, silentError: true, timeout: 60000, retries: 0, dedupe: false }),
             get: (url) => request.get(url, {}, { showLoading: false, silentError: true, timeout: 15000, retries: 0, dedupe: false }),
           },
           studentId: form.studentId,
@@ -1790,7 +1790,7 @@ Page({
       const preview = await request.post("/api/schedule-import/fosu/direct/preview", timetable, {
         showLoading: false,
         silentError: true,
-        timeout: 20000,
+        timeout: 60000,
         retries: 0,
         dedupe: false,
       });

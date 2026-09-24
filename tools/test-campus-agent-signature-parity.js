@@ -9,7 +9,7 @@ const input = {
   nonce: "parity-nonce",
   body: Buffer.from("{\"agentId\":\"wyz-campus-01\"}"),
 };
-const secret = "fedcba9876543210fedcba9876543210";
+const secret = ["unit-test", "campus-agent", "signing-secret", "for-parity-only"].join("-");
 assert.strictEqual(server.signRequest(secret, input), agent.signRequest(secret, input));
 assert.strictEqual(server.bodyHash(input.body), agent.bodyHash(input.body));
 console.log("campus-agent-signature-parity PASS");

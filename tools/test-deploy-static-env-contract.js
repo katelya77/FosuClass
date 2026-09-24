@@ -213,13 +213,20 @@ assert(
   "CAMPUS_AGENT_SIGNING_SECRET=${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}",
   "CAMPUS_SYNC_JOB_TTL_SECONDS=${{ vars.CAMPUS_SYNC_JOB_TTL_SECONDS || '120' }}",
   "CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET must be different.",
-  "node server/scripts/check-campus-agent-env.js",
+  "must each be at least 32 characters.",
+  "node scripts/check-campus-agent-env.js",
   "node scripts/verify-campus-agent-broker.js",
   "wyz-campus-agent-${{ github.sha }}",
+  "ACTIONS_ARTIFACT_UPLOAD_ENABLED",
+  "continue-on-error: true",
+  "retention-days: 1",
+  "route2-artifacts",
 ].forEach((needle) => {
   assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
 });
+assert(!workflow.includes("node server/scripts/check-campus-agent-env.js"), "campus env check must run after cd into server/");
 assert(!workflow.includes("source: deploy/**"), "production API upload must not ship deploy/");
+assert(!/class\.katelya\.eu\.org\/static\/releases[\s\S]{0,200}wyz-campus-agent/.test(workflow), "WYZ bundle must stay off the public static release path");
 
 function checkCampusEnv(body) {
   const file = path.join(os.tmpdir(), `fosu-campus-env-${process.pid}-${Date.now()}.tmp`);
