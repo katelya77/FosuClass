@@ -1,5 +1,4 @@
 const iconv = require("iconv-lite");
-const { decodeSchoolHtml, detectCharset: detectSchoolCharset } = require("../../../miniprogram/services/schoolHtmlCharset");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const { assertImportAttemptAllowed } = require("./studentScheduleImportRateLimiter");
@@ -29,11 +28,20 @@ function rejectSecretKeys(value, path) {
 }
 
 function detectCharset(contentType, buffer) {
-  return detectSchoolCharset(contentType, buffer);
+  const header = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(String(contentType || ""));
+  if (header) return header[1].toLowerCase();
+  const sniff = buffer.slice(0, 1200).toString("latin1");
+  const meta = /charset\s*=\s*["']?\s*([a-zA-Z0-9_-]+)/i.exec(sniff);
+  return meta ? meta[1].toLowerCase() : "utf-8";
 }
 
 function decodeTimetable(buffer, contentType) {
-  return decodeSchoolHtml(buffer, contentType, iconv);
+  const charset = detectCharset(contentType, buffer);
+  const encoding = /gb2312|gbk|gb18030/.test(charset) ? "gbk" : "utf8";
+  return {
+    html: iconv.decode(buffer, encoding),
+    charset: encoding,
+  };
 }
 
 function sanitizePlain(value, max) {
