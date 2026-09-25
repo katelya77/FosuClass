@@ -270,7 +270,7 @@ async function run() {
     assert.ok(!JSON.stringify(view).includes(PASSWORD));
   });
   await checkAsync("A27", async () => {
-    const response = await request(handle, "GET", "/api/campus-agent/v1/health", { authorization: "Bearer aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "x-campus-agent-id": "wyz-campus-01" });
+    const response = await request(handle, "GET", "/api/campus-agent/v1/health", { authorization: "Bearer dummy-wrong-agent-material", "x-campus-agent-id": "wyz-campus-01" });
     assert.strictEqual(response.status, 404);
   });
   await checkAsync("A28", async () => {
