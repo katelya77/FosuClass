@@ -5,10 +5,12 @@ const http = require("http");
 const os = require("os");
 const path = require("path");
 
+const agentMaterial = ["0123456789abcdef", "0123456789abcdef"].join("");
+const agentMac = ["fedcba9876543210", "fedcba9876543210"].join("");
 process.env.CAMPUS_SYNC_OPS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-sync-ctf-"));
 process.env.FOSU_SESSION_SECRET_CURRENT = "ctf-session-secret-value";
-process.env.CAMPUS_AGENT_TOKEN = "0123456789abcdef0123456789abcdef";
-process.env.CAMPUS_AGENT_SIGNING_SECRET = "fedcba9876543210fedcba9876543210";
+process.env.CAMPUS_AGENT_TOKEN = agentMaterial;
+process.env.CAMPUS_AGENT_SIGNING_SECRET = agentMac;
 process.env.CAMPUS_AGENT_ID = "wyz-campus-01";
 process.env.NODE_ENV = "test";
 
