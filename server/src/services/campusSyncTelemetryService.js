@@ -41,6 +41,8 @@ function emptyBucket() {
     durationSum: 0,
     queueWaitCount: 0,
     queueWaitSum: 0,
+    maxQueued: 0,
+    maxHeartbeatAgeMs: 0,
     histogram: EDGES.map(() => 0),
     errors: {},
   };
@@ -258,6 +260,8 @@ function mergeBuckets(list) {
     ["attempts", "success", "failed", "rateLimited", "busy", "timeout", "credentialFailures", "systemFailures", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum"].forEach((key) => {
       merged[key] += Number(bucket[key] || 0);
     });
+    merged.maxQueued = Math.max(merged.maxQueued, Number(bucket.maxQueued || 0));
+    merged.maxHeartbeatAgeMs = Math.max(merged.maxHeartbeatAgeMs, Number(bucket.maxHeartbeatAgeMs || 0));
     EDGES.forEach((edge, index) => {
       merged.histogram[index] += Number(bucket.histogram && bucket.histogram[index] || 0);
     });
@@ -388,8 +392,22 @@ function summarize(bucket) {
     p95DurationMs: percentile(bucket, 0.95),
     p99DurationMs: percentile(bucket, 0.99),
     queueWaitP95Ms: bucket.queueWaitCount ? Math.round(bucket.queueWaitSum / bucket.queueWaitCount) : 0,
+    maxQueued: bucket.maxQueued || 0,
+    maxHeartbeatAgeMs: bucket.maxHeartbeatAgeMs || 0,
     errors: bucket.errors || {},
   };
+}
+
+function observeRuntime(sample) {
+  const buckets = touch(Date.now());
+  const queued = Math.max(0, Number(sample && sample.queued) || 0);
+  const age = Math.max(0, Number(sample && sample.heartbeatAgeMs) || 0);
+  buckets.hour.maxQueued = Math.max(buckets.hour.maxQueued || 0, queued);
+  buckets.hour.maxHeartbeatAgeMs = Math.max(buckets.hour.maxHeartbeatAgeMs || 0, age);
+}
+
+function memoryP95() {
+  return percentile(mergeBuckets(Array.from(hours.values())), 0.95);
 }
 
 function overview(range, now) {
@@ -472,6 +490,8 @@ module.exports = {
   flushNow,
   lastIo: () => lastIo,
   listRecent,
+  memoryP95,
+  observeRuntime,
   overview,
   record,
   requiredHourFiles,

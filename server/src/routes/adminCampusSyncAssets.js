@@ -62,6 +62,11 @@ const CAMPUS_SYNC_SECTION = `
         <div id="csRefreshed" class="cs-muted"></div>
         <div id="csError" class="cs-card cs-error" hidden></div>
         <div class="cs-grid" id="csOverview"></div>
+        <div class="cs-card" id="csObservationCard">
+          <h3>过去 24 小时</h3>
+          <div id="csObservation" class="cs-muted">正在加载运行观察…</div>
+          <div id="csAdvice" class="cs-muted"></div>
+        </div>
         <div class="cs-card">
           <div class="cs-toolbar" style="justify-content: space-between;">
             <h3>请求趋势</h3>
@@ -333,7 +338,29 @@ const CAMPUS_SYNC_SCRIPT = `
           var error = csNode("csError");
           if (error) error.hidden = true;
           cs.criticalReady = true;
+          csRenderSafety(snap.queueSafety, snap.recommendation);
           csStamp();
+        }
+        function csRenderSafety(safety, advice) {
+          var node = csNode("csAdvice");
+          if (!node) return;
+          var parts = [];
+          if (advice && advice.label) parts.push("运行建议：" + advice.label);
+          if (safety && safety.tailExceedsTtl) parts.push("当前全局任务上限可能导致队尾超过任务 TTL。");
+          if (!parts.length) return;
+          node.textContent = parts.join(" ");
+        }
+        function csRenderObservation(overview) {
+          var host = csNode("csObservation");
+          if (!host || !overview) return;
+          var day = overview.window24h || {};
+          var safety = overview.queueSafety || {};
+          var advice = overview.recommendation || {};
+          host.textContent = "成功率 " + (day.successRate || 0) + "% · P50 " + (day.p50DurationMs || 0) + " ms · P95 " + (day.p95DurationMs || 0) +
+            " ms · 系统失败率 " + (day.systemFailureRate || 0) + "% · 凭据失败率 " + (day.credentialFailureRate || 0) +
+            "% · 限流 " + (day.rateLimited || 0) + " · 最大队列 " + (day.maxQueued || 0) +
+            " · 心跳年龄最大 " + (day.maxHeartbeatAgeMs || 0) + " ms · 最近成功 " + csWhen(overview.performance && overview.performance.lastSuccessAt);
+          csRenderSafety(safety, advice);
         }
         function csInt(value) {
           var text = String(value == null ? "" : value).trim();
@@ -426,6 +453,7 @@ const CAMPUS_SYNC_SCRIPT = `
               csCards(cs.overview);
               csRenderPipeline(cs.overview.pipeline);
               csRenderErrors(overview.errors, overview.window24h);
+              csRenderObservation(overview);
             }).catch(function () {});
           });
         }

@@ -44,6 +44,8 @@ async function main() {
   const control = require("../src/services/campusSyncControl");
   const beforePolicy = numbers(policy.reload());
   const beforeControl = control.reload();
+  const quotaFile = require("path").join(require("path").dirname(policy.policyFile()), "quota.json");
+  const quotaBefore = fs.existsSync(quotaFile) ? fs.readFileSync(quotaFile) : Buffer.alloc(0);
   const remote = await readRemote();
   const afterPolicy = numbers(policy.reload());
   const afterControl = control.reload();
@@ -64,7 +66,11 @@ async function main() {
   console.log("CONTROL BEFORE DEPLOY " + JSON.stringify({ paused: beforeControl.paused, pausedAt: beforeControl.pausedAt }));
   console.log("CONTROL AFTER DEPLOY " + JSON.stringify({ paused: afterControl.paused, pausedAt: afterControl.pausedAt }));
   console.log("CONTROL_UNCHANGED=" + (beforeControl.paused === afterControl.paused && beforeControl.pausedAt === afterControl.pausedAt));
+  const quotaAfter = fs.existsSync(quotaFile) ? fs.readFileSync(quotaFile) : Buffer.alloc(0);
+  const quotaUnchanged = Buffer.compare(quotaBefore, quotaAfter) === 0;
   console.log("campus-sync-policy-verify readonly storage=" + (afterPolicy.storageStatus || policy.snapshot().storageStatus));
+  console.log("QUOTA_UNCHANGED=" + quotaUnchanged);
+  if (!quotaUnchanged) fail("read-only verification changed quota");
   if (!unchanged) fail("read-only verification changed policy or control");
   if (!token) return;
   const paths = [
@@ -75,7 +81,7 @@ async function main() {
   ];
   for (const urlPath of paths) {
     const samples = [];
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       const started = Date.now();
       const response = await fetch(base + urlPath, { headers: { "x-admin-token": token, "x-fosu-client": "service" } });
       await response.arrayBuffer();
@@ -83,7 +89,7 @@ async function main() {
       samples.push(Date.now() - started);
     }
     samples.sort((left, right) => left - right);
-    console.log("LATENCY " + urlPath + " n=5 p50=" + samples[2] + " max=" + samples[4]);
+    console.log("LATENCY " + urlPath + " n=10 p50=" + samples[4] + " p95=" + samples[8] + " max=" + samples[9]);
   }
 }
 

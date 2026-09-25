@@ -79,6 +79,37 @@ function estimatedWait(metrics, summary) {
   return Math.max(0, (metrics.queuedJobs || 0) * median);
 }
 
+function queueSafety(p95DurationMs) {
+  const cap = policy.current().globalActiveCap;
+  const jobTtlMs = jobStore.JOB_TTL_MS;
+  const p95 = Math.max(0, Number(p95DurationMs) || 0);
+  const estimatedWorstTailMs = Math.max(0, cap - 1) * p95;
+  return {
+    workerConcurrency: 1,
+    jobTtlMs,
+    p95DurationMs: p95,
+    globalActiveCap: cap,
+    estimatedWorstTailMs,
+    tailExceedsTtl: p95 > 0 && estimatedWorstTailMs > jobTtlMs,
+  };
+}
+
+function recommendation(input) {
+  const action = [];
+  if (input.agentOnline === false) action.push("agent_offline");
+  if (input.circuit === "OPEN") action.push("circuit_open");
+  if (Number(input.systemFailureRate) > 15) action.push("system_failure_rate");
+  if (input.tailExceedsTtl) action.push("tail_exceeds_ttl");
+  if (action.length) return { level: "action", label: "需处理", reasons: action };
+  const watch = [];
+  if (input.paused) watch.push("paused");
+  if (Number(input.systemFailureRate) > 5) watch.push("system_failure_watch");
+  if (Number(input.credentialFailureRate) > 20) watch.push("credential_failure_watch");
+  if (Number(input.rateLimited) > 0) watch.push("rate_limited");
+  if (watch.length) return { level: "watch", label: "观察", reasons: watch };
+  return { level: "normal", label: "正常", reasons: [] };
+}
+
 function criticalSnapshot() {
   const now = Date.now();
   const metrics = broker.metrics();
@@ -86,6 +117,8 @@ function criticalSnapshot() {
   const maintenance = control.snapshot();
   const rules = policy.snapshot();
   const summary = { avgDurationMs: 0, systemFailures: 0, errors: {} };
+  telemetry.observeRuntime({ queued: metrics.queuedJobs + metrics.processingJobs, heartbeatAgeMs: metrics.lastHeartbeatAge || 0 });
+  const safety = queueSafety(telemetry.memoryP95());
   return {
     generatedAt: new Date(now).toISOString(),
     service: {
@@ -106,7 +139,15 @@ function criticalSnapshot() {
       circuit: { state: breaker.state },
       pipeline: pipeline(metrics, summary),
       securityPosture: breaker.state === "OPEN" ? "circuit_open" : "normal",
+      lastSuccessAt: metrics.lastSuccessAt || null,
     },
+    queueSafety: safety,
+    recommendation: recommendation({
+      agentOnline: metrics.agentOnline,
+      circuit: breaker.state,
+      paused: maintenance.paused === true,
+      tailExceedsTtl: safety.tailExceedsTtl,
+    }),
     policy: {
       rateLimit: rules.rateLimit,
       rateWindowSeconds: rules.rateWindowSeconds,
@@ -129,6 +170,8 @@ function overview() {
   const breaker = circuit.snapshot(now);
   const maintenance = control.snapshot();
   const status = serviceStatus(metrics, breaker, maintenance);
+  telemetry.observeRuntime({ queued: metrics.queuedJobs + metrics.processingJobs, heartbeatAgeMs: metrics.lastHeartbeatAge || 0 });
+  const safety = queueSafety(day.p95DurationMs);
   return {
     status,
     maintenance,
@@ -159,6 +202,16 @@ function overview() {
     pipeline: pipeline(metrics, day),
     errors: day.errors || {},
     securityPosture: securityPosture(breaker),
+    queueSafety: safety,
+    recommendation: recommendation({
+      agentOnline: metrics.agentOnline,
+      circuit: breaker.state,
+      systemFailureRate: day.systemFailureRate,
+      credentialFailureRate: day.credentialFailureRate,
+      rateLimited: day.rateLimited,
+      paused: maintenance.paused === true,
+      tailExceedsTtl: safety.tailExceedsTtl,
+    }),
   };
 }
 
@@ -239,6 +292,8 @@ function resetDiagnoseForTests() {
 module.exports = {
   criticalSnapshot,
   diagnose,
+  queueSafety,
+  recommendation,
   overview,
   resetDiagnoseForTests,
   runtimeConfig,
