@@ -1990,6 +1990,19 @@
   line-height: 1.45;
 }
 
+.saved-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12rpx;
+  color: #667085;
+  font-size: 22rpx;
+}
+
+.saved-account-clear {
+  color: #8a7560;
+}
+
 .sync-civility {
   margin-top: 16rpx;
   color: #8a7560;

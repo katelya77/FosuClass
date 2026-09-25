@@ -13,7 +13,7 @@
       <view class="form-group">
         <text class="form-label">学校账号密码</text>
         <view class="password-field">
-          <input class="form-input password-input" password="{{!passwordVisible}}" placeholder="学校账号密码" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" adjust-position="{{true}}" cursor-spacing="120" />
+          <input class="form-input password-input" password="{{!passwordVisible}}" placeholder="{{hasSavedPassword && !studentForm.password ? '已保存密码，无需重新输入' : '学校账号密码'}}" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" adjust-position="{{true}}" cursor-spacing="120" />
           <view class="password-eye {{passwordVisible ? 'is-open' : ''}}" catchtap="togglePasswordVisible" aria-role="button" aria-label="{{passwordVisible ? '隐藏密码' : '显示密码'}}">
             <view class="eye-glyph">
               <view class="eye-shape"></view>
@@ -23,12 +23,17 @@
           </view>
         </view>
       </view>
-      <checkbox-group bindchange="onStudentPrivacyChange">
+      <view class="saved-account" wx:if="{{hasSavedPassword}}">
+        <text>已记住账号</text>
+        <text class="saved-account-clear" bindtap="confirmClearSavedCredential">清除账号密码</text>
+      </view>
+      <checkbox-group wx:if="{{!hasSavedPassword || studentForm.password}}" bindchange="onStudentPrivacyChange">
         <label class="privacy-row">
           <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
-          <text>仅用于本次读取，不会保存密码</text>
+          <text>账号密码仅用于课表同步，并保存在本机用于快捷重新同步，可随时清除。</text>
         </label>
       </checkbox-group>
+      <view class="sync-civility" wx:else>账号密码仅用于课表同步，并保存在本机用于快捷重新同步，可随时清除。不会作为课表数据长期保存到服务器，也不会写入运行日志。</view>
       <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">同步最新课表</button>
       <view class="sync-civility">请勿恶意或高频重复同步。系统会限制异常频繁请求，仅在课表发生变化时重新同步即可。</view>
       <view class="campus-status campus-status-{{syncServiceStatus}}">
@@ -48,7 +53,7 @@
       </view>
       <view class="recent-sync-actions">
         <button class="recent-import-btn" bindtap="useRecentStudentImport">直接使用</button>
-        <button class="recent-import-btn" bindtap="resyncStudentImport">重新同步</button>
+        <button class="recent-import-btn" loading="{{studentImportLoading}}" disabled="{{studentImportLoading}}" bindtap="resyncStudentImport">重新同步</button>
         <button class="recent-import-btn" bindtap="openRecentStudentImportEditor">查看调整</button>
       </view>
     </view>

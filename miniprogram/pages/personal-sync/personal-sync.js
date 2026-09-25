@@ -7,6 +7,7 @@ const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const recentStudentImportService = require("../../services/recentStudentImportService");
+const personalSyncCredentialStore = require("../../services/personalSyncCredentialStore");
 const {
   normalizeImportSurface,
   buildPersonalSyncSubtitle,
@@ -972,6 +973,8 @@ Page({
     filteredCourses: [],
     recentStudentImport: null,
     recentStudentImportChecking: false,
+    credentialSaved: false,
+    hasSavedPassword: false,
     studentCachedPreviewMode: false,
   },
 
@@ -981,6 +984,7 @@ Page({
     const requestedTab = String(options.tab || "").trim();
     const requestedMethod = requestedTab === "xls" ? "xls" : "method";
     this.setData({ activeImportMethod: requestedMethod });
+    this.applySavedCredential();
     this.loadRecentStudentImport();
     const applyTerms = (config) => {
       const built = personalTermOptionsService.buildImportTermOptions(
@@ -1252,23 +1256,76 @@ Page({
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
-  resyncStudentImport() {
+  discardPreviewToken() {
     const token = this.data.studentPreviewToken;
-    if (token) {
-      request.post("/api/schedule-import/fosu/cancel", {
-        importPreviewToken: token,
-      }, {
-        showLoading: false,
-        silentError: true,
-        timeout: 8000,
-        retries: 0,
-        dedupe: false,
-      }).catch(() => {});
-    }
-    this.returnToAccountForm();
+    if (!token) return;
+    request.post("/api/schedule-import/fosu/cancel", {
+      importPreviewToken: token,
+    }, {
+      showLoading: false,
+      silentError: true,
+      timeout: 8000,
+      retries: 0,
+      dedupe: false,
+    }).catch(() => {});
   },
 
-  presentIdentityConfirm(preview, studentId) {
+  applySavedCredential() {
+    const saved = personalSyncCredentialStore.read();
+    if (!saved || !saved.studentId) {
+      this.setData({ credentialSaved: false, hasSavedPassword: false });
+      return;
+    }
+    const currentId = String(this.data.studentForm && this.data.studentForm.studentId || "");
+    this.setData({
+      credentialSaved: true,
+      hasSavedPassword: Boolean(saved.password),
+      "studentForm.studentId": currentId || saved.studentId,
+    });
+  },
+
+  resolveSyncCredential() {
+    const form = this.data.studentForm || {};
+    const studentId = String(form.studentId || "").trim();
+    const typedPassword = String(form.password || "");
+    const saved = personalSyncCredentialStore.read();
+    const savedPassword = saved && saved.studentId === studentId ? String(saved.password || "") : "";
+    const password = typedPassword || savedPassword;
+    const usingSavedPassword = !typedPassword && Boolean(savedPassword);
+    if (!/^\d{6,20}$/.test(studentId)) {
+      wx.showToast({ title: "请输入正确学号", icon: "none" });
+      return null;
+    }
+    if (!password) {
+      wx.showToast({ title: "请输入学校账号密码", icon: "none" });
+      return null;
+    }
+    if (!usingSavedPassword && !form.privacyConfirmed) {
+      wx.showToast({ title: "请先确认本机保存说明", icon: "none" });
+      return null;
+    }
+    return { studentId, password, usingSavedPassword };
+  },
+
+  resyncStudentImport() {
+    if (this.data.studentImportLoading) return;
+    const saved = personalSyncCredentialStore.read();
+    if (!saved || !saved.password || !saved.studentId) {
+      this.returnToAccountForm();
+      wx.showToast({ title: "请先完成一次账号同步", icon: "none" });
+      return;
+    }
+    this.discardPreviewToken();
+    this.setData({ "studentForm.studentId": saved.studentId, "studentForm.password": "" });
+    this.runPersonalScheduleSync({
+      studentId: saved.studentId,
+      password: saved.password,
+      usingSavedPassword: true,
+      quickResync: true,
+    });
+  },
+
+  presentIdentityConfirm(preview, studentId, stage) {
     const profile = preview && preview.profile || {};
     const name = reliableProfileText(profile.studentName);
     const displayInfo = buildApaasScheduleDisplay(preview);
@@ -1283,7 +1340,7 @@ Page({
     const patch = {
       activeImportMethod: "student",
       studentImportLoading: false,
-      studentImportStage: "identity-confirm",
+      studentImportStage: stage || "identity-confirm",
       campusLinkStatus: "connected",
       studentPreviewToken: preview.importPreviewToken || "",
       campusSyncJobId: preview.campusSyncJobId || "",
@@ -1302,12 +1359,18 @@ Page({
     };
     if (recent) patch.recentStudentImport = recent;
     this.stopStudentLoadingSteps();
-    this.setData(patch);
+    this.setData(patch, () => {
+      if ((stage || "") === "preview") this.prepareStudentPreview(patch.studentPreviewResult);
+    });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
   },
 
   confirmStudentIdentity() {
     if (!this.data.studentPreviewResult) return;
+    personalSyncCredentialStore.confirmIdentity({
+      studentId: this.data.identityStudentId || this.data.studentForm.studentId,
+      confirmedStudentName: this.data.identityNameMissing ? "" : this.data.identityStudentName,
+    });
     this.setData({
       studentImportStage: "preview",
       "studentForm.password": "",
@@ -1317,7 +1380,31 @@ Page({
   },
 
   reenterStudentIdentity() {
-    this.resyncStudentImport();
+    this.discardPreviewToken();
+    this.returnToAccountForm();
+    this.applySavedCredential();
+  },
+
+  confirmClearSavedCredential() {
+    wx.showModal({
+      title: "清除已保存账号？",
+      content: "清除后，下次同步需要重新输入学校账号密码。已导入的个人课表不会被删除。",
+      confirmText: "清除",
+      cancelText: "取消",
+      success: (res) => {
+        if (!res.confirm) return;
+        personalSyncCredentialStore.remove();
+        this.setData({
+          credentialSaved: false,
+          hasSavedPassword: false,
+          studentForm: {
+            studentId: "",
+            password: "",
+            privacyConfirmed: false,
+          },
+        });
+      },
+    });
   },
 
   togglePageRemarks() {
@@ -1537,7 +1624,7 @@ Page({
       studentPreviewWeek: targetWeek,
       studentPreviewGrid: buildStudentPreviewGrid(arrangements, targetWeek, selectedMap, editedMap),
       studentPreviewBuckets: buckets,
-      studentAdvancedTabs: buckets.map((bucket) => Object.assign({}, bucket, {
+      studentAdvancedTabs: buckets.filter((bucket) => bucket.key === "recommended" || Number(bucket.arrangementCount || 0) > 0).map((bucket) => Object.assign({}, bucket, {
         active: bucket.key === activeBucket,
         countText: `${bucket.arrangementCount || 0}`,
       })),
@@ -1831,30 +1918,61 @@ Page({
   },
 
   validateStudentForm() {
-    const form = this.data.studentForm || {};
-    const studentId = String(form.studentId || "").trim();
-    if (!/^\d{6,20}$/.test(studentId)) {
-      wx.showToast({ title: "请输入正确学号", icon: "none" });
-      return null;
+    return this.resolveSyncCredential();
+  },
+
+  finishPersonalScheduleRead(preview, credential) {
+    const studentId = credential && credential.studentId || "";
+    const password = credential && credential.password || "";
+    if (studentId && password) {
+      personalSyncCredentialStore.saveSuccessfulLogin({ studentId, password });
     }
-    if (!String(form.password || "")) {
-      wx.showToast({ title: "请输入学校账号密码", icon: "none" });
-      return null;
+    if (credential) credential.password = "";
+    const saved = personalSyncCredentialStore.read();
+    const parsedName = reliableProfileText(preview && preview.profile && preview.profile.studentName);
+    this.setData({
+      credentialSaved: Boolean(saved),
+      hasSavedPassword: Boolean(saved && saved.password),
+      "studentForm.password": "",
+      "studentForm.studentId": studentId || this.data.studentForm.studentId,
+    });
+    if (credential && credential.quickResync && personalSyncCredentialStore.sameConfirmedIdentity(saved, studentId, parsedName)) {
+      this.presentIdentityConfirm(preview, studentId, "preview");
+      wx.showToast({ title: "课表读取完成", icon: "success" });
+      return;
     }
-    if (!form.privacyConfirmed) {
-      wx.showToast({ title: "请先确认本人授权", icon: "none" });
-      return null;
+    this.presentIdentityConfirm(preview, studentId);
+  },
+
+  handlePersonalSyncFailure(error, credential) {
+    const code = error && (error.code || error.reasonCode || (error.payload && error.payload.code)) || "";
+    const usedSavedPassword = Boolean(credential && credential.usingSavedPassword);
+    if (usedSavedPassword && (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED")) {
+      personalSyncCredentialStore.clearPassword();
+      this.returnToAccountForm();
+      this.setData({ hasSavedPassword: false, credentialSaved: Boolean(personalSyncCredentialStore.read()) });
+      wx.showModal({
+        title: "需要重新输入密码",
+        content: "已保存的学校账号密码可能已失效，请重新输入。",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+      return;
     }
-    return {
-      studentId,
-      password: String(form.password || ""),
-    };
+    this.returnToAccountForm();
+    this.applySavedCredential();
+    this.showStudentImportError(code || "AGENT_OFFLINE", error && error.message);
   },
 
   async validateAndPreviewStudentImport() {
     if (this.data.studentImportLoading) return;
-    const form = this.validateStudentForm();
+    const form = this.resolveSyncCredential();
     if (!form) return;
+    this.runPersonalScheduleSync(form);
+  },
+
+  async runPersonalScheduleSync(form) {
+    if (this.data.studentImportLoading || !form || !form.studentId || !form.password) return;
     const selectedRecord = this.data.termRecords[this.data.semesterIndex];
     if (selectedRecord && !selectedRecord.importable) {
       wx.showToast({ title: "该学期暂不能导入", icon: "none" });
@@ -1907,18 +2025,24 @@ Page({
           password: plainPassword,
           semester: previewExtra.semester,
         });
+        const acceptedPassword = plainPassword;
         plainPassword = "";
         this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程" });
-        this.setData({ "studentForm.password": "" });
-        this.presentIdentityConfirm(preview, form.studentId);
+        this.finishPersonalScheduleRead(preview, {
+          studentId: form.studentId,
+          password: acceptedPassword,
+          usingSavedPassword: form.usingSavedPassword,
+          quickResync: form.quickResync,
+        });
+        form.password = "";
         enteredPreview = true;
       } catch (error) {
         plainPassword = "";
+        form.password = "";
         this.setData({ "studentForm.password": "" });
         if (!enteredPreview) {
           this.stopStudentLoadingSteps();
-          this.returnToAccountForm();
-          this.showStudentImportError(error && (error.code || error.reasonCode) || "AGENT_OFFLINE", error && error.message);
+          this.handlePersonalSyncFailure(error, form);
         }
       }
       return;
@@ -1952,6 +2076,7 @@ Page({
         password: plainPassword,
         semester: previewExtra.semester,
       });
+      const acceptedPassword = plainPassword;
       plainPassword = "";
       this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程" });
       noteDirectStage("direct-preview");
@@ -1964,12 +2089,18 @@ Page({
       });
       timetable = null;
       noteDirectStage("direct-preview", { httpStatus: 200 });
-      this.setData({ "studentForm.password": "" });
       logStudentImportDiagnostics(preview);
-      this.presentIdentityConfirm(preview, form.studentId);
+      this.finishPersonalScheduleRead(preview, {
+        studentId: form.studentId,
+        password: acceptedPassword,
+        usingSavedPassword: form.usingSavedPassword,
+        quickResync: form.quickResync,
+      });
+      form.password = "";
       enteredPreview = true;
     } catch (error) {
       plainPassword = "";
+      form.password = "";
       timetable = null;
       const code = error && (error.code || (error.payload && error.payload.code)) || "";
       if (this.directSyncAbandoned || code === "DIRECT_SYNC_CANCELLED") return;
@@ -1979,16 +2110,7 @@ Page({
         redirect: error && error.safeRedirect,
       });
       this.stopStudentLoadingSteps();
-      this.setData({
-        studentImportLoading: false,
-        activeImportMethod: "method",
-        campusLinkStatus: code === "DIRECT_NETWORK_ERROR" ? "unavailable" : this.data.campusLinkStatus,
-        studentImportStage: "form",
-        "studentForm.password": "",
-        studentImportStatusMessage: "",
-      });
-      const payload = error && error.payload || {};
-      this.showStudentImportError(payload.code || error.code, payload.message || error.message);
+      this.handlePersonalSyncFailure(error, form);
     } finally {
       plainPassword = "";
       timetable = null;

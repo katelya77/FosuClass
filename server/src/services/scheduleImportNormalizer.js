@@ -415,6 +415,21 @@ function classScopeReasonForArrangement(arrangement) {
 }
 
 function decisionForArrangement(arrangement) {
+  if (arrangement && arrangement.trustedPersonalSchedule) {
+    if (!arrangement.hasCompleteTime) {
+      return {
+        importDecision: IMPORT_DECISION.UNSCHEDULED,
+        confidence: "low",
+        reason: "缺少星期、节次或周次，补充后可加入。",
+      };
+    }
+    return {
+      importDecision: IMPORT_DECISION.AUTO_INCLUDE,
+      confidence: "high",
+      reason: "个人课表时间信息完整，默认加入。",
+    };
+  }
+
   const classStatus = arrangement.classScopeStatus;
   const localStatus = arrangement.matchStatus;
   const localMatched = isLocalMatched(localStatus);
@@ -1010,6 +1025,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       arrangement.teacherName = toText(localMatch.matchedCourse.teacherName);
     }
     if (options.reliableClassScope === false) arrangement.reliableClassScope = false;
+    if (options.scheduleOwnership === "personal") arrangement.trustedPersonalSchedule = true;
     Object.assign(arrangement, decisionForArrangement(arrangement));
     arrangement.selectedByDefault = arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE;
 
