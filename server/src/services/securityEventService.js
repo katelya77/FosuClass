@@ -23,6 +23,28 @@ function prune(now = Date.now()) {
   }
 }
 
+const aggregates = new Map();
+
+function recordAggregatedSecurityEvent(event, payload = {}) {
+  const reason = String(payload.reasonCode || payload.code || "UNSPECIFIED");
+  const bucket = String(payload.sourceBucket || payload.anonymizedIp || payload.openidHashPrefix || "unknown").slice(0, 32);
+  const minute = Math.floor(Date.now() / 60000);
+  const key = `${event}|${reason}|${bucket}|${minute}`;
+  const existing = aggregates.get(key);
+  if (existing) {
+    existing.count = (existing.count || 1) + 1;
+    return existing;
+  }
+  if (aggregates.size > 300) {
+    const oldest = aggregates.keys().next().value;
+    if (oldest) aggregates.delete(oldest);
+  }
+  const item = recordSecurityEvent(event, payload);
+  item.count = 1;
+  aggregates.set(key, item);
+  return item;
+}
+
 function recordSecurityEvent(event, payload = {}) {
   const item = {
     event,
@@ -134,5 +156,6 @@ function clearExpiredSecurityEvents() {
 module.exports = {
   clearExpiredSecurityEvents,
   getSecurityEventSummary,
+  recordAggregatedSecurityEvent,
   recordSecurityEvent,
 };

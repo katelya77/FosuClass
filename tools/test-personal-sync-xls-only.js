@@ -60,9 +60,10 @@ function run() {
   assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {})"), "student import should centralize display student id priority");
   assert(js.includes("return metadata.studentId || profile.studentId || metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
     "student import UI must prefer full studentId before masked value");
-  assert(wxml.includes("检测到周末课程，可在调整课程中查看"), "student preview should show a weekend-course hint");
-  assert(js.includes("STUDENT_WEEKDAY_LABELS.slice(0, 5)"), "student preview grid should default to weekdays only");
-  assert(previewGridJs.includes("Array.from({ length: 5 }"), "preview grid fallback days should be Monday to Friday");
+  assert(wxml.includes("day-count=\"7\""), "student preview should request seven day columns");
+  assert(js.includes("STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label }))"), "student preview grid should include Saturday and Sunday");
+  assert(!wxml.includes("检测到周末课程，可在调整课程中查看"), "weekend courses should render in the grid");
+  assert(previewGridJs.includes("Number(count) === 7 ? 7 : 5"), "preview grid should keep a five-day fallback unless seven days are requested");
   assert(js.includes("function studentPreviewLayerPriority"), "student preview should rank current-week/selected courses before rendering");
   assert(js.includes("activeInPreviewWeek: true"), "student preview grid cells should mark current preview-week courses");
   assert(js.includes("cell.zIndex = 1 + cell.previewLayerPriority;"), "student preview should assign bounded z-index from preview priority");

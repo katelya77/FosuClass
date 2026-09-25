@@ -1,0 +1,61 @@
+const express = require("express");
+const adminAuth = require("../../services/adminAuth");
+const { verifyAdminWriteAccess, writeAuditLog } = require("../../services/adminWriteGuard");
+const ops = require("../../services/campusSyncOpsService");
+const telemetry = require("../../services/campusSyncTelemetryService");
+const control = require("../../services/campusSyncControl");
+
+const router = express.Router();
+
+router.get("/campus-sync/overview", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json({ success: true, overview: ops.overview() });
+});
+
+router.get("/campus-sync/timeseries", adminAuth.verifyAdminAccess, (req, res) => {
+  const range = ["1h", "24h", "7d", "30d"].indexOf(String(req.query.range || "24h")) >= 0 ? String(req.query.range) : "24h";
+  res.json({ success: true, range, points: telemetry.timeseries(range) });
+});
+
+router.get("/campus-sync/events", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json(Object.assign({ success: true }, telemetry.listRecent({
+    limit: req.query.limit,
+    cursor: req.query.cursor,
+    status: req.query.status,
+    errorCode: req.query.errorCode,
+    from: req.query.from,
+    to: req.query.to,
+  })));
+});
+
+router.get("/campus-sync/security", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json({ success: true, security: ops.securitySummary() });
+});
+
+router.get("/campus-sync/config", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json({ success: true, config: ops.runtimeConfig() });
+});
+
+router.post("/campus-sync/actions/pause", verifyAdminWriteAccess, (req, res) => {
+  const state = control.pause("admin");
+  writeAuditLog(req, "campus-sync-pause", "campus-sync", "maintenance", "暂停新的个人课表同步");
+  res.json({ success: true, maintenance: state });
+});
+
+router.post("/campus-sync/actions/resume", verifyAdminWriteAccess, (req, res) => {
+  const state = control.resume();
+  writeAuditLog(req, "campus-sync-resume", "campus-sync", "maintenance", "恢复个人课表同步");
+  res.json({ success: true, maintenance: state });
+});
+
+router.post("/campus-sync/actions/diagnose", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const report = ops.diagnose();
+    writeAuditLog(req, "campus-sync-diagnose", "campus-sync", "diagnose", "轻量诊断");
+    res.json({ success: true, report });
+  } catch (error) {
+    const status = error && error.code === "DIAGNOSE_COOLDOWN" ? 429 : 500;
+    res.status(status).json({ success: false, code: error && error.code || "DIAGNOSE_FAILED", message: "诊断请稍后再试。" });
+  }
+});
+
+module.exports = router;

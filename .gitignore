@@ -37,7 +37,7 @@ server/.env
 server/node_modules/
 server/storage/*.json
 server/storage/*.jsonl
-server/storage/secure/
+server/storage/ops/
 server/storage/releases/
 server/storage/terms/
 !server/storage/terms/

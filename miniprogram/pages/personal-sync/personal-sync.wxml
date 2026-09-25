@@ -116,7 +116,7 @@
         <view class="preview-card-head">
           <view>
             <view class="student-preview-title">推荐课表预览</view>
-            <view class="student-preview-caption">显示当前周推荐导入课程。</view>
+        <view class="student-preview-caption">{{studentPreviewMeta || '显示当前周课程，包含周六和周日。'}}</view>
           </view>
         </view>
         <view class="week-switcher week-switcher-row">
@@ -124,9 +124,8 @@
           <text class="week-label">第{{studentPreviewWeek}}周</text>
           <button class="week-btn" data-delta="1" bindtap="onStudentPreviewWeekShift" disabled="{{studentPreviewWeek >= 19}}">›</button>
         </view>
-        <view class="student-weekend-tip" wx:if="{{studentPreviewGrid.hasWeekendCourses}}">检测到周末课程，可在调整课程中查看</view>
         <view class="grid-shell">
-          <schedule-preview-grid grid="{{studentPreviewGrid}}" section-height="66" day-column-width="120" bind:course="onStudentPreviewCourseTap" />
+          <schedule-preview-grid grid="{{studentPreviewGrid}}" section-height="66" day-column-width="96" day-count="7" bind:course="onStudentPreviewCourseTap" />
         </view>
       </view>
 
@@ -195,6 +194,7 @@
       </view>
 
       <view class="preview-actions student-bottom-actions">
+        <view class="student-apply-status" wx:if="{{studentImportConfirming}}">正在应用课表…</view>
         <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">确认并设为当前课表</button>
         <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '返回预览' : '继续调整'}}</button>
       </view>

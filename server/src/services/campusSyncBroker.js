@@ -1,9 +1,33 @@
 const { createMemoryCampusSyncJobStore } = require("./campusSyncJobStore");
 const { createCampusAgentStudentSchedulePreview } = require("./fosuDirectPreviewService");
 const { safeLog } = require("../utils/safeLogger");
+const circuit = require("./campusSyncCircuitBreaker");
+const control = require("./campusSyncControl");
+const telemetry = require("./campusSyncTelemetryService");
 
 const CLAIM_WAIT_MS = 25000;
-const store = createMemoryCampusSyncJobStore();
+const store = createMemoryCampusSyncJobStore({
+  onTerminal(info) {
+    const job = info && info.job || {};
+    const code = info && info.code || "";
+    circuit.observe(code, info && info.now);
+    try { control.persistCircuit(); } catch (error) {}
+    telemetry.record({
+      t: info && info.now || Date.now(),
+      jobId: job.jobId,
+      ownerKey: job.ownerKey,
+      principalHashPrefix: String(job.ownerKey || "").slice(0, 8),
+      status: job.status,
+      resultCode: code === "OK" ? "OK" : (job.errorCode || code),
+      queueWaitMs: job.queueWaitMs || 0,
+      durationMs: job.createdAt ? Math.max(0, (job.completedAt || info.now || Date.now()) - job.createdAt) : 0,
+      courseCount: job.courseCount || 0,
+      retryCount: job.retryCount || 0,
+      requestId: job.requestId || "",
+      source: job.source || "campus-sync",
+    });
+  },
+});
 const waiters = [];
 
 function ownerKeyFromRequest(req) {
@@ -51,27 +75,47 @@ function createJob(req, body) {
     error.code = "INVALID_CREDENTIALS";
     throw error;
   }
+  if (control.isPaused()) {
+    const error = new Error("CAMPUS_SYNC_MAINTENANCE");
+    error.code = "CAMPUS_SYNC_MAINTENANCE";
+    throw error;
+  }
+  const gate = circuit.allow(Date.now());
+  if (!gate.ok) {
+    const error = new Error("CAMPUS_SYNC_DEGRADED");
+    error.code = "CAMPUS_SYNC_DEGRADED";
+    throw error;
+  }
   const ownerKey = ownerKeyFromRequest(req);
   const now = Date.now();
-  if (store.hasActive(ownerKey)) {
-    const error = new Error("JOB_ALREADY_ACTIVE");
-    error.code = "JOB_ALREADY_ACTIVE";
+  try {
+    if (store.hasActive(ownerKey)) {
+      const error = new Error("JOB_ALREADY_ACTIVE");
+      error.code = "JOB_ALREADY_ACTIVE";
+      throw error;
+    }
+    if (!store.allowAttempt(ownerKey, now)) {
+      telemetry.recordAttempt("IMPORT_RATE_LIMITED");
+      const error = new Error("IMPORT_RATE_LIMITED");
+      error.code = "IMPORT_RATE_LIMITED";
+      throw error;
+    }
+    const job = store.put({
+      studentId,
+      password,
+      semester: body && body.semester || "",
+      ownerKey,
+      requestId: body && body.requestId || "",
+      source: "campus-sync",
+    }, now);
+    safeLog("campus-sync-job-queued", { jobId: job.jobId });
+    deliverWaiter();
+    return { jobId: job.jobId, status: "queued" };
+  } catch (error) {
+    if (gate.probe) circuit.observe("USER_REJECTED", now);
+    if (error && error.code === "CAMPUS_SYNC_BUSY") telemetry.recordAttempt("CAMPUS_SYNC_BUSY");
     throw error;
   }
-  if (!store.allowAttempt(ownerKey, now)) {
-    const error = new Error("IMPORT_RATE_LIMITED");
-    error.code = "IMPORT_RATE_LIMITED";
-    throw error;
-  }
-  const job = store.put({
-    studentId,
-    password,
-    semester: body && body.semester || "",
-    ownerKey: ownerKeyFromRequest(req),
-  }, Date.now());
-  safeLog("campus-sync-job-queued", { jobId: job.jobId });
-  deliverWaiter();
-  return { jobId: job.jobId, status: "queued" };
 }
 
 function readJob(req, jobId) {
@@ -148,8 +192,11 @@ function availability() {
   const now = Date.now();
   const online = store.agentOnline(now);
   const snapshot = store.snapshot(now);
+  const breaker = circuit.snapshot(now);
+  if (control.isPaused()) return { online, status: "maintenance" };
   let status = "unavailable";
-  if (online && snapshot.queuedJobs + snapshot.processingJobs >= snapshot.activeCap) status = "busy";
+  if (breaker.state === "OPEN") status = "degraded";
+  else if (online && snapshot.queuedJobs + snapshot.processingJobs >= snapshot.activeCap) status = "busy";
   else if (online) status = "available";
   return { online, status };
 }
@@ -172,7 +219,11 @@ function cancelJob(req, jobId) {
 
 function discardJob(req, jobId) {
   const job = store.get(jobId);
-  if (!job || job.ownerKey !== ownerKeyFromRequest(req)) return { jobId, status: "gone" };
+  if (!job || job.ownerKey !== ownerKeyFromRequest(req)) {
+    const error = new Error("JOB_NOT_FOUND");
+    error.code = "JOB_NOT_FOUND";
+    throw error;
+  }
   if (job.status === "queued" || job.status === "claimed" || job.status === "processing") {
     const error = new Error("JOB_NOT_CANCELLABLE");
     error.code = "JOB_NOT_CANCELLABLE";
@@ -185,6 +236,9 @@ function discardJob(req, jobId) {
 function resetCampusSyncForTests() {
   jobsClear();
   waiters.length = 0;
+  circuit.resetForTests();
+  telemetry.resetForTests();
+  control.resetForTests();
 }
 
 function jobsClear() {

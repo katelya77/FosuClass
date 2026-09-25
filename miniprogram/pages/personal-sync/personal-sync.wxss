@@ -1782,6 +1782,12 @@
   gap: 16rpx;
 }
 
+.student-apply-status {
+  margin-bottom: 8rpx;
+  color: #667085;
+  font-size: 24rpx;
+  text-align: center;
+}
 .student-bottom-actions .btn-bind,
 .student-bottom-actions .btn-cancel {
   flex: 1;

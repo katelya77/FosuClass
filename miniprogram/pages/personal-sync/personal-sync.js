@@ -645,6 +645,20 @@ function sortStudentPreviewGridCells(cells) {
   });
 }
 
+function buildStudentPreviewMeta(result, week, arrangements) {
+  const summary = result && result.summary || {};
+  const metadata = result && result.metadata || {};
+  const semester = summary.semester || metadata.semester || metadata.term || result && result.term || "";
+  const courseCount = Number(summary.scheduledCourseCount || summary.arrangementCount || (arrangements || []).length || 0);
+  const readAt = result && (result.readAt || result.fetchedAt || metadata.readAt || metadata.fetchedAt) || "";
+  const parts = [];
+  if (semester) parts.push(String(semester));
+  if (courseCount > 0) parts.push(`${courseCount} 门课程`);
+  if (week) parts.push(`第${week}周`);
+  if (readAt) parts.push(`读取于 ${String(readAt).slice(0, 16).replace("T", " ")}`);
+  return parts.join(" · ");
+}
+
 function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   const targetWeek = clampPreviewWeek(week);
   const prepared = (arrangements || [])
@@ -653,7 +667,7 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   const hasWeekendCourses = prepared.some((arrangement) => Number(arrangement.weekday) === 6 || Number(arrangement.weekday) === 7);
   const cells = prepared
     .filter((arrangement) => arrangement && !needsTimeCompletion(arrangement) && arrangementActiveInWeek(arrangement, targetWeek))
-    .filter((arrangement) => Number(arrangement.weekday) >= 1 && Number(arrangement.weekday) <= 5)
+    .filter((arrangement) => Number(arrangement.weekday) >= 1 && Number(arrangement.weekday) <= 7)
     .map((arrangement) => {
       const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, arrangement.arrangementId)
         ? Boolean(selectedMap[arrangement.arrangementId])
@@ -696,7 +710,7 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   return {
     week: targetWeek,
     hasWeekendCourses,
-    days: STUDENT_WEEKDAY_LABELS.slice(0, 5).map((label, index) => ({ weekday: index + 1, label })),
+    days: STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label })),
     sections: Array.from({ length: 14 }, (_, index) => ({ section: index + 1, label: `${index + 1}` })),
     cells: sortStudentPreviewGridCells(cells),
   };
@@ -982,13 +996,19 @@ Page({
   },
 
   applySyncServiceStatus(body) {
-    const status = body && body.status === "busy"
+    const status = body && body.status === "maintenance"
+      ? "maintenance"
+      : (body && body.status === "busy"
       ? "busy"
-      : (body && (body.status === "available" || body.online) ? "available" : "unavailable");
+      : (body && body.status === "degraded"
+        ? "degraded"
+        : (body && (body.status === "available" || body.online) ? "available" : "unavailable")));
     const copy = {
       checking: ["正在检测同步服务", "输入学号和学校密码即可同步"],
       available: ["同步服务正常", "输入学号和学校密码即可同步"],
       busy: ["当前同步人数较多", "可以稍后再试"],
+      degraded: ["同步服务暂时不可用", "请稍后再试"],
+      maintenance: ["同步服务维护中，请稍后再试", "可以先使用文件导入"],
       unavailable: ["同步服务暂时维护", "请稍后再试，或先使用文件导入"],
     };
     const pair = copy[status] || copy.unavailable;
@@ -1411,6 +1431,7 @@ Page({
       studentProfileClass: reliableProfileText(profile.className),
       studentPreviewNotice: studentPreviewNotice(summary, conflictCount),
       studentClassConfidenceWarning: classConfidenceWarning,
+      studentPreviewMeta: buildStudentPreviewMeta(result, targetWeek, arrangements),
     });
   },
 
@@ -2231,7 +2252,7 @@ Page({
       editedArrangements: this.getEditedStudentArrangements(),
       existingCourses: getExistingPersonalCoursesForStudentImport(),
     }, {
-      loadingTitle: "正在导入...",
+      showLoading: false,
       silentError: true,
       timeout: 20000,
       retries: 0,
@@ -2378,6 +2399,8 @@ Page({
       content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
     } else if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
       content = "学校账号或密码不正确";
+    } else if (code === "CAMPUS_SYNC_MAINTENANCE") {
+      content = "同步服务维护中，请稍后再试";
     } else if (code === "CAMPUS_SYNC_BUSY") {
       content = "当前同步人数较多，请稍后再试。";
     } else if (code === "AGENT_OFFLINE" || code === "CAMPUS_AGENT_NOT_AVAILABLE") {

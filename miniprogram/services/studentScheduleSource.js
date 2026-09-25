@@ -45,15 +45,36 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function obtainFreshWxCode(options) {
+  if (options && options.wxCode) return String(options.wxCode);
+  const login = options && options.login;
+  if (typeof login === "function") {
+    const result = await login();
+    return result && result.code ? String(result.code) : "";
+  }
+  const wxApi = typeof wx !== "undefined" ? wx : null;
+  if (!wxApi || typeof wxApi.login !== "function") throw unsupported("WECHAT_PROOF_UNAVAILABLE");
+  const result = await new Promise((resolve, reject) => {
+    wxApi.login({
+      success: (res) => resolve(res || {}),
+      fail: () => reject(unsupported("WECHAT_PROOF_UNAVAILABLE")),
+    });
+  });
+  if (!result.code) throw unsupported("WECHAT_PROOF_UNAVAILABLE");
+  return String(result.code);
+}
+
 async function readViaCampusAgent(options) {
   const http = options && options.http;
   if (!http || typeof http.post !== "function" || typeof http.get !== "function") {
     throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
   }
+  const wxCode = await obtainFreshWxCode(options);
   const created = await http.post("/api/campus-sync/jobs", {
     studentId: options.studentId,
     password: options.password,
     semester: options.semester || "",
+    wxCode,
   });
   const jobId = created && (created.jobId || created.data && created.data.jobId);
   if (!jobId) throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");

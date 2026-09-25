@@ -99,10 +99,12 @@ const largeJsonParser = express.json({
     if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0) req.rawBody = buf;
   },
 });
+const campusSyncJsonParser = express.json({ limit: process.env.CAMPUS_SYNC_JSON_BODY_LIMIT || "8kb" });
 const personalXlsJsonParser = express.json({ limit: PERSONAL_XLS_BODY_LIMIT });
 
 function selectJsonParser(req) {
   const routePath = String(req.path || "");
+  if (req.method === "POST" && routePath === "/api/campus-sync/jobs") return campusSyncJsonParser;
   if (routePath === "/api/fosu/personal/import-xls") return personalXlsJsonParser;
   if (
     routePath.indexOf("/api/admin/sync/") === 0 ||
@@ -230,10 +232,11 @@ app.use((err, req, res, next) => {
       limit: err.limit,
       length: err.length,
     });
+    const campusSyncJob = String(req.path || "") === "/api/campus-sync/jobs";
     return res.status(413).json({
       success: false,
-      code: "PAYLOAD_TOO_LARGE",
-      message: "上传数据过大，请使用分块上传或缩小同步范围。",
+      code: campusSyncJob ? "CAMPUS_SYNC_BODY_REJECTED" : "PAYLOAD_TOO_LARGE",
+      message: campusSyncJob ? "请求格式不正确。" : "上传数据过大，请使用分块上传或缩小同步范围。",
     });
   }
 

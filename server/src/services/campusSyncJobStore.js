@@ -17,7 +17,18 @@ const DAILY_WINDOW_MS = 86400000;
 const GLOBAL_ACTIVE_CAP = Math.max(1, seconds("CAMPUS_SYNC_GLOBAL_ACTIVE_CAP", 10));
 const MAX_JOBS = Math.max(GLOBAL_ACTIVE_CAP, seconds("CAMPUS_SYNC_MAX_JOBS", 200));
 
-function createMemoryCampusSyncJobStore() {
+function courseCountOf(preview) {
+  if (!preview || typeof preview !== "object") return 0;
+  const summary = preview.summary || {};
+  const named = Number(summary.scheduledCourseCount || summary.arrangementCount || summary.courseCount || 0);
+  if (Number.isFinite(named) && named > 0) return Math.round(named);
+  if (Array.isArray(preview.courses)) return preview.courses.length;
+  if (Array.isArray(preview.arrangements)) return preview.arrangements.length;
+  return 0;
+}
+
+function createMemoryCampusSyncJobStore(hooks) {
+  const listener = hooks && typeof hooks.onTerminal === "function" ? hooks.onTerminal : null;
   const jobs = new Map();
   const attempts = new Map();
   const daily = new Map();
@@ -54,6 +65,31 @@ function createMemoryCampusSyncJobStore() {
     if (metrics.durations.length > 200) metrics.durations.shift();
   }
 
+  function emit(code, job, now) {
+    if (!listener || !job) return;
+    try {
+      listener({
+        code: String(code || ""),
+        job: {
+          jobId: job.jobId,
+          status: job.status,
+          errorCode: job.errorCode || "",
+          createdAt: job.createdAt,
+          completedAt: job.completedAt || now,
+          queueWaitMs: job.queueWaitMs || 0,
+          ownerKey: job.ownerKey || "",
+          courseCount: job.courseCount || 0,
+          retryCount: job.retryCount || 0,
+          requestId: job.requestId || "",
+          source: job.source || "campus-sync",
+        },
+        now,
+      });
+    } catch (error) {
+      // Telemetry must not break job completion.
+    }
+  }
+
   function gc(now) {
     const drop = [];
     jobs.forEach((job, jobId) => {
@@ -64,6 +100,8 @@ function createMemoryCampusSyncJobStore() {
         wipe(job);
         metrics.expired += 1;
         noteError("TIMEOUT");
+        noteDuration(job, now);
+        emit("TIMEOUT", job, now);
       }
       const terminal = job.status === "completed" || job.status === "failed" || job.status === "expired" || job.status === "cancelled";
       if (!terminal) return;
@@ -108,6 +146,11 @@ function createMemoryCampusSyncJobStore() {
         password: String(input.password || ""),
         semester: String(input.semester || ""),
         ownerKey: String(input.ownerKey || ""),
+        requestId: String(input.requestId || ""),
+        source: String(input.source || "campus-sync"),
+        retryCount: 0,
+        queueWaitMs: 0,
+        courseCount: 0,
         createdAt: now,
         expiresAt: now + JOB_TTL_MS,
         errorCode: "",
@@ -151,6 +194,8 @@ function createMemoryCampusSyncJobStore() {
       if (!job) return null;
       job.status = "claimed";
       job.agentId = String(agentId || "");
+      job.claimedAt = now;
+      job.queueWaitMs = Math.max(0, now - job.createdAt);
       return job;
     },
     takeCredential(jobId) {
@@ -172,6 +217,7 @@ function createMemoryCampusSyncJobStore() {
       job.status = "cancelled";
       job.completedAt = now;
       wipe(job);
+      emit("CANCELLED", job, now);
       return job;
     },
     complete(jobId, preview, now) {
@@ -179,11 +225,13 @@ function createMemoryCampusSyncJobStore() {
       if (!job) return null;
       job.status = "completed";
       job.preview = preview;
+      job.courseCount = courseCountOf(preview);
       job.completedAt = now;
       wipe(job);
       metrics.completed += 1;
       metrics.lastSuccessAt = now;
       noteDuration(job, now);
+      emit("OK", job, now);
       return job;
     },
     fail(jobId, errorCode, now) {
@@ -196,6 +244,7 @@ function createMemoryCampusSyncJobStore() {
       metrics.failed += 1;
       noteError(job.errorCode);
       noteDuration(job, now);
+      emit(job.errorCode, job, now);
       return job;
     },
     heartbeat(now) {
@@ -255,5 +304,10 @@ function createMemoryCampusSyncJobStore() {
 module.exports = {
   HEARTBEAT_TTL_MS,
   JOB_TTL_MS,
+  PREVIEW_TTL_MS,
+  RATE_LIMIT,
+  RATE_WINDOW_MS,
+  DAILY_LIMIT,
+  GLOBAL_ACTIVE_CAP,
   createMemoryCampusSyncJobStore,
 };
