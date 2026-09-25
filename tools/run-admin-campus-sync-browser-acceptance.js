@@ -34,6 +34,13 @@ function page(seed) {
           seed.overview.pipeline[1].status = "ok";
           return Promise.resolve({ success: true, maintenance: seed.overview.maintenance });
         }
+        if (url.indexOf("snapshot") >= 0) {
+          return new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve({ success: true, snapshot: { generatedAt: "2026-09-26T00:00:00.000Z", service: { status: seed.overview.status, maintenance: seed.overview.maintenance, agent: seed.overview.agent, queue: seed.overview.queue, circuit: { state: seed.mode === "circuit" ? "OPEN" : "CLOSED" }, pipeline: seed.overview.pipeline, securityPosture: seed.overview.securityPosture }, policy: seed.policy } });
+            }, seed.delays && seed.delays.snapshot || 0);
+          });
+        }
         if (method === "PUT" && url.indexOf("policy") >= 0) {
           if (seed.mode === "save-failed") {
             var failed = new Error("策略暂时无法保存。");
@@ -53,12 +60,18 @@ function page(seed) {
           seed.policy = Object.assign({}, seed.policy, { rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, source: "environment", revision: "rev-default", updatedBy: "admin" });
         }
         if (url.indexOf("overview") >= 0) return Promise.resolve({ success: true, overview: seed.overview });
-        if (url.indexOf("timeseries") >= 0) return Promise.resolve({ points: seed.points });
+        if (url.indexOf("timeseries") >= 0) {
+          if (seed.mode === "trend-failed") return Promise.reject(new Error("trend"));
+          return new Promise(function (resolve) { setTimeout(function () { resolve({ points: seed.points }); }, seed.delays && seed.delays.trend || 0); });
+        }
         if (url.indexOf("security") >= 0) return Promise.resolve({ security: seed.security });
         if (url.indexOf("config") >= 0) return Promise.resolve({ config: seed.config });
         if (url.indexOf("policy") >= 0) return Promise.resolve({ success: true, policy: seed.policy, usage: seed.usage, message: "已保存 · 立即生效" });
         if (url.indexOf("diagnose") >= 0) return Promise.resolve({ report: seed.diagnose });
-        if (url.indexOf("events") >= 0) return Promise.resolve({ events: seed.events, nextCursor: "" });
+        if (url.indexOf("events") >= 0) {
+          if (seed.mode === "events-failed") return Promise.reject(new Error("events"));
+          return Promise.resolve({ events: seed.events, nextCursor: "" });
+        }
         return Promise.resolve({});
       }
       ${CAMPUS_SYNC_SCRIPT}
@@ -97,6 +110,7 @@ function seed(mode) {
       policy: { perUserConcurrency: 1, rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, jobTtlSeconds: 90, source: mode === "storage" ? "environment" : "runtime", storageStatus: mode === "storage" ? "invalid" : "ok", revision: "rev-1", updatedAt: "2026-09-25T01:00:00.000Z", updatedBy: "admin" },
       usage: { attempts: mode === "empty" ? 0 : 4, success: 3, failed: 1, rateLimited: mode === "limited" ? 2 : 0, activeUsers: 2, shortLimitedUsers: mode === "limited" ? 1 : 0, dailyLimitedUsers: 0, maxAccepted: 2, topUserPrefix: "a83f29xx", remaining: { zero: 0, oneToThree: 1, fourToSeven: 1, eightPlus: 0 } },
       diagnose: { broker: "ok", agentHeartbeat: "online", circuit: "CLOSED", policy: { source: "environment" }, quota: { healthy: true }, diskWritable: true, schoolGateway: "暂无近期真实任务" },
+      delays: { snapshot: mode === "loading" ? 4000 : 0, trend: mode === "trend-loading" ? 4000 : 0 },
     },
   };
 }
@@ -141,11 +155,23 @@ async function run() {
     ["empty", 1280, 800, "empty", "light"],
     ["limited", 1280, 800, "limited", "light"],
     ["save-failed", 1280, 800, "save-failed", "light"],
+    ["trend-loading", 1280, 800, "trend-loading", "light"],
+    ["trend-failed", 1280, 800, "trend-failed", "light"],
+    ["events-failed", 1280, 800, "events-failed", "light"],
   ];
   for (const [name, width, height, mode, theme] of shots) {
     const pageHandle = await browser.newPage({ viewport: { width, height } });
     await pageHandle.goto(`http://127.0.0.1:${port}/?mode=${mode}&theme=${theme}`);
+    if (mode === "loading") {
+      await pageHandle.waitForSelector("#csLoading");
+      await pageHandle.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: true });
+      await pageHandle.close();
+      continue;
+    }
     await pageHandle.waitForSelector("#csOverview .cs-stat");
+    if (mode === "trend-loading") await pageHandle.waitForFunction(() => document.getElementById("csChartStatus").textContent.indexOf("正在加载趋势") >= 0);
+    if (mode === "trend-failed") await pageHandle.waitForFunction(() => document.getElementById("csChartStatus").textContent.indexOf("趋势暂时无法刷新") >= 0);
+    if (mode === "events-failed") await pageHandle.waitForFunction(() => document.getElementById("csEventsStatus").textContent.indexOf("刷新失败") >= 0);
     await pageHandle.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: true });
     if (name === "paused") {
       const banner = await pageHandle.textContent("#csMaintenanceBanner");

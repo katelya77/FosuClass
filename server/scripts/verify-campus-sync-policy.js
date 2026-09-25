@@ -66,6 +66,25 @@ async function main() {
   console.log("CONTROL_UNCHANGED=" + (beforeControl.paused === afterControl.paused && beforeControl.pausedAt === afterControl.pausedAt));
   console.log("campus-sync-policy-verify readonly storage=" + (afterPolicy.storageStatus || policy.snapshot().storageStatus));
   if (!unchanged) fail("read-only verification changed policy or control");
+  if (!token) return;
+  const paths = [
+    "/api/admin/campus-sync/snapshot",
+    "/api/admin/campus-sync/overview",
+    "/api/admin/campus-sync/timeseries?range=24h",
+    "/api/admin/campus-sync/timeseries?range=30d",
+  ];
+  for (const urlPath of paths) {
+    const samples = [];
+    for (let index = 0; index < 5; index += 1) {
+      const started = Date.now();
+      const response = await fetch(base + urlPath, { headers: { "x-admin-token": token, "x-fosu-client": "service" } });
+      await response.arrayBuffer();
+      if (!response.ok) fail("GET " + urlPath + " HTTP " + response.status);
+      samples.push(Date.now() - started);
+    }
+    samples.sort((left, right) => left - right);
+    console.log("LATENCY " + urlPath + " n=5 p50=" + samples[2] + " max=" + samples[4]);
+  }
 }
 
 main().catch((error) => {

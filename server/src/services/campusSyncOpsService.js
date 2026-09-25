@@ -79,6 +79,49 @@ function estimatedWait(metrics, summary) {
   return Math.max(0, (metrics.queuedJobs || 0) * median);
 }
 
+function criticalSnapshot() {
+  const now = Date.now();
+  const metrics = broker.metrics();
+  const breaker = circuit.snapshot(now);
+  const maintenance = control.snapshot();
+  const rules = policy.snapshot();
+  const summary = { avgDurationMs: 0, systemFailures: 0, errors: {} };
+  return {
+    generatedAt: new Date(now).toISOString(),
+    service: {
+      status: serviceStatus(metrics, breaker, maintenance),
+      maintenance,
+      agent: {
+        online: metrics.agentOnline,
+        lastHeartbeatAgeMs: metrics.lastHeartbeatAge,
+      },
+      queue: {
+        queued: metrics.queuedJobs,
+        processing: metrics.processingJobs,
+        active: metrics.queuedJobs + metrics.processingJobs,
+        cap: rules.globalActiveCap,
+        oldestQueuedMs: metrics.queueOldestAge || 0,
+        activeWorker: metrics.processingJobs > 0 ? 1 : 0,
+      },
+      circuit: { state: breaker.state },
+      pipeline: pipeline(metrics, summary),
+      securityPosture: breaker.state === "OPEN" ? "circuit_open" : "normal",
+    },
+    policy: {
+      rateLimit: rules.rateLimit,
+      rateWindowSeconds: rules.rateWindowSeconds,
+      dailyLimit: rules.dailyLimit,
+      globalActiveCap: rules.globalActiveCap,
+      revision: rules.revision,
+      source: rules.source,
+      updatedAt: rules.updatedAt,
+      updatedBy: rules.updatedBy,
+      storageStatus: rules.storageStatus,
+      jobTtlSeconds: rules.jobTtlSeconds,
+    },
+  };
+}
+
 function overview() {
   const now = Date.now();
   const metrics = broker.metrics();
@@ -194,6 +237,7 @@ function resetDiagnoseForTests() {
 }
 
 module.exports = {
+  criticalSnapshot,
   diagnose,
   overview,
   resetDiagnoseForTests,

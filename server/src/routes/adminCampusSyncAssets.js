@@ -58,7 +58,8 @@ const CAMPUS_SYNC_SECTION = `
           <div>新的同步请求暂时不会进入队列。已经开始执行的任务允许正常结束。</div>
         </div>
         <div id="csPolicyStorage" class="cs-banner" hidden>策略存储异常</div>
-        <div id="csLoading" class="cs-card cs-muted">正在读取同步状态…</div>
+        <div id="csLoading" class="cs-card cs-muted">正在读取服务状态…</div>
+        <div id="csRefreshed" class="cs-muted"></div>
         <div id="csError" class="cs-card cs-error" hidden></div>
         <div class="cs-grid" id="csOverview"></div>
         <div class="cs-card">
@@ -72,6 +73,7 @@ const CAMPUS_SYNC_SECTION = `
             </div>
           </div>
           <svg id="csChart" class="cs-chart" viewBox="0 0 640 180" role="img" aria-label="同步请求趋势"></svg>
+          <div id="csChartStatus" class="cs-empty">正在加载趋势…</div>
           <div id="csChartEmpty" class="cs-empty" hidden>当前时间范围暂无同步请求</div>
           <div class="cs-muted">请求量 · 成功 · 系统失败 · 凭证失败 · 限流</div>
         </div>
@@ -113,18 +115,19 @@ const CAMPUS_SYNC_SECTION = `
               <button type="button" class="secondary" id="csEventsMore">下一页</button>
             </div>
           </div>
+          <div id="csEventsStatus" class="cs-empty">正在加载最近事件…</div>
           <div id="csEvents" class="cs-table-wrap"></div>
         </div>
         <div class="cs-grid">
-          <div class="cs-card"><h3>安全与临时封禁</h3><div id="csSecurity" class="cs-table-wrap"></div></div>
-          <div class="cs-card"><h3>运行契约</h3><div id="csConfig"></div></div>
+          <div class="cs-card"><h3>安全与临时封禁</h3><div id="csSecurityStatus" class="cs-empty">正在加载安全状态…</div><div id="csSecurity" class="cs-table-wrap"></div></div>
+          <div class="cs-card"><h3>运行契约</h3><div id="csConfigStatus" class="cs-empty">正在加载运行契约…</div><div id="csConfig"></div></div>
         </div>
       </section>
 `;
 
 const CAMPUS_SYNC_SCRIPT = `
       (function () {
-        var cs = { range: "24h", cursor: "", timer: null, eventTimer: null, backoff: 12000, control: null, policyDirty: false, serverRevision: "" };
+        var cs = { range: "24h", cursor: "", timers: {}, control: null, policyDirty: false, serverRevision: "", trendGeneration: 0, inflight: {}, criticalReady: false };
         function csNode(id) { return document.getElementById(id); }
         function csActive() {
           var section = csNode("section-campus-sync");
@@ -285,20 +288,52 @@ const CAMPUS_SYNC_SCRIPT = `
             "ms · Worker " + config.workerConcurrency + " · 熔断 " + ((config.circuit && config.circuit.state) || "-") +
             "<br>Token " + csText(secrets.campusAgentToken) + " · Signing " + csText(secrets.campusAgentSigningSecret) + "</div>";
         }
-        function csFail(error) {
-          var node = csNode("csError");
-          if (node) { node.hidden = false; node.textContent = "同步控制台暂时读不到数据，将稍后重试。"; }
-          cs.backoff = Math.min(120000, Math.round(cs.backoff * 1.6));
+        function csCardStatus(id, text, failed) {
+          var node = csNode(id);
+          if (!node) return;
+          node.hidden = !text;
+          node.textContent = text || "";
+          node.className = failed ? "cs-error" : "cs-empty";
         }
-        function csLoadEvents(reset) {
-          if (reset) cs.cursor = "";
-          var status = (csNode("csStatusFilter") && csNode("csStatusFilter").value || "").trim();
-          var code = (csNode("csCodeFilter") && csNode("csCodeFilter").value || "").trim();
-          var query = "/api/admin/campus-sync/events?limit=50" +
-            (status ? "&status=" + encodeURIComponent(status) : "") +
-            (code ? "&errorCode=" + encodeURIComponent(code) : "") +
-            (!reset && cs.cursor ? "&cursor=" + encodeURIComponent(cs.cursor) : "");
-          return api(query).then(csRenderEvents).catch(csFail);
+        function csSignal() {
+          if (cs.control) cs.control.abort();
+          cs.control = typeof AbortController === "function" ? new AbortController() : null;
+          return cs.control ? cs.control.signal : undefined;
+        }
+        function csTrack(key, factory) {
+          if (cs.inflight[key]) return cs.inflight[key];
+          var promise = Promise.resolve().then(factory).finally(function () { delete cs.inflight[key]; });
+          cs.inflight[key] = promise;
+          return promise;
+        }
+        function csStamp() {
+          var node = csNode("csRefreshed");
+          if (node) node.textContent = "最后刷新：" + new Date().toLocaleTimeString("zh-CN", { hour12: false });
+        }
+        function csApplySnapshot(body) {
+          var snap = body.snapshot || body;
+          var service = snap.service || {};
+          var overview = {
+            status: service.status,
+            maintenance: service.maintenance,
+            agent: service.agent,
+            queue: service.queue,
+            securityPosture: service.securityPosture || "normal",
+            window24h: cs.window24h || {},
+            performance: cs.performance || {},
+            pipeline: service.pipeline || []
+          };
+          cs.overview = overview;
+          csCards(overview);
+          csRenderPipeline(service.pipeline || []);
+          csRenderQueue(service.queue);
+          if (snap.policy) csFillPolicy(snap.policy);
+          var loading = csNode("csLoading");
+          if (loading) loading.hidden = true;
+          var error = csNode("csError");
+          if (error) error.hidden = true;
+          cs.criticalReady = true;
+          csStamp();
         }
         function csInt(value) {
           var text = String(value == null ? "" : value).trim();
@@ -366,40 +401,114 @@ const CAMPUS_SYNC_SCRIPT = `
             " · 配额 " + ((report.quota && report.quota.healthy) ? "正常" : "异常") +
             " · 磁盘 " + (report.diskWritable ? "可写" : "不可写") + " · 学校系统 " + (report.schoolGateway || "暂无近期真实任务");
         }
-        function csLoad() {
+        function csLoadCritical() {
           if (!csActive()) return Promise.resolve();
-          if (cs.control) cs.control.abort();
-          cs.control = typeof AbortController === "function" ? new AbortController() : null;
-          var loading = csNode("csLoading");
-          return Promise.all([
-            api("/api/admin/campus-sync/overview"),
-            api("/api/admin/campus-sync/timeseries?range=" + cs.range),
-            api("/api/admin/campus-sync/security"),
-            api("/api/admin/campus-sync/config"),
-            api("/api/admin/campus-sync/policy")
-          ]).then(function (parts) {
-            if (loading) loading.hidden = true;
-            var error = csNode("csError");
-            if (error) error.hidden = true;
-            cs.backoff = 12000;
-            var overview = parts[0].overview || parts[0];
-            csCards(overview);
-            csRenderPipeline(overview.pipeline);
-            csRenderQueue(overview.queue);
-            csRenderErrors(overview.errors, overview.window24h);
-            csDraw(parts[1].points || []);
-            csRenderSecurity(parts[2].security || parts[2]);
-            csRenderConfig(parts[3].config || parts[3]);
-            csFillPolicy((parts[4] && parts[4].policy) || null);
-            csRenderUsage(parts[4] && parts[4].usage);
-          }).catch(csFail);
+          return csTrack("snapshot", function () {
+            return api("/api/admin/campus-sync/snapshot", { signal: cs.control && cs.control.signal }).then(csApplySnapshot).catch(function () {
+              if (cs.criticalReady) return;
+              var node = csNode("csError");
+              if (node) { node.hidden = false; node.textContent = "同步控制台暂时读不到数据，将稍后重试。"; }
+            });
+          });
+        }
+        function csLoadWindow() {
+          return csTrack("overview", function () {
+            return api("/api/admin/campus-sync/overview", { signal: cs.control && cs.control.signal }).then(function (body) {
+              var overview = body.overview || body;
+              cs.window24h = overview.window24h;
+              cs.performance = overview.performance;
+              if (!cs.overview) return;
+              cs.overview.window24h = overview.window24h;
+              cs.overview.performance = overview.performance;
+              cs.overview.errors = overview.errors;
+              cs.overview.pipeline = overview.pipeline || cs.overview.pipeline;
+              cs.overview.securityPosture = overview.securityPosture || cs.overview.securityPosture;
+              csCards(cs.overview);
+              csRenderPipeline(cs.overview.pipeline);
+              csRenderErrors(overview.errors, overview.window24h);
+            }).catch(function () {});
+          });
+        }
+        function csLoadTrend() {
+          var generation = ++cs.trendGeneration;
+          var range = cs.range;
+          csCardStatus("csChartStatus", "正在加载趋势…", false);
+          return csTrack("trend:" + range, function () {
+            return api("/api/admin/campus-sync/timeseries?range=" + encodeURIComponent(range), { signal: cs.control && cs.control.signal }).then(function (body) {
+              if (generation !== cs.trendGeneration) return;
+              csCardStatus("csChartStatus", "", false);
+              csDraw(body.points || []);
+            }).catch(function () {
+              if (generation !== cs.trendGeneration) return;
+              csCardStatus("csChartStatus", "趋势暂时无法刷新", true);
+            });
+          });
+        }
+        function csLoadSecurity() {
+          return csTrack("security", function () {
+            csCardStatus("csSecurityStatus", "正在加载安全状态…", false);
+            return api("/api/admin/campus-sync/security", { signal: cs.control && cs.control.signal }).then(function (body) {
+              csCardStatus("csSecurityStatus", "", false);
+              csRenderSecurity(body.security || body);
+            }).catch(function () { csCardStatus("csSecurityStatus", "刷新失败 · 保留上次数据", true); });
+          });
+        }
+        function csLoadConfig() {
+          return csTrack("config", function () {
+            csCardStatus("csConfigStatus", "正在加载运行契约…", false);
+            return api("/api/admin/campus-sync/config", { signal: cs.control && cs.control.signal }).then(function (body) {
+              csCardStatus("csConfigStatus", "", false);
+              csRenderConfig(body.config || body);
+            }).catch(function () { csCardStatus("csConfigStatus", "刷新失败 · 保留上次数据", true); });
+          });
+        }
+        function csLoadPolicy() {
+          return csTrack("policy", function () {
+            return api("/api/admin/campus-sync/policy", { signal: cs.control && cs.control.signal }).then(function (body) {
+              csFillPolicy(body.policy || null);
+              csRenderUsage(body.usage);
+            }).catch(function () {});
+          });
+        }
+        function csLoadEvents(reset) {
+          if (reset) cs.cursor = "";
+          var status = (csNode("csStatusFilter") && csNode("csStatusFilter").value || "").trim();
+          var code = (csNode("csCodeFilter") && csNode("csCodeFilter").value || "").trim();
+          var query = "/api/admin/campus-sync/events?limit=50" +
+            (status ? "&status=" + encodeURIComponent(status) : "") +
+            (code ? "&errorCode=" + encodeURIComponent(code) : "") +
+            (!reset && cs.cursor ? "&cursor=" + encodeURIComponent(cs.cursor) : "");
+          return csTrack("events:" + query, function () {
+            csCardStatus("csEventsStatus", "正在加载最近事件…", false);
+            return api(query, { signal: cs.control && cs.control.signal }).then(function (body) {
+              csCardStatus("csEventsStatus", "", false);
+              csRenderEvents(body);
+            }).catch(function () { csCardStatus("csEventsStatus", "刷新失败 · 保留上次数据", true); });
+          });
+        }
+        function csLoadSecondary() {
+          [csLoadTrend, csLoadWindow, csLoadSecurity, csLoadEvents, csLoadConfig, csLoadPolicy].forEach(function (fn, index) {
+            setTimeout(function () { if (csActive()) fn(true); }, 120 * (index + 1));
+          });
+        }
+        function csLoad() {
+          csSignal();
+          return csLoadCritical().then(function () { csLoadSecondary(); });
+        }
+        function csArm(name, delay, fn) {
+          if (cs.timers[name]) clearTimeout(cs.timers[name]);
+          if (!csActive()) return;
+          cs.timers[name] = setTimeout(function () { fn().finally(function () { csArm(name, delay, fn); }); }, delay);
         }
         function csSchedule() {
-          if (cs.timer) clearTimeout(cs.timer);
-          if (cs.eventTimer) clearTimeout(cs.eventTimer);
+          Object.keys(cs.timers).forEach(function (name) { clearTimeout(cs.timers[name]); });
+          cs.timers = {};
           if (!csActive()) return;
-          cs.timer = setTimeout(function () { csLoad().finally(csSchedule); }, cs.backoff);
-          cs.eventTimer = setTimeout(function () { if (csActive()) csLoadEvents(true); }, 30000);
+          csArm("critical", 10000, csLoadCritical);
+          csArm("trend", 60000, csLoadTrend);
+          csArm("security", 60000, csLoadSecurity);
+          csArm("events", 30000, function () { return csLoadEvents(true); });
+          csArm("config", 300000, csLoadConfig);
         }
         function csAction(path, button, pending, done, expectPaused) {
           if (!button || button.dataset.busy === "1") return Promise.resolve();
@@ -407,9 +516,10 @@ const CAMPUS_SYNC_SCRIPT = `
           button.disabled = true;
           button.textContent = pending;
           return api(path, { method: "POST", body: "{}" }).then(function () {
-            return api("/api/admin/campus-sync/overview");
+            return api("/api/admin/campus-sync/snapshot");
           }).then(function (body) {
-            var overview = body.overview || body;
+            var snap = body.snapshot || body;
+            var overview = snap.service || body.overview || body;
             var paused = !!(overview.maintenance && overview.maintenance.paused);
             if (paused !== expectPaused) throw new Error("服务端状态尚未确认");
             csCards(overview);
@@ -418,7 +528,8 @@ const CAMPUS_SYNC_SCRIPT = `
           }).catch(function (error) {
             var host = csNode("csDiagnose");
             if (host) host.textContent = error && error.message ? error.message : "操作失败";
-            csFail(error);
+            var node = csNode("csDiagnose");
+            if (node && !node.textContent) node.textContent = "操作失败";
           }).finally(function () {
             button.dataset.busy = "";
             return csLoad();
@@ -428,7 +539,15 @@ const CAMPUS_SYNC_SCRIPT = `
           var refresh = csNode("csRefreshBtn");
           if (!refresh || refresh.dataset.bound) return;
           refresh.dataset.bound = "1";
-          refresh.addEventListener("click", function () { csLoad(); csLoadEvents(true); });
+          refresh.addEventListener("click", function () {
+            var label = refresh.textContent;
+            refresh.textContent = "正在刷新…";
+            csSignal();
+            csLoadCritical().finally(function () {
+              refresh.textContent = label;
+              csLoadSecondary();
+            });
+          });
           ["csRateLimit", "csRateWindow", "csDailyLimit", "csGlobalCap"].forEach(function (id) {
             csNode(id).addEventListener("input", function () {
               cs.policyDirty = true;
@@ -495,7 +614,7 @@ const CAMPUS_SYNC_SCRIPT = `
           csNode("csEventsBtn").addEventListener("click", function () { csLoadEvents(true); });
           csNode("csEventsMore").addEventListener("click", function () { if (cs.cursor) csLoadEvents(false); });
           document.querySelectorAll("#csRanges button").forEach(function (button) {
-            button.addEventListener("click", function () { cs.range = button.getAttribute("data-cs-range") || "24h"; csLoad(); });
+            button.addEventListener("click", function () { cs.range = button.getAttribute("data-cs-range") || "24h"; csLoadTrend(); });
           });
           document.addEventListener("visibilitychange", csSchedule);
           var section = csNode("section-campus-sync");

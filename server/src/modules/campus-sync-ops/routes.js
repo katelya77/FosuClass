@@ -6,8 +6,33 @@ const policy = require("../../services/campusSyncPolicyService");
 const quota = require("../../services/campusSyncQuotaStore");
 const telemetry = require("../../services/campusSyncTelemetryService");
 const control = require("../../services/campusSyncControl");
+const perf = require("../../services/campusSyncAdminPerf");
 
 const router = express.Router();
+
+router.use((req, res, next) => {
+  const started = process.hrtime.bigint();
+  res.set("Cache-Control", "private, no-store");
+  const send = res.json.bind(res);
+  res.json = (body) => {
+    const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
+    const io = telemetry.lastIo();
+    perf.record({
+      route: String(req.path || "").replace(/^\/campus-sync\//, ""),
+      durationMs,
+      cacheHit: io.cacheHit === true,
+      range: req.path.indexOf("timeseries") >= 0 ? String(req.query.range || "24h") : "",
+      filesRead: req.path.indexOf("timeseries") >= 0 || req.path.indexOf("overview") >= 0 ? io.filesRead : 0,
+    });
+    res.set("Server-Timing", `campus-sync;dur=${Math.max(0, Math.round(durationMs))}`);
+    return send(body);
+  };
+  next();
+});
+
+router.get("/campus-sync/snapshot", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json({ success: true, snapshot: ops.criticalSnapshot() });
+});
 
 router.get("/campus-sync/overview", adminAuth.verifyAdminAccess, (req, res) => {
   res.json({ success: true, overview: ops.overview() });

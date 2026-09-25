@@ -16,6 +16,12 @@ const minutes = new Map();
 let dropped = 0;
 let flushTimer = null;
 let lastDiskBytes = 0;
+const FILE_CACHE_MAX = 35;
+const FILE_CACHE_TTL_MS = 30000;
+const RANGE_CACHE_TTL_MS = 10000;
+const fileCache = new Map();
+const rangeCache = new Map();
+let lastIo = { filesRead: 0, cacheHit: false, range: "" };
 
 function opsDir() {
   return path.resolve(process.env.CAMPUS_SYNC_OPS_DIR || path.join(__dirname, "../../storage/ops/campus-sync"));
@@ -201,7 +207,9 @@ function flushNow() {
       existing[key] = payload[key];
     });
     fs.writeFileSync(file, JSON.stringify(existing));
+    fileCache.delete(`hours-${day}.json`);
   });
+  rangeCache.clear();
   enforceCap(dir);
   return { wrote: batch.length };
 }
@@ -260,23 +268,67 @@ function mergeBuckets(list) {
   return merged;
 }
 
-function diskHours() {
-  const dir = opsDir();
-  const found = new Map();
-  let names = [];
-  try {
-    names = fs.readdirSync(dir).filter((name) => name.startsWith("hours-") && name.endsWith(".json"));
-  } catch (error) {
-    return found;
+function requiredHourFiles(range, now) {
+  if (range === "1h") return [];
+  const current = Number(now || Date.now());
+  const span = range === "7d" ? 7 * 86400000 : (range === "30d" ? 30 * 86400000 : 86400000);
+  const start = current - span;
+  const names = new Set();
+  for (let time = start - 3600000; time <= current; time += 12 * 3600000) {
+    names.add(`hours-${new Date(time).toISOString().slice(0, 10)}.json`);
   }
-  names.forEach((name) => {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
-      Object.keys(parsed || {}).forEach((key) => found.set(key, parsed[key]));
-    } catch (error) {
-      // Skip a damaged aggregate file.
-    }
+  names.add(`hours-${new Date(current).toISOString().slice(0, 10)}.json`);
+  names.add(`hours-${new Date(start).toISOString().slice(0, 10)}.json`);
+  return Array.from(names);
+}
+
+function rememberFile(name, parsed) {
+  fileCache.set(name, { parsed, loadedAt: Date.now() });
+  while (fileCache.size > FILE_CACHE_MAX) fileCache.delete(fileCache.keys().next().value);
+}
+
+function publicBucket(bucket) {
+  const next = emptyBucket();
+  if (!bucket || typeof bucket !== "object") return next;
+  Object.keys(next).forEach((key) => {
+    if (key === "histogram") next.histogram = EDGES.map((edge, index) => Number(bucket.histogram && bucket.histogram[index] || 0));
+    else if (key === "errors" && bucket.errors && typeof bucket.errors === "object") {
+      Object.keys(bucket.errors).forEach((code) => { next.errors[String(code).slice(0, 64)] = Number(bucket.errors[code] || 0); });
+    } else if (key !== "errors") next[key] = Number(bucket[key] || 0);
   });
+  return next;
+}
+
+function readHourFile(name) {
+  const cached = fileCache.get(name);
+  if (cached && Date.now() - cached.loadedAt < FILE_CACHE_TTL_MS) return { parsed: cached.parsed, hit: true };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(opsDir(), name), "utf8"));
+    const safe = {};
+    Object.keys(parsed || {}).forEach((key) => {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(key)) safe[key] = publicBucket(parsed[key]);
+    });
+    rememberFile(name, safe);
+    return { parsed: safe, hit: false };
+  } catch (error) {
+    return null;
+  }
+}
+
+function diskHoursFor(range, now) {
+  const found = new Map();
+  let filesRead = 0;
+  let cacheHit = true;
+  requiredHourFiles(range, now).forEach((name) => {
+    const loaded = readHourFile(name);
+    if (!loaded) return;
+    if (!loaded.hit) {
+      filesRead += 1;
+      cacheHit = false;
+    }
+    Object.keys(loaded.parsed || {}).forEach((key) => found.set(key, loaded.parsed[key]));
+  });
+  lastIo = { filesRead, cacheHit: cacheHit && requiredHourFiles(range, now).length > 0, range, considered: requiredHourFiles(range, now).length };
   return found;
 }
 
@@ -285,18 +337,32 @@ function bucketsForRange(range, now) {
   const span = range === "1h" ? 3600000 : (range === "7d" ? 7 * 86400000 : (range === "30d" ? 30 * 86400000 : 86400000));
   const start = current - span;
   if (range === "1h") {
+    lastIo = { filesRead: 0, cacheHit: true, range: "1h", considered: 0 };
     const list = [];
     minutes.forEach((bucket, key) => {
       if (key * 60000 >= start) list.push({ key: new Date(key * 60000).toISOString(), bucket });
     });
     return list.sort((left, right) => left.key.localeCompare(right.key));
   }
-  const disk = diskHours();
+  const disk = diskHoursFor(range, now);
   hours.forEach((bucket, key) => disk.set(key, bucket));
   return Array.from(disk.entries())
     .filter(([key]) => Date.parse(`${key}:00:00.000Z`) >= start - 3600000)
     .sort((left, right) => left[0].localeCompare(right[0]))
     .map(([key, bucket]) => ({ key, bucket }));
+}
+
+function getRangeSnapshot(range, now) {
+  const current = Number(now || Date.now());
+  const cached = rangeCache.get(range);
+  if (cached && current - cached.at < RANGE_CACHE_TTL_MS) {
+    lastIo = { filesRead: 0, cacheHit: true, range, considered: cached.considered || 0 };
+    return cached.value;
+  }
+  const series = bucketsForRange(range, current);
+  const value = { series, summary: summarize(mergeBuckets(series.map((item) => item.bucket))) };
+  rangeCache.set(range, { at: current, value, considered: lastIo.considered || 0 });
+  return value;
 }
 
 function summarize(bucket) {
@@ -327,12 +393,11 @@ function summarize(bucket) {
 }
 
 function overview(range, now) {
-  const series = bucketsForRange(range || "24h", now);
-  return summarize(mergeBuckets(series.map((item) => item.bucket)));
+  return getRangeSnapshot(range || "24h", now).summary;
 }
 
 function timeseries(range, now) {
-  return bucketsForRange(range || "24h", now).map((item) => Object.assign({ bucket: item.key }, summarize(item.bucket)));
+  return getRangeSnapshot(range || "24h", now).series.map((item) => Object.assign({ bucket: item.key }, summarize(item.bucket)));
 }
 
 function listRecent(options) {
@@ -393,6 +458,9 @@ function resetForTests() {
   ring.length = 0;
   hours.clear();
   minutes.clear();
+  fileCache.clear();
+  rangeCache.clear();
+  lastIo = { filesRead: 0, cacheHit: false, range: "" };
   dropped = 0;
   lastDiskBytes = 0;
   if (flushTimer) clearTimeout(flushTimer);
@@ -400,10 +468,13 @@ function resetForTests() {
 }
 
 module.exports = {
+  cacheAuditBlob: () => JSON.stringify(Array.from(fileCache.values())),
   flushNow,
+  lastIo: () => lastIo,
   listRecent,
   overview,
   record,
+  requiredHourFiles,
   recordAttempt,
   resetForTests,
   storageStats,
