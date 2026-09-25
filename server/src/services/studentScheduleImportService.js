@@ -52,6 +52,7 @@ function publicPreviewPayload(preview, tokenInfo) {
     defaultSelectedArrangementIds: preview.defaultSelectedArrangementIds,
     uiHints: preview.uiHints,
     preview: preview.preview,
+    pageRemarks: Array.isArray(preview.pageRemarks) ? preview.pageRemarks : [],
     timing: preview.timing,
   };
 }
@@ -74,6 +75,7 @@ function buildPreviewRecord(context, preview) {
     scheduledCourses: preview.scheduledCourses,
     unscheduledCourses: preview.unscheduledCourses,
     timing: preview.timing,
+    pageRemarks: Array.isArray(preview.pageRemarks) ? preview.pageRemarks : [],
     source: context.source || "client-direct",
   };
 }
@@ -317,9 +319,9 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
     name: record.profile.studentName ? `${record.profile.studentName}的个人课表` : "个人课表",
     title: record.profile.studentName ? `${record.profile.studentName}的个人课表` : "个人课表",
     subtitle: [
-      record.profile.className || "班级未确认",
+      record.profile.className || "",
       record.summary.semester || "当前学期",
-      "学号导入",
+      "学号同步",
     ].filter(Boolean).join(" · "),
     classId: `personal-apaas-${crypto.createHash("sha256").update(record.studentId || "").digest("hex").slice(0, 16)}`,
     semester: record.summary.semester || "当前学期",

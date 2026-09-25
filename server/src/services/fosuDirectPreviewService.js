@@ -2,7 +2,7 @@ const iconv = require("iconv-lite");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const { assertImportAttemptAllowed } = require("./studentScheduleImportRateLimiter");
-const { parsePersonalScheduleHtml } = require("../utils/personal-schedule-parser");
+const { parsePersonalScheduleHtml, parsePersonalSchedulePageMetadata } = require("../utils/personal-schedule-parser");
 const { createNormalizedPreviewFromImportedData } = require("./scheduleImportNormalizer");
 const { createStoredPreviewFromNormalized } = require("./studentScheduleImportService");
 
@@ -85,6 +85,7 @@ function createTimetablePreview(req, body, source) {
   if (/name=["']username["']/i.test(decoded.html) && /name=["']password["']/i.test(decoded.html)) {
     throw previewError("DIRECT_PAYLOAD_NOT_TIMETABLE");
   }
+  const pageMetadata = parsePersonalSchedulePageMetadata(decoded.html);
   const courses = parsePersonalScheduleHtml(decoded.html, {
     semester: payload.semester || "",
     source: "personal-xskb",
@@ -94,6 +95,7 @@ function createTimetablePreview(req, body, source) {
   const preview = createNormalizedPreviewFromImportedData(coursesToRawRows(courses), {
     semester: payload.semester || "当前学期",
     scheduleOwnership: "personal",
+    reliableClassScope: false,
     source: channel,
     timing: {
       channel,
@@ -104,6 +106,16 @@ function createTimetablePreview(req, body, source) {
   const profileHint = payload.profileHint || {};
   if (profileHint.studentIdMasked && preview.profile) {
     preview.profile.studentIdMasked = String(profileHint.studentIdMasked);
+  }
+  if (preview.profile) {
+    preview.profile.studentName = pageMetadata.studentName || "";
+    preview.profile.className = "";
+    preview.profile.targetClassName = "";
+    preview.profile.classNameConfidence = "none";
+  }
+  preview.pageRemarks = pageMetadata.pageRemarks;
+  if (!pageMetadata.studentName) {
+    safeLog("fosu-direct-preview-profile", { code: "PROFILE_NAME_MISSING" });
   }
   safeLog("fosu-direct-preview-ok", {
     code: "OK",

@@ -57,9 +57,11 @@ function run() {
   assert(aiService.includes("personal-xls-required"), "AI context should reject deprecated credential schedule types");
   assert(!wxss.includes("captcha-"), "captcha styles should be removed from import page");
   assert(wxml.includes("displayStudentId"), "student import preview should bind the full display student id");
-  assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {})"), "student import should centralize display student id priority");
-  assert(js.includes("return metadata.studentId || profile.studentId || metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
-    "student import UI must prefer full studentId before masked value");
+  assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {}, localDisplayStudentId = \"\")"), "student import should centralize display student id priority");
+  assert(js.includes("if (isFullStudentId(localDisplayStudentId)) return String(localDisplayStudentId).trim();"),
+    "student import UI must prefer the local full student id");
+  assert(js.includes("return metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
+    "student import UI must fall back to a masked id only when no full id exists");
   assert(wxml.includes("day-count=\"7\""), "student preview should request seven day columns");
   assert(js.includes("STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label }))"), "student preview grid should include Saturday and Sunday");
   assert(!wxml.includes("检测到周末课程，可在调整课程中查看"), "weekend courses should render in the grid");

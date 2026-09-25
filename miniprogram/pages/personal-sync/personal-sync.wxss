@@ -1989,3 +1989,77 @@
   font-size: 24rpx;
   line-height: 1.45;
 }
+
+.sync-civility {
+  margin-top: 16rpx;
+  color: #8a7560;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.identity-card .identity-kicker {
+  color: #2f855a;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.identity-card .identity-title {
+  margin: 8rpx 0 16rpx;
+  color: #142033;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.identity-card .identity-note {
+  margin: 8rpx 0 16rpx;
+  color: #667085;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.identity-id {
+  overflow: visible;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.remark-card .remark-title {
+  color: #142033;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.remark-card .remark-caption {
+  margin-top: 4rpx;
+  color: #8a7560;
+  font-size: 22rpx;
+}
+
+.remark-body {
+  display: block;
+  margin-top: 12rpx;
+  color: #344054;
+  font-size: 24rpx;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.remark-body.is-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.sync-ad-slot {
+  max-height: 180rpx;
+  margin-top: 12rpx;
+  overflow: hidden;
+}
+
+.sync-ad-slot.is-empty {
+  display: none;
+  max-height: 0;
+  margin: 0;
+}

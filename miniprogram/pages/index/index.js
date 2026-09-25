@@ -67,7 +67,9 @@ function buildPersonalApaasHeader(target) {
   const metadata = (target && target.metadata) || {};
   const title = target.title || target.name || (metadata.studentName ? `${metadata.studentName}的个人课表` : "个人课表");
   const term = metadata.term || target.semester || "";
-  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "学号导入"].filter(Boolean).join(" · ");
+  const className = String(metadata.className || "").trim();
+  const reliableClass = className && !/班级未确认|班级待确认|未知班级/.test(className) ? className : "";
+  const subtitle = [reliableClass, term, "学号同步"].filter(Boolean).join(" · ");
   return {
     title,
     subtitle,

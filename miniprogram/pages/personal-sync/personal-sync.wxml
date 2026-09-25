@@ -30,6 +30,7 @@
         </label>
       </checkbox-group>
       <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">同步最新课表</button>
+      <view class="sync-civility">请勿恶意或高频重复同步。系统会限制异常频繁请求，仅在课表发生变化时重新同步即可。</view>
       <view class="campus-status campus-status-{{syncServiceStatus}}">
         <view class="campus-dot"></view>
         <view class="campus-copy">
@@ -61,6 +62,23 @@
   </block>
 
   <block wx:elif="{{activeImportMethod == 'student'}}">
+    <view class="card identity-card" wx:if="{{studentImportStage == 'identity-confirm'}}">
+      <view class="identity-kicker">账号验证成功</view>
+      <view class="identity-title">请确认这是你的课表</view>
+      <view class="profile-row">
+        <text class="profile-label">姓名</text>
+        <text class="profile-value">{{identityNameMissing ? '未读取到' : identityStudentName}}</text>
+      </view>
+      <view class="profile-row">
+        <text class="profile-label">学号</text>
+        <text class="profile-value identity-id">{{identityStudentId}}</text>
+      </view>
+      <view class="identity-note" wx:if="{{identityNameMissing}}">学校页面暂未提供可识别的姓名，请确认学号无误后继续。</view>
+      <view class="identity-note" wx:else>确认后将继续整理并展示本学期课表。</view>
+      <button class="btn-primary" bindtap="confirmStudentIdentity">确认，是我的课表</button>
+      <button class="btn-text" bindtap="reenterStudentIdentity">重新输入</button>
+    </view>
+
     <view class="card sync-status-card" wx:if="{{studentImportStage == 'loading'}}">
       <view class="sync-status-title">{{studentImportStatusMessage || '正在读取个人课表'}}</view>
       <view class="sync-status-hint">通常只需几秒，请勿重复点击。</view>
@@ -90,7 +108,7 @@
         </view>
         <view class="profile-row">
           <text class="profile-label">学号</text>
-          <text class="profile-value">{{studentPreviewResult.displayStudentId || studentPreviewResult.profile.studentId || studentPreviewResult.maskedStudentId}}</text>
+          <text class="profile-value identity-id">{{studentPreviewResult.displayStudentId || studentPreviewResult.profile.studentId || studentPreviewResult.maskedStudentId}}</text>
         </view>
       </view>
       <view class="student-class-warning" wx:if="{{studentClassConfidenceWarning}}">{{studentClassConfidenceWarning}}</view>
@@ -111,6 +129,13 @@
       </view>
 
       <view class="student-soft-tip" wx:if="{{studentPreviewNotice}}">{{studentPreviewNotice}}</view>
+
+      <view class="card remark-card" wx:if="{{pageRemarkView.visible}}">
+        <view class="remark-title">课表备注</view>
+        <view class="remark-caption">来自学校课表页面，仅供参考</view>
+        <text class="remark-body {{pageRemarkView.expanded || !pageRemarkView.canToggle ? '' : 'is-clamped'}}">{{pageRemarkView.text}}</text>
+        <button class="btn-text" wx:if="{{pageRemarkView.canToggle}}" bindtap="togglePageRemarks">{{pageRemarkView.expanded ? '收起' : '展开全部'}}</button>
+      </view>
 
       <view class="preview-card student-preview-card">
         <view class="preview-card-head">
@@ -186,7 +211,7 @@
               </view>
               <view class="arrangement-tools">
                 <switch class="arrangement-switch" wx:if="{{!arrangement.needsTimeCompletion}}" color="#2f855a" checked="{{arrangement.selected}}" data-id="{{arrangement.arrangementId}}" bindchange="toggleStudentArrangementSwitch" />
-                <button class="edit-arrangement-btn" wx:if="{{arrangement.canEdit}}" data-id="{{arrangement.arrangementId}}" bindtap="startEditStudentArrangement">补时间</button>
+                <button class="edit-arrangement-btn" wx:if="{{arrangement.needsTimeCompletion}}" data-id="{{arrangement.arrangementId}}" bindtap="startEditStudentArrangement">补充时间</button>
               </view>
             </view>
           </view>
@@ -196,12 +221,12 @@
       <view class="preview-actions student-bottom-actions">
         <view class="student-apply-status" wx:if="{{studentImportConfirming}}">正在应用课表…</view>
         <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">确认并设为当前课表</button>
-        <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '返回预览' : '继续调整'}}</button>
+        <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '完成调整' : '调整导入内容'}}</button>
       </view>
 
       <view class="edit-panel-mask" wx:if="{{studentEditingArrangement}}">
         <view class="edit-panel">
-          <view class="edit-panel-title">编辑后加入</view>
+          <view class="edit-panel-title">补充课程安排</view>
           <view class="edit-course-name">{{studentEditingArrangement.displayCourseName || studentEditingArrangement.courseName}}</view>
           <view class="edit-grid">
             <view class="edit-field">
@@ -233,7 +258,7 @@
           </view>
           <view class="edit-actions">
             <button class="btn-secondary" bindtap="cancelStudentArrangementEdit">取消</button>
-            <button class="btn-bind" bindtap="saveStudentArrangementEdit">保存并加入</button>
+            <button class="btn-bind" bindtap="saveStudentArrangementEdit">保存并加入课表</button>
           </view>
         </view>
       </view>
@@ -359,5 +384,8 @@
       </view>
     </view>
   </block>
+  <view class="sync-ad-slot {{syncAdVisible ? '' : 'is-empty'}}" wx:if="{{syncAdUnitId}}">
+    <ad unit-id="{{syncAdUnitId}}" binderror="onSyncAdError" bindload="onSyncAdLoad"></ad>
+  </view>
   <xiaofu-float />
 </view>

@@ -473,6 +473,28 @@ function decisionForArrangement(arrangement) {
     };
   }
 
+  if (arrangement.reliableClassScope === false && classStatus !== "not_match") {
+    if (!arrangement.hasCompleteTime) {
+      return {
+        importDecision: IMPORT_DECISION.UNSCHEDULED,
+        confidence: "low",
+        reason: "缺少星期、节次或周次，补充后可加入。",
+      };
+    }
+    if (arrangement.category === "online" || arrangement.category === "pending") {
+      return {
+        importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
+        confidence: "medium",
+        reason: "课程信息基本完整，可确认是否需要加入。",
+      };
+    }
+    return {
+      importDecision: IMPORT_DECISION.AUTO_INCLUDE,
+      confidence: "medium",
+      reason: "课程时间信息完整，默认加入课表。",
+    };
+  }
+
   if (classStatus === "unknown" && localTimeMatched) {
     return {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
@@ -869,7 +891,12 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     options.existingSelectedClassName || options.targetClassName || "",
     options.localCourses || []
   );
-  if (options.scheduleOwnership === "personal" && !targetInference.targetClassName) {
+  if (options.reliableClassScope === false) {
+    targetInference.targetClassName = "";
+    targetInference.className = "";
+    targetInference.classNameConfidence = "none";
+    targetInference.source = "page-without-class";
+  } else if (options.scheduleOwnership === "personal" && !targetInference.targetClassName) {
     targetInference.classNameConfidence = "high";
     targetInference.source = "personal-timetable";
   }
@@ -900,7 +927,10 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       index,
     });
     const classInfo = classifyRowByClassScope({ className: classNameRaw }, targetClassName);
-    if (options.scheduleOwnership === "personal" && classInfo.matchStatus !== "not_match") {
+    if (options.reliableClassScope === false && classInfo.matchStatus === "not_match") {
+      classInfo.matchStatus = "unknown";
+    }
+    if (options.scheduleOwnership === "personal" && options.reliableClassScope !== false && classInfo.matchStatus !== "not_match") {
       classInfo.matchStatus = "match";
     }
     const courseGroupId = `group_${stableHash({ normalizedCourseName, targetClassName, semester }, 20)}`;
@@ -979,6 +1009,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     if (!arrangement.teacherName && localMatch.matchedCourse && localMatch.matchedCourse.teacherName) {
       arrangement.teacherName = toText(localMatch.matchedCourse.teacherName);
     }
+    if (options.reliableClassScope === false) arrangement.reliableClassScope = false;
     Object.assign(arrangement, decisionForArrangement(arrangement));
     arrangement.selectedByDefault = arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE;
 
@@ -1015,7 +1046,9 @@ function buildScheduleImportPreview(rawRows, options = {}) {
 
   const allArrangements = groups.flatMap((group) => group.arrangements);
   allArrangements.forEach((arrangement) => {
-    arrangement.classScopeReason = arrangement.classScopeReason || classScopeReasonForArrangement(arrangement);
+    arrangement.classScopeReason = arrangement.reliableClassScope === false
+      ? ""
+      : (arrangement.classScopeReason || classScopeReasonForArrangement(arrangement));
     arrangement.audienceClasses = splitClassScopeSegments(arrangement.classNameRaw);
   });
   const autoArrangements = allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.AUTO_INCLUDE);

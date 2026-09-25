@@ -211,6 +211,7 @@ function buildEditablePreview(record = {}, metadata = {}, selection = {}) {
     editedArrangements: Array.isArray(selection.editedArrangements)
       ? selection.editedArrangements
       : [],
+    pageRemarks: Array.isArray(record.pageRemarks) ? record.pageRemarks.slice(0, 20) : [],
   });
 }
 
@@ -235,6 +236,7 @@ function buildRecentImportRecord({ ownerKey, record = {}, schedule = {}, selecti
     studentIdMasked: metadata.studentIdMasked || metadata.studentId || profile.studentIdMasked || "",
     studentName: metadata.studentName || profile.studentName || "",
     className: metadata.className || profile.className || "",
+    pageRemarks: Array.isArray(record.pageRemarks) ? record.pageRemarks.slice(0, 20) : [],
     importedAt,
     importedAtText: formatDisplayTime(importedAt),
     importedCourses: Array.isArray(cleanSchedule.courses) ? cleanSchedule.courses : [],
