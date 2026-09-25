@@ -17,8 +17,16 @@ function page(seed) {
     ${CAMPUS_SYNC_SECTION}
     <script>
       var seed = ${JSON.stringify(seed.payload)};
-      function api(url) {
+      function api(url, options) {
+        options = options || {};
         if (seed.mode === "error") return Promise.reject(new Error("offline"));
+        if (String(options.method || "GET") === "PUT" && url.indexOf("policy") >= 0) {
+          var next = JSON.parse(options.body || "{}");
+          seed.policy = Object.assign({}, seed.policy, next, { source: "runtime", updatedAt: "2026-09-25T08:00:00.000Z", updatedBy: "admin" });
+        }
+        if (url.indexOf("policy/reset") >= 0) {
+          seed.policy = Object.assign({}, seed.policy, { rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, source: "environment", updatedBy: "admin" });
+        }
         if (url.indexOf("overview") >= 0) return Promise.resolve({ overview: seed.overview });
         if (url.indexOf("timeseries") >= 0) return Promise.resolve({ points: seed.points });
         if (url.indexOf("security") >= 0) return Promise.resolve({ security: seed.security });
@@ -113,7 +121,7 @@ async function run() {
       await pageHandle.fill("#csDailyLimit", "0");
       await pageHandle.click("#csPolicySave");
       const invalid = await pageHandle.textContent("#csPolicyMeta");
-      if (!invalid || invalid.indexOf("1 到 50") < 0) throw new Error("invalid policy value was accepted");
+      if (!invalid || invalid.indexOf("输入值不合法") < 0) throw new Error("invalid policy value was accepted");
       await pageHandle.click("#csPolicyCancel");
       await pageHandle.fill("#csDailyLimit", "8");
       pageHandle.once("dialog", (dialog) => dialog.dismiss());

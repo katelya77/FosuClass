@@ -98,6 +98,9 @@ case "$ACTION" in
     echo "$COMMIT_SHA" > "$APP_DIR/server/storage/deployed-sha"
     sudo docker inspect -f '{{.Image}}' "$CONTAINER_NAME" > "$APP_DIR/server/storage/deployed-image" 2>/dev/null || true
     chmod 600 "$APP_DIR/server/storage/deployed-sha" "$APP_DIR/server/storage/deployed-image" 2>/dev/null || true
+    sudo docker restart "$CONTAINER_NAME"
+    curl -fsS --retry 30 --retry-delay 2 --retry-connrefused http://127.0.0.1:18318/api/health >/dev/null
+    sudo docker exec "$CONTAINER_NAME" node scripts/verify-campus-sync-policy.js --persisted
     ;;
   *)
     echo "unknown action: $ACTION" >&2

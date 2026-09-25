@@ -1,0 +1,10 @@
+[Unit]
+Description=FosuClass WYZ schedule collector timer (disabled until MVP verification)
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Asia/Shanghai
+Persistent=false
+Unit=wyz-schedule-collector.service
+
+[Install]
+WantedBy=timers.target

@@ -37,9 +37,19 @@ function defaults() {
   };
 }
 
+function parseStrictInt(value) {
+  if (typeof value === "number") return Number.isSafeInteger(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^-?\d+$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 function inRange(name, value) {
+  const parsed = parseStrictInt(value);
   const spec = FIELDS[name];
-  return Number.isInteger(value) && value >= spec.min && value <= spec.max;
+  return parsed != null && parsed >= spec.min && parsed <= spec.max;
 }
 
 function readFile() {
@@ -149,8 +159,9 @@ function update(body, actor) {
   const before = snapshot();
   const next = current();
   keys.forEach((key) => {
-    if (!inRange(key, body[key])) throw reject("策略数值不在允许范围内。");
-    next[key] = body[key];
+    const parsed = parseStrictInt(body[key]);
+    if (!inRange(key, parsed)) throw reject("策略数值不在允许范围内。");
+    next[key] = parsed;
   });
   if (!keys.length) throw reject("没有可保存的策略。");
   try {
@@ -202,6 +213,7 @@ function resetForTests() {
 module.exports = {
   current,
   reload,
+  parseStrictInt,
   reset,
   resetForTests,
   snapshot,

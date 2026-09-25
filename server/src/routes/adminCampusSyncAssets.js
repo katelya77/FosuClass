@@ -259,19 +259,40 @@ const CAMPUS_SYNC_SCRIPT = `
             (!reset && cs.cursor ? "&cursor=" + encodeURIComponent(cs.cursor) : "");
           return api(query).then(csRenderEvents).catch(csFail);
         }
-        function csFillPolicy(policy) {
+        function csInt(value) {
+          var text = String(value == null ? "" : value).trim();
+          if (!/^-?[0-9]+$/.test(text)) return null;
+          var parsed = Number(text);
+          return Number.isSafeInteger(parsed) ? parsed : null;
+        }
+        function csPolicyError(error) {
+          var status = error && error.status;
+          if (status === 401) return "权限已过期，请重新登录（HTTP 401）";
+          if (status === 403) return "CSRF 校验失败，请刷新页面（HTTP 403）";
+          if (status === 400) return "输入值不合法（HTTP 400）";
+          if (status === 503) return "策略文件暂时无法写入（HTTP 503）";
+          return "服务器暂时不可用（HTTP " + (status || 0) + "）";
+        }
+        function csWhen(value) {
+          if (!value) return "-";
+          var date = new Date(value);
+          if (Number.isNaN(date.getTime())) return "-";
+          return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+        }
+        function csFillPolicy(policy, force) {
           if (!policy) return;
           cs.policy = policy;
           ["csRateLimit", "csRateWindow", "csDailyLimit", "csGlobalCap"].forEach(function (id, index) {
             var node = csNode(id);
             var key = ["rateLimit", "rateWindowSeconds", "dailyLimit", "globalActiveCap"][index];
-            if (node && document.activeElement !== node) node.value = policy[key];
+            if (node && (force || document.activeElement !== node)) node.value = policy[key];
           });
           var ttl = csNode("csJobTtl");
           if (ttl) ttl.textContent = (policy.jobTtlSeconds || 90) + "s（只读）";
           var meta = csNode("csPolicyMeta");
-          if (meta) meta.textContent = (policy.source === "runtime" ? "当前来源：Runtime override" : "当前来源：Environment default") +
-            (policy.updatedAt ? " · 最后修改 " + policy.updatedAt : "") + (policy.updatedBy ? " · " + policy.updatedBy : "");
+          if (meta) meta.textContent = "当前来源：" + (policy.source === "runtime" ? "运行时策略" : "环境默认") +
+            " · 最后修改：" + csWhen(policy.updatedAt) + " · 修改者：" + (policy.updatedBy || "-") +
+            " · 服务器已应用值 " + policy.rateLimit + " / " + policy.rateWindowSeconds + "s / 每日 " + policy.dailyLimit + " / 全局 " + policy.globalActiveCap;
         }
         function csRenderUsage(usage) {
           var host = csNode("csUsage");
@@ -327,7 +348,7 @@ const CAMPUS_SYNC_SCRIPT = `
           cs.eventTimer = setTimeout(function () { if (csActive()) csLoadEvents(true); }, 30000);
         }
         function csAction(path) {
-          return api(path, { method: "POST", body: {} }).then(function () { return csLoad(); }).catch(csFail);
+          return api(path, { method: "POST", body: "{}" }).then(function () { return csLoad(); }).catch(csFail);
         }
         function csBind() {
           var refresh = csNode("csRefreshBtn");
@@ -337,36 +358,53 @@ const CAMPUS_SYNC_SCRIPT = `
           csNode("csPauseBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/pause"); });
           csNode("csResumeBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/resume"); });
           csNode("csDiagnoseBtn").addEventListener("click", function () {
-            api("/api/admin/campus-sync/actions/diagnose", { method: "POST", body: {} }).then(function (body) {
+            api("/api/admin/campus-sync/actions/diagnose", { method: "POST", body: "{}" }).then(function (body) {
               csRenderDiagnose(body.report || body);
               return csLoad();
             }).catch(csFail);
           });
           csNode("csPolicyCancel").addEventListener("click", function () { csFillPolicy(cs.policy); });
           csNode("csPolicySave").addEventListener("click", function () {
+            var button = csNode("csPolicySave");
             var body = {
-              rateLimit: Number(csNode("csRateLimit").value),
-              rateWindowSeconds: Number(csNode("csRateWindow").value),
-              dailyLimit: Number(csNode("csDailyLimit").value),
-              globalActiveCap: Number(csNode("csGlobalCap").value)
+              rateLimit: csInt(csNode("csRateLimit").value),
+              rateWindowSeconds: csInt(csNode("csRateWindow").value),
+              dailyLimit: csInt(csNode("csDailyLimit").value),
+              globalActiveCap: csInt(csNode("csGlobalCap").value)
             };
-            if (!Number.isInteger(body.dailyLimit) || body.dailyLimit < 1 || body.dailyLimit > 50) {
-              csNode("csPolicyMeta").textContent = "每日次数需要在 1 到 50 之间。";
+            if (body.dailyLimit == null || body.dailyLimit < 1 || body.dailyLimit > 50 || body.rateLimit == null || body.rateWindowSeconds == null || body.globalActiveCap == null) {
+              csNode("csPolicyMeta").textContent = "输入值不合法（HTTP 400）";
               return;
             }
             var previous = cs.policy && cs.policy.dailyLimit;
             if (!window.confirm("确定将每用户每日同步次数由 " + previous + " 次调整为 " + body.dailyLimit + " 次吗？修改后立即对新请求生效。")) return;
-            api("/api/admin/campus-sync/policy", { method: "PUT", body: body }).then(function (result) {
-              csFillPolicy(result.policy);
-              csNode("csPolicyMeta").textContent = "已保存 · 立即生效";
-            }).catch(function () { csNode("csPolicyMeta").textContent = "策略没有保存。"; });
+            button.disabled = true;
+            button.textContent = "正在保存…";
+            api("/api/admin/campus-sync/policy", { method: "PUT", body: JSON.stringify(body) }).then(function () {
+              return api("/api/admin/campus-sync/policy");
+            }).then(function (fresh) {
+              var applied = fresh.policy || {};
+              csFillPolicy(applied, true);
+              if (applied.dailyLimit !== body.dailyLimit || applied.rateLimit !== body.rateLimit || applied.rateWindowSeconds !== body.rateWindowSeconds || applied.globalActiveCap !== body.globalActiveCap) {
+                csNode("csPolicyMeta").textContent = "服务器返回的策略与提交值不一致";
+                return;
+              }
+              csNode("csPolicyMeta").textContent = "已保存 · 立即生效 · " + csNode("csPolicyMeta").textContent;
+            }).catch(function (error) {
+              csNode("csPolicyMeta").textContent = csPolicyError(error);
+            }).finally(function () {
+              button.disabled = false;
+              button.textContent = "保存修改";
+            });
           });
           csNode("csPolicyReset").addEventListener("click", function () {
             if (!window.confirm("确定恢复为环境默认的同步策略吗？修改后立即对新请求生效。")) return;
-            api("/api/admin/campus-sync/policy/reset", { method: "POST", body: {} }).then(function (result) {
-              csFillPolicy(result.policy);
-              csNode("csPolicyMeta").textContent = "已恢复默认值 · 立即生效";
-            }).catch(csFail);
+            api("/api/admin/campus-sync/policy/reset", { method: "POST", body: "{}" }).then(function () {
+              return api("/api/admin/campus-sync/policy");
+            }).then(function (fresh) {
+              csFillPolicy(fresh.policy, true);
+              csNode("csPolicyMeta").textContent = "已恢复默认值 · 立即生效 · " + csNode("csPolicyMeta").textContent;
+            }).catch(function (error) { csNode("csPolicyMeta").textContent = csPolicyError(error); });
           });
           csNode("csEventsBtn").addEventListener("click", function () { csLoadEvents(true); });
           csNode("csEventsMore").addEventListener("click", function () { if (cs.cursor) csLoadEvents(false); });

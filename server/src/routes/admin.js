@@ -14,6 +14,7 @@ try {
   router.use(require("../modules/ai-provider/routes"));
   router.use(require("../modules/agent-platform/routes"));
   router.use(require("../modules/campus-sync-ops/routes"));
+  router.use(require("../modules/schedule-collector/routes"));
 } catch (error) {
   // Domain modules must not prevent legacy admin routes from loading.
   console.warn("[admin] optional domain modules failed to load:", error.message);

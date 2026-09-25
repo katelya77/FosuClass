@@ -827,6 +827,15 @@ function getActiveTermConfig(config) {
   }));
 }
 
+function publicAdsConfig() {
+  const enabled = String(process.env.FOSU_ADS_ENABLED || "") === "1";
+  return {
+    enabled,
+    bannerEnabled: enabled && String(process.env.FOSU_ADS_BANNER_ENABLED || "") === "1",
+    rewardedEnabled: enabled && String(process.env.FOSU_ADS_REWARDED_ENABLED || "") === "1",
+  };
+}
+
 function getPublicAppConfig() {
   const config = getAdminConfig();
   const dataVersion = resolveDataVersion(config);
@@ -883,6 +892,7 @@ function getPublicAppConfig() {
       notices,
       dailyKnowledge,
       news: listNews().filter((item) => item.enabled === true),
+      ads: publicAdsConfig(),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,
       updatedAt: config.updatedAt || "",
       registryUpdatedAt,
@@ -998,6 +1008,7 @@ module.exports = {
   getAdminDashboard,
   getDailyKnowledgeAdminState,
   getPublicAppConfig,
+  publicAdsConfig,
   importDailyKnowledgePack,
   isInDisplayWindow,
   listNews,

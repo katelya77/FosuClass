@@ -2,6 +2,7 @@ const express = require("express");
 const adminAuth = require("../services/adminAuth");
 const { DAILY_KNOWLEDGE_BINDINGS, DAILY_KNOWLEDGE_SCRIPT, DAILY_KNOWLEDGE_SECTION, DAILY_KNOWLEDGE_STYLES } = require("./adminDailyKnowledgeAssets");
 const { CAMPUS_SYNC_SCRIPT, CAMPUS_SYNC_SECTION, CAMPUS_SYNC_STYLES } = require("./adminCampusSyncAssets");
+const { SCHEDULE_COLLECTOR_CARD, SCHEDULE_COLLECTOR_SCRIPT } = require("./adminScheduleCollectorAssets");
 const router = express.Router();
 
 const ADMIN_LOGO_URL = "/assets/logo.png";
@@ -5833,9 +5834,7 @@ ${CAMPUS_SYNC_STYLES}
             <li class="nav-item" data-section="config"><button type="button" title="数据版本"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5"/></svg><span class="nav-label">数据版本</span></button></li>
 
             <li class="nav-group-label" data-nav-group="内容管理">内容管理</li>
-            <li class="nav-item" data-section="notices"><button type="button" title="公告管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13V9l12-5v14L4 13Zm12-4h3a2 2 0 0 1 0 4h-3M6 14l1.5 6h4L10 15"/></svg><span class="nav-label">公告管理</span></button></li>
             <li class="nav-item" data-section="daily-knowledge"><button type="button" title="每日知识"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 4h6m-6 4h6m-6 4h4M4 7h2m-2 5h2m-2 5h2"/></svg><span class="nav-label">每日知识</span></button></li>
-            <li class="nav-item" data-section="news"><button type="button" title="最新动态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 4h8M8 12h8m-8 4h5"/></svg><span class="nav-label">最新动态</span></button></li>
             <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
             <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
             <li class="nav-item" data-section="assistant-kb"><button type="button" title="小序知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
@@ -6027,6 +6026,7 @@ ${CAMPUS_SYNC_STYLES}
 
 ${CAMPUS_SYNC_SECTION}
       <section id="section-sync" class="section">
+${SCHEDULE_COLLECTOR_CARD}
         <!-- 1. sync-hero -->
         <div class="sync-hero" id="sync-hero">
           <div class="sync-hero-main">
@@ -6978,236 +6978,6 @@ ${CAMPUS_SYNC_SECTION}
                 </tr>
               </thead>
               <tbody id="qualityAnomalyTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- 面板五：公告管理 -->
-      <section id="section-notices" class="section">
-        <div class="split-layout">
-          <div class="card form-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 id="noticeFormTitle" class="card-title" style="margin-bottom: 0;">新建公告</h3>
-              <button id="clearNoticeButton" class="ghost" style="padding: 4px 10px; font-size: 12px;">清除表单</button>
-            </div>
-            
-            <div class="form-row">
-              <div>
-                <label>标题</label>
-                <input id="noticeTitle" placeholder="例如：强智教务数据维护中">
-              </div>
-              <div>
-                <label>版本标识符 (Version)</label>
-                <input id="noticeVersion" placeholder="例如：20260601-1">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>公告类型 (Type)</label>
-                <select id="noticeType">
-                  <option value="info">常规 (info)</option>
-                  <option value="warning">警告 (warning)</option>
-                  <option value="success">成功 (success)</option>
-                  <option value="update">更新 (update)</option>
-                  <option value="maintenance">维护 (maintenance)</option>
-                </select>
-              </div>
-              <div>
-                <label>优先级 (Priority)</label>
-                <select id="noticePriority">
-                  <option value="normal">普通 (normal)</option>
-                  <option value="important">重要 (important)</option>
-                  <option value="urgent">紧急 (urgent)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>展示位置 (Target Page)</label>
-                <select id="noticeTargetPage">
-                  <option value="all">所有页面 (all)</option>
-                  <option value="home">小程序首页 (home)</option>
-                  <option value="today">今日课表 (today)</option>
-                  <option value="school">全校查询 (school)</option>
-                  <option value="settings">个人设置 (settings)</option>
-                </select>
-              </div>
-              <div>
-                <label>展示模式 (Display Mode)</label>
-                <select id="noticeDisplayMode">
-                  <option value="banner">顶部横幅 (banner)</option>
-                  <option value="modal">弹窗提醒 (modal)</option>
-                  <option value="ticker">跑马灯 ticker</option>
-                  <option value="card">普通卡片 (card)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>生效开始时间 (选填)</label>
-                <input id="noticeStartAt" placeholder="YYYY-MM-DD HH:MM">
-              </div>
-              <div>
-                <label>生效结束时间 (选填)</label>
-                <input id="noticeEndAt" placeholder="YYYY-MM-DD HH:MM">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>是否启用</label>
-                <select id="noticeEnabled">
-                  <option value="true">启用展示</option>
-                  <option value="false">停用展示</option>
-                </select>
-              </div>
-              <div>
-                <label>是否允许用户关闭</label>
-                <select id="noticeClosable">
-                  <option value="true">允许关闭 (保留缓存)</option>
-                  <option value="false">不可关闭 (强制展示)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>公告正文内容</label>
-                <textarea id="noticeContent" placeholder="在此输入公告正文内容...支持换行。"></textarea>
-              </div>
-            </div>
-
-            <button id="saveNoticeButton" class="primary">保存并发布公告</button>
-          </div>
-
-          <div class="preview-box">
-            <h3 class="card-title" style="margin-bottom: 0;">小程序端实时预览</h3>
-            <div class="preview-phone">
-              <div class="phone-bar">
-                <span>9:41</span>
-                <span style="font-size: 10px;">FosuClass 佛大</span>
-                <span>Wi-Fi</span>
-              </div>
-              <div class="phone-screen" id="noticePhoneScreen">
-                <!-- 实时预览公告 -->
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">公告管理列表</h3>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>标题</th>
-                  <th>类型/模式</th>
-                  <th>展示页面</th>
-                  <th>状态</th>
-                  <th>更新时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="noticeListTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-${DAILY_KNOWLEDGE_SECTION}
-
-      <!-- 面板六：最新动态 -->
-      <section id="section-news" class="section">
-        <div class="split-layout">
-          <div class="card form-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 id="newsFormTitle" class="card-title" style="margin-bottom: 0;">添加最新动态</h3>
-              <button id="clearNewsButton" class="ghost" style="padding: 4px 10px; font-size: 12px;">清除表单</button>
-            </div>
-            
-            <div class="form-row">
-              <div>
-                <label>动态标题</label>
-                <input id="newsTitle" placeholder="例如：2026 春季学期全校课表上线">
-              </div>
-              <div>
-                <label>徽章标签 (Tag)</label>
-                <input id="newsTag" placeholder="例如：数据更新 / 功能升级">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>显示日期 (选填)</label>
-                <input id="newsDate" placeholder="YYYY-MM-DD">
-              </div>
-              <div>
-                <label>外链链接 (可选)</label>
-                <input id="newsLink" placeholder="例如：https://mp.weixin.qq.com/...">
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>是否启用</label>
-                <select id="newsEnabled">
-                  <option value="true">启用</option>
-                  <option value="false">禁用</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>摘要内容 (显示在外部列表)</label>
-                <textarea id="newsSummary" placeholder="动态的简要说明，100字以内..."></textarea>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>详情正文内容 (折叠或点开后展示)</label>
-                <textarea id="newsDetail" placeholder="动态的详细说明，支持多行..."></textarea>
-              </div>
-            </div>
-
-            <button id="saveNewsButton" class="primary">保存动态</button>
-          </div>
-
-          <div class="preview-box">
-            <h3 class="card-title" style="margin-bottom: 0;">小程序卡片展示预览</h3>
-            <div class="preview-phone">
-              <div class="phone-bar">
-                <span>9:41</span>
-                <span style="font-size: 10px;">动态公告</span>
-                <span>Wi-Fi</span>
-              </div>
-              <div class="phone-screen" id="newsPhoneScreen">
-                <!-- 动态卡片预览 -->
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">动态管理列表</h3>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>标题</th>
-                  <th>标签</th>
-                  <th>日期</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="newsListTable"></tbody>
             </table>
           </div>
         </div>
@@ -13766,6 +13536,7 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
       function renderNotices() {
+        if (!$("noticeListTable")) return;
         var list = state.notices.filter(function(item) { return item && item.displayMode !== "daily-tip"; });
         var tbody = $("noticeListTable");
         tbody.textContent = "";
@@ -13810,6 +13581,7 @@ ${DAILY_KNOWLEDGE_SECTION}
 
 ${DAILY_KNOWLEDGE_SCRIPT}
 ${CAMPUS_SYNC_SCRIPT}
+${SCHEDULE_COLLECTOR_SCRIPT}
 
       // 最新动态管理
       function newsPayload() {
@@ -13898,6 +13670,7 @@ ${CAMPUS_SYNC_SCRIPT}
       function renderNews() {
         var list = state.news;
         var tbody = $("newsListTable");
+        if (!tbody) return;
         tbody.textContent = "";
         
         if (list.length === 0) {
@@ -16305,9 +16078,7 @@ ${CAMPUS_SYNC_SCRIPT}
             ["数据概览", loadDashboard()],
             ["全局配置", loadConfig()],
             ["查询服务", loadAiProviderConfig()],
-            ["公告管理", loadNotices()],
             ["每日知识", loadDailyKnowledge()],
-            ["最新动态", loadNews()],
             ["反馈管理", loadFeedbacks()]
           ];
           return Promise.allSettled(moduleLoaders.map(function (entry) { return entry[1]; })).then(function (results) {

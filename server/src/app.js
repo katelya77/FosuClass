@@ -90,13 +90,13 @@ const DEFAULT_URLENCODED_BODY_LIMIT = process.env.FOSU_URLENCODED_BODY_LIMIT || 
 const defaultJsonParser = express.json({
   limit: DEFAULT_JSON_BODY_LIMIT,
   verify(req, res, buf) {
-    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0) req.rawBody = buf;
+    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0 || String(req.originalUrl || "").indexOf("/api/full-sync/") === 0) req.rawBody = buf;
   },
 });
 const largeJsonParser = express.json({
   limit: LARGE_JSON_BODY_LIMIT,
   verify(req, res, buf) {
-    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0) req.rawBody = buf;
+    if (String(req.originalUrl || "").indexOf("/api/campus-agent/") === 0 || String(req.originalUrl || "").indexOf("/api/full-sync/") === 0) req.rawBody = buf;
   },
 });
 const campusSyncJsonParser = express.json({ limit: process.env.CAMPUS_SYNC_JSON_BODY_LIMIT || "8kb" });
@@ -251,6 +251,7 @@ app.use("/api/fosu/personal", personalRouter);
 app.use("/api/schedule-import/fosu", studentScheduleImportRouter);
 app.use("/api/campus-sync", require("./routes/campusSync"));
 app.use("/api/campus-agent/v1", require("./routes/campusAgent"));
+app.use("/api/full-sync/v1", require("./routes/fullSyncAgent"));
 app.use("/api/ai", aiRouter);
 app.use("/api/coze/tools", cozeToolGatewayRouter);
 app.use("/api/admin", adminRouter);
