@@ -34,17 +34,22 @@ router.get("/campus-sync/security", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.get("/campus-sync/policy", adminAuth.verifyAdminAccess, (req, res) => {
-  res.json({ success: true, policy: policy.snapshot(), usage: quota.usage() });
+  const snapshot = policy.snapshot();
+  res.json({ success: true, policy: snapshot, revision: snapshot.revision, usage: quota.usage() });
 });
 
 router.put("/campus-sync/policy", verifyAdminWriteAccess, (req, res) => {
   try {
     const identity = adminAuth.getAuditIdentity(req);
-    const changed = policy.update(req.body || {}, identity.operator || "admin");
+    const body = Object.assign({}, req.body || {});
+    const expectedRevision = body.expectedRevision;
+    delete body.expectedRevision;
+    const changed = policy.update(body, identity.operator || "admin", expectedRevision);
     writeAuditLog(req, "campus-sync-policy-update", "campus-sync", "policy", JSON.stringify(changed));
     res.json({ success: true, policy: policy.snapshot(), message: "已保存 · 立即生效" });
   } catch (error) {
-    res.status(400).json({ success: false, code: error && error.code || "CAMPUS_SYNC_POLICY_REJECTED", message: error && error.publicMessage || "策略数值不在允许范围内。" });
+    const status = error && error.code === "CAMPUS_SYNC_POLICY_CONFLICT" ? 409 : 400;
+    res.status(status).json({ success: false, code: error && error.code || "CAMPUS_SYNC_POLICY_REJECTED", message: error && error.publicMessage || "策略数值不在允许范围内。" });
   }
 });
 

@@ -17,17 +17,42 @@ function page(seed) {
     ${CAMPUS_SYNC_SECTION}
     <script>
       var seed = ${JSON.stringify(seed.payload)};
+      window.__seed = seed;
       function api(url, options) {
         options = options || {};
+        var method = String(options.method || "GET").toUpperCase();
         if (seed.mode === "error") return Promise.reject(new Error("offline"));
-        if (String(options.method || "GET") === "PUT" && url.indexOf("policy") >= 0) {
+        if (method === "POST" && url.indexOf("actions/pause") >= 0) {
+          seed.overview.maintenance = { paused: true };
+          seed.overview.status = "maintenance";
+          seed.overview.pipeline[1].status = "maintenance";
+          return Promise.resolve({ success: true, maintenance: seed.overview.maintenance });
+        }
+        if (method === "POST" && url.indexOf("actions/resume") >= 0) {
+          seed.overview.maintenance = { paused: false };
+          seed.overview.status = "normal";
+          seed.overview.pipeline[1].status = "ok";
+          return Promise.resolve({ success: true, maintenance: seed.overview.maintenance });
+        }
+        if (method === "PUT" && url.indexOf("policy") >= 0) {
+          if (seed.mode === "save-failed") {
+            var failed = new Error("策略暂时无法保存。");
+            failed.status = 503;
+            return Promise.reject(failed);
+          }
           var next = JSON.parse(options.body || "{}");
-          seed.policy = Object.assign({}, seed.policy, next, { source: "runtime", updatedAt: "2026-09-25T08:00:00.000Z", updatedBy: "admin" });
+          if (seed.policy.revision && next.expectedRevision && next.expectedRevision !== seed.policy.revision) {
+            var conflict = new Error("策略已在其他窗口被修改，请重新加载后再保存。");
+            conflict.status = 409;
+            return Promise.reject(conflict);
+          }
+          delete next.expectedRevision;
+          seed.policy = Object.assign({}, seed.policy, next, { source: "runtime", revision: "rev-saved", updatedAt: "2026-09-25T08:00:00.000Z", updatedBy: "admin" });
         }
         if (url.indexOf("policy/reset") >= 0) {
-          seed.policy = Object.assign({}, seed.policy, { rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, source: "environment", updatedBy: "admin" });
+          seed.policy = Object.assign({}, seed.policy, { rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, source: "environment", revision: "rev-default", updatedBy: "admin" });
         }
-        if (url.indexOf("overview") >= 0) return Promise.resolve({ overview: seed.overview });
+        if (url.indexOf("overview") >= 0) return Promise.resolve({ success: true, overview: seed.overview });
         if (url.indexOf("timeseries") >= 0) return Promise.resolve({ points: seed.points });
         if (url.indexOf("security") >= 0) return Promise.resolve({ security: seed.security });
         if (url.indexOf("config") >= 0) return Promise.resolve({ config: seed.config });
@@ -50,8 +75,9 @@ function seed(mode) {
     payload: {
       mode,
       overview: {
-        status: mode === "offline" ? "offline" : (mode === "busy" ? "busy" : (mode === "maintenance" ? "maintenance" : "normal")),
-        securityPosture: mode === "security" ? "watch" : "normal",
+        status: mode === "offline" ? "offline" : (mode === "busy" ? "busy" : (mode === "maintenance" ? "maintenance" : (mode === "circuit" ? "degraded" : "normal"))),
+        securityPosture: mode === "circuit" ? "circuit_open" : (mode === "security" ? "watch" : "normal"),
+        maintenance: { paused: mode === "maintenance" },
         agent: { online: healthy, lastHeartbeatAgeMs: healthy ? 1200 : null },
         queue: { queued: mode === "busy" ? 10 : 1, processing: mode === "busy" ? 1 : 0, active: mode === "busy" ? 11 : 1, cap: 10, oldestQueuedMs: 400, activeWorker: mode === "busy" ? 1 : 0, estimatedWaitMs: 800 },
         window24h: { attempts: 20, success: 16, failed: 2, successRate: 88.9, rateLimited: 1, systemFailureRate: 10, credentialFailureRate: 5 },
@@ -68,7 +94,7 @@ function seed(mode) {
       config: { perUserConcurrency: 1, rateLimit: 5, dailyLimit: 10, globalCap: 10, jobTtlSeconds: 90, previewRetentionSeconds: 900, heartbeatIntervalMs: 30000, offlineTtlMs: 90000, workerConcurrency: 1, circuit: { state: "CLOSED" }, secrets: { campusAgentToken: "Configured", campusAgentSigningSecret: "Configured" } },
       events: mode === "empty" ? [] : [{ t: Date.now(), jobIdShort: "abc12345", principalHashPrefix: "abcd1234", status: mode === "failed" ? "failed" : "completed", queueWaitMs: 20, durationMs: 800, courseCount: 23, retryCount: 0, resultCode: mode === "failed" ? "TIMEOUT" : "OK", source: "campus-sync", requestId: "req123" }],
       points: mode === "empty" ? [] : (mode === "single" ? [{ attempts: 1, success: 1, failed: 0, systemFailures: 0, credentialFailures: 0, rateLimited: 0 }] : [{ attempts: 4, success: 3, failed: 1, systemFailures: 1, credentialFailures: 0, rateLimited: mode === "limited" ? 2 : 0 }, { attempts: 6, success: 5, failed: 0, systemFailures: 0, credentialFailures: 1, rateLimited: 0 }]),
-      policy: { perUserConcurrency: 1, rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, jobTtlSeconds: 90, source: "environment", updatedAt: null, updatedBy: "" },
+      policy: { perUserConcurrency: 1, rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10, jobTtlSeconds: 90, source: mode === "storage" ? "environment" : "runtime", storageStatus: mode === "storage" ? "invalid" : "ok", revision: "rev-1", updatedAt: "2026-09-25T01:00:00.000Z", updatedBy: "admin" },
       usage: { attempts: mode === "empty" ? 0 : 4, success: 3, failed: 1, rateLimited: mode === "limited" ? 2 : 0, activeUsers: 2, shortLimitedUsers: mode === "limited" ? 1 : 0, dailyLimitedUsers: 0, maxAccepted: 2, topUserPrefix: "a83f29xx", remaining: { zero: 0, oneToThree: 1, fourToSeven: 1, eightPlus: 0 } },
       diagnose: { broker: "ok", agentHeartbeat: "online", circuit: "CLOSED", policy: { source: "environment" }, quota: { healthy: true }, diskWritable: true, schoolGateway: "暂无近期真实任务" },
     },
@@ -109,15 +135,37 @@ async function run() {
     ["busy", 1280, 800, "busy", "light"],
     ["offline", 1280, 800, "offline", "light"],
     ["maintenance", 1280, 800, "maintenance", "light"],
+    ["paused", 1280, 800, "maintenance", "light"],
+    ["circuit", 1280, 800, "circuit", "light"],
+    ["storage", 1280, 800, "storage", "light"],
     ["empty", 1280, 800, "empty", "light"],
     ["limited", 1280, 800, "limited", "light"],
+    ["save-failed", 1280, 800, "save-failed", "light"],
   ];
   for (const [name, width, height, mode, theme] of shots) {
     const pageHandle = await browser.newPage({ viewport: { width, height } });
     await pageHandle.goto(`http://127.0.0.1:${port}/?mode=${mode}&theme=${theme}`);
     await pageHandle.waitForSelector("#csOverview .cs-stat");
     await pageHandle.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: true });
+    if (name === "paused") {
+      const banner = await pageHandle.textContent("#csMaintenanceBanner");
+      const service = await pageHandle.textContent("#csServiceBadge");
+      if (!banner || banner.indexOf("个人课表同步已暂停") < 0) throw new Error("paused banner missing");
+      if (!service || service.indexOf("已暂停") < 0) throw new Error("paused service badge missing");
+    }
     if (name === "desktop-light") {
+      await pageHandle.fill("#csRateLimit", "4");
+      const dirty = await pageHandle.textContent("#csPolicyMeta");
+      if (!dirty || dirty.indexOf("有未保存的修改") < 0) throw new Error("dirty state missing");
+      await pageHandle.evaluate(() => { window.__seed.policy.revision = "rev-2"; window.__seed.policy.dailyLimit = 3; });
+      await pageHandle.click("#csRefreshBtn");
+      await pageHandle.waitForFunction(() => document.getElementById("csPolicyMeta").textContent.indexOf("服务器策略已发生变化") >= 0);
+      const kept = await pageHandle.inputValue("#csRateLimit");
+      if (kept !== "4") throw new Error("dirty input was overwritten");
+      await pageHandle.screenshot({ path: path.join(OUT_DIR, "policy-dirty.png"), fullPage: true });
+      await pageHandle.screenshot({ path: path.join(OUT_DIR, "policy-conflict.png"), fullPage: true });
+      await pageHandle.click("#csPolicyCancel");
+      await pageHandle.waitForFunction(() => document.getElementById("csRateLimit").value === "5");
       await pageHandle.fill("#csDailyLimit", "0");
       await pageHandle.click("#csPolicySave");
       const invalid = await pageHandle.textContent("#csPolicyMeta");
@@ -129,12 +177,22 @@ async function run() {
       pageHandle.once("dialog", (dialog) => dialog.accept());
       await pageHandle.click("#csPolicySave");
       await pageHandle.waitForFunction(() => document.getElementById("csPolicyMeta").textContent.indexOf("已保存") >= 0);
+      await pageHandle.screenshot({ path: path.join(OUT_DIR, "policy-save-success.png"), fullPage: true });
       pageHandle.once("dialog", (dialog) => dialog.accept());
       await pageHandle.click("#csPolicyReset");
       await pageHandle.click("#csPauseBtn");
+      await pageHandle.waitForFunction(() => document.getElementById("csDiagnose").textContent.indexOf("已暂停个人课表同步") >= 0);
       await pageHandle.click("#csResumeBtn");
+      await pageHandle.waitForFunction(() => document.getElementById("csDiagnose").textContent.indexOf("个人课表同步已恢复") >= 0);
       await pageHandle.click("#csDiagnoseBtn");
       await pageHandle.waitForFunction(() => document.getElementById("csDiagnose").textContent.indexOf("学校系统") >= 0);
+    }
+    if (name === "save-failed") {
+      await pageHandle.fill("#csDailyLimit", "8");
+      pageHandle.once("dialog", (dialog) => dialog.accept());
+      await pageHandle.click("#csPolicySave");
+      await pageHandle.waitForFunction(() => /无法写入|暂时不可用|保存/.test(document.getElementById("csPolicyMeta").textContent));
+      await pageHandle.screenshot({ path: path.join(OUT_DIR, "policy-save-failed.png"), fullPage: true });
     }
     await pageHandle.close();
   }

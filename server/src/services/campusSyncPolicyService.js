@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { safeLog } = require("../utils/safeLogger");
@@ -12,6 +13,7 @@ const LOCKED = ["perUserConcurrency", "workerConcurrency"];
 
 let loaded = false;
 let override = null;
+let storageStatus = "ok";
 let meta = { updatedAt: null, updatedBy: "" };
 
 function opsDir() {
@@ -52,32 +54,42 @@ function inRange(name, value) {
   return parsed != null && parsed >= spec.min && parsed <= spec.max;
 }
 
+function allowedRecord(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const next = {};
+  const names = Object.keys(FIELDS);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index];
+    if (!Object.prototype.hasOwnProperty.call(parsed, name) || !inRange(name, parsed[name])) return null;
+    next[name] = parseStrictInt(parsed[name]);
+  }
+  return next;
+}
+
 function readFile() {
   let raw = "";
   try {
     raw = fs.readFileSync(policyPath(), "utf8");
   } catch (error) {
     override = null;
+    storageStatus = error && error.code === "ENOENT" ? "ok" : "invalid";
     meta = { updatedAt: null, updatedBy: "" };
     loaded = true;
     return;
   }
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("shape");
-    const next = {};
-    Object.keys(FIELDS).forEach((name) => {
-      if (!Object.prototype.hasOwnProperty.call(parsed, name)) return;
-      if (!inRange(name, parsed[name])) throw new Error(name);
-      next[name] = parsed[name];
-    });
+    const next = allowedRecord(parsed);
+    if (!next) throw new Error("shape");
     override = next;
+    storageStatus = "ok";
     meta = {
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : null,
-      updatedBy: String(parsed.updatedBy || "").slice(0, 64),
+      updatedBy: String(parsed.updatedBy || "").replace(/[\u0000-\u001F]/g, "").slice(0, 64),
     };
   } catch (error) {
     override = null;
+    storageStatus = "invalid";
     meta = { updatedAt: null, updatedBy: "" };
     safeLog("campus-sync-policy-invalid", { fallback: "environment" });
   }
@@ -104,6 +116,8 @@ function snapshot() {
     resetTimezone: "Asia/Shanghai",
     resetLabel: "北京时间每日 00:00 重置",
     source: override ? "runtime" : "environment",
+    storageStatus,
+    revision: revision(),
     updatedAt: meta.updatedAt,
     updatedBy: override ? meta.updatedBy : "",
     bounds: {
@@ -122,9 +136,21 @@ function reject(message) {
   return error;
 }
 
+function revision() {
+  const values = Object.assign(defaults(), override || {});
+  return crypto.createHash("sha256").update([
+    1,
+    values.rateLimit,
+    values.rateWindowSeconds,
+    values.dailyLimit,
+    values.globalActiveCap,
+    meta.updatedAt || "",
+  ].join("|")).digest("hex").slice(0, 16);
+}
+
 function write(next, actor) {
   const dir = opsDir();
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const payload = {
     version: 1,
     rateLimit: next.rateLimit,
@@ -132,22 +158,33 @@ function write(next, actor) {
     dailyLimit: next.dailyLimit,
     globalActiveCap: next.globalActiveCap,
     updatedAt: new Date().toISOString(),
-    updatedBy: String(actor || "admin").slice(0, 64),
+    updatedBy: String(actor || "admin").replace(/[\u0000-\u001F]/g, "").slice(0, 64),
   };
+  const body = JSON.stringify(payload);
   const temp = `${policyPath()}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(payload));
+  fs.writeFileSync(temp, body, { mode: 0o600 });
   fs.renameSync(temp, policyPath());
-  override = {
-    rateLimit: payload.rateLimit,
-    rateWindowSeconds: payload.rateWindowSeconds,
-    dailyLimit: payload.dailyLimit,
-    globalActiveCap: payload.globalActiveCap,
-  };
+  try { fs.chmodSync(policyPath(), 0o600); } catch (error) {}
+  const saved = allowedRecord(JSON.parse(fs.readFileSync(policyPath(), "utf8")));
+  if (!saved || saved.dailyLimit !== payload.dailyLimit || saved.rateLimit !== payload.rateLimit || saved.rateWindowSeconds !== payload.rateWindowSeconds || saved.globalActiveCap !== payload.globalActiveCap) {
+    throw new Error("readback");
+  }
+  const backup = path.join(dir, "policy.last-known-good.json");
+  fs.writeFileSync(backup, body, { mode: 0o600 });
+  override = saved;
+  storageStatus = "ok";
   meta = { updatedAt: payload.updatedAt, updatedBy: payload.updatedBy };
   loaded = true;
 }
 
-function update(body, actor) {
+function conflict() {
+  const error = new Error("CAMPUS_SYNC_POLICY_CONFLICT");
+  error.code = "CAMPUS_SYNC_POLICY_CONFLICT";
+  error.publicMessage = "策略已在其他窗口被修改，请重新加载后再保存。";
+  return error;
+}
+
+function update(body, actor, expectedRevision) {
   ensure();
   if (!body || typeof body !== "object" || Array.isArray(body)) throw reject("策略格式不正确。");
   const keys = Object.keys(body);
@@ -164,9 +201,11 @@ function update(body, actor) {
     next[key] = parsed;
   });
   if (!keys.length) throw reject("没有可保存的策略。");
+  if (arguments.length >= 3 && expectedRevision !== before.revision) throw conflict();
   try {
     write(next, actor);
   } catch (error) {
+    if (error && error.code === "CAMPUS_SYNC_POLICY_CONFLICT") throw error;
     safeLog("campus-sync-policy-write-failed", { code: "POLICY_WRITE_FAILED" });
     throw reject("策略暂时无法保存。");
   }
@@ -205,6 +244,7 @@ function reload() {
 
 function resetForTests() {
   override = null;
+  storageStatus = "ok";
   meta = { updatedAt: null, updatedBy: "" };
   loaded = true;
   try { fs.rmSync(policyPath(), { force: true }); } catch (error) {}

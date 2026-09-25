@@ -23,6 +23,10 @@ const CAMPUS_SYNC_STYLES = `
     #section-campus-sync .cs-policy input { height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-primary); padding: 0 8px; }
     #section-campus-sync .cs-pipeline { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; }
     #section-campus-sync .cs-error, #section-campus-sync .cs-empty { color: var(--text-muted); font-size: 13px; }
+    #section-campus-sync .cs-banner { border: 1px solid var(--warning); border-radius: var(--radius); background: var(--warning-soft); color: var(--text-primary); padding: 12px 14px; }
+    #section-campus-sync .cs-banner b { display: block; margin-bottom: 4px; }
+    #section-campus-sync .cs-help { color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+    #section-campus-sync button:disabled { opacity: 0.55; }
     @media (max-width: 860px) {
       #section-campus-sync .cs-pipeline { grid-template-columns: 1fr 1fr; }
     }
@@ -36,9 +40,11 @@ const CAMPUS_SYNC_SECTION = `
               <h2>个人课表同步</h2>
               <div class="cs-kicker">Personal Schedule Sync</div>
               <p class="cs-kicker">监控个人课表同步链路、任务队列、异常、安全事件与服务状态。</p>
+              <div id="csRuntimeLine" class="cs-badge">● 正在读取服务状态</div>
             </div>
             <div class="cs-toolbar">
-              <span id="csSecurityBadge" class="cs-badge">安全状态</span>
+              <span id="csServiceBadge" class="cs-badge">服务：读取中</span>
+              <span id="csSecurityBadge" class="cs-badge">安全：读取中</span>
               <button type="button" class="secondary" id="csRefreshBtn">刷新</button>
               <button type="button" class="secondary" id="csPauseBtn">暂停个人同步</button>
               <button type="button" class="secondary" id="csResumeBtn">恢复个人同步</button>
@@ -47,6 +53,11 @@ const CAMPUS_SYNC_SECTION = `
           </div>
           <div id="csDiagnose" class="cs-muted"></div>
         </div>
+        <div id="csMaintenanceBanner" class="cs-banner" hidden>
+          <b>个人课表同步已暂停</b>
+          <div>新的同步请求暂时不会进入队列。已经开始执行的任务允许正常结束。</div>
+        </div>
+        <div id="csPolicyStorage" class="cs-banner" hidden>策略存储异常</div>
         <div id="csLoading" class="cs-card cs-muted">正在读取同步状态…</div>
         <div id="csError" class="cs-card cs-error" hidden></div>
         <div class="cs-grid" id="csOverview"></div>
@@ -68,17 +79,17 @@ const CAMPUS_SYNC_SECTION = `
           <h3>同步策略</h3>
           <div class="cs-policy">
             <div><span>单用户并发</span><b>1（固定）</b></div>
-            <label>短周期最多同步<input id="csRateLimit" type="number" min="1" max="20" step="1"></label>
+            <label>短周期最多同步<input id="csRateLimit" type="number" min="1" max="20" step="1"><span class="cs-help">限制单个用户短时间连续触发同步。</span></label>
             <label>周期（秒）<input id="csRateWindow" type="number" min="60" max="3600" step="1"></label>
-            <label>每日最多同步<input id="csDailyLimit" type="number" min="1" max="50" step="1"></label>
+            <label>每日最多同步<input id="csDailyLimit" type="number" min="1" max="50" step="1"><span class="cs-help">按北京时间自然日计算。</span></label>
             <div class="cs-muted">北京时间每日 00:00 重置</div>
-            <label>全局进行中任务上限<input id="csGlobalCap" type="number" min="1" max="30" step="1"></label>
+            <label>全局进行中任务上限<input id="csGlobalCap" type="number" min="1" max="30" step="1"><span class="cs-help">限制同时排队和处理的 Route 2 任务数量。</span></label>
             <div><span>WYZ Worker</span><b>1（固定）</b></div>
             <div><span>任务 TTL</span><b id="csJobTtl">90s（只读）</b></div>
           </div>
           <div class="cs-toolbar">
             <button type="button" id="csPolicySave">保存修改</button>
-            <button type="button" class="secondary" id="csPolicyCancel">取消编辑</button>
+            <button type="button" class="secondary" id="csPolicyCancel">放弃修改</button>
             <button type="button" class="secondary" id="csPolicyReset">恢复默认值</button>
           </div>
           <div id="csPolicyMeta" class="cs-muted"></div>
@@ -113,7 +124,7 @@ const CAMPUS_SYNC_SECTION = `
 
 const CAMPUS_SYNC_SCRIPT = `
       (function () {
-        var cs = { range: "24h", cursor: "", timer: null, eventTimer: null, backoff: 12000, control: null };
+        var cs = { range: "24h", cursor: "", timer: null, eventTimer: null, backoff: 12000, control: null, policyDirty: false, serverRevision: "" };
         function csNode(id) { return document.getElementById(id); }
         function csActive() {
           var section = csNode("section-campus-sync");
@@ -163,7 +174,7 @@ const CAMPUS_SYNC_SCRIPT = `
           var perf = overview.performance || {};
           var agent = overview.agent || {};
           var queue = overview.queue || {};
-          var statusLabel = { normal: "正常", busy: "繁忙", degraded: "降级", maintenance: "维护", offline: "离线" }[overview.status] || overview.status || "-";
+          var statusLabel = { normal: "正常", busy: "繁忙", degraded: "降级", maintenance: "已暂停", offline: "节点离线" }[overview.status] || overview.status || "-";
           var cards = [
             ["同步服务", statusLabel],
             ["校内同步节点", agent.online ? "在线" : "离线"],
@@ -180,8 +191,38 @@ const CAMPUS_SYNC_SCRIPT = `
             return "<div class='cs-stat'><span>" + card[0] + "</span><b>" + card[1] + "</b></div>";
           }).join("");
           var posture = overview.securityPosture || "normal";
-          var label = { normal: "安全状态正常", watch: "观察到异常", rate_limit: "限流生效中", circuit_open: "熔断已打开" }[posture] || posture;
-          csBadge(label, posture === "circuit_open" ? "danger" : (posture === "normal" ? "ok" : "warn"));
+          var label = { normal: "安全：正常", watch: "安全：观察", rate_limit: "安全：限流", circuit_open: "安全：熔断" }[posture] || ("安全：" + posture);
+          csBadge(label, posture === "circuit_open" || posture === "rate_limit" ? "danger" : (posture === "normal" ? "ok" : "warn"));
+          csSyncRuntime(overview);
+        }
+        function csSyncRuntime(overview) {
+          var paused = !!(overview && overview.maintenance && overview.maintenance.paused);
+          var status = overview && overview.status || "";
+          var banner = csNode("csMaintenanceBanner");
+          if (banner) banner.hidden = !paused;
+          var line = csNode("csRuntimeLine");
+          var service = csNode("csServiceBadge");
+          var running = !paused && (status === "normal" || status === "");
+          var serviceText = paused ? "已暂停" : status === "offline" ? "离线" : status === "degraded" ? "降级" : status === "busy" ? "繁忙" : "运行中";
+          if (service) {
+            service.className = "cs-badge " + (paused || status === "offline" ? "danger" : running ? "ok" : "warn");
+            service.textContent = "服务：" + serviceText;
+          }
+          if (line) {
+            line.className = "cs-badge " + (paused ? "danger" : running ? "ok" : "warn");
+            line.textContent = paused ? "● 个人课表同步已暂停" : running ? "● 个人课表同步运行中" : "● 个人课表同步" + serviceText;
+          }
+          var pauseBtn = csNode("csPauseBtn");
+          var resumeBtn = csNode("csResumeBtn");
+          if (pauseBtn && pauseBtn.dataset.busy !== "1") {
+            pauseBtn.disabled = paused;
+            pauseBtn.textContent = paused ? "已暂停" : "暂停个人同步";
+          }
+          if (resumeBtn && resumeBtn.dataset.busy !== "1") {
+            resumeBtn.disabled = !paused;
+            resumeBtn.textContent = "恢复个人同步";
+            resumeBtn.classList.toggle("secondary", !paused);
+          }
         }
         function csRenderPipeline(list) {
           var host = csNode("csPipeline");
@@ -270,6 +311,7 @@ const CAMPUS_SYNC_SCRIPT = `
           if (status === 401) return "权限已过期，请重新登录（HTTP 401）";
           if (status === 403) return "CSRF 校验失败，请刷新页面（HTTP 403）";
           if (status === 400) return "输入值不合法（HTTP 400）";
+          if (status === 409) return (error && error.message) || "策略已在其他窗口被修改，请重新加载后再保存。";
           if (status === 503) return "策略文件暂时无法写入（HTTP 503）";
           return "服务器暂时不可用（HTTP " + (status || 0) + "）";
         }
@@ -281,16 +323,28 @@ const CAMPUS_SYNC_SCRIPT = `
         }
         function csFillPolicy(policy, force) {
           if (!policy) return;
+          var previous = cs.serverRevision;
           cs.policy = policy;
+          cs.serverPolicy = policy;
+          var storage = csNode("csPolicyStorage");
+          if (storage) {
+            storage.hidden = policy.storageStatus !== "invalid";
+            storage.textContent = "策略存储异常";
+          }
+          if (force) cs.policyDirty = false;
+          if (!cs.policyDirty) cs.serverRevision = policy.revision || "";
           ["csRateLimit", "csRateWindow", "csDailyLimit", "csGlobalCap"].forEach(function (id, index) {
             var node = csNode(id);
             var key = ["rateLimit", "rateWindowSeconds", "dailyLimit", "globalActiveCap"][index];
-            if (node && (force || document.activeElement !== node)) node.value = policy[key];
+            if (node && !cs.policyDirty && (force || document.activeElement !== node)) node.value = policy[key];
           });
           var ttl = csNode("csJobTtl");
           if (ttl) ttl.textContent = (policy.jobTtlSeconds || 90) + "s（只读）";
           var meta = csNode("csPolicyMeta");
-          if (meta) meta.textContent = "当前来源：" + (policy.source === "runtime" ? "运行时策略" : "环境默认") +
+          if (!meta) return;
+          if (cs.policyDirty && previous && policy.revision && previous !== policy.revision) meta.textContent = "服务器策略已发生变化，请重新加载后再修改。";
+          else if (cs.policyDirty) meta.textContent = "有未保存的修改";
+          else meta.textContent = "当前来源：" + (policy.source === "runtime" ? "运行时策略" : "环境默认") +
             " · 最后修改：" + csWhen(policy.updatedAt) + " · 修改者：" + (policy.updatedBy || "-") +
             " · 服务器已应用值 " + policy.rateLimit + " / " + policy.rateWindowSeconds + "s / 每日 " + policy.dailyLimit + " / 全局 " + policy.globalActiveCap;
         }
@@ -347,30 +401,60 @@ const CAMPUS_SYNC_SCRIPT = `
           cs.timer = setTimeout(function () { csLoad().finally(csSchedule); }, cs.backoff);
           cs.eventTimer = setTimeout(function () { if (csActive()) csLoadEvents(true); }, 30000);
         }
-        function csAction(path) {
-          return api(path, { method: "POST", body: "{}" }).then(function () { return csLoad(); }).catch(csFail);
+        function csAction(path, button, pending, done, expectPaused) {
+          if (!button || button.dataset.busy === "1") return Promise.resolve();
+          button.dataset.busy = "1";
+          button.disabled = true;
+          button.textContent = pending;
+          return api(path, { method: "POST", body: "{}" }).then(function () {
+            return api("/api/admin/campus-sync/overview");
+          }).then(function (body) {
+            var overview = body.overview || body;
+            var paused = !!(overview.maintenance && overview.maintenance.paused);
+            if (paused !== expectPaused) throw new Error("服务端状态尚未确认");
+            csCards(overview);
+            var host = csNode("csDiagnose");
+            if (host) host.textContent = done;
+          }).catch(function (error) {
+            var host = csNode("csDiagnose");
+            if (host) host.textContent = error && error.message ? error.message : "操作失败";
+            csFail(error);
+          }).finally(function () {
+            button.dataset.busy = "";
+            return csLoad();
+          });
         }
         function csBind() {
           var refresh = csNode("csRefreshBtn");
           if (!refresh || refresh.dataset.bound) return;
           refresh.dataset.bound = "1";
           refresh.addEventListener("click", function () { csLoad(); csLoadEvents(true); });
-          csNode("csPauseBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/pause"); });
-          csNode("csResumeBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/resume"); });
+          ["csRateLimit", "csRateWindow", "csDailyLimit", "csGlobalCap"].forEach(function (id) {
+            csNode(id).addEventListener("input", function () {
+              cs.policyDirty = true;
+              csNode("csPolicyMeta").textContent = "有未保存的修改";
+            });
+          });
+          csNode("csPauseBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/pause", this, "正在暂停", "已暂停个人课表同步", true); });
+          csNode("csResumeBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/resume", this, "正在恢复", "个人课表同步已恢复", false); });
           csNode("csDiagnoseBtn").addEventListener("click", function () {
             api("/api/admin/campus-sync/actions/diagnose", { method: "POST", body: "{}" }).then(function (body) {
               csRenderDiagnose(body.report || body);
               return csLoad();
             }).catch(csFail);
           });
-          csNode("csPolicyCancel").addEventListener("click", function () { csFillPolicy(cs.policy); });
+          csNode("csPolicyCancel").addEventListener("click", function () {
+            cs.policyDirty = false;
+            csFillPolicy(cs.serverPolicy || cs.policy, true);
+          });
           csNode("csPolicySave").addEventListener("click", function () {
             var button = csNode("csPolicySave");
             var body = {
               rateLimit: csInt(csNode("csRateLimit").value),
               rateWindowSeconds: csInt(csNode("csRateWindow").value),
               dailyLimit: csInt(csNode("csDailyLimit").value),
-              globalActiveCap: csInt(csNode("csGlobalCap").value)
+              globalActiveCap: csInt(csNode("csGlobalCap").value),
+              expectedRevision: cs.serverRevision
             };
             if (body.dailyLimit == null || body.dailyLimit < 1 || body.dailyLimit > 50 || body.rateLimit == null || body.rateWindowSeconds == null || body.globalActiveCap == null) {
               csNode("csPolicyMeta").textContent = "输入值不合法（HTTP 400）";
@@ -384,6 +468,7 @@ const CAMPUS_SYNC_SCRIPT = `
               return api("/api/admin/campus-sync/policy");
             }).then(function (fresh) {
               var applied = fresh.policy || {};
+              cs.policyDirty = false;
               csFillPolicy(applied, true);
               if (applied.dailyLimit !== body.dailyLimit || applied.rateLimit !== body.rateLimit || applied.rateWindowSeconds !== body.rateWindowSeconds || applied.globalActiveCap !== body.globalActiveCap) {
                 csNode("csPolicyMeta").textContent = "服务器返回的策略与提交值不一致";
@@ -402,6 +487,7 @@ const CAMPUS_SYNC_SCRIPT = `
             api("/api/admin/campus-sync/policy/reset", { method: "POST", body: "{}" }).then(function () {
               return api("/api/admin/campus-sync/policy");
             }).then(function (fresh) {
+              cs.policyDirty = false;
               csFillPolicy(fresh.policy, true);
               csNode("csPolicyMeta").textContent = "已恢复默认值 · 立即生效 · " + csNode("csPolicyMeta").textContent;
             }).catch(function (error) { csNode("csPolicyMeta").textContent = csPolicyError(error); });

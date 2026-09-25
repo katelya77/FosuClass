@@ -9,57 +9,63 @@ function fail(message) {
   throw error;
 }
 
-async function call(method, urlPath, body) {
-  const response = await fetch(base + urlPath, {
-    method,
+function numbers(policy) {
+  return {
+    rateLimit: policy && policy.rateLimit,
+    rateWindowSeconds: policy && policy.rateWindowSeconds,
+    dailyLimit: policy && policy.dailyLimit,
+    globalActiveCap: policy && policy.globalActiveCap,
+    updatedAt: policy && policy.updatedAt || null,
+    updatedBy: policy && policy.updatedBy || "",
+  };
+}
+
+function readJson(file) {
+  if (!fs.existsSync(file)) return null;
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+async function readRemote() {
+  if (!token) return null;
+  const response = await fetch(base + "/api/admin/campus-sync/policy", {
     headers: {
-      "content-type": "application/json",
       "x-admin-token": token,
       "x-fosu-client": "service",
     },
-    body: body ? JSON.stringify(body) : undefined,
   });
-  let json = null;
-  try { json = await response.json(); } catch (error) { json = null; }
-  if (!response.ok || !json || json.success !== true) fail(method + " " + urlPath + " HTTP " + response.status);
-  return json;
+  if (!response.ok) fail("GET policy HTTP " + response.status);
+  const json = await response.json();
+  if (!json || json.success !== true || !json.policy) fail("GET policy was not a snapshot");
+  return json.policy;
 }
 
 async function main() {
-  if (process.argv.includes("--persisted")) {
-    const policy = require("../src/services/campusSyncPolicyService");
-    policy.reload();
-    const current = policy.current();
-    if (current.dailyLimit !== 10 || current.rateLimit !== 5 || current.rateWindowSeconds !== 600 || current.globalActiveCap !== 10) {
-      fail("persisted policy was not the production default");
-    }
-    console.log("campus-sync-policy-verify persisted=10");
-    return;
-  }
-  if (!token) fail("empty ADMIN_API_TOKEN");
-  const defaults = { rateLimit: 5, rateWindowSeconds: 600, dailyLimit: 10, globalActiveCap: 10 };
-  try {
-    await call("PUT", "/api/admin/campus-sync/policy", Object.assign({}, defaults, { dailyLimit: 9 }));
-    const applied = await call("GET", "/api/admin/campus-sync/policy");
-    if (!applied.policy || applied.policy.dailyLimit !== 9) fail("GET dailyLimit was not 9");
-    const policy = require("../src/services/campusSyncPolicyService");
-    policy.reload();
-    if (policy.current().dailyLimit !== 9) fail("runtime current() was not 9");
-    console.log("campus-sync-policy-verify applied=9");
-  } finally {
-    await call("PUT", "/api/admin/campus-sync/policy", defaults);
-    const restored = await call("GET", "/api/admin/campus-sync/policy");
-    if (!restored.policy || restored.policy.dailyLimit !== 10 || restored.policy.rateLimit !== 5 || restored.policy.rateWindowSeconds !== 600 || restored.policy.globalActiveCap !== 10) {
-      fail("defaults were not restored");
-    }
-  }
   const policy = require("../src/services/campusSyncPolicyService");
-  const file = policy.policyFile();
-  if (process.env.NODE_ENV === "production" && !file.startsWith("/app/storage/")) fail("policy file is not on the storage volume");
-  if (!fs.existsSync(file)) fail("policy.json missing at " + file);
-  const saved = JSON.parse(fs.readFileSync(file, "utf8"));
-  if (saved.dailyLimit !== 10) fail("persisted dailyLimit was not restored");
-  console.log("campus-sync-policy-verify restored=10 file=present");
+  const control = require("../src/services/campusSyncControl");
+  const beforePolicy = numbers(policy.reload());
+  const beforeControl = control.reload();
+  const remote = await readRemote();
+  const afterPolicy = numbers(policy.reload());
+  const afterControl = control.reload();
+  const policyFile = policy.policyFile();
+  if (process.env.NODE_ENV === "production" && !policyFile.startsWith("/app/storage/")) fail("policy file is not on the storage volume");
+  const saved = readJson(policyFile);
+  if (saved && (saved.dailyLimit !== afterPolicy.dailyLimit || saved.rateLimit !== afterPolicy.rateLimit || saved.rateWindowSeconds !== afterPolicy.rateWindowSeconds || saved.globalActiveCap !== afterPolicy.globalActiveCap)) {
+    fail("runtime policy does not match persisted policy");
+  }
+  if (remote && (remote.dailyLimit !== afterPolicy.dailyLimit || remote.rateLimit !== afterPolicy.rateLimit || remote.rateWindowSeconds !== afterPolicy.rateWindowSeconds || remote.globalActiveCap !== afterPolicy.globalActiveCap)) {
+    fail("GET policy does not match runtime policy");
+  }
+  try { fs.accessSync(require("path").dirname(policyFile), fs.constants.W_OK); } catch (error) { fail("policy directory is not writable"); }
+  const unchanged = JSON.stringify(beforePolicy) === JSON.stringify(afterPolicy) && beforeControl.paused === afterControl.paused && beforeControl.pausedAt === afterControl.pausedAt;
+  console.log("POLICY BEFORE DEPLOY " + JSON.stringify(beforePolicy));
+  console.log("POLICY AFTER DEPLOY " + JSON.stringify(afterPolicy));
+  console.log("POLICY_UNCHANGED=" + unchanged);
+  console.log("CONTROL BEFORE DEPLOY " + JSON.stringify({ paused: beforeControl.paused, pausedAt: beforeControl.pausedAt }));
+  console.log("CONTROL AFTER DEPLOY " + JSON.stringify({ paused: afterControl.paused, pausedAt: afterControl.pausedAt }));
+  console.log("CONTROL_UNCHANGED=" + (beforeControl.paused === afterControl.paused && beforeControl.pausedAt === afterControl.pausedAt));
+  console.log("campus-sync-policy-verify readonly storage=" + (afterPolicy.storageStatus || policy.snapshot().storageStatus));
+  if (!unchanged) fail("read-only verification changed policy or control");
 }
 
 main().catch((error) => {

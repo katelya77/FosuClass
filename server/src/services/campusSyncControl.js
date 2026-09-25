@@ -14,6 +14,7 @@ let loaded = false;
 let paused = false;
 let pausedAt = null;
 let pausedBy = "";
+let storageStatus = "ok";
 
 function readControl() {
   try {
@@ -23,8 +24,14 @@ function readControl() {
     pausedAt = parsed.pausedAt || null;
     pausedBy = String(parsed.pausedBy || "");
     if (parsed.circuit) circuit.loadState(parsed.circuit);
+    storageStatus = "ok";
   } catch (error) {
-    if (error && error.code !== "ENOENT") paused = false;
+    if (!error || error.code === "ENOENT") {
+      storageStatus = "ok";
+    } else {
+      storageStatus = "invalid";
+      paused = true;
+    }
   }
   loaded = true;
 }
@@ -35,7 +42,7 @@ function ensureLoaded() {
 
 function writeControl() {
   const dir = opsDir();
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const payload = {
     paused,
     pausedAt,
@@ -44,8 +51,9 @@ function writeControl() {
     updatedAt: new Date().toISOString(),
   };
   const temp = `${controlPath()}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(payload));
+  fs.writeFileSync(temp, JSON.stringify(payload), { mode: 0o600 });
   fs.renameSync(temp, controlPath());
+  try { fs.chmodSync(controlPath(), 0o600); } catch (error) {}
 }
 
 function isPaused() {
@@ -86,7 +94,14 @@ function snapshot() {
     paused,
     pausedAt,
     pausedBy: paused ? "admin" : "",
+    storageStatus,
   };
+}
+
+function reload() {
+  loaded = false;
+  readControl();
+  return snapshot();
 }
 
 function resetForTests() {
@@ -105,6 +120,7 @@ module.exports = {
   isPaused,
   pause,
   persistCircuit,
+  reload,
   resetForTests,
   resume,
   snapshot,

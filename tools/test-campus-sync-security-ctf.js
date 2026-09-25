@@ -356,7 +356,8 @@ async function run() {
   await rejectPolicy("A40", { constructor: { prototype: { dailyLimit: 1 } } });
   await rejectPolicy("A41", { perUserConcurrency: 4 });
   await checkAsync("A42", async () => {
-    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 2, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 });
+    const current = await request(handle, "GET", "/api/admin/campus-sync/policy", { cookie: adminCookie });
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 2, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10, expectedRevision: current.json.revision });
     assert.strictEqual(response.status, 200);
     assert.strictEqual(syncPolicy.current().dailyLimit, 2);
     const owner = { fosuSession: { openidHash: "policy-now-user" } };
@@ -418,6 +419,26 @@ async function run() {
     assert.ok(!text.includes(process.env.CAMPUS_AGENT_TOKEN));
     assert.ok(!text.includes(process.env.CAMPUS_AGENT_SIGNING_SECRET));
     assert.ok(!text.includes(PASSWORD));
+  });
+  await checkAsync("A51", async () => {
+    const current = await request(handle, "GET", "/api/admin/campus-sync/policy", { cookie: adminCookie });
+    const stale = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 3, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10, expectedRevision: "stale-revision" });
+    assert.strictEqual(stale.status, 409);
+    assert.strictEqual(stale.json.code, "CAMPUS_SYNC_POLICY_CONFLICT");
+    assert.strictEqual(syncPolicy.current().dailyLimit, current.json.policy.dailyLimit);
+  });
+  await checkAsync("A52", async () => {
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf, "content-type": "application/json" }, "{");
+    assert.ok(response.status === 400 || response.status === 409);
+  });
+  await checkAsync("A53", async () => {
+    const current = await request(handle, "GET", "/api/admin/campus-sync/policy", { cookie: adminCookie });
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 4, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10, token: "secret-token", expectedRevision: current.json.revision });
+    assert.strictEqual(response.json.code, "CAMPUS_SYNC_POLICY_REJECTED");
+  });
+  await checkAsync("A54", async () => {
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 4, padding: "x".repeat(9000) });
+    assert.strictEqual(response.status, 413);
   });
 
   const blob = JSON.stringify(telemetry.listRecent({ limit: 50 })) + JSON.stringify(broker.metrics());

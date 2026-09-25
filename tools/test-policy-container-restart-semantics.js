@@ -1,0 +1,28 @@
+const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-policy-restart-"));
+process.env.CAMPUS_SYNC_OPS_DIR = dir;
+const policyPath = require.resolve("../server/src/services/campusSyncPolicyService");
+const controlPath = require.resolve("../server/src/services/campusSyncControl");
+delete require.cache[policyPath];
+delete require.cache[controlPath];
+const policy = require("../server/src/services/campusSyncPolicyService");
+const control = require("../server/src/services/campusSyncControl");
+policy.resetForTests();
+policy.update({ rateLimit: 4, rateWindowSeconds: 720, dailyLimit: 7, globalActiveCap: 8 }, "admin-test");
+control.pause("admin-test");
+delete require.cache[policyPath];
+delete require.cache[controlPath];
+const policy2 = require("../server/src/services/campusSyncPolicyService");
+const control2 = require("../server/src/services/campusSyncControl");
+const loaded = policy2.reload();
+assert.deepStrictEqual([loaded.rateLimit, loaded.rateWindowSeconds, loaded.dailyLimit, loaded.globalActiveCap], [4, 720, 7, 8]);
+assert.strictEqual(control2.reload().paused, true);
+control2.resume();
+delete require.cache[controlPath];
+const control3 = require("../server/src/services/campusSyncControl");
+assert.strictEqual(control3.reload().paused, false);
+console.log("policy-container-restart-semantics PASS");
