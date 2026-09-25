@@ -104,13 +104,7 @@ function claimJob(agentId, waitMs) {
 }
 
 function claimPayload(job) {
-  store.markProcessing(job.jobId, Date.now());
-  return {
-    jobId: job.jobId,
-    studentId: job.studentId,
-    password: job.password,
-    semester: job.semester || "",
-  };
+  return store.takeCredential(job.jobId);
 }
 
 function finishJob(jobId, body) {
@@ -151,7 +145,41 @@ function heartbeat() {
 }
 
 function availability() {
-  return { online: store.agentOnline(Date.now()) };
+  const now = Date.now();
+  const online = store.agentOnline(now);
+  const snapshot = store.snapshot(now);
+  let status = "unavailable";
+  if (online && snapshot.queuedJobs + snapshot.processingJobs >= snapshot.activeCap) status = "busy";
+  else if (online) status = "available";
+  return { online, status };
+}
+
+function cancelJob(req, jobId) {
+  const job = store.get(jobId);
+  if (!job || job.ownerKey !== ownerKeyFromRequest(req)) {
+    const error = new Error("JOB_NOT_FOUND");
+    error.code = "JOB_NOT_FOUND";
+    throw error;
+  }
+  const cancelled = store.cancel(jobId, Date.now());
+  if (!cancelled) {
+    const error = new Error("JOB_NOT_CANCELLABLE");
+    error.code = "JOB_NOT_CANCELLABLE";
+    throw error;
+  }
+  return { jobId, status: "cancelled" };
+}
+
+function discardJob(req, jobId) {
+  const job = store.get(jobId);
+  if (!job || job.ownerKey !== ownerKeyFromRequest(req)) return { jobId, status: "gone" };
+  if (job.status === "queued" || job.status === "claimed" || job.status === "processing") {
+    const error = new Error("JOB_NOT_CANCELLABLE");
+    error.code = "JOB_NOT_CANCELLABLE";
+    throw error;
+  }
+  store.remove(jobId);
+  return { jobId, status: "gone" };
 }
 
 function resetCampusSyncForTests() {
@@ -165,11 +193,16 @@ function jobsClear() {
 
 module.exports = {
   availability,
+  cancelJob,
   claimJob,
   claimPayload,
   createJob,
+  discardJob,
   finishJob,
   heartbeat,
+  metrics() {
+    return store.snapshot(Date.now());
+  },
   inspectJob(jobId) {
     const job = store.get(jobId);
     if (!job) return null;

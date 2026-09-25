@@ -1845,8 +1845,22 @@
   background: #16803c;
 }
 
-.campus-status-unavailable .campus-dot {
+.campus-status-available .campus-dot,
+.campus-status-connected .campus-dot {
+  background: #16803c;
+}
+
+.campus-status-busy .campus-dot {
+  background: #b7791f;
+}
+
+.campus-status-unavailable .campus-dot,
+.campus-status-checking .campus-dot {
   background: #c62828;
+}
+
+.campus-status-checking .campus-dot {
+  background: #98a2b3;
 }
 
 .campus-copy {

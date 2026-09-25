@@ -57,17 +57,27 @@ async function readViaCampusAgent(options) {
   });
   const jobId = created && (created.jobId || created.data && created.data.jobId);
   if (!jobId) throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
+  const waitMs = Math.max(15000, Number(personalSyncConfig.campusSyncWaitMs || 90000));
   const started = Date.now();
-  while (Date.now() - started < 60000) {
+  const retries = Number(options && options._campusRetries || 0);
+  while (Date.now() - started < waitMs) {
     const job = await http.get(`/api/campus-sync/jobs/${jobId}`);
     const status = job && (job.status || job.data && job.data.status);
     const payload = job && job.preview ? job : (job && job.data) || job;
-    if (status === "completed" && payload && payload.preview) return payload.preview;
+    if (status === "completed" && payload && payload.preview) {
+      if (payload.preview && typeof payload.preview === "object") payload.preview.campusSyncJobId = jobId;
+      return payload.preview;
+    }
     if (status === "completed") return payload;
-    if (status === "failed" || status === "expired") {
-      throw unsupported((payload && payload.errorCode) || "AGENT_OFFLINE");
+    if (status === "failed" || status === "expired" || status === "cancelled") {
+      const code = (payload && payload.errorCode) || "AGENT_OFFLINE";
+      if (code === "INVALID_CREDENTIALS" || retries >= 1) throw unsupported(code);
+      return readViaCampusAgent(Object.assign({}, options, { _campusRetries: retries + 1 }));
     }
     await sleep(1000);
+  }
+  if (http.post) {
+    try { await http.post(`/api/campus-sync/jobs/${jobId}/cancel`, {}); } catch (error) {}
   }
   throw unsupported("TIMEOUT");
 }

@@ -30,14 +30,11 @@
         </label>
       </checkbox-group>
       <button class="btn-primary" loading="{{studentImportLoading}}" disabled="{{studentImportLoading || !studentImportEnabled}}" bindtap="validateAndPreviewStudentImport">同步最新课表</button>
-      <view class="campus-status campus-status-{{campusLinkStatus}}" wx:if="{{showCampusLinkStatus}}">
+      <view class="campus-status campus-status-{{syncServiceStatus}}">
         <view class="campus-dot"></view>
         <view class="campus-copy">
-          <text class="campus-title" wx:if="{{campusLinkStatus == 'connected'}}">已连接学校系统</text>
-          <text class="campus-title" wx:elif="{{campusLinkStatus == 'unavailable'}}">无法连接学校系统</text>
-          <text class="campus-title" wx:else>校园网 / VPN</text>
-          <text class="campus-hint" wx:if="{{campusLinkStatus == 'unknown'}}">同步时自动检测</text>
-          <text class="campus-hint" wx:elif="{{campusLinkStatus == 'unavailable'}}">请连接佛山大学校园网或校园 VPN 后再同步</text>
+          <text class="campus-title">{{syncServiceTitle}}</text>
+          <text class="campus-hint">{{syncServiceHint}}</text>
         </view>
       </view>
       <button class="btn-text" wx:if="{{enableCampusAgentSync && campusLinkStatus == 'offline'}}" bindtap="tryRemoteSync">尝试远程同步</button>
@@ -66,7 +63,7 @@
   <block wx:elif="{{activeImportMethod == 'student'}}">
     <view class="card sync-status-card" wx:if="{{studentImportStage == 'loading'}}">
       <view class="sync-status-title">{{studentImportStatusMessage || '正在读取个人课表'}}</view>
-      <view class="sync-status-hint">请保持校园网或校园 VPN 连接</view>
+      <view class="sync-status-hint">通常只需几秒，请勿重复点击。</view>
       <view class="loading-progress-track">
         <view class="loading-progress-fill" style="{{studentLoadingProgressStyle}}"></view>
       </view>
@@ -83,13 +80,13 @@
       </view>
 
       <view class="student-profile-panel">
-        <view class="profile-row">
+        <view class="profile-row" wx:if="{{studentProfileName}}">
           <text class="profile-label">姓名</text>
-          <text class="profile-value">{{studentPreviewResult.profile.studentName || '未识别'}}</text>
+          <text class="profile-value">{{studentProfileName}}</text>
         </view>
-        <view class="profile-row">
+        <view class="profile-row" wx:if="{{studentProfileClass}}">
           <text class="profile-label">班级</text>
-          <text class="profile-value">{{studentPreviewResult.profile.className || '班级待确认'}}</text>
+          <text class="profile-value">{{studentProfileClass}}</text>
         </view>
         <view class="profile-row">
           <text class="profile-label">学号</text>
@@ -109,11 +106,11 @@
         </view>
         <view class="student-metric">
           <text class="metric-value">{{studentConflictCount}}</text>
-          <text class="metric-label">冲突</text>
+          <text class="metric-label">时间重叠</text>
         </view>
       </view>
 
-      <view class="student-soft-tip">部分课程需确认，可导入后继续整理。</view>
+      <view class="student-soft-tip" wx:if="{{studentPreviewNotice}}">{{studentPreviewNotice}}</view>
 
       <view class="preview-card student-preview-card">
         <view class="preview-card-head">
@@ -198,8 +195,8 @@
       </view>
 
       <view class="preview-actions student-bottom-actions">
-        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">{{studentCachedPreviewMode ? '应用缓存调整' : (studentAdvancedMode ? '确认导入已选课程' : '确认导入推荐课表')}}</button>
-        <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '返回预览' : '调整课程'}}</button>
+        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">确认并设为当前课表</button>
+        <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '返回预览' : '继续调整'}}</button>
       </view>
 
       <view class="edit-panel-mask" wx:if="{{studentEditingArrangement}}">

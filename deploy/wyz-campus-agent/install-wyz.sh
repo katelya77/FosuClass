@@ -6,10 +6,14 @@ if [ ! -f "$SRC/vendor/fosuDirectClient.js" ]; then
   exit 1
 fi
 DEST=/opt/wyz-campus-agent
-install -d -m 755 "$DEST/src" "$DEST/vendor"
+if ! id fosu-campus-agent >/dev/null 2>&1; then
+  useradd --system --home-dir "$DEST" --shell /usr/sbin/nologin fosu-campus-agent
+fi
+install -d -m 755 -o fosu-campus-agent -g fosu-campus-agent "$DEST/src" "$DEST/vendor"
 cp "$SRC/package.json" "$SRC/package-lock.json" "$DEST/"
 cp "$SRC/src/index.js" "$SRC/src/signature.js" "$DEST/src/"
 cp "$SRC/vendor/"*.js "$DEST/vendor/"
+chown -R fosu-campus-agent:fosu-campus-agent "$DEST"
 install -m 644 "$SRC/wyz-campus-agent.service" /etc/systemd/system/wyz-campus-agent.service
 if [ -f "$SRC/verify-wyz.sh" ]; then
   install -m 755 "$SRC/verify-wyz.sh" "$DEST/verify-wyz.sh"

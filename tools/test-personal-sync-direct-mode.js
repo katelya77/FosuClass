@@ -6,9 +6,12 @@ const page = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal
 const wxml = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal-sync/personal-sync.wxml"), "utf8");
 const aiDoc = fs.readFileSync(path.join(__dirname, "../docs/ai-agent-compliance.md"), "utf8");
 
-assert.ok(wxml.includes("同步时自动检测"));
-assert.ok(wxml.includes("无法连接学校系统"));
-assert.ok(wxml.includes("校园网 / VPN"));
+assert.ok(page.includes("正在检测同步服务"));
+assert.ok(page.includes("同步服务正常"));
+assert.ok(page.includes("当前同步人数较多"));
+assert.ok(page.includes("同步服务暂时维护"));
+assert.ok(!wxml.includes("校园网 / VPN"));
+assert.ok(!page.includes("请先连接佛山大学校园网或校园 VPN"));
 assert.ok(!wxml.includes("未连接校园网络"));
 assert.ok(page.includes("studentForm.password\": \"\""));
 assert.ok(page.includes("onHide("));

@@ -64,7 +64,7 @@ async function run() {
   assert.strictEqual(cleared.password, "");
   assert.strictEqual(cleared.studentId, "");
   const queued = broker.createJob(owner, { studentId: "202500000303", password: "school-secret", semester: "" });
-  broker.expireJobsForTests(Date.now() + 130000);
+  broker.expireJobsForTests(Date.now() + 5000);
   const expired = broker.inspectJob(queued.jobId);
   assert.strictEqual(expired.status, "expired");
   assert.strictEqual(expired.password, "");

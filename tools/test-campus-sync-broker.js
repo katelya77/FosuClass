@@ -18,6 +18,9 @@ async function run() {
   assert.ok(job);
   const payload = claimPayload(job);
   assert.strictEqual(payload.password, "school-secret");
+  const held = require("../server/src/services/campusSyncBroker").inspectJob(payload.jobId);
+  assert.strictEqual(held.password, "");
+  assert.strictEqual(held.studentId, "");
   const done = finishJob(payload.jobId, {
     success: true,
     semester: "2025-2026-1",

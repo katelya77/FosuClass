@@ -437,6 +437,12 @@ router.get("/security/status", adminAuth.verifyAdminAccess, (req, res) => {
   return res.json(buildSecurityStatusPayload());
 });
 
+router.get("/campus-sync/metrics", adminAuth.verifyAdminAccess, (req, res) => {
+  const snapshot = require("../services/campusSyncBroker").metrics();
+  delete snapshot.activeCap;
+  return res.json({ success: true, metrics: snapshot });
+});
+
 function makeSecurityCheck(id, title, status, message) {
   return { id, title, status, ok: status !== "block", message };
 }

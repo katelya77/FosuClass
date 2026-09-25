@@ -24,8 +24,24 @@ const WEEKDAY_TABS = [
   { label: "周六", value: 6 },
   { label: "周日", value: 7 },
 ];
+function reliableProfileText(value) {
+  const text = String(value || "").trim();
+  if (!text || /未识别|待确认|待定|未知/.test(text)) return "";
+  return text;
+}
+
+function studentPreviewNotice(summary, conflictCount) {
+  const pending = Number(summary.pendingArrangementCount || summary.needsConfirmCount || 0);
+  const unplaced = Number(summary.unplacedArrangementCount || summary.unscheduledCount || 0);
+  const suspected = Number(summary.suspectedArrangementCount || summary.suspectedCount || 0);
+  if (pending === 0 && unplaced === 0 && suspected === 0) {
+    return conflictCount > 0 ? `检测到 ${conflictCount} 处课程时间重叠，不影响导入，可在调整中查看。` : "";
+  }
+  return "部分课程需确认，可导入后继续整理。";
+}
+
 const STUDENT_IMPORT_STEPS = [
-  "正在连接学校系统",
+  "正在连接同步服务",
   "正在验证学校账号",
   "正在读取个人课表",
   "正在整理课程",
@@ -854,6 +870,13 @@ Page({
     showCampusLinkStatus: personalSyncConfig.enableClientDirectSync !== false,
     enableCampusAgentSync: personalSyncConfig.enableCampusAgentSync === true,
     campusLinkStatus: "unknown",
+    syncServiceStatus: "checking",
+    syncServiceTitle: "正在检测同步服务",
+    syncServiceHint: "输入学号和学校密码即可同步",
+    studentPreviewNotice: "",
+    studentProfileName: "",
+    studentProfileClass: "",
+    campusSyncJobId: "",
     studentImportSteps: STUDENT_IMPORT_STEPS,
     studentLoadingStepIndex: 0,
     studentLoadingProgressStyle: "width: 14%;",
@@ -951,11 +974,30 @@ Page({
     };
     if (personalSyncConfig.enableCampusAgentSync === true) {
       request.get("/api/campus-sync/availability", {}, { silentError: true, showLoading: false, retries: 0 }).then((body) => {
-        if (body && body.online) this.setData({ showCampusLinkStatus: true, campusLinkStatus: "connected" });
+        this.applySyncServiceStatus(body);
       }).catch(() => {});
     }
     applyTerms(appConfigService.getGlobalConfig());
     appConfigService.loadAppConfig({ silent: true }).then(applyTerms).catch(() => {});
+  },
+
+  applySyncServiceStatus(body) {
+    const status = body && body.status === "busy"
+      ? "busy"
+      : (body && (body.status === "available" || body.online) ? "available" : "unavailable");
+    const copy = {
+      checking: ["正在检测同步服务", "输入学号和学校密码即可同步"],
+      available: ["同步服务正常", "输入学号和学校密码即可同步"],
+      busy: ["当前同步人数较多", "可以稍后再试"],
+      unavailable: ["同步服务暂时维护", "请稍后再试，或先使用文件导入"],
+    };
+    const pair = copy[status] || copy.unavailable;
+    this.setData({
+      syncServiceStatus: status,
+      syncServiceTitle: pair[0],
+      syncServiceHint: pair[1],
+      campusLinkStatus: status === "available" ? "connected" : (status === "unavailable" ? "unavailable" : this.data.campusLinkStatus),
+    });
   },
 
   selectImportMethod(event) {
@@ -1365,6 +1407,9 @@ Page({
       studentRecommendedCount: recommendedCount,
       studentPendingCount: pendingCount,
       studentConflictCount: conflictCount,
+      studentProfileName: reliableProfileText(profile.studentName),
+      studentProfileClass: reliableProfileText(profile.className),
+      studentPreviewNotice: studentPreviewNotice(summary, conflictCount),
       studentClassConfidenceWarning: classConfidenceWarning,
     });
   },
@@ -1707,7 +1752,7 @@ Page({
     const preferredSource = studentScheduleSource.getPreferredSource();
     if (preferredSource === studentScheduleSource.SOURCE.CAMPUS_AGENT) {
       try {
-        this.applyStudentImportJobStatus({ progress: 18, stepIndex: 0, message: "正在连接学校系统" });
+        this.applyStudentImportJobStatus({ progress: 18, stepIndex: 0, message: "正在连接同步服务" });
         const preview = await studentScheduleSource.readPersonalTimetable({
           source: preferredSource,
           http: {
@@ -1732,6 +1777,7 @@ Page({
           campusLinkStatus: "connected",
           studentImportStage: "preview",
           studentPreviewToken: preview.importPreviewToken || "",
+          campusSyncJobId: preview.campusSyncJobId || "",
           studentPreviewResult: Object.assign({}, preview, {
             displayInfo,
             metadata,
@@ -2220,6 +2266,10 @@ Page({
           });
           noteDirectStage("confirm", { httpStatus: 200 });
           wx.showToast({ title: "导入成功", icon: "success" });
+          if (this.data.campusSyncJobId) {
+            request.post(`/api/campus-sync/jobs/${this.data.campusSyncJobId}/discard`, {}, { silentError: true, showLoading: false, retries: 0 }).catch(() => {});
+            this.setData({ campusSyncJobId: "" });
+          }
           setTimeout(() => {
             wx.switchTab({ url: "/pages/index/index" });
           }, 900);
@@ -2288,7 +2338,7 @@ Page({
     if (code === "DIRECT_NETWORK_ERROR") {
       wx.showModal({
         title: "无法连接学校系统",
-        content: "请先连接佛山大学校园网或校园 VPN，再重新同步。",
+        content: "同步服务暂时没有响应，请稍后重试。",
         confirmText: "重新检测",
         cancelText: "使用 XLS 导入",
         success: (res) => {
@@ -2328,6 +2378,8 @@ Page({
       content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
     } else if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
       content = "学校账号或密码不正确";
+    } else if (code === "CAMPUS_SYNC_BUSY") {
+      content = "当前同步人数较多，请稍后再试。";
     } else if (code === "AGENT_OFFLINE" || code === "CAMPUS_AGENT_NOT_AVAILABLE") {
       content = "课表同步服务暂时不可用";
     } else if (code === "TIMEOUT" || code === "REQUEST_TIMEOUT") {
@@ -2337,7 +2389,7 @@ Page({
     } else if (code === "SCHEDULE_APP_NOT_FOUND") {
       content = "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。";
     } else if (code === "CAMPUS_AGENT_NOT_AVAILABLE") {
-      content = "远程同步还没有开放，请连接校园网后再同步，或使用 XLS 导入。";
+      content = "课表同步服务暂时不可用，请稍后再试，或使用 XLS 导入。";
     } else if (code === "LOGIN_PAGE_CHANGED" || code === "AUTH_PAGE_CHANGED" || code === "STRUCTURE_CHANGED") {
       content = "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。";
     } else if (code === "SCHEDULE_EMPTY" || code === "SCHEDULE_ROWS_EMPTY") {

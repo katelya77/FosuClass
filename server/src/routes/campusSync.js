@@ -1,7 +1,7 @@
 const express = require("express");
 const { getClientIpInfo } = require("../utils/clientIp");
 const { verifySessionTokenDetailed } = require("../utils/apiSecurity");
-const { availability, createJob, readJob } = require("../services/campusSyncBroker");
+const { availability, cancelJob, createJob, discardJob, readJob } = require("../services/campusSyncBroker");
 
 const router = express.Router();
 
@@ -31,8 +31,28 @@ router.post("/jobs", requireMiniProgramSession, (req, res) => {
     const code = error && error.code || "INVALID_CREDENTIALS";
     const message = code === "INVALID_CREDENTIALS"
       ? "学校账号或密码不正确"
-      : (code === "IMPORT_RATE_LIMITED" ? "尝试次数较多，请稍后再试。" : "课表同步服务暂时不可用");
-    res.status(code === "IMPORT_RATE_LIMITED" ? 429 : 400).json({ success: false, code, message });
+      : (code === "IMPORT_RATE_LIMITED"
+        ? "尝试次数较多，请稍后再试。"
+        : (code === "CAMPUS_SYNC_BUSY" ? "当前同步人数较多，请稍后再试。" : "课表同步服务暂时不可用"));
+    const status = code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_BUSY" ? 429 : 400;
+    res.status(status).json({ success: false, code, message });
+  }
+});
+
+router.post("/jobs/:jobId/cancel", requireMiniProgramSession, (req, res) => {
+  try {
+    res.json(Object.assign({ success: true }, cancelJob(req, req.params.jobId)));
+  } catch (error) {
+    const code = error && error.code || "JOB_NOT_FOUND";
+    res.status(code === "JOB_NOT_CANCELLABLE" ? 409 : 404).json({ success: false, code, message: "这次同步已经开始，请等待结果。" });
+  }
+});
+
+router.post("/jobs/:jobId/discard", requireMiniProgramSession, (req, res) => {
+  try {
+    res.json(Object.assign({ success: true }, discardJob(req, req.params.jobId)));
+  } catch (error) {
+    res.status(409).json({ success: false, code: "JOB_NOT_CANCELLABLE", message: "这次同步还在进行。" });
   }
 });
 
