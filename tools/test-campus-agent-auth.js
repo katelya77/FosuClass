@@ -54,7 +54,7 @@ async function run() {
   const owner = { fosuSession: { openidHash: "owner-a" } };
   const other = { fosuSession: { openidHash: "owner-b" } };
   const created = broker.createJob(owner, { studentId: "202500000303", password: "school-secret", semester: "" });
-  assert.throws(() => broker.createJob(owner, { studentId: "202500000303", password: "school-secret", semester: "" }), (error) => error.code === "JOB_ALREADY_ACTIVE");
+  assert.throws(() => broker.createJob(owner, { studentId: "202500000303", password: "school-secret", semester: "" }), (error) => error.code === "CAMPUS_SYNC_CONCURRENT_LIMIT");
   const first = await broker.claimJob("wyz-campus-01", 0);
   const second = await broker.claimJob("wyz-campus-01", 0);
   assert.ok(first && first.password === "school-secret");

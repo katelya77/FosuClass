@@ -56,7 +56,7 @@ async function wave(concurrency) {
 async function run() {
   const baseline = await wave(10);
   const after = [];
-  for (const concurrency of [50, 100, 200]) after.push(await wave(concurrency));
+  for (const concurrency of [50, 100, 200, 500]) after.push(await wave(concurrency));
   const capped = after.every((item) => item.accepted <= 10 && item.rejected >= item.concurrency - 10);
   console.log(JSON.stringify({ baseline, after, capped, schoolSystemsLoadTested: false }, null, 2));
   if (!capped) process.exit(1);

@@ -92,7 +92,7 @@ function classify(event) {
   const code = String(event.resultCode || event.errorCode || "");
   const status = String(event.status || "");
   if (code === "INVALID_CREDENTIALS") return "credential";
-  if (code === "IMPORT_RATE_LIMITED") return "rate";
+  if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED" || code === "CAMPUS_SYNC_DAILY_LIMIT" || code === "CAMPUS_SYNC_CONCURRENT_LIMIT") return "rate";
   if (code === "CAMPUS_SYNC_BUSY" || code === "CAMPUS_SYNC_DEGRADED") return "busy";
   if (code === "TIMEOUT" || status === "expired") return "timeout";
   if (status === "completed" || code === "OK") return "success";

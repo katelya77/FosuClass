@@ -4,13 +4,16 @@ const { safeLog } = require("../utils/safeLogger");
 const circuit = require("./campusSyncCircuitBreaker");
 const control = require("./campusSyncControl");
 const telemetry = require("./campusSyncTelemetryService");
+const quota = require("./campusSyncQuotaStore");
+const policy = require("./campusSyncPolicyService");
 
 const CLAIM_WAIT_MS = 25000;
 const store = createMemoryCampusSyncJobStore({
   onTerminal(info) {
     const job = info && info.job || {};
     const code = info && info.code || "";
-    circuit.observe(code, info && info.now);
+      circuit.observe(code, info && info.now);
+    try { quota.noteTerminal(job.status); } catch (error) {}
     try { control.persistCircuit(); } catch (error) {}
     telemetry.record({
       t: info && info.now || Date.now(),
@@ -90,14 +93,16 @@ function createJob(req, body) {
   const now = Date.now();
   try {
     if (store.hasActive(ownerKey)) {
-      const error = new Error("JOB_ALREADY_ACTIVE");
-      error.code = "JOB_ALREADY_ACTIVE";
+      const error = new Error("CAMPUS_SYNC_CONCURRENT_LIMIT");
+      error.code = "CAMPUS_SYNC_CONCURRENT_LIMIT";
       throw error;
     }
-    if (!store.allowAttempt(ownerKey, now)) {
-      telemetry.recordAttempt("IMPORT_RATE_LIMITED");
-      const error = new Error("IMPORT_RATE_LIMITED");
-      error.code = "IMPORT_RATE_LIMITED";
+    const decision = quota.consume(ownerKey, now);
+    if (!decision.ok) {
+      telemetry.recordAttempt(decision.code);
+      const error = new Error(decision.code);
+      error.code = decision.code;
+      error.quota = decision.public;
       throw error;
     }
     const job = store.put({
@@ -239,6 +244,8 @@ function resetCampusSyncForTests() {
   circuit.resetForTests();
   telemetry.resetForTests();
   control.resetForTests();
+  try { policy.resetForTests(); } catch (error) {}
+  try { quota.resetForTests(); } catch (error) {}
 }
 
 function jobsClear() {

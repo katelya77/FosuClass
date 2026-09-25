@@ -13,6 +13,7 @@ process.env.CAMPUS_AGENT_TOKEN = agentMaterial;
 process.env.CAMPUS_AGENT_SIGNING_SECRET = agentMac;
 process.env.CAMPUS_AGENT_ID = "wyz-campus-01";
 process.env.NODE_ENV = "test";
+process.env.ADMIN_PASSWORD = "ctf-admin-password";
 
 const express = require("../server/node_modules/express");
 const { createSessionToken } = require("../server/src/utils/apiSecurity");
@@ -116,6 +117,7 @@ async function run() {
   server.use(express.json({ limit: "8kb", verify: (req, res, buf) => { req.rawBody = buf; } }));
   server.use("/api/campus-sync", require("../server/src/routes/campusSync"));
   server.use("/api/campus-agent/v1", require("../server/src/routes/campusAgent"));
+  server.use("/api/admin", require("../server/src/modules/campus-sync-ops/routes"));
   server.use((error, req, res, next) => {
     if (error && (error.type === "entity.too.large" || error.status === 413)) {
       return res.status(413).json({ success: false, code: "CAMPUS_SYNC_BODY_REJECTED" });
@@ -230,7 +232,7 @@ async function run() {
       const created = broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" });
       broker.cancelJob(owner, created.jobId);
     }
-    assert.throws(() => broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" }), (error) => error.code === "IMPORT_RATE_LIMITED");
+    assert.throws(() => broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" }), (error) => error.code === "CAMPUS_SYNC_RATE_LIMITED");
   });
   await checkAsync("A22", async () => {
     const response = await request(handle, "POST", "/api/campus-sync/jobs", headerA, jobBody("code-a22user"));
@@ -313,6 +315,109 @@ async function run() {
       "x-campus-signature": signature,
     }, { tampered: true });
     assert.strictEqual(response.status, 403);
+  });
+
+  const adminAuth = require("../server/src/services/adminAuth");
+  const syncPolicy = require("../server/src/services/campusSyncPolicyService");
+  const syncQuota = require("../server/src/services/campusSyncQuotaStore");
+  const sessionToken = adminAuth.createSessionToken();
+  const csrf = adminAuth.createCsrfToken(sessionToken);
+  const adminCookie = `${adminAuth.ADMIN_SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`;
+  await checkAsync("A31", async () => {
+    const response = await request(handle, "GET", "/api/admin/campus-sync/policy");
+    assert.ok(response.status === 401 || response.status === 503);
+  });
+  await checkAsync("A32", async () => {
+    const response = await request(handle, "GET", "/api/admin/campus-sync/policy", { "x-fosu-session": tokenA });
+    assert.ok(response.status === 401 || response.status === 503);
+  });
+  await checkAsync("A33", async () => {
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie }, { dailyLimit: 8 });
+    assert.strictEqual(response.status, 403);
+  });
+  await checkAsync("A34", async () => {
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": "bad.csrf" }, { dailyLimit: 8 });
+    assert.strictEqual(response.status, 403);
+  });
+  await checkAsync("A35", async () => {
+    const response = await request(handle, "GET", "/api/admin/campus-sync/policy", { cookie: `${adminAuth.ADMIN_SESSION_COOKIE}=forged.session` });
+    assert.ok(response.status === 401 || response.status === 503);
+  });
+  async function rejectPolicy(id, body) {
+    await checkAsync(id, async () => {
+      const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, body);
+      assert.strictEqual(response.json && response.json.code, "CAMPUS_SYNC_POLICY_REJECTED");
+    });
+  }
+  await rejectPolicy("A36", { dailyLimit: 0 });
+  await rejectPolicy("A37", { dailyLimit: -1 });
+  await rejectPolicy("A38", { dailyLimit: 999999 });
+  await rejectPolicy("A39", { rateWindowSeconds: "ten-minutes" });
+  await rejectPolicy("A40", { constructor: { prototype: { dailyLimit: 1 } } });
+  await rejectPolicy("A41", { perUserConcurrency: 4 });
+  await checkAsync("A42", async () => {
+    const response = await request(handle, "PUT", "/api/admin/campus-sync/policy", { cookie: adminCookie, "x-fosu-csrf": csrf }, { dailyLimit: 2, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 });
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(syncPolicy.current().dailyLimit, 2);
+    const owner = { fosuSession: { openidHash: "policy-now-user" } };
+    const first = broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" });
+    broker.cancelJob(owner, first.jobId);
+    const second = broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" });
+    broker.cancelJob(owner, second.jobId);
+    assert.throws(() => broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" }), (error) => error.code === "CAMPUS_SYNC_DAILY_LIMIT");
+  });
+  await checkAsync("A43", async () => {
+    syncPolicy.reload();
+    assert.strictEqual(syncPolicy.current().dailyLimit, 2);
+  });
+  await checkAsync("A44", async () => {
+    const owner = "quota-restart-user";
+    syncQuota.consume(owner, Date.parse("2026-09-25T02:00:00.000Z"));
+    syncQuota.flushNow();
+    syncQuota.reload();
+    assert.strictEqual(syncQuota.acceptedFor(owner, Date.parse("2026-09-25T02:00:00.000Z")), 1);
+  });
+  await checkAsync("A45", async () => {
+    syncPolicy.update({ dailyLimit: 1, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 }, "ctf");
+    const owner = "rollover-user";
+    const late = Date.UTC(2026, 8, 25, 15, 59, 0);
+    const early = Date.UTC(2026, 8, 25, 16, 1, 0);
+    assert.strictEqual(syncQuota.consume(owner, late).ok, true);
+    assert.strictEqual(syncQuota.consume(owner, early).ok, true);
+    assert.notStrictEqual(syncQuota.shanghaiDate(late), syncQuota.shanghaiDate(early));
+  });
+  await checkAsync("A46", async () => {
+    syncPolicy.update({ dailyLimit: 1, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 }, "ctf");
+    const now = Date.parse("2026-09-25T03:00:00.000Z");
+    assert.strictEqual(syncQuota.consume("user-a-quota", now).ok, true);
+    assert.strictEqual(syncQuota.consume("user-a-quota", now + 1000).code, "CAMPUS_SYNC_DAILY_LIMIT");
+    assert.strictEqual(syncQuota.consume("user-b-quota", now).ok, true);
+  });
+  await checkAsync("A47", async () => {
+    const before = syncQuota.acceptedFor("spoof-target", Date.now());
+    broker.resetCampusSyncForTests();
+    const response = await request(handle, "POST", "/api/campus-sync/jobs", headerA, Object.assign(jobBody("code-a47user"), { principalHash: "spoof-target" }));
+    assert.strictEqual(syncQuota.acceptedFor("spoof-target", Date.now()), 0);
+    assert.notStrictEqual(response.status, 202);
+  });
+  await checkAsync("A48", async () => {
+    broker.resetCampusSyncForTests();
+    const owner = { fosuSession: { openidHash: "parallel-owner" } };
+    const outcomes = await Promise.all([0, 1].map(() => Promise.resolve().then(() => broker.createJob(owner, { studentId: STUDENT, password: PASSWORD, semester: "" })).then(() => "ok").catch((error) => error.code)));
+    assert.strictEqual(outcomes.filter((item) => item === "ok").length, 1);
+  });
+  await checkAsync("A49", async () => {
+    broker.resetCampusSyncForTests();
+    syncPolicy.update({ globalActiveCap: 1, dailyLimit: 10, rateLimit: 5, rateWindowSeconds: 600 }, "ctf");
+    broker.createJob({ fosuSession: { openidHash: "cap-a" } }, { studentId: STUDENT, password: PASSWORD, semester: "" });
+    assert.throws(() => broker.createJob({ fosuSession: { openidHash: "cap-b" } }, { studentId: STUDENT, password: PASSWORD, semester: "" }), (error) => error.code === "CAMPUS_SYNC_BUSY");
+  });
+  await checkAsync("A50", async () => {
+    const response = await request(handle, "GET", "/api/admin/campus-sync/policy", { cookie: adminCookie });
+    const text = response.text || "";
+    assert.ok(!text.includes(process.env.CAMPUS_AGENT_TOKEN));
+    assert.ok(!text.includes(process.env.CAMPUS_AGENT_SIGNING_SECRET));
+    assert.ok(!text.includes(PASSWORD));
   });
 
   const blob = JSON.stringify(telemetry.listRecent({ limit: 50 })) + JSON.stringify(broker.metrics());

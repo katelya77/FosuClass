@@ -2,6 +2,8 @@ const express = require("express");
 const adminAuth = require("../../services/adminAuth");
 const { verifyAdminWriteAccess, writeAuditLog } = require("../../services/adminWriteGuard");
 const ops = require("../../services/campusSyncOpsService");
+const policy = require("../../services/campusSyncPolicyService");
+const quota = require("../../services/campusSyncQuotaStore");
 const telemetry = require("../../services/campusSyncTelemetryService");
 const control = require("../../services/campusSyncControl");
 
@@ -29,6 +31,28 @@ router.get("/campus-sync/events", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.get("/campus-sync/security", adminAuth.verifyAdminAccess, (req, res) => {
   res.json({ success: true, security: ops.securitySummary() });
+});
+
+router.get("/campus-sync/policy", adminAuth.verifyAdminAccess, (req, res) => {
+  res.json({ success: true, policy: policy.snapshot(), usage: quota.usage() });
+});
+
+router.put("/campus-sync/policy", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const identity = adminAuth.getAuditIdentity(req);
+    const changed = policy.update(req.body || {}, identity.operator || "admin");
+    writeAuditLog(req, "campus-sync-policy-update", "campus-sync", "policy", JSON.stringify(changed));
+    res.json({ success: true, policy: policy.snapshot(), message: "已保存 · 立即生效" });
+  } catch (error) {
+    res.status(400).json({ success: false, code: error && error.code || "CAMPUS_SYNC_POLICY_REJECTED", message: error && error.publicMessage || "策略数值不在允许范围内。" });
+  }
+});
+
+router.post("/campus-sync/policy/reset", verifyAdminWriteAccess, (req, res) => {
+  const identity = adminAuth.getAuditIdentity(req);
+  const changed = policy.reset(identity.operator || "admin");
+  writeAuditLog(req, "campus-sync-policy-reset", "campus-sync", "policy", JSON.stringify(changed));
+  res.json({ success: true, policy: policy.snapshot(), message: "已恢复默认值 · 立即生效" });
 });
 
 router.get("/campus-sync/config", adminAuth.verifyAdminAccess, (req, res) => {

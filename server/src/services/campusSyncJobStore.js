@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const policy = require("./campusSyncPolicyService");
 
 function seconds(name, fallback) {
   const parsed = Number(process.env[name]);
@@ -133,7 +134,7 @@ function createMemoryCampusSyncJobStore(hooks) {
     put(input, now) {
       gc(now);
       const activeCount = Array.from(jobs.values()).filter(active).length;
-      if (activeCount >= GLOBAL_ACTIVE_CAP) {
+      if (activeCount >= policy.current().globalActiveCap) {
         metrics.busy += 1;
         const error = new Error("CAMPUS_SYNC_BUSY");
         error.code = "CAMPUS_SYNC_BUSY";
@@ -275,7 +276,7 @@ function createMemoryCampusSyncJobStore(hooks) {
         rateLimited: metrics.rateLimited,
         busy: metrics.busy,
         lastSuccessAt: metrics.lastSuccessAt || null,
-        activeCap: GLOBAL_ACTIVE_CAP,
+        activeCap: policy.current().globalActiveCap,
       };
     },
     reset() {

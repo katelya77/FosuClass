@@ -4,6 +4,8 @@ const circuit = require("./campusSyncCircuitBreaker");
 const control = require("./campusSyncControl");
 const telemetry = require("./campusSyncTelemetryService");
 const abuse = require("./campusSyncAbuseGuard");
+const policy = require("./campusSyncPolicyService");
+const quota = require("./campusSyncQuotaStore");
 const { getSecurityEventSummary } = require("./securityEventService");
 
 let diagnoseAt = 0;
@@ -21,12 +23,14 @@ function runtimeConfig() {
   const now = Date.now();
   const metrics = broker.metrics();
   const durations = [];
+  const rules = policy.snapshot();
   return {
     perUserConcurrency: 1,
-    rateLimit: jobStore.RATE_LIMIT,
-    rateWindowSeconds: Math.round(jobStore.RATE_WINDOW_MS / 1000),
-    dailyLimit: jobStore.DAILY_LIMIT,
-    globalCap: jobStore.GLOBAL_ACTIVE_CAP,
+    rateLimit: rules.rateLimit,
+    rateWindowSeconds: rules.rateWindowSeconds,
+    dailyLimit: rules.dailyLimit,
+    globalCap: rules.globalActiveCap,
+    policySource: rules.source,
     jobTtlSeconds: Math.round(jobStore.JOB_TTL_MS / 1000),
     previewRetentionSeconds: Math.round(jobStore.PREVIEW_TTL_MS / 1000),
     heartbeatIntervalMs: numberEnv("CAMPUS_AGENT_HEARTBEAT_INTERVAL_MS", 30000),
@@ -42,7 +46,7 @@ function runtimeConfig() {
     queue: {
       queued: metrics.queuedJobs,
       processing: metrics.processingJobs,
-      activeCap: jobStore.GLOBAL_ACTIVE_CAP,
+      activeCap: policy.current().globalActiveCap,
       oldestQueuedMs: metrics.queueOldestAge || 0,
       activeWorker: metrics.processingJobs > 0 ? 1 : 0,
     },
@@ -54,7 +58,7 @@ function serviceStatus(metrics, breaker, maintenance) {
   if (maintenance.paused) return "maintenance";
   if (!metrics.agentOnline) return "offline";
   if (breaker.state === "OPEN") return "degraded";
-  if (metrics.queuedJobs + metrics.processingJobs >= jobStore.GLOBAL_ACTIVE_CAP) return "busy";
+  if (metrics.queuedJobs + metrics.processingJobs >= policy.current().globalActiveCap) return "busy";
   return "normal";
 }
 
@@ -63,10 +67,10 @@ function pipeline(metrics, summary) {
   const agentAge = metrics.lastHeartbeatAge;
   const schoolErrors = (summary.errors && (summary.errors.TIMEOUT || 0) + (summary.errors.AUTH_PAGE_CHANGED || 0) + (summary.errors.STRUCTURE_CHANGED || 0) + (summary.errors.AGENT_OFFLINE || 0)) || 0;
   return [
-    { id: "miniprogram", label: "Mini Program API", status: "ok", lastSuccessAt: metrics.lastSuccessAt, lastError: "", latencyMs: summary.avgDurationMs || 0, errors: 0 },
-    { id: "broker", label: "Campus Sync Broker", status: control.snapshot().paused ? "maintenance" : "ok", lastSuccessAt: metrics.lastSuccessAt, lastError: "", latencyMs: summary.avgDurationMs || 0, errors: summary.systemFailures || 0 },
-    { id: "agent", label: "WYZ Agent", status: metrics.agentOnline ? "online" : "offline", lastSuccessAt: agentAge == null ? null : now - agentAge, lastError: metrics.agentOnline ? "" : "AGENT_OFFLINE", latencyMs: agentAge, errors: summary.errors.AGENT_OFFLINE || 0 },
-    { id: "school", label: "School Gateway", status: schoolErrors && !metrics.lastSuccessAt ? "degraded" : (metrics.lastSuccessAt ? "inferred" : "unknown"), lastSuccessAt: metrics.lastSuccessAt, lastError: schoolErrors ? "SYSTEM" : "", latencyMs: summary.avgDurationMs || 0, errors: schoolErrors },
+    { id: "miniprogram", label: "小程序接口", technical: "Mini Program API", status: "ok", lastSuccessAt: metrics.lastSuccessAt, lastError: "", latencyMs: summary.avgDurationMs || 0, errors: 0 },
+    { id: "broker", label: "同步调度服务", technical: "Campus Sync Broker", status: control.snapshot().paused ? "maintenance" : "ok", lastSuccessAt: metrics.lastSuccessAt, lastError: "", latencyMs: summary.avgDurationMs || 0, errors: summary.systemFailures || 0 },
+    { id: "agent", label: "校内同步节点", technical: "WYZ Agent", status: metrics.agentOnline ? "online" : "offline", lastSuccessAt: agentAge == null ? null : now - agentAge, lastError: metrics.agentOnline ? "" : "AGENT_OFFLINE", latencyMs: agentAge, errors: summary.errors.AGENT_OFFLINE || 0 },
+    { id: "school", label: "学校系统", technical: "School Gateway", status: metrics.lastSuccessAt ? "inferred" : "unknown", schoolNote: metrics.lastSuccessAt ? "最近真实任务正常" : "暂无近期真实任务", lastSuccessAt: metrics.lastSuccessAt, lastError: schoolErrors ? "SYSTEM" : "", latencyMs: summary.avgDurationMs || 0, errors: schoolErrors },
   ];
 }
 
@@ -93,7 +97,7 @@ function overview() {
       queued: metrics.queuedJobs,
       processing: metrics.processingJobs,
       active: metrics.queuedJobs + metrics.processingJobs,
-      cap: jobStore.GLOBAL_ACTIVE_CAP,
+      cap: policy.current().globalActiveCap,
       oldestQueuedMs: metrics.queueOldestAge || 0,
       activeWorker: metrics.processingJobs > 0 ? 1 : 0,
       estimatedWaitMs: estimatedWait(metrics, day),
@@ -161,6 +165,7 @@ function diagnose() {
   const storage = telemetry.storageStats();
   return {
     checkedAt: new Date(now).toISOString(),
+    miniprogramApi: "ok",
     broker: control.snapshot().paused ? "maintenance" : "ok",
     agentHeartbeat: metrics.agentOnline ? "online" : "offline",
     lastHeartbeatAgeMs: metrics.lastHeartbeatAge,
@@ -171,6 +176,16 @@ function diagnose() {
       storageCapBytes: storage.storageCapBytes,
     },
     circuit: circuit.snapshot(now).state,
+    queue: {
+      queued: metrics.queuedJobs,
+      processing: metrics.processingJobs,
+      active: metrics.queuedJobs + metrics.processingJobs,
+    },
+    policy: { source: policy.snapshot().source, healthy: true },
+    quota: quota.health(),
+    diskWritable: quota.diskWritable(),
+    lastSuccessAt: metrics.lastSuccessAt,
+    schoolGateway: metrics.lastSuccessAt ? "最近真实任务正常" : "暂无近期真实任务",
   };
 }
 

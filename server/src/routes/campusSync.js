@@ -16,8 +16,8 @@ function requestId() {
   return crypto.randomBytes(8).toString("hex");
 }
 
-function send(res, status, code, message) {
-  return res.status(status).json({ success: false, code, message });
+function send(res, status, code, message, extra) {
+  return res.status(status).json(Object.assign({ success: false, code, message }, extra || {}));
 }
 
 function note(req, reasonCode, session) {
@@ -59,12 +59,27 @@ function requireMiniProgramSession(req, res, next) {
   return next();
 }
 
+function quotaFields(error) {
+  const quota = error && error.quota || {};
+  const extra = {};
+  ["retryAfterSeconds", "dailyLimit", "dailyUsed", "dailyRemaining", "resetAt"].forEach((key) => {
+    if (quota[key] != null) extra[key] = quota[key];
+  });
+  return extra;
+}
+
 function publicError(error) {
   const code = error && error.code || "AGENT_OFFLINE";
   if (code === "INVALID_CREDENTIALS") return { status: 400, code, message: "学校账号或密码不正确" };
-  if (code === "IMPORT_RATE_LIMITED") return { status: 429, code, message: "尝试次数较多，请稍后再试。" };
-  if (code === "CAMPUS_SYNC_BUSY" || code === "CAMPUS_SYNC_DEGRADED") return { status: 429, code: "CAMPUS_SYNC_BUSY", message: "当前同步人数较多，请稍后再试。" };
-  if (code === "CAMPUS_SYNC_MAINTENANCE") return { status: 503, code, message: "同步服务维护中，请稍后再试" };
+  if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED") {
+    return { status: 429, code: code === "IMPORT_RATE_LIMITED" ? code : "CAMPUS_SYNC_RATE_LIMITED", message: "操作有些频繁，请稍后再试。", extra: quotaFields(error) };
+  }
+  if (code === "CAMPUS_SYNC_DAILY_LIMIT") return { status: 429, code, message: "今天的课表同步次数已用完，明天 00:00 后可再次同步。", extra: quotaFields(error) };
+  if (code === "CAMPUS_SYNC_CONCURRENT_LIMIT" || code === "JOB_ALREADY_ACTIVE") {
+    return { status: 429, code: "CAMPUS_SYNC_CONCURRENT_LIMIT", message: "已有一次课表同步正在进行，请等待完成。", extra: quotaFields(error) };
+  }
+  if (code === "CAMPUS_SYNC_BUSY" || code === "CAMPUS_SYNC_DEGRADED") return { status: 429, code: "CAMPUS_SYNC_BUSY", message: "当前同步人数较多，请稍后再试。", extra: quotaFields(error) };
+  if (code === "CAMPUS_SYNC_MAINTENANCE") return { status: 503, code, message: "课表同步服务维护中，请稍后再试。" };
   if (code === "JOB_NOT_CANCELLABLE") return { status: 409, code, message: "这次同步已经开始，请等待结果。" };
   if (code === "JOB_NOT_FOUND") return { status: 404, code, message: "没有找到这次同步。" };
   if (code === "CAMPUS_SYNC_BODY_REJECTED") return { status: 400, code, message: "请求格式不正确。" };
@@ -118,7 +133,7 @@ router.post("/jobs", requireMiniProgramSession, async (req, res) => {
       note(req, mapped.code, req.fosuSession);
     }
     if (mapped.code === "INVALID_CREDENTIALS") telemetry.record({ status: "rejected", resultCode: "INVALID_CREDENTIALS", t: Date.now() });
-    return send(res, mapped.status, mapped.code, mapped.message);
+    return send(res, mapped.status, mapped.code, mapped.message, mapped.extra);
   }
 });
 

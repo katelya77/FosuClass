@@ -18,6 +18,9 @@ const CAMPUS_SYNC_STYLES = `
     #section-campus-sync th, #section-campus-sync td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
     #section-campus-sync .cs-table-wrap { overflow: auto; max-height: 420px; }
     #section-campus-sync .cs-chart { width: 100%; height: 180px; }
+    #section-campus-sync .cs-policy { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    #section-campus-sync .cs-policy label, #section-campus-sync .cs-policy div { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+    #section-campus-sync .cs-policy input { height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-primary); padding: 0 8px; }
     #section-campus-sync .cs-pipeline { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; }
     #section-campus-sync .cs-error, #section-campus-sync .cs-empty { color: var(--text-muted); font-size: 13px; }
     @media (max-width: 860px) {
@@ -42,6 +45,7 @@ const CAMPUS_SYNC_SECTION = `
               <button type="button" class="secondary" id="csDiagnoseBtn">轻量诊断</button>
             </div>
           </div>
+          <div id="csDiagnose" class="cs-muted"></div>
         </div>
         <div id="csLoading" class="cs-card cs-muted">正在读取同步状态…</div>
         <div id="csError" class="cs-card cs-error" hidden></div>
@@ -57,6 +61,28 @@ const CAMPUS_SYNC_SECTION = `
             </div>
           </div>
           <svg id="csChart" class="cs-chart" viewBox="0 0 640 180" role="img" aria-label="同步请求趋势"></svg>
+          <div id="csChartEmpty" class="cs-empty" hidden>当前时间范围暂无同步请求</div>
+          <div class="cs-muted">请求量 · 成功 · 系统失败 · 凭证失败 · 限流</div>
+        </div>
+        <div class="cs-card" id="csPolicyCard">
+          <h3>同步策略</h3>
+          <div class="cs-policy">
+            <div><span>单用户并发</span><b>1（固定）</b></div>
+            <label>短周期最多同步<input id="csRateLimit" type="number" min="1" max="20" step="1"></label>
+            <label>周期（秒）<input id="csRateWindow" type="number" min="60" max="3600" step="1"></label>
+            <label>每日最多同步<input id="csDailyLimit" type="number" min="1" max="50" step="1"></label>
+            <div class="cs-muted">北京时间每日 00:00 重置</div>
+            <label>全局进行中任务上限<input id="csGlobalCap" type="number" min="1" max="30" step="1"></label>
+            <div><span>WYZ Worker</span><b>1（固定）</b></div>
+            <div><span>任务 TTL</span><b id="csJobTtl">90s（只读）</b></div>
+          </div>
+          <div class="cs-toolbar">
+            <button type="button" id="csPolicySave">保存修改</button>
+            <button type="button" class="secondary" id="csPolicyCancel">取消编辑</button>
+            <button type="button" class="secondary" id="csPolicyReset">恢复默认值</button>
+          </div>
+          <div id="csPolicyMeta" class="cs-muted"></div>
+          <div id="csUsage" class="cs-muted"></div>
         </div>
         <div class="cs-card">
           <h3>链路状态</h3>
@@ -102,21 +128,33 @@ const CAMPUS_SYNC_SCRIPT = `
         function csText(value) { return value == null || value === "" ? "-" : String(value); }
         function csDraw(points) {
           var svg = csNode("csChart");
+          var empty = csNode("csChartEmpty");
           if (!svg) return;
           var rows = points || [];
-          if (!rows.length) { svg.innerHTML = "<text x='16' y='28' fill='currentColor'>暂无趋势数据</text>"; return; }
-          var max = 1;
-          rows.forEach(function (row) { max = Math.max(max, row.attempts || 0, row.success || 0, row.failed || 0); });
-          function line(key, color) {
-            return rows.map(function (row, index) {
-              var x = rows.length === 1 ? 20 : 20 + (index * 600 / (rows.length - 1));
-              var y = 160 - ((row[key] || 0) / max) * 140;
-              return (index ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
-            }).join(" ") ;
+          var total = rows.reduce(function (sum, row) {
+            return sum + (row.attempts || 0) + (row.success || 0) + (row.failed || 0) + (row.systemFailures || 0) + (row.credentialFailures || 0) + (row.rateLimited || 0);
+          }, 0);
+          if (!rows.length || !total) {
+            svg.innerHTML = "";
+            if (empty) empty.hidden = false;
+            return;
           }
-          svg.innerHTML = "<path d='" + line("attempts", "") + "' fill='none' stroke='currentColor' stroke-width='1.5'/>" +
-            "<path d='" + line("success", "") + "' fill='none' stroke='#14795a' stroke-width='1.5'/>" +
-            "<path d='" + line("failed", "") + "' fill='none' stroke='#b42318' stroke-width='1.5'/>";
+          if (empty) empty.hidden = true;
+          var max = 1;
+          rows.forEach(function (row) { max = Math.max(max, row.attempts || 0, row.success || 0, row.systemFailures || 0, row.credentialFailures || 0, row.rateLimited || 0); });
+          function xAt(index) { return rows.length === 1 ? 320 : 20 + (index * 600 / (rows.length - 1)); }
+          function line(key, color) {
+            var path = rows.map(function (row, index) {
+              var y = 160 - ((row[key] || 0) / max) * 140;
+              return (index ? "L" : "M") + xAt(index).toFixed(1) + " " + y.toFixed(1);
+            }).join(" ");
+            var dots = rows.map(function (row, index) {
+              var y = 160 - ((row[key] || 0) / max) * 140;
+              return "<circle cx='" + xAt(index).toFixed(1) + "' cy='" + y.toFixed(1) + "' r='3' fill='" + color + "'/>";
+            }).join("");
+            return "<path d='" + path + "' fill='none' stroke='" + color + "' stroke-width='1.5'/>" + dots;
+          }
+          svg.innerHTML = line("attempts", "currentColor") + line("success", "#14795a") + line("systemFailures", "#b42318") + line("credentialFailures", "#9a5d08") + line("rateLimited", "#3b6ea5");
         }
         function csCards(overview) {
           var host = csNode("csOverview");
@@ -128,7 +166,7 @@ const CAMPUS_SYNC_SCRIPT = `
           var statusLabel = { normal: "正常", busy: "繁忙", degraded: "降级", maintenance: "维护", offline: "离线" }[overview.status] || overview.status || "-";
           var cards = [
             ["同步服务", statusLabel],
-            ["Campus Agent", agent.online ? "Online" : "Offline"],
+            ["校内同步节点", agent.online ? "在线" : "离线"],
             ["心跳年龄", agent.lastHeartbeatAgeMs == null ? "-" : Math.round(agent.lastHeartbeatAgeMs / 1000) + "s"],
             ["Queue / Processing", (queue.queued || 0) + " / " + (queue.processing || 0)],
             ["Active / Cap", (queue.active || 0) + " / " + (queue.cap || 0)],
@@ -142,14 +180,16 @@ const CAMPUS_SYNC_SCRIPT = `
             return "<div class='cs-stat'><span>" + card[0] + "</span><b>" + card[1] + "</b></div>";
           }).join("");
           var posture = overview.securityPosture || "normal";
-          var label = { normal: "安全状态正常", watch: "观察到异常", rate_limit: "Rate Limit 活跃", circuit_open: "Circuit Open" }[posture] || posture;
+          var label = { normal: "安全状态正常", watch: "观察到异常", rate_limit: "限流生效中", circuit_open: "熔断已打开" }[posture] || posture;
           csBadge(label, posture === "circuit_open" ? "danger" : (posture === "normal" ? "ok" : "warn"));
         }
         function csRenderPipeline(list) {
           var host = csNode("csPipeline");
           if (!host) return;
+          var statusText = { ok: "正常", online: "在线", offline: "离线", maintenance: "维护", inferred: "最近真实任务正常", unknown: "暂无近期真实任务", degraded: "异常" };
           host.innerHTML = (list || []).map(function (item) {
-            return "<div class='cs-stat'><b>" + csText(item.label) + "</b><span>" + csText(item.status) + " · 错误 " + (item.errors || 0) + "</span></div>";
+            var state = item.schoolNote || statusText[item.status] || item.status;
+            return "<div class='cs-stat'><b>" + csText(item.label) + "</b><span>" + csText(item.technical) + " · " + csText(state) + "</span></div>";
           }).join("");
         }
         function csRenderQueue(queue) {
@@ -219,6 +259,38 @@ const CAMPUS_SYNC_SCRIPT = `
             (!reset && cs.cursor ? "&cursor=" + encodeURIComponent(cs.cursor) : "");
           return api(query).then(csRenderEvents).catch(csFail);
         }
+        function csFillPolicy(policy) {
+          if (!policy) return;
+          cs.policy = policy;
+          ["csRateLimit", "csRateWindow", "csDailyLimit", "csGlobalCap"].forEach(function (id, index) {
+            var node = csNode(id);
+            var key = ["rateLimit", "rateWindowSeconds", "dailyLimit", "globalActiveCap"][index];
+            if (node && document.activeElement !== node) node.value = policy[key];
+          });
+          var ttl = csNode("csJobTtl");
+          if (ttl) ttl.textContent = (policy.jobTtlSeconds || 90) + "s（只读）";
+          var meta = csNode("csPolicyMeta");
+          if (meta) meta.textContent = (policy.source === "runtime" ? "当前来源：Runtime override" : "当前来源：Environment default") +
+            (policy.updatedAt ? " · 最后修改 " + policy.updatedAt : "") + (policy.updatedBy ? " · " + policy.updatedBy : "");
+        }
+        function csRenderUsage(usage) {
+          var host = csNode("csUsage");
+          if (!host || !usage) return;
+          var left = usage.remaining || {};
+          host.textContent = "今日请求 " + (usage.attempts || 0) + " · 成功 " + (usage.success || 0) + " · 失败 " + (usage.failed || 0) +
+            " · 限流 " + (usage.rateLimited || 0) + " · 活跃用户 " + (usage.activeUsers || 0) +
+            " · 短周期限制 " + (usage.shortLimitedUsers || 0) + " · 每日限制 " + (usage.dailyLimitedUsers || 0) +
+            " · 单用户最高 " + (usage.maxAccepted || 0) + (usage.topUserPrefix ? "（User · " + usage.topUserPrefix + "）" : "") +
+            " · 剩余 0:" + (left.zero || 0) + " / 1-3:" + (left.oneToThree || 0) + " / 4-7:" + (left.fourToSeven || 0) + " / 8+:" + (left.eightPlus || 0);
+        }
+        function csRenderDiagnose(report) {
+          var host = csNode("csDiagnose");
+          if (!host || !report) return;
+          host.textContent = "接口正常 · 调度 " + report.broker + " · 节点 " + report.agentHeartbeat +
+            " · 熔断 " + report.circuit + " · 策略 " + ((report.policy && report.policy.source) || "-") +
+            " · 配额 " + ((report.quota && report.quota.healthy) ? "正常" : "异常") +
+            " · 磁盘 " + (report.diskWritable ? "可写" : "不可写") + " · 学校系统 " + (report.schoolGateway || "暂无近期真实任务");
+        }
         function csLoad() {
           if (!csActive()) return Promise.resolve();
           if (cs.control) cs.control.abort();
@@ -228,7 +300,8 @@ const CAMPUS_SYNC_SCRIPT = `
             api("/api/admin/campus-sync/overview"),
             api("/api/admin/campus-sync/timeseries?range=" + cs.range),
             api("/api/admin/campus-sync/security"),
-            api("/api/admin/campus-sync/config")
+            api("/api/admin/campus-sync/config"),
+            api("/api/admin/campus-sync/policy")
           ]).then(function (parts) {
             if (loading) loading.hidden = true;
             var error = csNode("csError");
@@ -242,6 +315,8 @@ const CAMPUS_SYNC_SCRIPT = `
             csDraw(parts[1].points || []);
             csRenderSecurity(parts[2].security || parts[2]);
             csRenderConfig(parts[3].config || parts[3]);
+            csFillPolicy((parts[4] && parts[4].policy) || null);
+            csRenderUsage(parts[4] && parts[4].usage);
           }).catch(csFail);
         }
         function csSchedule() {
@@ -261,7 +336,38 @@ const CAMPUS_SYNC_SCRIPT = `
           refresh.addEventListener("click", function () { csLoad(); csLoadEvents(true); });
           csNode("csPauseBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/pause"); });
           csNode("csResumeBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/resume"); });
-          csNode("csDiagnoseBtn").addEventListener("click", function () { csAction("/api/admin/campus-sync/actions/diagnose"); });
+          csNode("csDiagnoseBtn").addEventListener("click", function () {
+            api("/api/admin/campus-sync/actions/diagnose", { method: "POST", body: {} }).then(function (body) {
+              csRenderDiagnose(body.report || body);
+              return csLoad();
+            }).catch(csFail);
+          });
+          csNode("csPolicyCancel").addEventListener("click", function () { csFillPolicy(cs.policy); });
+          csNode("csPolicySave").addEventListener("click", function () {
+            var body = {
+              rateLimit: Number(csNode("csRateLimit").value),
+              rateWindowSeconds: Number(csNode("csRateWindow").value),
+              dailyLimit: Number(csNode("csDailyLimit").value),
+              globalActiveCap: Number(csNode("csGlobalCap").value)
+            };
+            if (!Number.isInteger(body.dailyLimit) || body.dailyLimit < 1 || body.dailyLimit > 50) {
+              csNode("csPolicyMeta").textContent = "每日次数需要在 1 到 50 之间。";
+              return;
+            }
+            var previous = cs.policy && cs.policy.dailyLimit;
+            if (!window.confirm("确定将每用户每日同步次数由 " + previous + " 次调整为 " + body.dailyLimit + " 次吗？修改后立即对新请求生效。")) return;
+            api("/api/admin/campus-sync/policy", { method: "PUT", body: body }).then(function (result) {
+              csFillPolicy(result.policy);
+              csNode("csPolicyMeta").textContent = "已保存 · 立即生效";
+            }).catch(function () { csNode("csPolicyMeta").textContent = "策略没有保存。"; });
+          });
+          csNode("csPolicyReset").addEventListener("click", function () {
+            if (!window.confirm("确定恢复为环境默认的同步策略吗？修改后立即对新请求生效。")) return;
+            api("/api/admin/campus-sync/policy/reset", { method: "POST", body: {} }).then(function (result) {
+              csFillPolicy(result.policy);
+              csNode("csPolicyMeta").textContent = "已恢复默认值 · 立即生效";
+            }).catch(csFail);
+          });
           csNode("csEventsBtn").addEventListener("click", function () { csLoadEvents(true); });
           csNode("csEventsMore").addEventListener("click", function () { if (cs.cursor) csLoadEvents(false); });
           document.querySelectorAll("#csRanges button").forEach(function (button) {

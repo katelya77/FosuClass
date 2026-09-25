@@ -1008,7 +1008,7 @@ Page({
       available: ["同步服务正常", "输入学号和学校密码即可同步"],
       busy: ["当前同步人数较多", "可以稍后再试"],
       degraded: ["同步服务暂时不可用", "请稍后再试"],
-      maintenance: ["同步服务维护中，请稍后再试", "可以先使用文件导入"],
+      maintenance: ["课表同步服务维护中，请稍后再试", "可以先使用文件导入"],
       unavailable: ["同步服务暂时维护", "请稍后再试，或先使用文件导入"],
     };
     const pair = copy[status] || copy.unavailable;
@@ -2400,7 +2400,13 @@ Page({
     } else if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
       content = "学校账号或密码不正确";
     } else if (code === "CAMPUS_SYNC_MAINTENANCE") {
-      content = "同步服务维护中，请稍后再试";
+      content = "课表同步服务维护中，请稍后再试。";
+    } else if (code === "CAMPUS_SYNC_RATE_LIMITED") {
+      content = "操作有些频繁，请稍后再试。";
+    } else if (code === "CAMPUS_SYNC_DAILY_LIMIT") {
+      content = "今天的课表同步次数已用完，明天 00:00 后可再次同步。";
+    } else if (code === "CAMPUS_SYNC_CONCURRENT_LIMIT" || code === "JOB_ALREADY_ACTIVE") {
+      content = "已有一次课表同步正在进行，请等待完成。";
     } else if (code === "CAMPUS_SYNC_BUSY") {
       content = "当前同步人数较多，请稍后再试。";
     } else if (code === "AGENT_OFFLINE" || code === "CAMPUS_AGENT_NOT_AVAILABLE") {
@@ -2426,7 +2432,7 @@ Page({
     } else if (code === "UNKNOWN_IMPORT_ERROR") {
       content = "读取失败，请稍后重试或使用其他导入方式。";
     } else if (code === "IMPORT_RATE_LIMITED") {
-      content = "尝试次数较多，请稍后再试。";
+      content = "操作有些频繁，请稍后再试。";
     } else if (code === "IMPORT_KEY_EXPIRED") {
       content = "本次安全验证已失效，请重新点击“验证并读取课表”。";
     } else if (code === "IMPORT_TOKEN_EXPIRED") {
