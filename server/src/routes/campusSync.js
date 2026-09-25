@@ -71,6 +71,7 @@ function quotaFields(error) {
 function publicError(error) {
   const code = error && error.code || "AGENT_OFFLINE";
   if (code === "INVALID_CREDENTIALS") return { status: 400, code, message: "学校账号或密码不正确" };
+  if (code === "PROFILE_ID_MISMATCH") return { status: 400, code, message: "读取到的学籍学号与登录学号不一致，已停止同步。" };
   if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED") {
     return { status: 429, code: code === "IMPORT_RATE_LIMITED" ? code : "CAMPUS_SYNC_RATE_LIMITED", message: "操作有些频繁，请稍后再试。", extra: quotaFields(error) };
   }

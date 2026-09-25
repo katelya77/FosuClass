@@ -2,8 +2,12 @@ const {
   CAPTCHA_CHECK_URL,
   CAS_BOOTSTRAP_URL,
   TIMETABLE_URL,
+  PROFILE_URL,
+  PROFILE_TIMEOUT_MS,
   XS_MAIN_URL,
 } = require("./fosuDirectConfig");
+const { parseStudentProfileHtml, parseXsMainIdentity } = require("./studentProfileParser");
+const { decodeSchoolHtml } = require("./schoolHtmlCharset");
 const { createCookieJar } = require("./fosuDirectCookieJar");
 const { encryptFosuPassword } = require("./fosuDirectPasswordCrypto");
 const {
@@ -482,6 +486,80 @@ function createFosuDirectClient(options) {
     }
   }
 
+  function decodeProfilePage(data, contentType) {
+    if (typeof options.decodeSchoolHtml === "function") {
+      const decoded = options.decodeSchoolHtml(data, contentType);
+      return typeof decoded === "string" ? decoded : (decoded && decoded.html) || "";
+    }
+    return decodeSchoolHtml(data, contentType).html;
+  }
+
+  function profileHintFrom(studentId, parsed, source, status) {
+    return {
+      studentName: parsed.studentName || "",
+      className: parsed.className || "",
+      studentIdMasked: maskStudentId(studentId),
+      studentIdMatched: Boolean(parsed.studentIdMatched),
+      source: source || "",
+      profileStatus: status,
+    };
+  }
+
+  async function fetchProfileDocument() {
+    let attempt = 0;
+    while (attempt < 2) {
+      attempt += 1;
+      try {
+        const followed = await follow({
+          url: PROFILE_URL,
+          method: "GET",
+          responseType: "arraybuffer",
+          timeout: PROFILE_TIMEOUT_MS,
+          stage: "profile-fetch",
+        });
+        const response = followed.response || {};
+        const statusCode = Number(response.statusCode || 0);
+        if (statusCode !== 200) return "";
+        return decodeProfilePage(response.data, headerValue(response, "content-type"));
+      } catch (error) {
+        const transient = error && (error.code === "DIRECT_NETWORK_ERROR" || /timeout/i.test(String(error.code || "")));
+        if (transient && attempt < 2) continue;
+        return "";
+      }
+    }
+    return "";
+  }
+
+  async function readStudentProfile(studentId, homeHtml) {
+    let html = await fetchProfileDocument();
+    let parsed = html ? parseStudentProfileHtml(html) : { studentName: "", studentId: "", className: "" };
+    html = "";
+    let source = parsed.studentName || parsed.studentId || parsed.className ? "grxx/xsxx" : "";
+    if (parsed.studentId && String(parsed.studentId) !== String(studentId)) {
+      throw directError("PROFILE_ID_MISMATCH", { stage: "profile-fetch" });
+    }
+    if ((!parsed.studentName || !parsed.studentId) && homeHtml) {
+      const fallback = parseXsMainIdentity(homeHtml);
+      if (fallback.studentId && String(fallback.studentId) !== String(studentId)) {
+        throw directError("PROFILE_ID_MISMATCH", { stage: "profile-fetch" });
+      }
+      if (fallback.studentId && String(fallback.studentId) === String(studentId)) {
+        if (!parsed.studentName) parsed.studentName = fallback.studentName;
+        if (!parsed.studentId) parsed.studentId = fallback.studentId;
+        if (!source) source = "xsMain";
+      }
+    }
+    const matched = Boolean(parsed.studentId) && String(parsed.studentId) === String(studentId);
+    const status = parsed.studentName || parsed.className
+      ? (matched ? "ok" : "partial")
+      : "unavailable";
+    return profileHintFrom(studentId, {
+      studentName: parsed.studentName,
+      className: parsed.className,
+      studentIdMatched: matched,
+    }, source, status);
+  }
+
   async function readTimetable(input) {
     const studentId = String(input && input.studentId || "").trim();
     secrets.password = String(input && input.password || "");
@@ -636,6 +714,7 @@ function createFosuDirectClient(options) {
           statusCode: timetable.statusCode,
         });
       }
+      const profileHint = await readStudentProfile(studentId, homeHtml);
       const body = timetable.data;
       const bytes = body instanceof ArrayBuffer ? new Uint8Array(body) : (body instanceof Uint8Array ? body : utf8Fallback(body));
       return {
@@ -643,9 +722,7 @@ function createFosuDirectClient(options) {
         timetableBodyBase64: bytesToBase64(bytes),
         contentType: headerValue(timetable, "content-type") || "text/html",
         semester,
-        profileHint: {
-          studentIdMasked: maskStudentId(studentId),
-        },
+        profileHint,
       };
     } catch (error) {
       noteFailure(error, error && error.stage, error && error.targetHost);

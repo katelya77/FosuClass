@@ -1,4 +1,5 @@
 const iconv = require("iconv-lite");
+const { decodeSchoolHtml, detectCharset: detectSchoolCharset } = require("../../../miniprogram/services/schoolHtmlCharset");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const { assertImportAttemptAllowed } = require("./studentScheduleImportRateLimiter");
@@ -28,19 +29,37 @@ function rejectSecretKeys(value, path) {
 }
 
 function detectCharset(contentType, buffer) {
-  const header = /charset\s*=\s*["']?([^;"'\s]+)/i.exec(String(contentType || ""));
-  if (header) return header[1].toLowerCase();
-  const sniff = buffer.slice(0, 1200).toString("latin1");
-  const meta = /charset\s*=\s*["']?\s*([a-zA-Z0-9_-]+)/i.exec(sniff);
-  return meta ? meta[1].toLowerCase() : "utf-8";
+  return detectSchoolCharset(contentType, buffer);
 }
 
 function decodeTimetable(buffer, contentType) {
-  const charset = detectCharset(contentType, buffer);
-  const encoding = /gb2312|gbk|gb18030/.test(charset) ? "gbk" : "utf8";
+  return decodeSchoolHtml(buffer, contentType, iconv);
+}
+
+function sanitizePlain(value, max) {
+  const text = String(value || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/script|javascript:|onerror\s*=/i.test(text)) return "";
+  return text.slice(0, max);
+}
+
+function sanitizeProfileHint(hint) {
+  const source = hint && typeof hint === "object" ? hint : {};
+  const status = ["ok", "partial", "unavailable", "id_mismatch"].indexOf(source.profileStatus) >= 0
+    ? source.profileStatus
+    : "";
+  const masked = sanitizePlain(source.studentIdMasked, 32).replace(/[^\d*]/g, "");
   return {
-    html: iconv.decode(buffer, encoding),
-    charset: encoding,
+    studentName: sanitizePlain(source.studentName, 40),
+    className: sanitizePlain(source.className, 80),
+    studentIdMasked: masked,
+    studentIdMatched: source.studentIdMatched === true,
+    source: sanitizePlain(source.source, 32),
+    profileStatus: status,
   };
 }
 
@@ -103,20 +122,17 @@ function createTimetablePreview(req, body, source) {
       rowsCount: courses.length,
     },
   });
-  const profileHint = payload.profileHint || {};
-  if (profileHint.studentIdMasked && preview.profile) {
-    preview.profile.studentIdMasked = String(profileHint.studentIdMasked);
-  }
+  const profileHint = sanitizeProfileHint(payload.profileHint);
   if (preview.profile) {
-    preview.profile.studentName = pageMetadata.studentName || "";
-    preview.profile.className = "";
+    preview.profile.studentName = profileHint.studentName || pageMetadata.studentName || "";
+    preview.profile.className = profileHint.className || "";
     preview.profile.targetClassName = "";
-    preview.profile.classNameConfidence = "none";
+    preview.profile.classNameConfidence = profileHint.className ? "high" : "none";
+    if (profileHint.studentIdMasked) preview.profile.studentIdMasked = profileHint.studentIdMasked;
   }
   preview.pageRemarks = pageMetadata.pageRemarks;
-  if (!pageMetadata.studentName) {
-    safeLog("fosu-direct-preview-profile", { code: "PROFILE_NAME_MISSING" });
-  }
+  const profileStatus = profileHint.profileStatus || (preview.profile && preview.profile.studentName ? "ok" : "unavailable");
+  safeLog("fosu-direct-preview-profile", { code: profileStatus === "unavailable" ? "PROFILE_NAME_MISSING" : profileStatus });
   safeLog("fosu-direct-preview-ok", {
     code: "OK",
     bytes: buffer.length,
@@ -141,4 +157,5 @@ module.exports = {
   createDirectStudentSchedulePreview,
   detectCharset,
   rejectSecretKeys,
+  sanitizeProfileHint,
 };

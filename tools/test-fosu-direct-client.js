@@ -38,7 +38,9 @@ function scriptedTransport(handlers) {
     async request(spec) {
       calls.push({ url: spec.url, method: spec.method || "GET", data: spec.data, header: spec.header || {} });
       assert.ok(spec.url.startsWith("https://"), "school client must not request http");
-      const handler = all.find((item) => item.match(spec, calls));
+      const handler = all.find((item) => item.match(spec, calls)) || (spec.url.includes("/grxx/xsxx") ? {
+        respond: () => ({ statusCode: 500, data: "", header: {} }),
+      } : null);
       assert.ok(handler, `unexpected ${spec.method} ${spec.url}`);
       return handler.respond(spec);
     },

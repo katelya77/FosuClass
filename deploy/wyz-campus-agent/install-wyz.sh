@@ -13,6 +13,11 @@ install -d -m 755 -o fosu-campus-agent -g fosu-campus-agent "$DEST/src" "$DEST/v
 cp "$SRC/package.json" "$SRC/package-lock.json" "$DEST/"
 cp "$SRC/src/index.js" "$SRC/src/signature.js" "$DEST/src/"
 cp "$SRC/vendor/"*.js "$DEST/vendor/"
+if [ -d "$SRC/vendor/iconv-lite" ]; then
+  rm -rf "$DEST/vendor/iconv-lite"
+  cp -a "$SRC/vendor/iconv-lite" "$DEST/vendor/iconv-lite"
+  chown -R fosu-campus-agent:fosu-campus-agent "$DEST/vendor/iconv-lite"
+fi
 chown -R fosu-campus-agent:fosu-campus-agent "$DEST"
 install -m 644 "$SRC/wyz-campus-agent.service" /etc/systemd/system/wyz-campus-agent.service
 if [ -f "$SRC/verify-wyz.sh" ]; then

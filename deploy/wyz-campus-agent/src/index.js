@@ -15,6 +15,18 @@ function clientFactory() {
   return require(path.join(root, "fosuDirectClient")).createFosuDirectClient;
 }
 
+function loadIconv() {
+  try { return require("iconv-lite"); } catch (error) {}
+  try { return require(path.join(__dirname, "..", "vendor", "iconv-lite")); } catch (error) {}
+  return null;
+}
+
+function decodeSchoolHtml(data, contentType) {
+  const root = process.env.FOSU_DIRECT_CLIENT_DIR || path.join(__dirname, "..", "vendor");
+  const decoder = require(path.join(root, "schoolHtmlCharset")).decodeSchoolHtml;
+  return decoder(data, contentType, loadIconv());
+}
+
 function createNodeTransport() {
   return {
     manualRedirect: true,
@@ -142,6 +154,7 @@ function safeCode(error) {
   const code = error && error.code || "";
   if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") return "INVALID_CREDENTIALS";
   if (code === "INTERACTIVE_CHALLENGE_REQUIRED") return "INTERACTIVE_CHALLENGE_REQUIRED";
+  if (code === "PROFILE_ID_MISMATCH") return "PROFILE_ID_MISMATCH";
   if (/TIMEOUT/i.test(code)) return "TIMEOUT";
   return "AGENT_OFFLINE";
 }
@@ -164,7 +177,7 @@ function shortId(value) {
 
 async function runClaimedJob(job, request, log) {
   const createFosuDirectClient = clientFactory();
-  const client = createFosuDirectClient({ transport: createNodeTransport() });
+  const client = createFosuDirectClient({ transport: createNodeTransport(), decodeSchoolHtml });
   let password = job.password;
   const jobId = shortId(job.jobId);
   try {
@@ -174,13 +187,23 @@ async function runClaimedJob(job, request, log) {
       semester: job.semester || "",
     });
     password = "";
+    const hint = result.profileHint || {};
+    const profileStatus = ["ok", "partial", "unavailable"].indexOf(hint.profileStatus) >= 0 ? hint.profileStatus : "unavailable";
+    log({ event: "profile-fetched", status: profileStatus });
     const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
       jobId: job.jobId,
       success: true,
       semester: job.semester || "",
       timetableBodyBase64: result.timetableBodyBase64,
       contentType: result.contentType || "text/html",
-      profileHint: { studentIdMasked: result.profileHint && result.profileHint.studentIdMasked || "" },
+      profileHint: {
+        studentName: hint.studentName || "",
+        className: hint.className || "",
+        studentIdMasked: hint.studentIdMasked || "",
+        studentIdMatched: hint.studentIdMatched === true,
+        source: hint.source || "",
+        profileStatus,
+      },
     });
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
       throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
@@ -190,6 +213,7 @@ async function runClaimedJob(job, request, log) {
     password = "";
     if (error && error.delayMs) throw error;
     const code = safeCode(error);
+    if (code === "PROFILE_ID_MISMATCH") log({ event: "profile-fetched", status: "id_mismatch" });
     const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
       jobId: job.jobId,
       success: false,

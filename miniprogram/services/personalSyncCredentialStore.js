@@ -46,6 +46,7 @@ function publicView(record) {
     studentId: record.studentId || "",
     password: record.password || "",
     confirmedStudentName: record.confirmedStudentName || "",
+    confirmedClassName: record.confirmedClassName || "",
     identityConfirmed: Boolean(record.identityConfirmed),
     updatedAt: record.updatedAt || "",
   };
@@ -75,6 +76,7 @@ function saveSuccessfulLogin(credential) {
     studentId,
     password,
     confirmedStudentName: previous.confirmedStudentName || "",
+    confirmedClassName: previous.confirmedClassName || "",
     identityConfirmed: Boolean(previous.identityConfirmed),
     updatedAt: new Date().toISOString(),
   };
@@ -89,6 +91,7 @@ function confirmIdentity(identity) {
   const current = store.records[ownerKey];
   if (!current || current.studentId !== String(identity && identity.studentId || "").trim()) return null;
   current.confirmedStudentName = String(identity && identity.confirmedStudentName || "").trim();
+  current.confirmedClassName = String(identity && identity.confirmedClassName || "").trim();
   current.identityConfirmed = true;
   current.updatedAt = new Date().toISOString();
   store.records[ownerKey] = current;
@@ -96,10 +99,11 @@ function confirmIdentity(identity) {
   return publicView(current);
 }
 
-function sameConfirmedIdentity(saved, studentId, studentName) {
+function sameConfirmedIdentity(saved, studentId, studentName, className) {
   if (!saved || !saved.identityConfirmed) return false;
   if (String(saved.studentId || "") !== String(studentId || "")) return false;
-  return String(saved.confirmedStudentName || "") === String(studentName || "").trim();
+  if (String(saved.confirmedStudentName || "") !== String(studentName || "").trim()) return false;
+  return String(saved.confirmedClassName || "") === String(className || "").trim();
 }
 
 function clearPassword() {

@@ -101,6 +101,31 @@ async function run() {
     assert.ok(utf8.data.importPreviewToken);
     assert.ok(utf8.data.buckets && utf8.data.buckets.recommended.length);
     assert.strictEqual(utf8.data.profile.studentIdMasked, "2025****0303");
+    const profiled = await requestJson(baseUrl, "/api/schedule-import/fosu/direct/preview", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source: "client-direct-fosu100",
+        timetableBodyBase64: Buffer.from(HTML).toString("base64"),
+        contentType: "text/html; charset=utf-8",
+        semester: "2025-2026-2",
+        profileHint: {
+          studentName: "王奕章",
+          className: "25动物医学6",
+          studentIdMasked: "2025****0303",
+          studentIdMatched: true,
+          source: "grxx/xsxx",
+          profileStatus: "ok",
+          phone: "13800000000",
+        },
+      }),
+    });
+    assert.strictEqual(profiled.status, 200);
+    assert.strictEqual(profiled.data.profile.studentName, "王奕章");
+    assert.strictEqual(profiled.data.profile.className, "25动物医学6");
+    assert.strictEqual(profiled.data.profile.targetClassName, "");
+    assert.ok(profiled.data.buckets.recommended.length);
+    assert.ok(!JSON.stringify(profiled.data).includes("13800000000"));
     assert.ok(!JSON.stringify(utf8.data).includes("password"));
     const confirmed = confirmStudentScheduleImport({
       fosuSession: { openidHash: session.payload && session.payload.openidHash },

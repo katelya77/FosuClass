@@ -910,6 +910,7 @@ Page({
     studentImportStage: "form",
     identityStudentName: "",
     identityNameMissing: false,
+    identityClassName: "",
     identityStudentId: "",
     pageRemarksExpanded: false,
     pageRemarkView: { visible: false, text: "", expanded: false, canToggle: false },
@@ -1243,6 +1244,7 @@ Page({
       studentEditingArrangement: null,
       identityStudentName: "",
       identityNameMissing: false,
+      identityClassName: "",
       identityStudentId: "",
       pageRemarksExpanded: false,
       pageRemarkView: { visible: false, text: "", expanded: false, canToggle: false },
@@ -1328,6 +1330,7 @@ Page({
   presentIdentityConfirm(preview, studentId, stage) {
     const profile = preview && preview.profile || {};
     const name = reliableProfileText(profile.studentName);
+    const className = reliableProfileText(profile.className);
     const displayInfo = buildApaasScheduleDisplay(preview);
     const metadata = sanitizeApaasMetadata(preview);
     const fullId = isFullStudentId(studentId) ? String(studentId).trim() : "";
@@ -1346,6 +1349,7 @@ Page({
       campusSyncJobId: preview.campusSyncJobId || "",
       identityStudentName: name,
       identityNameMissing: !name,
+      identityClassName: className,
       identityStudentId: fullId,
       pageRemarksExpanded: false,
       studentForm: Object.assign({}, this.data.studentForm, { password: "", studentId: fullId || this.data.studentForm.studentId }),
@@ -1370,6 +1374,7 @@ Page({
     personalSyncCredentialStore.confirmIdentity({
       studentId: this.data.identityStudentId || this.data.studentForm.studentId,
       confirmedStudentName: this.data.identityNameMissing ? "" : this.data.identityStudentName,
+      confirmedClassName: this.data.identityClassName || "",
     });
     this.setData({
       studentImportStage: "preview",
@@ -1930,13 +1935,14 @@ Page({
     if (credential) credential.password = "";
     const saved = personalSyncCredentialStore.read();
     const parsedName = reliableProfileText(preview && preview.profile && preview.profile.studentName);
+    const parsedClass = reliableProfileText(preview && preview.profile && preview.profile.className);
     this.setData({
       credentialSaved: Boolean(saved),
       hasSavedPassword: Boolean(saved && saved.password),
       "studentForm.password": "",
       "studentForm.studentId": studentId || this.data.studentForm.studentId,
     });
-    if (credential && credential.quickResync && personalSyncCredentialStore.sameConfirmedIdentity(saved, studentId, parsedName)) {
+    if (credential && credential.quickResync && personalSyncCredentialStore.sameConfirmedIdentity(saved, studentId, parsedName, parsedClass)) {
       this.presentIdentityConfirm(preview, studentId, "preview");
       wx.showToast({ title: "课表读取完成", icon: "success" });
       return;
@@ -2602,6 +2608,8 @@ Page({
       content = "当前网络环境暂时无法完成学校身份验证。";
     } else if (code === "CLIENT_CRYPTO_UNAVAILABLE" || code === "DIRECT_CRYPTO_UNAVAILABLE") {
       content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
+    } else if (code === "PROFILE_ID_MISMATCH") {
+      content = "读取到的学籍学号与登录学号不一致，已停止同步。";
     } else if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
       content = "学校账号或密码不正确";
     } else if (code === "CAMPUS_SYNC_MAINTENANCE") {

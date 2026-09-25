@@ -74,6 +74,10 @@
         <text class="profile-label">姓名</text>
         <text class="profile-value">{{identityNameMissing ? '未读取到' : identityStudentName}}</text>
       </view>
+      <view class="profile-row" wx:if="{{identityClassName}}">
+        <text class="profile-label">班级</text>
+        <text class="profile-value">{{identityClassName}}</text>
+      </view>
       <view class="profile-row">
         <text class="profile-label">学号</text>
         <text class="profile-value identity-id">{{identityStudentId}}</text>
