@@ -214,6 +214,7 @@ module.exports = {
   current,
   reload,
   parseStrictInt,
+  policyFile: policyPath,
   reset,
   resetForTests,
   snapshot,

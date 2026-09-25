@@ -1,5 +1,4 @@
 const fs = require("fs");
-const path = require("path");
 
 const base = process.env.POLICY_VERIFY_BASE || "http://127.0.0.1:3000";
 const token = process.env.ADMIN_API_TOKEN || "";
@@ -54,9 +53,9 @@ async function main() {
       fail("defaults were not restored");
     }
   }
-  const file = process.env.CAMPUS_SYNC_OPS_DIR
-    ? path.join(process.env.CAMPUS_SYNC_OPS_DIR, "policy.json")
-    : "/app/storage/ops/campus-sync/policy.json";
+  const policy = require("../src/services/campusSyncPolicyService");
+  const file = policy.policyFile();
+  if (process.env.NODE_ENV === "production" && !file.startsWith("/app/storage/")) fail("policy file is not on the storage volume");
   if (!fs.existsSync(file)) fail("policy.json missing at " + file);
   const saved = JSON.parse(fs.readFileSync(file, "utf8"));
   if (saved.dailyLimit !== 10) fail("persisted dailyLimit was not restored");
