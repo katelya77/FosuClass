@@ -4,7 +4,7 @@
 
 - `/admin`：根据登录状态跳转到 `/admin/login` 或 `/admin/dashboard`。
 - `/admin/login`：输入 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN` 登录，登录态写入 httpOnly Cookie。
-- `/admin/dashboard`：管理数据概览、公告、最新动态、数据版本和反馈。
+- `/admin/dashboard`：管理数据概览、每日知识、数据版本和反馈。公告管理与最新动态已从后台导航移除；`GET /api/fosu/app-config` 仍返回 `notices` 与 `news` 数组，兼容审核中的小程序。
 
 ## 新增 API
 

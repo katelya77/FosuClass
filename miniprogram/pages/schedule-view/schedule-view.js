@@ -1,10 +1,11 @@
 const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
-const { getSettings, getCurrentScheduleTarget, setCurrentScheduleTarget } = require("../../utils/storage");
+const { getSettings, getCurrentScheduleTarget, saveSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
 const {
   TOTAL_WEEKS,
   addLocalDays,
@@ -112,6 +113,8 @@ Page({
     weekRangeText: "",
     weekScopeText: "周一至周五",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: SECTION_HEIGHT,
     scheduleHeight: courseTimes.length * SECTION_HEIGHT,
@@ -120,7 +123,8 @@ Page({
     dayColumnWidth: 128,
     weekdays: [],
     dayColumns: [],
-    showWeekend: false,
+    showWeekend: true,
+    weekendShowMode: "overview",
     detailVisible: false,
     selectedCourse: null,
     isFromShare: false,
@@ -483,6 +487,7 @@ Page({
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -499,18 +504,31 @@ Page({
   },
 
   onWeekChange(event) {
-    const type = event.detail.type;
+    const detail = event && event.detail || {};
+    const type = detail.type;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
-      : clampWeek(event.detail.week, termConfig);
+      : clampWeek(detail.week, termConfig);
+    if (type !== "current" && nextWeek === this.data.currentWeek) return;
+
+    this._initialWeek = null;
+    saveSettings({
+      currentWeek: nextWeek,
+      manualWeekOverride: type !== "current",
+    });
     
     this.setData({
       currentWeek: nextWeek,
     }, () => {
       this.renderSchedule();
     });
+  },
+
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
   },
 
   toggleBindTarget() {

@@ -1,5 +1,7 @@
 const assert = require("assert");
+const { spawnSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
@@ -29,10 +31,7 @@ const dockerfile = fs.readFileSync(path.join(root, "server", "Dockerfile"), "utf
   "FOSU_DISK_CRITICAL_PERCENT=90",
   "FOSU_MIN_FREE_DISK_GB=5",
   "FOSU_AUTH_BASE=https://authserver.fosu.edu.cn",
-  "FOSU_APAAS_BASE=https://apaas.fosu.edu.cn",
-  "FOSU_IMPORT_TIMEOUT_MS=30000",
   "FOSU_IMPORT_PREVIEW_TTL_SECONDS=600",
-  "FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK=false",
   "FOSU_IMPORT_RATE_LIMIT_ENABLED=true",
   "FOSU_IMPORT_IP_RATE_LIMIT_10M=12",
 ].forEach((line) => {
@@ -50,12 +49,6 @@ const dockerfile = fs.readFileSync(path.join(root, "server", "Dockerfile"), "utf
   "FOSU_DEPLOY_COMMIT_SHA=",
   "FOSU_CLIENT_BUILD_ID=",
   "FOSU_IMPORT_ENABLE=true",
-  "FOSU_IMPORT_CHANNEL=auto",
-  "FOSU_CLOUDBASE_IMPORT_ENABLE=true",
-  "FOSU_CLOUDBASE_IMPORT_URL=",
-  "FOSU_IMPORT_CHANNEL_TIMEOUT_MS=25000",
-  "FOSU_IMPORT_ORACLE_FALLBACK=true",
-  "FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN=",
 ].forEach((line) => {
   assert(envExample.includes(line), `.env.example should include ${line}`);
   const key = line.split("=")[0];
@@ -212,5 +205,49 @@ assert(
 ].forEach((pattern) => {
   assert(!pattern.test(workflow), `workflow appears to contain a hard-coded secret: ${pattern}`);
 });
+
+[
+  "CAMPUS_AGENT_ENABLED=${{ vars.CAMPUS_AGENT_ENABLED || 'true' }}",
+  "CAMPUS_AGENT_ID=${{ vars.CAMPUS_AGENT_ID || 'wyz-campus-01' }}",
+  "CAMPUS_AGENT_TOKEN=${{ secrets.CAMPUS_AGENT_TOKEN }}",
+  "CAMPUS_AGENT_SIGNING_SECRET=${{ secrets.CAMPUS_AGENT_SIGNING_SECRET }}",
+  "CAMPUS_SYNC_JOB_TTL_SECONDS=${{ vars.CAMPUS_SYNC_JOB_TTL_SECONDS || '120' }}",
+  "CAMPUS_AGENT_TOKEN and CAMPUS_AGENT_SIGNING_SECRET must be different.",
+  "must each be at least 32 characters.",
+  "node scripts/check-campus-agent-env.js",
+  "node scripts/verify-campus-agent-broker.js",
+  "wyz-campus-agent-${{ github.sha }}",
+  "ACTIONS_ARTIFACT_UPLOAD_ENABLED",
+  "continue-on-error: true",
+  "retention-days: 1",
+  "route2-artifacts",
+].forEach((needle) => {
+  assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
+});
+assert(!workflow.includes("node server/scripts/check-campus-agent-env.js"), "campus env check must run after cd into server/");
+assert(!workflow.includes("source: deploy/**"), "production API upload must not ship deploy/");
+assert(!/class\.katelya\.eu\.org\/static\/releases[\s\S]{0,200}wyz-campus-agent/.test(workflow), "WYZ bundle must stay off the public static release path");
+
+function checkCampusEnv(body) {
+  const file = path.join(os.tmpdir(), `fosu-campus-env-${process.pid}-${Date.now()}.tmp`);
+  fs.writeFileSync(file, body, { mode: 0o600 });
+  const result = spawnSync(process.execPath, [path.join(root, "server", "scripts", "check-campus-agent-env.js"), file], { encoding: "utf8" });
+  return { status: result.status, stderr: result.stderr || "", exists: fs.existsSync(file), file };
+}
+const accepted = checkCampusEnv(`CAMPUS_AGENT_ENABLED=true\nCAMPUS_AGENT_TOKEN=${"a".repeat(32)}\nCAMPUS_AGENT_SIGNING_SECRET=${"b".repeat(32)}\n`);
+assert.strictEqual(accepted.status, 0, accepted.stderr);
+fs.unlinkSync(accepted.file);
+const rejected = checkCampusEnv(`CAMPUS_AGENT_ENABLED=true\nCAMPUS_AGENT_TOKEN=${"c".repeat(32)}\nCAMPUS_AGENT_SIGNING_SECRET=${"c".repeat(32)}\n`);
+assert.strictEqual(rejected.status, 1);
+assert.strictEqual(rejected.exists, false);
+assert.ok(!rejected.stderr.includes("c".repeat(8)));
+const disabled = checkCampusEnv("CAMPUS_AGENT_ENABLED=false\n");
+assert.strictEqual(disabled.status, 0);
+fs.unlinkSync(disabled.file);
+
+const route2Example = fs.readFileSync(path.join(root, "deploy", "route2-env.example"), "utf8");
+assert.ok(route2Example.includes("CAMPUS_AGENT_TOKEN=<SET_IN_PRODUCTION>"));
+assert.ok(route2Example.includes("CAMPUS_AGENT_SIGNING_SECRET=<SET_IN_PRODUCTION>"));
+assert.ok(!/CAMPUS_AGENT_(TOKEN|SIGNING_SECRET)=(?!<SET_IN_PRODUCTION>)\S+/.test(route2Example));
 
 console.log("test-deploy-static-env-contract passed");

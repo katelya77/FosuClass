@@ -1,5 +1,6 @@
 const { API_BASE_URL } = require("../config/api");
 const { normalizeTrustedPath } = require("../utils/trustedUrl");
+const multiPlatform = require("../utils/multiPlatform");
 
 const STORAGE_KEY = "FOSU_SECURITY_SESSION";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -94,16 +95,8 @@ function getCurrentSessionOwnerKey() {
   return "";
 }
 
-function wxLogin() {
-  return new Promise((resolve, reject) => {
-    wx.login({
-      success: (res) => {
-        if (res && res.code) resolve(res.code);
-        else reject(Object.assign(new Error("WX_LOGIN_CODE_MISSING"), { code: "WX_LOGIN_CODE_MISSING" }));
-      },
-      fail: (err) => reject(Object.assign(new Error("WX_LOGIN_FAILED"), { code: "WX_LOGIN_FAILED", originalError: err })),
-    });
-  });
+function getPlatformLoginCode() {
+  return multiPlatform.getMiniProgramCode();
 }
 
 function bootstrapWithCode(code) {
@@ -153,7 +146,7 @@ function ensureSession(options = {}) {
   if (inflightBootstrap) {
     return inflightBootstrap;
   }
-  inflightBootstrap = wxLogin()
+  inflightBootstrap = getPlatformLoginCode()
     .then(bootstrapWithCode)
     .then((session) => {
       writeStorage(session);

@@ -1,7 +1,8 @@
 const securitySessionService = require("./securitySessionService");
+const { isFullStudentId, mergeDisplayStudentId, buildPersonalSyncSubtitle } = require("./personalSyncSurface");
 
 const STORAGE_KEY = "FOSU_RECENT_STUDENT_IMPORT_CACHE";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const STALE_AFTER_DAYS = 30;
 const STALE_AFTER_MS = STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -43,7 +44,8 @@ function formatImportTime(value) {
 }
 
 function normalizeRecentImport(record) {
-  if (!record || typeof record !== "object" || Number(record.schemaVersion || 0) !== SCHEMA_VERSION) {
+  const version = Number(record && record.schemaVersion || 0);
+  if (!record || typeof record !== "object" || (version !== 1 && version !== SCHEMA_VERSION)) {
     return null;
   }
   const ownerKey = securitySessionService.getCurrentSessionOwnerKey();
@@ -54,7 +56,14 @@ function normalizeRecentImport(record) {
     : (Array.isArray(schedule.courses) ? schedule.courses : []);
   const importedAtMs = Date.parse(record.importedAt || "");
   const isStale = Number.isFinite(importedAtMs) && Date.now() - importedAtMs > STALE_AFTER_MS;
+  const localDisplayStudentId = mergeDisplayStudentId(
+    record.localDisplayStudentId,
+    isFullStudentId(record.studentId) ? record.studentId : ""
+  );
   return Object.assign({}, record, {
+    schemaVersion: SCHEMA_VERSION,
+    localDisplayStudentId,
+    pageRemarks: Array.isArray(record.pageRemarks) ? record.pageRemarks : [],
     importedAtText: formatImportTime(record.importedAt) || record.importedAtText || "",
     courseCount: courses.length,
     isStale,
@@ -72,11 +81,24 @@ function readLocalRecentImport() {
 function writeLocalRecentImport(record) {
   const ownerKey = securitySessionService.getCurrentSessionOwnerKey() || record && record.ownerKey || "";
   if (!ownerKey || !record) return null;
+  const stored = readStorage();
+  const previous = stored.records[ownerKey] || {};
+  const localDisplayStudentId = mergeDisplayStudentId(
+    record.localDisplayStudentId || (isFullStudentId(record.studentId) ? record.studentId : ""),
+    previous.localDisplayStudentId || (isFullStudentId(previous.studentId) ? previous.studentId : "")
+  );
+  const pageRemarks = Array.isArray(record.pageRemarks)
+    ? record.pageRemarks
+    : (Array.isArray(previous.pageRemarks) ? previous.pageRemarks : []);
   const next = Object.assign({}, record, {
     schemaVersion: SCHEMA_VERSION,
     ownerKey,
+    localDisplayStudentId,
+    pageRemarks,
+    studentId: isFullStudentId(record.studentId)
+      ? String(record.studentId).trim()
+      : (isFullStudentId(previous.studentId) ? String(previous.studentId).trim() : (record.studentId || previous.studentId || "")),
   });
-  const stored = readStorage();
   stored.records[ownerKey] = next;
   writeStorage(stored);
   return normalizeRecentImport(next);
@@ -334,7 +356,7 @@ function buildScheduleTarget(record) {
     sourceText: schedule.sourceText || "学校课表系统",
     name: title,
     title,
-    subtitle: schedule.subtitle || [metadata.className || "班级未确认", schedule.term || schedule.semester || metadata.term || "", "学号导入"].filter(Boolean).join(" · "),
+    subtitle: buildPersonalSyncSubtitle(metadata.className, schedule.term || schedule.semester || metadata.term || ""),
     classId: schedule.classId || "personal-apaas-recent",
     semester: schedule.semester || schedule.term || metadata.term || "",
     term: schedule.term || schedule.semester || metadata.term || "",

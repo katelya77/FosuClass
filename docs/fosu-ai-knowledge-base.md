@@ -96,7 +96,7 @@
 | 研究生学院旧入口 | http://web.fosu.edu.cn/yanjiusheng/ | 研究生招生与通知历史入口 | medium |
 | 招聘报名系统 | https://rczp.fosu.edu.cn/ | 人才招聘报名系统 | high |
 | 学报编辑部 | https://xbbjb.fosu.edu.cn/ | 学报、投稿、期刊信息 | medium |
-| 教务/课表相关系统 | https://apaas.fosu.edu.cn/ | 教务/课表数据来源之一，需项目内验证 | medium |
+| 个人课表自动同步 | 佛山大学统一身份认证 + 100 网个人课表 | 在小程序“个人课表同步”页面完成，不在聊天里输入密码 | high |
 
 ### 2.3 后续建议继续发现的域名模式
 Codex 可加入脚本定期搜索：

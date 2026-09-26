@@ -320,7 +320,7 @@ function requestWechatSubscription(capability) {
       disclosure: "微信订阅模板未配置，已使用应用内提醒。",
     });
   }
-  if (typeof wx === "undefined" || typeof wx.requestSubscribeMessage !== "function") {
+  if (typeof wx === "undefined" || platform.isMultiEndApp() || typeof wx.requestSubscribeMessage !== "function") {
     return Promise.resolve({
       status: "not_requested",
       channel: "app_only",

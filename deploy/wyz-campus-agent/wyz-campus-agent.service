@@ -1,0 +1,30 @@
+[Unit]
+Description=FosuClass WYZ campus outbound agent
+After=network-online.target
+
+[Service]
+Type=simple
+User=fosu-campus-agent
+Group=fosu-campus-agent
+WorkingDirectory=/opt/wyz-campus-agent
+Environment=CAMPUS_AGENT_ENABLED=true
+Environment=CAMPUS_AGENT_BROKER_URL=https://agent-broker.katelya.eu.org
+Environment=CAMPUS_AGENT_ID=wyz-campus-01
+Environment=FOSU_DIRECT_CLIENT_DIR=/opt/wyz-campus-agent/vendor
+Environment=CAMPUS_AGENT_POLL_INTERVAL_MS=3000
+Environment=CAMPUS_AGENT_HEARTBEAT_INTERVAL_MS=30000
+EnvironmentFile=/etc/fosu-campus-agent.env
+ExecStart=/usr/bin/node /opt/wyz-campus-agent/src/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/wyz-campus-agent
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

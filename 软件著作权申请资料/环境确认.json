@@ -1,0 +1,6 @@
+{
+  "environment_confirmed": true,
+  "confirmation_note": "用户已明确同意使用官方脚本全局安装；重启后已验证 OfficeCLI 1.0.151。",
+  "confirmed_at": "2026-09-19T04:38:03+00:00",
+  "confirmed_content_sha256": "46456dae7e9f6e74fa113dff55ed152712b61fe450e53f19ed5b3c7747ed00d9"
+}

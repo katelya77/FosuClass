@@ -1,0 +1,17 @@
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const wxml = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal-sync/personal-sync.wxml"), "utf8");
+const wxss = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal-sync/personal-sync.wxss"), "utf8");
+const methodAt = wxml.indexOf("activeImportMethod == 'method'");
+const studentAt = wxml.indexOf("activeImportMethod == 'student'");
+const adAt = wxml.indexOf("sync-ad-slot");
+assert.ok(methodAt >= 0 && studentAt > methodAt);
+assert.ok(adAt > studentAt);
+assert.ok(wxml.includes("identity-confirm"));
+assert.ok(wxml.includes("调整导入内容"));
+assert.ok(wxss.includes(".sync-ad-slot.is-empty"));
+assert.ok(wxss.includes("display: none"));
+assert.ok(/\.student-bottom-actions\s*\{[\s\S]*position:\s*fixed/.test(wxss));
+assert.ok(/\.student-preview-page\s*\{[\s\S]*padding-bottom:\s*188rpx/.test(wxss));
+console.log("personal sync ad layout state ok");

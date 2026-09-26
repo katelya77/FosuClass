@@ -1,0 +1,208 @@
+{
+  "apis": [
+    {
+      "name": "getTermCalendar",
+      "_meta": { "ui": { "pagePath": "/pages/calendar/calendar" } },
+      "description": "查询佛山大学已发布的整学期教学周历，返回每周起止日期和已有标注。不推测周历外的放假或考试安排。",
+      "inputSchema": { "type": "object", "properties": {} },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "term": { "type": "string" },
+          "releaseVersion": { "type": "string" },
+          "weeks": { "type": "array", "items": { "type": "object", "properties": {
+            "weekNo": { "type": "number" }, "startDate": { "type": "string" },
+            "endDate": { "type": "string" }, "title": { "type": "string" }, "note": { "type": "string" }
+          } } },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    },
+    {
+      "name": "getDataStatus",
+      "_meta": { "ui": { "pagePath": "/pages/school/school" } },
+      "description": "核查佛课小表当前已发布课表的学期、Release Pack 版本与更新时间，只读取公开应用配置。",
+      "inputSchema": { "type": "object", "properties": {} },
+      "outputSchema": { "type": "object", "properties": {
+        "term": { "type": "string" }, "releaseVersion": { "type": "string" },
+        "publishedAt": { "type": "string" }, "pageTitle": { "type": "string" },
+        "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+      } }
+    },
+    {
+      "name": "getCampusWeather",
+      "description": "查询仙溪、江湾或河滨校区今天或明天的天气。只复述天气服务的成功结果和更新时间；服务不可用时不要猜测。",
+      "inputSchema": { "type": "object", "properties": {
+        "campus": { "type": "string", "enum": ["仙溪校区", "江湾校区", "河滨校区"] },
+        "dateHint": { "type": "string", "enum": ["today", "tomorrow"] }
+      }, "required": ["campus"] },
+      "outputSchema": { "type": "object", "properties": {
+        "campus": { "type": "string" }, "dateLabel": { "type": "string" },
+        "weatherText": { "type": "string" }, "temperatureC": { "type": "number" },
+        "rainProbabilityMax24h": { "type": "number" }, "updatedAt": { "type": "string" },
+        "sourceId": { "type": "string" }
+      } }
+    },
+    {
+      "name": "searchCampusPlace",
+      "_meta": { "ui": { "pagePath": "/packageMaps/pages/campus-map/campus-map" } },
+      "description": "按公开名称查询已发布校园地图中已核验的教学楼、图书馆、饭堂等地点；地图仅供参考，现场标识优先。",
+      "inputSchema": { "type": "object", "properties": {
+        "keyword": { "type": "string", "description": "用户明确提到的公开地点名称，不得填个人信息。" }
+      }, "required": ["keyword"] },
+      "outputSchema": { "type": "object", "properties": {
+        "keyword": { "type": "string" }, "version": { "type": "string" },
+        "matches": { "type": "array", "items": { "type": "object", "properties": {
+          "name": { "type": "string" }, "campus": { "type": "string" },
+          "area": { "type": "string" }
+        } } },
+        "pageTitle": { "type": "string" },
+        "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+      } }
+    },
+    {
+      "name": "openXiaoxuTask",
+      "_meta": { "ui": { "pagePath": "/packageXiaofu/pages/ai-assistant/ai-assistant" } },
+      "description": "当任务需要个人课表、课程提醒、偏好、会话记忆、课表冲突检查、会议时间推荐、首页课表切换等小序能力，且没有更具体的只读原子接口时，打开小程序内的小序继续处理。这个接口不读取或写入个人数据。",
+      "inputSchema": { "type": "object", "properties": {
+        "question": { "type": "string", "description": "用不含学号、密码、文件或票据的简短任务问题，最多 80 字。" }
+      }, "required": ["question"] },
+      "outputSchema": { "type": "object", "properties": {
+        "pageTitle": { "type": "string" },
+        "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+      } }
+    },
+    {
+      "name": "openPersonalTask",
+      "_meta": { "ui": { "pagePath": "/packageXiaofu/pages/ai-assistant/ai-assistant" } },
+      "description": "用户要看自己的今日、明日、下一节或本周课程、提醒，或导入个人课表时调用。只返回小程序内部入口，不读取私人课表；明日课程和下一节课不得跳到仅显示今天的今日安排页。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": ["today", "tomorrow", "next", "week", "reminder", "import"],
+            "description": "用户要完成的个人任务。明天的课=tomorrow，下一节课=next，不把它们归为 today。"
+          }
+        },
+        "required": ["task"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "task": { "type": "string" },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    },
+    {
+      "name": "searchCampusSchedule",
+      "_meta": { "ui": { "pagePath": "/pages/schedule-view/schedule-view" } },
+      "description": "检索佛山大学已发布的班级、教师、教室或课程课表索引。用户给出公开名称时调用；个人今日课表、下一节课或私人导入内容应引导进入佛课小表页面。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["class", "teacher", "classroom", "course"],
+            "description": "查询对象。班级=class，教师=teacher，教室=classroom，课程=course；只按用户明确提到的对象选择。"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "用户明确说出的公开班级、教师、教室或课程名称；不要填学号、密码、登录票据或猜测出的名称。"
+          }
+        },
+        "required": ["type", "keyword"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "keyword": { "type": "string" },
+          "total": { "type": "number" },
+          "term": { "type": "string" },
+          "releaseVersion": { "type": "string" },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "name" }
+              }
+            }
+          },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    },
+    {
+      "name": "findEmptyClassrooms",
+      "_meta": { "ui": { "pagePath": "/pages/empty-room/empty-room" } },
+      "description": "查询指定日期和节次的候选空教室。必须有明确的节次范围；结果基于已发布课表，现场临时占用不在数据内。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "description": "日期，格式 YYYY-MM-DD；用户说今天而未给日期时可留空。" },
+          "sections": { "type": "string", "description": "必填，连续节次范围，格式 3-4；用户只说现在、上午或下午而未给节次时应先询问，不能猜测。" },
+          "building": { "type": "string", "description": "用户明确指定的楼栋名称或编号；未指定则留空，不猜测。" }
+        },
+        "required": ["sections"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string" },
+          "sections": { "type": "string" },
+          "building": { "type": "string" },
+          "term": { "type": "string" },
+          "releaseVersion": { "type": "string" },
+          "total": { "type": "number" },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "roomName": { "type": "string" },
+                "building": { "type": "string" },
+                "campus": { "type": "string" }
+              }
+            }
+          },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    },
+    {
+      "name": "getTeachingWeek",
+      "_meta": { "ui": { "pagePath": "/pages/calendar/calendar" } },
+      "description": "查询已发布周历中某天对应的教学周与周历标注。日期不在已发布教学周内时如实说明，不推算。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "description": "日期，格式 YYYY-MM-DD；用户说今天而未给日期时留空。" }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string" },
+          "inTerm": { "type": "boolean" },
+          "weekNo": { "type": "number" },
+          "startDate": { "type": "string" },
+          "endDate": { "type": "string" },
+          "title": { "type": "string" },
+          "note": { "type": "string" },
+          "term": { "type": "string" },
+          "releaseVersion": { "type": "string" },
+          "pageTitle": { "type": "string" },
+          "pagePath": { "type": "string", "format": "page-link", "x-link-text-field": "pageTitle" }
+        }
+      }
+    }
+  ]
+}

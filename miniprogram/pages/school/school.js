@@ -373,14 +373,6 @@ Page({
       return;
     }
 
-    const { getSettings } = require("../../utils/storage");
-    const settings = getSettings();
-    const showHistorical = settings.showHistoricalGrades || false;
-
-    if (this.originalCatalogData && this.lastShowHistoricalGrades !== showHistorical) {
-      this.lastShowHistoricalGrades = showHistorical;
-      this.applyCatalogFilter();
-    }
     this.loadRecentSchedules();
 
     const aiPendingQuery = this.consumeAiPendingSchoolQuery();
@@ -808,25 +800,20 @@ Page({
     ).trim();
     const activeSemesters = activeTerm ? [{ value: activeTerm, label: activeTerm }] : [];
 
-    const { getSettings } = require("../../utils/storage");
-    const settings = getSettings();
-    const showHistorical = settings.showHistoricalGrades || false;
-
     let grades = data.grades || [];
-    if (!showHistorical) {
-      // 默认只显示最近 4 个有效本科年级
-      const activeSemester = activeTerm || getFallbackTerm();
-      const match = activeSemester.match(/^(\d{4})/);
-      if (match) {
-        const startYear = parseInt(match[1], 10);
-        const activeGrades = [];
-        for (let i = 3; i >= 0; i--) {
-          activeGrades.push(String(startYear - i));
-        }
-        grades = grades.filter((g) => activeGrades.includes(g));
-      } else {
-        grades = grades.filter((g) => ["2022", "2023", "2024", "2025"].includes(g));
+    // 全校页固定展示当前学期覆盖的四个有效本科年级。旧 storage
+    // 中的历史年级字段已退役，不再参与任何筛选决策。
+    const activeSemester = activeTerm || getFallbackTerm();
+    const match = activeSemester.match(/^(\d{4})/);
+    if (match) {
+      const startYear = parseInt(match[1], 10);
+      const activeGrades = [];
+      for (let i = 3; i >= 0; i--) {
+        activeGrades.push(String(startYear - i));
       }
+      grades = grades.filter((g) => activeGrades.includes(g));
+    } else {
+      grades = grades.filter((g) => ["2022", "2023", "2024", "2025"].includes(g));
     }
 
     // 严谨校验与更新选中的 index

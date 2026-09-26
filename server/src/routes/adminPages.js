@@ -1,7 +1,8 @@
 const express = require("express");
 const adminAuth = require("../services/adminAuth");
 const { DAILY_KNOWLEDGE_BINDINGS, DAILY_KNOWLEDGE_SCRIPT, DAILY_KNOWLEDGE_SECTION, DAILY_KNOWLEDGE_STYLES } = require("./adminDailyKnowledgeAssets");
-
+const { CAMPUS_SYNC_SCRIPT, CAMPUS_SYNC_SECTION, CAMPUS_SYNC_STYLES } = require("./adminCampusSyncAssets");
+const { SCHEDULE_COLLECTOR_CARD, SCHEDULE_COLLECTOR_SCRIPT } = require("./adminScheduleCollectorAssets");
 const router = express.Router();
 
 const ADMIN_LOGO_URL = "/assets/logo.png";
@@ -1675,7 +1676,7 @@ const adminConsoleHtml = `<!doctype html>
     .mini-banner.warning { background: var(--warning-soft); border-left-color: var(--warning); color: var(--warning); }
 
 ${DAILY_KNOWLEDGE_STYLES}
-    
+${CAMPUS_SYNC_STYLES}
     .mini-modal-mask {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -5685,6 +5686,7 @@ ${DAILY_KNOWLEDGE_STYLES}
     #section-sync .sync-section-heading h3, #section-sync .card-title, #section-sync .section-title { margin-bottom: 0; font-size: 14px; line-height: 1.35; }
     #section-sync .sync-section-heading p, #section-sync .card > p { margin-top: 4px; margin-bottom: 8px; font-size: 12px; line-height: 1.45; }
     #section-sync .sync-ops-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    #section-sync .sync-overview-aside .sync-ops-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #section-sync .sync-compact-card { min-height: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); box-shadow: none; }
     .sync-quick-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
     .sync-recommendation-copy { margin: 0 0 8px; color: var(--text-secondary); font-size: 12px; }
@@ -5826,15 +5828,14 @@ ${DAILY_KNOWLEDGE_STYLES}
             <li class="nav-item" data-section="catalog"><button type="button" title="数据资源"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6.5C4 5.12 7.58 4 12 4s8 1.12 8 2.5S16.42 9 12 9 4 7.88 4 6.5Zm0 0V12c0 1.38 3.58 2.5 8 2.5s8-1.12 8-2.5V6.5M4 12v5.5C4 18.88 7.58 20 12 20s8-1.12 8-2.5V12"/></svg><span class="nav-label">数据资源</span></button></li>
             <li class="nav-item" data-section="terms"><button type="button" title="学期管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm3 8h3m2 0h3m-8 4h3m2 0h3"/></svg><span class="nav-label">学期管理</span></button></li>
             <li class="nav-item" data-section="quality"><button type="button" title="数据质量"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm-3 9 2 2 4-4"/></svg><span class="nav-label">数据质量</span></button></li>
+            <li class="nav-item" data-section="campus-sync"><button type="button" title="个人课表同步"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7h10v2H7V7Zm0 4h10v2H7v-2Zm0 4h6v2H7v-2ZM4 4h16v16H4V4Z"/></svg><span class="nav-label">个人课表同步</span></button></li>
 
             <li class="nav-group-label" data-nav-group="发布与运维">发布与运维</li>
             <li class="nav-item" data-section="sync"><button type="button" title="同步中心"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7h-7a4 4 0 0 0-4 4v0M16 3l4 4-4 4M4 17h7a4 4 0 0 0 4-4v0m-7 8-4-4 4-4"/></svg><span class="nav-label">同步中心</span></button></li>
             <li class="nav-item" data-section="config"><button type="button" title="数据版本"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5"/></svg><span class="nav-label">数据版本</span></button></li>
 
             <li class="nav-group-label" data-nav-group="内容管理">内容管理</li>
-            <li class="nav-item" data-section="notices"><button type="button" title="公告管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13V9l12-5v14L4 13Zm12-4h3a2 2 0 0 1 0 4h-3M6 14l1.5 6h4L10 15"/></svg><span class="nav-label">公告管理</span></button></li>
             <li class="nav-item" data-section="daily-knowledge"><button type="button" title="每日知识"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 4h6m-6 4h6m-6 4h4M4 7h2m-2 5h2m-2 5h2"/></svg><span class="nav-label">每日知识</span></button></li>
-            <li class="nav-item" data-section="news"><button type="button" title="最新动态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 4h8M8 12h8m-8 4h5"/></svg><span class="nav-label">最新动态</span></button></li>
             <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
             <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
             <li class="nav-item" data-section="assistant-kb"><button type="button" title="小序知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
@@ -6024,9 +6025,9 @@ ${DAILY_KNOWLEDGE_STYLES}
         </div>
       </section>
 
-      <!-- 面板三：同步中心 Sync Center -->
-      <!-- 面板三：同步中心 Sync Center -->
+${CAMPUS_SYNC_SECTION}
       <section id="section-sync" class="section">
+${SCHEDULE_COLLECTOR_CARD}
         <!-- 1. sync-hero -->
         <div class="sync-hero" id="sync-hero">
           <div class="sync-hero-main">
@@ -6983,236 +6984,6 @@ ${DAILY_KNOWLEDGE_STYLES}
         </div>
       </section>
 
-      <!-- 面板五：公告管理 -->
-      <section id="section-notices" class="section">
-        <div class="split-layout">
-          <div class="card form-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 id="noticeFormTitle" class="card-title" style="margin-bottom: 0;">新建公告</h3>
-              <button id="clearNoticeButton" class="ghost" style="padding: 4px 10px; font-size: 12px;">清除表单</button>
-            </div>
-            
-            <div class="form-row">
-              <div>
-                <label>标题</label>
-                <input id="noticeTitle" placeholder="例如：强智教务数据维护中">
-              </div>
-              <div>
-                <label>版本标识符 (Version)</label>
-                <input id="noticeVersion" placeholder="例如：20260601-1">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>公告类型 (Type)</label>
-                <select id="noticeType">
-                  <option value="info">常规 (info)</option>
-                  <option value="warning">警告 (warning)</option>
-                  <option value="success">成功 (success)</option>
-                  <option value="update">更新 (update)</option>
-                  <option value="maintenance">维护 (maintenance)</option>
-                </select>
-              </div>
-              <div>
-                <label>优先级 (Priority)</label>
-                <select id="noticePriority">
-                  <option value="normal">普通 (normal)</option>
-                  <option value="important">重要 (important)</option>
-                  <option value="urgent">紧急 (urgent)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>展示位置 (Target Page)</label>
-                <select id="noticeTargetPage">
-                  <option value="all">所有页面 (all)</option>
-                  <option value="home">小程序首页 (home)</option>
-                  <option value="today">今日课表 (today)</option>
-                  <option value="school">全校查询 (school)</option>
-                  <option value="settings">个人设置 (settings)</option>
-                </select>
-              </div>
-              <div>
-                <label>展示模式 (Display Mode)</label>
-                <select id="noticeDisplayMode">
-                  <option value="banner">顶部横幅 (banner)</option>
-                  <option value="modal">弹窗提醒 (modal)</option>
-                  <option value="ticker">跑马灯 ticker</option>
-                  <option value="card">普通卡片 (card)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>生效开始时间 (选填)</label>
-                <input id="noticeStartAt" placeholder="YYYY-MM-DD HH:MM">
-              </div>
-              <div>
-                <label>生效结束时间 (选填)</label>
-                <input id="noticeEndAt" placeholder="YYYY-MM-DD HH:MM">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>是否启用</label>
-                <select id="noticeEnabled">
-                  <option value="true">启用展示</option>
-                  <option value="false">停用展示</option>
-                </select>
-              </div>
-              <div>
-                <label>是否允许用户关闭</label>
-                <select id="noticeClosable">
-                  <option value="true">允许关闭 (保留缓存)</option>
-                  <option value="false">不可关闭 (强制展示)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>公告正文内容</label>
-                <textarea id="noticeContent" placeholder="在此输入公告正文内容...支持换行。"></textarea>
-              </div>
-            </div>
-
-            <button id="saveNoticeButton" class="primary">保存并发布公告</button>
-          </div>
-
-          <div class="preview-box">
-            <h3 class="card-title" style="margin-bottom: 0;">小程序端实时预览</h3>
-            <div class="preview-phone">
-              <div class="phone-bar">
-                <span>9:41</span>
-                <span style="font-size: 10px;">FosuClass 佛大</span>
-                <span>Wi-Fi</span>
-              </div>
-              <div class="phone-screen" id="noticePhoneScreen">
-                <!-- 实时预览公告 -->
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">公告管理列表</h3>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>标题</th>
-                  <th>类型/模式</th>
-                  <th>展示页面</th>
-                  <th>状态</th>
-                  <th>更新时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="noticeListTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-${DAILY_KNOWLEDGE_SECTION}
-
-      <!-- 面板六：最新动态 -->
-      <section id="section-news" class="section">
-        <div class="split-layout">
-          <div class="card form-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 id="newsFormTitle" class="card-title" style="margin-bottom: 0;">添加最新动态</h3>
-              <button id="clearNewsButton" class="ghost" style="padding: 4px 10px; font-size: 12px;">清除表单</button>
-            </div>
-            
-            <div class="form-row">
-              <div>
-                <label>动态标题</label>
-                <input id="newsTitle" placeholder="例如：2026 春季学期全校课表上线">
-              </div>
-              <div>
-                <label>徽章标签 (Tag)</label>
-                <input id="newsTag" placeholder="例如：数据更新 / 功能升级">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div>
-                <label>显示日期 (选填)</label>
-                <input id="newsDate" placeholder="YYYY-MM-DD">
-              </div>
-              <div>
-                <label>外链链接 (可选)</label>
-                <input id="newsLink" placeholder="例如：https://mp.weixin.qq.com/...">
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>是否启用</label>
-                <select id="newsEnabled">
-                  <option value="true">启用</option>
-                  <option value="false">禁用</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>摘要内容 (显示在外部列表)</label>
-                <textarea id="newsSummary" placeholder="动态的简要说明，100字以内..."></textarea>
-              </div>
-            </div>
-
-            <div class="form-row full">
-              <div>
-                <label>详情正文内容 (折叠或点开后展示)</label>
-                <textarea id="newsDetail" placeholder="动态的详细说明，支持多行..."></textarea>
-              </div>
-            </div>
-
-            <button id="saveNewsButton" class="primary">保存动态</button>
-          </div>
-
-          <div class="preview-box">
-            <h3 class="card-title" style="margin-bottom: 0;">小程序卡片展示预览</h3>
-            <div class="preview-phone">
-              <div class="phone-bar">
-                <span>9:41</span>
-                <span style="font-size: 10px;">动态公告</span>
-                <span>Wi-Fi</span>
-              </div>
-              <div class="phone-screen" id="newsPhoneScreen">
-                <!-- 动态卡片预览 -->
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">动态管理列表</h3>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>标题</th>
-                  <th>标签</th>
-                  <th>日期</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="newsListTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
       <!-- 面板七：数据版本 -->
       <section id="section-config" class="section">
         <div class="card form-box">
@@ -7338,6 +7109,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         <div id="assistantKbConsole" class="kb-console"></div>
       </section>
 
+${DAILY_KNOWLEDGE_SECTION}
       <section id="section-campus-map" class="section">
         <div class="campus-map-stack">
           <div class="card form-box">
@@ -8220,6 +7992,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         "campus-map": "/admin/map",
         feedback: "/admin/feedback",
         security: "/admin/security",
+        "campus-sync": "/admin/campus-sync",
         "agent-platform": "/admin/agent",
         settings: "/admin/settings"
       };
@@ -8256,6 +8029,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         "/admin/map": { section: "campus-map" },
         "/admin/feedback": { section: "feedback" },
         "/admin/security": { section: "security" },
+        "/admin/campus-sync": { section: "campus-sync" },
         "/admin/agent": { section: "agent-platform" },
         "/admin/settings": { section: "settings" },
         "/admin/logs": { section: "settings" }
@@ -8906,6 +8680,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
+          "campus-sync": "个人课表同步",
           "agent-platform": "助手运行中心",
           settings: "系统设置与日志"
         };
@@ -8925,6 +8700,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           feedback: "内容管理 / 用户反馈",
           "ai-provider": "系统与安全 / 查询服务",
           security: "系统与安全 / 安全状态",
+          "campus-sync": "数据与课表 / 个人课表同步",
           "agent-platform": "系统与安全 / 助手运行中心",
           settings: "系统与安全 / 设置与日志"
         };
@@ -13762,6 +13538,7 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
       function renderNotices() {
+        if (!$("noticeListTable")) return;
         var list = state.notices.filter(function(item) { return item && item.displayMode !== "daily-tip"; });
         var tbody = $("noticeListTable");
         tbody.textContent = "";
@@ -13805,6 +13582,8 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
 ${DAILY_KNOWLEDGE_SCRIPT}
+${CAMPUS_SYNC_SCRIPT}
+${SCHEDULE_COLLECTOR_SCRIPT}
 
       // 最新动态管理
       function newsPayload() {
@@ -13893,6 +13672,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
       function renderNews() {
         var list = state.news;
         var tbody = $("newsListTable");
+        if (!tbody) return;
         tbody.textContent = "";
         
         if (list.length === 0) {
@@ -16300,9 +16080,7 @@ ${DAILY_KNOWLEDGE_SCRIPT}
             ["数据概览", loadDashboard()],
             ["全局配置", loadConfig()],
             ["查询服务", loadAiProviderConfig()],
-            ["公告管理", loadNotices()],
             ["每日知识", loadDailyKnowledge()],
-            ["最新动态", loadNews()],
             ["反馈管理", loadFeedbacks()]
           ];
           return Promise.allSettled(moduleLoaders.map(function (entry) { return entry[1]; })).then(function (results) {
@@ -17475,6 +17253,7 @@ router.get([
   "/config",
   "/version",
   "/security",
+  "/campus-sync",
 ], (req, res) => {
   if (!adminAuth.isAdminCookieValid(req)) {
     return res.redirect(buildAdminLoginRedirect(req));

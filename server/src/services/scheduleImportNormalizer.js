@@ -6,7 +6,7 @@ const {
   parseSections,
   parseWeekday,
   parseWeeks,
-} = require("../utils/fosuApaasScheduleParser");
+} = require("../utils/studentScheduleRowParser");
 
 const DEFAULT_PREVIEW_WEEK = 16;
 const MAX_PREVIEW_WEEKS = 19;
@@ -415,6 +415,21 @@ function classScopeReasonForArrangement(arrangement) {
 }
 
 function decisionForArrangement(arrangement) {
+  if (arrangement && arrangement.trustedPersonalSchedule) {
+    if (!arrangement.hasCompleteTime) {
+      return {
+        importDecision: IMPORT_DECISION.UNSCHEDULED,
+        confidence: "low",
+        reason: "缺少星期、节次或周次，补充后可加入。",
+      };
+    }
+    return {
+      importDecision: IMPORT_DECISION.AUTO_INCLUDE,
+      confidence: "high",
+      reason: "个人课表时间信息完整，默认加入。",
+    };
+  }
+
   const classStatus = arrangement.classScopeStatus;
   const localStatus = arrangement.matchStatus;
   const localMatched = isLocalMatched(localStatus);
@@ -470,6 +485,28 @@ function decisionForArrangement(arrangement) {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "medium",
       reason: "包含当前班级，已推荐",
+    };
+  }
+
+  if (arrangement.reliableClassScope === false && classStatus !== "not_match") {
+    if (!arrangement.hasCompleteTime) {
+      return {
+        importDecision: IMPORT_DECISION.UNSCHEDULED,
+        confidence: "low",
+        reason: "缺少星期、节次或周次，补充后可加入。",
+      };
+    }
+    if (arrangement.category === "online" || arrangement.category === "pending") {
+      return {
+        importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
+        confidence: "medium",
+        reason: "课程信息基本完整，可确认是否需要加入。",
+      };
+    }
+    return {
+      importDecision: IMPORT_DECISION.AUTO_INCLUDE,
+      confidence: "medium",
+      reason: "课程时间信息完整，默认加入课表。",
     };
   }
 
@@ -659,7 +696,7 @@ function toImportCourse(arrangement, context = {}) {
     remark: arrangement.specialNote || "",
     semester: context.semester || "",
     term: context.semester || "",
-    source: "fosu_apaas",
+    source: context.source || "fosu_apaas",
     sourceType: "personal",
     sourceStudentId: context.studentId || "",
     sourceHash: arrangement.sourceHash,
@@ -869,6 +906,15 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     options.existingSelectedClassName || options.targetClassName || "",
     options.localCourses || []
   );
+  if (options.reliableClassScope === false) {
+    targetInference.targetClassName = "";
+    targetInference.className = "";
+    targetInference.classNameConfidence = "none";
+    targetInference.source = "page-without-class";
+  } else if (options.scheduleOwnership === "personal" && !targetInference.targetClassName) {
+    targetInference.classNameConfidence = "high";
+    targetInference.source = "personal-timetable";
+  }
   const targetClassName = targetInference.targetClassName || "";
   const localIndex = buildLocalScheduleIndex(options.localCourses || []);
   const groupMap = new Map();
@@ -896,6 +942,12 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       index,
     });
     const classInfo = classifyRowByClassScope({ className: classNameRaw }, targetClassName);
+    if (options.reliableClassScope === false && classInfo.matchStatus === "not_match") {
+      classInfo.matchStatus = "unknown";
+    }
+    if (options.scheduleOwnership === "personal" && options.reliableClassScope !== false && classInfo.matchStatus !== "not_match") {
+      classInfo.matchStatus = "match";
+    }
     const courseGroupId = `group_${stableHash({ normalizedCourseName, targetClassName, semester }, 20)}`;
     const exactKey = [
       normalizedCourseName,
@@ -972,6 +1024,8 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     if (!arrangement.teacherName && localMatch.matchedCourse && localMatch.matchedCourse.teacherName) {
       arrangement.teacherName = toText(localMatch.matchedCourse.teacherName);
     }
+    if (options.reliableClassScope === false) arrangement.reliableClassScope = false;
+    if (options.scheduleOwnership === "personal") arrangement.trustedPersonalSchedule = true;
     Object.assign(arrangement, decisionForArrangement(arrangement));
     arrangement.selectedByDefault = arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE;
 
@@ -1008,7 +1062,9 @@ function buildScheduleImportPreview(rawRows, options = {}) {
 
   const allArrangements = groups.flatMap((group) => group.arrangements);
   allArrangements.forEach((arrangement) => {
-    arrangement.classScopeReason = arrangement.classScopeReason || classScopeReasonForArrangement(arrangement);
+    arrangement.classScopeReason = arrangement.reliableClassScope === false
+      ? ""
+      : (arrangement.classScopeReason || classScopeReasonForArrangement(arrangement));
     arrangement.audienceClasses = splitClassScopeSegments(arrangement.classNameRaw);
   });
   const autoArrangements = allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.AUTO_INCLUDE);
@@ -1026,6 +1082,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     semester,
     importedAt,
     targetClassName,
+    source: options.source || "",
   }));
   const unscheduledCourses = allArrangements
     .filter((item) => item.importDecision === IMPORT_DECISION.UNSCHEDULED || item.importDecision === IMPORT_DECISION.NEEDS_CONFIRM)
@@ -1034,7 +1091,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       sections: arrangement.sections || [],
       startSection: arrangement.startSection || null,
       endSection: arrangement.endSection || null,
-    }), { studentId, semester, importedAt, targetClassName }), {
+    }), { studentId, semester, importedAt, targetClassName, source: options.source || "" }), {
       reason: arrangement.reason,
       isScheduled: false,
     }));
@@ -1105,6 +1162,7 @@ module.exports = {
   buildLocalScheduleIndex,
   buildPreviewGrid,
   buildScheduleImportPreview,
+  createNormalizedPreviewFromImportedData: buildScheduleImportPreview,
   classifyRowByClassScope,
   inferTargetClassName,
   isClassScopeMatch,

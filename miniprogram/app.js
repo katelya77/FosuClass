@@ -9,6 +9,7 @@ const termConfigService = require("./services/termConfigService");
 const startupCoordinator = require("./services/startupCoordinator");
 const BRAND = require("./config/brand");
 const cloudbaseConfig = require("./config/cloudbase");
+const platformUtils = require("./utils/platform");
 
 const STARTUP_BACKGROUND_TIMEOUT_MS = 15000;
 let startupSessionWarmupPromise = null;
@@ -87,7 +88,7 @@ App({
   },
 
   onLaunch() {
-    if (wx.cloud && typeof wx.cloud.init === "function" && cloudbaseConfig.CLOUDBASE_ENABLED !== false) {
+    if (!platformUtils.isMultiEndApp() && wx.cloud && typeof wx.cloud.init === "function" && cloudbaseConfig.CLOUDBASE_ENABLED !== false) {
       try {
         wx.cloud.init({
           env: cloudbaseConfig.ENV_ID,

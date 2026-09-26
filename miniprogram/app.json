@@ -51,6 +51,9 @@
   },
   "__usePrivacyCheck__": true,
   "requiredPrivateInfos": [],
+  "miniApp": {
+    "useAuthorizePage": true
+  },
   "tabBar": {
     "color": "#7a8494",
     "selectedColor": "#c62828",

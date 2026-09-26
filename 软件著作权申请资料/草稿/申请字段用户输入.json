@@ -1,0 +1,34 @@
+{
+  "software_full_name": "佛课小表校园课表服务软件",
+  "software_short_name": "佛课小表",
+  "version": "V1.0",
+  "software_category": "应用软件",
+  "completion_date": "2026-08-10",
+  "development_method": "单独开发",
+  "software_description": "原创",
+  "publication_status": "已发表",
+  "first_publication_date": "2026-09-02",
+  "copyright_holder": {
+    "country": "中国",
+    "province": "广东省",
+    "city": "佛山市",
+    "type": "自然人",
+    "name": "王奕章",
+    "type_note": "用户已于代码选择确认时明确确认著作权人类型为自然人。",
+    "identity_document": "仅在中国版权保护中心官网手工填写，不写入项目文件或Git历史"
+  },
+  "rights_scope": "全部权利",
+  "rights_acquisition": "原始取得",
+  "development_hardware": "Core Ultra 7 255HX/16GB内存/306GB硬盘",
+  "runtime_hardware": "支持微信的Android/iOS手机，内存2GB以上",
+  "development_os": "Windows 11 64位",
+  "development_environment_tools": "开发环境:Windows 11/开发工具:VS Code",
+  "runtime_platform": "微信小程序（Android/iOS）",
+  "support_software": "微信客户端、网络连接",
+  "programming_languages": [
+    "JavaScript",
+    "WXML",
+    "WXSS"
+  ],
+  "sensitive_data_policy": "不在软著材料、普通日志或Git历史中记录证件号码、账号密码、Token及其他敏感信息。"
+}

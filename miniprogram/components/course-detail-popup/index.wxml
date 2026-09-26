@@ -1,15 +1,15 @@
-<view wx:if="{{visible}}" class="popup-mask" bindtap="close">
+<view wx:if="{{visible}}" class="popup-mask" bindtap="close" catchtouchmove="noop">
   <view class="popup-panel" catchtap="noop">
     <view class="popup-handle"></view>
     <view class="popup-header">
       <view class="popup-title-block">
         <view class="course-title">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
-        <view class="course-subtitle">{{course.semester || "当前学期"}}</view>
+        <view class="course-subtitle">{{course.personalized ? '个人调整 · ' : ''}}{{course.semester || "当前学期"}}</view>
       </view>
       <button class="close-button" bindtap="close">×</button>
     </view>
 
-    <scroll-view scroll-y class="popup-scroll-content">
+    <scroll-view scroll-y enhanced bounces="{{false}}" class="popup-scroll-content">
       <view class="grouped-detail-list conflict-list" wx:if="{{course.eventKind === 'true-conflict'}}">
         <view class="grouped-title-hint">真实冲突课程 · {{course.conflictEvents.length}} 门</view>
         <view class="grouped-item-box conflict-item-box" wx:for="{{course.conflictEvents}}" wx:key="eventId">
@@ -99,6 +99,7 @@
       </view>
 
       <view class="detail-actions">
+        <button class="edit-course-btn" wx:if="{{editable && !course.isGrouped && course.eventKind !== 'parallel-group' && course.eventKind !== 'shared-session' && course.eventKind !== 'true-conflict'}}" bindtap="editCourse">编辑这门课</button>
         <button class="copy-custom-btn" bindtap="copyAsCustom">复制为自定义课程</button>
       </view>
     </scroll-view>

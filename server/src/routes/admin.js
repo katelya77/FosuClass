@@ -1,7 +1,3 @@
-/**
- * 管理员同步 API 路由：接收本地同步工具上传的教务数据并持久化到 storage。
- */
-
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -17,6 +13,8 @@ try {
   router.use(require("../modules/dashboard/routes"));
   router.use(require("../modules/ai-provider/routes"));
   router.use(require("../modules/agent-platform/routes"));
+  router.use(require("../modules/campus-sync-ops/routes"));
+  router.use(require("../modules/schedule-collector/routes"));
 } catch (error) {
   // Domain modules must not prevent legacy admin routes from loading.
   console.warn("[admin] optional domain modules failed to load:", error.message);
@@ -435,6 +433,12 @@ function buildSecurityStatusPayload() {
 
 router.get("/security/status", adminAuth.verifyAdminAccess, (req, res) => {
   return res.json(buildSecurityStatusPayload());
+});
+
+router.get("/campus-sync/metrics", adminAuth.verifyAdminAccess, (req, res) => {
+  const snapshot = require("../services/campusSyncBroker").metrics();
+  delete snapshot.activeCap;
+  return res.json({ success: true, metrics: snapshot });
 });
 
 function makeSecurityCheck(id, title, status, message) {

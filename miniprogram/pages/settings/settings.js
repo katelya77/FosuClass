@@ -24,6 +24,7 @@ const releasePackService = require("../../services/releasePackService");
 const staticOriginService = require("../../services/staticOriginService");
 const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const platformUtils = require("../../utils/platform");
+const multiPlatform = require("../../utils/multiPlatform");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
 
@@ -47,6 +48,15 @@ function buildWeekOptions(totalWeeks) {
     options.push(`第${week}周`);
   }
   return options;
+}
+
+function formatSemesterLabel(term, semesterText) {
+  const friendly = String(semesterText || "").trim();
+  if (friendly) return friendly;
+  const value = String(term || "").trim();
+  const match = value.match(/^(\d{4})-(\d{4})-([12])$/);
+  if (!match) return value;
+  return `${match[1]}-${match[2]}学年第${match[3] === "1" ? "一" : "二"}学期`;
 }
 
 function formatFullDateTime(value) {
@@ -127,27 +137,6 @@ function buildSelectedScheduleText(selected) {
   return "未绑定课表";
 }
 
-function buildSelectedScheduleMeta(selected) {
-  const target = selected && selected.target;
-  if (!target) {
-    return {
-      sourceText: "",
-      importText: "",
-    };
-  }
-  if (target.type === "personal-xls" || target.type === "personal-apaas") {
-    const isApaas = target.type === "personal-apaas";
-    return {
-      sourceText: isApaas ? "来源：学校课表系统" : "来源：100网 XLS 手动导入",
-      importText: target.importedAt ? `导入时间：${formatFullDateTime(target.importedAt)}` : "",
-    };
-  }
-  return {
-    sourceText: target.type ? `来源：${target.type}` : "",
-    importText: target.updateTime ? `更新时间：${target.updateTime}` : "",
-  };
-}
-
 function summarizeSelectedSchedule(selected) {
   const target = selected && selected.target ? selected.target : null;
   const filter = selected && selected.filter ? selected.filter : null;
@@ -197,22 +186,21 @@ Page({
     },
     contactConfig,
     selectedScheduleText: "未绑定课表",
-    selectedScheduleSourceText: "",
-    selectedScheduleImportText: "",
+    semesterDisplayText: "",
     appConfig: { dataVersion: {}, notices: [], news: [] },
-    appConfigUpdatedText: "",
-    noticeHistoryVisible: false,
-    newsVisible: false,
-    noticeHistory: [],
-    newsList: [],
+    moreSettingsVisible: false,
     versionDetailVisible: false,
     diagnosisExpanded: false,
     diagnosisCanShowFull: false,
     xiaofuFloatEnabled: true,
-    xiaofuFloatEnabledText: "右下角常驻，可拖拽吸附",
+    xiaofuFloatEnabledText: "在页面右下角快速打开",
+    isMultiEndApp: platformUtils.isMultiEndApp(),
+    runtimePlatform: platformUtils.getRuntimePlatform(),
     versionData: {
       appVersion: APP_VERSION,
       sdkVersion: "",
+      runtimePlatform: "miniprogram",
+      envVersion: "release",
       courseTimesVersion: "",
       courseTimesUpdatedAt: "",
       snapshotVersion: "-",
@@ -254,7 +242,12 @@ Page({
   },
 
   onShow() {
-    if (wx.showShareMenu) {
+    const isMultiEndApp = platformUtils.isMultiEndApp();
+    this.setData({
+      isMultiEndApp,
+      runtimePlatform: platformUtils.getRuntimePlatform(),
+    });
+    if (!isMultiEndApp && wx.showShareMenu) {
       wx.showShareMenu({
         withShareTicket: true,
         menus: ["shareAppMessage", "shareTimeline"],
@@ -270,12 +263,8 @@ Page({
         const normalizedConfig = appConfigService.normalizeConfig
           ? appConfigService.normalizeConfig(config)
           : Object.assign({ dataVersion: {}, notices: [], news: [] }, config || {});
-        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(normalizedConfig);
         this.setData({
           appConfig: normalizedConfig,
-          appConfigUpdatedText: latestUpdatedAt ? appConfigService.formatConfigTime(latestUpdatedAt) : "",
-          noticeHistory: Array.isArray(normalizedConfig.notices) ? normalizedConfig.notices : [],
-          newsList: Array.isArray(normalizedConfig.news) ? normalizedConfig.news : [],
         });
       })
       .catch((err) => {
@@ -294,7 +283,6 @@ Page({
     const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], termConfig);
     const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, termConfig) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
-    const selectedMeta = buildSelectedScheduleMeta(selectedSchedule);
     const startWeekdayText = getWeekdayLabel(termConfig.termStartDate) || "周一";
     const xiaofuFloatEnabled = xiaofuFloatService.isEnabled();
     this.setData({
@@ -310,10 +298,12 @@ Page({
       totalTeachingWeeks: termConfig.totalWeeks ? `${termConfig.totalWeeks}周` : "日期待同步",
       weekOptions: buildWeekOptions(termConfig.totalWeeks),
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
-      selectedScheduleSourceText: selectedMeta.sourceText,
-      selectedScheduleImportText: selectedMeta.importText,
+      semesterDisplayText: formatSemesterLabel(
+        selectedTerm || termConfig.term || "",
+        calendar.semesterText || termConfig.semesterText || ""
+      ),
       xiaofuFloatEnabled,
-      xiaofuFloatEnabledText: xiaofuFloatEnabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
+      xiaofuFloatEnabledText: xiaofuFloatEnabled ? "在页面右下角快速打开" : "已关闭",
     });
     teachingCalendarService.loadActiveTeachingCalendar()
       .then((latest) => {
@@ -338,6 +328,10 @@ Page({
             }),
             teachingInfo: latestInfo,
             teachingPeriodText: getTeachingPeriodText(latestInfo, nextWeek),
+            semesterDisplayText: formatSemesterLabel(
+              latestConfig.term || this.data.settings.semester || "",
+              latest.semesterText || latestConfig.semesterText || ""
+            ),
             termStartDate: formatFullDateLabel(latestConfig.termStartDate) || "日期待同步",
             termStartWeekdayText: getWeekdayLabel(latestConfig.termStartDate) || "周一",
             totalTeachingWeeks: latestConfig.totalWeeks ? `${latestConfig.totalWeeks}周` : "日期待同步",
@@ -388,7 +382,7 @@ Page({
     }
     this.setData({
       xiaofuFloatEnabled: enabled,
-      xiaofuFloatEnabledText: enabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
+      xiaofuFloatEnabledText: enabled ? "在页面右下角快速打开" : "已关闭",
     });
     wx.showToast({ title: enabled ? `已开启${ASSISTANT_BRAND.assistantName}浮窗` : `已关闭${ASSISTANT_BRAND.assistantName}浮窗`, icon: "none" });
   },
@@ -399,27 +393,9 @@ Page({
     });
   },
 
-  goTimetable() {
-    wx.navigateTo({
-      url: "/pages/timetable/timetable",
-    });
-  },
-
   goImportXls() {
     wx.navigateTo({
       url: "/pages/personal-sync/personal-sync",
-    });
-  },
-
-  goLogin() {
-    wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync",
-    });
-  },
-
-  goCustomCourses() {
-    wx.navigateTo({
-      url: "/pages/custom-courses/custom-courses",
     });
   },
 
@@ -435,12 +411,6 @@ Page({
     });
   },
   
-  goContribute() {
-    wx.navigateTo({
-      url: "/pages/contribute/contribute",
-    });
-  },
-
   showFeedback() {
     this.setData({
       feedbackVisible: true,
@@ -534,6 +504,27 @@ Page({
     });
   },
 
+  async shareWithClassmates() {
+    const envVersion = platformUtils.getMiniProgramEnvVersion();
+    const miniprogramType = multiPlatform.getMiniProgramType(envVersion);
+    try {
+      await multiPlatform.shareMiniProgram({
+        title: BRAND.appName + "｜查看课程安排",
+        path: "pages/index/index",
+        miniprogramType,
+      });
+    } catch (error) {
+      const errorText = String(error && (error.originalError && error.originalError.errMsg || error.message) || "");
+      if (errorText.indexOf("cancel") >= 0) return;
+      wx.showModal({
+        title: "暂时无法分享",
+        content: "请确认已安装微信，且当前移动应用已在微信开放平台完成绑定。",
+        showCancel: false,
+        confirmText: "知道了",
+      });
+    }
+  },
+
   refreshBootstrapData() {
     wx.showLoading({ title: "正在刷新..." });
     clearDataCaches();
@@ -566,50 +557,24 @@ Page({
       });
   },
 
-  clearLocalSelectionOnly() {
-    wx.showModal({
-      title: "清除本地选择",
-      content: "将清空当前课表选择和全校页筛选记录，下次进入时重新选择。",
-      confirmText: "清除",
-      confirmColor: "#c62828",
-      success: (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        clearLocalSelection();
-        this.loadSettings();
-        wx.showToast({
-          title: "已清除",
-          icon: "success",
-        });
-      },
-    });
-  },
-
-  showDeveloperApi() {
-    wx.showModal({
-      title: "开发者接口调试",
-      content: "开发诊断信息仅用于排查课表数据问题。提交调试前请确认已脱敏敏感登录信息。",
-      showCancel: false,
-      confirmText: "知道了",
-    });
-  },
-
   clearCache() {
     wx.showModal({
-      title: "清除缓存",
-      content: "将恢复默认班级、当前周 and 显示设置。",
-      confirmText: "清除",
+      title: "恢复默认设置",
+      content: "将恢复课表显示和提醒设置，并清除当前课表选择。是否继续？",
+      confirmText: "恢复",
       confirmColor: "#c62828",
       success: (res) => {
         if (!res.confirm) {
           return;
         }
+        const { clearCurrentScheduleTarget } = require("../../utils/storage");
         clearAppCache();
+        clearCurrentScheduleTarget();
         clearLocalSelection();
+        this.setData({ moreSettingsVisible: false });
         this.loadSettings();
         wx.showToast({
-          title: "已清除",
+          title: "已恢复默认设置",
           icon: "success",
         });
       },
@@ -623,9 +588,17 @@ Page({
     });
     this.loadSettings();
     wx.showToast({
-      title: "模式已更改",
+      title: "显示方式已更新",
       icon: "success",
     });
+  },
+
+  showMoreSettings() {
+    this.setData({ moreSettingsVisible: true });
+  },
+
+  hideMoreSettings() {
+    this.setData({ moreSettingsVisible: false });
   },
 
   resetToNewUser() {
@@ -655,16 +628,16 @@ Page({
   },
 
   showAbout() {
-    // 连续点击 5 次关于，触发开发者模式彩蛋
+    // 连续点击 5 次关于，保留受控的数据诊断入口。
     this.clickCount = (this.clickCount || 0) + 1;
     if (this.clickCount >= 5) {
       this.clickCount = 0;
-      this.showDeveloperApi();
+      this.showDataVersionDetail();
       return;
     }
     wx.showModal({
       title: "关于" + BRAND.appName,
-      content: BRAND.appName + "是个人开发的课程时间管理工具，主要用于查看课程安排、今日课程提醒和作息时间。本工具非学校官方服务，课程数据由开发者整理维护及用户反馈修正，仅供学习生活参考，具体安排请以任课教师通知及正式通知为准。\n\n联系邮箱：" + BRAND.contactEmail,
+      content: "版本 " + APP_VERSION + "\n\n" + BRAND.appName + "用于查看课程安排与课程提醒，非学校官方服务。课程信息仅供参考，具体安排请以正式通知为准。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -673,7 +646,7 @@ Page({
   showPrivacy() {
     wx.showModal({
       title: "隐私说明",
-      content: BRAND.appName + "严格保护您的隐私，小程序绝不会在前端保存您的学校账号密码。学号导入仅用于本次登录读取本人课表数据，导入完成后会清除临时状态。",
+      content: BRAND.appName + "不会在小程序或 App 前端保存您的学校账号密码。学号导入仅用于本次登录读取本人课表数据，导入完成后会清除临时状态；移动端首次启动还会由系统隐私门禁征求授权。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -719,6 +692,8 @@ Page({
       versionDetailVisible: true,
       diagnosisCanShowFull: isDeveloperEnv,
       "versionData.sdkVersion": sysInfo.SDKVersion || "未知",
+      "versionData.runtimePlatform": platformUtils.getRuntimePlatform(),
+      "versionData.envVersion": platformUtils.getMiniProgramEnvVersion(),
       "versionData.courseTimesVersion": courseTimesMeta.version,
       "versionData.courseTimesUpdatedAt": courseTimesMeta.updatedAt,
       "versionData.localActiveReleaseVersion": localReleaseVersion || "-",
@@ -779,6 +754,8 @@ Page({
             versionData: {
               appVersion: APP_VERSION,
               sdkVersion: sysInfo.SDKVersion || "未知",
+              runtimePlatform: platformUtils.getRuntimePlatform(),
+              envVersion: platformUtils.getMiniProgramEnvVersion(),
               courseTimesVersion: courseTimesMeta.version,
               courseTimesUpdatedAt: courseTimesMeta.updatedAt,
               
@@ -949,30 +926,6 @@ Page({
           this.showDataVersionDetail();
         }
       }
-    });
-  },
-
-  showNoticeHistory() {
-    this.setData({
-      noticeHistoryVisible: true,
-    });
-  },
-
-  hideNoticeHistory() {
-    this.setData({
-      noticeHistoryVisible: false,
-    });
-  },
-
-  showNewsList() {
-    this.setData({
-      newsVisible: true,
-    });
-  },
-
-  hideNewsList() {
-    this.setData({
-      newsVisible: false,
     });
   },
 

@@ -1,5 +1,27 @@
 <view class="week-switcher">
-  <button class="week-button" bindtap="prevWeek">‹</button>
-  <button class="week-current" bindtap="backToCurrent">{{weekLabel || "第" + currentWeek + "周"}}</button>
-  <button class="week-button" bindtap="nextWeek">›</button>
+  <button class="week-button {{currentWeek <= 1 ? 'is-disabled' : ''}}" disabled="{{currentWeek <= 1}}" bindtap="prevWeek" aria-label="上一周">‹</button>
+  <button class="week-current" bindtap="openPicker" aria-label="选择教学周">{{weekLabel || "第" + currentWeek + "周"}} <text class="week-current-chevron">⌄</text></button>
+  <button class="week-button {{currentWeek >= totalWeeks ? 'is-disabled' : ''}}" disabled="{{currentWeek >= totalWeeks}}" bindtap="nextWeek" aria-label="下一周">›</button>
+</view>
+<view wx:if="{{pickerVisible}}" class="week-picker-mask" bindtap="closePicker" catchtouchmove="noop">
+  <view class="week-picker-panel" catchtap="noop">
+    <view class="week-picker-handle"></view>
+    <view class="week-picker-header">
+      <view>
+        <view class="week-picker-title">选择教学周</view>
+        <view class="week-picker-subtitle">上下滑动，快速跳到任意一周</view>
+      </view>
+      <button class="week-picker-close" bindtap="closePicker" aria-label="关闭">×</button>
+    </view>
+    <scroll-view scroll-y enhanced bounces="{{false}}" class="week-picker-list" scroll-into-view="{{scrollToId}}" scroll-with-animation="{{false}}">
+      <button wx:for="{{weekOptions}}" wx:key="week" id="week-option-{{item.week}}" class="week-picker-item {{item.week === currentWeek ? 'is-selected' : ''}}" data-week="{{item.week}}" bindtap="selectWeek">
+        <text class="week-picker-no">第{{item.week}}周</text>
+        <text class="week-picker-date">{{item.rangeText}}</text>
+        <text class="week-picker-check">{{item.week === currentWeek ? '✓' : '›'}}</text>
+      </button>
+    </scroll-view>
+    <view class="week-picker-footer">
+      <button bindtap="backToCurrent">回到本周</button>
+    </view>
+  </view>
 </view>

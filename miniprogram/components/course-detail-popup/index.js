@@ -23,6 +23,7 @@ Component({
       type: Object,
       value: {},
     },
+    editable: { type: Boolean, value: false },
   },
 
   data: {
@@ -58,6 +59,9 @@ Component({
       this.triggerEvent("copycustom", {
         course: this.data.course,
       });
+    },
+    editCourse() {
+      this.triggerEvent("editcourse", { course: this.data.course });
     },
     noop() {},
   },

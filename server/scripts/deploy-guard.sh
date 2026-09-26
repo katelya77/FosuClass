@@ -98,6 +98,20 @@ case "$ACTION" in
     echo "$COMMIT_SHA" > "$APP_DIR/server/storage/deployed-sha"
     sudo docker inspect -f '{{.Image}}' "$CONTAINER_NAME" > "$APP_DIR/server/storage/deployed-image" 2>/dev/null || true
     chmod 600 "$APP_DIR/server/storage/deployed-sha" "$APP_DIR/server/storage/deployed-image" 2>/dev/null || true
+    sudo docker restart "$CONTAINER_NAME"
+    policy_ok=0
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+      if curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
+        policy_ok=1
+        break
+      fi
+      sleep 2
+    done
+    if [ "$policy_ok" != "1" ]; then
+      echo "policy persistence restart did not recover health" >&2
+      exit 1
+    fi
+    sudo docker exec "$CONTAINER_NAME" node scripts/verify-campus-sync-policy.js --persisted
     ;;
   *)
     echo "unknown action: $ACTION" >&2

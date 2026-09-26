@@ -1,11 +1,40 @@
+<page-meta page-style="{{formVisible ? 'overflow: hidden;' : ''}}" />
 <view class="page custom-page">
   <view class="custom-hero card">
     <view>
       <view class="hero-kicker">个性化课程</view>
-      <view class="hero-title">补充你的专属课表</view>
+      <view class="hero-title">调整你的专属课表</view>
       <view class="hero-desc">当前绑定：{{targetLabel}}</view>
     </view>
     <button class="hero-btn" bindtap="showAddForm">添加课程</button>
+  </view>
+
+  <view class="source-section card" wx:if="{{sourceCount}}">
+    <view class="source-section-head">
+      <view>
+        <view class="group-title">原课表课程</view>
+        <view class="source-section-subtitle">{{sourceCount}} 门课程 · {{overrideCount}} 门已调整</view>
+      </view>
+      <view class="source-section-badge">可编辑</view>
+    </view>
+    <view class="source-section-tip">调整保存在本机，仅应用于当前课表；课表来源更新后，未修改的信息会继续同步。</view>
+    <view class="source-search"><text>查找</text><input value="{{sourceQuery}}" placeholder="课程名、教师或教室" confirm-type="search" bindinput="onSourceSearch" /></view>
+    <view class="source-search-empty" wx:if="{{sourceQuery && !visibleSourceCourses.length}}">没有找到相关课程，请换个关键词。</view>
+    <view class="source-course-row" wx:for="{{visibleSourceCourses}}" wx:key="sourceIndex">
+      <view class="source-course-mark {{item.personalized ? 'changed' : ''}}"></view>
+      <view class="source-course-main">
+        <view class="source-course-heading">
+          <text class="source-course-name">{{item.courseName}}</text>
+          <text class="source-course-status {{item.personalized ? 'changed' : ''}}">{{item.personalized ? '已调整' : '原课程'}}</text>
+        </view>
+        <view class="source-course-meta">{{item.weekdayText}} · 第{{item.startSection}}-{{item.endSection}}节 · {{item.weekText}}</view>
+        <view class="source-course-meta">{{item.teacherName || '教师待补充'}} · {{item.classroom || '教室待补充'}}</view>
+        <view class="source-course-actions">
+          <button data-index="{{item.sourceIndex}}" bindtap="editSourceCourse">{{item.personalized ? '继续调整' : '编辑课程'}}</button>
+          <button wx:if="{{item.personalized}}" class="restore-course-btn" data-index="{{item.sourceIndex}}" bindtap="restoreSourceCourse">恢复原信息</button>
+        </view>
+      </view>
+    </view>
   </view>
 
   <view class="import-card card">
@@ -15,13 +44,15 @@
     </view>
     <view class="import-grid" wx:if="{{!importToolsCollapsed}}">
       <button class="import-btn import-xls-btn" bindtap="importXls">100网 xls 导入</button>
-      <button class="import-btn" bindtap="exportJson">导出 JSON</button>
-      <button class="import-btn" bindtap="importJson">导入 JSON</button>
+      <button class="import-btn" bindtap="exportJson">导出新增课程 JSON</button>
+      <button class="import-btn" bindtap="importJson">导入新增课程 JSON</button>
       <button class="import-btn disabled" disabled>WakeUp (即将支持)</button>
       <button class="import-btn disabled" disabled>ICS (即将支持)</button>
       <button class="import-btn disabled" disabled>粘贴文本 (即将支持)</button>
     </view>
   </view>
+
+  <view class="added-section-title">自行添加的课程 <text>{{courses.length}}</text></view>
 
   <view wx:if="{{courses.length}}" class="course-list">
     <view wx:for="{{courses}}" wx:key="id" class="custom-course-card card">
@@ -43,23 +74,23 @@
 
   <empty-state
     wx:else
-    title="还没有补充课程"
-    desc="添加实验课、选修课或临时调课，让课表更贴近你的真实安排。"
-    symbol="🗓️"
+    title="还没有添加课程"
+    desc="原课表课程可以直接在上方编辑；实验课、选修课等新安排可点击「添加课程」。"
+    symbol="课"
   />
 
-  <view wx:if="{{formVisible}}" class="popup-mask" bindtap="hideForm">
+  <view wx:if="{{formVisible}}" class="popup-mask" bindtap="hideForm" catchtouchmove="noop">
     <view class="popup-panel" catchtap="noop">
       <view class="popup-handle"></view>
       <view class="popup-header">
         <view>
           <view class="popup-title">{{formTitle}}</view>
-          <view class="popup-subtitle">保存后立即应用到首页和今日课程</view>
+          <view class="popup-subtitle">{{formMode === 'override' ? '仅调整当前课表的显示，可随时恢复原信息' : '保存后立即应用到首页和今日课程'}}</view>
         </view>
         <button class="close-button" bindtap="hideForm">×</button>
       </view>
 
-      <scroll-view scroll-y class="form-scroll">
+      <scroll-view scroll-y enhanced bounces="{{false}}" class="form-scroll">
         <view class="form-grid">
           <view class="field full">
             <view class="label">课程名</view>
@@ -91,7 +122,7 @@
               <view class="picker-value">{{sectionOptions[form.endSectionIndex]}}</view>
             </picker>
           </view>
-          <view class="field full">
+          <view class="field full" wx:if="{{formMode !== 'override'}}">
             <view class="label">选择卡片颜色</view>
             <view class="color-picker-grid" style="display: flex; gap: 16rpx; flex-wrap: wrap; margin-top: 10rpx;">
               <view 
@@ -112,7 +143,7 @@
             <view class="label">备注</view>
             <textarea value="{{form.note}}" data-key="note" placeholder="例如：第12周周二临时调课到周四（选填）" bindinput="onInput" />
           </view>
-          <view class="field switch-field">
+          <view class="field switch-field" wx:if="{{formMode !== 'override'}}">
             <view>
               <view class="label">启用课程</view>
               <view class="hint">关闭后保留数据但不显示</view>

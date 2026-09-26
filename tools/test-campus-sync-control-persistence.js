@@ -1,0 +1,25 @@
+const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-control-persist-"));
+process.env.CAMPUS_SYNC_OPS_DIR = dir;
+const controlFile = require.resolve("../server/src/services/campusSyncControl");
+delete require.cache[controlFile];
+const control = require("../server/src/services/campusSyncControl");
+control.pause("admin-test");
+delete require.cache[controlFile];
+assert.strictEqual(require("../server/src/services/campusSyncControl").reload().paused, true);
+delete require.cache[controlFile];
+const resumed = require("../server/src/services/campusSyncControl");
+resumed.resume();
+delete require.cache[controlFile];
+assert.strictEqual(require("../server/src/services/campusSyncControl").reload().paused, false);
+fs.writeFileSync(path.join(dir, "control.json"), "{");
+delete require.cache[controlFile];
+const broken = require("../server/src/services/campusSyncControl").reload();
+assert.strictEqual(broken.storageStatus, "invalid");
+assert.strictEqual(broken.paused, true);
+assert.strictEqual(fs.readFileSync(path.join(dir, "control.json"), "utf8"), "{");
+console.log("campus-sync-control-persistence PASS");

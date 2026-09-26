@@ -1,12 +1,15 @@
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
+const { resolveAdjacentWeek, resolveWeekSwipeDirection } = require("../../utils/weekSwipe");
 const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const dailyKnowledgeCloudService = require("../../services/dailyKnowledgeCloudService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
+const courseOverrideService = require("../../services/courseOverrideService");
 const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
@@ -64,7 +67,9 @@ function buildPersonalApaasHeader(target) {
   const metadata = (target && target.metadata) || {};
   const title = target.title || target.name || (metadata.studentName ? `${metadata.studentName}的个人课表` : "个人课表");
   const term = metadata.term || target.semester || "";
-  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "学号导入"].filter(Boolean).join(" · ");
+  const className = String(metadata.className || "").trim();
+  const reliableClass = className && !/班级未确认|班级待确认|未知班级/.test(className) ? className : "";
+  const subtitle = [reliableClass, term, "学号同步"].filter(Boolean).join(" · ");
   return {
     title,
     subtitle,
@@ -104,6 +109,8 @@ Page({
     weekScopeText: "周一至周五",
     todayText: "",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: 90,
     scheduleHeight: courseTimes.length * 90,
@@ -112,8 +119,9 @@ Page({
     dayColumnWidth: 128,
     weekdays: [],
     dayColumns: [],
-    hideInactiveCourses: false,
-    showWeekend: false,
+    hideInactiveCourses: true,
+    showWeekend: true,
+    weekendShowMode: "overview",
     selectedCourse: null,
     detailVisible: false,
     unplacedCourses: [],
@@ -139,6 +147,8 @@ Page({
   },
 
   onLoad(options) {
+    this._weekSwipeState = null;
+    this._suppressCourseTapUntil = 0;
     if (options && options.shareScheduleId) {
       wx.navigateTo({
         url: `/pages/schedule-view/schedule-view?type=class&name=${encodeURIComponent(options.shareScheduleName || "")}&shareScheduleId=${options.shareScheduleId}`
@@ -356,6 +366,7 @@ Page({
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       todayText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel}`,
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -372,12 +383,15 @@ Page({
   },
 
   onWeekChange(event) {
-    const type = event.detail.type;
+    const detail = event && event.detail || {};
+    const type = detail.type;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = teachingCalendarService.getImmediateActiveCalendar();
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
-      : clampWeek(event.detail.week, termConfig);
+      : clampWeek(detail.week, termConfig);
+    if (type !== "current" && nextWeek === this.data.currentWeek) return;
     saveSettings({
       currentWeek: nextWeek,
       manualWeekOverride: type !== "current",
@@ -385,7 +399,71 @@ Page({
     this.loadSchedule();
   },
 
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
+  },
+
+  canHandleScheduleSwipe() {
+    return !(this.data.showWeekend && this.data.weekendShowMode === "detail") &&
+      !this.data.weekPickerOpen &&
+      !this.data.detailVisible &&
+      !this.data.showUnplacedCourses &&
+      !this.data.showTodayReminder &&
+      !this.data.showDisclaimerPopup &&
+      !this.data.showMoreMenu &&
+      !this.data.showNoticeDetail &&
+      !this.data.showAppNoticeModal;
+  },
+
+  onScheduleTouchStart(event) {
+    const touches = event && event.touches || [];
+    if (!this.canHandleScheduleSwipe() || touches.length !== 1) {
+      this._weekSwipeState = null;
+      return;
+    }
+    const touch = touches[0];
+    this._weekSwipeState = {
+      start: { clientX: touch.clientX, clientY: touch.clientY },
+      last: { clientX: touch.clientX, clientY: touch.clientY },
+    };
+  },
+
+  onScheduleTouchMove(event) {
+    const touches = event && event.touches || [];
+    if (!this._weekSwipeState || touches.length !== 1) return;
+    const touch = touches[0];
+    this._weekSwipeState.last = { clientX: touch.clientX, clientY: touch.clientY };
+  },
+
+  onScheduleTouchEnd(event) {
+    const swipeState = this._weekSwipeState;
+    this._weekSwipeState = null;
+    if (!swipeState || !this.canHandleScheduleSwipe()) return;
+    const changedTouches = event && event.changedTouches || [];
+    const end = changedTouches.length === 1 ? changedTouches[0] : swipeState.last;
+    const direction = resolveWeekSwipeDirection(swipeState.start, end);
+    if (!direction) return;
+
+    // A committed horizontal gesture must not also open the course card that
+    // happened to be under the finger when touchend fired.
+    this._suppressCourseTapUntil = Date.now() + 240;
+    const adjacent = resolveAdjacentWeek(this.data.currentWeek, this.data.totalWeeks, direction);
+    if (!adjacent.changed) return;
+    this.onWeekChange({
+      detail: {
+        type: direction,
+        week: adjacent.week,
+        source: "swipe",
+      },
+    });
+  },
+
+  onScheduleTouchCancel() {
+    this._weekSwipeState = null;
+  },
+
   onCourseTap(event) {
+    if (Date.now() < Number(this._suppressCourseTapUntil || 0)) return;
     this.setData({
       selectedCourse: event.detail.course,
       detailVisible: true,
@@ -420,6 +498,16 @@ Page({
         title: "课程信息不完整",
         icon: "none",
       });
+    }
+  },
+
+  onEditExistingCourse(event) {
+    try {
+      courseOverrideService.saveEditDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
+    } catch (error) {
+      wx.showToast({ title: "请从个性化页面选择课程", icon: "none" });
     }
   },
 
@@ -548,67 +636,6 @@ Page({
   hideMoreMenu() {
     this.setData({
       showMoreMenu: false
-    });
-  },
-
-  async refreshData() {
-    this.hideMoreMenu();
-    const { getCurrentScheduleTarget } = require("../../utils/storage");
-    const target = getCurrentScheduleTarget();
-    if (!target) {
-      wx.showToast({ title: "请先选择课表", icon: "none" });
-      return;
-    }
-    wx.showLoading({ title: "正在刷新..." });
-    const app = getApp();
-    try {
-      if (typeof app.checkReleasePackForeground === "function") {
-        await app.checkReleasePackForeground();
-      }
-      const result = await currentScheduleService.ensureCurrentScheduleFresh({
-        force: true,
-        forceNetwork: true,
-        forcePointer: true,
-      });
-      await Promise.all([
-        app.loadBootstrapData({ force: true, silent: true }).catch(() => null),
-        app.loadAppConfigData({ force: true, silent: true }).catch(() => null),
-        teachingCalendarService.loadActiveTeachingCalendar({ forceNetwork: true }).catch(() => null),
-      ]);
-      await this.loadPageConfig();
-      wx.hideLoading();
-      this.loadSchedule();
-      let title = "当前已是最新课表";
-      if (result && result.status === "UPDATED") {
-        title = "课表已更新";
-      } else if (result && result.status === "PROTECTED_PERSONAL_XLS") {
-        title = "个人课表请重新导入更新";
-      } else if (result && result.status === "AMBIGUOUS") {
-        title = "找到多个同名课表，请重新确认";
-      } else if (result && result.success === false) {
-        title = "网络暂不可用，已保留当前课表";
-      }
-      wx.showToast({ title, icon: result && result.status === "UPDATED" ? "success" : "none" });
-    } catch (error) {
-      wx.hideLoading();
-      this.loadSchedule();
-      wx.showToast({ title: "网络暂不可用，已保留当前课表", icon: "none" });
-    }
-  },
-
-  clearLocalCache() {
-    this.hideMoreMenu();
-    wx.showModal({
-      title: "提示",
-      content: "确定要清除所有缓存吗？",
-      success: (res) => {
-        if (res.confirm) {
-          const { clearAppCache, clearCurrentScheduleTarget } = require("../../utils/storage");
-          clearAppCache();
-          clearCurrentScheduleTarget();
-          this.onShow();
-        }
-      }
     });
   },
 
