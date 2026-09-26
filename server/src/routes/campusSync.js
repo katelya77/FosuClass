@@ -70,7 +70,12 @@ function quotaFields(error) {
 
 function publicError(error) {
   const code = error && error.code || "AGENT_OFFLINE";
-  if (code === "INVALID_CREDENTIALS") return { status: 400, code, message: "学校账号或密码不正确" };
+  if (code === "INVALID_CREDENTIALS") return { status: 400, code, message: "学校账号验证未通过，请检查学号和密码后重新尝试。" };
+  if (code === "EMPTY_PERSONAL_SCHEDULE") return { status: 400, code, message: "学校系统中当前学期暂未读取到可导入的课程。你的现有课表不会被修改。" };
+  if (code === "STRUCTURE_CHANGED") return { status: 400, code, message: "学校课表页面可能发生了调整，本次没有修改你的现有课表。" };
+  if (code === "SCHOOL_UNAVAILABLE") return { status: 503, code, message: "学校系统暂时没有正常响应，请稍后重新同步。" };
+  if (code === "TIMEOUT") return { status: 504, code, message: "学校系统暂时没有正常响应，请稍后重新同步。" };
+  if (code === "AGENT_OFFLINE") return { status: 503, code, message: "暂时无法连接学校系统，请稍后再试。" };
   if (code === "PROFILE_ID_MISMATCH") return { status: 400, code, message: "读取到的学籍学号与登录学号不一致，已停止同步。" };
   if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED") {
     return { status: 429, code: code === "IMPORT_RATE_LIMITED" ? code : "CAMPUS_SYNC_RATE_LIMITED", message: "操作有些频繁，请稍后再试。", extra: quotaFields(error) };

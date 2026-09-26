@@ -8,6 +8,7 @@ const SYSTEM_CODES = new Set([
   "NETWORK_TIMEOUT",
   "UPSTREAM_TIMEOUT",
   "SCHOOL_SYSTEM_TIMEOUT",
+  "SCHOOL_UNAVAILABLE",
 ]);
 
 function numberEnv(name, fallback) {

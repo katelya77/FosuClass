@@ -5,7 +5,7 @@ const path = require("path");
 const page = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal-sync/personal-sync.js"), "utf8");
 const wxml = fs.readFileSync(path.join(__dirname, "../miniprogram/pages/personal-sync/personal-sync.wxml"), "utf8");
 
-assert.ok(page.includes("studentImportStage: \"identity-confirm\""));
+assert.ok(page.includes("stage || \"identity-confirm\""));
 assert.ok(page.includes("presentIdentityConfirm"));
 assert.ok(page.includes("confirmStudentIdentity"));
 assert.ok(page.includes("reenterStudentIdentity"));

@@ -8,6 +8,8 @@ const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const recentStudentImportService = require("../../services/recentStudentImportService");
 const personalSyncCredentialStore = require("../../services/personalSyncCredentialStore");
+const { applyPersonalSyncFailure } = require("../../services/personalSyncFailureTransition");
+const { assertPersonalSyncRenderableState } = require("../../services/personalSyncRenderableState");
 const {
   normalizeImportSurface,
   buildPersonalSyncSubtitle,
@@ -916,6 +918,11 @@ Page({
     pageRemarkView: { visible: false, text: "", expanded: false, canToggle: false },
     syncAdVisible: false,
     studentImportLoading: false,
+    syncErrorTitle: "",
+    syncErrorContent: "",
+    passwordInputFocus: false,
+    passwordTyped: false,
+    passwordFieldEpoch: 0,
     studentImportConfirming: false,
     passwordVisible: false,
     studentForm: {
@@ -1289,7 +1296,7 @@ Page({
   resolveSyncCredential() {
     const form = this.data.studentForm || {};
     const studentId = String(form.studentId || "").trim();
-    const typedPassword = String(form.password || "");
+    const typedPassword = String(this.pendingPassword || "");
     const saved = personalSyncCredentialStore.read();
     const savedPassword = saved && saved.studentId === studentId ? String(saved.password || "") : "";
     const password = typedPassword || savedPassword;
@@ -1435,7 +1442,25 @@ Page({
   },
 
   onStudentPasswordInput(event) {
-    this.setData({ "studentForm.password": String(event.detail.value || "") });
+    this.pendingPassword = String(event.detail.value || "");
+    const typed = Boolean(this.pendingPassword);
+    if (typed !== this.data.passwordTyped || this.data.passwordInputFocus || this.data.syncErrorTitle) {
+      this.setData({
+        passwordTyped: typed,
+        passwordInputFocus: false,
+        syncErrorTitle: "",
+        syncErrorContent: "",
+      });
+    }
+  },
+
+  clearTypedPassword() {
+    this.pendingPassword = "";
+    this.setData({
+      passwordTyped: false,
+      passwordFieldEpoch: (this.data.passwordFieldEpoch || 0) + 1,
+      "studentForm.password": "",
+    });
   },
 
   togglePasswordVisible() {
@@ -1927,6 +1952,10 @@ Page({
   },
 
   finishPersonalScheduleRead(preview, credential) {
+    if (!flattenStudentPreviewArrangements(preview).length) {
+      this.presentPersonalSyncFailure({ code: "EMPTY_PERSONAL_SCHEDULE" }, credential);
+      return false;
+    }
     const studentId = credential && credential.studentId || "";
     const password = credential && credential.password || "";
     if (studentId && password) {
@@ -1945,29 +1974,74 @@ Page({
     if (credential && credential.quickResync && personalSyncCredentialStore.sameConfirmedIdentity(saved, studentId, parsedName, parsedClass)) {
       this.presentIdentityConfirm(preview, studentId, "preview");
       wx.showToast({ title: "课表读取完成", icon: "success" });
-      return;
+      return true;
     }
     this.presentIdentityConfirm(preview, studentId);
+    return true;
+  },
+
+  presentPersonalSyncFailure(error, credential, options) {
+    if (this.syncModalOpen) return;
+    const transition = applyPersonalSyncFailure(error, credential, Object.assign({
+      activeImportMethod: this.data.activeImportMethod,
+      studentImportStage: this.data.studentImportStage,
+    }, options || {}));
+    if (transition.credentialPatch.clearSavedPassword) personalSyncCredentialStore.clearPassword();
+    if (transition.credentialPatch.saveCredential && credential && credential.password) {
+      personalSyncCredentialStore.saveSuccessfulLogin({
+        studentId: credential.studentId,
+        password: credential.password,
+      });
+    }
+    if (credential) credential.password = "";
+    this.pendingPassword = "";
+    const saved = personalSyncCredentialStore.read();
+    const patch = Object.assign({}, transition.patch, {
+      hasSavedPassword: Boolean(saved && saved.password),
+      credentialSaved: Boolean(saved && saved.studentId),
+      passwordTyped: false,
+      passwordFieldEpoch: (this.data.passwordFieldEpoch || 0) + 1,
+      "studentForm.password": "",
+    });
+    if (!options || !options.keepSurface) {
+      this.studentPreviewArrangements = [];
+      this.studentSelectedArrangementMap = {};
+      this.studentEditedArrangementMap = {};
+    }
+    this.stopStudentLoadingSteps();
+    this.syncModalOpen = true;
+    const view = transition.view;
+    this.setData(patch, () => {
+      if (!assertPersonalSyncRenderableState(this.data).ok) {
+        this.setData({
+          activeImportMethod: "method",
+          studentImportStage: "form",
+          studentImportLoading: false,
+          syncErrorTitle: view.title,
+          syncErrorContent: view.content,
+        });
+      }
+      wx.showModal({
+        title: view.title,
+        content: view.content,
+        showCancel: Boolean(view.cancelText),
+        confirmText: view.confirmText,
+        cancelText: view.cancelText || "关闭",
+        complete: () => {
+          this.syncModalOpen = false;
+        },
+        success: (res) => {
+          if (res && res.cancel && view.action === "empty-schedule") {
+            const current = personalSyncCredentialStore.read();
+            if (current && current.password) this.resyncStudentImport();
+          }
+        },
+      });
+    });
   },
 
   handlePersonalSyncFailure(error, credential) {
-    const code = error && (error.code || error.reasonCode || (error.payload && error.payload.code)) || "";
-    const usedSavedPassword = Boolean(credential && credential.usingSavedPassword);
-    if (usedSavedPassword && (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED")) {
-      personalSyncCredentialStore.clearPassword();
-      this.returnToAccountForm();
-      this.setData({ hasSavedPassword: false, credentialSaved: Boolean(personalSyncCredentialStore.read()) });
-      wx.showModal({
-        title: "需要重新输入密码",
-        content: "已保存的学校账号密码可能已失效，请重新输入。",
-        showCancel: false,
-        confirmText: "知道了",
-      });
-      return;
-    }
-    this.returnToAccountForm();
-    this.applySavedCredential();
-    this.showStudentImportError(code || "AGENT_OFFLINE", error && error.message);
+    this.presentPersonalSyncFailure(error, credential);
   },
 
   async validateAndPreviewStudentImport() {
@@ -1978,9 +2052,11 @@ Page({
   },
 
   async runPersonalScheduleSync(form) {
-    if (this.data.studentImportLoading || !form || !form.studentId || !form.password) return;
+    if (this.personalSyncInflight || this.data.studentImportLoading || !form || !form.studentId || !form.password) return;
+    this.personalSyncInflight = true;
     const selectedRecord = this.data.termRecords[this.data.semesterIndex];
     if (selectedRecord && !selectedRecord.importable) {
+      this.personalSyncInflight = false;
       wx.showToast({ title: "该学期暂不能导入", icon: "none" });
       return;
     }
@@ -1999,7 +2075,9 @@ Page({
       studentLoadingStepIndex: 0,
       studentLoadingProgressStyle: "width: 14%;",
       studentImportSlow: false,
-      studentImportStatusMessage: "正在连接学校系统",
+      syncErrorTitle: "",
+      syncErrorContent: "",
+      studentImportStatusMessage: "正在读取学校课表…",
       studentAdvancedMode: false,
       studentAdvancedTabs: [],
       studentActiveBucket: "recommended",
@@ -2034,21 +2112,38 @@ Page({
         const acceptedPassword = plainPassword;
         plainPassword = "";
         this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程" });
-        this.finishPersonalScheduleRead(preview, {
+        enteredPreview = this.finishPersonalScheduleRead(preview, {
           studentId: form.studentId,
           password: acceptedPassword,
           usingSavedPassword: form.usingSavedPassword,
           quickResync: form.quickResync,
-        });
+        }) !== false;
         form.password = "";
-        enteredPreview = true;
       } catch (error) {
+        const failedCredential = {
+          studentId: form.studentId,
+          password: plainPassword,
+          usingSavedPassword: form.usingSavedPassword,
+        };
         plainPassword = "";
         form.password = "";
-        this.setData({ "studentForm.password": "" });
+        this.clearTypedPassword();
         if (!enteredPreview) {
           this.stopStudentLoadingSteps();
-          this.handlePersonalSyncFailure(error, form);
+          this.handlePersonalSyncFailure(error, failedCredential);
+        }
+      } finally {
+        plainPassword = "";
+        this.personalSyncInflight = false;
+        if (!enteredPreview) {
+          this.stopStudentLoadingSteps();
+          this.setData({
+            studentImportLoading: false,
+            studentImportStage: "form",
+            activeImportMethod: "method",
+            studentImportStatusMessage: "",
+            "studentForm.password": "",
+          });
         }
       }
       return;
@@ -2096,15 +2191,19 @@ Page({
       timetable = null;
       noteDirectStage("direct-preview", { httpStatus: 200 });
       logStudentImportDiagnostics(preview);
-      this.finishPersonalScheduleRead(preview, {
+      enteredPreview = this.finishPersonalScheduleRead(preview, {
         studentId: form.studentId,
         password: acceptedPassword,
         usingSavedPassword: form.usingSavedPassword,
         quickResync: form.quickResync,
-      });
+      }) !== false;
       form.password = "";
-      enteredPreview = true;
     } catch (error) {
+      const failedCredential = {
+        studentId: form.studentId,
+        password: plainPassword,
+        usingSavedPassword: form.usingSavedPassword,
+      };
       plainPassword = "";
       form.password = "";
       timetable = null;
@@ -2116,10 +2215,12 @@ Page({
         redirect: error && error.safeRedirect,
       });
       this.stopStudentLoadingSteps();
-      this.handlePersonalSyncFailure(error, form);
+      this.clearTypedPassword();
+      this.handlePersonalSyncFailure(error, failedCredential);
     } finally {
       plainPassword = "";
       timetable = null;
+      this.personalSyncInflight = false;
       if (directClient) directClient.clearSecrets();
       if (this.activeDirectClient === directClient) this.activeDirectClient = null;
       if (!enteredPreview) {
@@ -2557,109 +2658,13 @@ Page({
     });
   },
 
-  showStudentImportError(code, defaultMsg) {
-    if (code === "DIRECT_CLIENT_INTERNAL_ERROR") {
-      wx.showModal({
-        title: "同步暂时失败",
-        content: "暂时无法读取学校课表，请稍后重试。",
-        showCancel: false,
-        confirmText: "知道了",
-      });
-      return;
-    }
-    if (code === "DIRECT_NETWORK_ERROR") {
-      wx.showModal({
-        title: "无法连接学校系统",
-        content: "同步服务暂时没有响应，请稍后重试。",
-        confirmText: "重新检测",
-        cancelText: "使用 XLS 导入",
-        success: (res) => {
-          if (res.confirm) this.recheckCampusNetwork();
-          else this.selectImportMethod({ currentTarget: { dataset: { method: "xls" } } });
-        },
-      });
-      return;
-    }
-    if (code === "UNTRUSTED_REDIRECT" || code === "REDIRECT_LOCATION_MISSING") {
-      wx.showModal({
-        title: "学校登录流程发生变化",
-        content: "暂时无法继续完成身份验证，请稍后重试。",
-        showCancel: false,
-        confirmText: "知道了",
-      });
-      return;
-    }
-    const raw = String(defaultMsg || "");
-    let content = raw && raw !== code && !/^[A-Z0-9_]+$/.test(raw) ? raw : "学号导入暂时不可用，请稍后再试。";
-    if (code === "DIRECT_MODE_UNSUPPORTED") {
-      content = "当前微信版本暂不支持直接同步，请更新微信或使用 XLS 导入。";
-    } else if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
-      wx.showModal({
-        title: "暂时无法自动同步",
-        content: "学校系统要求额外安全验证，暂时无法自动同步",
-        confirmText: "稍后重试",
-        cancelText: "使用 XLS 导入",
-        success: (res) => {
-          if (!res.confirm) this.selectImportMethod({ currentTarget: { dataset: { method: "xls" } } });
-        },
-      });
-      return;
-    } else if (code === "CAS_HTTPS_CALLBACK_UNSUPPORTED" || code === "CAS_SESSION_NOT_ESTABLISHED") {
-      content = "当前网络环境暂时无法完成学校身份验证。";
-    } else if (code === "CLIENT_CRYPTO_UNAVAILABLE" || code === "DIRECT_CRYPTO_UNAVAILABLE") {
-      content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
-    } else if (code === "PROFILE_ID_MISMATCH") {
-      content = "读取到的学籍学号与登录学号不一致，已停止同步。";
-    } else if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
-      content = "学校账号或密码不正确";
-    } else if (code === "CAMPUS_SYNC_MAINTENANCE") {
-      content = "课表同步服务维护中，请稍后再试。";
-    } else if (code === "CAMPUS_SYNC_RATE_LIMITED") {
-      content = "操作有些频繁，请稍后再试。";
-    } else if (code === "CAMPUS_SYNC_DAILY_LIMIT") {
-      content = "今天的课表同步次数已用完，明天 00:00 后可再次同步。";
-    } else if (code === "CAMPUS_SYNC_CONCURRENT_LIMIT" || code === "JOB_ALREADY_ACTIVE") {
-      content = "已有一次课表同步正在进行，请等待完成。";
-    } else if (code === "CAMPUS_SYNC_BUSY") {
-      content = "当前同步人数较多，请稍后再试。";
-    } else if (code === "AGENT_OFFLINE" || code === "CAMPUS_AGENT_NOT_AVAILABLE") {
-      content = "课表同步服务暂时不可用";
-    } else if (code === "TIMEOUT" || code === "REQUEST_TIMEOUT") {
-      content = "读取学校课表超时，请稍后重试";
-    } else if (code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
-      content = "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。";
-    } else if (code === "SCHEDULE_APP_NOT_FOUND") {
-      content = "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。";
-    } else if (code === "CAMPUS_AGENT_NOT_AVAILABLE") {
-      content = "课表同步服务暂时不可用，请稍后再试，或使用 XLS 导入。";
-    } else if (code === "LOGIN_PAGE_CHANGED" || code === "AUTH_PAGE_CHANGED" || code === "STRUCTURE_CHANGED") {
-      content = "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。";
-    } else if (code === "SCHEDULE_EMPTY" || code === "SCHEDULE_ROWS_EMPTY") {
-      content = "没有读取到可导入的课表数据，请确认当前学期是否已有课表。";
-    } else if (code === "SCHOOL_SYSTEM_TIMEOUT") {
-      content = "学校系统响应较慢，请稍后再试。";
-    } else if (code === "NETWORK_TIMEOUT" || code === "UPSTREAM_TIMEOUT") {
-      content = "连接超时，可立即重试一次。";
-    } else if (code === "CLOUDBASE_SERVICE_UNAVAILABLE" || code === "CLOUDBASE_IMPORT_FAILED") {
-      content = "当前读取通道暂时不可用，请稍后重试。";
-    } else if (code === "UNKNOWN_IMPORT_ERROR") {
-      content = "读取失败，请稍后重试或使用其他导入方式。";
-    } else if (code === "IMPORT_RATE_LIMITED") {
-      content = "操作有些频繁，请稍后再试。";
-    } else if (code === "IMPORT_KEY_EXPIRED") {
-      content = "本次安全验证已失效，请重新点击“验证并读取课表”。";
-    } else if (code === "IMPORT_TOKEN_EXPIRED") {
-      content = "预览结果已过期，请重新验证后再导入。";
-    } else if (code === "FOSU_IMPORT_DISABLED") {
-      content = "学号导入暂未开放，请使用 XLS 或班级课表导入。";
-    } else if (code === "LOCAL_SAVE_FAILED") {
-      content = "课程已读取，但本地保存失败。请清理缓存后重试。";
-    }
-    wx.showModal({
-      title: "提示",
-      content,
-      showCancel: false,
-      confirmText: "知道了",
+  showStudentImportError(code) {
+    const stage = this.data.studentImportStage;
+    const keep = stage === "preview" || stage === "identity-confirm" || stage === "done";
+    this.presentPersonalSyncFailure({ code: code || "UNKNOWN_SYNC_ERROR" }, null, {
+      keepSurface: keep,
+      activeImportMethod: this.data.activeImportMethod,
+      studentImportStage: stage,
     });
   },
 

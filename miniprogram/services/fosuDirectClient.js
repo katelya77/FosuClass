@@ -15,6 +15,7 @@ const {
   classifyLoginPage,
   hasTicket,
   isAuthenticatedHome,
+  classifyTimetableDocument,
   looksLikeLoginPage,
   looksLikeTimetable,
   maskStudentId,
@@ -486,6 +487,17 @@ function createFosuDirectClient(options) {
     }
   }
 
+  function timetableVerdict(data, contentType, pageUrl) {
+    const raw = typeof data === "string" ? data : textFromData(data);
+    const decoded = typeof data === "string" ? data : (decodeProfilePage(data, contentType) || raw);
+    const verdict = classifyTimetableDocument(decoded, pageUrl);
+    if (verdict === "INVALID_CREDENTIALS" || verdict === "SCHOOL_UNAVAILABLE" || verdict === "AUTHENTICATED_TIMETABLE") return verdict;
+    const rawVerdict = decoded === raw ? verdict : classifyTimetableDocument(raw, pageUrl);
+    if (rawVerdict === "INVALID_CREDENTIALS" || rawVerdict === "SCHOOL_UNAVAILABLE" || rawVerdict === "AUTHENTICATED_TIMETABLE") return rawVerdict;
+    if (looksLikeTimetable(raw) && !looksLikeLoginPage(raw)) return "AUTHENTICATED_TIMETABLE";
+    return verdict;
+  }
+
   function decodeProfilePage(data, contentType) {
     if (typeof options.decodeSchoolHtml === "function") {
       const decoded = options.decodeSchoolHtml(data, contentType);
@@ -639,11 +651,11 @@ function createFosuDirectClient(options) {
       }
       if (!isRedirectStatus(statusCode) || !location) {
         const code = classifyLoginPage(textFromData(posted.data)) || "LOGIN_REJECTED";
-        throw directError(code, { stage: "login-post", statusCode });
+        throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
       }
       if (!hasTicket(location)) {
         const code = classifyLoginPage(textFromData(posted.data)) || "LOGIN_REJECTED";
-        throw directError(code, { stage: "login-post", statusCode });
+        throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
       }
       let callback;
       try {
@@ -666,8 +678,14 @@ function createFosuDirectClient(options) {
       const home = await follow({ url: XS_MAIN_URL, stage: "xs-main" });
       const homeHtml = textFromData(home.response && home.response.data);
       const homeStatus = Number(home.response && home.response.statusCode || 0);
-      if (looksLikeLoginPage(homeHtml) || !isAuthenticatedHome(homeHtml, homeStatus)) {
-        throw directError(looksLikeLoginPage(homeHtml) || !httpsUpgraded ? "CAS_SESSION_NOT_ESTABLISHED" : "CAS_HTTPS_CALLBACK_UNSUPPORTED", {
+      if (looksLikeLoginPage(homeHtml)) {
+        throw directError("INVALID_CREDENTIALS", {
+          stage: "xs-main",
+          statusCode: homeStatus,
+        });
+      }
+      if (!isAuthenticatedHome(homeHtml, homeStatus)) {
+        throw directError(!httpsUpgraded ? "CAS_SESSION_NOT_ESTABLISHED" : "CAS_HTTPS_CALLBACK_UNSUPPORTED", {
           stage: "xs-main",
           statusCode: homeStatus,
         });
@@ -691,6 +709,13 @@ function createFosuDirectClient(options) {
         });
       }
       const decodedForSemester = textFromData(timetable.data);
+      const earlyVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
+      if (earlyVerdict !== "AUTHENTICATED_TIMETABLE") {
+        throw directError(earlyVerdict, {
+          stage: "timetable-fetch",
+          statusCode: timetable.statusCode,
+        });
+      }
       if (semester && decodedForSemester && looksLikeTimetable(decodedForSemester)) {
         const parsed = parseSemesterOptions(decodedForSemester);
         const matched = parsed.options.find((item) => item.code === semester || item.code.indexOf(semester) === 0);
@@ -707,9 +732,9 @@ function createFosuDirectClient(options) {
           throw directError("SEMESTER_NOT_FOUND", { stage: "semester-switch" });
         }
       }
-      const finalText = textFromData(timetable.data);
-      if (!looksLikeTimetable(finalText)) {
-        throw directError(httpsUpgraded ? "CAS_HTTPS_CALLBACK_UNSUPPORTED" : "SCHEDULE_PAGE_UNREACHABLE", {
+      const finalVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
+      if (finalVerdict !== "AUTHENTICATED_TIMETABLE") {
+        throw directError(finalVerdict, {
           stage: "timetable-fetch",
           statusCode: timetable.statusCode,
         });

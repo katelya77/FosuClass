@@ -6,9 +6,34 @@ const SOURCE = {
   CAMPUS_AGENT: "campus-agent",
 };
 
-function unsupported(code) {
-  const error = new Error(code);
-  error.code = code;
+const TERMINAL_SYNC_CODES = new Set([
+  "INVALID_CREDENTIALS",
+  "LOGIN_REJECTED",
+  "EMPTY_PERSONAL_SCHEDULE",
+  "STRUCTURE_CHANGED",
+  "PROFILE_ID_MISMATCH",
+  "SCHOOL_UNAVAILABLE",
+  "CAMPUS_SYNC_DAILY_LIMIT",
+  "CAMPUS_SYNC_RATE_LIMITED",
+  "CAMPUS_SYNC_CONCURRENT_LIMIT",
+  "CAMPUS_SYNC_BUSY",
+  "CAMPUS_SYNC_MAINTENANCE",
+  "SESSION_EXPIRED",
+  "SESSION_INVALID",
+  "FOSU_SESSION_REQUIRED",
+  "FOSU_SESSION_EXPIRED",
+]);
+
+function unsupported(code, extra) {
+  const error = new Error(code || "UNKNOWN_SYNC_ERROR");
+  error.code = code || "UNKNOWN_SYNC_ERROR";
+  const payload = extra && extra.payload ? extra.payload : extra;
+  if (payload && typeof payload === "object") {
+    error.payload = payload;
+    ["retryAfterSeconds", "dailyLimit", "dailyUsed", "dailyRemaining", "resetAt", "requestId"].forEach((key) => {
+      if (payload[key] != null) error[key] = payload[key];
+    });
+  }
   return error;
 }
 
@@ -91,8 +116,8 @@ async function readViaCampusAgent(options) {
     }
     if (status === "completed") return payload;
     if (status === "failed" || status === "expired" || status === "cancelled") {
-      const code = (payload && payload.errorCode) || "AGENT_OFFLINE";
-      if (code === "INVALID_CREDENTIALS" || retries >= 1) throw unsupported(code);
+      const code = (payload && (payload.errorCode || payload.code)) || "AGENT_OFFLINE";
+      if (TERMINAL_SYNC_CODES.has(code) || retries >= 1) throw unsupported(code, payload);
       return readViaCampusAgent(Object.assign({}, options, { _campusRetries: retries + 1 }));
     }
     await sleep(1000);

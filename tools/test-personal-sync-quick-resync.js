@@ -10,7 +10,7 @@ assert.ok(page.includes("async runPersonalScheduleSync(form)"));
 assert.ok(page.includes("this.runPersonalScheduleSync(form)"));
 assert.ok(page.includes("this.runPersonalScheduleSync({"));
 assert.ok(page.includes("if (this.data.studentImportLoading) return;"));
-assert.ok(page.includes("if (this.data.studentImportLoading || !form || !form.studentId || !form.password) return;"));
+assert.ok(page.includes("if (this.personalSyncInflight || this.data.studentImportLoading || !form || !form.studentId || !form.password) return;"));
 assert.ok(page.includes("studentImportStage: \"loading\""));
 assert.ok(page.includes("quickResync: true"));
 assert.ok(!page.includes("this.returnToAccountForm();\n  },\n\n  presentIdentityConfirm"));

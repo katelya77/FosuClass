@@ -3,6 +3,7 @@ const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const { assertImportAttemptAllowed } = require("./studentScheduleImportRateLimiter");
 const { parsePersonalScheduleHtml, parsePersonalSchedulePageMetadata } = require("../utils/personal-schedule-parser");
+const { classifyTimetableDocument } = require("./personalSchedulePageAssertion");
 const { createNormalizedPreviewFromImportedData } = require("./scheduleImportNormalizer");
 const { createStoredPreviewFromNormalized } = require("./studentScheduleImportService");
 
@@ -109,15 +110,16 @@ function createTimetablePreview(req, body, source) {
   }
   if (!buffer.length || buffer.length > MAX_TIMETABLE_BYTES) throw previewError("DIRECT_BODY_TOO_LARGE");
   const decoded = decodeTimetable(buffer, payload.contentType);
-  if (/name=["']username["']/i.test(decoded.html) && /name=["']password["']/i.test(decoded.html)) {
-    throw previewError("DIRECT_PAYLOAD_NOT_TIMETABLE");
+  const verdict = classifyTimetableDocument(decoded.html, "");
+  if (verdict === "INVALID_CREDENTIALS" || verdict === "STRUCTURE_CHANGED" || verdict === "SCHOOL_UNAVAILABLE") {
+    throw previewError(verdict);
   }
   const pageMetadata = parsePersonalSchedulePageMetadata(decoded.html);
   const courses = parsePersonalScheduleHtml(decoded.html, {
     semester: payload.semester || "",
     source: "personal-xskb",
   });
-  if (!courses.length) throw previewError("SCHEDULE_ROWS_EMPTY");
+  if (!courses.length) throw previewError("EMPTY_PERSONAL_SCHEDULE");
   const channel = source === "campus-agent" ? "campus-agent" : "client-direct";
   const preview = createNormalizedPreviewFromImportedData(coursesToRawRows(courses), {
     semester: payload.semester || "当前学期",

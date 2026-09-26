@@ -183,7 +183,7 @@ function finishJob(jobId, body) {
     safeLog("campus-sync-job-completed", { jobId });
     return { jobId, status: "completed" };
   } catch (error) {
-    store.fail(jobId, error && error.code || "SCHEDULE_ROWS_EMPTY", Date.now());
+    store.fail(jobId, error && error.code || "UNKNOWN_SYNC_ERROR", Date.now());
     throw error;
   }
 }

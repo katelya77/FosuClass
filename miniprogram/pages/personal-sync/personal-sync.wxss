@@ -633,6 +633,27 @@
   transform: rotate(-28deg);
 }
 
+.sync-error-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin: 16rpx 0;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fff4f2;
+  color: #8a2b24;
+}
+
+.sync-error-title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.sync-error-body {
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
 .privacy-row {
   display: flex;
   align-items: center;

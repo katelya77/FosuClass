@@ -155,7 +155,11 @@ function safeCode(error) {
   if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") return "INVALID_CREDENTIALS";
   if (code === "INTERACTIVE_CHALLENGE_REQUIRED") return "INTERACTIVE_CHALLENGE_REQUIRED";
   if (code === "PROFILE_ID_MISMATCH") return "PROFILE_ID_MISMATCH";
+  if (code === "STRUCTURE_CHANGED" || code === "AUTH_PAGE_CHANGED" || code === "LOGIN_PAGE_CHANGED") return "STRUCTURE_CHANGED";
+  if (code === "EMPTY_PERSONAL_SCHEDULE" || code === "SCHEDULE_ROWS_EMPTY" || code === "SCHEDULE_EMPTY") return "EMPTY_PERSONAL_SCHEDULE";
+  if (code === "SCHOOL_UNAVAILABLE" || code === "DIRECT_NETWORK_ERROR" || code === "SCHEDULE_PAGE_UNREACHABLE") return "SCHOOL_UNAVAILABLE";
   if (/TIMEOUT/i.test(code)) return "TIMEOUT";
+  if (code === "AGENT_OFFLINE") return "AGENT_OFFLINE";
   return "AGENT_OFFLINE";
 }
 
