@@ -299,6 +299,7 @@ ${CAMPUS_SYNC_TREND_SOURCE}
               return "<tr><td>" + new Date(row.t).toLocaleString() + "</td><td>" + csText(row.jobIdShort) + "</td><td>" + csText(row.principalHashPrefix) +
                 "</td><td>" + csText(row.status) + "</td><td>" + (row.queueWaitMs || 0) + "</td><td>" + (row.durationMs || 0) +
                 "</td><td>" + (row.courseCount || 0) + "</td><td>" + (row.retryCount || 0) + "</td><td>" + csText(row.resultCode) +
+                (row.authMode ? "<div class='cs-muted'>Auth mode: " + csText(row.authMode) + "</div>" : "") +
                 "</td><td>" + csText(row.source) + "</td><td>" + csText(row.requestId) + "</td></tr>";
             }).join("") + "</tbody></table>";
         }

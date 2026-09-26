@@ -90,6 +90,7 @@ function createMemoryCampusSyncJobStore(hooks) {
           retryCount: job.retryCount || 0,
           requestId: job.requestId || "",
           source: job.source || "campus-sync",
+          authMode: job.authMode || "",
         },
         now,
       });
@@ -205,6 +206,11 @@ function createMemoryCampusSyncJobStore(hooks) {
       if ((rank[job.stage] || 0) > rank[next]) return true;
       job.stage = next;
       return true;
+    },
+    rememberAuthMode(jobId, value) {
+      const job = jobs.get(jobId);
+      if (!job) return;
+      if (value === "mobile" || value === "cas" || value === "authenticated-session") job.authMode = value;
     },
     rememberTimings(jobId, timings) {
       const job = jobs.get(jobId);

@@ -178,6 +178,7 @@ function record(event) {
   ["password", "studentId", "studentName", "className", "openid", "cookie", "ticket", "wxCode", "authorization", "html", "casHtml"].forEach((key) => {
     delete item[key];
   });
+  if (item.authMode !== "mobile" && item.authMode !== "cas" && item.authMode !== "authenticated-session") delete item.authMode;
   if (item.stageTimings && typeof item.stageTimings === "object") {
     ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs", "previewBuildMs"].forEach((key) => {
       const value = Number(item.stageTimings[key]);
@@ -532,6 +533,7 @@ function publicEvent(item) {
     courseCount: Number(item.courseCount || 0) || 0,
     retryCount: Number(item.retryCount || 0) || 0,
     resultCode: item.resultCode || "",
+    authMode: item.authMode || "",
     source: item.source || "campus-sync",
     requestId: String(item.requestId || "").slice(0, 32),
   };

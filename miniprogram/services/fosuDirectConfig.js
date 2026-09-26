@@ -11,6 +11,7 @@ const XS_MAIN_URL = `${EDU_ORIGIN}/framework/xsMain.jsp`;
 const TIMETABLE_URL = `${EDU_ORIGIN}/xskb/xskb_list.do`;
 const PROFILE_URL = `${EDU_ORIGIN}/grxx/xsxx`;
 const PROFILE_TIMEOUT_MS = 2500;
+const SCHOOL_MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
 
 const SECRET_KEY_PATTERN = /^(password|encryptedpassword|cookie|cookies|castgc|jsessionid|ticket|execution|pwdencryptsalt|set-cookie|authorization)$/i;
 
@@ -27,5 +28,6 @@ module.exports = {
   TIMETABLE_URL,
   PROFILE_URL,
   PROFILE_TIMEOUT_MS,
+  SCHOOL_MOBILE_USER_AGENT,
   SECRET_KEY_PATTERN,
 };

@@ -27,14 +27,35 @@ function decodeSchoolHtml(data, contentType) {
   return decoder(data, contentType, loadIconv());
 }
 
-function createNodeTransport() {
+function loadSchoolUserAgent() {
+  const root = process.env.FOSU_DIRECT_CLIENT_DIR || path.join(__dirname, "..", "vendor");
+  try {
+    return require(path.join(root, "fosuDirectConfig")).SCHOOL_MOBILE_USER_AGENT;
+  } catch (error) {
+    return require(path.join(__dirname, "..", "..", "..", "miniprogram", "services", "fosuDirectConfig")).SCHOOL_MOBILE_USER_AGENT;
+  }
+}
+
+function trustedSchoolHeaders(input) {
+  const headers = {};
+  const source = input && typeof input === "object" ? input : {};
+  Object.keys(source).forEach((key) => {
+    if (/^user-agent$/i.test(key)) return;
+    headers[key] = source[key];
+  });
+  headers["User-Agent"] = loadSchoolUserAgent();
+  return headers;
+}
+
+function createNodeTransport(deps) {
+  const requestFor = deps && deps.requestFor ? deps.requestFor : (protocol) => (protocol === "http:" ? http : https);
   return {
     manualRedirect: true,
     request(spec) {
       return new Promise((resolve, reject) => {
         const url = new URL(spec.url);
-        const lib = url.protocol === "http:" ? http : https;
-        const headers = Object.assign({}, spec.header || {});
+        const lib = requestFor(url.protocol);
+        const headers = trustedSchoolHeaders(spec.header);
         const body = spec.data == null ? null : Buffer.from(String(spec.data));
         if (body) headers["Content-Length"] = String(body.length);
         const req = lib.request({
@@ -185,6 +206,10 @@ function publicStage(progress) {
   return "";
 }
 
+function publicAuthMode(value) {
+  return value === "mobile" || value === "cas" || value === "authenticated-session" ? value : "";
+}
+
 function resultTimings(result) {
   const source = result && result.stageTimings || {};
   const out = {};
@@ -220,7 +245,7 @@ async function runClaimedJob(job, request, log) {
     const hint = result.profileHint || {};
     const profileStatus = ["ok", "partial", "unavailable"].indexOf(hint.profileStatus) >= 0 ? hint.profileStatus : "unavailable";
     log({ event: "profile-fetched", status: profileStatus });
-    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
+    const successBody = {
       jobId: job.jobId,
       success: true,
       semester: job.semester || "",
@@ -235,7 +260,10 @@ async function runClaimedJob(job, request, log) {
         profileStatus,
       },
       stageTimings: resultTimings(result),
-    });
+    };
+    const successMode = publicAuthMode(result && result.authMode);
+    if (successMode) successBody.authMode = successMode;
+    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, successBody);
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
       throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
     }
@@ -245,12 +273,15 @@ async function runClaimedJob(job, request, log) {
     if (error && error.delayMs) throw error;
     const code = safeCode(error);
     if (code === "PROFILE_ID_MISMATCH") log({ event: "profile-fetched", status: "id_mismatch" });
-    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, {
+    const failureBody = {
       jobId: job.jobId,
       success: false,
       code,
       stageTimings: resultTimings(error),
-    });
+    };
+    const failureMode = publicAuthMode(error && error.authMode);
+    if (failureMode) failureBody.authMode = failureMode;
+    const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, failureBody);
     log({ event: "job-finished", jobId, code, status: posted && posted.statusCode || 0 });
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
       throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
@@ -376,6 +407,9 @@ module.exports = {
   safeCode,
   publicStage,
   resultTimings,
+  createNodeTransport,
+  trustedSchoolHeaders,
+  publicAuthMode,
   DEFAULT_POLL_MS,
   DEFAULT_HEARTBEAT_MS,
 };

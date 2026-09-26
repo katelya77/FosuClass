@@ -4,6 +4,7 @@ const {
   TIMETABLE_URL,
   PROFILE_URL,
   PROFILE_TIMEOUT_MS,
+  SCHOOL_MOBILE_USER_AGENT,
   XS_MAIN_URL,
 } = require("./fosuDirectConfig");
 const { parseStudentProfileHtml, parseXsMainIdentity } = require("./studentProfileParser");
@@ -35,7 +36,7 @@ const {
   redirectFromUrl,
   setCookieNames,
 } = require("./fosuDirectDiagnostics");
-const { resolveRelativeUrl } = require("./fosuDirectUrl");
+const { resolveRelativeUrl, splitUrl } = require("./fosuDirectUrl");
 const { RETRY_PAUSE_MS, canRetrySchoolGet } = require("./fosuDirectRetry");
 
 const STAGE_TIMING_KEYS = ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs"];
@@ -52,7 +53,7 @@ function measuredStageTimings(source) {
 }
 
 const BLOCKED_SCHOOL_HEADERS = /^(cookie|authorization|x-fosu-session|x-fosu-static-ticket|referer|user-agent)$/i;
-const SCHOOL_MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
+const AUTH_MODE_VALUES = new Set(["mobile", "cas", "authenticated-session"]);
 
 function headerValue(response, name) {
   const headers = response && (response.header || response.headers) || {};
@@ -170,6 +171,33 @@ function buildSchoolRequestHeaders(extra, cookie) {
   delete header.Origin;
   if (cookie) header.Cookie = cookie;
   return header;
+}
+
+function urlHost(value) {
+  const parsed = splitUrl(String(value || ""));
+  return parsed ? parsed.host : "";
+}
+
+function isHomePath(pathname) {
+  return String(pathname || "").indexOf("/framework/xsMain.jsp") >= 0;
+}
+
+function publicAuthMode(value) {
+  return AUTH_MODE_VALUES.has(value) ? value : "";
+}
+
+function classifyAuthDocument(html, statusCode, pageUrl) {
+  if (isAuthenticatedHome(html, statusCode)) return { authMode: "authenticated-session" };
+  const fields = parseCasLoginFields(html, pageUrl);
+  if (fields.execution && fields.pwdEncryptSalt) {
+    const postUrl = fields.postUrl || pageUrl;
+    const host = urlHost(postUrl);
+    if (host === "authserver.fosu.edu.cn") return { authMode: "cas", fields, postUrl };
+    if (host === "100.fosu.edu.cn") return { authMode: "mobile", fields, postUrl };
+    return { authMode: "" };
+  }
+  if (classifyLoginPage(html) === "INTERACTIVE_CHALLENGE_REQUIRED") return { authMode: "challenge" };
+  return { authMode: "" };
 }
 
 function createFosuDirectClient(options) {
@@ -448,30 +476,48 @@ function createFosuDirectClient(options) {
     });
     const statusCode = Number(response.statusCode || 0);
     const location = headerValue(response, "location");
-    if (!isRedirectStatus(statusCode) || !String(location || "").trim()) {
-      throw directError(isRedirectStatus(statusCode) ? "REDIRECT_LOCATION_MISSING" : "AUTH_PAGE_HTTP_ERROR", {
-        stage: "cas-bootstrap",
-        statusCode,
-        transportPhase: "after-response",
-        targetHost: "100.fosu.edu.cn",
-      });
+    if (isRedirectStatus(statusCode)) {
+      if (!String(location || "").trim()) {
+        throw directError("REDIRECT_LOCATION_MISSING", {
+          stage: "cas-bootstrap",
+          statusCode,
+          transportPhase: "after-response",
+          targetHost: "100.fosu.edu.cn",
+        });
+      }
+      const resolved = resolveSchoolRedirect(CAS_BOOTSTRAP_URL, location);
+      networkEnvironment.authReachable = true;
+      networkEnvironment.eduReachable = true;
+      if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
+      if (resolved.host === "authserver.fosu.edu.cn" && String(resolved.path || "").indexOf("/authserver/login") === 0) {
+        return { authMode: "cas", authLoginUrl: resolved.url };
+      }
+      if (isHomePath(resolved.path)) return { authMode: "authenticated-session", homeUrl: resolved.url };
+      return { authMode: "follow", nextUrl: resolved.url };
     }
-    const resolved = resolveSchoolRedirect(CAS_BOOTSTRAP_URL, location);
-    if (resolved.host !== "authserver.fosu.edu.cn" || String(resolved.path || "").indexOf("/authserver/login") !== 0) {
-      throw directError("UNTRUSTED_REDIRECT", {
-        stage: "cas-bootstrap",
-        statusCode,
-        scheme: "https",
-        locationHost: resolved.host,
-        locationPath: resolved.path,
-        transportPhase: "after-response",
-        targetHost: "100.fosu.edu.cn",
-      });
+    if (statusCode === 200) {
+      const html = textFromData(response.data);
+      const classified = classifyAuthDocument(html, statusCode, CAS_BOOTSTRAP_URL);
+      networkEnvironment.eduReachable = true;
+      if (classified.authMode === "cas" || classified.authMode === "mobile" || classified.authMode === "authenticated-session") {
+        networkEnvironment.authReachable = true;
+        if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
+      }
+      return {
+        authMode: classified.authMode,
+        fields: classified.fields,
+        postUrl: classified.postUrl,
+        response,
+        url: CAS_BOOTSTRAP_URL,
+        html,
+      };
     }
-    networkEnvironment.authReachable = true;
-    networkEnvironment.eduReachable = true;
-    if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
-    return { authLoginUrl: resolved.url };
+    throw directError("AUTH_PAGE_HTTP_ERROR", {
+      stage: "cas-bootstrap",
+      statusCode,
+      transportPhase: "after-response",
+      targetHost: "100.fosu.edu.cn",
+    });
   }
 
   async function bootstrapCasLoginByFollow() {
@@ -507,13 +553,14 @@ function createFosuDirectClient(options) {
     networkEnvironment.authReachable = true;
     networkEnvironment.eduReachable = true;
     if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
-    return { authLoginUrl: pageUrl, followed: true, fields, html, response };
+    return { authMode: "cas", authLoginUrl: pageUrl, followed: true, fields, html, response };
   }
 
   async function checkSchoolLink() {
     try {
-      await bootstrapCasLogin();
-      return { state: "connected" };
+      const boot = await bootstrapCasLogin();
+      if (boot && boot.authMode && boot.authMode !== "challenge") return { state: "connected" };
+      return { state: "unknown", errorCode: boot && boot.authMode === "challenge" ? "INTERACTIVE_CHALLENGE_REQUIRED" : "" };
     } catch (error) {
       if (error && error.code === "DIRECT_NETWORK_ERROR") {
         if (typeof options.onNetworkState === "function") options.onNetworkState("unavailable");
@@ -610,111 +657,161 @@ function createFosuDirectClient(options) {
     let encryptedPassword = "";
     let form = "";
     const timings = {};
+    let authMode = "";
     const flowStarted = Date.now();
     try {
       if (!studentId || !secrets.password) throw directError("INVALID_CREDENTIALS", { stage: "auth-page", transportPhase: "before-request" });
       if (typeof options.onProgress === "function") options.onProgress("cas-bootstrap");
       const boot = await bootstrapCasLogin();
-      if (typeof options.onProgress === "function") options.onProgress("auth-page");
-      const loginPage = boot.followed
-        ? { response: boot.response, url: boot.authLoginUrl, upgraded: false }
-        : await follow({ url: boot.authLoginUrl, stage: "auth-page" });
-      const loginStatus = Number(loginPage.response && loginPage.response.statusCode || 0);
-      if (loginStatus !== 200) {
-        throw directError("AUTH_PAGE_HTTP_ERROR", {
-          stage: "auth-page",
-          statusCode: loginStatus,
-          transportPhase: "after-response",
-          targetHost: "authserver.fosu.edu.cn",
-        });
-      }
-      if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
-      const html = textFromData(loginPage.response && loginPage.response.data);
-      fields = parseCasLoginFields(html, loginPage.url);
-      secrets.execution = fields.execution;
-      secrets.pwdEncryptSalt = fields.pwdEncryptSalt;
-      if (!fields.execution || !fields.pwdEncryptSalt) {
-        throw directError("AUTH_PAGE_CHANGED", { stage: "auth-page", statusCode: loginStatus, transportPhase: "after-response", targetHost: "authserver.fosu.edu.cn" });
-      }
-      const captcha = await schoolRequest({
-        url: CAPTCHA_CHECK_URL,
-        method: "POST",
-        data: `username=${encodeURIComponent(studentId)}`,
-        header: { "Content-Type": "application/x-www-form-urlencoded" },
-        stage: "captcha-check",
-      });
-      if (captchaRequiredFromCheck(textFromData(captcha.data) || captcha.data)) {
-        throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "captcha-check", statusCode: captcha.statusCode });
-      }
-      encryptedPassword = await encryptFosuPassword(secrets.password, fields.pwdEncryptSalt);
-      secrets.password = "";
-      form = [
-        `username=${encodeURIComponent(studentId)}`,
-        `password=${encodeURIComponent(encryptedPassword)}`,
-        "captcha=",
-        `_eventId=${encodeURIComponent(fields._eventId || "submit")}`,
-        `cllt=${encodeURIComponent(fields.cllt || "userNameLogin")}`,
-        `dllt=${encodeURIComponent(fields.dllt || "generalLogin")}`,
-        `lt=${encodeURIComponent(fields.lt || "")}`,
-        `execution=${encodeURIComponent(fields.execution)}`,
-      ].join("&");
-      const postUrl = fields.postUrl || loginPage.url;
-      if (/_wx_redirect/.test(postUrl)) {
-        throw directError("WECHAT_REDIRECT_INCOMPATIBLE", {
+      let home = null;
+      let homeHtml = "";
+      let homeStatus = 0;
+      const acceptHome = (page) => {
+        home = page;
+        homeHtml = textFromData(page && page.response && page.response.data);
+        homeStatus = Number(page && page.response && page.response.statusCode || 0);
+        if (!publicAuthMode(authMode)) authMode = "authenticated-session";
+      };
+      const loginFromFields = async (pageUrl, mode, parsedFields) => {
+        authMode = mode;
+        fields = parsedFields;
+        secrets.execution = fields.execution;
+        secrets.pwdEncryptSalt = fields.pwdEncryptSalt;
+        if (mode === "cas") {
+          const captcha = await schoolRequest({
+            url: CAPTCHA_CHECK_URL,
+            method: "POST",
+            data: `username=${encodeURIComponent(studentId)}`,
+            header: { "Content-Type": "application/x-www-form-urlencoded" },
+            stage: "captcha-check",
+          });
+          if (captchaRequiredFromCheck(textFromData(captcha.data) || captcha.data)) {
+            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "captcha-check", statusCode: captcha.statusCode });
+          }
+        }
+        encryptedPassword = await encryptFosuPassword(secrets.password, fields.pwdEncryptSalt);
+        secrets.password = "";
+        form = [
+          `username=${encodeURIComponent(studentId)}`,
+          `password=${encodeURIComponent(encryptedPassword)}`,
+          "captcha=",
+          `_eventId=${encodeURIComponent(fields._eventId || "submit")}`,
+          `cllt=${encodeURIComponent(fields.cllt || "userNameLogin")}`,
+          `dllt=${encodeURIComponent(fields.dllt || "generalLogin")}`,
+          `lt=${encodeURIComponent(fields.lt || "")}`,
+          `execution=${encodeURIComponent(fields.execution)}`,
+        ].join("&");
+        const postUrl = fields.postUrl || pageUrl;
+        if (/_wx_redirect/.test(postUrl)) {
+          throw directError("WECHAT_REDIRECT_INCOMPATIBLE", {
+            stage: "login-post",
+            transportPhase: "before-request",
+            targetHost: urlHost(postUrl) || "authserver.fosu.edu.cn",
+          });
+        }
+        const posted = await schoolRequest({
+          url: postUrl,
+          method: "POST",
+          data: form,
+          header: { "Content-Type": "application/x-www-form-urlencoded" },
           stage: "login-post",
-          transportPhase: "before-request",
-          targetHost: "authserver.fosu.edu.cn",
         });
-      }
-      const posted = await schoolRequest({
-        url: postUrl,
-        method: "POST",
-        data: form,
-        header: { "Content-Type": "application/x-www-form-urlencoded" },
-        stage: "login-post",
-      });
-      encryptedPassword = "";
-      form = "";
-      const statusCode = Number(posted.statusCode || 0);
-      const location = headerValue(posted, "location");
-      if (isRedirectStatus(statusCode) && !String(location || "").trim()) {
-        throw directError("REDIRECT_LOCATION_MISSING", { stage: "login-post", statusCode });
-      }
-      if (!isRedirectStatus(statusCode) || !location) {
-        const code = classifyLoginPage(textFromData(posted.data)) || "LOGIN_REJECTED";
-        throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
-      }
-      if (!hasTicket(location)) {
-        const code = classifyLoginPage(textFromData(posted.data)) || "LOGIN_REJECTED";
-        throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
-      }
-      let callback;
-      try {
-        callback = resolveSchoolRedirect(fields.postUrl || loginPage.url, location);
-      } catch (error) {
-        error.stage = "cas-redirect";
-        error.statusCode = statusCode;
-        throw error;
-      }
-      if (callback.upgraded) httpsUpgraded = true;
-      secrets.ticket = "";
-      note({
-        stage: "cas-redirect",
-        httpStatus: statusCode,
-        redirect: redirectFromUrl(callback.url),
-        cookieNames: jar.cookieNames(callback.url),
-      });
-      const callbackResult = await follow({ url: callback.url, stage: "cas-callback" });
-      if (callbackResult.upgraded) httpsUpgraded = true;
-      let home = callbackResult;
-      let homeHtml = textFromData(home.response && home.response.data);
-      let homeStatus = Number(home.response && home.response.statusCode || 0);
-      const callbackAlreadyHome = String(callbackResult.url || "").indexOf("/framework/xsMain.jsp") >= 0
-        && isAuthenticatedHome(homeHtml, homeStatus);
-      if (!callbackAlreadyHome) {
-        home = await follow({ url: XS_MAIN_URL, stage: "xs-main" });
+        encryptedPassword = "";
+        form = "";
+        const statusCode = Number(posted.statusCode || 0);
+        const location = headerValue(posted, "location");
+        const postedHtml = textFromData(posted.data);
+        if (isAuthenticatedHome(postedHtml, statusCode)) {
+          acceptHome({ response: posted, url: postUrl });
+          return;
+        }
+        if (isRedirectStatus(statusCode) && !String(location || "").trim()) {
+          throw directError("REDIRECT_LOCATION_MISSING", { stage: "login-post", statusCode });
+        }
+        if (!isRedirectStatus(statusCode) || !location) {
+          const code = classifyLoginPage(postedHtml) || "LOGIN_REJECTED";
+          throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
+        }
+        let callback;
+        try {
+          callback = resolveSchoolRedirect(postUrl, location);
+        } catch (error) {
+          error.stage = "cas-redirect";
+          error.statusCode = statusCode;
+          throw error;
+        }
+        if (!hasTicket(location) && !isHomePath(callback.path)) {
+          const code = classifyLoginPage(postedHtml) || "LOGIN_REJECTED";
+          throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
+        }
+        if (callback.upgraded) httpsUpgraded = true;
+        secrets.ticket = "";
+        note({
+          stage: "cas-redirect",
+          httpStatus: statusCode,
+          redirect: redirectFromUrl(callback.url),
+          cookieNames: jar.cookieNames(callback.url),
+        });
+        const callbackResult = await follow({ url: callback.url, stage: "cas-callback" });
+        if (callbackResult.upgraded) httpsUpgraded = true;
+        home = callbackResult;
         homeHtml = textFromData(home.response && home.response.data);
         homeStatus = Number(home.response && home.response.statusCode || 0);
+        const callbackAlreadyHome = isHomePath(callbackResult.url) && isAuthenticatedHome(homeHtml, homeStatus);
+        if (!callbackAlreadyHome) {
+          home = await follow({ url: XS_MAIN_URL, stage: "xs-main" });
+          homeHtml = textFromData(home.response && home.response.data);
+          homeStatus = Number(home.response && home.response.statusCode || 0);
+        }
+      };
+      if (boot.authMode === "challenge") {
+        throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "cas-bootstrap" });
+      }
+      if (boot.authMode === "authenticated-session" && boot.html) {
+        acceptHome({ response: boot.response, url: boot.url });
+      } else if (boot.homeUrl) {
+        const page = await follow({ url: boot.homeUrl, stage: "xs-main" });
+        if (page.upgraded) httpsUpgraded = true;
+        acceptHome(page);
+      } else if (boot.authMode === "mobile" && boot.fields) {
+        await loginFromFields(boot.url, "mobile", boot.fields);
+      } else {
+        if (typeof options.onProgress === "function") options.onProgress("auth-page");
+        const loginPage = boot.html
+          ? { response: boot.response, url: boot.url || boot.authLoginUrl, upgraded: false }
+          : (boot.followed
+            ? { response: boot.response, url: boot.authLoginUrl, upgraded: false }
+            : await follow({ url: boot.authLoginUrl || boot.nextUrl, stage: "auth-page" }));
+        if (loginPage.upgraded) httpsUpgraded = true;
+        const loginStatus = Number(loginPage.response && loginPage.response.statusCode || 0);
+        if (loginStatus !== 200) {
+          throw directError("AUTH_PAGE_HTTP_ERROR", {
+            stage: "auth-page",
+            statusCode: loginStatus,
+            transportPhase: "after-response",
+            targetHost: urlHost(loginPage.url) || "authserver.fosu.edu.cn",
+          });
+        }
+        if (typeof options.onNetworkState === "function") options.onNetworkState("connected");
+        const html = textFromData(loginPage.response && loginPage.response.data);
+        if (isAuthenticatedHome(html, loginStatus)) {
+          acceptHome(loginPage);
+        } else {
+          const classified = classifyAuthDocument(html, loginStatus, loginPage.url);
+          if (classified.authMode === "authenticated-session") acceptHome(loginPage);
+          else if (classified.authMode === "challenge") {
+            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "auth-page", statusCode: loginStatus });
+          } else if (classified.authMode !== "cas" && classified.authMode !== "mobile") {
+            throw directError("AUTH_PAGE_CHANGED", {
+              stage: "auth-page",
+              statusCode: loginStatus,
+              transportPhase: "after-response",
+              targetHost: urlHost(loginPage.url) || "authserver.fosu.edu.cn",
+            });
+          } else {
+            await loginFromFields(loginPage.url, classified.authMode, classified.fields);
+          }
+        }
       }
       if (looksLikeLoginPage(homeHtml)) {
         throw directError("INVALID_CREDENTIALS", {
@@ -811,9 +908,13 @@ function createFosuDirectClient(options) {
         semester,
         profileHint,
         stageTimings: measuredStageTimings(timings),
+        authMode: publicAuthMode(authMode),
       };
     } catch (error) {
-      if (error && typeof error === "object") error.stageTimings = measuredStageTimings(timings);
+      if (error && typeof error === "object") {
+        error.stageTimings = measuredStageTimings(timings);
+        error.authMode = publicAuthMode(authMode);
+      }
       noteFailure(error, error && error.stage, error && error.targetHost);
       throw error;
     } finally {

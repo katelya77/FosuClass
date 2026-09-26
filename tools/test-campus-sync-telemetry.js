@@ -22,6 +22,10 @@ function run() {
   });
   telemetry.record({ t: Date.now(), status: "failed", resultCode: "INVALID_CREDENTIALS", durationMs: 100 });
   telemetry.record({ t: Date.now(), status: "failed", resultCode: "TIMEOUT", durationMs: 9000 });
+  const mobileMode = telemetry.record({ t: Date.now(), status: "completed", resultCode: "OK", authMode: "mobile" });
+  const droppedMode = telemetry.record({ t: Date.now(), status: "completed", resultCode: "OK", authMode: "https://authserver.fosu.edu.cn/authserver/login?ticket=ST-hidden" });
+  assert.strictEqual(mobileMode.authMode, "mobile");
+  assert.strictEqual(droppedMode.authMode, undefined);
   const view = telemetry.overview("24h");
   assert.ok(view.success >= 1);
   assert.ok(view.credentialFailures >= 1);
@@ -40,6 +44,8 @@ function run() {
   const dumped = fs.readdirSync(process.env.CAMPUS_SYNC_OPS_DIR).map((name) => fs.readFileSync(path.join(process.env.CAMPUS_SYNC_OPS_DIR, name), "utf8")).join("\n");
   assert.ok(!dumped.includes("school-secret"));
   assert.ok(!dumped.includes("202500000303"));
+  assert.ok(!dumped.includes("ST-hidden"));
+  assert.ok(!dumped.includes("authserver"));
   console.log("campus-sync-telemetry PASS");
 }
 

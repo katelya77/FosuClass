@@ -37,6 +37,7 @@ const store = createMemoryCampusSyncJobStore({
       retryCount: job.retryCount || 0,
       requestId: job.requestId || "",
       source: job.source || "campus-sync",
+      authMode: job.authMode || "",
     });
   },
 });
@@ -190,6 +191,7 @@ function finishJob(jobId, body) {
     throw error;
   }
   if (body && body.stageTimings) store.rememberTimings(jobId, body.stageTimings);
+  if (body && body.authMode) store.rememberAuthMode(jobId, body.authMode);
   if (!body || body.success !== true) {
     store.fail(jobId, body && body.code || "AGENT_OFFLINE", Date.now());
     safeLog("campus-sync-job-failed", { jobId, code: body && body.code || "AGENT_OFFLINE" });
