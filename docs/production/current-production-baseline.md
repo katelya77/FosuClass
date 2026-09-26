@@ -4,12 +4,12 @@ This file records what is actually running. It does not contain secrets.
 
 | Item | Value |
 |---|---|
-| Deployment commit | `39234ac1354eb0715feaf80beddc3b084cd02268` |
-| Deployment date | 2026-09-26 02:12 CST |
+| Deployment commit | `b4493c586f8bf76fb94d0a7d2534fd257ca66b50` |
+| Deployment date | 2026-09-26 20:21 CST |
 | Server branch | `fix/campus-sync-admin-fastload` |
-| Deploy run | `36171012395` |
+| Deploy run | `36241122347` |
 | Route 2 status | running |
-| WYZ | agent heartbeat available; this server deploy did not reinstall the agent |
+| WYZ | bundle for this commit is on the server under `route2-artifacts/`; the running agent was not reinstalled by this deploy |
 | Mini program production version | 3.1.1 experience line. In-repo settings label remains `1.0.0` and is not the upload version |
 | Security mode | `session-canary` |
 
