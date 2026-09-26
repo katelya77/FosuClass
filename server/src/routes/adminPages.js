@@ -5686,6 +5686,7 @@ ${CAMPUS_SYNC_STYLES}
     #section-sync .sync-section-heading h3, #section-sync .card-title, #section-sync .section-title { margin-bottom: 0; font-size: 14px; line-height: 1.35; }
     #section-sync .sync-section-heading p, #section-sync .card > p { margin-top: 4px; margin-bottom: 8px; font-size: 12px; line-height: 1.45; }
     #section-sync .sync-ops-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    #section-sync .sync-overview-aside .sync-ops-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #section-sync .sync-compact-card { min-height: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); box-shadow: none; }
     .sync-quick-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
     .sync-recommendation-copy { margin: 0 0 8px; color: var(--text-secondary); font-size: 12px; }
