@@ -179,9 +179,35 @@ function shortId(value) {
   return String(value || "").slice(0, 8);
 }
 
+function publicStage(progress) {
+  if (progress === "timetable-fetch" || progress === "profile-fetch" || progress === "semester-switch") return "reading";
+  if (progress === "cas-bootstrap" || progress === "auth-page" || progress === "login-post" || progress === "cas-callback" || progress === "xs-main") return "verifying";
+  return "";
+}
+
+function resultTimings(result) {
+  const source = result && result.stageTimings || {};
+  const out = {};
+  ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs"].forEach((key) => {
+    const value = Number(source[key]);
+    if (Number.isFinite(value) && value >= 0 && value < 600000) out[key] = Math.round(value);
+  });
+  return out;
+}
+
 async function runClaimedJob(job, request, log) {
   const createFosuDirectClient = clientFactory();
-  const client = createFosuDirectClient({ transport: createNodeTransport(), decodeSchoolHtml });
+  let lastStage = "";
+  const client = createFosuDirectClient({
+    transport: createNodeTransport(),
+    decodeSchoolHtml,
+    onProgress: (progress) => {
+      const stage = publicStage(progress);
+      if (!stage || stage === lastStage) return;
+      lastStage = stage;
+      Promise.resolve(request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/stage`, { stage })).catch(() => {});
+    },
+  });
   let password = job.password;
   const jobId = shortId(job.jobId);
   try {
@@ -208,6 +234,7 @@ async function runClaimedJob(job, request, log) {
         source: hint.source || "",
         profileStatus,
       },
+      stageTimings: resultTimings(result),
     });
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
       throw brokerFailure(posted && posted.statusCode, posted && posted.retryAfter);
@@ -222,6 +249,7 @@ async function runClaimedJob(job, request, log) {
       jobId: job.jobId,
       success: false,
       code,
+      stageTimings: resultTimings(error),
     });
     log({ event: "job-finished", jobId, code, status: posted && posted.statusCode || 0 });
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
@@ -346,6 +374,8 @@ module.exports = {
   retryDelay,
   runAgentLoop,
   safeCode,
+  publicStage,
+  resultTimings,
   DEFAULT_POLL_MS,
   DEFAULT_HEARTBEAT_MS,
 };

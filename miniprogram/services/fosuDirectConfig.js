@@ -10,7 +10,7 @@ const CAPTCHA_CHECK_URL = "https://authserver.fosu.edu.cn/authserver/checkNeedCa
 const XS_MAIN_URL = `${EDU_ORIGIN}/framework/xsMain.jsp`;
 const TIMETABLE_URL = `${EDU_ORIGIN}/xskb/xskb_list.do`;
 const PROFILE_URL = `${EDU_ORIGIN}/grxx/xsxx`;
-const PROFILE_TIMEOUT_MS = 6000;
+const PROFILE_TIMEOUT_MS = 2500;
 
 const SECRET_KEY_PATTERN = /^(password|encryptedpassword|cookie|cookies|castgc|jsessionid|ticket|execution|pwdencryptsalt|set-cookie|authorization)$/i;
 

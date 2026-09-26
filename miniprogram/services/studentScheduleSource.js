@@ -9,10 +9,15 @@ const SOURCE = {
 const TERMINAL_SYNC_CODES = new Set([
   "INVALID_CREDENTIALS",
   "LOGIN_REJECTED",
+  "INTERACTIVE_CHALLENGE_REQUIRED",
+  "CAPTCHA_REQUIRED",
+  "RISK_CONTROL_REQUIRED",
   "EMPTY_PERSONAL_SCHEDULE",
   "STRUCTURE_CHANGED",
   "PROFILE_ID_MISMATCH",
   "SCHOOL_UNAVAILABLE",
+  "TIMEOUT",
+  "AGENT_OFFLINE",
   "CAMPUS_SYNC_DAILY_LIMIT",
   "CAMPUS_SYNC_RATE_LIMITED",
   "CAMPUS_SYNC_CONCURRENT_LIMIT",
@@ -23,6 +28,13 @@ const TERMINAL_SYNC_CODES = new Set([
   "FOSU_SESSION_REQUIRED",
   "FOSU_SESSION_EXPIRED",
 ]);
+
+const STAGE_MESSAGES = {
+  connecting: "正在连接同步服务…",
+  verifying: "正在验证学校账号…",
+  reading: "正在读取个人课表…",
+  organizing: "正在整理课程信息…",
+};
 
 function unsupported(code, extra) {
   const error = new Error(code || "UNKNOWN_SYNC_ERROR");
@@ -89,11 +101,23 @@ async function obtainFreshWxCode(options) {
   return String(result.code);
 }
 
+function reportSyncStage(options, status, stage) {
+  if (!options || typeof options.onProgress !== "function") return;
+  const key = STAGE_MESSAGES[stage]
+    ? stage
+    : (status === "queued" ? "connecting" : (status === "claimed" || status === "processing" ? "verifying" : ""));
+  const message = STAGE_MESSAGES[key];
+  if (!message || options._lastStageMessage === message) return;
+  options._lastStageMessage = message;
+  options.onProgress(message);
+}
+
 async function readViaCampusAgent(options) {
   const http = options && options.http;
   if (!http || typeof http.post !== "function" || typeof http.get !== "function") {
     throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
   }
+  reportSyncStage(options, "queued", "connecting");
   const wxCode = await obtainFreshWxCode(options);
   const created = await http.post("/api/campus-sync/jobs", {
     studentId: options.studentId,
@@ -105,20 +129,20 @@ async function readViaCampusAgent(options) {
   if (!jobId) throw unsupported("CAMPUS_AGENT_NOT_AVAILABLE");
   const waitMs = Math.max(15000, Number(personalSyncConfig.campusSyncWaitMs || 90000));
   const started = Date.now();
-  const retries = Number(options && options._campusRetries || 0);
   while (Date.now() - started < waitMs) {
     const job = await http.get(`/api/campus-sync/jobs/${jobId}`);
     const status = job && (job.status || job.data && job.data.status);
     const payload = job && job.preview ? job : (job && job.data) || job;
+    reportSyncStage(options, status, payload && payload.stage);
     if (status === "completed" && payload && payload.preview) {
+      reportSyncStage(options, "completed", "organizing");
       if (payload.preview && typeof payload.preview === "object") payload.preview.campusSyncJobId = jobId;
       return payload.preview;
     }
     if (status === "completed") return payload;
     if (status === "failed" || status === "expired" || status === "cancelled") {
       const code = (payload && (payload.errorCode || payload.code)) || "AGENT_OFFLINE";
-      if (TERMINAL_SYNC_CODES.has(code) || retries >= 1) throw unsupported(code, payload);
-      return readViaCampusAgent(Object.assign({}, options, { _campusRetries: retries + 1 }));
+      throw unsupported(code, payload);
     }
     await sleep(1000);
   }
@@ -154,6 +178,8 @@ async function loadSchedulePreview(options) {
 
 module.exports = {
   SOURCE,
+  STAGE_MESSAGES,
+  TERMINAL_SYNC_CODES,
   getPreferredSource,
   isCampusAgentEnabled,
   isSourceAvailable,

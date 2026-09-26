@@ -196,6 +196,8 @@ function overview() {
       p95DurationMs: day.p95DurationMs,
       p99DurationMs: day.p99DurationMs,
       queueWaitP95Ms: day.queueWaitP95Ms,
+      stageLatency: day.stageLatency || null,
+      schoolChallenges: day.schoolChallenges || 0,
       lastSuccessAt: metrics.lastSuccessAt,
     },
     circuit: breaker,

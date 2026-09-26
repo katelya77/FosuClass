@@ -172,6 +172,13 @@ async function main() {
   assert.ok(service.includes("CAMPUS_AGENT_POLL_INTERVAL_MS=3000"));
   assert.ok(service.includes("CAMPUS_AGENT_HEARTBEAT_INTERVAL_MS=30000"));
   assert.ok(service.indexOf("CAMPUS_AGENT_POLL_INTERVAL_MS=3000") < service.indexOf("EnvironmentFile="));
+  assert.strictEqual(agent.publicStage("login-post"), "verifying");
+  assert.strictEqual(agent.publicStage("timetable-fetch"), "reading");
+  assert.strictEqual(agent.publicStage("profile-fetch"), "reading");
+  assert.deepStrictEqual(agent.resultTimings({
+    stageTimings: { schoolLoginMs: 10.4, scheduleFetchMs: 20, profileFetchMs: -1, normalizeMs: 3, password: PASSWORD },
+  }), { schoolLoginMs: 10, scheduleFetchMs: 20, normalizeMs: 3 });
+  assert.strictEqual(agent.safeCode({ code: "INTERACTIVE_CHALLENGE_REQUIRED" }), "INTERACTIVE_CHALLENGE_REQUIRED");
 
   console.log("wyz-campus-agent-loop PASS");
 }

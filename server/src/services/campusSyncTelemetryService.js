@@ -37,13 +37,21 @@ function emptyBucket() {
     timeout: 0,
     credentialFailures: 0,
     systemFailures: 0,
+    schoolChallenges: 0,
     durationCount: 0,
     durationSum: 0,
     queueWaitCount: 0,
     queueWaitSum: 0,
+    loginCount: 0,
+    scheduleCount: 0,
+    profileCount: 0,
     maxQueued: 0,
     maxHeartbeatAgeMs: 0,
     histogram: EDGES.map(() => 0),
+    queueHistogram: EDGES.map(() => 0),
+    loginHistogram: EDGES.map(() => 0),
+    scheduleHistogram: EDGES.map(() => 0),
+    profileHistogram: EDGES.map(() => 0),
     errors: {},
   };
 }
@@ -67,9 +75,27 @@ function addDuration(bucket, value) {
   const sample = Math.max(0, Number(value) || 0);
   bucket.durationCount += 1;
   bucket.durationSum += sample;
+  addHistogram(bucket, "histogram", sample);
+}
+
+function addHistogram(bucket, key, value) {
+  if (!Array.isArray(bucket[key])) bucket[key] = EDGES.map(() => 0);
+  const sample = Math.max(0, Number(value) || 0);
   let index = EDGES.findIndex((edge) => sample <= edge);
   if (index < 0) index = EDGES.length - 1;
-  bucket.histogram[index] += 1;
+  bucket[key][index] += 1;
+}
+
+function histogramPercentile(histogram, count, ratio) {
+  const total = Number(count || 0);
+  if (!total || !Array.isArray(histogram)) return null;
+  const target = Math.ceil(total * ratio);
+  let seen = 0;
+  for (let index = 0; index < histogram.length; index += 1) {
+    seen += Number(histogram[index] || 0);
+    if (seen >= target) return EDGES[index];
+  }
+  return EDGES[EDGES.length - 1];
 }
 
 function percentile(bucket, ratio) {
@@ -99,10 +125,12 @@ function touch(time) {
 function classify(event) {
   const code = String(event.resultCode || event.errorCode || "");
   const status = String(event.status || "");
-  if (code === "INVALID_CREDENTIALS") return "credential";
+  if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") return "credential";
+  if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") return "challenge";
   if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED" || code === "CAMPUS_SYNC_DAILY_LIMIT" || code === "CAMPUS_SYNC_CONCURRENT_LIMIT") return "rate";
   if (code === "CAMPUS_SYNC_BUSY" || code === "CAMPUS_SYNC_DEGRADED") return "busy";
   if (code === "TIMEOUT" || status === "expired") return "timeout";
+  if (code === "SCHOOL_UNAVAILABLE" || code === "AGENT_OFFLINE" || code === "STRUCTURE_CHANGED") return "system";
   if (status === "completed" || code === "OK") return "success";
   if (status === "failed" || status === "expired") return "system";
   return "";
@@ -114,6 +142,7 @@ function apply(bucket, event) {
   bucket.attempts += 1;
   if (kind === "success") bucket.success += 1;
   if (kind === "credential") bucket.credentialFailures += 1;
+  if (kind === "challenge") bucket.schoolChallenges += 1;
   if (kind === "system" || kind === "timeout") {
     bucket.failed += 1;
     bucket.systemFailures += 1;
@@ -125,17 +154,37 @@ function apply(bucket, event) {
   }
   if (kind === "busy") bucket.busy += 1;
   if (event.durationMs != null) addDuration(bucket, event.durationMs);
-  if (event.queueWaitMs != null) addSample(bucket, "queueWaitCount", "queueWaitSum", event.queueWaitMs);
+  if (event.queueWaitMs != null) {
+    addSample(bucket, "queueWaitCount", "queueWaitSum", event.queueWaitMs);
+    addHistogram(bucket, "queueHistogram", event.queueWaitMs);
+  }
+  if (event.schoolLoginMs != null) {
+    bucket.loginCount += 1;
+    addHistogram(bucket, "loginHistogram", event.schoolLoginMs);
+  }
+  if (event.scheduleFetchMs != null) {
+    bucket.scheduleCount += 1;
+    addHistogram(bucket, "scheduleHistogram", event.scheduleFetchMs);
+  }
+  if (event.profileFetchMs != null) {
+    bucket.profileCount += 1;
+    addHistogram(bucket, "profileHistogram", event.profileFetchMs);
+  }
   if (event.resultCode) bucket.errors[event.resultCode] = (bucket.errors[event.resultCode] || 0) + 1;
 }
 
 function record(event) {
   const item = Object.assign({ t: Date.now() }, event || {});
-  delete item.password;
-  delete item.studentId;
-  delete item.openid;
-  delete item.cookie;
-  delete item.ticket;
+  ["password", "studentId", "studentName", "className", "openid", "cookie", "ticket", "wxCode", "authorization", "html", "casHtml"].forEach((key) => {
+    delete item[key];
+  });
+  if (item.stageTimings && typeof item.stageTimings === "object") {
+    ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs", "previewBuildMs"].forEach((key) => {
+      const value = Number(item.stageTimings[key]);
+      if (Number.isFinite(value) && value >= 0) item[key] = Math.round(value);
+    });
+    delete item.stageTimings;
+  }
   const buckets = touch(item.t);
   apply(buckets.hour, item);
   apply(buckets.minute, item);
@@ -257,13 +306,15 @@ function mergeBuckets(list) {
   const merged = emptyBucket();
   list.forEach((bucket) => {
     if (!bucket) return;
-    ["attempts", "success", "failed", "rateLimited", "busy", "timeout", "credentialFailures", "systemFailures", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum"].forEach((key) => {
+    ["attempts", "success", "failed", "rateLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
       merged[key] += Number(bucket[key] || 0);
     });
     merged.maxQueued = Math.max(merged.maxQueued, Number(bucket.maxQueued || 0));
     merged.maxHeartbeatAgeMs = Math.max(merged.maxHeartbeatAgeMs, Number(bucket.maxHeartbeatAgeMs || 0));
-    EDGES.forEach((edge, index) => {
-      merged.histogram[index] += Number(bucket.histogram && bucket.histogram[index] || 0);
+    ["histogram", "queueHistogram", "loginHistogram", "scheduleHistogram", "profileHistogram"].forEach((key) => {
+      EDGES.forEach((edge, index) => {
+        merged[key][index] += Number(bucket[key] && bucket[key][index] || 0);
+      });
     });
     Object.keys(bucket.errors || {}).forEach((code) => {
       merged.errors[code] = (merged.errors[code] || 0) + Number(bucket.errors[code] || 0);
@@ -295,8 +346,9 @@ function publicBucket(bucket) {
   const next = emptyBucket();
   if (!bucket || typeof bucket !== "object") return next;
   Object.keys(next).forEach((key) => {
-    if (key === "histogram") next.histogram = EDGES.map((edge, index) => Number(bucket.histogram && bucket.histogram[index] || 0));
-    else if (key === "errors" && bucket.errors && typeof bucket.errors === "object") {
+    if (key === "histogram" || key.endsWith("Histogram")) {
+      next[key] = EDGES.map((edge, index) => Number(bucket[key] && bucket[key][index] || 0));
+    } else if (key === "errors" && bucket.errors && typeof bucket.errors === "object") {
       Object.keys(bucket.errors).forEach((code) => { next.errors[String(code).slice(0, 64)] = Number(bucket.errors[code] || 0); });
     } else if (key !== "errors") next[key] = Number(bucket[key] || 0);
   });
@@ -369,12 +421,23 @@ function getRangeSnapshot(range, now) {
   return value;
 }
 
+function latencyPair(histogram, count) {
+  const samples = Number(count || 0);
+  if (!samples) return { samples: 0, p50: null, p95: null };
+  return {
+    samples,
+    p50: histogramPercentile(histogram, samples, 0.5),
+    p95: histogramPercentile(histogram, samples, 0.95),
+  };
+}
+
 function summarize(bucket) {
   const attempts = bucket.attempts || 0;
   const system = bucket.systemFailures || 0;
   const credential = bucket.credentialFailures || 0;
+  const school = bucket.schoolChallenges || 0;
   const success = bucket.success || 0;
-  const relevant = Math.max(0, attempts - credential);
+  const relevant = Math.max(0, attempts - credential - school);
   return {
     attempts,
     success,
@@ -384,14 +447,23 @@ function summarize(bucket) {
     timeout: bucket.timeout || 0,
     credentialFailures: credential,
     systemFailures: system,
+    schoolChallenges: school,
     successRate: relevant ? Math.round((success / relevant) * 1000) / 10 : (success ? 100 : 0),
     systemFailureRate: relevant ? Math.round((system / relevant) * 1000) / 10 : 0,
     credentialFailureRate: attempts ? Math.round((credential / attempts) * 1000) / 10 : 0,
+    schoolChallengeRate: attempts ? Math.round((school / attempts) * 1000) / 10 : 0,
     avgDurationMs: bucket.durationCount ? Math.round(bucket.durationSum / bucket.durationCount) : 0,
     p50DurationMs: percentile(bucket, 0.5),
     p95DurationMs: percentile(bucket, 0.95),
     p99DurationMs: percentile(bucket, 0.99),
     queueWaitP95Ms: bucket.queueWaitCount ? Math.round(bucket.queueWaitSum / bucket.queueWaitCount) : 0,
+    stageLatency: {
+      total: latencyPair(bucket.histogram, bucket.durationCount),
+      queue: latencyPair(bucket.queueHistogram, bucket.queueWaitCount),
+      login: latencyPair(bucket.loginHistogram, bucket.loginCount),
+      schedule: latencyPair(bucket.scheduleHistogram, bucket.scheduleCount),
+      profile: latencyPair(bucket.profileHistogram, bucket.profileCount),
+    },
     maxQueued: bucket.maxQueued || 0,
     maxHeartbeatAgeMs: bucket.maxHeartbeatAgeMs || 0,
     errors: bucket.errors || {},
@@ -448,8 +520,15 @@ function publicEvent(item) {
     jobIdShort: String(item.jobId || "").slice(0, 8),
     principalHashPrefix: String(item.principalHashPrefix || item.ownerKey || "").slice(0, 8),
     status: item.status || "",
-    queueWaitMs: item.queueWaitMs || 0,
-    durationMs: item.durationMs || 0,
+    queueWaitMs: item.queueWaitMs == null ? null : Number(item.queueWaitMs) || 0,
+    durationMs: item.durationMs == null ? null : Number(item.durationMs) || 0,
+    schoolLoginMs: item.schoolLoginMs == null ? null : Number(item.schoolLoginMs) || 0,
+    scheduleFetchMs: item.scheduleFetchMs == null ? null : Number(item.scheduleFetchMs) || 0,
+    profileFetchMs: item.profileFetchMs == null ? null : Number(item.profileFetchMs) || 0,
+    normalizeMs: item.normalizeMs == null ? null : Number(item.normalizeMs) || 0,
+    previewBuildMs: item.previewBuildMs == null ? null : Number(item.previewBuildMs) || 0,
+    jobQueuedAt: Number(item.jobQueuedAt || 0) || 0,
+    agentClaimedAt: Number(item.agentClaimedAt || 0) || 0,
     courseCount: Number(item.courseCount || 0) || 0,
     retryCount: Number(item.retryCount || 0) || 0,
     resultCode: item.resultCode || "",

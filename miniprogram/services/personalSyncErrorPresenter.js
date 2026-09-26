@@ -213,9 +213,12 @@ function present(code, error) {
     };
   }
   if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
+    const waiting = Number(details.retryAfterSeconds || details.retryAfter) > 0;
     return {
       title: "暂时无法自动同步",
-      content: "学校系统要求额外安全验证，暂时无法自动同步。",
+      content: waiting
+        ? "学校系统刚刚要求额外验证，请稍后再尝试同步。"
+        : "学校系统要求额外安全验证，暂时无法自动同步。\n请稍后再试；如持续出现，可先通过学校官方系统完成正常登录验证后再次同步。",
       confirmText: "我知道了",
       cancelText: "",
       action: "acknowledge",

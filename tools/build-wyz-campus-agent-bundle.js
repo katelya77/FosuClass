@@ -15,6 +15,7 @@ const vendorFiles = [
   "fosuDirectHtml.js",
   "fosuDirectPasswordCrypto.js",
   "fosuDirectRedirect.js",
+  "fosuDirectRetry.js",
   "fosuDirectUrl.js",
   "studentProfileParser.js",
   "schoolHtmlCharset.js",

@@ -286,7 +286,7 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           host.innerHTML = "<table><tbody>" + codes.map(function (code) {
             var count = Number(errors[code] || 0);
             return "<tr><td>" + code + "</td><td>" + count + "</td><td>" + Math.round(count / total * 100) + "%</td></tr>";
-          }).join("") + "</tbody></table><div class='cs-muted'>系统失败率 " + ((day && day.systemFailureRate) || 0) + "% · 凭据失败率 " + ((day && day.credentialFailureRate) || 0) + "%</div>";
+          }).join("") + "</tbody></table><div class='cs-muted'>系统失败率 " + ((day && day.systemFailureRate) || 0) + "% · 凭据失败率 " + ((day && day.credentialFailureRate) || 0) + "% · 学校验证挑战 " + ((day && day.schoolChallenges) || 0) + "</div>";
         }
         function csRenderEvents(payload) {
           var host = csNode("csEvents");
@@ -385,9 +385,17 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           var day = overview.window24h || {};
           var safety = overview.queueSafety || {};
           var advice = overview.recommendation || {};
-          host.textContent = "成功率 " + (day.successRate || 0) + "% · P50 " + (day.p50DurationMs || 0) + " ms · P95 " + (day.p95DurationMs || 0) +
+          var latency = (overview.performance && overview.performance.stageLatency) || day.stageLatency || {};
+          function csPair(pair) {
+            if (!pair || !pair.samples) return "-";
+            return (pair.p50 == null ? "-" : pair.p50) + " / " + (pair.p95 == null ? "-" : pair.p95);
+          }
+          host.textContent = "成功率 " + (day.successRate || 0) + "% · Total " + csPair(latency.total) +
+            " · Queue " + csPair(latency.queue) + " · Login " + csPair(latency.login) +
+            " · xskb " + csPair(latency.schedule) + " · Profile " + csPair(latency.profile) +
             " ms · 系统失败率 " + (day.systemFailureRate || 0) + "% · 凭据失败率 " + (day.credentialFailureRate || 0) +
-            "% · 限流 " + (day.rateLimited || 0) + " · 最大队列 " + (day.maxQueued || 0) +
+            "% · 学校验证挑战 " + (day.schoolChallenges || 0) +
+            " · 限流 " + (day.rateLimited || 0) + " · 最大队列 " + (day.maxQueued || 0) +
             " · 心跳年龄最大 " + (day.maxHeartbeatAgeMs || 0) + " ms · 最近成功 " + csWhen(overview.performance && overview.performance.lastSuccessAt);
           csRenderSafety(safety, advice);
         }

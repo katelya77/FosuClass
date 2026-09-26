@@ -6,6 +6,7 @@ const control = require("./campusSyncControl");
 const telemetry = require("./campusSyncTelemetryService");
 const quota = require("./campusSyncQuotaStore");
 const policy = require("./campusSyncPolicyService");
+const challengeCooldown = require("./campusSyncChallengeCooldown");
 
 const CLAIM_WAIT_MS = 25000;
 const store = createMemoryCampusSyncJobStore({
@@ -15,6 +16,7 @@ const store = createMemoryCampusSyncJobStore({
       circuit.observe(code, info && info.now);
     try { quota.noteTerminal(job.status); } catch (error) {}
     try { control.persistCircuit(); } catch (error) {}
+    if (code === "INTERACTIVE_CHALLENGE_REQUIRED") challengeCooldown.note(job.ownerKey, info && info.now || Date.now());
     telemetry.record({
       t: info && info.now || Date.now(),
       jobId: job.jobId,
@@ -24,6 +26,13 @@ const store = createMemoryCampusSyncJobStore({
       resultCode: code === "OK" ? "OK" : (job.errorCode || code),
       queueWaitMs: job.queueWaitMs || 0,
       durationMs: job.createdAt ? Math.max(0, (job.completedAt || info.now || Date.now()) - job.createdAt) : 0,
+      jobQueuedAt: job.jobQueuedAt || job.createdAt || 0,
+      agentClaimedAt: job.agentClaimedAt || job.claimedAt || 0,
+      schoolLoginMs: job.schoolLoginMs,
+      scheduleFetchMs: job.scheduleFetchMs,
+      profileFetchMs: job.profileFetchMs,
+      normalizeMs: job.normalizeMs,
+      previewBuildMs: job.previewBuildMs,
       courseCount: job.courseCount || 0,
       retryCount: job.retryCount || 0,
       requestId: job.requestId || "",
@@ -39,9 +48,11 @@ function ownerKeyFromRequest(req) {
 }
 
 function publicJob(job) {
+  const stage = ["connecting", "verifying", "reading", "organizing"].indexOf(job.stage) >= 0 ? job.stage : "";
   return {
     jobId: job.jobId,
     status: job.status,
+    stage,
     errorCode: job.status === "failed" || job.status === "expired" ? job.errorCode || "TIMEOUT" : "",
     preview: job.status === "completed" ? rejectSecrets(job.preview) : null,
   };
@@ -91,6 +102,21 @@ function createJob(req, body) {
   }
   const ownerKey = ownerKeyFromRequest(req);
   const now = Date.now();
+  const cooled = challengeCooldown.check(ownerKey, now);
+  if (cooled.blocked) {
+    telemetry.record({
+      t: now,
+      status: "failed",
+      resultCode: "INTERACTIVE_CHALLENGE_REQUIRED",
+      ownerKey,
+      principalHashPrefix: String(ownerKey || "").slice(0, 8),
+      source: "campus-sync",
+    });
+    const error = new Error("INTERACTIVE_CHALLENGE_REQUIRED");
+    error.code = "INTERACTIVE_CHALLENGE_REQUIRED";
+    error.retryAfterSeconds = cooled.retryAfterSeconds;
+    throw error;
+  }
   try {
     if (store.hasActive(ownerKey)) {
       const error = new Error("CAMPUS_SYNC_CONCURRENT_LIMIT");
@@ -163,12 +189,14 @@ function finishJob(jobId, body) {
     error.code = "JOB_NOT_FOUND";
     throw error;
   }
+  if (body && body.stageTimings) store.rememberTimings(jobId, body.stageTimings);
   if (!body || body.success !== true) {
     store.fail(jobId, body && body.code || "AGENT_OFFLINE", Date.now());
     safeLog("campus-sync-job-failed", { jobId, code: body && body.code || "AGENT_OFFLINE" });
     return { jobId, status: "failed" };
   }
   try {
+    const previewStarted = Date.now();
     const preview = createCampusAgentStudentSchedulePreview({
       fosuSession: { openidHash: job.ownerKey },
       clientIpInfo: { effectiveIp: "campus-agent" },
@@ -179,6 +207,7 @@ function finishJob(jobId, body) {
       semester: body.semester || job.semester || "",
       profileHint: body.profileHint || {},
     });
+    store.rememberTimings(jobId, { previewBuildMs: Date.now() - previewStarted });
     store.complete(jobId, preview, Date.now());
     safeLog("campus-sync-job-completed", { jobId });
     return { jobId, status: "completed" };
@@ -246,6 +275,11 @@ function resetCampusSyncForTests() {
   control.resetForTests();
   try { policy.resetForTests(); } catch (error) {}
   try { quota.resetForTests(); } catch (error) {}
+  try { challengeCooldown.resetForTests(); } catch (error) {}
+}
+
+function noteJobStage(jobId, stage) {
+  return store.noteStage(jobId, stage);
 }
 
 function jobsClear() {
@@ -261,6 +295,7 @@ module.exports = {
   discardJob,
   finishJob,
   heartbeat,
+  noteJobStage,
   metrics() {
     return store.snapshot(Date.now());
   },

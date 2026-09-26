@@ -78,6 +78,13 @@ function createMemoryCampusSyncJobStore(hooks) {
           createdAt: job.createdAt,
           completedAt: job.completedAt || now,
           queueWaitMs: job.queueWaitMs || 0,
+          jobQueuedAt: job.createdAt || 0,
+          agentClaimedAt: job.claimedAt || 0,
+          schoolLoginMs: job.schoolLoginMs,
+          scheduleFetchMs: job.scheduleFetchMs,
+          profileFetchMs: job.profileFetchMs,
+          normalizeMs: job.normalizeMs,
+          previewBuildMs: job.previewBuildMs,
           ownerKey: job.ownerKey || "",
           courseCount: job.courseCount || 0,
           retryCount: job.retryCount || 0,
@@ -151,6 +158,7 @@ function createMemoryCampusSyncJobStore(hooks) {
         source: String(input.source || "campus-sync"),
         retryCount: 0,
         queueWaitMs: 0,
+        stage: "connecting",
         courseCount: 0,
         createdAt: now,
         expiresAt: now + JOB_TTL_MS,
@@ -188,6 +196,23 @@ function createMemoryCampusSyncJobStore(hooks) {
       attempts.set(ownerKey, recent);
       daily.set(ownerKey, today);
       return true;
+    },
+    noteStage(jobId, stage) {
+      const rank = { connecting: 1, verifying: 2, reading: 3, organizing: 4 };
+      const job = jobs.get(jobId);
+      const next = String(stage || "");
+      if (!job || !active(job) || !rank[next]) return false;
+      if ((rank[job.stage] || 0) > rank[next]) return true;
+      job.stage = next;
+      return true;
+    },
+    rememberTimings(jobId, timings) {
+      const job = jobs.get(jobId);
+      if (!job || !timings) return;
+      ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs", "previewBuildMs"].forEach((key) => {
+        const value = Number(timings[key]);
+        if (Number.isFinite(value) && value >= 0 && value < 600000) job[key] = Math.round(value);
+      });
     },
     claim(agentId, now) {
       gc(now);

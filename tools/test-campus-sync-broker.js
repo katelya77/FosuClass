@@ -2,7 +2,7 @@ const assert = require("assert");
 const { availability, claimJob, claimPayload, createJob, finishJob, heartbeat, readJob, resetCampusSyncForTests } = require("../server/src/services/campusSyncBroker");
 
 const HTML = [
-  "<table id=\"kbtable\"><tr><td>节次</td><td>星期一</td></tr>",
+  "<table id=\"kbtable\"><tr><td>节次</td><td>星期一</td><td>星期二</td></tr>",
   "<tr><td>第一大节</td><td>高等数学<br>张三<br>1-16周<br>[01-02]节<br>A101</td></tr></table>",
 ].join("");
 

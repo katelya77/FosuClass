@@ -1,6 +1,6 @@
 const express = require("express");
 const { verifySignedRequest } = require("../security/campusAgentSignature");
-const { claimJob, claimPayload, finishJob, heartbeat } = require("../services/campusSyncBroker");
+const { claimJob, claimPayload, finishJob, heartbeat, noteJobStage } = require("../services/campusSyncBroker");
 
 const router = express.Router();
 
@@ -23,6 +23,13 @@ router.post("/jobs/claim", requireAgent, async (req, res) => {
   const job = await claimJob(req.campusAgentId);
   if (!job) return res.status(204).end();
   return res.json(claimPayload(job));
+});
+
+router.post("/jobs/:jobId/stage", requireAgent, (req, res) => {
+  const stage = req.body && req.body.stage;
+  if (stage !== "verifying" && stage !== "reading" && stage !== "organizing") return res.status(400).end();
+  if (!noteJobStage(req.params.jobId, stage)) return res.status(404).end();
+  return res.status(204).end();
 });
 
 router.post("/jobs/:jobId/result", requireAgent, (req, res) => {

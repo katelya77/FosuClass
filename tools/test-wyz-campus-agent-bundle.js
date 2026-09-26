@@ -22,6 +22,7 @@ for (const required of [
   "vendor/fosuDirectHtml.js",
   "vendor/fosuDirectPasswordCrypto.js",
   "vendor/fosuDirectRedirect.js",
+  "vendor/fosuDirectRetry.js",
   "vendor/fosuDirectUrl.js",
   "vendor/studentProfileParser.js",
   "vendor/schoolHtmlCharset.js",

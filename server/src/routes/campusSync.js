@@ -64,6 +64,7 @@ function quotaFields(error) {
   const extra = {};
   ["retryAfterSeconds", "dailyLimit", "dailyUsed", "dailyRemaining", "resetAt"].forEach((key) => {
     if (quota[key] != null) extra[key] = quota[key];
+    else if (error && error[key] != null && key === "retryAfterSeconds") extra[key] = error[key];
   });
   return extra;
 }
@@ -77,6 +78,17 @@ function publicError(error) {
   if (code === "TIMEOUT") return { status: 504, code, message: "学校系统暂时没有正常响应，请稍后重新同步。" };
   if (code === "AGENT_OFFLINE") return { status: 503, code, message: "暂时无法连接学校系统，请稍后再试。" };
   if (code === "PROFILE_ID_MISMATCH") return { status: 400, code, message: "读取到的学籍学号与登录学号不一致，已停止同步。" };
+  if (code === "INTERACTIVE_CHALLENGE_REQUIRED") {
+    const retryAfterSeconds = Number(error && error.retryAfterSeconds || 0);
+    return {
+      status: 409,
+      code,
+      message: retryAfterSeconds > 0
+        ? "学校系统刚刚要求额外验证，请稍后再尝试同步。"
+        : "学校系统要求额外安全验证，暂时无法自动同步。",
+      extra: retryAfterSeconds > 0 ? { retryAfterSeconds } : {},
+    };
+  }
   if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED") {
     return { status: 429, code: code === "IMPORT_RATE_LIMITED" ? code : "CAMPUS_SYNC_RATE_LIMITED", message: "操作有些频繁，请稍后再试。", extra: quotaFields(error) };
   }

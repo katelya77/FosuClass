@@ -8,6 +8,16 @@ const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const recentStudentImportService = require("../../services/recentStudentImportService");
 const personalSyncCredentialStore = require("../../services/personalSyncCredentialStore");
+const {
+  PASSWORD_PLACEHOLDER,
+  createPasswordEntry,
+  onPasswordFocus,
+  onPasswordInput,
+  onPasswordBlur,
+  onEyeToggle,
+  releaseEyeHold,
+  resetPasswordEntry,
+} = require("../../services/personalSyncPasswordInput");
 const { applyPersonalSyncFailure } = require("../../services/personalSyncFailureTransition");
 const { assertPersonalSyncRenderableState } = require("../../services/personalSyncRenderableState");
 const {
@@ -50,10 +60,10 @@ function studentPreviewNotice(summary, conflictCount) {
 }
 
 const STUDENT_IMPORT_STEPS = [
-  "正在连接同步服务",
-  "正在验证学校账号",
-  "正在读取个人课表",
-  "正在整理课程",
+  "正在连接同步服务…",
+  "正在验证学校账号…",
+  "正在读取个人课表…",
+  "正在整理课程信息…",
 ];
 
 const STUDENT_PREVIEW_WEEK_MIN = 1;
@@ -921,8 +931,9 @@ Page({
     syncErrorTitle: "",
     syncErrorContent: "",
     passwordInputFocus: false,
-    passwordTyped: false,
-    passwordFieldEpoch: 0,
+    passwordManualEdit: false,
+    passwordFieldAlive: true,
+    passwordPlaceholder: PASSWORD_PLACEHOLDER,
     studentImportConfirming: false,
     passwordVisible: false,
     studentForm: {
@@ -987,6 +998,8 @@ Page({
   },
 
   onLoad(options = {}) {
+    this.passwordEntry = createPasswordEntry();
+    this.pendingPassword = "";
     const settings = getSettings();
     const currentSemesterId = settings.semesterId || settings.semester || getRuntimeTermConfig().term;
     const requestedTab = String(options.tab || "").trim();
@@ -1406,7 +1419,10 @@ Page({
       success: (res) => {
         if (!res.confirm) return;
         personalSyncCredentialStore.remove();
-        this.setData({
+        this.pendingPassword = "";
+        const cleared = resetPasswordEntry(this.passwordEntry || createPasswordEntry());
+        this.passwordEntry = createPasswordEntry();
+        this.setData(Object.assign({
           credentialSaved: false,
           hasSavedPassword: false,
           studentForm: {
@@ -1414,7 +1430,7 @@ Page({
             password: "",
             privacyConfirmed: false,
           },
-        });
+        }, cleared), () => this.restorePasswordField());
       },
     });
   },
@@ -1441,30 +1457,55 @@ Page({
     this.setData({ "studentForm.studentId": value });
   },
 
+  onStudentPasswordFocus() {
+    if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
+    const patch = onPasswordFocus(this.data);
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
   onStudentPasswordInput(event) {
-    this.pendingPassword = String(event.detail.value || "");
-    const typed = Boolean(this.pendingPassword);
-    if (typed !== this.data.passwordTyped || this.data.passwordInputFocus || this.data.syncErrorTitle) {
-      this.setData({
-        passwordTyped: typed,
-        passwordInputFocus: false,
-        syncErrorTitle: "",
-        syncErrorContent: "",
-      });
-    }
+    if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
+    const next = onPasswordInput(this.passwordEntry, event && event.detail);
+    this.pendingPassword = next.pendingPassword;
+  },
+
+  onStudentPasswordBlur() {
+    if (!this.passwordEntry) return;
+    const patch = onPasswordBlur(this.passwordEntry);
+    if (patch) this.setData(patch);
   },
 
   clearTypedPassword() {
+    if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
     this.pendingPassword = "";
-    this.setData({
-      passwordTyped: false,
-      passwordFieldEpoch: (this.data.passwordFieldEpoch || 0) + 1,
-      "studentForm.password": "",
-    });
+    const patch = resetPasswordEntry(this.passwordEntry);
+    this.setData(patch, () => this.restorePasswordField());
+  },
+
+  restorePasswordField() {
+    const apply = () => {
+      if (this.data.passwordFieldAlive) return;
+      this.setData({ passwordFieldAlive: true });
+    };
+    if (typeof wx !== "undefined" && wx.nextTick) wx.nextTick(apply);
+    else apply();
   },
 
   togglePasswordVisible() {
-    this.setData({ passwordVisible: !this.data.passwordVisible });
+    if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
+    const patch = onEyeToggle(this.passwordEntry, this.data);
+    this.setData(patch, () => {
+      const release = () => releaseEyeHold(this.passwordEntry);
+      const settle = () => {
+        if (this.passwordEntry && this.passwordEntry.eyeHold && !this.data.passwordInputFocus) {
+          this.setData({ passwordInputFocus: true }, release);
+          return;
+        }
+        release();
+      };
+      if (typeof wx !== "undefined" && wx.nextTick) wx.nextTick(settle);
+      else settle();
+    });
   },
 
   onStudentPrivacyChange(event) {
@@ -1963,8 +2004,19 @@ Page({
     }
     if (credential) credential.password = "";
     const saved = personalSyncCredentialStore.read();
-    const parsedName = reliableProfileText(preview && preview.profile && preview.profile.studentName);
-    const parsedClass = reliableProfileText(preview && preview.profile && preview.profile.className);
+    const schoolName = reliableProfileText(preview && preview.profile && preview.profile.studentName);
+    const schoolClass = reliableProfileText(preview && preview.profile && preview.profile.className);
+    const cachedQuick = Boolean(
+      credential && credential.quickResync && saved && saved.identityConfirmed
+      && String(saved.studentId || "") === String(studentId || "")
+      && !schoolName && !schoolClass
+    );
+    const parsedName = schoolName || (cachedQuick ? reliableProfileText(saved.confirmedStudentName) : "");
+    const parsedClass = schoolClass || (cachedQuick ? reliableProfileText(saved.confirmedClassName) : "");
+    if (cachedQuick && preview && preview.profile) {
+      preview.profile.studentName = parsedName;
+      preview.profile.className = parsedClass;
+    }
     this.setData({
       credentialSaved: Boolean(saved),
       hasSavedPassword: Boolean(saved && saved.password),
@@ -1995,12 +2047,11 @@ Page({
     }
     if (credential) credential.password = "";
     this.pendingPassword = "";
+    if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
     const saved = personalSyncCredentialStore.read();
-    const patch = Object.assign({}, transition.patch, {
+    const patch = Object.assign({}, transition.patch, resetPasswordEntry(this.passwordEntry), {
       hasSavedPassword: Boolean(saved && saved.password),
       credentialSaved: Boolean(saved && saved.studentId),
-      passwordTyped: false,
-      passwordFieldEpoch: (this.data.passwordFieldEpoch || 0) + 1,
       "studentForm.password": "",
     });
     if (!options || !options.keepSurface) {
@@ -2012,6 +2063,7 @@ Page({
     this.syncModalOpen = true;
     const view = transition.view;
     this.setData(patch, () => {
+      this.restorePasswordField();
       if (!assertPersonalSyncRenderableState(this.data).ok) {
         this.setData({
           activeImportMethod: "method",
@@ -2077,7 +2129,7 @@ Page({
       studentImportSlow: false,
       syncErrorTitle: "",
       syncErrorContent: "",
-      studentImportStatusMessage: "正在读取学校课表…",
+      studentImportStatusMessage: "正在连接同步服务…",
       studentAdvancedMode: false,
       studentAdvancedTabs: [],
       studentActiveBucket: "recommended",
@@ -2098,7 +2150,7 @@ Page({
     const preferredSource = studentScheduleSource.getPreferredSource();
     if (preferredSource === studentScheduleSource.SOURCE.CAMPUS_AGENT) {
       try {
-        this.applyStudentImportJobStatus({ progress: 18, stepIndex: 0, message: "正在连接同步服务" });
+        this.applyStudentImportJobStatus({ progress: 18, stepIndex: 0, message: "正在连接同步服务…" });
         const preview = await studentScheduleSource.readPersonalTimetable({
           source: preferredSource,
           http: {
@@ -2108,10 +2160,19 @@ Page({
           studentId: form.studentId,
           password: plainPassword,
           semester: previewExtra.semester,
+          onProgress: (message) => {
+            const steps = {
+              "正在连接同步服务…": { progress: 18, stepIndex: 0, message },
+              "正在验证学校账号…": { progress: 46, stepIndex: 1, message },
+              "正在读取个人课表…": { progress: 72, stepIndex: 2, message },
+              "正在整理课程信息…": { progress: 88, stepIndex: 3, message },
+            };
+            if (steps[message]) this.applyStudentImportJobStatus(steps[message]);
+          },
         });
         const acceptedPassword = plainPassword;
         plainPassword = "";
-        this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程" });
+        this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程信息…" });
         enteredPreview = this.finishPersonalScheduleRead(preview, {
           studentId: form.studentId,
           password: acceptedPassword,
@@ -2179,7 +2240,7 @@ Page({
       });
       const acceptedPassword = plainPassword;
       plainPassword = "";
-      this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程" });
+        this.applyStudentImportJobStatus({ progress: 88, stepIndex: 3, message: "正在整理课程信息…" });
       noteDirectStage("direct-preview");
       const preview = await request.post("/api/schedule-import/fosu/direct/preview", timetable, {
         showLoading: false,

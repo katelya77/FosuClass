@@ -36,6 +36,20 @@ const {
   setCookieNames,
 } = require("./fosuDirectDiagnostics");
 const { resolveRelativeUrl } = require("./fosuDirectUrl");
+const { RETRY_PAUSE_MS, canRetrySchoolGet } = require("./fosuDirectRetry");
+
+const STAGE_TIMING_KEYS = ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs"];
+
+function measuredStageTimings(source) {
+  const out = {};
+  STAGE_TIMING_KEYS.forEach((key) => {
+    const value = Number(source && source[key]);
+    if (source && Object.prototype.hasOwnProperty.call(source, key) && Number.isFinite(value) && value >= 0 && value < 600000) {
+      out[key] = Math.round(value);
+    }
+  });
+  return out;
+}
 
 const BLOCKED_SCHOOL_HEADERS = /^(cookie|authorization|x-fosu-session|x-fosu-static-ticket|referer|user-agent)$/i;
 const SCHOOL_MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
@@ -251,7 +265,29 @@ function createFosuDirectClient(options) {
     return error;
   }
 
+  function retryPause() {
+    return new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+  }
+
   async function schoolRequest(spec) {
+    try {
+      const response = await schoolRequestOnce(spec);
+      const statusCode = Number(response && response.statusCode || 0);
+      if (canRetrySchoolGet(spec, null, statusCode)) {
+        await retryPause();
+        return schoolRequestOnce(Object.assign({}, spec, { _retried: true }));
+      }
+      return response;
+    } catch (error) {
+      if (canRetrySchoolGet(spec, error, Number(error && error.statusCode || 0))) {
+        await retryPause();
+        return schoolRequestOnce(Object.assign({}, spec, { _retried: true }));
+      }
+      throw error;
+    }
+  }
+
+  async function schoolRequestOnce(spec) {
     const stage = spec.stage || "request";
     const target = targetFromUrl(spec.url);
     let url = "";
@@ -518,28 +554,21 @@ function createFosuDirectClient(options) {
   }
 
   async function fetchProfileDocument() {
-    let attempt = 0;
-    while (attempt < 2) {
-      attempt += 1;
-      try {
-        const followed = await follow({
-          url: PROFILE_URL,
-          method: "GET",
-          responseType: "arraybuffer",
-          timeout: PROFILE_TIMEOUT_MS,
-          stage: "profile-fetch",
-        });
-        const response = followed.response || {};
-        const statusCode = Number(response.statusCode || 0);
-        if (statusCode !== 200) return "";
-        return decodeProfilePage(response.data, headerValue(response, "content-type"));
-      } catch (error) {
-        const transient = error && (error.code === "DIRECT_NETWORK_ERROR" || /timeout/i.test(String(error.code || "")));
-        if (transient && attempt < 2) continue;
-        return "";
-      }
+    try {
+      const followed = await follow({
+        url: PROFILE_URL,
+        method: "GET",
+        responseType: "arraybuffer",
+        timeout: PROFILE_TIMEOUT_MS,
+        stage: "profile-fetch",
+      });
+      const response = followed.response || {};
+      const statusCode = Number(response.statusCode || 0);
+      if (statusCode !== 200) return "";
+      return decodeProfilePage(response.data, headerValue(response, "content-type"));
+    } catch (error) {
+      return "";
     }
-    return "";
   }
 
   async function readStudentProfile(studentId, homeHtml) {
@@ -580,6 +609,8 @@ function createFosuDirectClient(options) {
     let fields = null;
     let encryptedPassword = "";
     let form = "";
+    const timings = {};
+    const flowStarted = Date.now();
     try {
       if (!studentId || !secrets.password) throw directError("INVALID_CREDENTIALS", { stage: "auth-page", transportPhase: "before-request" });
       if (typeof options.onProgress === "function") options.onProgress("cas-bootstrap");
@@ -675,9 +706,16 @@ function createFosuDirectClient(options) {
       });
       const callbackResult = await follow({ url: callback.url, stage: "cas-callback" });
       if (callbackResult.upgraded) httpsUpgraded = true;
-      const home = await follow({ url: XS_MAIN_URL, stage: "xs-main" });
-      const homeHtml = textFromData(home.response && home.response.data);
-      const homeStatus = Number(home.response && home.response.statusCode || 0);
+      let home = callbackResult;
+      let homeHtml = textFromData(home.response && home.response.data);
+      let homeStatus = Number(home.response && home.response.statusCode || 0);
+      const callbackAlreadyHome = String(callbackResult.url || "").indexOf("/framework/xsMain.jsp") >= 0
+        && isAuthenticatedHome(homeHtml, homeStatus);
+      if (!callbackAlreadyHome) {
+        home = await follow({ url: XS_MAIN_URL, stage: "xs-main" });
+        homeHtml = textFromData(home.response && home.response.data);
+        homeStatus = Number(home.response && home.response.statusCode || 0);
+      }
       if (looksLikeLoginPage(homeHtml)) {
         throw directError("INVALID_CREDENTIALS", {
           stage: "xs-main",
@@ -690,66 +728,92 @@ function createFosuDirectClient(options) {
           statusCode: homeStatus,
         });
       }
-      let timetable = await schoolRequest({
-        url: TIMETABLE_URL,
-        method: "GET",
-        responseType: "arraybuffer",
-        stage: "timetable-fetch",
-      });
-      let timetableUrl = TIMETABLE_URL;
-      if ([301, 302, 303, 307, 308].includes(Number(timetable.statusCode || 0))) {
-        const next = resolveSchoolRedirect(TIMETABLE_URL, headerValue(timetable, "location"));
-        if (next.upgraded) httpsUpgraded = true;
-        timetableUrl = next.url;
-        timetable = await schoolRequest({
-          url: timetableUrl,
+      timings.schoolLoginMs = Date.now() - flowStarted;
+      const scheduleTask = (async () => {
+        const started = Date.now();
+        if (typeof options.onProgress === "function") options.onProgress("timetable-fetch");
+        let timetable = await schoolRequest({
+          url: TIMETABLE_URL,
           method: "GET",
           responseType: "arraybuffer",
           stage: "timetable-fetch",
         });
-      }
-      const decodedForSemester = textFromData(timetable.data);
-      const earlyVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
-      if (earlyVerdict !== "AUTHENTICATED_TIMETABLE") {
-        throw directError(earlyVerdict, {
-          stage: "timetable-fetch",
-          statusCode: timetable.statusCode,
-        });
-      }
-      if (semester && decodedForSemester && looksLikeTimetable(decodedForSemester)) {
-        const parsed = parseSemesterOptions(decodedForSemester);
-        const matched = parsed.options.find((item) => item.code === semester || item.code.indexOf(semester) === 0);
-        if (matched && parsed.current !== matched.code) {
+        let timetableUrl = TIMETABLE_URL;
+        if ([301, 302, 303, 307, 308].includes(Number(timetable.statusCode || 0))) {
+          const next = resolveSchoolRedirect(TIMETABLE_URL, headerValue(timetable, "location"));
+          if (next.upgraded) httpsUpgraded = true;
+          timetableUrl = next.url;
           timetable = await schoolRequest({
-            url: TIMETABLE_URL,
-            method: "POST",
-            data: `xnxq01id=${encodeURIComponent(matched.code)}`,
-            header: { "Content-Type": "application/x-www-form-urlencoded" },
+            url: timetableUrl,
+            method: "GET",
             responseType: "arraybuffer",
-            stage: "semester-switch",
+            stage: "timetable-fetch",
           });
-        } else if (!matched && parsed.options.length) {
-          throw directError("SEMESTER_NOT_FOUND", { stage: "semester-switch" });
         }
-      }
-      const finalVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
-      if (finalVerdict !== "AUTHENTICATED_TIMETABLE") {
-        throw directError(finalVerdict, {
-          stage: "timetable-fetch",
-          statusCode: timetable.statusCode,
-        });
-      }
-      const profileHint = await readStudentProfile(studentId, homeHtml);
+        const decodedForSemester = textFromData(timetable.data);
+        const earlyVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
+        if (earlyVerdict !== "AUTHENTICATED_TIMETABLE") {
+          throw directError(earlyVerdict, {
+            stage: "timetable-fetch",
+            statusCode: timetable.statusCode,
+          });
+        }
+        if (semester && decodedForSemester && looksLikeTimetable(decodedForSemester)) {
+          const parsed = parseSemesterOptions(decodedForSemester);
+          const matched = parsed.options.find((item) => item.code === semester || item.code.indexOf(semester) === 0);
+          if (matched && parsed.current !== matched.code) {
+            timetable = await schoolRequest({
+              url: TIMETABLE_URL,
+              method: "POST",
+              data: `xnxq01id=${encodeURIComponent(matched.code)}`,
+              header: { "Content-Type": "application/x-www-form-urlencoded" },
+              responseType: "arraybuffer",
+              stage: "semester-switch",
+            });
+          } else if (!matched && parsed.options.length) {
+            throw directError("SEMESTER_NOT_FOUND", { stage: "semester-switch" });
+          }
+        }
+        const finalVerdict = timetableVerdict(timetable.data, headerValue(timetable, "content-type"), timetableUrl);
+        if (finalVerdict !== "AUTHENTICATED_TIMETABLE") {
+          throw directError(finalVerdict, {
+            stage: "timetable-fetch",
+            statusCode: timetable.statusCode,
+          });
+        }
+        timings.scheduleFetchMs = Date.now() - started;
+        return { timetable, timetableUrl };
+      })();
+      const profileTask = (async () => {
+        const started = Date.now();
+        if (typeof options.onProgress === "function") options.onProgress("profile-fetch");
+        try {
+          return await readStudentProfile(studentId, homeHtml);
+        } finally {
+          timings.profileFetchMs = Date.now() - started;
+        }
+      })();
+      const settled = await Promise.allSettled([scheduleTask, profileTask]);
+      if (settled[0].status === "rejected") throw settled[0].reason;
+      if (settled[1].status === "rejected") throw settled[1].reason;
+      const schedule = settled[0].value;
+      const profileHint = settled[1].value;
+      const timetable = schedule.timetable;
+      const normalizeStarted = Date.now();
       const body = timetable.data;
       const bytes = body instanceof ArrayBuffer ? new Uint8Array(body) : (body instanceof Uint8Array ? body : utf8Fallback(body));
+      const timetableBodyBase64 = bytesToBase64(bytes);
+      timings.normalizeMs = Date.now() - normalizeStarted;
       return {
         source: "client-direct-fosu100",
-        timetableBodyBase64: bytesToBase64(bytes),
+        timetableBodyBase64,
         contentType: headerValue(timetable, "content-type") || "text/html",
         semester,
         profileHint,
+        stageTimings: measuredStageTimings(timings),
       };
     } catch (error) {
+      if (error && typeof error === "object") error.stageTimings = measuredStageTimings(timings);
       noteFailure(error, error && error.stage, error && error.targetHost);
       throw error;
     } finally {

@@ -3,6 +3,7 @@ const SERIES = [
   { key: "success", label: "成功", color: "#14795a", dash: "" },
   { key: "systemFailures", label: "系统失败", color: "#b42318", dash: "5 3" },
   { key: "credentialFailures", label: "凭证失败", color: "#9a5d08", dash: "2 2" },
+  { key: "schoolChallenges", label: "学校验证", color: "#7a4d1f", dash: "4 2" },
   { key: "rateLimited", label: "限流", color: "#3b6ea5", dash: "6 2 2 2" },
 ];
 
