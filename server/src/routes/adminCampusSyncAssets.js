@@ -1,3 +1,10 @@
+const fs = require("fs");
+const path = require("path");
+
+const CAMPUS_SYNC_TREND_SOURCE = fs.readFileSync(path.join(__dirname, "../services/campusSyncTrendChart.js"), "utf8")
+  .replace(/\r\n/g, "\n")
+  .replace(/module\.exports[\s\S]*$/, "");
+
 const CAMPUS_SYNC_STYLES = `
     #section-campus-sync { display: none; gap: 12px; min-width: 0; }
     #section-campus-sync.active { display: grid; }
@@ -17,7 +24,12 @@ const CAMPUS_SYNC_STYLES = `
     #section-campus-sync table { width: 100%; border-collapse: collapse; font-size: 12px; }
     #section-campus-sync th, #section-campus-sync td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
     #section-campus-sync .cs-table-wrap { overflow: auto; max-height: 420px; }
-    #section-campus-sync .cs-chart { width: 100%; height: 180px; }
+    #section-campus-sync .cs-chart-wrap { position: relative; }
+    #section-campus-sync .cs-chart { width: 100%; height: auto; display: block; }
+    #section-campus-sync .cs-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; margin: 8px 0; }
+    #section-campus-sync .cs-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+    #section-campus-sync .cs-swatch { width: 18px; height: 0; border-top-width: 3px; border-top-style: solid; }
+    #section-campus-sync .cs-tip { position: absolute; z-index: 2; min-width: 140px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-primary); font-size: 12px; line-height: 1.45; white-space: pre-line; pointer-events: none; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12); }
     #section-campus-sync .cs-policy { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 10px; }
     #section-campus-sync .cs-policy label, #section-campus-sync .cs-policy div { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
     #section-campus-sync .cs-policy input { height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-primary); padding: 0 8px; }
@@ -77,10 +89,14 @@ const CAMPUS_SYNC_SECTION = `
               <button type="button" class="secondary" data-cs-range="30d">30 天</button>
             </div>
           </div>
-          <svg id="csChart" class="cs-chart" viewBox="0 0 640 180" role="img" aria-label="同步请求趋势"></svg>
+          <div id="csChartLegend" class="cs-legend"></div>
+          <div class="cs-muted">时间：北京时间</div>
+          <div class="cs-chart-wrap">
+            <svg id="csChart" class="cs-chart" viewBox="0 0 720 260" role="img" aria-label="同步请求趋势"></svg>
+            <div id="csChartTip" class="cs-tip" hidden></div>
+          </div>
           <div id="csChartStatus" class="cs-empty">正在加载趋势…</div>
           <div id="csChartEmpty" class="cs-empty" hidden>当前时间范围暂无同步请求</div>
-          <div class="cs-muted">请求量 · 成功 · 系统失败 · 凭证失败 · 限流</div>
         </div>
         <div class="cs-card" id="csPolicyCard">
           <h3>同步策略</h3>
@@ -145,35 +161,48 @@ const CAMPUS_SYNC_SCRIPT = `
           node.textContent = text;
         }
         function csText(value) { return value == null || value === "" ? "-" : String(value); }
+${CAMPUS_SYNC_TREND_SOURCE}
         function csDraw(points) {
           var svg = csNode("csChart");
           var empty = csNode("csChartEmpty");
-          if (!svg) return;
-          var rows = points || [];
-          var total = rows.reduce(function (sum, row) {
-            return sum + (row.attempts || 0) + (row.success || 0) + (row.failed || 0) + (row.systemFailures || 0) + (row.credentialFailures || 0) + (row.rateLimited || 0);
-          }, 0);
-          if (!rows.length || !total) {
+          var legend = csNode("csChartLegend");
+          var tip = csNode("csChartTip");
+          if (!svg || typeof buildCampusSyncTrend !== "function") return;
+          var model = buildCampusSyncTrend(points || [], cs.range || "24h");
+          cs.trendModel = model;
+          svg.setAttribute("viewBox", model.viewBox);
+          if (model.empty) {
             svg.innerHTML = "";
             if (empty) empty.hidden = false;
+            if (legend) legend.innerHTML = "";
+            if (tip) tip.hidden = true;
             return;
           }
           if (empty) empty.hidden = true;
-          var max = 1;
-          rows.forEach(function (row) { max = Math.max(max, row.attempts || 0, row.success || 0, row.systemFailures || 0, row.credentialFailures || 0, row.rateLimited || 0); });
-          function xAt(index) { return rows.length === 1 ? 320 : 20 + (index * 600 / (rows.length - 1)); }
-          function line(key, color) {
-            var path = rows.map(function (row, index) {
-              var y = 160 - ((row[key] || 0) / max) * 140;
-              return (index ? "L" : "M") + xAt(index).toFixed(1) + " " + y.toFixed(1);
-            }).join(" ");
-            var dots = rows.map(function (row, index) {
-              var y = 160 - ((row[key] || 0) / max) * 140;
-              return "<circle cx='" + xAt(index).toFixed(1) + "' cy='" + y.toFixed(1) + "' r='3' fill='" + color + "'/>";
+          svg.innerHTML = model.svg;
+          if (legend) {
+            legend.innerHTML = model.legend.map(function (item) {
+              var style = item.dash ? "border-top-style:dashed;" : "";
+              return "<span><i class='cs-swatch' style='border-top-color:" + item.color + ";" + style + "'></i>" + item.label + "</span>";
             }).join("");
-            return "<path d='" + path + "' fill='none' stroke='" + color + "' stroke-width='1.5'/>" + dots;
           }
-          svg.innerHTML = line("attempts", "currentColor") + line("success", "#14795a") + line("systemFailures", "#b42318") + line("credentialFailures", "#9a5d08") + line("rateLimited", "#3b6ea5");
+        }
+        function csShowTrendTip(index, event) {
+          var tip = csNode("csChartTip");
+          var model = cs.trendModel;
+          if (!tip || !model || !model.points || !model.points[index]) return;
+          var point = model.points[index];
+          var lines = [point.time || ""];
+          (model.legend || []).forEach(function (item) {
+            lines.push(item.label + "：" + (point.values[item.key] || 0));
+          });
+          tip.hidden = false;
+          tip.textContent = lines.filter(Boolean).join("\\n");
+          var wrap = tip.parentNode;
+          if (!wrap || !event) return;
+          var bounds = wrap.getBoundingClientRect();
+          tip.style.left = Math.max(8, event.clientX - bounds.left + 12) + "px";
+          tip.style.top = Math.max(8, event.clientY - bounds.top + 12) + "px";
         }
         function csCards(overview) {
           var host = csNode("csOverview");
@@ -567,6 +596,23 @@ const CAMPUS_SYNC_SCRIPT = `
           var refresh = csNode("csRefreshBtn");
           if (!refresh || refresh.dataset.bound) return;
           refresh.dataset.bound = "1";
+          var chart = csNode("csChart");
+          if (chart) {
+            chart.addEventListener("mousemove", function (event) {
+              var node = event.target;
+              var index = node && node.getAttribute && node.getAttribute("data-i");
+              if (index == null || index === "") {
+                var idle = csNode("csChartTip");
+                if (idle) idle.hidden = true;
+                return;
+              }
+              csShowTrendTip(Number(index), event);
+            });
+            chart.addEventListener("mouseleave", function () {
+              var tip = csNode("csChartTip");
+              if (tip) tip.hidden = true;
+            });
+          }
           refresh.addEventListener("click", function () {
             var label = refresh.textContent;
             refresh.textContent = "正在刷新…";
