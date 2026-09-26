@@ -245,4 +245,9 @@ const disabled = checkCampusEnv("CAMPUS_AGENT_ENABLED=false\n");
 assert.strictEqual(disabled.status, 0);
 fs.unlinkSync(disabled.file);
 
+const route2Example = fs.readFileSync(path.join(root, "deploy", "route2-env.example"), "utf8");
+assert.ok(route2Example.includes("CAMPUS_AGENT_TOKEN=<SET_IN_PRODUCTION>"));
+assert.ok(route2Example.includes("CAMPUS_AGENT_SIGNING_SECRET=<SET_IN_PRODUCTION>"));
+assert.ok(!/CAMPUS_AGENT_(TOKEN|SIGNING_SECRET)=(?!<SET_IN_PRODUCTION>)\S+/.test(route2Example));
+
 console.log("test-deploy-static-env-contract passed");

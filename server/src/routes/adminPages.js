@@ -7108,6 +7108,7 @@ ${SCHEDULE_COLLECTOR_CARD}
         <div id="assistantKbConsole" class="kb-console"></div>
       </section>
 
+${DAILY_KNOWLEDGE_SECTION}
       <section id="section-campus-map" class="section">
         <div class="campus-map-stack">
           <div class="card form-box">
