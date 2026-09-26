@@ -84,6 +84,24 @@ server/data/ai/run-store/
 private.key
 *.private.key
 
+# Local acceptance captures and one-off security reports
+output/personal-sync-311/
+output/public-ready/
+output/admin-campus-sync-acceptance/circuit.png
+output/admin-campus-sync-acceptance/events-failed.png
+output/admin-campus-sync-acceptance/paused.png
+output/admin-campus-sync-acceptance/policy-conflict.png
+output/admin-campus-sync-acceptance/policy-dirty.png
+output/admin-campus-sync-acceptance/policy-save-failed.png
+output/admin-campus-sync-acceptance/policy-save-success.png
+output/admin-campus-sync-acceptance/save-failed.png
+output/admin-campus-sync-acceptance/storage.png
+output/admin-campus-sync-acceptance/trend-failed.png
+output/admin-campus-sync-acceptance/trend-loading.png
+
+# Runtime provider config. Never commit.
+server/storage/secure/
+
 # Local delivery/build scratch files (never part of a submission or deploy)
 /push-*.txt
 /competition/demo-portal/build-log.txt
