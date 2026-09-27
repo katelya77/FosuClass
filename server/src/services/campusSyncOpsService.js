@@ -6,6 +6,7 @@ const telemetry = require("./campusSyncTelemetryService");
 const abuse = require("./campusSyncAbuseGuard");
 const policy = require("./campusSyncPolicyService");
 const quota = require("./campusSyncQuotaStore");
+const challengeCooldown = require("./campusSyncChallengeCooldown");
 const { getSecurityEventSummary } = require("./securityEventService");
 
 let diagnoseAt = 0;
@@ -94,18 +95,28 @@ function queueSafety(p95DurationMs) {
   };
 }
 
+function deploymentShort() {
+  const raw = String(process.env.FOSU_DEPLOY_COMMIT_SHA || process.env.DEPLOY_SHA || "").trim().toLowerCase();
+  return /^[a-f0-9]{7,40}$/.test(raw) ? raw.slice(0, 7) : "";
+}
+
 function recommendation(input) {
   const action = [];
+  const heartbeatAgeMs = Number(input.heartbeatAgeMs);
   if (input.agentOnline === false) action.push("agent_offline");
+  if (Number.isFinite(heartbeatAgeMs) && heartbeatAgeMs > 90000) action.push("heartbeat_stale");
   if (input.circuit === "OPEN") action.push("circuit_open");
   if (Number(input.systemFailureRate) > 15) action.push("system_failure_rate");
   if (input.tailExceedsTtl) action.push("tail_exceeds_ttl");
+  if (Number(input.p95DurationMs) > 15000) action.push("p95_slow");
+  if (input.storageFailed) action.push("storage_failure");
+  if (input.policyInvalid) action.push("policy_invalid");
   if (action.length) return { level: "action", label: "需处理", reasons: action };
   const watch = [];
   if (input.paused) watch.push("paused");
   if (Number(input.systemFailureRate) > 5) watch.push("system_failure_watch");
-  if (Number(input.credentialFailureRate) > 20) watch.push("credential_failure_watch");
-  if (Number(input.rateLimited) > 0) watch.push("rate_limited");
+  const challengeAttempts = Number(input.attempts || 0);
+  if (challengeAttempts >= 8 && Number(input.schoolChallengeRate) >= 30) watch.push("challenge_rate");
   if (watch.length) return { level: "watch", label: "观察", reasons: watch };
   return { level: "normal", label: "正常", reasons: [] };
 }
@@ -127,6 +138,8 @@ function criticalSnapshot() {
       agent: {
         online: metrics.agentOnline,
         lastHeartbeatAgeMs: metrics.lastHeartbeatAge,
+        workerConcurrency: 1,
+        deploymentShort: deploymentShort(),
       },
       queue: {
         queued: metrics.queuedJobs,
@@ -144,9 +157,12 @@ function criticalSnapshot() {
     queueSafety: safety,
     recommendation: recommendation({
       agentOnline: metrics.agentOnline,
+      heartbeatAgeMs: metrics.lastHeartbeatAge,
       circuit: breaker.state,
       paused: maintenance.paused === true,
       tailExceedsTtl: safety.tailExceedsTtl,
+      storageFailed: maintenance.storageStatus === "invalid",
+      policyInvalid: rules.storageStatus === "invalid",
     }),
     policy: {
       rateLimit: rules.rateLimit,
@@ -178,6 +194,8 @@ function overview() {
     agent: {
       online: metrics.agentOnline,
       lastHeartbeatAgeMs: metrics.lastHeartbeatAge,
+      workerConcurrency: 1,
+      deploymentShort: deploymentShort(),
     },
     queue: {
       queued: metrics.queuedJobs,
@@ -205,14 +223,19 @@ function overview() {
     errors: day.errors || {},
     securityPosture: securityPosture(breaker),
     queueSafety: safety,
+    challengeCooldowns: challengeCooldown.activeCount(now),
     recommendation: recommendation({
       agentOnline: metrics.agentOnline,
+      heartbeatAgeMs: metrics.lastHeartbeatAge,
       circuit: breaker.state,
       systemFailureRate: day.systemFailureRate,
-      credentialFailureRate: day.credentialFailureRate,
-      rateLimited: day.rateLimited,
+      attempts: day.attempts,
+      schoolChallengeRate: day.schoolChallengeRate,
+      p95DurationMs: day.stageLatency && day.stageLatency.total ? day.stageLatency.total.p95 : null,
       paused: maintenance.paused === true,
       tailExceedsTtl: safety.tailExceedsTtl,
+      storageFailed: maintenance.storageStatus === "invalid",
+      policyInvalid: policy.snapshot().storageStatus === "invalid",
     }),
   };
 }
@@ -261,29 +284,40 @@ function diagnose() {
   diagnoseAt = now;
   const metrics = broker.metrics();
   const storage = telemetry.storageStats();
+  const rules = policy.snapshot();
+  const maintenance = control.snapshot();
+  const writable = quota.diskWritable();
+  const quotaHealth = quota.health();
   return {
+    name: "Campus Sync Production Diagnostics",
     checkedAt: new Date(now).toISOString(),
+    schoolContact: false,
     miniprogramApi: "ok",
-    broker: control.snapshot().paused ? "maintenance" : "ok",
+    broker: maintenance.paused ? "maintenance" : "ok",
     agentHeartbeat: metrics.agentOnline ? "online" : "offline",
     lastHeartbeatAgeMs: metrics.lastHeartbeatAge,
+    workerConcurrency: 1,
+    queue: metrics.queuedJobs,
+    processing: metrics.processingJobs,
+    circuit: circuit.snapshot(now).state,
+    maintenance: maintenance.paused ? "paused" : "running",
+    policyStorage: rules.storageStatus === "invalid" ? "invalid" : "ok",
+    quotaStorage: quotaHealth && quotaHealth.healthy ? "ok" : "invalid",
+    telemetryStorage: storage.diskBytes > storage.storageCapBytes ? "over-cap" : "ok",
+    writable: writable ? "writable" : "read-only",
+    deployment: deploymentShort(),
+    wyzProtocol: "compatible",
     runtimeConfig: "ok",
     telemetry: {
       queuedWrites: storage.queuedWrites,
       diskBytes: storage.diskBytes,
       storageCapBytes: storage.storageCapBytes,
     },
-    circuit: circuit.snapshot(now).state,
-    queue: {
-      queued: metrics.queuedJobs,
-      processing: metrics.processingJobs,
-      active: metrics.queuedJobs + metrics.processingJobs,
-    },
-    policy: { source: policy.snapshot().source, healthy: true },
-    quota: quota.health(),
-    diskWritable: quota.diskWritable(),
+    policy: { source: rules.source, healthy: rules.storageStatus !== "invalid" },
+    quota: { healthy: quotaHealth.healthy === true },
+    diskWritable: writable,
     lastSuccessAt: metrics.lastSuccessAt,
-    schoolGateway: metrics.lastSuccessAt ? "最近真实任务正常" : "暂无近期真实任务",
+    schoolGateway: "未访问",
   };
 }
 

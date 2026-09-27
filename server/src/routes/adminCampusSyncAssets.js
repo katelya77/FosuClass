@@ -208,21 +208,27 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           var host = csNode("csOverview");
           if (!host || !overview) return;
           var day = overview.window24h || {};
-          var perf = overview.performance || {};
           var agent = overview.agent || {};
           var queue = overview.queue || {};
           var statusLabel = { normal: "正常", busy: "繁忙", degraded: "降级", maintenance: "已暂停", offline: "节点离线" }[overview.status] || overview.status || "-";
+          var advice = overview.recommendation || {};
           var cards = [
             ["同步服务", statusLabel],
+            ["运行判断", advice.label || "-"],
             ["校内同步节点", agent.online ? "在线" : "离线"],
             ["心跳年龄", agent.lastHeartbeatAgeMs == null ? "-" : Math.round(agent.lastHeartbeatAgeMs / 1000) + "s"],
+            ["Worker", String(agent.workerConcurrency || 1)],
+            ["部署版本", agent.deploymentShort || "-"],
             ["Queue / Processing", (queue.queued || 0) + " / " + (queue.processing || 0)],
             ["Active / Cap", (queue.active || 0) + " / " + (queue.cap || 0)],
             ["近24h 请求", day.attempts || 0],
-            ["成功 / 失败", (day.success || 0) + " / " + (day.failed || 0)],
-            ["成功率", (day.successRate || 0) + "%"],
-            ["限流", day.rateLimited || 0],
-            ["Avg / P95", (perf.avgDurationMs || 0) + " / " + (perf.p95DurationMs || 0) + " ms"]
+            ["成功", day.success || 0],
+            ["系统失败", day.systemFailures || 0],
+            ["凭据失败", day.credentialFailures || 0],
+            ["学校安全验证", day.schoolChallenges || 0],
+            ["短周期限流", day.rateLimited || 0],
+            ["每日限制", day.dailyLimited || 0],
+            ["成功率", day.attempts ? ((day.successRate || 0) + "%") : "-"]
           ];
           host.innerHTML = cards.map(function (card) {
             return "<div class='cs-stat'><span>" + card[0] + "</span><b>" + card[1] + "</b></div>";
@@ -297,7 +303,7 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           host.innerHTML = "<table><thead><tr><th>时间</th><th>Job</th><th>Principal</th><th>状态</th><th>等待</th><th>耗时</th><th>课程数</th><th>重试</th><th>结果</th><th>来源</th><th>Request</th></tr></thead><tbody>" +
             rows.map(function (row) {
               return "<tr><td>" + new Date(row.t).toLocaleString() + "</td><td>" + csText(row.jobIdShort) + "</td><td>" + csText(row.principalHashPrefix) +
-                "</td><td>" + csText(row.status) + "</td><td>" + (row.queueWaitMs || 0) + "</td><td>" + (row.durationMs || 0) +
+                "</td><td>" + csText(row.status) + "</td><td>" + csMs(row.queueWaitMs) + "</td><td>" + csMs(row.durationMs) +
                 "</td><td>" + (row.courseCount || 0) + "</td><td>" + (row.retryCount || 0) + "</td><td>" + csText(row.resultCode) +
                 (row.authMode ? "<div class='cs-muted'>Auth mode: " + csText(row.authMode) + "</div>" : "") +
                 "</td><td>" + csText(row.source) + "</td><td>" + csText(row.requestId) + "</td></tr>";
@@ -391,13 +397,22 @@ ${CAMPUS_SYNC_TREND_SOURCE}
             if (!pair || !pair.samples) return "-";
             return (pair.p50 == null ? "-" : pair.p50) + " / " + (pair.p95 == null ? "-" : pair.p95);
           }
-          host.textContent = "成功率 " + (day.successRate || 0) + "% · Total " + csPair(latency.total) +
+          var modes = day.authModes || {};
+          var challengeCount = day.schoolChallenges || 0;
+          var challengeShare = day.attempts ? (day.schoolChallengeRate || 0) + "%" : "-";
+          host.textContent = "成功率 " + (day.attempts ? (day.successRate || 0) + "%" : "-") +
+            " · Total " + csPair(latency.total) +
             " · Queue " + csPair(latency.queue) + " · Login " + csPair(latency.login) +
             " · xskb " + csPair(latency.schedule) + " · Profile " + csPair(latency.profile) +
-            " ms · 系统失败率 " + (day.systemFailureRate || 0) + "% · 凭据失败率 " + (day.credentialFailureRate || 0) +
-            "% · 学校验证挑战 " + (day.schoolChallenges || 0) +
-            " · 限流 " + (day.rateLimited || 0) + " · 最大队列 " + (day.maxQueued || 0) +
-            " · 心跳年龄最大 " + (day.maxHeartbeatAgeMs || 0) + " ms · 最近成功 " + csWhen(overview.performance && overview.performance.lastSuccessAt);
+            " ms · 系统失败率 " + (day.attempts ? (day.systemFailureRate || 0) + "%" : "-") +
+            " · 凭据失败 " + (day.credentialFailures || 0) +
+            " · 学校安全验证 " + challengeCount + " 次 · 占比 " + challengeShare +
+            " · 最近一次 " + (day.lastChallengeAt ? csWhen(day.lastChallengeAt) : "-") +
+            " · 当前 cooldown " + (overview.challengeCooldowns || 0) +
+            " · Auth mode " + (day.lastSuccessAuthMode || "-") +
+            " · 24h mobile " + (modes.mobile || 0) + " / cas " + (modes.cas || 0) +
+            " / authenticated-session " + (modes["authenticated-session"] || 0) +
+            " · 短周期限流 " + (day.rateLimited || 0) + " · 每日限制 " + (day.dailyLimited || 0);
           csRenderSafety(safety, advice);
         }
         function csInt(value) {
@@ -414,6 +429,9 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           if (status === 409) return (error && error.message) || "策略已在其他窗口被修改，请重新加载后再保存。";
           if (status === 503) return "策略文件暂时无法写入（HTTP 503）";
           return "服务器暂时不可用（HTTP " + (status || 0) + "）";
+        }
+        function csMs(value) {
+          return value == null || value === "" ? "-" : String(value);
         }
         function csWhen(value) {
           if (!value) return "-";
@@ -461,10 +479,20 @@ ${CAMPUS_SYNC_TREND_SOURCE}
         function csRenderDiagnose(report) {
           var host = csNode("csDiagnose");
           if (!host || !report) return;
-          host.textContent = "接口正常 · 调度 " + report.broker + " · 节点 " + report.agentHeartbeat +
-            " · 熔断 " + report.circuit + " · 策略 " + ((report.policy && report.policy.source) || "-") +
-            " · 配额 " + ((report.quota && report.quota.healthy) ? "正常" : "异常") +
-            " · 磁盘 " + (report.diskWritable ? "可写" : "不可写") + " · 学校系统 " + (report.schoolGateway || "暂无近期真实任务");
+          host.textContent = "Campus Sync Production Diagnostics · 接口正常 · 调度 " + (report.broker || "-") +
+            " · 节点 " + (report.agentHeartbeat || "-") +
+            " · 心跳 " + (report.lastHeartbeatAgeMs == null ? "-" : Math.round(report.lastHeartbeatAgeMs / 1000) + "s") +
+            " · Worker " + (report.workerConcurrency || 1) +
+            " · 队列 " + (report.queue || 0) + " · 处理中 " + (report.processing || 0) +
+            " · 熔断 " + (report.circuit || "-") +
+            " · 维护 " + (report.maintenance || "-") +
+            " · 策略存储 " + (report.policyStorage || ((report.policy && report.policy.healthy) ? "ok" : "-")) +
+            " · 配额存储 " + (report.quotaStorage || ((report.quota && report.quota.healthy) ? "ok" : "异常")) +
+            " · 遥测存储 " + (report.telemetryStorage || "-") +
+            " · 可写 " + (report.writable || (report.diskWritable ? "writable" : "read-only")) +
+            " · 部署 " + (report.deployment || "-") +
+            " · WYZ 协议 " + (report.wyzProtocol || "-") +
+            " · 学校系统：未访问";
         }
         function csLoadCritical() {
           if (!csActive()) return Promise.resolve();
@@ -488,6 +516,10 @@ ${CAMPUS_SYNC_TREND_SOURCE}
               cs.overview.errors = overview.errors;
               cs.overview.pipeline = overview.pipeline || cs.overview.pipeline;
               cs.overview.securityPosture = overview.securityPosture || cs.overview.securityPosture;
+              cs.overview.recommendation = overview.recommendation;
+              cs.overview.challengeCooldowns = overview.challengeCooldowns || 0;
+              cs.overview.queueSafety = overview.queueSafety;
+              if (overview.agent) cs.overview.agent = overview.agent;
               csCards(cs.overview);
               csRenderPipeline(cs.overview.pipeline);
               csRenderErrors(overview.errors, overview.window24h);

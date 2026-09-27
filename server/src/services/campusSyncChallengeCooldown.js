@@ -32,12 +32,23 @@ function check(ownerKey, now) {
   };
 }
 
+function activeCount(now) {
+  const current = Number(now || Date.now());
+  let count = 0;
+  until.forEach((expires, key) => {
+    if (Number(expires) > current) count += 1;
+    else until.delete(key);
+  });
+  return count;
+}
+
 function resetForTests() {
   until.clear();
 }
 
 module.exports = {
   DEFAULT_COOLDOWN_SECONDS,
+  activeCount,
   check,
   cooldownSeconds,
   note,

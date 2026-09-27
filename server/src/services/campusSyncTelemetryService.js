@@ -38,6 +38,13 @@ function emptyBucket() {
     credentialFailures: 0,
     systemFailures: 0,
     schoolChallenges: 0,
+    dailyLimited: 0,
+    authModeMobile: 0,
+    authModeCas: 0,
+    authModeSession: 0,
+    lastChallengeAt: 0,
+    lastSuccessAt: 0,
+    lastSuccessAuthMode: "",
     durationCount: 0,
     durationSum: 0,
     queueWaitCount: 0,
@@ -136,9 +143,14 @@ function classify(event) {
   return "";
 }
 
+function knownAuthMode(value) {
+  return value === "mobile" || value === "cas" || value === "authenticated-session" ? value : "";
+}
+
 function apply(bucket, event) {
   const kind = classify(event);
   if (!kind) return;
+  const code = String(event.resultCode || event.errorCode || "");
   bucket.attempts += 1;
   if (kind === "success") bucket.success += 1;
   if (kind === "credential") bucket.credentialFailures += 1;
@@ -149,9 +161,19 @@ function apply(bucket, event) {
   }
   if (kind === "timeout") bucket.timeout += 1;
   if (kind === "rate") {
-    bucket.rateLimited += 1;
-    bucket.attempts += 0;
+    if (code === "CAMPUS_SYNC_DAILY_LIMIT") bucket.dailyLimited += 1;
+    else bucket.rateLimited += 1;
   }
+  const mode = knownAuthMode(event.authMode);
+  if (mode === "mobile") bucket.authModeMobile += 1;
+  else if (mode === "cas") bucket.authModeCas += 1;
+  else if (mode === "authenticated-session") bucket.authModeSession += 1;
+  const at = Number(event.t) || 0;
+  if (kind === "success" && at >= Number(bucket.lastSuccessAt || 0)) {
+    bucket.lastSuccessAt = at;
+    bucket.lastSuccessAuthMode = mode;
+  }
+  if (kind === "challenge" && at >= Number(bucket.lastChallengeAt || 0)) bucket.lastChallengeAt = at;
   if (kind === "busy") bucket.busy += 1;
   if (event.durationMs != null) addDuration(bucket, event.durationMs);
   if (event.queueWaitMs != null) {
@@ -175,7 +197,7 @@ function apply(bucket, event) {
 
 function record(event) {
   const item = Object.assign({ t: Date.now() }, event || {});
-  ["password", "studentId", "studentName", "className", "openid", "cookie", "ticket", "wxCode", "authorization", "html", "casHtml"].forEach((key) => {
+  ["password", "studentId", "studentName", "className", "openid", "cookie", "ticket", "wxCode", "authorization", "html", "casHtml", "execution", "pwdEncryptSalt", "casUrl", "loginUrl"].forEach((key) => {
     delete item[key];
   });
   if (item.authMode !== "mobile" && item.authMode !== "cas" && item.authMode !== "authenticated-session") delete item.authMode;
@@ -307,9 +329,14 @@ function mergeBuckets(list) {
   const merged = emptyBucket();
   list.forEach((bucket) => {
     if (!bucket) return;
-    ["attempts", "success", "failed", "rateLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
+    ["attempts", "success", "failed", "rateLimited", "dailyLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "authModeMobile", "authModeCas", "authModeSession", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
       merged[key] += Number(bucket[key] || 0);
     });
+    if (Number(bucket.lastChallengeAt || 0) > merged.lastChallengeAt) merged.lastChallengeAt = Number(bucket.lastChallengeAt || 0);
+    if (Number(bucket.lastSuccessAt || 0) >= merged.lastSuccessAt) {
+      merged.lastSuccessAt = Number(bucket.lastSuccessAt || 0);
+      merged.lastSuccessAuthMode = knownAuthMode(bucket.lastSuccessAuthMode);
+    }
     merged.maxQueued = Math.max(merged.maxQueued, Number(bucket.maxQueued || 0));
     merged.maxHeartbeatAgeMs = Math.max(merged.maxHeartbeatAgeMs, Number(bucket.maxHeartbeatAgeMs || 0));
     ["histogram", "queueHistogram", "loginHistogram", "scheduleHistogram", "profileHistogram"].forEach((key) => {
@@ -351,6 +378,8 @@ function publicBucket(bucket) {
       next[key] = EDGES.map((edge, index) => Number(bucket[key] && bucket[key][index] || 0));
     } else if (key === "errors" && bucket.errors && typeof bucket.errors === "object") {
       Object.keys(bucket.errors).forEach((code) => { next.errors[String(code).slice(0, 64)] = Number(bucket.errors[code] || 0); });
+    } else if (key === "lastSuccessAuthMode") {
+      next[key] = knownAuthMode(bucket.lastSuccessAuthMode);
     } else if (key !== "errors") next[key] = Number(bucket[key] || 0);
   });
   return next;
@@ -444,6 +473,7 @@ function summarize(bucket) {
     success,
     failed: bucket.failed || 0,
     rateLimited: bucket.rateLimited || 0,
+    dailyLimited: bucket.dailyLimited || 0,
     busy: bucket.busy || 0,
     timeout: bucket.timeout || 0,
     credentialFailures: credential,
@@ -453,10 +483,17 @@ function summarize(bucket) {
     systemFailureRate: relevant ? Math.round((system / relevant) * 1000) / 10 : 0,
     credentialFailureRate: attempts ? Math.round((credential / attempts) * 1000) / 10 : 0,
     schoolChallengeRate: attempts ? Math.round((school / attempts) * 1000) / 10 : 0,
-    avgDurationMs: bucket.durationCount ? Math.round(bucket.durationSum / bucket.durationCount) : 0,
-    p50DurationMs: percentile(bucket, 0.5),
-    p95DurationMs: percentile(bucket, 0.95),
-    p99DurationMs: percentile(bucket, 0.99),
+    authModes: {
+      mobile: bucket.authModeMobile || 0,
+      cas: bucket.authModeCas || 0,
+      "authenticated-session": bucket.authModeSession || 0,
+    },
+    lastSuccessAuthMode: knownAuthMode(bucket.lastSuccessAuthMode),
+    lastChallengeAt: bucket.lastChallengeAt || 0,
+    avgDurationMs: bucket.durationCount ? Math.round(bucket.durationSum / bucket.durationCount) : null,
+    p50DurationMs: bucket.durationCount ? percentile(bucket, 0.5) : null,
+    p95DurationMs: bucket.durationCount ? percentile(bucket, 0.95) : null,
+    p99DurationMs: bucket.durationCount ? percentile(bucket, 0.99) : null,
     queueWaitP95Ms: bucket.queueWaitCount ? Math.round(bucket.queueWaitSum / bucket.queueWaitCount) : 0,
     stageLatency: {
       total: latencyPair(bucket.histogram, bucket.durationCount),

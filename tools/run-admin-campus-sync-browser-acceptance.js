@@ -173,6 +173,24 @@ async function run() {
     if (mode === "trend-failed") await pageHandle.waitForFunction(() => document.getElementById("csChartStatus").textContent.indexOf("趋势暂时无法刷新") >= 0);
     if (mode === "events-failed") await pageHandle.waitForFunction(() => document.getElementById("csEventsStatus").textContent.indexOf("刷新失败") >= 0);
     await pageHandle.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: true });
+    if (name === "offline") {
+      const agent = await pageHandle.evaluate(() => {
+        const cards = Array.from(document.querySelectorAll("#csOverview .cs-stat"));
+        const read = (label) => {
+          const card = cards.find((node) => node.querySelector("span") && node.querySelector("span").textContent === label);
+          return card && card.querySelector("b") ? card.querySelector("b").textContent : "";
+        };
+        return { node: read("校内同步节点"), age: read("心跳年龄") };
+      });
+      if (agent.node !== "离线") throw new Error("offline agent card missing");
+      if (agent.age !== "-") throw new Error("missing heartbeat rendered as a duration");
+    }
+    if (name === "empty") {
+      await pageHandle.waitForFunction(() => {
+        const text = document.getElementById("csObservation").textContent || "";
+        return text.indexOf("Total -") >= 0 && text.indexOf("Queue -") >= 0 && text.indexOf("Login -") >= 0;
+      });
+    }
     if (name === "paused") {
       const banner = await pageHandle.textContent("#csMaintenanceBanner");
       const service = await pageHandle.textContent("#csServiceBadge");
