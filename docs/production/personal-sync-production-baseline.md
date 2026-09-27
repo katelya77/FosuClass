@@ -14,7 +14,7 @@ This file records the verified Route 2 production state after the real WYZ succe
 | Deploy run that published this Oracle commit | `36258490085` |
 | Real acceptance | Operator confirmed `job-claimed`, `profile-fetched status=ok`, `job-finished code=OK status=200` on the installed WYZ node |
 
-Oracle and the installed WYZ bundle are the same commit. An older agent that omits `authMode` can still finish a job. The installed agent sends the optional enum `mobile`, `cas`, or `authenticated-session`.
+The school-login code in Oracle and the installed WYZ bundle is the same commit, `6b89a688`. Later Oracle-only admin deploys do not change that agent. Heartbeat does not carry a WYZ commit, so the admin page shows the Oracle short sha separately and shows WYZ version as not reported. An older agent that omits `authMode` can still finish a job. The installed agent sends the optional enum `mobile`, `cas`, or `authenticated-session`.
 
 ## Route 2
 

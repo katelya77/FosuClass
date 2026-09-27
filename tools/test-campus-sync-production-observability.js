@@ -135,6 +135,8 @@ function run() {
   assert.ok(assets.includes("if (!pair || !pair.samples) return \"-\""));
   assert.ok(assets.includes("Auth mode"));
   assert.ok(assets.includes("学校安全验证"));
+  assert.ok(assets.includes("WYZ 版本"));
+  assert.ok(assets.includes("未上报"));
   const snapshotSource = assets.slice(assets.indexOf("function csLoadCritical"), assets.indexOf("function csLoadWindow"));
   assert.ok(snapshotSource.includes("/snapshot"));
   assert.ok(!snapshotSource.includes("timeseries"));
