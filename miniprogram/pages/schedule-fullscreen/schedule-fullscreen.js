@@ -13,7 +13,7 @@ const {
 Page({
   data: {
     title: "周课表",
-    headerTop: 64,
+    headerTop: 24,
     currentWeek: 1,
     totalWeeks: TOTAL_WEEKS,
     weekRangeText: "",
@@ -37,7 +37,9 @@ Page({
     const info = wx.getSystemInfoSync();
     const menu = typeof wx.getMenuButtonBoundingClientRect === "function"
       ? wx.getMenuButtonBoundingClientRect() : null;
-    this.setData({ headerTop: menu && menu.bottom ? menu.bottom + 4 : (info.statusBarHeight || 24) + 40 });
+    // 自定义导航栏与右上角胶囊处于同一行；只避开系统状态栏。
+    const statusBarHeight = Number(info.statusBarHeight) || (menu && menu.top ? Math.max(0, menu.top - 8) : 24);
+    this.setData({ headerTop: statusBarHeight });
     const channel = this.getOpenerEventChannel();
     if (channel && typeof channel.on === "function") {
       channel.on("schedule", (payload) => {

@@ -77,7 +77,18 @@ function testFullscreenWeekGestures() {
     on: (_, fn) => { receiver = fn; },
     emit: (name, detail) => sent.push({ name, detail }),
   });
-  fullscreen.onLoad();
+  const getSystemInfoSync = wx.getSystemInfoSync;
+  const getMenuButtonBoundingClientRect = wx.getMenuButtonBoundingClientRect;
+  wx.getSystemInfoSync = () => ({ statusBarHeight: 48 });
+  wx.getMenuButtonBoundingClientRect = () => ({ top: 56, bottom: 88 });
+  try {
+    fullscreen.onLoad();
+  } finally {
+    wx.getSystemInfoSync = getSystemInfoSync;
+    wx.getMenuButtonBoundingClientRect = getMenuButtonBoundingClientRect;
+  }
+  assert.strictEqual(fullscreen.data.headerTop, 48,
+    "fullscreen toolbar should align with the capsule instead of leaving a second navigation-row gap");
   receiver({ title: "课表预览", week: 2, target: { type: "class", name: "测试班级" }, courses: [] });
   assert.strictEqual(fullscreen.data.currentWeek, 2);
   fullscreen.onScheduleTouchStart({ touches: [{ clientX: 280, clientY: 200 }] });
