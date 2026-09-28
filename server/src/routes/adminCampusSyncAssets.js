@@ -306,6 +306,7 @@ ${CAMPUS_SYNC_TREND_SOURCE}
               return "<tr><td>" + new Date(row.t).toLocaleString() + "</td><td>" + csText(row.jobIdShort) + "</td><td>" + csText(row.principalHashPrefix) +
                 "</td><td>" + csText(row.status) + "</td><td>" + csMs(row.queueWaitMs) + "</td><td>" + csMs(row.durationMs) +
                 "</td><td>" + (row.courseCount || 0) + "</td><td>" + (row.retryCount || 0) + "</td><td>" + csText(row.resultCode) +
+                (row.challengeReason ? "<div class='cs-muted'>" + csText(row.challengeReason) + "</div>" : "") +
                 (row.authMode ? "<div class='cs-muted'>Auth mode: " + csText(row.authMode) + "</div>" : "") +
                 "</td><td>" + csText(row.source) + "</td><td>" + csText(row.requestId) + "</td></tr>";
             }).join("") + "</tbody></table>";
@@ -401,6 +402,7 @@ ${CAMPUS_SYNC_TREND_SOURCE}
           var modes = day.authModes || {};
           var challengeCount = day.schoolChallenges || 0;
           var challengeShare = day.attempts ? (day.schoolChallengeRate || 0) + "%" : "-";
+          var reasons = day.challengeReasons || {};
           host.textContent = "成功率 " + (day.attempts ? (day.successRate || 0) + "%" : "-") +
             " · Total " + csPair(latency.total) +
             " · Queue " + csPair(latency.queue) + " · Login " + csPair(latency.login) +
@@ -408,6 +410,9 @@ ${CAMPUS_SYNC_TREND_SOURCE}
             " ms · 系统失败率 " + (day.attempts ? (day.systemFailureRate || 0) + "%" : "-") +
             " · 凭据失败 " + (day.credentialFailures || 0) +
             " · 学校安全验证 " + challengeCount + " 次 · 占比 " + challengeShare +
+            " · prelogin-captcha " + (reasons["prelogin-captcha"] || 0) +
+            " · postlogin-challenge " + (reasons["postlogin-challenge"] || 0) +
+            " · risk-control " + (reasons["risk-control"] || 0) +
             " · 最近一次 " + (day.lastChallengeAt ? csWhen(day.lastChallengeAt) : "-") +
             " · 当前 cooldown " + (overview.challengeCooldowns || 0) +
             " · Auth mode " + (day.lastSuccessAuthMode || "-") +

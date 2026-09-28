@@ -13,6 +13,7 @@ const { createCookieJar } = require("./fosuDirectCookieJar");
 const { encryptFosuPassword } = require("./fosuDirectPasswordCrypto");
 const {
   captchaRequiredFromCheck,
+  challengeReasonFromPage,
   classifyLoginPage,
   hasTicket,
   isAuthenticatedHome,
@@ -196,8 +197,25 @@ function classifyAuthDocument(html, statusCode, pageUrl) {
     if (host === "100.fosu.edu.cn") return { authMode: "mobile", fields, postUrl };
     return { authMode: "" };
   }
-  if (classifyLoginPage(html) === "INTERACTIVE_CHALLENGE_REQUIRED") return { authMode: "challenge" };
+  if (classifyLoginPage(html) === "INTERACTIVE_CHALLENGE_REQUIRED") {
+    return { authMode: "challenge", challengeReason: challengeReasonFromPage(html, "before-password") };
+  }
   return { authMode: "" };
+}
+
+function throwPostedLoginResult(postedHtml, statusCode) {
+  const code = classifyLoginPage(postedHtml);
+  if (code === "INTERACTIVE_CHALLENGE_REQUIRED") {
+    throw directError(code, {
+      stage: "login-post",
+      statusCode,
+      challengeReason: challengeReasonFromPage(postedHtml, "after-password"),
+    });
+  }
+  if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") {
+    throw directError("INVALID_CREDENTIALS", { stage: "login-post", statusCode });
+  }
+  throw directError("AUTH_PAGE_CHANGED", { stage: "login-post", statusCode });
 }
 
 function createFosuDirectClient(options) {
@@ -686,7 +704,11 @@ function createFosuDirectClient(options) {
             stage: "captcha-check",
           });
           if (captchaRequiredFromCheck(textFromData(captcha.data) || captcha.data)) {
-            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "captcha-check", statusCode: captcha.statusCode });
+            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", {
+              stage: "captcha-check",
+              statusCode: captcha.statusCode,
+              challengeReason: "prelogin-captcha",
+            });
           }
         }
         encryptedPassword = await encryptFosuPassword(secrets.password, fields.pwdEncryptSalt);
@@ -729,8 +751,7 @@ function createFosuDirectClient(options) {
           throw directError("REDIRECT_LOCATION_MISSING", { stage: "login-post", statusCode });
         }
         if (!isRedirectStatus(statusCode) || !location) {
-          const code = classifyLoginPage(postedHtml) || "LOGIN_REJECTED";
-          throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
+          throwPostedLoginResult(postedHtml, statusCode);
         }
         let callback;
         try {
@@ -741,8 +762,7 @@ function createFosuDirectClient(options) {
           throw error;
         }
         if (!hasTicket(location) && !isHomePath(callback.path)) {
-          const code = classifyLoginPage(postedHtml) || "LOGIN_REJECTED";
-          throw directError(code === "LOGIN_REJECTED" ? "INVALID_CREDENTIALS" : code, { stage: "login-post", statusCode });
+          throwPostedLoginResult(postedHtml, statusCode);
         }
         if (callback.upgraded) httpsUpgraded = true;
         secrets.ticket = "";
@@ -765,7 +785,10 @@ function createFosuDirectClient(options) {
         }
       };
       if (boot.authMode === "challenge") {
-        throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "cas-bootstrap" });
+        throw directError("INTERACTIVE_CHALLENGE_REQUIRED", {
+          stage: "cas-bootstrap",
+          challengeReason: boot.challengeReason || "prelogin-captcha",
+        });
       }
       if (boot.authMode === "authenticated-session" && boot.html) {
         acceptHome({ response: boot.response, url: boot.url });
@@ -800,7 +823,11 @@ function createFosuDirectClient(options) {
           const classified = classifyAuthDocument(html, loginStatus, loginPage.url);
           if (classified.authMode === "authenticated-session") acceptHome(loginPage);
           else if (classified.authMode === "challenge") {
-            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", { stage: "auth-page", statusCode: loginStatus });
+            throw directError("INTERACTIVE_CHALLENGE_REQUIRED", {
+              stage: "auth-page",
+              statusCode: loginStatus,
+              challengeReason: classified.challengeReason || "prelogin-captcha",
+            });
           } else if (classified.authMode !== "cas" && classified.authMode !== "mobile") {
             throw directError("AUTH_PAGE_CHANGED", {
               stage: "auth-page",

@@ -38,6 +38,9 @@ function emptyBucket() {
     credentialFailures: 0,
     systemFailures: 0,
     schoolChallenges: 0,
+    challengePreloginCaptcha: 0,
+    challengePostlogin: 0,
+    challengeRiskControl: 0,
     dailyLimited: 0,
     authModeMobile: 0,
     authModeCas: 0,
@@ -147,6 +150,10 @@ function knownAuthMode(value) {
   return value === "mobile" || value === "cas" || value === "authenticated-session" ? value : "";
 }
 
+function knownChallengeReason(value) {
+  return value === "prelogin-captcha" || value === "postlogin-challenge" || value === "risk-control" ? value : "";
+}
+
 function apply(bucket, event) {
   const kind = classify(event);
   if (!kind) return;
@@ -154,7 +161,13 @@ function apply(bucket, event) {
   bucket.attempts += 1;
   if (kind === "success") bucket.success += 1;
   if (kind === "credential") bucket.credentialFailures += 1;
-  if (kind === "challenge") bucket.schoolChallenges += 1;
+  if (kind === "challenge") {
+    bucket.schoolChallenges += 1;
+    const reason = knownChallengeReason(event.challengeReason);
+    if (reason === "prelogin-captcha") bucket.challengePreloginCaptcha += 1;
+    else if (reason === "postlogin-challenge") bucket.challengePostlogin += 1;
+    else if (reason === "risk-control") bucket.challengeRiskControl += 1;
+  }
   if (kind === "system" || kind === "timeout") {
     bucket.failed += 1;
     bucket.systemFailures += 1;
@@ -201,6 +214,8 @@ function record(event) {
     delete item[key];
   });
   if (item.authMode !== "mobile" && item.authMode !== "cas" && item.authMode !== "authenticated-session") delete item.authMode;
+  if (!knownChallengeReason(item.challengeReason)) delete item.challengeReason;
+  else item.challengeReason = knownChallengeReason(item.challengeReason);
   if (item.stageTimings && typeof item.stageTimings === "object") {
     ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs", "previewBuildMs"].forEach((key) => {
       const value = Number(item.stageTimings[key]);
@@ -329,7 +344,7 @@ function mergeBuckets(list) {
   const merged = emptyBucket();
   list.forEach((bucket) => {
     if (!bucket) return;
-    ["attempts", "success", "failed", "rateLimited", "dailyLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "authModeMobile", "authModeCas", "authModeSession", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
+    ["attempts", "success", "failed", "rateLimited", "dailyLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "challengePreloginCaptcha", "challengePostlogin", "challengeRiskControl", "authModeMobile", "authModeCas", "authModeSession", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
       merged[key] += Number(bucket[key] || 0);
     });
     if (Number(bucket.lastChallengeAt || 0) > merged.lastChallengeAt) merged.lastChallengeAt = Number(bucket.lastChallengeAt || 0);
@@ -479,6 +494,11 @@ function summarize(bucket) {
     credentialFailures: credential,
     systemFailures: system,
     schoolChallenges: school,
+    challengeReasons: {
+      "prelogin-captcha": bucket.challengePreloginCaptcha || 0,
+      "postlogin-challenge": bucket.challengePostlogin || 0,
+      "risk-control": bucket.challengeRiskControl || 0,
+    },
     successRate: relevant ? Math.round((success / relevant) * 1000) / 10 : (success ? 100 : 0),
     systemFailureRate: relevant ? Math.round((system / relevant) * 1000) / 10 : 0,
     credentialFailureRate: attempts ? Math.round((credential / attempts) * 1000) / 10 : 0,
@@ -553,7 +573,7 @@ function listRecent(options) {
 }
 
 function publicEvent(item) {
-  return {
+  const view = {
     t: item.t,
     jobIdShort: String(item.jobId || "").slice(0, 8),
     principalHashPrefix: String(item.principalHashPrefix || item.ownerKey || "").slice(0, 8),
@@ -574,6 +594,9 @@ function publicEvent(item) {
     source: item.source || "campus-sync",
     requestId: String(item.requestId || "").slice(0, 32),
   };
+  const reason = knownChallengeReason(item.challengeReason);
+  if (reason) view.challengeReason = reason;
+  return view;
 }
 
 function storageStats() {

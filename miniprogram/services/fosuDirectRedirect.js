@@ -1,6 +1,8 @@
 const { ALLOWED_HOSTS, HTTPS_UPGRADE_HOSTS, MAX_REDIRECTS } = require("./fosuDirectConfig");
 const { resolveRelativeUrl, splitUrl } = require("./fosuDirectUrl");
 
+const CHALLENGE_REASONS = new Set(["prelogin-captcha", "postlogin-challenge", "risk-control"]);
+
 function directError(code, details) {
   const error = new Error(code);
   const info = details || {};
@@ -8,6 +10,7 @@ function directError(code, details) {
   const normalized = code === "UNTRUSTED_REDIRECT" && !host ? "REDIRECT_LOCATION_MISSING" : code;
   error.message = normalized;
   error.code = normalized;
+  if (CHALLENGE_REASONS.has(info.challengeReason)) error.challengeReason = info.challengeReason;
   error.stage = info.stage || "";
   error.statusCode = info.statusCode || 0;
   error.locationHost = host;

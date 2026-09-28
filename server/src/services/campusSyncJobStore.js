@@ -91,6 +91,7 @@ function createMemoryCampusSyncJobStore(hooks) {
           requestId: job.requestId || "",
           source: job.source || "campus-sync",
           authMode: job.authMode || "",
+          challengeReason: job.challengeReason === "prelogin-captcha" || job.challengeReason === "postlogin-challenge" || job.challengeReason === "risk-control" ? job.challengeReason : "",
         },
         now,
       });
@@ -211,6 +212,11 @@ function createMemoryCampusSyncJobStore(hooks) {
       const job = jobs.get(jobId);
       if (!job) return;
       if (value === "mobile" || value === "cas" || value === "authenticated-session") job.authMode = value;
+    },
+    rememberChallengeReason(jobId, value) {
+      const job = jobs.get(jobId);
+      if (!job) return;
+      if (value === "prelogin-captcha" || value === "postlogin-challenge" || value === "risk-control") job.challengeReason = value;
     },
     rememberTimings(jobId, timings) {
       const job = jobs.get(jobId);

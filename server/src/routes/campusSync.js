@@ -80,13 +80,18 @@ function publicError(error) {
   if (code === "PROFILE_ID_MISMATCH") return { status: 400, code, message: "读取到的学籍学号与登录学号不一致，已停止同步。" };
   if (code === "INTERACTIVE_CHALLENGE_REQUIRED") {
     const retryAfterSeconds = Number(error && error.retryAfterSeconds || 0);
+    const extra = {};
+    if (retryAfterSeconds > 0) extra.retryAfterSeconds = retryAfterSeconds;
+    if (error && (error.challengeReason === "prelogin-captcha" || error.challengeReason === "postlogin-challenge" || error.challengeReason === "risk-control")) {
+      extra.challengeReason = error.challengeReason;
+    }
     return {
       status: 409,
       code,
       message: retryAfterSeconds > 0
-        ? "学校系统刚刚要求额外验证，请稍后再尝试同步。"
-        : "学校系统要求额外安全验证，暂时无法自动同步。",
-      extra: retryAfterSeconds > 0 ? { retryAfterSeconds } : {},
+        ? "学校系统刚刚要求额外安全验证。为避免频繁请求，个人课表同步暂时暂停。"
+        : "学校系统当前要求额外安全验证，暂时无法自动完成同步。",
+      extra,
     };
   }
   if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED") {

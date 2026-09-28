@@ -58,12 +58,31 @@ function captchaRequiredFromCheck(payload) {
   return data.isNeed === true || data.isNeed === "true" || data.needCaptcha === true || data.needCaptcha === "true";
 }
 
+function visibleLoginText(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+const CREDENTIAL_FAILURE = /密码错误|密码有误|密码不正确|用户名或密码错误|用户名或密码有误|账号或密码错误|账号或密码有误|账号密码错误|认证失败|登录失败|用户名不存在|用户不存在/;
+const EXPLICIT_CHALLENGE = /验证码|滑块|拼图|人机验证|风险验证|风险控制|安全验证/;
+
 function classifyLoginPage(html) {
-  const text = String(html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-  if (/验证码|滑块|拼图|人机验证|安全验证/.test(text)) return "INTERACTIVE_CHALLENGE_REQUIRED";
-  if (/密码错误|用户名或密码|账号或密码|认证失败/.test(text)) return "INVALID_CREDENTIALS";
-  if (/name=["']username["']/i.test(html) && /name=["']password["']/i.test(html)) return "LOGIN_REJECTED";
+  const source = String(html || "");
+  const text = visibleLoginText(source);
+  if (CREDENTIAL_FAILURE.test(text)) return "INVALID_CREDENTIALS";
+  if (EXPLICIT_CHALLENGE.test(text)) return "INTERACTIVE_CHALLENGE_REQUIRED";
+  if (/name=["']username["']/i.test(source) && /name=["']password["']/i.test(source)) return "LOGIN_REJECTED";
   return "";
+}
+
+function challengeReasonFromPage(html, when) {
+  const text = visibleLoginText(html);
+  if (/风险验证|风险控制/.test(text)) return "risk-control";
+  if (when === "before-password") return "prelogin-captcha";
+  return "postlogin-challenge";
 }
 
 function hasTicket(location) {
@@ -136,6 +155,7 @@ function maskStudentId(studentId) {
 
 module.exports = {
   captchaRequiredFromCheck,
+  challengeReasonFromPage,
   classifyLoginPage,
   hasTicket,
   isAuthenticatedHome,

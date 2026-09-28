@@ -16,7 +16,9 @@ const store = createMemoryCampusSyncJobStore({
       circuit.observe(code, info && info.now);
     try { quota.noteTerminal(job.status); } catch (error) {}
     try { control.persistCircuit(); } catch (error) {}
-    if (code === "INTERACTIVE_CHALLENGE_REQUIRED") challengeCooldown.note(job.ownerKey, info && info.now || Date.now());
+    if (code === "INTERACTIVE_CHALLENGE_REQUIRED") {
+      challengeCooldown.note(job.ownerKey, info && info.now || Date.now(), job.challengeReason || "");
+    }
     telemetry.record({
       t: info && info.now || Date.now(),
       jobId: job.jobId,
@@ -24,6 +26,7 @@ const store = createMemoryCampusSyncJobStore({
       principalHashPrefix: String(job.ownerKey || "").slice(0, 8),
       status: job.status,
       resultCode: code === "OK" ? "OK" : (job.errorCode || code),
+      challengeReason: job.challengeReason || "",
       queueWaitMs: job.queueWaitMs || 0,
       durationMs: job.createdAt ? Math.max(0, (job.completedAt || info.now || Date.now()) - job.createdAt) : 0,
       jobQueuedAt: job.jobQueuedAt || job.createdAt || 0,
@@ -50,13 +53,16 @@ function ownerKeyFromRequest(req) {
 
 function publicJob(job) {
   const stage = ["connecting", "verifying", "reading", "organizing"].indexOf(job.stage) >= 0 ? job.stage : "";
-  return {
+  const view = {
     jobId: job.jobId,
     status: job.status,
     stage,
     errorCode: job.status === "failed" || job.status === "expired" ? job.errorCode || "TIMEOUT" : "",
     preview: job.status === "completed" ? rejectSecrets(job.preview) : null,
   };
+  const reason = job.status === "failed" ? challengeCooldown.publicChallengeReason(job.challengeReason) : "";
+  if (reason) view.challengeReason = reason;
+  return view;
 }
 
 function deliverWaiter() {
@@ -109,6 +115,7 @@ function createJob(req, body) {
       t: now,
       status: "failed",
       resultCode: "INTERACTIVE_CHALLENGE_REQUIRED",
+      challengeReason: cooled.reason || "",
       ownerKey,
       principalHashPrefix: String(ownerKey || "").slice(0, 8),
       source: "campus-sync",
@@ -116,6 +123,7 @@ function createJob(req, body) {
     const error = new Error("INTERACTIVE_CHALLENGE_REQUIRED");
     error.code = "INTERACTIVE_CHALLENGE_REQUIRED";
     error.retryAfterSeconds = cooled.retryAfterSeconds;
+    if (cooled.reason) error.challengeReason = cooled.reason;
     throw error;
   }
   try {
@@ -192,6 +200,7 @@ function finishJob(jobId, body) {
   }
   if (body && body.stageTimings) store.rememberTimings(jobId, body.stageTimings);
   if (body && body.authMode) store.rememberAuthMode(jobId, body.authMode);
+  if (body && body.challengeReason) store.rememberChallengeReason(jobId, body.challengeReason);
   if (!body || body.success !== true) {
     store.fail(jobId, body && body.code || "AGENT_OFFLINE", Date.now());
     safeLog("campus-sync-job-failed", { jobId, code: body && body.code || "AGENT_OFFLINE" });

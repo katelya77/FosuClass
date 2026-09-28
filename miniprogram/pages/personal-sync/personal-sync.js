@@ -1484,8 +1484,18 @@ Page({
 
   restorePasswordField() {
     const apply = () => {
-      if (this.data.passwordFieldAlive) return;
-      this.setData({ passwordFieldAlive: true });
+      const focus = this._reenterPasswordFocus === true;
+      if (this.data.passwordFieldAlive) {
+        if (!focus) return;
+        this._reenterPasswordFocus = false;
+        this.setData({ passwordInputFocus: false }, () => this.setData({ passwordInputFocus: true }));
+        return;
+      }
+      this.setData({ passwordFieldAlive: true, passwordInputFocus: false }, () => {
+        if (!focus) return;
+        this._reenterPasswordFocus = false;
+        this.setData({ passwordInputFocus: true });
+      });
     };
     if (typeof wx !== "undefined" && wx.nextTick) wx.nextTick(apply);
     else apply();
@@ -2047,6 +2057,7 @@ Page({
     }
     if (credential) credential.password = "";
     this.pendingPassword = "";
+    this._reenterPasswordFocus = transition.view.action === "reenter-password";
     if (!this.passwordEntry) this.passwordEntry = createPasswordEntry();
     const saved = personalSyncCredentialStore.read();
     const patch = Object.assign({}, transition.patch, resetPasswordEntry(this.passwordEntry), {

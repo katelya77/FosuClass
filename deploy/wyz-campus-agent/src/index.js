@@ -210,6 +210,20 @@ function publicAuthMode(value) {
   return value === "mobile" || value === "cas" || value === "authenticated-session" ? value : "";
 }
 
+function publicChallengeReason(value) {
+  return value === "prelogin-captcha" || value === "postlogin-challenge" || value === "risk-control" ? value : "";
+}
+
+function failureReport(error) {
+  const code = safeCode(error);
+  const report = { success: false, code };
+  const reason = code === "INTERACTIVE_CHALLENGE_REQUIRED" ? publicChallengeReason(error && error.challengeReason) : "";
+  if (reason) report.challengeReason = reason;
+  const mode = publicAuthMode(error && error.authMode);
+  if (mode) report.authMode = mode;
+  return report;
+}
+
 function resultTimings(result) {
   const source = result && result.stageTimings || {};
   const out = {};
@@ -273,14 +287,10 @@ async function runClaimedJob(job, request, log) {
     if (error && error.delayMs) throw error;
     const code = safeCode(error);
     if (code === "PROFILE_ID_MISMATCH") log({ event: "profile-fetched", status: "id_mismatch" });
-    const failureBody = {
+    const failureBody = Object.assign({
       jobId: job.jobId,
-      success: false,
-      code,
       stageTimings: resultTimings(error),
-    };
-    const failureMode = publicAuthMode(error && error.authMode);
-    if (failureMode) failureBody.authMode = failureMode;
+    }, failureReport(error));
     const posted = await request("POST", `/api/campus-agent/v1/jobs/${job.jobId}/result`, failureBody);
     log({ event: "job-finished", jobId, code, status: posted && posted.statusCode || 0 });
     if (!posted || posted.statusCode < 200 || posted.statusCode >= 300) {
@@ -410,6 +420,8 @@ module.exports = {
   createNodeTransport,
   trustedSchoolHeaders,
   publicAuthMode,
+  publicChallengeReason,
+  failureReport,
   DEFAULT_POLL_MS,
   DEFAULT_HEARTBEAT_MS,
 };

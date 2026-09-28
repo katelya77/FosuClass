@@ -213,12 +213,22 @@ function present(code, error) {
     };
   }
   if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
-    const waiting = Number(details.retryAfterSeconds || details.retryAfter) > 0;
+    const wait = humanWait(details.retryAfterSeconds || details.retryAfter);
+    if (wait) {
+      return {
+        title: "学校登录暂时需要验证",
+        content: "学校系统刚刚要求额外安全验证。\n为避免频繁请求，个人课表同步暂时暂停，请在 " + wait + "再试。",
+        confirmText: "我知道了",
+        cancelText: "",
+        action: "acknowledge",
+      };
+    }
+    const passwordNotChecked = details.challengeReason === "prelogin-captcha";
     return {
-      title: "暂时无法自动同步",
-      content: waiting
-        ? "学校系统刚刚要求额外验证，请稍后再尝试同步。"
-        : "学校系统要求额外安全验证，暂时无法自动同步。\n请稍后再试；如持续出现，可先通过学校官方系统完成正常登录验证后再次同步。",
+      title: "学校登录需要额外验证",
+      content: passwordNotChecked
+        ? "学校系统当前要求额外安全验证，本次尚未完成账号密码校验。\n请稍后再试；如果持续出现，可先通过学校官方系统正常登录一次后再回来同步。"
+        : "学校系统当前要求额外安全验证，暂时无法自动完成同步。\n请稍后再试；如果持续出现，可先通过学校官方系统正常登录一次后再回来同步。",
       confirmText: "我知道了",
       cancelText: "",
       action: "acknowledge",
@@ -226,8 +236,8 @@ function present(code, error) {
   }
   if (code === "SESSION_EXPIRED") {
     return {
-      title: "需要重新进入",
-      content: "当前登录状态已失效，请重新进入小程序后再同步。",
+      title: "当前登录状态已失效",
+      content: "请重新进入小程序后再同步。",
       confirmText: "我知道了",
       cancelText: "",
       action: "acknowledge",
