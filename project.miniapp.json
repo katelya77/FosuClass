@@ -1,0 +1,81 @@
+{
+  "miniVersion": "v2",
+  "name": "佛课小表",
+  "version": "1.0.0",
+  "versionCode": 100,
+  "i18nFilePath": "i18n",
+  "mini-ohos": {
+    "sdkVersion": "0.5.4",
+    "icons": {
+      "foreground": "miniapp/assets/harmonyos/icon-foreground.png",
+      "background": "miniapp/assets/harmonyos/icon-background.png"
+    },
+    "splashscreen": {
+      "startWindowIcon": "miniapp/assets/harmonyos/start-window-icon.png",
+      "startWindowBackground": "#F7F8FA"
+    }
+  },
+  "mini-android": {
+    "resourcePath": "miniapp/android/nativeResources",
+    "sdkVersion": "1.7.0",
+    "toolkitVersion": "0.11.0",
+    "useExtendedSdk": {
+      "media": true,
+      "bluetooth": false,
+      "network": false,
+      "scanner": false,
+      "xweb": false,
+      "open": true
+    },
+    "icons": {
+      "hdpi": "miniapp/assets/android/icon-hdpi.png",
+      "xhdpi": "miniapp/assets/android/icon-xhdpi.png",
+      "xxhdpi": "miniapp/assets/android/icon-xxhdpi.png",
+      "xxxhdpi": "miniapp/assets/android/icon-xxxhdpi.png"
+    },
+    "splashscreen": {
+      "hdpi": "",
+      "xhdpi": "",
+      "xxhdpi": ""
+    },
+    "enableVConsole": "close",
+    "privacy": {
+      "enable": true,
+      "template": "miniapp/privacy.json",
+      "enableViewOnly": false
+    }
+  },
+  "mini-ios": {
+    "sdkVersion": "1.7.0",
+    "toolkitVersion": "0.0.9",
+    "useExtendedSdk": {
+      "WeAppOpenFuns": true,
+      "WeAppNetwork": false,
+      "WeAppBluetooth": false,
+      "WeAppMedia": true,
+      "WeAppLBS": false,
+      "WeAppOthers": false
+    },
+    "enableVConsole": "close",
+    "icons": {
+      "mainIcon120": "miniapp/assets/ios/icon-main-120.png",
+      "mainIcon180": "miniapp/assets/ios/icon-main-180.png",
+      "spotlightIcon80": "miniapp/assets/ios/icon-spotlight-80.png",
+      "spotlightIcon120": "miniapp/assets/ios/icon-spotlight-120.png",
+      "settingsIcon58": "miniapp/assets/ios/icon-settings-58.png",
+      "settingsIcon87": "miniapp/assets/ios/icon-settings-87.png",
+      "notificationIcon40": "miniapp/assets/ios/icon-notification-40.png",
+      "notificationIcon60": "miniapp/assets/ios/icon-notification-60.png",
+      "appStore1024": "miniapp/assets/ios/icon-app-store-1024.png"
+    },
+    "splashScreen": {
+      "customImage": ""
+    },
+    "privacy": {
+      "enable": true,
+      "template": "miniapp/privacy.json",
+      "enableViewOnly": false
+    },
+    "enableOpenUrlNavigate": true
+  }
+}

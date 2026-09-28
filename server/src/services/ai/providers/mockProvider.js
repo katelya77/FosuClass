@@ -362,7 +362,7 @@ function buildDiagnosis(result) {
 
 function buildGuide(result) {
   return {
-    answer: "个人课表请先打开个人课表同步主入口。系统不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议；明确需要表格文件时再查看 XLS 文件导入。",
+    answer: "个人课表请先打开个人课表同步主入口。请不要在对话里发送学号或密码；学校密码只在个人课表同步页面由你自己输入。助手只在你开启摘要后读取最小课程字段；明确需要表格文件时再查看 XLS 文件导入。",
     cards: [makeCard("guide", result.title || "个人课表导入", "新学期重新导入即可刷新本机课表和课表摘要", {
       badges: ["无需密码", "最小化字段", "本地优先"],
       items: (result.steps || []).map((step, index) => ({

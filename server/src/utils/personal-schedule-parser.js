@@ -586,8 +586,120 @@ function parsePersonalScheduleHtml(html, context) {
   });
 }
 
+const STUDENT_NAME_MAX = 24;
+const PAGE_REMARK_ITEM_MAX = 240;
+const PAGE_REMARK_TOTAL_MAX = 1200;
+const PAGE_REMARK_COUNT_MAX = 20;
+
+function plainPageText(value) {
+  return String(value == null ? "" : value)
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\u3000/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function sanitizeStudentName(value) {
+  const text = plainPageText(value)
+    .replace(/[<>]/g, "")
+    .replace(/^(学生姓名|姓名)\s*[:：]\s*/, "")
+    .slice(0, STUDENT_NAME_MAX)
+    .trim();
+  if (text.length < 2 || text.length > STUDENT_NAME_MAX) return "";
+  if (/\d{5,}/.test(text)) return "";
+  if (/课程|备注|星期|节次|教师|学号|班级/.test(text)) return "";
+  return text;
+}
+
+function htmlToRemarkLines(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function splitPageRemarkText(value) {
+  return String(value || "")
+    .split(/\r?\n+/)
+    .map((line) => plainPageText(line).replace(/^备注\s*[:：]\s*/, ""))
+    .map((line) => line.slice(0, PAGE_REMARK_ITEM_MAX))
+    .filter((line) => line && line !== "备注");
+}
+
+function collectPageRemarks(lines) {
+  const seen = new Set();
+  const remarks = [];
+  let total = 0;
+  lines.forEach((line) => {
+    if (remarks.length >= PAGE_REMARK_COUNT_MAX) return;
+    if (seen.has(line)) return;
+    if (total + line.length > PAGE_REMARK_TOTAL_MAX) return;
+    seen.add(line);
+    remarks.push(line);
+    total += line.length;
+  });
+  return remarks;
+}
+
+function labelValue($, el) {
+  const next = $(el).next();
+  if (next.length) {
+    const text = plainPageText(next.text());
+    if (text) return text;
+  }
+  const parentNext = $(el).parent().next();
+  if (parentNext.length) return plainPageText(parentNext.text());
+  return "";
+}
+
+function parsePersonalSchedulePageMetadata(html) {
+  const $ = cheerio.load(String(html || ""), { decodeEntities: true });
+  $("script, style, iframe, object, noscript").remove();
+  let studentName = "";
+  $("td, th, span, label, div, p, li").each((_, el) => {
+    if (studentName) return;
+    const text = plainPageText($(el).clone().children().remove().end().text()) || plainPageText($(el).text());
+    const inline = text.match(/(?:学生姓名|姓名)\s*[:：]\s*([^\s:：<>]{2,24})/);
+    if (inline) {
+      studentName = sanitizeStudentName(inline[1]);
+      return;
+    }
+    if (/^(学生姓名|姓名)$/.test(text)) {
+      studentName = sanitizeStudentName(labelValue($, el));
+    }
+  });
+
+  const remarkLines = [];
+  $("tr").each((_, tr) => {
+    const cells = $(tr).children("td, th");
+    if (!cells.length) return;
+    const label = plainPageText($(cells[0]).text()).replace(/[:：]$/, "");
+    if (label !== "备注") return;
+    cells.toArray().slice(1).forEach((cell) => {
+      splitPageRemarkText(htmlToRemarkLines($(cell).html())).forEach((line) => remarkLines.push(line));
+    });
+  });
+  if (!remarkLines.length) {
+    const body = htmlToRemarkLines($("body").html());
+    const match = body.match(/备注\s*[:：]\s*([\s\S]{1,2000})/);
+    if (match) splitPageRemarkText(match[1]).forEach((line) => remarkLines.push(line));
+  }
+
+  return {
+    studentName,
+    pageRemarks: collectPageRemarks(remarkLines),
+  };
+}
+
 module.exports = {
   parsePersonalScheduleHtml,
+  parsePersonalSchedulePageMetadata,
   parseCourseBlock,
   parseWeeks,
   parseSections,

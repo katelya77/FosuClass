@@ -1,3 +1,4 @@
+<page-meta page-style="{{detailVisible ? 'overflow: hidden;' : ''}}" />
 <view class="page today-page">
   <view class="today-hero card">
     <view class="hero-topline">
@@ -68,6 +69,8 @@
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
     bind:copycustom="onCopyCourseToCustom"
+    bind:editcourse="onEditExistingCourse"
+    editable="{{selectedCourse.source !== 'custom' && selectedCourse.sourceType !== 'custom'}}"
   />
   <xiaofu-float />
 </view>

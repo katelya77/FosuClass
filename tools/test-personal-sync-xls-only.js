@@ -17,35 +17,55 @@ function run() {
   const courseCardWxml = read("miniprogram/components/course-card/index.wxml");
   const courseCardWxss = read("miniprogram/components/course-card/index.wxss");
   const aiService = read("miniprogram/services/aiAssistantService.js");
-  const cryptoService = read("miniprogram/services/fosuStudentImportCrypto.js");
   const recentImportService = read("miniprogram/services/recentStudentImportService.js");
 
+  const directClient = read("miniprogram/services/fosuDirectClient.js");
+  const directConfig = read("miniprogram/services/fosuDirectConfig.js");
+  const cookieJar = read("miniprogram/services/fosuDirectCookieJar.js");
+  const passwordCrypto = read("miniprogram/services/fosuDirectPasswordCrypto.js");
+  const scheduleSource = read("miniprogram/services/studentScheduleSource.js");
+  const directPreviewRoute = read("server/src/routes/studentScheduleImport.js");
+  const requestUtil = read("miniprogram/utils/request.js");
+  const validateStart = js.indexOf("async validateAndPreviewStudentImport");
+  const validateBody = js.slice(validateStart, js.indexOf("recheckCampusNetwork"));
   assert(!/startLoginFlow|loginAndSyncSchedule|showCaptchaModal|\/api\/fosu\/personal\/login/.test(js + wxml),
     "personal-sync page should not expose deprecated direct account/password sync flow");
-  assert(!/authserver\.fosu\.edu\.cn|apaas\.fosu\.edu\.cn/.test(js + wxml + cryptoService),
-    "mini program must not request Fosu authserver/APaaS directly");
-  assert(js.includes("encryptCredentialPayload"), "student import should encrypt credentials before preview");
-  assert(js.includes("/api/schedule-import/fosu/public-key"), "student import should fetch a one-time public key from backend");
-  assert(js.includes("/api/schedule-import/fosu/preview/start"), "student import should start async preview jobs");
-  assert(js.includes("/api/schedule-import/fosu/preview/status"), "student import should poll async preview job status");
-  assert(js.includes("/api/schedule-import/fosu/preview"), "student import should keep legacy preview fallback");
-  assert(js.includes("requestStudentSchedulePreview"), "student import should isolate public-key/encrypt/preview into a retryable attempt");
+  assert(!/authserver\.fosu\.edu\.cn|100\.fosu\.edu\.cn|apaas\.fosu\.edu\.cn/.test(js + wxml + requestUtil + aiService),
+    "school hosts must stay inside the direct client, not pages, AI, or common request");
+  assert(/authserver\.fosu\.edu\.cn/.test(directConfig) && /100\.fosu\.edu\.cn/.test(directConfig),
+    "direct config should name the school allowlist");
+  assert(directClient.includes('redirect: "manual"'), "school requests must use manual redirects");
+  assert(!directClient.includes("utils/request"), "school requests must not use the class request client");
+  assert(!/wx\.setStorage(Sync)?\(/.test(cookieJar + passwordCrypto + directClient), "cookie jar and password crypto must not touch storage");
+  assert(cookieJar.includes("clear("), "cookie jar must be clearable");
+  assert(validateBody.includes("client-direct") || validateBody.includes("SOURCE.CLIENT_DIRECT"), "default sync must use client direct");
+  assert(validateBody.includes("/api/schedule-import/fosu/direct/preview"), "default sync must upload only the timetable body");
+  assert(!validateBody.includes("/preview/start"), "default sync must not send school credentials to the relay preview");
+  assert(validateBody.includes("studentForm.password\": \"\""), "password must be cleared after client direct sync");
+  assert(scheduleSource.includes("CAMPUS_AGENT_NOT_AVAILABLE"), "campus agent must stay unavailable");
+  assert(scheduleSource.includes("enableCampusAgentSync"), "campus agent must be gated by the feature flag");
+  assert(!js.includes("encryptCredentialPayload"), "personal sync must not encrypt school passwords for the class server");
+  assert(!js.includes("/api/schedule-import/fosu/public-key"), "personal sync must not request a server credential key");
+  assert(!directPreviewRoute.includes("/preview/start"), "credential preview start must be removed");
+  assert(directPreviewRoute.includes("DIRECT_SECRET_REJECTED"), "direct preview must reject credential fields");
   assert(!wxml.includes("使用前请阅读"), "student import page should not show forced privacy guide reading copy");
   assert(!wxml.includes("隐私保护指引"), "student import page should not show privacy guide link copy");
   assert(!wxml.includes("openStudentPrivacyContract"), "student import page should not bind privacy guide opening");
-  assert(js.includes("shouldRetryStudentPreview"), "student import should retry once when a one-time import key is stale");
+  assert(wxml.includes("同步最新课表"), "personal sync should offer one primary sync action");
   assert(wxml.includes("XLS"), "personal-sync page should keep XLS import available");
   assert(js.includes("rememberLatestScheduleImport"), "XLS bind should refresh AI schedule context");
   assert(aiService.includes("personal-xls-required"), "AI context should reject deprecated credential schedule types");
   assert(!wxss.includes("captcha-"), "captcha styles should be removed from import page");
-  assert(!cryptoService.includes("root.window ="), "SM2 fallback must not assign globalThis.window in WeChat runtimes");
   assert(wxml.includes("displayStudentId"), "student import preview should bind the full display student id");
-  assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {})"), "student import should centralize display student id priority");
-  assert(js.includes("return metadata.studentId || profile.studentId || metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
-    "student import UI must prefer full studentId before masked value");
-  assert(wxml.includes("检测到周末课程，可在调整课程中查看"), "student preview should show a weekend-course hint");
-  assert(js.includes("STUDENT_WEEKDAY_LABELS.slice(0, 5)"), "student preview grid should default to weekdays only");
-  assert(previewGridJs.includes("Array.from({ length: 5 }"), "preview grid fallback days should be Monday to Friday");
+  assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {}, localDisplayStudentId = \"\")"), "student import should centralize display student id priority");
+  assert(js.includes("if (isFullStudentId(localDisplayStudentId)) return String(localDisplayStudentId).trim();"),
+    "student import UI must prefer the local full student id");
+  assert(js.includes("return metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
+    "student import UI must fall back to a masked id only when no full id exists");
+  assert(wxml.includes("day-count=\"7\""), "student preview should request seven day columns");
+  assert(js.includes("STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label }))"), "student preview grid should include Saturday and Sunday");
+  assert(!wxml.includes("检测到周末课程，可在调整课程中查看"), "weekend courses should render in the grid");
+  assert(previewGridJs.includes("Number(count) === 7 ? 7 : 5"), "preview grid should keep a five-day fallback unless seven days are requested");
   assert(js.includes("function studentPreviewLayerPriority"), "student preview should rank current-week/selected courses before rendering");
   assert(js.includes("activeInPreviewWeek: true"), "student preview grid cells should mark current preview-week courses");
   assert(js.includes("cell.zIndex = 1 + cell.previewLayerPriority;"), "student preview should assign bounded z-index from preview priority");

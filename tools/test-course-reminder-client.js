@@ -45,6 +45,21 @@ async function run() {
   assert.strictEqual(unavailable.status, "not_requested");
   assert.strictEqual(unavailable.channel, "app_only");
   assert.ok(unavailable.disclosure.includes("未配置"));
+
+  let appSubscriptionCalls = 0;
+  global.wx = {
+    getAppBaseInfo() {
+      return { host: { env: "SAAASDK" } };
+    },
+    requestSubscribeMessage() {
+      appSubscriptionCalls += 1;
+    },
+  };
+  const appFallback = await client.requestWechatSubscription({ configured: true, templateId: "tmpl-course" });
+  assert.strictEqual(appFallback.status, "not_requested");
+  assert.strictEqual(appFallback.channel, "app_only");
+  assert.strictEqual(appSubscriptionCalls, 0, "multi-end App must not reuse Mini Program subscription templates");
+
   assert.strictEqual(typeof client.listInAppEvents, "function");
   assert.strictEqual(typeof client.acknowledgeInAppEvent, "function");
   assert.strictEqual(typeof client.grantSubscriptionAuthorization, "function");

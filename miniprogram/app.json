@@ -9,6 +9,7 @@
     "pages/timetable/timetable",
     "pages/login/login",
     "pages/schedule-view/schedule-view",
+    "pages/schedule-fullscreen/schedule-fullscreen",
     "pages/empty-room/empty-room",
     "pages/contribute/contribute",
     "pages/personal-sync/personal-sync"
@@ -51,6 +52,9 @@
   },
   "__usePrivacyCheck__": true,
   "requiredPrivateInfos": [],
+  "miniApp": {
+    "useAuthorizePage": true
+  },
   "tabBar": {
     "color": "#7a8494",
     "selectedColor": "#c62828",

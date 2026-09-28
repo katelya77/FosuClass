@@ -78,6 +78,9 @@ Component({
     show() {
       this.refreshPosition();
     },
+    resize() {
+      this.refreshPosition();
+    },
   },
 
   observers: {
@@ -103,6 +106,7 @@ Component({
       const height = Number(info.windowHeight || 667) || 667;
       const safeArea = info.safeArea || {};
       const safeTop = Number(safeArea.top || 0) || 0;
+      const minY = Math.max(EDGE_MARGIN, safeTop + TOP_SAFE_GAP);
       const safeBottomGap = safeArea.bottom ? Math.max(0, height - Number(safeArea.bottom || height)) : 0;
       const bottomAvoid = Math.max(10, Number(policy && policy.bottomAvoidPx || 18)) +
         safeBottomGap +
@@ -111,8 +115,8 @@ Component({
       return {
         minX: EDGE_MARGIN,
         maxX: Math.max(EDGE_MARGIN, width - FLOAT_SIZE - EDGE_MARGIN),
-        minY: Math.max(EDGE_MARGIN, Math.min(safeTop + TOP_SAFE_GAP, EDGE_MARGIN)),
-        maxY: Math.max(EDGE_MARGIN, height - FLOAT_SIZE - bottomAvoid),
+        minY,
+        maxY: Math.max(minY, height - FLOAT_SIZE - bottomAvoid),
         menuButton,
         width,
         height,

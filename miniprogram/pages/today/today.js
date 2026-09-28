@@ -3,6 +3,7 @@ const { getSettings } = require("../../utils/storage");
 const appConfigService = require("../../services/appConfigService");
 const currentScheduleService = require("../../services/currentScheduleService");
 const customCourseService = require("../../services/customCourseService");
+const courseOverrideService = require("../../services/courseOverrideService");
 const BRAND = require("../../config/brand");
 const classroomSearch = require("../../utils/classroomSearch");
 
@@ -210,6 +211,16 @@ Page({
       selectedCourse: null,
       detailVisible: false,
     });
+  },
+
+  onEditExistingCourse(event) {
+    try {
+      courseOverrideService.saveEditDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
+    } catch (error) {
+      wx.showToast({ title: "请从个性化页面选择课程", icon: "none" });
+    }
   },
 
   goEmptyRoom() {

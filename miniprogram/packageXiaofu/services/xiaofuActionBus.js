@@ -6,6 +6,7 @@
 //   3. 所有输入在端上再校验一次（服务端校验 + 端上校验，双层防线）。
 
 const catalog = require("../../shared/agentActionCatalog.generated.js");
+const platform = require("../../utils/platform");
 
 const ACTION_CATALOG = catalog.ACTION_CATALOG || {};
 const CARD_ACTION_TO_COMMAND = catalog.CARD_ACTION_TO_COMMAND || {};
@@ -177,6 +178,10 @@ function createActionBus(options = {}) {
         return done(id, "fillForm");
       }
       case "requestSubscribe": {
+        // 移动应用订阅消息使用开放平台移动应用模板，不能复用小程序 tmplIds。
+        // 当前服务端投递链路仍是小程序订阅消息，因此 App 端必须显式降级，
+        // 避免前端提示订阅成功但服务端无法向该渠道投递。
+        if (platform.isMultiEndApp(wxApi)) return reject(id, "MOBILE_SUBSCRIPTION_UNCONFIGURED");
         if (!wxApi || typeof wxApi.requestSubscribeMessage !== "function") return reject(id, "WX_UNAVAILABLE");
         const resolve = context.resolveSubscribeTemplateIds;
         const tmplIds = typeof resolve === "function" ? resolve(String(input.scene)) : [];

@@ -2,9 +2,11 @@ const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
 const { getSettings, getCurrentScheduleTarget, setCurrentScheduleTarget } = require("../../utils/storage");
+const { resolveAdjacentWeek, resolveWeekSwipeDirection } = require("../../utils/weekSwipe");
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
 const {
   TOTAL_WEEKS,
   addLocalDays,
@@ -112,6 +114,8 @@ Page({
     weekRangeText: "",
     weekScopeText: "周一至周五",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: SECTION_HEIGHT,
     scheduleHeight: courseTimes.length * SECTION_HEIGHT,
@@ -120,13 +124,17 @@ Page({
     dayColumnWidth: 128,
     weekdays: [],
     dayColumns: [],
-    showWeekend: false,
+    showWeekend: true,
+    weekendShowMode: "overview",
     detailVisible: false,
     selectedCourse: null,
     isFromShare: false,
+    showBackToCurrentWeek: false,
   },
 
   onLoad(options) {
+    this._weekSwipeState = null;
+    this._suppressCourseTapUntil = 0;
     const { type = "class", name = "", id = "", semester = "", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "", week = "", weekday = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
     const decodedId = safeDecodeURIComponent(id);
@@ -380,8 +388,6 @@ Page({
     const now = new Date();
     const currentWeek = this._initialWeek
       ? clampWeek(this._initialWeek, termConfig)
-      : settings.manualWeekOverride
-      ? clampWeek(settings.currentWeek, termConfig)
       : getCurrentTeachingWeek(now, calendar.weeks || [], termConfig);
     const showWeekend = this._initialWeekday >= 6 ? true : (settings.showWeekend || false);
     this.activeTeachingCalendar = calendar;
@@ -399,11 +405,11 @@ Page({
         if (!calendarChanged(this.activeTeachingCalendar, latest)) return;
         this.activeTeachingCalendar = latest;
         const latestConfig = latest.termConfig || {};
-        const nextWeek = this._initialWeek
-          ? clampWeek(this._initialWeek, latestConfig)
-          : getSettings().manualWeekOverride
-          ? clampWeek(getSettings().currentWeek, latestConfig)
-          : getCurrentTeachingWeek(new Date(), latest.weeks || [], latestConfig);
+        const nextWeek = this._hasChosenWeek
+          ? clampWeek(this.data.currentWeek, latestConfig)
+          : this._initialWeek
+            ? clampWeek(this._initialWeek, latestConfig)
+            : getCurrentTeachingWeek(new Date(), latest.weeks || [], latestConfig);
         this.setData({
           currentWeek: nextWeek,
           totalWeeks: latestConfig.totalWeeks || TOTAL_WEEKS,
@@ -480,9 +486,11 @@ Page({
     const weekSwitcherLabel = weekRangeText ? `${weekRangeText} · 第${currentWeek}周` : `日期待同步 · 第${currentWeek}周`;
 
     this.setData({
+      showBackToCurrentWeek: currentWeek !== getCurrentTeachingWeek(now, calendar.weeks || [], termConfig),
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -499,17 +507,72 @@ Page({
   },
 
   onWeekChange(event) {
-    const type = event.detail.type;
+    const detail = event && event.detail || {};
+    const type = detail.type;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
-      : clampWeek(event.detail.week, termConfig);
+      : clampWeek(detail.week, termConfig);
+    if (type !== "current" && nextWeek === this.data.currentWeek) return;
+
+    this._initialWeek = null;
+    this._hasChosenWeek = type !== "current";
     
     this.setData({
       currentWeek: nextWeek,
     }, () => {
       this.renderSchedule();
+    });
+  },
+
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
+  },
+
+  backToCurrentWeek() {
+    this.onWeekChange({ detail: { type: "current" } });
+  },
+
+  onScheduleTouchStart(event) {
+    if (this.data.weekPickerOpen || this.data.detailVisible || this.data.scrollX || !event.touches || event.touches.length !== 1) {
+      this._weekSwipeState = null;
+      return;
+    }
+    const touch = event.touches[0];
+    this._weekSwipeState = { start: { clientX: touch.clientX, clientY: touch.clientY } };
+  },
+
+  onScheduleTouchEnd(event) {
+    const state = this._weekSwipeState;
+    this._weekSwipeState = null;
+    if (!state || this.data.detailVisible || this.data.weekPickerOpen) return;
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) return;
+    const direction = resolveWeekSwipeDirection(state.start, touch);
+    if (!direction) return;
+    this._suppressCourseTapUntil = Date.now() + 240;
+    const next = resolveAdjacentWeek(this.data.currentWeek, this.data.totalWeeks, direction);
+    if (next.changed) this.onWeekChange({ detail: { type: direction, week: next.week } });
+  },
+
+  onScheduleTouchCancel() { this._weekSwipeState = null; },
+
+  openScheduleFullscreen() {
+    wx.navigateTo({
+      url: "/pages/schedule-fullscreen/schedule-fullscreen",
+      events: {
+        weekChange: (event) => this.onWeekChange({ detail: { type: "select", week: event.week } }),
+      },
+      success: (result) => result.eventChannel.emit("schedule", {
+        title: this.data.title,
+        courses: this.data.allCourses,
+        target: Object.assign({}, this.data.scheduleMeta || {}, { type: this.data.type, name: this.data.name, semester: this.data.semester }),
+        week: this.data.currentWeek,
+        showWeekend: this.data.showWeekend,
+        weekendShowMode: this.data.weekendShowMode,
+      }),
     });
   },
 
@@ -570,6 +633,7 @@ Page({
   },
 
   onCourseTap(event) {
+    if (Date.now() < Number(this._suppressCourseTapUntil || 0)) return;
     this.setData({
       selectedCourse: event.detail.course,
       detailVisible: true,

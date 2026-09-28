@@ -47,6 +47,9 @@ function inspectFile(file) {
     if (repoPath === "miniprogram" || repoPath.startsWith("miniprogram/")) {
       violations.push(`runtime require resolves to miniprogram: ${specifier}`);
     }
+    if (repoPath === "deploy" || repoPath.startsWith("deploy/")) {
+      violations.push(`runtime require resolves to deploy: ${specifier}`);
+    }
   }
   return violations.map((message) => `${toRepoPath(file)}: ${message}`);
 }

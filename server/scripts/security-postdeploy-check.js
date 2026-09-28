@@ -1,5 +1,7 @@
 const http = require("http");
 const https = require("https");
+const path = require("path");
+const { spawnSync } = require("child_process");
 
 function argValue(name, fallback) {
   const prefix = `${name}=`;
@@ -43,7 +45,9 @@ function request(baseUrl, path, options = {}) {
 async function run() {
   const baseUrl = argValue("--base-url", process.env.FOSU_POSTDEPLOY_BASE_URL || "http://127.0.0.1:3000");
   const securityModeService = require("../src/services/securityModeService");
-  const { getRouteSecurityPolicy, ACCESS_LEVELS } = require("../src/security/routeSecurityPolicy");
+  const { spawnSync } = require("child_process");
+const path = require("path");
+const { getRouteSecurityPolicy, ACCESS_LEVELS } = require("../src/security/routeSecurityPolicy");
 
   const status = securityModeService.getSecurityStatus();
   if (!status.mode) throw new Error("SECURITY_MODE_MISSING");
@@ -71,6 +75,9 @@ async function run() {
   if (bootstrap.statusCode === 404 || bootstrap.statusCode === 0) {
     throw new Error(`SESSION_BOOTSTRAP_UNAVAILABLE_${bootstrap.statusCode}`);
   }
+
+  const policyVerify = spawnSync(process.execPath, [path.join(__dirname, "verify-campus-sync-policy.js")], { stdio: "inherit" });
+  if (policyVerify.status !== 0) throw new Error("CAMPUS_SYNC_POLICY_VERIFY_FAILED");
 
   console.log(JSON.stringify({
     success: true,

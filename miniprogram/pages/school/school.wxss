@@ -86,6 +86,34 @@
   box-shadow: 0 8rpx 18rpx rgba(16, 31, 55, 0.06);
 }
 
+.personal-import-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  min-height: 56rpx;
+  margin: 12rpx 6rpx 0;
+  padding: 8rpx 8rpx 0;
+  border-top: 1rpx solid #f0f2f5;
+}
+
+.personal-import-prompt {
+  color: #8691a2;
+  font-size: 21rpx;
+}
+
+.personal-import-link {
+  display: flex;
+  align-items: center;
+  gap: 5rpx;
+  flex: 0 0 auto;
+  color: #ab3439;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.personal-import-arrow { font-size: 30rpx; line-height: 1; }
+
 .tab-panel {
   margin-top: 14rpx;
 }

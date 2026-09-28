@@ -85,23 +85,39 @@ const defaultSettings = {
   semester: "",
   currentWeek: 12,
   manualWeekOverride: false,
-  hideInactiveCourses: false,
+  hideInactiveCourses: true,
   showWeekend: true,
-  showHistoricalGrades: false,
+  weekendShowMode: "overview",
   enableTodayStartupReminder: true,
 };
+
+function normalizeSettings(settings) {
+  const next = Object.assign({}, settings || {});
+  // Legacy display preference removed from the product. Keeping it in storage
+  // must never revive the retired historical-grade branch.
+  delete next.showHistoricalGrades;
+  if (next.weekendShowMode !== "detail" && next.weekendShowMode !== "overview") {
+    next.weekendShowMode = defaultSettings.weekendShowMode;
+  }
+  return next;
+}
 
 function getSettings() {
   try {
     const saved = wx.getStorageSync(STORAGE_KEY);
-    return Object.assign({}, defaultSettings, saved || {});
+    const normalizedSaved = normalizeSettings(saved);
+    const next = Object.assign({}, defaultSettings, normalizedSaved);
+    if (saved && Object.prototype.hasOwnProperty.call(saved, "showHistoricalGrades")) {
+      writeCriticalStorage(STORAGE_KEY, next);
+    }
+    return next;
   } catch (error) {
     return Object.assign({}, defaultSettings);
   }
 }
 
 function saveSettings(patch) {
-  const next = Object.assign({}, getSettings(), patch || {});
+  const next = normalizeSettings(Object.assign({}, getSettings(), patch || {}));
   writeCriticalStorage(STORAGE_KEY, next);
   return next;
 }
@@ -188,6 +204,11 @@ function clearDataCaches() {
 function clearLocalSelection() {
   wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
   wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+  wx.removeStorageSync("FOSU_PREF_SCHOOL_SEARCH_V1");
+  try {
+    const keys = wx.getStorageInfoSync().keys || [];
+    keys.filter((key) => key.startsWith("FOSU_PREF_SCHOOL_FILTER:")).forEach((key) => wx.removeStorageSync(key));
+  } catch (error) { /* preference cleanup is best effort */ }
   wx.removeStorageSync(PERSONAL_SCHEDULE_CACHE_KEY);
   currentScheduleTargetMemory = null;
 }

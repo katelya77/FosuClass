@@ -4,22 +4,6 @@
   "functionRoot": "cloudfunctions",
   "functions": [
     {
-      "name": "fosuImportRelay",
-      "handler": "index.main",
-      "runtime": "Nodejs18.15",
-      "timeout": 60,
-      "memorySize": 512,
-      "description": "FosuClass APaaS personal schedule import relay",
-      "envVariables": {
-        "NODE_ENV": "production",
-        "FOSU_AUTH_BASE": "https://authserver.fosu.edu.cn",
-        "FOSU_APAAS_BASE": "https://apaas.fosu.edu.cn",
-        "FOSU_IMPORT_TIMEOUT_MS": "25000",
-        "FOSU_APAAS_PAGE_SIZE": "500",
-        "FOSU_APAAS_PAGE_CONCURRENCY": "3"
-      }
-    },
-    {
       "name": "xiaofuAgentGateway",
       "handler": "index.main",
       "runtime": "Nodejs18.15",

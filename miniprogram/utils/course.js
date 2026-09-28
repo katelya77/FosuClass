@@ -4,6 +4,7 @@ const { courseTimes, courseTimesMeta } = require("../data/courseTimes");
 const { courseColorTokenForCourse, courseSemanticColorToken } = require("./color");
 const { isCourseInWeek } = require("./week");
 const customCourseService = require("../services/customCourseService");
+const courseOverrideService = require("../services/courseOverrideService");
 const {
   mergeCanonicalCoursesForDisplay,
   normalizeCourseIdentity,
@@ -84,23 +85,25 @@ function getCourseDataSource() {
 }
 
 function getCoursesByClass(className) {
+  const courses = getBaseCoursesByClass(className).map(normalizeCourse);
+  const adjusted = courseOverrideService.applyCourseOverrides(courses)
+    .map((course) => course.personalized ? normalizeCourse(course) : course);
+  return mergeCustomCoursesForCurrentTarget(adjusted);
+}
+
+function getBaseCoursesByClass(className) {
   const dataset = getCourseDataset();
-  let courses = [];
   if (dataset.source === "realtime") {
     // 实时教务数据绑定，无需按班级名二次过滤
-    courses = dataset.courses.map(normalizeCourse);
-    return mergeCustomCoursesForCurrentTarget(courses);
+    return dataset.courses;
   }
   
   if (!className) {
-    return mergeCustomCoursesForCurrentTarget([]);
+    return [];
   }
   
   const targetClassName = className;
-  courses = dataset.courses
-    .filter((course) => course.className === targetClassName)
-    .map(normalizeCourse);
-  return mergeCustomCoursesForCurrentTarget(courses);
+  return dataset.courses.filter((course) => course.className === targetClassName);
 }
 
 function mergeCustomCoursesForCurrentTarget(baseCourses) {
@@ -464,6 +467,7 @@ module.exports = {
   getCourseStatus,
   getCourseTimeRange,
   getCoursesByClass,
+  getBaseCoursesByClass,
   getCoursesForDay,
   getCoursesForWeek,
   getTodayCourses,

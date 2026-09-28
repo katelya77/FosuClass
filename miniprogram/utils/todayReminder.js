@@ -1,12 +1,13 @@
 const {
   getCourseStatus,
   getCourseTimeRange,
-  getCoursesByClass,
+  getBaseCoursesByClass,
   mergeCanonicalCoursesForDisplay,
   normalizeCourse,
 } = require("./course");
 const { getSettings } = require("./storage");
 const customCourseService = require("../services/customCourseService");
+const courseOverrideService = require("../services/courseOverrideService");
 const teachingCalendarService = require("../services/teachingCalendarService");
 const { clampWeek, getTermPhaseText, getTodayTeachingInfo, getTodayWeekday } = require("./week");
 const { getCourseWeekStatus } = require("./courseWeekRules");
@@ -34,8 +35,8 @@ function getCurrentBoundSchedule() {
   }
 
   if (!schedule && className) {
-    const courses = getCoursesByClass(className);
-    if (courses && courses.length) {
+    const courses = getBaseCoursesByClass(className);
+    if ((courses && courses.length) || customCourseService.getEnabledCustomCourses().length) {
       schedule = {
         classId,
         className,
@@ -140,7 +141,8 @@ function getTodayCoursesData(options = {}) {
   const boundInfo = getCurrentBoundSchedule();
   const { classId, className, semester, schedule, source } = boundInfo;
 
-  if (!schedule || !Array.isArray(schedule.courses) || schedule.courses.length === 0) {
+  if (!schedule || !Array.isArray(schedule.courses) ||
+      (schedule.courses.length === 0 && customCourseService.getEnabledCustomCourses().length === 0)) {
     return {
       hasSchedule: false,
       dateText: todayInfo.fullDateLabel,
@@ -175,11 +177,13 @@ function getTodayCoursesData(options = {}) {
   }
 
   const { dedupeCourses } = require("./course");
-  const baseCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
+  const normalizedBaseCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
     semester: course.semester || semester,
     classId: course.classId || classId,
     className: course.className || className,
   })));
+  const baseCourses = courseOverrideService.applyCourseOverrides(normalizedBaseCourses)
+    .map((course) => course.personalized ? normalizeCourse(course) : course);
   const customCourses = customCourseService.getEnabledCustomCourses().map((course) => {
     return normalizeCourse(Object.assign({}, course, {
       semester: course.semester || semester,

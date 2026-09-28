@@ -1,12 +1,16 @@
 const { courseTimes } = require("../../data/courseTimes");
-const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
-const { getSettings, saveSettings } = require("../../utils/storage");
+const { buildScheduleColumns, getCourseDataSource, getCoursesByClass, normalizeCourse } = require("../../utils/course");
+const { getSettings, getRecentSchedules, setRecentSchedules } = require("../../utils/storage");
+const { resolveAdjacentWeek, resolveWeekSwipeDirection } = require("../../utils/weekSwipe");
 const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const dailyKnowledgeCloudService = require("../../services/dailyKnowledgeCloudService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
+const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const { buildWeekPickerOptions } = require("../../utils/weekPicker");
+const courseOverrideService = require("../../services/courseOverrideService");
 const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
@@ -37,6 +41,13 @@ function resolveDisplayWeek(settings, todayInfo, termConfig) {
   return todayInfo.weekNo;
 }
 
+function getScheduleTabIdentity(item) {
+  const source = item || {};
+  const name = String(source.name || source.className || source.title || "")
+    .replace(/\s+/g, "").replace(/(老师|教室|课表)$/, "").trim();
+  return [source.type || "class", source.term || source.semester || "", name].join("|");
+}
+
 function calendarChanged(left, right) {
   if (!left || !right) return Boolean(left || right);
   return left.term !== right.term ||
@@ -64,7 +75,9 @@ function buildPersonalApaasHeader(target) {
   const metadata = (target && target.metadata) || {};
   const title = target.title || target.name || (metadata.studentName ? `${metadata.studentName}的个人课表` : "个人课表");
   const term = metadata.term || target.semester || "";
-  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "学号导入"].filter(Boolean).join(" · ");
+  const className = String(metadata.className || "").trim();
+  const reliableClass = className && !/班级未确认|班级待确认|未知班级/.test(className) ? className : "";
+  const subtitle = [reliableClass, term, "学号同步"].filter(Boolean).join(" · ");
   return {
     title,
     subtitle,
@@ -104,6 +117,8 @@ Page({
     weekScopeText: "周一至周五",
     todayText: "",
     weekSwitcherLabel: "",
+    weekPickerOpen: false,
+    weekOptions: [],
     sections: courseTimes,
     sectionHeight: 90,
     scheduleHeight: courseTimes.length * 90,
@@ -112,8 +127,9 @@ Page({
     dayColumnWidth: 128,
     weekdays: [],
     dayColumns: [],
-    hideInactiveCourses: false,
-    showWeekend: false,
+    hideInactiveCourses: true,
+    showWeekend: true,
+    weekendShowMode: "overview",
     selectedCourse: null,
     detailVisible: false,
     unplacedCourses: [],
@@ -136,9 +152,15 @@ Page({
     selectedNotice: null,
     showNoticeDetail: false,
     showAppNoticeModal: false,
+    scheduleTabs: [],
+    activeScheduleTab: "current",
+    isPreviewSchedule: false,
+    showBackToCurrentWeek: false,
   },
 
   onLoad(options) {
+    this._weekSwipeState = null;
+    this._suppressCourseTapUntil = 0;
     if (options && options.shareScheduleId) {
       wx.navigateTo({
         url: `/pages/schedule-view/schedule-view?type=class&name=${encodeURIComponent(options.shareScheduleName || "")}&shareScheduleId=${options.shareScheduleId}`
@@ -151,6 +173,7 @@ Page({
     const { isScheduleInitialized, getCurrentScheduleTarget } = require("../../utils/storage");
     const initialized = isScheduleInitialized();
     const target = getCurrentScheduleTarget();
+    this.refreshScheduleTabs(target);
     if (!initialized || !target) {
       this.setData({
         showInitModal: true,
@@ -169,6 +192,61 @@ Page({
       this.checkTodayReminder();
       this.refreshCurrentTargetSilently();
     }
+  },
+
+  refreshScheduleTabs(target) {
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const term = calendar.termConfig && calendar.termConfig.term || calendar.term || "";
+    const activeRelease = releasePackService.getLocalActiveRelease(term);
+    const version = activeRelease && activeRelease.releaseVersion || calendar.releaseVersion || "";
+    const currentIdentity = target && getScheduleTabIdentity(target);
+    const seen = new Set(currentIdentity ? [currentIdentity] : []);
+    const recent = getRecentSchedules().filter((item) => {
+      const identity = getScheduleTabIdentity(item);
+      if (!identity || seen.has(identity) || !Array.isArray(item.courses) || !item.courses.length ||
+        term && item.semester !== term || version && item.releaseVersion !== version) return false;
+      seen.add(identity);
+      return true;
+    }).slice(0, 5);
+    const scheduleTabs = (target ? [{ key: "current", label: target.name || "当前课表", current: true }] : [])
+      .concat(recent.map((item) => ({
+        key: `recent-${getScheduleTabIdentity(item)}`,
+        label: item.title || item.name || item.className || "课表",
+        current: false,
+      })));
+    this._recentScheduleTabs = recent;
+    const activeScheduleTab = scheduleTabs.some((tab) => tab.key === this.data.activeScheduleTab)
+      ? this.data.activeScheduleTab : "current";
+    this.setData({ scheduleTabs, activeScheduleTab, isPreviewSchedule: activeScheduleTab !== "current" });
+  },
+
+  onScheduleTabTap(event) {
+    const key = event.currentTarget.dataset.key;
+    if (key === this.data.activeScheduleTab) return;
+    this._weekOverride = null;
+    this.setData({ activeScheduleTab: key, isPreviewSchedule: key !== "current" }, () => this.loadSchedule());
+  },
+
+  closeScheduleTab(event) {
+    const key = String(event.currentTarget.dataset.key || "");
+    if (!key.startsWith("recent-")) return;
+    const identity = key.slice("recent-".length);
+    setRecentSchedules(getRecentSchedules().filter((item) => getScheduleTabIdentity(item) !== identity));
+    if (this.data.activeScheduleTab === key) {
+      this._weekOverride = null;
+      this.setData({ activeScheduleTab: "current", isPreviewSchedule: false }, () => {
+        const { getCurrentScheduleTarget } = require("../../utils/storage");
+        this.refreshScheduleTabs(getCurrentScheduleTarget());
+        this.loadSchedule();
+      });
+      return;
+    }
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    this.refreshScheduleTabs(getCurrentScheduleTarget());
+  },
+
+  openScheduleTabPicker() {
+    this.goSchool();
   },
 
   refreshCurrentTargetSilently() {
@@ -260,7 +338,9 @@ Page({
     
     const now = new Date();
     const todayInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
-    const currentWeek = resolveDisplayWeek(settings, todayInfo, termConfig);
+    const currentWeek = this._weekOverride == null
+      ? resolveDisplayWeek(settings, todayInfo, termConfig)
+      : clampWeek(this._weekOverride, termConfig);
     const weekInfo = getWeekRangeByWeekNo(currentWeek, calendarWeeks, termConfig);
     const showWeekend = settings.showWeekend || false;
     const weekendShowMode = settings.weekendShowMode || "overview";
@@ -281,17 +361,22 @@ Page({
       });
     });
     
-    const courses = getCoursesByClass(settings.className);
+    const previewKey = String(this.data.activeScheduleTab || "").replace(/^recent-/, "");
+    const preview = this.data.activeScheduleTab !== "current" &&
+      this._recentScheduleTabs && this._recentScheduleTabs.find((item) =>
+        getScheduleTabIdentity(item) === previewKey);
+    const displayTarget = preview || target;
+    const courses = preview ? preview.courses.map(normalizeCourse) : getCoursesByClass(settings.className);
     const dataSource = getCourseDataSource();
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: 90,
       hideInactiveCourses: settings.hideInactiveCourses,
       normalized: true,
-      targetType: target && target.type || "class",
-      targetId: target && (target.detailId || target.id || target.classId) || settings.classId || "",
-      targetName: target && (target.name || target.className) || settings.className || "",
-      semester: target && (target.term || target.semester) || termConfig.term || "",
-      releaseVersion: target && (target.scheduleVersion || target.releaseVersion) || calendar.releaseVersion || "",
+      targetType: displayTarget && displayTarget.type || "class",
+      targetId: displayTarget && (displayTarget.detailId || displayTarget.id || displayTarget.classId) || settings.classId || "",
+      targetName: displayTarget && (displayTarget.name || displayTarget.className) || settings.className || "",
+      semester: displayTarget && (displayTarget.term || displayTarget.semester) || termConfig.term || "",
+      releaseVersion: displayTarget && (displayTarget.scheduleVersion || displayTarget.releaseVersion) || calendar.releaseVersion || "",
     });
     
     const contentWidth = getContentWidthRpx();
@@ -339,7 +424,14 @@ Page({
       }
       lastSyncText = target.updateTime || "";
     }
-    const unplacedCourses = decorateUnplacedCourses(target && target.unplacedCourses);
+    if (preview) {
+      displayClassName = preview.title || preview.name || preview.className || "课表";
+      scheduleSubtitle = `${preview.semester || ""} · 最近查看`;
+      sourceText = "全校课表缓存";
+      lastSyncText = "";
+      syncActionText = "同步当前";
+    }
+    const unplacedCourses = decorateUnplacedCourses(!preview && target && target.unplacedCourses);
 
     this.setData({
       className: displayClassName,
@@ -349,6 +441,7 @@ Page({
       lastSyncText,
       syncActionText,
       currentWeek,
+      showBackToCurrentWeek: currentWeek !== getCurrentTeachingWeek(now, calendarWeeks, termConfig),
       teachingPeriodText: getTeachingPeriodText(todayInfo, currentWeek),
       termPhase: todayInfo.termPhase || "unknown",
       totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
@@ -356,6 +449,7 @@ Page({
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       todayText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel}`,
       weekSwitcherLabel,
+      weekOptions: buildWeekPickerOptions(calendar),
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -372,20 +466,112 @@ Page({
   },
 
   onWeekChange(event) {
-    const type = event.detail.type;
+    const detail = event && event.detail || {};
+    const type = detail.type;
+    if (type !== "prev" && type !== "next" && type !== "current" && type !== "select") return;
     const calendar = teachingCalendarService.getImmediateActiveCalendar();
     const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
-      : clampWeek(event.detail.week, termConfig);
-    saveSettings({
-      currentWeek: nextWeek,
-      manualWeekOverride: type !== "current",
-    });
+      : clampWeek(detail.week, termConfig);
+    if (type !== "current" && nextWeek === this.data.currentWeek) return;
+    this._weekOverride = nextWeek;
     this.loadSchedule();
   },
 
+  backToCurrentWeek() {
+    this.onWeekChange({ detail: { type: "current" } });
+  },
+
+  openScheduleFullscreen() {
+    const previewKey = String(this.data.activeScheduleTab || "").replace(/^recent-/, "");
+    const preview = this.data.activeScheduleTab !== "current" && this._recentScheduleTabs &&
+      this._recentScheduleTabs.find((item) => getScheduleTabIdentity(item) === previewKey);
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = preview || getCurrentScheduleTarget();
+    if (!target) return;
+    const courses = preview ? preview.courses : getCoursesByClass(getSettings().className);
+    wx.navigateTo({
+      url: "/pages/schedule-fullscreen/schedule-fullscreen",
+      events: {
+        weekChange: (event) => this.onWeekChange({ detail: { type: "select", week: event.week } }),
+      },
+      success: (result) => result.eventChannel.emit("schedule", {
+        title: this.data.className,
+        courses,
+        target,
+        week: this.data.currentWeek,
+        showWeekend: this.data.showWeekend,
+        weekendShowMode: this.data.weekendShowMode,
+      }),
+    });
+  },
+
+  onWeekPickerModalChange(event) {
+    this.setData({ weekPickerOpen: Boolean(event.detail && event.detail.visible) });
+  },
+
+  canHandleScheduleSwipe() {
+    return !(this.data.showWeekend && this.data.weekendShowMode === "detail") &&
+      !this.data.weekPickerOpen &&
+      !this.data.detailVisible &&
+      !this.data.showUnplacedCourses &&
+      !this.data.showTodayReminder &&
+      !this.data.showDisclaimerPopup &&
+      !this.data.showMoreMenu &&
+      !this.data.showNoticeDetail &&
+      !this.data.showAppNoticeModal;
+  },
+
+  onScheduleTouchStart(event) {
+    const touches = event && event.touches || [];
+    if (!this.canHandleScheduleSwipe() || touches.length !== 1) {
+      this._weekSwipeState = null;
+      return;
+    }
+    const touch = touches[0];
+    this._weekSwipeState = {
+      start: { clientX: touch.clientX, clientY: touch.clientY },
+      last: { clientX: touch.clientX, clientY: touch.clientY },
+    };
+  },
+
+  onScheduleTouchMove(event) {
+    const touches = event && event.touches || [];
+    if (!this._weekSwipeState || touches.length !== 1) return;
+    const touch = touches[0];
+    this._weekSwipeState.last = { clientX: touch.clientX, clientY: touch.clientY };
+  },
+
+  onScheduleTouchEnd(event) {
+    const swipeState = this._weekSwipeState;
+    this._weekSwipeState = null;
+    if (!swipeState || !this.canHandleScheduleSwipe()) return;
+    const changedTouches = event && event.changedTouches || [];
+    const end = changedTouches.length === 1 ? changedTouches[0] : swipeState.last;
+    const direction = resolveWeekSwipeDirection(swipeState.start, end);
+    if (!direction) return;
+
+    // A committed horizontal gesture must not also open the course card that
+    // happened to be under the finger when touchend fired.
+    this._suppressCourseTapUntil = Date.now() + 240;
+    const adjacent = resolveAdjacentWeek(this.data.currentWeek, this.data.totalWeeks, direction);
+    if (!adjacent.changed) return;
+    this.onWeekChange({
+      detail: {
+        type: direction,
+        week: adjacent.week,
+        source: "swipe",
+      },
+    });
+  },
+
+  onScheduleTouchCancel() {
+    this._weekSwipeState = null;
+  },
+
   onCourseTap(event) {
+    if (Date.now() < Number(this._suppressCourseTapUntil || 0)) return;
     this.setData({
       selectedCourse: event.detail.course,
       detailVisible: true,
@@ -420,6 +606,16 @@ Page({
         title: "课程信息不完整",
         icon: "none",
       });
+    }
+  },
+
+  onEditExistingCourse(event) {
+    try {
+      courseOverrideService.saveEditDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
+    } catch (error) {
+      wx.showToast({ title: "请从个性化页面选择课程", icon: "none" });
     }
   },
 
@@ -548,67 +744,6 @@ Page({
   hideMoreMenu() {
     this.setData({
       showMoreMenu: false
-    });
-  },
-
-  async refreshData() {
-    this.hideMoreMenu();
-    const { getCurrentScheduleTarget } = require("../../utils/storage");
-    const target = getCurrentScheduleTarget();
-    if (!target) {
-      wx.showToast({ title: "请先选择课表", icon: "none" });
-      return;
-    }
-    wx.showLoading({ title: "正在刷新..." });
-    const app = getApp();
-    try {
-      if (typeof app.checkReleasePackForeground === "function") {
-        await app.checkReleasePackForeground();
-      }
-      const result = await currentScheduleService.ensureCurrentScheduleFresh({
-        force: true,
-        forceNetwork: true,
-        forcePointer: true,
-      });
-      await Promise.all([
-        app.loadBootstrapData({ force: true, silent: true }).catch(() => null),
-        app.loadAppConfigData({ force: true, silent: true }).catch(() => null),
-        teachingCalendarService.loadActiveTeachingCalendar({ forceNetwork: true }).catch(() => null),
-      ]);
-      await this.loadPageConfig();
-      wx.hideLoading();
-      this.loadSchedule();
-      let title = "当前已是最新课表";
-      if (result && result.status === "UPDATED") {
-        title = "课表已更新";
-      } else if (result && result.status === "PROTECTED_PERSONAL_XLS") {
-        title = "个人课表请重新导入更新";
-      } else if (result && result.status === "AMBIGUOUS") {
-        title = "找到多个同名课表，请重新确认";
-      } else if (result && result.success === false) {
-        title = "网络暂不可用，已保留当前课表";
-      }
-      wx.showToast({ title, icon: result && result.status === "UPDATED" ? "success" : "none" });
-    } catch (error) {
-      wx.hideLoading();
-      this.loadSchedule();
-      wx.showToast({ title: "网络暂不可用，已保留当前课表", icon: "none" });
-    }
-  },
-
-  clearLocalCache() {
-    this.hideMoreMenu();
-    wx.showModal({
-      title: "提示",
-      content: "确定要清除所有缓存吗？",
-      success: (res) => {
-        if (res.confirm) {
-          const { clearAppCache, clearCurrentScheduleTarget } = require("../../utils/storage");
-          clearAppCache();
-          clearCurrentScheduleTarget();
-          this.onShow();
-        }
-      }
     });
   },
 

@@ -37,6 +37,55 @@ function compactStatus(status) {
   };
 }
 
+function releaseKey(job) {
+  const input = job && job.input || {};
+  return String(input.version || input.releaseVersion || "");
+}
+
+function isSameReleaseReconcile(running, version) {
+  return Boolean(running)
+    && running.type === "static-release-reconcile"
+    && releaseKey(running) === String(version || "");
+}
+
+function waitMs() {
+  const parsed = Number(process.env.FOSU_RECONCILE_WAIT_MS);
+  if (Number.isFinite(parsed) && parsed >= 1000) return Math.min(parsed, 180000);
+  return 180000;
+}
+
+function pollMs() {
+  const parsed = Number(process.env.FOSU_RECONCILE_POLL_MS);
+  if (Number.isFinite(parsed) && parsed >= 200) return Math.min(parsed, 10000);
+  return 8000;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForReconcile(jobId) {
+  const deadline = Date.now() + waitMs();
+  while (Date.now() <= deadline) {
+    const job = jobService.readJob(jobId);
+    if (!job) {
+      const error = new Error("running reconcile disappeared");
+      error.code = "STATIC_RECONCILE_LOST";
+      throw error;
+    }
+    if (job.status === "success") return job;
+    if (job.status === "failed" || job.status === "cancelled") {
+      const error = new Error(job.error && job.error.message || "reconcile failed");
+      error.code = job.error && job.error.code || "STATIC_RECONCILE_FAILED";
+      throw error;
+    }
+    await sleep(pollMs());
+  }
+  const error = new Error("timed out waiting for the running reconcile");
+  error.code = "STATIC_RECONCILE_WAIT_TIMEOUT";
+  throw error;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
@@ -49,16 +98,39 @@ async function main() {
   }
 
   const version = args.version || args.releaseVersion || "";
-  const job = jobService.createExternalJob("static-release-reconcile", {
-    version,
-    reason: args.reason || "postdeploy",
-  }, {
-    lockGroup: releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP,
-    worker: {
-      kind: "inline-script",
-      task: "static-release-reconcile",
-    },
-  });
+  let job;
+  try {
+    job = jobService.createExternalJob("static-release-reconcile", {
+      version,
+      reason: args.reason || "postdeploy",
+    }, {
+      lockGroup: releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP,
+      worker: {
+        kind: "inline-script",
+        task: "static-release-reconcile",
+      },
+    });
+  } catch (error) {
+    if (!error || error.code !== "JOB_ALREADY_RUNNING") throw error;
+    const running = error.job;
+    if (!isSameReleaseReconcile(running, version)) {
+      console.error(JSON.stringify({
+        success: false,
+        code: "JOB_ALREADY_RUNNING",
+        message: "a different release job is already running",
+      }, null, 2));
+      process.exit(1);
+      return;
+    }
+    const joined = await waitForReconcile(running.id);
+    console.log(JSON.stringify({
+      success: true,
+      joined: true,
+      jobId: joined.id,
+      staticSync: joined.result && joined.result.staticSync || {},
+    }, null, 2));
+    return;
+  }
 
   jobService.startJob(job.id, {
     workerPid: process.pid,

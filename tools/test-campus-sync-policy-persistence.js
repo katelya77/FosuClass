@@ -1,0 +1,20 @@
+const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-policy-persist-"));
+process.env.CAMPUS_SYNC_OPS_DIR = dir;
+const policy = require("../server/src/services/campusSyncPolicyService");
+policy.resetForTests();
+const saved = policy.update({ rateLimit: 4, rateWindowSeconds: 720, dailyLimit: 7, globalActiveCap: 8 }, "admin-test");
+assert.deepStrictEqual([saved.after.rateLimit, saved.after.rateWindowSeconds, saved.after.dailyLimit, saved.after.globalActiveCap], [4, 720, 7, 8]);
+const again = policy.reload();
+assert.deepStrictEqual([again.rateLimit, again.rateWindowSeconds, again.dailyLimit, again.globalActiveCap], [4, 720, 7, 8]);
+const raw = fs.readFileSync(path.join(dir, "policy.json"), "utf8");
+assert.ok(!/token|secret|openid|studentId|password|cookie|ticket/i.test(raw));
+fs.writeFileSync(path.join(dir, "policy.json"), "{");
+const broken = policy.reload();
+assert.strictEqual(broken.storageStatus, "invalid");
+assert.strictEqual(broken.dailyLimit, 10);
+console.log("campus-sync-policy-persistence PASS");

@@ -22,6 +22,17 @@ function createMockWx() {
   };
 }
 
+function createMultiEndMockWx() {
+  const runtime = createMockWx();
+  runtime.getAppBaseInfo = () => ({ host: { env: "SAAASDK" } });
+  runtime.miniapp = {
+    requestSubscribeMessage(options) {
+      runtime.calls.push({ api: "miniapp.requestSubscribeMessage", options });
+    },
+  };
+  return runtime;
+}
+
 function createMockContext(overrides = {}) {
   const calls = [];
   return {
@@ -122,6 +133,18 @@ const EVIL_PAGE = "/pages/hack/hack";
   assert.strictEqual(confirmed.executed, true);
   assert.strictEqual(wxMock.calls[0].api, "requestSubscribeMessage");
   assert.deepStrictEqual(wxMock.calls[0].options.tmplIds, ["tmpl-course-1"]);
+}
+
+{
+  const wxMock = createMultiEndMockWx();
+  const bus = createActionBus({ wx: wxMock, context: createMockContext() });
+  const result = bus.execute(
+    { command: "requestSubscribe", input: { scene: "course_reminder" } },
+    { confirmed: true }
+  );
+  assert.strictEqual(result.executed, false, "移动 App 不得复用小程序订阅模板");
+  assert.strictEqual(result.reason, "MOBILE_SUBSCRIPTION_UNCONFIGURED");
+  assert.strictEqual(wxMock.calls.length, 0, "未配置移动应用模板与投递链路时不得调用订阅 API");
 }
 
 // ---------- 小程序端：读类 Action ----------

@@ -20,6 +20,10 @@
 6. 移除 `FOSU_STATIC_TICKET_SECRET_PREVIOUS`。
 7. 再次部署。
 
+## 生成
+
+可以在受信任的本机用 `openssl rand -hex 32` 生成新值。生成结果只能进入密钥管理界面或权限受保护的环境文件。不要把生成值提交到 Git、issue、PR、Actions 日志、对话或测试夹具。
+
 ## 规则
 
 - 不要复用 `ADMIN_API_TOKEN` 作为 session 或 static ticket secret。

@@ -1,0 +1,25 @@
+[Unit]
+Description=FosuClass WYZ full schedule collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fosuclass
+ExecStart=/usr/bin/node tools/wyz-schedule-collector/collector.js
+EnvironmentFile=/etc/fosuclass/full-sync.env
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=40%
+MemoryHigh=512M
+MemoryMax=768M
+TasksMax=128
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fosuclass/schedule-collector
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

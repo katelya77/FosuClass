@@ -1,0 +1,643 @@
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+
+const EDGES = [100, 250, 500, 1000, 2000, 4000, 8000, 15000, 30000, 60000, 120000];
+const QUEUE_MAX = 800;
+const RING_MAX = 400;
+const EVENT_RETENTION_MS = 14 * 86400000;
+const HOUR_RETENTION_MS = 90 * 86400000;
+const STORAGE_CAP_BYTES = 100 * 1024 * 1024;
+
+const queue = [];
+const ring = [];
+const hours = new Map();
+const minutes = new Map();
+let dropped = 0;
+let flushTimer = null;
+let lastDiskBytes = 0;
+const FILE_CACHE_MAX = 35;
+const FILE_CACHE_TTL_MS = 30000;
+const RANGE_CACHE_TTL_MS = 10000;
+const fileCache = new Map();
+const rangeCache = new Map();
+let lastIo = { filesRead: 0, cacheHit: false, range: "" };
+
+function opsDir() {
+  return path.resolve(process.env.CAMPUS_SYNC_OPS_DIR || path.join(__dirname, "../../storage/ops/campus-sync"));
+}
+
+function emptyBucket() {
+  return {
+    attempts: 0,
+    success: 0,
+    failed: 0,
+    rateLimited: 0,
+    busy: 0,
+    timeout: 0,
+    credentialFailures: 0,
+    systemFailures: 0,
+    schoolChallenges: 0,
+    challengePreloginCaptcha: 0,
+    challengePostlogin: 0,
+    challengeRiskControl: 0,
+    dailyLimited: 0,
+    authModeMobile: 0,
+    authModeCas: 0,
+    authModeSession: 0,
+    lastChallengeAt: 0,
+    lastSuccessAt: 0,
+    lastSuccessAuthMode: "",
+    durationCount: 0,
+    durationSum: 0,
+    queueWaitCount: 0,
+    queueWaitSum: 0,
+    loginCount: 0,
+    scheduleCount: 0,
+    profileCount: 0,
+    maxQueued: 0,
+    maxHeartbeatAgeMs: 0,
+    histogram: EDGES.map(() => 0),
+    queueHistogram: EDGES.map(() => 0),
+    loginHistogram: EDGES.map(() => 0),
+    scheduleHistogram: EDGES.map(() => 0),
+    profileHistogram: EDGES.map(() => 0),
+    errors: {},
+  };
+}
+
+function hourKey(time) {
+  return new Date(time).toISOString().slice(0, 13);
+}
+
+function minuteKey(time) {
+  return Math.floor(Number(time) / 60000);
+}
+
+function addSample(bucket, fieldCount, fieldSum, value) {
+  const sample = Math.max(0, Number(value) || 0);
+  if (!sample && value !== 0) return;
+  bucket[fieldCount] += 1;
+  bucket[fieldSum] += sample;
+}
+
+function addDuration(bucket, value) {
+  const sample = Math.max(0, Number(value) || 0);
+  bucket.durationCount += 1;
+  bucket.durationSum += sample;
+  addHistogram(bucket, "histogram", sample);
+}
+
+function addHistogram(bucket, key, value) {
+  if (!Array.isArray(bucket[key])) bucket[key] = EDGES.map(() => 0);
+  const sample = Math.max(0, Number(value) || 0);
+  let index = EDGES.findIndex((edge) => sample <= edge);
+  if (index < 0) index = EDGES.length - 1;
+  bucket[key][index] += 1;
+}
+
+function histogramPercentile(histogram, count, ratio) {
+  const total = Number(count || 0);
+  if (!total || !Array.isArray(histogram)) return null;
+  const target = Math.ceil(total * ratio);
+  let seen = 0;
+  for (let index = 0; index < histogram.length; index += 1) {
+    seen += Number(histogram[index] || 0);
+    if (seen >= target) return EDGES[index];
+  }
+  return EDGES[EDGES.length - 1];
+}
+
+function percentile(bucket, ratio) {
+  const total = bucket.durationCount || 0;
+  if (!total) return 0;
+  const target = Math.ceil(total * ratio);
+  let seen = 0;
+  for (let index = 0; index < bucket.histogram.length; index += 1) {
+    seen += bucket.histogram[index];
+    if (seen >= target) return EDGES[index];
+  }
+  return EDGES[EDGES.length - 1];
+}
+
+function touch(time) {
+  const hour = hourKey(time);
+  const minute = minuteKey(time);
+  if (!hours.has(hour)) hours.set(hour, emptyBucket());
+  if (!minutes.has(minute)) minutes.set(minute, emptyBucket());
+  const minKeep = minuteKey(Date.now()) - 180;
+  minutes.forEach((value, key) => {
+    if (key < minKeep) minutes.delete(key);
+  });
+  return { hour: hours.get(hour), minute: minutes.get(minute), hourName: hour };
+}
+
+function classify(event) {
+  const code = String(event.resultCode || event.errorCode || "");
+  const status = String(event.status || "");
+  if (code === "INVALID_CREDENTIALS" || code === "LOGIN_REJECTED") return "credential";
+  if (code === "INTERACTIVE_CHALLENGE_REQUIRED" || code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") return "challenge";
+  if (code === "IMPORT_RATE_LIMITED" || code === "CAMPUS_SYNC_RATE_LIMITED" || code === "CAMPUS_SYNC_DAILY_LIMIT" || code === "CAMPUS_SYNC_CONCURRENT_LIMIT") return "rate";
+  if (code === "CAMPUS_SYNC_BUSY" || code === "CAMPUS_SYNC_DEGRADED") return "busy";
+  if (code === "TIMEOUT" || status === "expired") return "timeout";
+  if (code === "SCHOOL_UNAVAILABLE" || code === "AGENT_OFFLINE" || code === "STRUCTURE_CHANGED") return "system";
+  if (status === "completed" || code === "OK") return "success";
+  if (status === "failed" || status === "expired") return "system";
+  return "";
+}
+
+function knownAuthMode(value) {
+  return value === "mobile" || value === "cas" || value === "authenticated-session" ? value : "";
+}
+
+function knownChallengeReason(value) {
+  return value === "prelogin-captcha" || value === "postlogin-challenge" || value === "risk-control" ? value : "";
+}
+
+function apply(bucket, event) {
+  const kind = classify(event);
+  if (!kind) return;
+  const code = String(event.resultCode || event.errorCode || "");
+  bucket.attempts += 1;
+  if (kind === "success") bucket.success += 1;
+  if (kind === "credential") bucket.credentialFailures += 1;
+  if (kind === "challenge") {
+    bucket.schoolChallenges += 1;
+    const reason = knownChallengeReason(event.challengeReason);
+    if (reason === "prelogin-captcha") bucket.challengePreloginCaptcha += 1;
+    else if (reason === "postlogin-challenge") bucket.challengePostlogin += 1;
+    else if (reason === "risk-control") bucket.challengeRiskControl += 1;
+  }
+  if (kind === "system" || kind === "timeout") {
+    bucket.failed += 1;
+    bucket.systemFailures += 1;
+  }
+  if (kind === "timeout") bucket.timeout += 1;
+  if (kind === "rate") {
+    if (code === "CAMPUS_SYNC_DAILY_LIMIT") bucket.dailyLimited += 1;
+    else bucket.rateLimited += 1;
+  }
+  const mode = knownAuthMode(event.authMode);
+  if (mode === "mobile") bucket.authModeMobile += 1;
+  else if (mode === "cas") bucket.authModeCas += 1;
+  else if (mode === "authenticated-session") bucket.authModeSession += 1;
+  const at = Number(event.t) || 0;
+  if (kind === "success" && at >= Number(bucket.lastSuccessAt || 0)) {
+    bucket.lastSuccessAt = at;
+    bucket.lastSuccessAuthMode = mode;
+  }
+  if (kind === "challenge" && at >= Number(bucket.lastChallengeAt || 0)) bucket.lastChallengeAt = at;
+  if (kind === "busy") bucket.busy += 1;
+  if (event.durationMs != null) addDuration(bucket, event.durationMs);
+  if (event.queueWaitMs != null) {
+    addSample(bucket, "queueWaitCount", "queueWaitSum", event.queueWaitMs);
+    addHistogram(bucket, "queueHistogram", event.queueWaitMs);
+  }
+  if (event.schoolLoginMs != null) {
+    bucket.loginCount += 1;
+    addHistogram(bucket, "loginHistogram", event.schoolLoginMs);
+  }
+  if (event.scheduleFetchMs != null) {
+    bucket.scheduleCount += 1;
+    addHistogram(bucket, "scheduleHistogram", event.scheduleFetchMs);
+  }
+  if (event.profileFetchMs != null) {
+    bucket.profileCount += 1;
+    addHistogram(bucket, "profileHistogram", event.profileFetchMs);
+  }
+  if (event.resultCode) bucket.errors[event.resultCode] = (bucket.errors[event.resultCode] || 0) + 1;
+}
+
+function record(event) {
+  const item = Object.assign({ t: Date.now() }, event || {});
+  ["password", "studentId", "studentName", "className", "openid", "cookie", "ticket", "wxCode", "authorization", "html", "casHtml", "execution", "pwdEncryptSalt", "casUrl", "loginUrl"].forEach((key) => {
+    delete item[key];
+  });
+  if (item.authMode !== "mobile" && item.authMode !== "cas" && item.authMode !== "authenticated-session") delete item.authMode;
+  if (!knownChallengeReason(item.challengeReason)) delete item.challengeReason;
+  else item.challengeReason = knownChallengeReason(item.challengeReason);
+  if (item.stageTimings && typeof item.stageTimings === "object") {
+    ["schoolLoginMs", "scheduleFetchMs", "profileFetchMs", "normalizeMs", "previewBuildMs"].forEach((key) => {
+      const value = Number(item.stageTimings[key]);
+      if (Number.isFinite(value) && value >= 0) item[key] = Math.round(value);
+    });
+    delete item.stageTimings;
+  }
+  const buckets = touch(item.t);
+  apply(buckets.hour, item);
+  apply(buckets.minute, item);
+  ring.push(item);
+  if (ring.length > RING_MAX) ring.shift();
+  if (queue.length >= QUEUE_MAX) {
+    dropped += 1;
+    return item;
+  }
+  queue.push(item);
+  scheduleFlush();
+  return item;
+}
+
+function recordAttempt(code) {
+  return record({
+    status: code === "IMPORT_RATE_LIMITED" ? "rejected" : "rejected",
+    resultCode: code,
+    durationMs: 0,
+    queueWaitMs: 0,
+  });
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    try {
+      flushNow();
+    } catch (error) {
+      dropped += queue.length;
+      queue.length = 0;
+    }
+  }, 1500);
+  if (flushTimer.unref) flushTimer.unref();
+}
+
+function dayStamp(time) {
+  return new Date(time).toISOString().slice(0, 10);
+}
+
+function flushNow() {
+  if (!queue.length && !hours.size) return { wrote: 0 };
+  const dir = opsDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const batch = queue.splice(0, queue.length);
+  const groups = new Map();
+  batch.forEach((item) => {
+    const day = dayStamp(item.t);
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(`${JSON.stringify(item)}\n`);
+  });
+  groups.forEach((lines, day) => {
+    fs.appendFileSync(path.join(dir, `events-${day}.jsonl`), lines.join(""));
+  });
+  const hourGroups = new Map();
+  hours.forEach((bucket, key) => {
+    const day = key.slice(0, 10);
+    if (!hourGroups.has(day)) hourGroups.set(day, {});
+    hourGroups.get(day)[key] = bucket;
+  });
+  hourGroups.forEach((payload, day) => {
+    const file = path.join(dir, `hours-${day}.json`);
+    let existing = {};
+    try {
+      existing = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch (error) {
+      existing = {};
+    }
+    Object.keys(payload).forEach((key) => {
+      existing[key] = payload[key];
+    });
+    fs.writeFileSync(file, JSON.stringify(existing));
+    fileCache.delete(`hours-${day}.json`);
+  });
+  rangeCache.clear();
+  enforceCap(dir);
+  return { wrote: batch.length };
+}
+
+function fileTime(name) {
+  const match = String(name).match(/(\d{4}-\d{2}-\d{2})/);
+  return match ? Date.parse(`${match[1]}T00:00:00.000Z`) : 0;
+}
+
+function enforceCap(dir) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir).map((name) => {
+      const full = path.join(dir, name);
+      const stat = fs.statSync(full);
+      return { name, full, size: stat.size, time: fileTime(name) || stat.mtimeMs };
+    });
+  } catch (error) {
+    return;
+  }
+  const now = Date.now();
+  entries.forEach((entry) => {
+    const eventFile = entry.name.startsWith("events-");
+    const hourFile = entry.name.startsWith("hours-");
+    if (eventFile && entry.time && now - entry.time > EVENT_RETENTION_MS) fs.rmSync(entry.full, { force: true });
+    if (hourFile && entry.time && now - entry.time > HOUR_RETENTION_MS) fs.rmSync(entry.full, { force: true });
+  });
+  entries = entries.filter((entry) => fs.existsSync(entry.full));
+  let total = entries.reduce((sum, entry) => sum + entry.size, 0);
+  lastDiskBytes = total;
+  const removable = entries
+    .filter((entry) => entry.name.startsWith("events-") || entry.name.startsWith("hours-"))
+    .sort((left, right) => left.time - right.time);
+  while (total > STORAGE_CAP_BYTES && removable.length) {
+    const oldest = removable.shift();
+    total -= oldest.size;
+    fs.rmSync(oldest.full, { force: true });
+  }
+  lastDiskBytes = Math.max(0, total);
+}
+
+function mergeBuckets(list) {
+  const merged = emptyBucket();
+  list.forEach((bucket) => {
+    if (!bucket) return;
+    ["attempts", "success", "failed", "rateLimited", "dailyLimited", "busy", "timeout", "credentialFailures", "systemFailures", "schoolChallenges", "challengePreloginCaptcha", "challengePostlogin", "challengeRiskControl", "authModeMobile", "authModeCas", "authModeSession", "durationCount", "durationSum", "queueWaitCount", "queueWaitSum", "loginCount", "scheduleCount", "profileCount"].forEach((key) => {
+      merged[key] += Number(bucket[key] || 0);
+    });
+    if (Number(bucket.lastChallengeAt || 0) > merged.lastChallengeAt) merged.lastChallengeAt = Number(bucket.lastChallengeAt || 0);
+    if (Number(bucket.lastSuccessAt || 0) >= merged.lastSuccessAt) {
+      merged.lastSuccessAt = Number(bucket.lastSuccessAt || 0);
+      merged.lastSuccessAuthMode = knownAuthMode(bucket.lastSuccessAuthMode);
+    }
+    merged.maxQueued = Math.max(merged.maxQueued, Number(bucket.maxQueued || 0));
+    merged.maxHeartbeatAgeMs = Math.max(merged.maxHeartbeatAgeMs, Number(bucket.maxHeartbeatAgeMs || 0));
+    ["histogram", "queueHistogram", "loginHistogram", "scheduleHistogram", "profileHistogram"].forEach((key) => {
+      EDGES.forEach((edge, index) => {
+        merged[key][index] += Number(bucket[key] && bucket[key][index] || 0);
+      });
+    });
+    Object.keys(bucket.errors || {}).forEach((code) => {
+      merged.errors[code] = (merged.errors[code] || 0) + Number(bucket.errors[code] || 0);
+    });
+  });
+  return merged;
+}
+
+function requiredHourFiles(range, now) {
+  if (range === "1h") return [];
+  const current = Number(now || Date.now());
+  const span = range === "7d" ? 7 * 86400000 : (range === "30d" ? 30 * 86400000 : 86400000);
+  const start = current - span;
+  const names = new Set();
+  for (let time = start - 3600000; time <= current; time += 12 * 3600000) {
+    names.add(`hours-${new Date(time).toISOString().slice(0, 10)}.json`);
+  }
+  names.add(`hours-${new Date(current).toISOString().slice(0, 10)}.json`);
+  names.add(`hours-${new Date(start).toISOString().slice(0, 10)}.json`);
+  return Array.from(names);
+}
+
+function rememberFile(name, parsed) {
+  fileCache.set(name, { parsed, loadedAt: Date.now() });
+  while (fileCache.size > FILE_CACHE_MAX) fileCache.delete(fileCache.keys().next().value);
+}
+
+function publicBucket(bucket) {
+  const next = emptyBucket();
+  if (!bucket || typeof bucket !== "object") return next;
+  Object.keys(next).forEach((key) => {
+    if (key === "histogram" || key.endsWith("Histogram")) {
+      next[key] = EDGES.map((edge, index) => Number(bucket[key] && bucket[key][index] || 0));
+    } else if (key === "errors" && bucket.errors && typeof bucket.errors === "object") {
+      Object.keys(bucket.errors).forEach((code) => { next.errors[String(code).slice(0, 64)] = Number(bucket.errors[code] || 0); });
+    } else if (key === "lastSuccessAuthMode") {
+      next[key] = knownAuthMode(bucket.lastSuccessAuthMode);
+    } else if (key !== "errors") next[key] = Number(bucket[key] || 0);
+  });
+  return next;
+}
+
+function readHourFile(name) {
+  const cached = fileCache.get(name);
+  if (cached && Date.now() - cached.loadedAt < FILE_CACHE_TTL_MS) return { parsed: cached.parsed, hit: true };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(opsDir(), name), "utf8"));
+    const safe = {};
+    Object.keys(parsed || {}).forEach((key) => {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(key)) safe[key] = publicBucket(parsed[key]);
+    });
+    rememberFile(name, safe);
+    return { parsed: safe, hit: false };
+  } catch (error) {
+    return null;
+  }
+}
+
+function diskHoursFor(range, now) {
+  const found = new Map();
+  let filesRead = 0;
+  let cacheHit = true;
+  requiredHourFiles(range, now).forEach((name) => {
+    const loaded = readHourFile(name);
+    if (!loaded) return;
+    if (!loaded.hit) {
+      filesRead += 1;
+      cacheHit = false;
+    }
+    Object.keys(loaded.parsed || {}).forEach((key) => found.set(key, loaded.parsed[key]));
+  });
+  lastIo = { filesRead, cacheHit: cacheHit && requiredHourFiles(range, now).length > 0, range, considered: requiredHourFiles(range, now).length };
+  return found;
+}
+
+function bucketsForRange(range, now) {
+  const current = Number(now || Date.now());
+  const span = range === "1h" ? 3600000 : (range === "7d" ? 7 * 86400000 : (range === "30d" ? 30 * 86400000 : 86400000));
+  const start = current - span;
+  if (range === "1h") {
+    lastIo = { filesRead: 0, cacheHit: true, range: "1h", considered: 0 };
+    const list = [];
+    minutes.forEach((bucket, key) => {
+      if (key * 60000 >= start) list.push({ key: new Date(key * 60000).toISOString(), bucket });
+    });
+    return list.sort((left, right) => left.key.localeCompare(right.key));
+  }
+  const disk = diskHoursFor(range, now);
+  hours.forEach((bucket, key) => disk.set(key, bucket));
+  return Array.from(disk.entries())
+    .filter(([key]) => Date.parse(`${key}:00:00.000Z`) >= start - 3600000)
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([key, bucket]) => ({ key, bucket }));
+}
+
+function getRangeSnapshot(range, now) {
+  const current = Number(now || Date.now());
+  const cached = rangeCache.get(range);
+  if (cached && current - cached.at < RANGE_CACHE_TTL_MS) {
+    lastIo = { filesRead: 0, cacheHit: true, range, considered: cached.considered || 0 };
+    return cached.value;
+  }
+  const series = bucketsForRange(range, current);
+  const value = { series, summary: summarize(mergeBuckets(series.map((item) => item.bucket))) };
+  rangeCache.set(range, { at: current, value, considered: lastIo.considered || 0 });
+  return value;
+}
+
+function latencyPair(histogram, count) {
+  const samples = Number(count || 0);
+  if (!samples) return { samples: 0, p50: null, p95: null };
+  return {
+    samples,
+    p50: histogramPercentile(histogram, samples, 0.5),
+    p95: histogramPercentile(histogram, samples, 0.95),
+  };
+}
+
+function summarize(bucket) {
+  const attempts = bucket.attempts || 0;
+  const system = bucket.systemFailures || 0;
+  const credential = bucket.credentialFailures || 0;
+  const school = bucket.schoolChallenges || 0;
+  const success = bucket.success || 0;
+  const relevant = Math.max(0, attempts - credential - school);
+  return {
+    attempts,
+    success,
+    failed: bucket.failed || 0,
+    rateLimited: bucket.rateLimited || 0,
+    dailyLimited: bucket.dailyLimited || 0,
+    busy: bucket.busy || 0,
+    timeout: bucket.timeout || 0,
+    credentialFailures: credential,
+    systemFailures: system,
+    schoolChallenges: school,
+    challengeReasons: {
+      "prelogin-captcha": bucket.challengePreloginCaptcha || 0,
+      "postlogin-challenge": bucket.challengePostlogin || 0,
+      "risk-control": bucket.challengeRiskControl || 0,
+    },
+    successRate: relevant ? Math.round((success / relevant) * 1000) / 10 : (success ? 100 : 0),
+    systemFailureRate: relevant ? Math.round((system / relevant) * 1000) / 10 : 0,
+    credentialFailureRate: attempts ? Math.round((credential / attempts) * 1000) / 10 : 0,
+    schoolChallengeRate: attempts ? Math.round((school / attempts) * 1000) / 10 : 0,
+    authModes: {
+      mobile: bucket.authModeMobile || 0,
+      cas: bucket.authModeCas || 0,
+      "authenticated-session": bucket.authModeSession || 0,
+    },
+    lastSuccessAuthMode: knownAuthMode(bucket.lastSuccessAuthMode),
+    lastChallengeAt: bucket.lastChallengeAt || 0,
+    avgDurationMs: bucket.durationCount ? Math.round(bucket.durationSum / bucket.durationCount) : null,
+    p50DurationMs: bucket.durationCount ? percentile(bucket, 0.5) : null,
+    p95DurationMs: bucket.durationCount ? percentile(bucket, 0.95) : null,
+    p99DurationMs: bucket.durationCount ? percentile(bucket, 0.99) : null,
+    queueWaitP95Ms: bucket.queueWaitCount ? Math.round(bucket.queueWaitSum / bucket.queueWaitCount) : 0,
+    stageLatency: {
+      total: latencyPair(bucket.histogram, bucket.durationCount),
+      queue: latencyPair(bucket.queueHistogram, bucket.queueWaitCount),
+      login: latencyPair(bucket.loginHistogram, bucket.loginCount),
+      schedule: latencyPair(bucket.scheduleHistogram, bucket.scheduleCount),
+      profile: latencyPair(bucket.profileHistogram, bucket.profileCount),
+    },
+    maxQueued: bucket.maxQueued || 0,
+    maxHeartbeatAgeMs: bucket.maxHeartbeatAgeMs || 0,
+    errors: bucket.errors || {},
+  };
+}
+
+function observeRuntime(sample) {
+  const buckets = touch(Date.now());
+  const queued = Math.max(0, Number(sample && sample.queued) || 0);
+  const age = Math.max(0, Number(sample && sample.heartbeatAgeMs) || 0);
+  buckets.hour.maxQueued = Math.max(buckets.hour.maxQueued || 0, queued);
+  buckets.hour.maxHeartbeatAgeMs = Math.max(buckets.hour.maxHeartbeatAgeMs || 0, age);
+}
+
+function memoryP95() {
+  return percentile(mergeBuckets(Array.from(hours.values())), 0.95);
+}
+
+function overview(range, now) {
+  return getRangeSnapshot(range || "24h", now).summary;
+}
+
+function timeseries(range, now) {
+  return getRangeSnapshot(range || "24h", now).series.map((item) => Object.assign({ bucket: item.key }, summarize(item.bucket)));
+}
+
+function listRecent(options) {
+  const limit = Math.min(50, Math.max(1, Number(options && options.limit || 50)));
+  const status = options && options.status || "";
+  const errorCode = options && options.errorCode || "";
+  const from = options && options.from ? Date.parse(options.from) : 0;
+  const to = options && options.to ? Date.parse(options.to) : 0;
+  const cursor = options && options.cursor ? String(options.cursor) : "";
+  let rows = ring.filter((item) => {
+    if (status && item.status !== status) return false;
+    if (errorCode && item.resultCode !== errorCode) return false;
+    if (from && item.t < from) return false;
+    if (to && item.t > to) return false;
+    return true;
+  });
+  if (cursor) {
+    const cursorTime = Number(cursor.split(":")[0] || 0);
+    rows = rows.filter((item) => item.t < cursorTime);
+  }
+  rows.sort((left, right) => right.t - left.t);
+  const page = rows.slice(0, limit).map(publicEvent);
+  const next = rows.length > limit ? `${page[page.length - 1].t}:${page[page.length - 1].jobIdShort}` : "";
+  return { events: page, nextCursor: next };
+}
+
+function publicEvent(item) {
+  const view = {
+    t: item.t,
+    jobIdShort: String(item.jobId || "").slice(0, 8),
+    principalHashPrefix: String(item.principalHashPrefix || item.ownerKey || "").slice(0, 8),
+    status: item.status || "",
+    queueWaitMs: item.queueWaitMs == null ? null : Number(item.queueWaitMs) || 0,
+    durationMs: item.durationMs == null ? null : Number(item.durationMs) || 0,
+    schoolLoginMs: item.schoolLoginMs == null ? null : Number(item.schoolLoginMs) || 0,
+    scheduleFetchMs: item.scheduleFetchMs == null ? null : Number(item.scheduleFetchMs) || 0,
+    profileFetchMs: item.profileFetchMs == null ? null : Number(item.profileFetchMs) || 0,
+    normalizeMs: item.normalizeMs == null ? null : Number(item.normalizeMs) || 0,
+    previewBuildMs: item.previewBuildMs == null ? null : Number(item.previewBuildMs) || 0,
+    jobQueuedAt: Number(item.jobQueuedAt || 0) || 0,
+    agentClaimedAt: Number(item.agentClaimedAt || 0) || 0,
+    courseCount: Number(item.courseCount || 0) || 0,
+    retryCount: Number(item.retryCount || 0) || 0,
+    resultCode: item.resultCode || "",
+    authMode: item.authMode || "",
+    source: item.source || "campus-sync",
+    requestId: String(item.requestId || "").slice(0, 32),
+  };
+  const reason = knownChallengeReason(item.challengeReason);
+  if (reason) view.challengeReason = reason;
+  return view;
+}
+
+function storageStats() {
+  return {
+    dir: opsDir(),
+    queuedWrites: queue.length,
+    dropped,
+    ring: ring.length,
+    diskBytes: lastDiskBytes,
+    eventRetentionDays: 14,
+    hourRetentionDays: 90,
+    storageCapBytes: STORAGE_CAP_BYTES,
+  };
+}
+
+function resetForTests() {
+  queue.length = 0;
+  ring.length = 0;
+  hours.clear();
+  minutes.clear();
+  fileCache.clear();
+  rangeCache.clear();
+  lastIo = { filesRead: 0, cacheHit: false, range: "" };
+  dropped = 0;
+  lastDiskBytes = 0;
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
+}
+
+module.exports = {
+  cacheAuditBlob: () => JSON.stringify(Array.from(fileCache.values())),
+  flushNow,
+  lastIo: () => lastIo,
+  listRecent,
+  memoryP95,
+  observeRuntime,
+  overview,
+  record,
+  requiredHourFiles,
+  recordAttempt,
+  resetForTests,
+  storageStats,
+  timeseries,
+};

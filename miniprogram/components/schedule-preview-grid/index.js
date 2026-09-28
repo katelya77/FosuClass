@@ -31,8 +31,21 @@ function themeForCell(cell) {
   return courseColorTokenForCourse(key);
 }
 
-function buildDefaultDays() {
-  return Array.from({ length: 5 }, (_, index) => ({
+function layoutSize(columnCount, dayColumnWidth, sectionHeight, sectionCount) {
+  const width = Number(dayColumnWidth || DEFAULT_DAY_WIDTH) || DEFAULT_DAY_WIDTH;
+  const height = Number(sectionHeight || DEFAULT_SECTION_HEIGHT) || DEFAULT_SECTION_HEIGHT;
+  const columns = Math.max(0, Number(columnCount) || 0);
+  const sections = Math.max(0, Number(sectionCount) || 0);
+  return {
+    dayTrackWidth: width * columns,
+    gridWidth: TIME_AXIS_WIDTH + width * columns,
+    scheduleHeight: height * sections,
+  };
+}
+
+function buildDefaultDays(count) {
+  const size = Number(count) === 7 ? 7 : 5;
+  return Array.from({ length: size }, (_, index) => ({
     weekday: index + 1,
     label: `周${"一二三四五六日"[index]}`,
   }));
@@ -77,8 +90,8 @@ function sortPreviewCellsForRender(cells, gridWeek) {
   });
 }
 
-function buildColumns(grid, sectionHeight, dayColumnWidth) {
-  const days = (grid && grid.days || []).length ? grid.days : buildDefaultDays();
+function buildColumns(grid, sectionHeight, dayColumnWidth, dayCount) {
+  const days = (grid && grid.days || []).length ? grid.days : buildDefaultDays(dayCount);
   const cells = grid && Array.isArray(grid.cells) ? grid.cells : [];
   return days.map((day) => {
     const gridWeek = grid && grid.week;
@@ -130,7 +143,7 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
   });
 }
 
-Component({
+if (typeof Component === "function") Component({
   properties: {
     grid: {
       type: Object,
@@ -144,6 +157,10 @@ Component({
       type: Number,
       value: DEFAULT_DAY_WIDTH,
     },
+    dayCount: {
+      type: Number,
+      value: 5,
+    },
   },
 
   data: {
@@ -155,13 +172,13 @@ Component({
   },
 
   observers: {
-    "grid, sectionHeight, dayColumnWidth": function (grid, sectionHeight, dayColumnWidth) {
+    "grid, sectionHeight, dayColumnWidth, dayCount": function (grid, sectionHeight, dayColumnWidth, dayCount) {
       const height = Number(sectionHeight || DEFAULT_SECTION_HEIGHT) || DEFAULT_SECTION_HEIGHT;
       const width = Number(dayColumnWidth || DEFAULT_DAY_WIDTH) || DEFAULT_DAY_WIDTH;
       const sections = (grid && grid.sections || []).length
         ? grid.sections
         : Array.from({ length: 14 }, (_, index) => ({ section: index + 1, label: `${index + 1}` }));
-      const columns = buildColumns(grid || {}, height, width);
+      const columns = buildColumns(grid || {}, height, width, dayCount);
       this.setData({
         sections,
         columns,
@@ -178,3 +195,9 @@ Component({
     },
   },
 });
+
+module.exports = {
+  buildColumns,
+  buildDefaultDays,
+  layoutSize,
+};

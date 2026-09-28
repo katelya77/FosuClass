@@ -129,7 +129,10 @@ button::after {
 
 .page {
   width: 100%;
+  max-width: 720px;
   min-height: 100vh;
+  margin-right: auto;
+  margin-left: auto;
   padding: 28rpx 24rpx calc(32rpx + env(safe-area-inset-bottom));
   overflow-x: hidden;
 }
@@ -178,4 +181,23 @@ button::after {
   font-size: 34rpx;
   font-weight: 700;
   color: #172033;
+}
+
+/* 多端应用在平板、折叠屏和横屏上保持可读的单列内容轨道。 */
+@media (min-width: 768px) {
+  .page {
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+
+  .card {
+    border-radius: 18px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .page {
+    padding-top: 16px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
 }

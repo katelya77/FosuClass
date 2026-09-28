@@ -1,0 +1,53 @@
+<page-meta page-style="overflow: hidden;" />
+<view class="fullscreen-page" style="padding-top: {{headerTop}}px;">
+  <view class="fullscreen-toolbar">
+    <view class="fullscreen-back" bindtap="exitFullscreen" role="button" aria-label="退出全屏课表"><text class="fullscreen-back-icon">‹</text><text>返回</text></view>
+    <text class="fullscreen-toolbar-title">周课表</text>
+  </view>
+  <view class="fullscreen-controls">
+    <view class="fullscreen-weekbar">
+      <view class="fullscreen-arrow {{currentWeek <= 1 ? 'is-disabled' : ''}}" bindtap="previousWeek" role="button" aria-label="上一周">‹</view>
+      <view class="fullscreen-week-summary">
+        <text class="fullscreen-week">第{{currentWeek}}周</text>
+        <text class="fullscreen-range">{{weekRangeText}}</text>
+      </view>
+      <view class="fullscreen-arrow {{currentWeek >= totalWeeks ? 'is-disabled' : ''}}" bindtap="nextWeek" role="button" aria-label="下一周">›</view>
+    </view>
+    <view class="fullscreen-subbar">
+      <text class="fullscreen-target">{{title}}</text>
+      <view wx:if="{{showBackToCurrentWeek}}" class="fullscreen-action" bindtap="backToCurrentWeek" role="button">回本周</view>
+      <view class="fullscreen-action fullscreen-zoom {{zoomed ? 'is-zoomed' : ''}}" bindtap="toggleZoom" role="button">{{zoomed ? '整周查看' : '放大课程'}}</view>
+    </view>
+  </view>
+  <view class="table-shell schedule-gesture-region" bindtouchstart="onScheduleTouchStart" bindtouchend="onScheduleTouchEnd" bindtouchcancel="onScheduleTouchCancel">
+    <view class="schedule-grid-shell">
+      <view class="time-axis-layer">
+        <view class="time-axis">
+          <view class="time-head">节次</view>
+          <view wx:for="{{sections}}" wx:key="section" class="time-cell {{item.section === 5 || item.section === 10 ? 'section-divider' : ''}}" style="height: {{sectionHeight}}rpx;">
+            <view class="section-no">第{{item.section}}节</view>
+            <view class="time-text-single">{{item.axisLabel}}</view>
+          </view>
+        </view>
+      </view>
+      <scroll-view class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}" scroll-x="{{scrollX}}" enhanced show-scrollbar="{{false}}">
+        <view class="day-track" style="width: {{dayTrackWidth}}rpx;">
+          <view class="weekday-heads">
+            <view wx:for="{{weekdays}}" wx:key="weekday" class="weekday-head {{item.isToday ? 'is-today' : ''}}" style="width: {{dayColumnWidth}}rpx;">
+              <view>{{item.label}}</view>
+              <view class="weekday-date">{{item.dateLabel}}</view>
+              <view wx:if="{{item.isToday}}" class="today-dot"></view>
+            </view>
+          </view>
+          <view class="days-area" style="height: {{scheduleHeight}}rpx;">
+            <view wx:for="{{dayColumns}}" wx:key="weekday" class="day-column {{item.isToday ? 'is-today' : ''}}" style="width: {{dayColumnWidth}}rpx;">
+              <view wx:for="{{sections}}" wx:for-item="section" wx:key="section" class="section-slot {{section.section === 5 || section.section === 10 ? 'section-divider' : ''}}" style="height: {{sectionHeight}}rpx;"></view>
+              <course-card wx:for="{{item.courses}}" wx:for-item="course" wx:key="id" course="{{course}}" card-style="{{course.cardStyle}}" layout="{{!zoomed && showWeekend && weekendShowMode === 'overview' ? 'overview' : 'grid'}}" bind:tapcourse="onCourseTap" />
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+  <course-detail-popup visible="{{detailVisible}}" course="{{selectedCourse}}" bind:close="closeCourseDetail" bind:copycustom="onCopyCourseToCustom" />
+</view>

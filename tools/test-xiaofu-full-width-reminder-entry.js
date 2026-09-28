@@ -14,8 +14,8 @@ const assistantJs = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assist
 const assistantWxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 
 assert.match(settingsWxml, /bindtap="goSmartCourseReminders"/);
-assert.match(settingsWxml, /智能课程提醒/);
-assert.match(settingsWxml, /微信服务通知/);
+assert.match(settingsWxml, /课程提醒/);
+assert.match(settingsWxml, /上课前提醒、微信通知/);
 assert.match(settingsJs, /goSmartCourseReminders\(\)[\s\S]*panel=reminders/);
 assert.match(assistantJs, /options\s*&&\s*options\.panel/);
 assert.match(assistantJs, /panelName\s*===\s*["']reminders["']/);

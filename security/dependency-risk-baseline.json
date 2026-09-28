@@ -1,0 +1,96 @@
+{
+  "schema": "fosuclass-dependency-risk-baseline/v1",
+  "generatedOn": "2026-09-26",
+  "registry": "https://registry.npmjs.org",
+  "nodeUpgrade": "not-applied",
+  "items": [
+    {
+      "package": "axios",
+      "version": "1.0.0 - 1.17.0",
+      "severity": "high",
+      "dependencyChainClass": "direct",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Upgrade axios past 1.17.0 in server and root when a compatible release is verified. Do not use npm audit fix --force."
+    },
+    {
+      "package": "form-data",
+      "version": "4.0.0 - 4.0.5",
+      "severity": "high",
+      "dependencyChainClass": "transitive-via-axios",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Follows the axios upgrade. Do not force-resolve independently."
+    },
+    {
+      "package": "xlsx",
+      "version": "*",
+      "severity": "high",
+      "dependencyChainClass": "direct-server",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Personal XLS import parses workbooks with xlsx. SheetJS has no patched release in this audit. Keep parser input size limits; do not swap libraries in this closure."
+    },
+    {
+      "package": "undici",
+      "version": "7.0.0 - 7.28.0",
+      "severity": "high",
+      "dependencyChainClass": "transitive-server",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Upgrade the server transitive undici past 7.28.0 after confirming the parent package allows it."
+    },
+    {
+      "package": "sm-crypto",
+      "version": "<0.5.0",
+      "severity": "critical",
+      "dependencyChainClass": "direct-server-declared",
+      "runtimeReachability": "NOT_APPLICABLE",
+      "remediation": "Declared by the server package and not imported by server source. Remove or upgrade in a dedicated dependency change. Not a request-path blocker for this closure."
+    },
+    {
+      "package": "qs",
+      "version": "2.2.5 - 6.15.3",
+      "severity": "moderate",
+      "dependencyChainClass": "transitive-via-express",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Moderate only. Upgrade express/qs together in a later patch."
+    },
+    {
+      "package": "express",
+      "version": "4.22.2",
+      "severity": "moderate",
+      "dependencyChainClass": "direct-server",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Moderate only, via qs."
+    },
+    {
+      "package": "body-parser",
+      "version": "<=1.20.6",
+      "severity": "moderate",
+      "dependencyChainClass": "transitive-via-express",
+      "runtimeReachability": "PRODUCTION_REACHABLE",
+      "remediation": "Moderate only."
+    },
+    {
+      "package": "adm-zip",
+      "version": "<=0.6.0",
+      "severity": "high",
+      "dependencyChainClass": "direct-root",
+      "runtimeReachability": "DEV_ONLY",
+      "remediation": "Root tooling dependency. Not the production API image."
+    },
+    {
+      "package": "axios-cookiejar-support",
+      "version": "7.0.0",
+      "severity": "none",
+      "dependencyChainClass": "direct-root",
+      "runtimeReachability": "DEV_ONLY",
+      "remediation": "Root copy requires Node >= 22 through its own engine and http-cookie-agent 8. The production server pins axios-cookiejar-support 5.0.5 and http-cookie-agent 6.0.8, which do not declare that engine. Do not upgrade the server to Node 22 for this package."
+    },
+    {
+      "package": "http-cookie-agent",
+      "version": "8.0.0",
+      "severity": "none",
+      "dependencyChainClass": "transitive-via-root-axios-cookiejar-support",
+      "runtimeReachability": "DEV_ONLY",
+      "remediation": "Engine node >= 22 applies only to the root tree. Server runtime uses 6.0.8."
+    }
+  ]
+}

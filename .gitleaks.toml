@@ -26,5 +26,17 @@ paths = [
   '''^tools/test-coze-tool-gateway\.js$''',
   '''^tools/test-domain-adapter-conformance\.js$''',
   '''^tools/test-kb-control-plane-v2\.js$''',
-  '''^tools/test-provider-control-plane\.js$'''
+  '''^tools/test-provider-control-plane\.js$''',
+  '''^tools/test-campus-agent-auth\.js$''',
+  '''^tools/test-campus-agent-signature-parity\.js$''',
+  '''^tools/test-campus-sync-broker\.js$''',
+  '''^tools/test-campus-sync-security-ctf\.js$''',
+  '''^deploy/route2-env\.example$'''
+]
+regexTarget = "secret"
+regexes = [
+  '''0123456789abcdef0123456789abcdef''',
+  '''fedcba9876543210fedcba9876543210''',
+  '''placeholder-campus-agent-token''',
+  '''placeholder-campus-agent-signing-secret'''
 ]

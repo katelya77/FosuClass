@@ -105,6 +105,31 @@
       "path": "tools/test-provider-control-plane.js",
       "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
       "reason": "Synthetic provider key scoped to an in-process test double."
+    },
+    {
+      "path": "tools/test-campus-agent-auth.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Deterministic 32-hex HMAC fixture. Not a production credential."
+    },
+    {
+      "path": "tools/test-campus-agent-signature-parity.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Deterministic 32-hex HMAC fixture. Not a production credential."
+    },
+    {
+      "path": "tools/test-campus-sync-broker.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Deterministic 32-hex HMAC fixture. Not a production credential."
+    },
+    {
+      "path": "tools/test-campus-sync-security-ctf.js",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Deterministic 32-hex HMAC fixture. Not a production credential."
+    },
+    {
+      "path": "deploy/route2-env.example",
+      "secretTypes": ["GITLEAKS_GENERIC-API-KEY"],
+      "reason": "Example file only. Live values must be <SET_IN_PRODUCTION>. The allowlist covers the historical assignment without copying it."
     }
   ]
 }

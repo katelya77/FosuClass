@@ -40,13 +40,19 @@
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek provider 专用 key，优先级低于 `AI_API_KEY` | 允许为空，AI 状态显示 DeepSeek key 未配置 |
 | `CLOUDBASE_OPENAI_API_KEY` | 空 | CloudBase OpenAI-compatible provider key | 允许为空，AI 状态显示 CloudBase OpenAI key 未配置 |
 | `COZE_API_KEY` | 空 | Coze provider key | 允许为空，AI 状态显示 Coze key 未配置 |
-| `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` | 空 | 学号导入 CloudBase relay 的可选 Bearer token | 允许为空；仅当 relay 服务要求 token 时配置 |
 
 ## Deprecated
 
 | 名称 | 替代项 | 作用 | 当前部署行为 |
 | --- | --- | --- | --- |
 | `FOSU_STATIC_TICKET_SECRET` | `FOSU_STATIC_TICKET_SECRET_CURRENT` | 旧版静态 ticket 兼容密钥名 | GitHub Actions 不再写入生产 `.env`；代码仍保留运行时兼容读取 |
+| `FOSU_APAAS_BASE` | 无 | LEGACY / RETIRED：APaaS 个人课表地址 | 运行时已删除，可从 GitHub Variables 人工移除 |
+| `FOSU_IMPORT_CHANNEL` | 无 | LEGACY / RETIRED：CloudBase / Oracle 通道 | 运行时已删除 |
+| `FOSU_CLOUDBASE_IMPORT_ENABLE` | 无 | LEGACY / RETIRED：CloudBase APaaS relay | 运行时已删除 |
+| `FOSU_CLOUDBASE_IMPORT_URL` | 无 | LEGACY / RETIRED：CloudBase APaaS relay | 运行时已删除 |
+| `FOSU_IMPORT_ORACLE_FALLBACK` | 无 | LEGACY / RETIRED：Oracle APaaS fallback | 运行时已删除 |
+| `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` | 无 | LEGACY / RETIRED：relay token | 可从 GitHub Secrets 人工删除 |
+| `FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK` | 无 | LEGACY / RETIRED：Playwright 个人课表登录 | 运行时已删除 |
 
 ## Repository Variables
 
@@ -58,12 +64,9 @@
 | `FOSU_STATIC_ACCESS_MODE` | `public` | 静态资源访问模式 | 使用 public |
 | `FOSU_OPENRESTY_STATIC_SECURITY_MODE` | `public` | OpenResty 静态安全模式 | 使用 public |
 | `FOSU_STATIC_TICKET_TTL_SECONDS` | `600` | 静态 ticket TTL | 使用默认值 |
-| `FOSU_IMPORT_ENABLE` | `true` | 是否启用本人授权学号导入预览 API | 使用 true |
-| `FOSU_IMPORT_CHANNEL` | `auto` | 导入通道策略：`auto`、`cloudbase`、`oracle` | 生产使用 auto，优先 CloudBase |
-| `FOSU_CLOUDBASE_IMPORT_ENABLE` | `true` | 是否启用 CloudBase relay 导入通道 | 生产使用 true |
-| `FOSU_CLOUDBASE_IMPORT_URL` | 空 | CloudBase relay HTTPS 地址 | 生产必须配置 relay URL |
-| `FOSU_IMPORT_CHANNEL_TIMEOUT_MS` | `25000` | 单个导入通道请求超时 | 使用默认值 |
-| `FOSU_IMPORT_ORACLE_FALLBACK` | `true` | CloudBase 可重试故障时是否回落 Oracle 通道 | 生产开启 Oracle fallback |
+| `FOSU_IMPORT_ENABLE` | `true` | 是否启用个人课表预览 API | 使用 true |
+| `FOSU_IMPORT_PREVIEW_TTL_SECONDS` | `600` | 个人课表预览令牌有效期 | 使用默认值 |
+| `FOSU_IMPORT_RATE_LIMIT_ENABLED` | `true` | 是否限制个人课表预览频率 | 使用 true |
 | `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
 | `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze`、`cloudbase-openai` | 使用 mock |
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |

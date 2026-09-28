@@ -10,9 +10,9 @@
   width: 100%;
   min-width: 0;
   padding: 6rpx;
-  border: 1rpx solid #e4eaf2;
+  border: 1rpx solid #e8ebef;
   border-radius: 16rpx;
-  background: #f7f9fc;
+  background: #f7f8fa;
 }
 
 .week-button,
@@ -29,9 +29,32 @@
 .week-button {
   flex: 0 0 52rpx;
   width: 52rpx;
-  color: #5a6678;
-  font-size: 40rpx;
-  font-weight: 600;
+  color: #68707d;
+  font-size: 36rpx;
+  font-weight: 500;
+}
+
+.week-current-chevron { margin-left: 8rpx; color: #9aa4b5; font-size: 22rpx; }
+.week-picker-mask { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 1001; display: flex; align-items: flex-end; background: rgba(16, 24, 40, .48); }
+.week-picker-panel { width: 100%; max-height: 82vh; overflow: hidden; border-radius: 28rpx 28rpx 0 0; background: #fff; box-shadow: 0 -12rpx 50rpx rgba(16, 24, 40, .12); }
+.week-picker-handle { width: 72rpx; height: 8rpx; margin: 16rpx auto 4rpx; border-radius: 8rpx; background: #d9dee8; }
+.week-picker-header { display: flex; align-items: center; justify-content: space-between; padding: 24rpx 32rpx; border-bottom: 1rpx solid #edf0f5; }
+.week-picker-title { color: #172033; font-size: 32rpx; font-weight: 800; }
+.week-picker-subtitle { margin-top: 4rpx; color: #7a8494; font-size: 22rpx; }
+.week-picker-close { display: flex; align-items: center; justify-content: center; width: 56rpx; height: 56rpx; padding: 0; border-radius: 50%; background: #f1f3f7; color: #687386; font-size: 36rpx; }
+.week-picker-list { height: 52vh; max-height: 760rpx; }
+.week-picker-item { display: flex; align-items: center; width: calc(100% - 48rpx); min-height: 88rpx; margin: 8rpx 24rpx; padding: 0 24rpx; border-radius: 14rpx; background: #fff; color: #172033; text-align: left; }
+.week-picker-item.is-selected { background: #fff2f2; color: #b4232b; }
+.week-picker-no { width: 128rpx; font-size: 27rpx; font-weight: 800; }
+.week-picker-date { flex: 1; color: #687386; font-size: 24rpx; }
+.week-picker-check { color: #a2aab6; font-size: 27rpx; }
+.week-picker-item.is-selected .week-picker-check { color: #b4232b; }
+.week-picker-footer { padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom)); border-top: 1rpx solid #edf0f5; }
+.week-picker-footer button { height: 72rpx; border-radius: 36rpx; background: #f5f7fa; color: #475467; font-size: 25rpx; font-weight: 700; line-height: 72rpx; }
+
+.week-button.is-disabled {
+  color: #c9cdd3;
+  opacity: 1;
 }
 
 .week-current {
@@ -40,11 +63,11 @@
   margin: 0 6rpx;
   padding: 0 12rpx;
   background: #ffffff;
-  color: #c62828;
+  color: #1f2329;
   font-size: 24rpx;
-  font-weight: 800;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  box-shadow: 0 6rpx 16rpx rgba(16, 31, 55, 0.06);
+  box-shadow: 0 2rpx 8rpx rgba(16, 31, 55, 0.04);
 }

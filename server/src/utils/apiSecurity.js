@@ -1,5 +1,4 @@
 const crypto = require("crypto");
-const axios = require("axios");
 const config = require("../config");
 const { getClientIpInfo } = require("./clientIp");
 const { safeLog } = require("./safeLogger");
@@ -191,44 +190,10 @@ function storeWechatReminderRecipient(input = {}) {
 }
 
 async function bootstrapFosuSession(code) {
-  const jsCode = String(code || "").trim();
-  if (!jsCode) {
-    const error = new Error("WX_CODE_REQUIRED");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const appid = process.env.WECHAT_APPID || process.env.WX_APPID || "";
-  const secret = process.env.WECHAT_APPSECRET || process.env.WX_APPSECRET || "";
-  let openid = "";
-
-  if (appid && secret) {
-    const response = await axios.get("https://api.weixin.qq.com/sns/jscode2session", {
-      params: {
-        appid,
-        secret,
-        js_code: jsCode,
-        grant_type: "authorization_code",
-      },
-      timeout: Number(process.env.WECHAT_SESSION_TIMEOUT_MS || 5000) || 5000,
-    });
-    if (!response.data || response.data.errcode || !response.data.openid) {
-      const error = new Error("WECHAT_SESSION_FAILED");
-      error.statusCode = 502;
-      error.details = response.data || {};
-      throw error;
-    }
-    openid = response.data.openid;
-  } else if (config.NODE_ENV !== "production") {
-    openid = `dev-${crypto.createHash("sha256").update(jsCode).digest("hex").slice(0, 24)}`;
-  } else {
-    const error = new Error("WECHAT_SESSION_NOT_CONFIGURED");
-    error.statusCode = 503;
-    throw error;
-  }
-
-  const created = createSessionToken({ appid, openid });
-  storeWechatReminderRecipient({ openid, appid, sessionPayload: created.payload });
+  const { exchangeCode } = require("../services/wechatIdentityService");
+  const identity = await exchangeCode(code);
+  const created = createSessionToken({ appid: identity.appid, openid: identity.openid });
+  storeWechatReminderRecipient({ openid: identity.openid, appid: identity.appid, sessionPayload: created.payload });
   const security = getSecurityMode();
   return {
     sessionToken: created.token,
@@ -325,6 +290,7 @@ module.exports = {
   bootstrapFosuSession,
   storeWechatReminderRecipient,
   createSessionToken,
+  hashOpenid,
   getSecurityStatus,
   optionalSessionGuard,
   publicFosuGuard,
