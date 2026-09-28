@@ -718,6 +718,59 @@
 }
 
 /* 周课表控制区 */
+.schedule-tabs {
+  margin-bottom: 14rpx;
+  padding: 14rpx 0 12rpx;
+  border-radius: 18rpx;
+  background: #ffffff;
+}
+
+.schedule-tabs-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 20rpx 12rpx;
+  color: #172033;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.schedule-tabs-caption {
+  color: #8a94a6;
+  font-size: 20rpx;
+  font-weight: 500;
+}
+
+.schedule-tabs-scroll { width: 100%; white-space: nowrap; }
+.schedule-tabs-track { display: inline-flex; align-items: center; gap: 10rpx; padding: 0 18rpx; }
+.schedule-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  max-width: 278rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0 12rpx 0 18rpx;
+  box-sizing: border-box;
+  border-radius: 14rpx;
+  border: 1rpx solid #e9edf2;
+  background: #f5f7fa;
+  color: #64748b;
+  font-size: 23rpx;
+  line-height: 1;
+}
+.schedule-tab.is-active { border-color: #e8a9ad; background: #fff4f4; color: #a82026; font-weight: 800; }
+.schedule-tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-tab-mark { color: #c62828; font-size: 14rpx; }
+.schedule-tab-close { flex: 0 0 38rpx; width: 38rpx; height: 38rpx; border-radius: 50%; background: #e8ecf2; color: #5c6677; font-size: 30rpx; line-height: 36rpx; text-align: center; }
+.schedule-tab.is-active .schedule-tab-close { background: #f7dfe1; color: #a82026; }
+.schedule-tab-add { min-width: 108rpx; padding: 0 18rpx; color: #a82026; background: #ffffff; border: 1rpx dashed #e9b6b9; }
+
+.schedule-quick-actions { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; min-height: 58rpx; padding: 0 18rpx 12rpx; }
+.schedule-quick-button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; height: 48rpx; margin: 0; padding: 0 16rpx; border-radius: 12rpx; background: #f4f6f9; color: #566276; font-size: 21rpx; line-height: 1; }
+.schedule-fullscreen-button { margin-left: auto; color: #a82026; background: #fff4f4; }
+.schedule-swipe-hint { color: #9aa4b5; font-size: 20rpx; }
+
 .schedule-title-row {
   display: flex;
   align-items: center;

@@ -87,7 +87,23 @@
   </view>
 
   <!-- 如果已绑定课表，展示周课表网格 -->
-  <view class="schedule card" wx:else>
+  <view class="schedule-tabs card" wx:if="{{hasBoundTarget}}">
+    <view class="schedule-tabs-heading">
+      <text>切换课表</text>
+      <text class="schedule-tabs-caption">{{isPreviewSchedule ? '预览最近查看' : '我的课表'}}</text>
+    </view>
+    <scroll-view class="schedule-tabs-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="schedule-tabs-track">
+        <view wx:for="{{scheduleTabs}}" wx:key="key" class="schedule-tab {{activeScheduleTab === item.key ? 'is-active' : ''}}" data-key="{{item.key}}" bindtap="onScheduleTabTap" role="button" aria-label="查看{{item.label}}课表">
+          <text class="schedule-tab-label">{{item.label}}</text>
+          <text wx:if="{{item.current}}" class="schedule-tab-mark">●</text>
+          <view wx:else class="schedule-tab-close" data-key="{{item.key}}" catchtap="closeScheduleTab" role="button" aria-label="移除{{item.label}}标签">×</view>
+        </view>
+        <view class="schedule-tab schedule-tab-add" bindtap="openScheduleTabPicker" role="button" aria-label="从全校添加课表">＋ 添加</view>
+      </view>
+    </scroll-view>
+  </view>
+  <view class="schedule card" wx:if="{{hasBoundTarget}}">
     <view class="schedule-title-row">
       <view class="section-title">周课表</view>
       <view class="schedule-control-wrapper">
@@ -100,6 +116,12 @@
           bind:modalchange="onWeekPickerModalChange"
         />
       </view>
+    </view>
+
+    <view class="schedule-quick-actions">
+      <view wx:if="{{showBackToCurrentWeek}}" class="schedule-quick-button" bindtap="backToCurrentWeek" role="button">回到本周</view>
+      <text wx:else class="schedule-swipe-hint">左右滑动切周</text>
+      <view class="schedule-quick-button schedule-fullscreen-button" bindtap="openScheduleFullscreen" role="button">⛶ 全屏查看</view>
     </view>
 
     <view class="unplaced-entry" wx:if="{{unplacedCourseCount}}" bindtap="showUnplacedCourses">

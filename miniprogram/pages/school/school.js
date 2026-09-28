@@ -22,6 +22,7 @@ const SCHOOL_RESULT_PAGE_STEP = 20;
 const SCHOOL_KEYWORD_DEBOUNCE_MS = 300;
 const AI_PENDING_SCHOOL_QUERY_KEY = "FOSU_AI_PENDING_SCHOOL_QUERY";
 const FOSU_RELEASE_NOTICE_STATE_KEY = "FOSU_RELEASE_NOTICE_STATE";
+const SCHOOL_SEARCH_PREFS_KEY = "FOSU_PREF_SCHOOL_SEARCH_V1";
 const SCHOOL_BACKGROUND_REFRESH_MIN_INTERVAL_MS = 45 * 1000;
 
 const request = require("../../utils/request");
@@ -320,6 +321,7 @@ Page({
     this._schoolRequestSeq = 0;
     this._activeInitSeq = 0;
     this._lastInitAt = 0;
+    this._searchPrefsRestored = false;
     this.resetPagedResultStore();
     this._lastSchoolMapQuery = this.buildMapReturnFromOptions(options || {});
     // Drop poisoned teacher full-index caches (filtered search hits written as full index).
@@ -330,6 +332,7 @@ Page({
   },
 
   onUnload() {
+    this.saveSearchPrefs();
     if (this.keywordSearchTimer) {
       clearTimeout(this.keywordSearchTimer);
       this.keywordSearchTimer = null;
@@ -341,6 +344,54 @@ Page({
     this._schoolRequestSeq += 1;
     this._activeInitSeq += 1;
     this._loadMoreBusy = false;
+  },
+
+  onHide() {
+    this.saveSearchPrefs();
+  },
+
+  readSearchPrefs() {
+    try {
+      const saved = wx.getStorageSync(SCHOOL_SEARCH_PREFS_KEY) || {};
+      const term = this.getActiveTermForCache();
+      return saved.term === term ? saved : { term, keywords: {} };
+    } catch (error) {
+      return { term: this.getActiveTermForCache(), keywords: {} };
+    }
+  },
+
+  saveSearchPrefs() {
+    const previous = this.readSearchPrefs();
+    const keywords = Object.assign({}, previous.keywords || {});
+    if (this.data.activeTab !== "class") keywords[this.data.activeTab] = String(this.data.keyword || "").slice(0, 100);
+    const teacherCollege = this.data.teacherColleges[this.data.selectedTeacherCollegeIndex] || {};
+    try {
+      wx.setStorageSync(SCHOOL_SEARCH_PREFS_KEY, {
+        term: this.getActiveTermForCache(),
+        activeTab: this.data.activeTab,
+        keywords,
+        teacherCollegeCode: teacherCollege.code || "",
+        title: this.data.selectedTitleIndex >= 0 ? this.data.titleOptions[this.data.selectedTitleIndex] : "",
+        campus: this.data.selectedCampusIndex >= 0 ? this.data.campusOptions[this.data.selectedCampusIndex] : "",
+      });
+    } catch (error) { /* preferences are best effort */ }
+  },
+
+  restoreSearchPrefs() {
+    if (this._searchPrefsRestored) return;
+    this._searchPrefsRestored = true;
+    if (this._pendingDirectSchoolQuery || this._explicitSchoolQuery) return;
+    const saved = this.readSearchPrefs();
+    const activeTab = tabs.some((item) => item.key === saved.activeTab) ? saved.activeTab : "class";
+    const teacherIndex = saved.teacherCollegeCode
+      ? this.data.teacherColleges.findIndex((item) => item.code === saved.teacherCollegeCode) : 0;
+    this.setData({
+      activeTab,
+      keyword: String(saved.keywords && saved.keywords[activeTab] || ""),
+      selectedTeacherCollegeIndex: Math.max(0, teacherIndex),
+      selectedTitleIndex: saved.title ? this.data.titleOptions.indexOf(saved.title) : -1,
+      selectedCampusIndex: saved.campus ? this.data.campusOptions.indexOf(saved.campus) : -1,
+    });
   },
 
   onShow() {
@@ -450,6 +501,7 @@ Page({
   },
 
   applyAiPendingSchoolQuery(query, attempt = 0) {
+    this._explicitSchoolQuery = true;
     const type = ["teacher", "classroom", "course", "class"].includes(query.type) ? query.type : "teacher";
     const keyword = safeDecodeURIComponent(query.q || query.keyword || "").trim();
     const term = safeDecodeURIComponent(query.term || query.semester || "");
@@ -879,15 +931,17 @@ Page({
       // 如果年级索引越界重置为 -1，需连带清空之前联动的专业
       majors: newSelectedIndex < 0 ? [] : this.data.majors,
       selectedMajorIndex: newSelectedIndex < 0 ? -1 : this.data.selectedMajorIndex
-    });
+    }, () => this.restoreSearchPrefs());
   },
 
   onTabChange(event) {
     const tabKey = event.currentTarget.dataset.key;
+    this.saveSearchPrefs();
+    const saved = this.readSearchPrefs();
     this.resetPagedResultStore();
     this.setData({
       activeTab: tabKey,
-      keyword: "",
+      keyword: String(saved.keywords && saved.keywords[tabKey] || ""),
       // 清空当前结果，避免误导
       classesResult: [],
       classAdminResults: [],
@@ -917,12 +971,12 @@ Page({
       classNoticeText: "",
       loadMoreState: "idle",
       loadMoreText: "",
-    });
+    }, () => this.saveSearchPrefs());
   },
 
   onKeywordInput(event) {
     const keyword = event.detail.value;
-    this.setData({ keyword });
+    this.setData({ keyword }, () => this.saveSearchPrefs());
     if (this.keywordSearchTimer) {
       clearTimeout(this.keywordSearchTimer);
     }
@@ -1249,7 +1303,10 @@ Page({
       lastUpdatedAt: Date.now()
     };
 
-    wx.setStorageSync(this.getFilterCacheKey(), cache);
+    try {
+      wx.setStorageSync(this.getFilterCacheKey(), cache);
+      wx.setStorageSync(this.getStableFilterPrefsKey(), cache);
+    } catch (error) { /* selection stays usable in memory */ }
   },
 
   hasSharedQuery() {
@@ -1339,7 +1396,7 @@ Page({
 
   restoreFilterCache() {
     const cacheKey = this.getFilterCacheKey();
-    const cache = wx.getStorageSync(cacheKey);
+    const cache = wx.getStorageSync(cacheKey) || wx.getStorageSync(this.getStableFilterPrefsKey());
     if (!cache) {
       this.printSchoolDebugLog(false, "", "no cached filter");
       this.applySharedQueryIfNeeded();
@@ -1352,10 +1409,12 @@ Page({
       if (semIdx >= 0) selectedSemesterIndex = semIdx;
     }
 
-    const finishDowngrade = (level, reason) => {
+    const finishDowngrade = (level, reason, persist = true) => {
       this.printSchoolDebugLog(true, level, reason);
-      this.saveFilterCache();
-      this.showFilterChangedHint("部分筛选项已更新，已恢复到可用层级");
+      if (persist) this.saveFilterCache();
+      this.showFilterChangedHint(persist
+        ? "部分筛选项已更新，已恢复到可用层级"
+        : "筛选数据暂不可用，已保留上次选择");
       this.applySharedQueryIfNeeded();
     };
 
@@ -1437,13 +1496,13 @@ Page({
             this.applySharedQueryIfNeeded();
           }).catch(err => {
             this.setData({ selectedClassIndex: -1, classesOptions: [] }, () => {
-              finishDowngrade("major", "class list failed: " + (err && err.message || "unknown"));
+              finishDowngrade("major", "class list failed: " + (err && err.message || "unknown"), false);
             });
           });
         });
       }).catch(err => {
         this.setData({ selectedMajorIndex: -1, selectedClassIndex: -1, majors: [], classesOptions: [] }, () => {
-          finishDowngrade("grade", "major list failed: " + (err && err.message || "unknown"));
+          finishDowngrade("grade", "major list failed: " + (err && err.message || "unknown"), false);
         });
       });
     });
@@ -1499,6 +1558,7 @@ Page({
 
   resetFilters() {
     wx.removeStorageSync(this.getFilterCacheKey());
+    wx.removeStorageSync(this.getStableFilterPrefsKey());
     this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedSemesterIndex: 0,
@@ -1580,6 +1640,7 @@ Page({
       teacherHitCount: 0,
       updatedAtText: "",
     }, () => {
+      this.saveSearchPrefs();
       // 已有关键词时切换院系立即重搜，保证「选院系 + 关键词」流畅闭环
       const kw = String(this.data.keyword || "").trim();
       if (kw && this.data.activeTab === "teacher") {
@@ -1784,14 +1845,14 @@ Page({
   onTitleChange(event) {
     this.setData({
       selectedTitleIndex: Number(event.detail.value),
-    });
+    }, () => this.saveSearchPrefs());
   },
 
   // 8. 校区选择改变 (教室 Tab)
   onCampusChange(event) {
     this.setData({
       selectedCampusIndex: Number(event.detail.value),
-    });
+    }, () => this.saveSearchPrefs());
   },
 
   // ================== 查询按钮动作 ==================
@@ -2245,6 +2306,18 @@ Page({
   },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {
+    if (type !== "class" && Array.isArray(courses) && courses.length) {
+      const meta = scheduleMeta || {};
+      addRecentSchedule(Object.assign({}, meta, {
+        type,
+        id: meta.detailId || meta.id || name,
+        name,
+        title: name,
+        semester: meta.semester || meta.term || this.getActiveTermForCache(),
+        releaseVersion: meta.scheduleVersion || meta.releaseVersion || this.getReleaseVersionForCache(),
+        courses,
+      }));
+    }
     // Prefer shared scheduleNavigationService URL builder (no courses in query).
     try {
       const scheduleNavigationService = require("../../services/scheduleNavigationService");
@@ -3431,6 +3504,10 @@ Page({
     const term = this.getActiveTermForCache();
     const releaseVersion = this.getReleaseVersionForCache();
     return getSchoolFilterCacheKey(term, releaseVersion);
+  },
+
+  getStableFilterPrefsKey() {
+    return `FOSU_PREF_SCHOOL_FILTER:${this.getActiveTermForCache() || getFallbackTerm()}`;
   },
 
   fetchSearchIndex(type, params, options = {}) {

@@ -65,8 +65,8 @@ function testHomeWeekSwipe() {
 
   swipe(page, touch(280, 300), touch(180, 306));
   assert.strictEqual(page.data.currentWeek, 3, "left swipe should move from week 2 to week 3");
-  assert.strictEqual(storage.getSettings().currentWeek, 3);
-  assert.strictEqual(storage.getSettings().manualWeekOverride, true);
+  assert.strictEqual(storage.getSettings().currentWeek, 12, "home browsing must not change shared settings");
+  assert.strictEqual(storage.getSettings().manualWeekOverride, false);
 
   swipe(page, touch(180, 300), touch(280, 294));
   assert.strictEqual(page.data.currentWeek, 2, "right swipe should move from week 3 to week 2");
@@ -145,7 +145,7 @@ function testWeekSwitcherButtons() {
   assert.strictEqual(events.length, 0, "week-switcher boundary buttons must be inert");
 }
 
-function testScheduleViewPersistsWeekState() {
+function testScheduleViewKeepsWeekLocal() {
   mockEnv.clearStorage();
   const storage = require("../miniprogram/utils/storage");
   const page = loadPage("miniprogram/pages/schedule-view/schedule-view.js");
@@ -156,10 +156,18 @@ function testScheduleViewPersistsWeekState() {
   page.setData({ currentWeek: 2, totalWeeks: 19, allCourses: [] });
   page.onWeekChange({ detail: { type: "next", week: 3 } });
   assert.strictEqual(page.data.currentWeek, 3);
-  assert.strictEqual(storage.getSettings().currentWeek, 3);
-  assert.strictEqual(storage.getSettings().manualWeekOverride, true);
+  assert.strictEqual(storage.getSettings().currentWeek, 12, "school schedule browsing must not change home week");
+  assert.strictEqual(storage.getSettings().manualWeekOverride, false);
   page.onWeekChange({ detail: { type: "current", week: 3 } });
-  assert.strictEqual(storage.getSettings().manualWeekOverride, false, "back-to-current must restore calendar following");
+  assert.strictEqual(storage.getSettings().manualWeekOverride, false, "back-to-current must not write shared settings");
+
+  page.setData({ currentWeek: 2, totalWeeks: 19, scrollX: false });
+  page.onScheduleTouchStart({ touches: [touch(280, 300)] });
+  page.onScheduleTouchEnd({ changedTouches: [touch(180, 306)] });
+  assert.strictEqual(page.data.currentWeek, 3, "school schedule should switch weeks on horizontal swipe");
+  page.onScheduleTouchStart({ touches: [touch(200, 200)] });
+  page.onScheduleTouchEnd({ changedTouches: [touch(205, 305)] });
+  assert.strictEqual(page.data.currentWeek, 3, "vertical scroll must not switch school schedule weeks");
 }
 
 function testRestoreDefaultsConfirmation() {
@@ -251,7 +259,7 @@ function testHistoricalGradeRemovalAndSettingsHierarchy() {
 testSwipeClassifier();
 testHomeWeekSwipe();
 testWeekSwitcherButtons();
-testScheduleViewPersistsWeekState();
+testScheduleViewKeepsWeekLocal();
 testRestoreDefaultsConfirmation();
 testHistoricalGradeRemovalAndSettingsHierarchy();
 

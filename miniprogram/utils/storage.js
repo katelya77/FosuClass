@@ -204,6 +204,11 @@ function clearDataCaches() {
 function clearLocalSelection() {
   wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
   wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+  wx.removeStorageSync("FOSU_PREF_SCHOOL_SEARCH_V1");
+  try {
+    const keys = wx.getStorageInfoSync().keys || [];
+    keys.filter((key) => key.startsWith("FOSU_PREF_SCHOOL_FILTER:")).forEach((key) => wx.removeStorageSync(key));
+  } catch (error) { /* preference cleanup is best effort */ }
   wx.removeStorageSync(PERSONAL_SCHEDULE_CACHE_KEY);
   currentScheduleTargetMemory = null;
 }

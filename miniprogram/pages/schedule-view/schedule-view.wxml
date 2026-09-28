@@ -42,8 +42,13 @@
       <view class="section-title">周课表</view>
       <view class="schedule-hint">{{showWeekend ? (weekendShowMode === "detail" ? "七天详细" : "七天概览") : "周一至周五"}}</view>
     </view>
+    <view class="schedule-quick-actions">
+      <view wx:if="{{showBackToCurrentWeek}}" class="schedule-quick-button" bindtap="backToCurrentWeek" role="button">回到本周</view>
+      <text wx:else class="schedule-swipe-hint">左右滑动切周</text>
+      <view class="schedule-quick-button schedule-fullscreen-button" bindtap="openScheduleFullscreen" role="button">⛶ 全屏查看</view>
+    </view>
 
-    <view class="table-shell" wx:if="{{allCourses && allCourses.length && hasVisibleWeekCourses}}">
+    <view class="table-shell schedule-gesture-region" wx:if="{{allCourses && allCourses.length && hasVisibleWeekCourses}}" bindtouchstart="onScheduleTouchStart" bindtouchend="onScheduleTouchEnd" bindtouchcancel="onScheduleTouchCancel">
       <view class="schedule-grid-shell">
         <view class="time-axis-layer">
           <view class="time-axis">
@@ -110,12 +115,12 @@
       </view>
     </view>
 
-    <view class="empty-week-wrap" wx:elif="{{allCourses && allCourses.length}}">
+    <view class="empty-week-wrap" wx:elif="{{allCourses && allCourses.length}}" bindtouchstart="onScheduleTouchStart" bindtouchend="onScheduleTouchEnd" bindtouchcancel="onScheduleTouchCancel">
       <view class="empty-week-title">本周暂无课程</view>
       <view class="empty-week-desc">该课表共有 {{allCourses.length}} 门课，可切换周次查看，或查看下方课程总览。</view>
     </view>
     
-    <view class="empty-wrap" wx:else>
+    <view class="empty-wrap" wx:else bindtouchstart="onScheduleTouchStart" bindtouchend="onScheduleTouchEnd" bindtouchcancel="onScheduleTouchCancel">
       <image class="empty-icon" src="/images/icons/business.png" style="opacity: 0.15; width: 120rpx; height: 120rpx; margin-bottom: 20rpx;" />
       <view class="empty-text">该课表暂无课程数据</view>
     </view>

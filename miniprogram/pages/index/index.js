@@ -1,12 +1,13 @@
 const { courseTimes } = require("../../data/courseTimes");
-const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
-const { getSettings, saveSettings } = require("../../utils/storage");
+const { buildScheduleColumns, getCourseDataSource, getCoursesByClass, normalizeCourse } = require("../../utils/course");
+const { getSettings, getRecentSchedules, setRecentSchedules } = require("../../utils/storage");
 const { resolveAdjacentWeek, resolveWeekSwipeDirection } = require("../../utils/weekSwipe");
 const { getTodayCoursesData, shouldShowTodayStartupReminder } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const dailyKnowledgeCloudService = require("../../services/dailyKnowledgeCloudService");
 const customCourseService = require("../../services/customCourseService");
 const currentScheduleService = require("../../services/currentScheduleService");
+const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
 const { buildWeekPickerOptions } = require("../../utils/weekPicker");
 const courseOverrideService = require("../../services/courseOverrideService");
@@ -38,6 +39,13 @@ function resolveDisplayWeek(settings, todayInfo, termConfig) {
     return clampWeek(settings.currentWeek, termConfig);
   }
   return todayInfo.weekNo;
+}
+
+function getScheduleTabIdentity(item) {
+  const source = item || {};
+  const name = String(source.name || source.className || source.title || "")
+    .replace(/\s+/g, "").replace(/(老师|教室|课表)$/, "").trim();
+  return [source.type || "class", source.term || source.semester || "", name].join("|");
 }
 
 function calendarChanged(left, right) {
@@ -144,6 +152,10 @@ Page({
     selectedNotice: null,
     showNoticeDetail: false,
     showAppNoticeModal: false,
+    scheduleTabs: [],
+    activeScheduleTab: "current",
+    isPreviewSchedule: false,
+    showBackToCurrentWeek: false,
   },
 
   onLoad(options) {
@@ -161,6 +173,7 @@ Page({
     const { isScheduleInitialized, getCurrentScheduleTarget } = require("../../utils/storage");
     const initialized = isScheduleInitialized();
     const target = getCurrentScheduleTarget();
+    this.refreshScheduleTabs(target);
     if (!initialized || !target) {
       this.setData({
         showInitModal: true,
@@ -179,6 +192,61 @@ Page({
       this.checkTodayReminder();
       this.refreshCurrentTargetSilently();
     }
+  },
+
+  refreshScheduleTabs(target) {
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const term = calendar.termConfig && calendar.termConfig.term || calendar.term || "";
+    const activeRelease = releasePackService.getLocalActiveRelease(term);
+    const version = activeRelease && activeRelease.releaseVersion || calendar.releaseVersion || "";
+    const currentIdentity = target && getScheduleTabIdentity(target);
+    const seen = new Set(currentIdentity ? [currentIdentity] : []);
+    const recent = getRecentSchedules().filter((item) => {
+      const identity = getScheduleTabIdentity(item);
+      if (!identity || seen.has(identity) || !Array.isArray(item.courses) || !item.courses.length ||
+        term && item.semester !== term || version && item.releaseVersion !== version) return false;
+      seen.add(identity);
+      return true;
+    }).slice(0, 5);
+    const scheduleTabs = (target ? [{ key: "current", label: target.name || "当前课表", current: true }] : [])
+      .concat(recent.map((item) => ({
+        key: `recent-${getScheduleTabIdentity(item)}`,
+        label: item.title || item.name || item.className || "课表",
+        current: false,
+      })));
+    this._recentScheduleTabs = recent;
+    const activeScheduleTab = scheduleTabs.some((tab) => tab.key === this.data.activeScheduleTab)
+      ? this.data.activeScheduleTab : "current";
+    this.setData({ scheduleTabs, activeScheduleTab, isPreviewSchedule: activeScheduleTab !== "current" });
+  },
+
+  onScheduleTabTap(event) {
+    const key = event.currentTarget.dataset.key;
+    if (key === this.data.activeScheduleTab) return;
+    this._weekOverride = null;
+    this.setData({ activeScheduleTab: key, isPreviewSchedule: key !== "current" }, () => this.loadSchedule());
+  },
+
+  closeScheduleTab(event) {
+    const key = String(event.currentTarget.dataset.key || "");
+    if (!key.startsWith("recent-")) return;
+    const identity = key.slice("recent-".length);
+    setRecentSchedules(getRecentSchedules().filter((item) => getScheduleTabIdentity(item) !== identity));
+    if (this.data.activeScheduleTab === key) {
+      this._weekOverride = null;
+      this.setData({ activeScheduleTab: "current", isPreviewSchedule: false }, () => {
+        const { getCurrentScheduleTarget } = require("../../utils/storage");
+        this.refreshScheduleTabs(getCurrentScheduleTarget());
+        this.loadSchedule();
+      });
+      return;
+    }
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    this.refreshScheduleTabs(getCurrentScheduleTarget());
+  },
+
+  openScheduleTabPicker() {
+    this.goSchool();
   },
 
   refreshCurrentTargetSilently() {
@@ -270,7 +338,9 @@ Page({
     
     const now = new Date();
     const todayInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
-    const currentWeek = resolveDisplayWeek(settings, todayInfo, termConfig);
+    const currentWeek = this._weekOverride == null
+      ? resolveDisplayWeek(settings, todayInfo, termConfig)
+      : clampWeek(this._weekOverride, termConfig);
     const weekInfo = getWeekRangeByWeekNo(currentWeek, calendarWeeks, termConfig);
     const showWeekend = settings.showWeekend || false;
     const weekendShowMode = settings.weekendShowMode || "overview";
@@ -291,17 +361,22 @@ Page({
       });
     });
     
-    const courses = getCoursesByClass(settings.className);
+    const previewKey = String(this.data.activeScheduleTab || "").replace(/^recent-/, "");
+    const preview = this.data.activeScheduleTab !== "current" &&
+      this._recentScheduleTabs && this._recentScheduleTabs.find((item) =>
+        getScheduleTabIdentity(item) === previewKey);
+    const displayTarget = preview || target;
+    const courses = preview ? preview.courses.map(normalizeCourse) : getCoursesByClass(settings.className);
     const dataSource = getCourseDataSource();
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: 90,
       hideInactiveCourses: settings.hideInactiveCourses,
       normalized: true,
-      targetType: target && target.type || "class",
-      targetId: target && (target.detailId || target.id || target.classId) || settings.classId || "",
-      targetName: target && (target.name || target.className) || settings.className || "",
-      semester: target && (target.term || target.semester) || termConfig.term || "",
-      releaseVersion: target && (target.scheduleVersion || target.releaseVersion) || calendar.releaseVersion || "",
+      targetType: displayTarget && displayTarget.type || "class",
+      targetId: displayTarget && (displayTarget.detailId || displayTarget.id || displayTarget.classId) || settings.classId || "",
+      targetName: displayTarget && (displayTarget.name || displayTarget.className) || settings.className || "",
+      semester: displayTarget && (displayTarget.term || displayTarget.semester) || termConfig.term || "",
+      releaseVersion: displayTarget && (displayTarget.scheduleVersion || displayTarget.releaseVersion) || calendar.releaseVersion || "",
     });
     
     const contentWidth = getContentWidthRpx();
@@ -349,7 +424,14 @@ Page({
       }
       lastSyncText = target.updateTime || "";
     }
-    const unplacedCourses = decorateUnplacedCourses(target && target.unplacedCourses);
+    if (preview) {
+      displayClassName = preview.title || preview.name || preview.className || "课表";
+      scheduleSubtitle = `${preview.semester || ""} · 最近查看`;
+      sourceText = "全校课表缓存";
+      lastSyncText = "";
+      syncActionText = "同步当前";
+    }
+    const unplacedCourses = decorateUnplacedCourses(!preview && target && target.unplacedCourses);
 
     this.setData({
       className: displayClassName,
@@ -359,6 +441,7 @@ Page({
       lastSyncText,
       syncActionText,
       currentWeek,
+      showBackToCurrentWeek: currentWeek !== getCurrentTeachingWeek(now, calendarWeeks, termConfig),
       teachingPeriodText: getTeachingPeriodText(todayInfo, currentWeek),
       termPhase: todayInfo.termPhase || "unknown",
       totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
@@ -392,11 +475,36 @@ Page({
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
       : clampWeek(detail.week, termConfig);
     if (type !== "current" && nextWeek === this.data.currentWeek) return;
-    saveSettings({
-      currentWeek: nextWeek,
-      manualWeekOverride: type !== "current",
-    });
+    this._weekOverride = nextWeek;
     this.loadSchedule();
+  },
+
+  backToCurrentWeek() {
+    this.onWeekChange({ detail: { type: "current" } });
+  },
+
+  openScheduleFullscreen() {
+    const previewKey = String(this.data.activeScheduleTab || "").replace(/^recent-/, "");
+    const preview = this.data.activeScheduleTab !== "current" && this._recentScheduleTabs &&
+      this._recentScheduleTabs.find((item) => getScheduleTabIdentity(item) === previewKey);
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = preview || getCurrentScheduleTarget();
+    if (!target) return;
+    const courses = preview ? preview.courses : getCoursesByClass(getSettings().className);
+    wx.navigateTo({
+      url: "/pages/schedule-fullscreen/schedule-fullscreen",
+      events: {
+        weekChange: (event) => this.onWeekChange({ detail: { type: "select", week: event.week } }),
+      },
+      success: (result) => result.eventChannel.emit("schedule", {
+        title: this.data.className,
+        courses,
+        target,
+        week: this.data.currentWeek,
+        showWeekend: this.data.showWeekend,
+        weekendShowMode: this.data.weekendShowMode,
+      }),
+    });
   },
 
   onWeekPickerModalChange(event) {

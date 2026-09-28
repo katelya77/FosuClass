@@ -6,7 +6,7 @@
         <view class="course-title">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
         <view class="course-subtitle">{{course.personalized ? '个人调整 · ' : ''}}{{course.semester || "当前学期"}}</view>
       </view>
-      <button class="close-button" bindtap="close">×</button>
+      <view class="close-button" bindtap="close" role="button" aria-label="关闭课程详情"><text class="close-button-icon">×</text></view>
     </view>
 
     <scroll-view scroll-y enhanced bounces="{{false}}" class="popup-scroll-content">
