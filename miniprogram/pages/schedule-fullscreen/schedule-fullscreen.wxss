@@ -1,7 +1,7 @@
 @import "../index/index.wxss";
 
-page { background: #ffffff; }
-.fullscreen-page { min-height: 100vh; box-sizing: border-box; background: #ffffff; }
+page { height: 100vh; overflow: hidden; background: #ffffff; }
+.fullscreen-page { height: 100vh; overflow: hidden; box-sizing: border-box; background: #ffffff; }
 .fullscreen-toolbar {
   position: relative;
   display: flex;

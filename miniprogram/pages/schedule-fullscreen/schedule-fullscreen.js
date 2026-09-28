@@ -10,6 +10,21 @@ const {
   getVisibleWeekdays, getWeekRangeByWeekNo,
 } = require("../../utils/week");
 
+const DEFAULT_SECTION_HEIGHT = 84;
+const FULLSCREEN_CHROME_HEIGHT_RPX = 314;
+
+function getFittedSectionHeight(info, headerTop) {
+  const windowInfo = typeof wx.getWindowInfo === "function" ? wx.getWindowInfo() : {};
+  const width = Number(windowInfo.windowWidth || info.windowWidth);
+  const height = Number(windowInfo.screenHeight || info.screenHeight || windowInfo.windowHeight || info.windowHeight);
+  if (!width || !height) return DEFAULT_SECTION_HEIGHT;
+  const safeArea = windowInfo.safeArea || info.safeArea;
+  const bottomInset = safeArea && Number(safeArea.bottom)
+    ? Math.max(18, height - Number(safeArea.bottom)) : 24;
+  const availableRpx = (height - headerTop - bottomInset) * 750 / width - FULLSCREEN_CHROME_HEIGHT_RPX;
+  return Math.max(54, Math.min(90, Math.floor(availableRpx / courseTimes.length)));
+}
+
 Page({
   data: {
     title: "周课表",
@@ -19,8 +34,8 @@ Page({
     weekRangeText: "",
     showBackToCurrentWeek: false,
     sections: courseTimes,
-    sectionHeight: 90,
-    scheduleHeight: courseTimes.length * 90,
+    sectionHeight: DEFAULT_SECTION_HEIGHT,
+    scheduleHeight: courseTimes.length * DEFAULT_SECTION_HEIGHT,
     dayTrackWidth: 642,
     dayColumnWidth: 128,
     weekdays: [],
@@ -39,7 +54,12 @@ Page({
       ? wx.getMenuButtonBoundingClientRect() : null;
     // 自定义导航栏与右上角胶囊处于同一行；只避开系统状态栏。
     const statusBarHeight = Number(info.statusBarHeight) || (menu && menu.top ? Math.max(0, menu.top - 8) : 24);
-    this.setData({ headerTop: statusBarHeight });
+    const sectionHeight = getFittedSectionHeight(info, statusBarHeight);
+    this.setData({
+      headerTop: statusBarHeight,
+      sectionHeight,
+      scheduleHeight: courseTimes.length * sectionHeight,
+    });
     const channel = this.getOpenerEventChannel();
     if (channel && typeof channel.on === "function") {
       channel.on("schedule", (payload) => {
@@ -82,7 +102,7 @@ Page({
     const settings = getSettings();
     const target = this._target || {};
     const dayColumns = buildScheduleColumns(this._courses || [], weekdays, week, {
-      sectionHeight: 90,
+      sectionHeight: this.data.sectionHeight,
       hideInactiveCourses: settings.hideInactiveCourses,
       normalized: true,
       targetType: target.type || "class",

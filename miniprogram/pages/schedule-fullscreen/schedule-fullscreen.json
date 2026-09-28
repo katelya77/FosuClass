@@ -1,6 +1,6 @@
 {
   "navigationStyle": "custom",
-  "disableScroll": false,
+  "disableScroll": true,
   "usingComponents": {
     "course-card": "/components/course-card/index",
     "course-detail-popup": "/components/course-detail-popup/index"

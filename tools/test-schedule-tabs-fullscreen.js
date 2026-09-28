@@ -65,11 +65,23 @@ function testSchoolSearchMemory() {
   storage.clearAllSchoolCaches();
   assert.strictEqual(wx.getStorageSync(school.getStableFilterPrefsKey()).collegeCode, "02",
     "release cache refresh must preserve the user's filter choices");
+  const navigateTo = wx.navigateTo;
+  let openedUrl = "";
+  wx.navigateTo = ({ url }) => { openedUrl = url; };
+  try {
+    school.goPersonalSync();
+  } finally {
+    wx.navigateTo = navigateTo;
+  }
+  assert.strictEqual(openedUrl, "/pages/personal-sync/personal-sync");
 }
 
 function testFullscreenWeekGestures() {
   const appConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../miniprogram/app.json"), "utf8"));
   assert(appConfig.pages.includes("pages/schedule-fullscreen/schedule-fullscreen"));
+  const fullscreenConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname,
+    "../miniprogram/pages/schedule-fullscreen/schedule-fullscreen.json"), "utf8"));
+  assert.strictEqual(fullscreenConfig.disableScroll, true, "fullscreen page must not expose vertical scrolling");
   const fullscreen = page("schedule-fullscreen");
   let receiver;
   const sent = [];
@@ -89,6 +101,10 @@ function testFullscreenWeekGestures() {
   }
   assert.strictEqual(fullscreen.data.headerTop, 48,
     "fullscreen toolbar should align with the capsule instead of leaving a second navigation-row gap");
+  assert(fullscreen.data.sectionHeight < 90, "section rows should fit the visible fullscreen height");
+  const contentHeight = fullscreen.data.headerTop + 24 +
+    (314 + fullscreen.data.scheduleHeight) * 390 / 750;
+  assert(contentHeight <= 844, "the timetable should fit without a short page scroll");
   receiver({ title: "课表预览", week: 2, target: { type: "class", name: "测试班级" }, courses: [] });
   assert.strictEqual(fullscreen.data.currentWeek, 2);
   fullscreen.onScheduleTouchStart({ touches: [{ clientX: 280, clientY: 200 }] });
@@ -97,7 +113,7 @@ function testFullscreenWeekGestures() {
   assert.deepStrictEqual(sent.pop(), { name: "weekChange", detail: { week: 3 } });
   fullscreen.onScheduleTouchStart({ touches: [{ clientX: 200, clientY: 200 }] });
   fullscreen.onScheduleTouchEnd({ changedTouches: [{ clientX: 205, clientY: 320 }] });
-  assert.strictEqual(fullscreen.data.currentWeek, 3, "vertical scrolling must preserve the week");
+  assert.strictEqual(fullscreen.data.currentWeek, 3, "vertical gestures must preserve the week");
   fullscreen.toggleZoom();
   assert.strictEqual(fullscreen.data.zoomed, true);
   assert.strictEqual(fullscreen.data.scrollX, true);

@@ -1,4 +1,4 @@
-<page-meta page-style="{{detailVisible ? 'overflow: hidden;' : ''}}" />
+<page-meta page-style="overflow: hidden;" />
 <view class="fullscreen-page" style="padding-top: {{headerTop}}px;">
   <view class="fullscreen-toolbar">
     <view class="fullscreen-back" bindtap="exitFullscreen" role="button" aria-label="退出全屏课表"><text class="fullscreen-back-icon">‹</text><text>返回</text></view>

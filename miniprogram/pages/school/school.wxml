@@ -76,6 +76,10 @@
           bindtap="onTabChange"
         >{{item.label}}</view>
       </view>
+      <view class="personal-import-entry" bindtap="goPersonalSync" role="button" aria-label="导入个人课表">
+        <text class="personal-import-prompt">想查看自己的课表？</text>
+        <view class="personal-import-link">导入个人课表 <text class="personal-import-arrow">›</text></view>
+      </view>
     </view>
 
     <view class="school-notice" wx:if="{{schoolNotice}}">

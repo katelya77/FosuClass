@@ -2279,6 +2279,10 @@ Page({
     });
   },
 
+  goPersonalSync() {
+    wx.navigateTo({ url: "/pages/personal-sync/personal-sync" });
+  },
+
   goCampusMap() {
     const keyword = String(this.data.keyword || "").trim();
     const parsed = classroomSearch.parseClassroomQuery(keyword);
