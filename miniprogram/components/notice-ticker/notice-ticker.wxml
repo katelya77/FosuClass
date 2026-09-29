@@ -6,16 +6,19 @@
       <text wx:if="{{currentNotice.shouldScroll}}" class="notice-ticker-text">{{currentNotice.tickerText}}</text>
     </view>
   </view>
+  <text class="notice-ticker-chevron">›</text>
   <button wx:if="{{currentNotice.closable}}" class="notice-ticker-close" catchtap="dismissNotice">×</button>
 </view>
 
 <view wx:if="{{detailVisible}}" class="notice-ticker-mask" bindtap="closeNoticeDetail">
   <view class="notice-ticker-panel" catchtap="noop">
     <view class="notice-ticker-panel-head">
-      <view class="notice-ticker-panel-tag {{currentNotice.priority || 'normal'}}">{{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '公告')}}</view>
+      <view class="notice-ticker-panel-tag {{currentNotice.priority || 'normal'}}">{{currentNotice.typeLabel}} · {{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '普通')}}</view>
       <button class="notice-ticker-panel-close" bindtap="closeNoticeDetail">×</button>
     </view>
     <view class="notice-ticker-panel-title">{{currentNotice.title}}</view>
     <view class="notice-ticker-panel-content">{{currentNotice.content}}</view>
+    <view wx:if="{{currentNotice.dateText || currentNotice.validUntilText}}" class="notice-ticker-panel-date"><text wx:if="{{currentNotice.dateText}}">发布 {{currentNotice.dateText}}</text><text wx:if="{{currentNotice.validUntilText}}"> · 有效至 {{currentNotice.validUntilText}}</text></view>
+    <button wx:if="{{currentNotice.closable}}" class="notice-ticker-panel-action" bindtap="dismissNotice">关闭这条公告</button>
   </view>
 </view>

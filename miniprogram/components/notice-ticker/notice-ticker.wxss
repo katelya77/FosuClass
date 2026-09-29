@@ -5,25 +5,25 @@
   margin: 18rpx 24rpx;
   padding: 0 16rpx;
   border-radius: 16rpx;
-  background: #eff6ff;
-  border: 1rpx solid #bfdbfe;
-  color: #1d4ed8;
+  background: #ffffff;
+  border: 1rpx solid #e9e5e5;
+  color: #404956;
   box-sizing: border-box;
   overflow: hidden;
   cursor: pointer;
 }
 
 .notice-ticker-important {
-  background: #fff7ed;
-  border-color: #fed7aa;
-  color: #c2410c;
+  background: #fff8f7;
+  border-color: #efcfcc;
+  color: #a83b35;
 }
 
 .notice-ticker-urgent {
   background: #fef2f2;
   border-color: #fecaca;
   color: #b91c1c;
-  box-shadow: 0 8rpx 18rpx rgba(239, 68, 68, 0.08);
+  box-shadow: 0 4rpx 12rpx rgba(184, 43, 37, 0.06);
 }
 
 .notice-ticker-icon {
@@ -45,6 +45,8 @@
   margin: 0 14rpx;
 }
 
+.notice-ticker-chevron { flex: 0 0 auto; color: #9299a4; font-size: 38rpx; line-height: 1; }
+
 .notice-ticker-line {
   display: inline-flex;
   align-items: center;
@@ -60,11 +62,13 @@
 
 .notice-ticker-line.is-scroll {
   min-width: 200%;
-  animation: noticeTickerScroll 15s linear infinite;
+  animation: noticeTickerScroll 20s linear infinite;
 }
 
 .notice-ticker-line.is-static {
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .notice-ticker-close,
@@ -169,6 +173,9 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.notice-ticker-panel-date { margin-top: 22rpx; color: #89919d; font-size: 22rpx; }
+.notice-ticker-panel-action { margin-top: 26rpx; background: #f5f6f8; color: #5b6673; font-size: 23rpx; }
 
 @keyframes noticeTickerScroll {
   0% {

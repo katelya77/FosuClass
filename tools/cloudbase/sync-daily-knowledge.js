@@ -15,6 +15,7 @@ const appConfigService = require("../../server/src/services/appConfigService");
 const ROOT = path.resolve(__dirname, "../..");
 const DEFAULT_ENV_ID = "cloud1-d3g17rpe7566d3d5c";
 const PRODUCTION_CONFIRMATION = "publish-fosu-daily-knowledge";
+const SERVER_APP_CONFIG_URL = "https://class.katelya.eu.org/api/fosu/app-config";
 const BATCH_SIZE = 10;
 const MCPORTER_PACKAGE = "mcporter@0.13.8";
 
@@ -27,6 +28,9 @@ function parseArgs(argv) {
     envId: DEFAULT_ENV_ID,
     confirm: "",
     rollback: "",
+    mirrorPolicy: false,
+    expectedServerVersion: "",
+    expectedRegistryVersion: "",
   };
   argv.forEach((arg) => {
     if (arg === "--execute") args.execute = true;
@@ -36,6 +40,9 @@ function parseArgs(argv) {
     else if (arg.startsWith("--env=")) args.envId = arg.slice(6);
     else if (arg.startsWith("--confirm=")) args.confirm = arg.slice(10);
     else if (arg.startsWith("--rollback=")) args.rollback = arg.slice(11);
+    else if (arg === "--mirror-policy") args.mirrorPolicy = true;
+    else if (arg.startsWith("--expected-server-version=")) args.expectedServerVersion = arg.slice(26);
+    else if (arg.startsWith("--expected-registry-version=")) args.expectedRegistryVersion = arg.slice(28);
   });
   return args;
 }
@@ -142,6 +149,65 @@ function readRegistry() {
   } catch (error) {
     return null;
   }
+}
+
+async function mirrorServerPolicy(options) {
+  const response = await fetch(SERVER_APP_CONFIG_URL, {
+    headers: { "Cache-Control": "no-cache" },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`Server app-config returned HTTP ${response.status}`);
+  const payload = await response.json();
+  const data = payload && payload.data || {};
+  const module = data.contentModules && data.contentModules.dailyKnowledge;
+  if (!module || typeof module.enabled !== "boolean" || !module.version) {
+    throw new Error("Server app-config has no authoritative daily knowledge policy version");
+  }
+  if ((module.enabled === false && data.dailyKnowledge !== null) ||
+      (module.enabled === true && !data.dailyKnowledge)) {
+    throw new Error("Server app-config daily knowledge payload conflicts with policy");
+  }
+  callMcp("auth", { action: "set_env", envId: options.envId });
+  const registry = readRegistry();
+  if (!registry || !registry.activeCollection || !registry.contentVersion) {
+    throw new Error("CloudBase active registry is unavailable");
+  }
+  const plan = {
+    mode: options.execute ? "mirror-policy-execute" : "mirror-policy-verify",
+    envId: options.envId,
+    serverVersion: module.version,
+    serverEnabled: module.enabled,
+    registryContentVersion: registry.contentVersion,
+    registryEnabled: registry.enabled !== false,
+    activeCollection: registry.activeCollection,
+    registryPolicyVersion: String(registry.policyVersion || ""),
+    inSync: (registry.enabled !== false) === module.enabled && registry.policyVersion === module.version,
+  };
+  if (!options.execute) {
+    console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+  if (options.confirm !== PRODUCTION_CONFIRMATION ||
+      options.expectedServerVersion !== module.version ||
+      options.expectedRegistryVersion !== registry.contentVersion) {
+    throw new Error("Policy mirror requires confirmation and exact Server/registry versions");
+  }
+  if (!plan.inSync) {
+    callMcp("writeNoSqlDatabaseContent", {
+      action: "update",
+      collectionName: REGISTRY_COLLECTION,
+      query: { _id: ACTIVE_DOCUMENT_ID },
+      update: { $set: { enabled: module.enabled, policyVersion: module.version, mirroredAt: new Date().toISOString() } },
+      upsert: false,
+    });
+  }
+  const after = readRegistry();
+  if (!after || after.contentVersion !== registry.contentVersion ||
+      after.activeCollection !== registry.activeCollection ||
+      (after.enabled !== false) !== module.enabled || after.policyVersion !== module.version) {
+    throw new Error("CloudBase policy mirror verification failed");
+  }
+  console.log(JSON.stringify({ ...plan, inSync: true, registryEnabledAfter: after.enabled !== false, verified: true }, null, 2));
 }
 
 function countDocuments(collectionName) {
@@ -282,8 +348,12 @@ function verifyDeployment(deployment, collections) {
   }
 }
 
-function main() {
+async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.mirrorPolicy) {
+    await mirrorServerPolicy(options);
+    return;
+  }
   const now = new Date();
   const adminState = appConfigService.getDailyKnowledgeAdminState(now);
   const time = now.getTime();
@@ -353,9 +423,7 @@ function main() {
   console.log(JSON.stringify(Object.assign({}, plan, { verification, cleanup }), null, 2));
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(JSON.stringify({ success: false, code: error.code || "DAILY_KNOWLEDGE_SYNC_FAILED", message: error.message }, null, 2));
   process.exitCode = 1;
-}
+});

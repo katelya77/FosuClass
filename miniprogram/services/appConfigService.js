@@ -28,6 +28,18 @@ function normalizeDailyKnowledge(payload) {
   });
 }
 
+function normalizeNoticeForDisplay(notice) {
+  if (!notice || typeof notice !== "object") return null;
+  const typeLabels = { info: "校园通知", warning: "提醒", success: "好消息", update: "服务更新", maintenance: "维护通知" };
+  const priorityLabels = { normal: "普通", important: "重要", urgent: "紧急" };
+  return Object.assign({}, notice, {
+    typeLabel: typeLabels[notice.type] || "校园通知",
+    priorityLabel: priorityLabels[notice.priority] || "普通",
+    publishedDate: notice.createdAt ? String(notice.createdAt).slice(0, 10) : "",
+    validUntilDate: notice.endAt ? String(notice.endAt).slice(0, 10) : "",
+  });
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -68,8 +80,23 @@ function normalizeConfig(payload) {
   } else if (!config.currentSemester && config.termConfig && config.termConfig.term) {
     config.currentSemester = config.termConfig.term;
   }
-  if (!Array.isArray(config.notices)) config.notices = [];
+  config.notices = Array.isArray(config.notices)
+    ? config.notices.map(normalizeNoticeForDisplay).filter(Boolean) : [];
   config.dailyKnowledge = normalizeDailyKnowledge(config.dailyKnowledge);
+  const modules = config.contentModules && typeof config.contentModules === "object" ? config.contentModules : {};
+  config.contentModules = {
+    announcements: {
+      enabled: !(modules.announcements && modules.announcements.enabled === false),
+      version: String(modules.announcements && modules.announcements.version || ""),
+    },
+    dailyKnowledge: {
+      enabled: modules.dailyKnowledge && typeof modules.dailyKnowledge.enabled === "boolean"
+        ? modules.dailyKnowledge.enabled : Boolean(config.dailyKnowledge),
+      version: String(modules.dailyKnowledge && modules.dailyKnowledge.version || config.updatedAt || ""),
+    },
+  };
+  if (!config.contentModules.dailyKnowledge.enabled) config.dailyKnowledge = null;
+  if (!config.contentModules.announcements.enabled) config.notices = [];
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];
   if (config.urgentNotice === undefined) config.urgentNotice = null;
@@ -146,6 +173,14 @@ function loadAppConfig(options) {
       if (!opt.silent) {
         console.warn("⚠️ [appConfigService] 网络请求 app-config 失败", error);
       }
+      if (opt.requireFreshContent) {
+        const stale = normalizeConfig(cached || {});
+        stale.notices = [];
+        stale.dailyKnowledge = null;
+        stale.contentModules.announcements.enabled = false;
+        stale.contentModules.dailyKnowledge.enabled = false;
+        return stale;
+      }
       if (cached) {
         return cached;
       }
@@ -166,7 +201,12 @@ function getPageNotices(config, pageName) {
   const data = normalizeConfig(config || getGlobalConfig());
   const notices = Array.isArray(data.notices) ? data.notices : [];
   return notices.filter((notice) => {
-    return notice && (notice.targetPage === "all" || notice.targetPage === pageName);
+    if (!notice || notice.enabled === false ||
+        !(notice.targetPage === "all" || notice.targetPage === pageName)) return false;
+    const now = Date.now();
+    const start = notice.startAt ? Date.parse(notice.startAt) : NaN;
+    const end = notice.endAt ? Date.parse(notice.endAt) : NaN;
+    return !(Number.isFinite(start) && now < start) && !(Number.isFinite(end) && now > end);
   });
 }
 

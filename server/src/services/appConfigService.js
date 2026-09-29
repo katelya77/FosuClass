@@ -38,6 +38,10 @@ const DEFAULT_CONFIG = {
     enableFosuStudentImport: true,
   },
   dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(),
+  contentModules: {
+    announcements: { enabled: true, version: "" },
+    dailyKnowledge: { version: "" },
+  },
   dataVersion: {
     releaseVersion: "",
     classScheduleUpdatedAt: "",
@@ -93,6 +97,57 @@ function toText(value, maxLength) {
   return text;
 }
 
+function toNoticeText(value, maxLength) {
+  const text = toText(value, maxLength).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
+  if (/<\s*\/?\s*[a-z][^>]*>/i.test(text) || /(?:javascript|data)\s*:/i.test(text)) {
+    const error = new Error("公告仅支持纯文本，不允许 HTML 或脚本链接");
+    error.statusCode = 400;
+    error.code = "NOTICE_TEXT_UNSAFE";
+    throw error;
+  }
+  return text;
+}
+
+function publicNotice(item) {
+  const clean = (value, limit) => toText(value, limit)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .replace(/<[^>]*>/g, "");
+  return {
+    id: clean(item.id, 80),
+    title: clean(item.title, 120),
+    content: clean(item.content, 3000),
+    type: NOTICE_TYPES.has(item.type) ? item.type : "info",
+    priority: NOTICE_PRIORITIES.has(item.priority) ? item.priority : "normal",
+    displayMode: NOTICE_DISPLAY_MODES.has(item.displayMode) ? item.displayMode : "banner",
+    targetPage: NOTICE_TARGET_PAGES.has(item.targetPage) ? item.targetPage : "all",
+    enabled: true,
+    closable: item.closable !== false,
+    startAt: clean(item.startAt, 80),
+    endAt: clean(item.endAt, 80),
+    version: clean(item.version, 120),
+    createdAt: clean(item.createdAt, 80),
+    updatedAt: clean(item.updatedAt, 80),
+  };
+}
+
+function mergeContentModules(current, patch) {
+  const source = patch && typeof patch === "object" ? patch : {};
+  const base = current && typeof current === "object" ? current : {};
+  return {
+    announcements: {
+      enabled: source.announcements && source.announcements.enabled !== undefined
+        ? source.announcements.enabled !== false
+        : !(base.announcements && base.announcements.enabled === false),
+      version: toText(source.announcements && source.announcements.version !== undefined
+        ? source.announcements.version : base.announcements && base.announcements.version, 100),
+    },
+    dailyKnowledge: {
+      version: toText(source.dailyKnowledge && source.dailyKnowledge.version !== undefined
+        ? source.dailyKnowledge.version : base.dailyKnowledge && base.dailyKnowledge.version, 100),
+    },
+  };
+}
+
 function toBool(value, defaultValue) {
   if (value === undefined || value === null || value === "") {
     return Boolean(defaultValue);
@@ -123,6 +178,7 @@ function mergeConfig(raw) {
   return Object.assign({}, DEFAULT_CONFIG, source, {
     appConfig: Object.assign({}, DEFAULT_CONFIG.appConfig, source.appConfig || {}),
     dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(source.dailyKnowledge),
+    contentModules: mergeContentModules(DEFAULT_CONFIG.contentModules, source.contentModules),
     dataVersion: Object.assign({}, DEFAULT_CONFIG.dataVersion, source.dataVersion || {}),
   });
 }
@@ -142,6 +198,7 @@ function saveAdminConfig(patch) {
     dataVersion: Object.assign({}, current.dataVersion, source.dataVersion || {}),
     appConfig: Object.assign({}, current.appConfig || {}, source.appConfig || {}),
     dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(source.dailyKnowledge || current.dailyKnowledge),
+    contentModules: mergeContentModules(current.contentModules, source.contentModules),
     updatedAt: nowIso(),
   });
   next.dataVersion.releaseVersion = toText(next.dataVersion.releaseVersion, 80);
@@ -189,8 +246,8 @@ function normalizeNotice(payload, existing) {
   const displayMode = NOTICE_DISPLAY_MODES.has(source.displayMode) ? source.displayMode : (NOTICE_DISPLAY_MODES.has(base.displayMode) ? base.displayMode : "banner");
   const requestedTargetPage = NOTICE_TARGET_PAGES.has(source.targetPage) ? source.targetPage : (NOTICE_TARGET_PAGES.has(base.targetPage) ? base.targetPage : "all");
   const targetPage = displayMode === "daily-tip" ? "home" : requestedTargetPage;
-  const title = toText(source.title !== undefined ? source.title : base.title, 120);
-  const content = toText(source.content !== undefined ? source.content : base.content, 3000);
+  const title = toNoticeText(source.title !== undefined ? source.title : base.title, 120);
+  const content = toNoticeText(source.content !== undefined ? source.content : base.content, 3000);
   if (!title) {
     const err = new Error("notice title is required");
     err.statusCode = 400;
@@ -542,8 +599,10 @@ function updateNotice(id, payload, options) {
   return items[index];
 }
 
-function deleteNotice(id) {
+function deleteNotice(id, options = {}) {
   const items = listNotices();
+  const existing = items.find((item) => item.id === id);
+  if (existing) assertVersionMatch(existing, options);
   const next = items.filter((item) => item.id !== id);
   if (next.length === items.length) {
     const err = new Error("notice not found");
@@ -682,6 +741,7 @@ function getDailyKnowledgeAdminState(now = new Date()) {
     mode: policy.enabled ? resolved.source : "disabled",
     effectiveSource: resolved.source,
     policy,
+    policyVersion: getAdminConfig().contentModules.dailyKnowledge.version,
     selected: selectDailyKnowledge(activeNotices, now),
     managed: managed.map((item) => Object.assign({}, item, { active: dailyKnowledgePolicy.isActiveManaged(item, now) })),
     builtin,
@@ -696,8 +756,31 @@ function getDailyKnowledgeAdminState(now = new Date()) {
   };
 }
 
-function saveDailyKnowledgePolicy(patch) {
-  return saveAdminConfig({ dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(patch) }).dailyKnowledge;
+function assertContentVersion(current, expected) {
+  if (!expected || !current) return;
+  if (String(current) !== String(expected)) {
+    const error = new Error("首页内容已由其他管理员修改，请刷新后重试");
+    error.statusCode = 409;
+    error.code = "CONFLICT";
+    throw error;
+  }
+}
+
+function saveDailyKnowledgePolicy(patch, options = {}) {
+  const current = getAdminConfig();
+  assertContentVersion(current.contentModules.dailyKnowledge.version, options.expectedVersion);
+  return saveAdminConfig({
+    dailyKnowledge: dailyKnowledgePolicy.normalizePolicy(patch),
+    contentModules: { dailyKnowledge: { version: makeResourceVersion() } },
+  }).dailyKnowledge;
+}
+
+function saveAnnouncementsPolicy(enabled, options = {}) {
+  const current = getAdminConfig();
+  assertContentVersion(current.contentModules.announcements.version, options.expectedVersion);
+  return saveAdminConfig({
+    contentModules: { announcements: { enabled: enabled !== false, version: makeResourceVersion() } },
+  }).contentModules.announcements;
 }
 
 function exportDailyKnowledgePack(scope = "effective", now = new Date()) {
@@ -847,13 +930,16 @@ function getPublicAppConfig() {
   
   const activeNotices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
   const dailyKnowledge = selectDailyKnowledge(activeNotices, now);
-  let notices = activeNotices.filter((notice) => notice.displayMode !== "daily-tip");
+  let notices = config.contentModules.announcements.enabled
+    ? activeNotices.filter((notice) => notice.displayMode !== "daily-tip")
+    : [];
   
   // 检查当前学期是否已发布数据
   const activeRelease = releaseService.getActiveReleaseInfoFast
     ? releaseService.getActiveReleaseInfoFast()
     : releaseService.getActiveReleaseInfo();
-  if (!activeRelease || (activeRelease.term || activeRelease.semester) !== activeTerm.term) {
+  if (config.contentModules.announcements.enabled &&
+      (!activeRelease || (activeRelease.term || activeRelease.semester) !== activeTerm.term)) {
     notices.unshift({
       id: "temp_new_semester_syncing",
       title: "温馨提示",
@@ -889,8 +975,18 @@ function getPublicAppConfig() {
       appConfig: Object.assign({
         enableFosuStudentImport: process.env.FOSU_IMPORT_ENABLE !== "false",
       }, config.appConfig || {}),
-      notices,
+      notices: notices.map(publicNotice),
       dailyKnowledge,
+      contentModules: {
+        announcements: {
+          enabled: config.contentModules.announcements.enabled,
+          version: config.contentModules.announcements.version,
+        },
+        dailyKnowledge: {
+          enabled: config.dailyKnowledge.enabled,
+          version: config.contentModules.dailyKnowledge.version || config.updatedAt || "",
+        },
+      },
       news: listNews().filter((item) => item.enabled === true),
       ads: publicAdsConfig(),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,
@@ -1014,6 +1110,7 @@ module.exports = {
   listNews,
   listNotices,
   saveAdminConfig,
+  saveAnnouncementsPolicy,
   saveDailyKnowledgePolicy,
   seedBuiltinDailyKnowledge,
   selectDailyKnowledge,

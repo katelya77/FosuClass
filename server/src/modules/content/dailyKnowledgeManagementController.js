@@ -1,6 +1,7 @@
 "use strict";
 
 const contentService = require("./service");
+const cloudbaseService = require("../../services/dailyKnowledgeCloudbaseService");
 
 function sendFailure(res, error, fallbackCode) {
   return res.status(error.statusCode || 500).json({
@@ -14,9 +15,14 @@ function createDailyKnowledgePolicyHandler({ createBackup, writeAuditLog, safeLo
   return function dailyKnowledgePolicyHandler(req, res) {
     try {
       createBackup("config", contentService.CONFIG_PATH);
-      const policy = contentService.saveDailyKnowledgePolicy(req.body || {});
+      const policy = contentService.saveDailyKnowledgePolicy(req.body || {}, {
+        expectedVersion: req.get("if-match") || req.body && req.body.expectedVersion,
+      });
       writeAuditLog(req, "update", "daily-knowledge-policy", "active", `更新每日知识轮换策略: ${policy.enabled ? "启用" : "停用"}/${policy.strategy}/偏移${policy.rotationOffset}`);
-      return res.json({ success: true, data: { policy, state: contentService.getDailyKnowledgeAdminState(new Date()) } });
+      let mirror;
+      try { mirror = cloudbaseService.queueSync(); }
+      catch (error) { mirror = { status: "pending", code: "MIRROR_SYNC_QUEUING_FAILED" }; }
+      return res.json({ success: true, data: { policy, state: contentService.getDailyKnowledgeAdminState(new Date()), mirror } });
     } catch (error) {
       safeLog("admin-daily-knowledge-policy-failed", { error: error.message });
       return sendFailure(res, error, "DAILY_KNOWLEDGE_POLICY_FAILED");

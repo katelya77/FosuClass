@@ -3635,7 +3635,45 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.use(createDailyKnowledgeRoutes({ adminAuth, verifyAdminWriteAccess, createBackup, writeAuditLog, safeLog }));
 
-router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
+router.get("/content-center", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const config = contentDomainService.getAdminConfig();
+    const dailyKnowledge = contentDomainService.getDailyKnowledgeAdminState();
+    const cloudbaseService = require("../services/dailyKnowledgeCloudbaseService");
+    return res.json({ success: true, data: {
+      modules: {
+        announcements: config.contentModules.announcements,
+        dailyKnowledge: { enabled: config.dailyKnowledge.enabled, version: config.contentModules.dailyKnowledge.version },
+      },
+      notices: contentDomainService.listNotices().filter((item) => item.displayMode !== "daily-tip"),
+      dailyKnowledge: { policy: dailyKnowledge.policy, counts: dailyKnowledge.counts, selected: dailyKnowledge.selected },
+      mirror: cloudbaseService.getMirrorStatus(),
+    } });
+  } catch (error) {
+    safeLog("admin-content-center-read-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: "首页内容读取失败" });
+  }
+});
+
+router.put("/content-center/policy", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const body = req.body || {};
+    if (typeof body.announcementsEnabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "公告播报状态必须为布尔值" });
+    }
+    createBackup("config", contentDomainService.CONFIG_PATH);
+    const announcements = contentDomainService.saveAnnouncementsPolicy(body.announcementsEnabled, {
+      expectedVersion: req.get("if-match") || body.expectedVersion,
+    });
+    writeAuditLog(req, "update", "content-center-policy", "announcements", `公告播报${announcements.enabled ? "启用" : "停用"}`);
+    return res.json({ success: true, data: { announcements } });
+  } catch (error) {
+    safeLog("admin-content-center-policy-failed", { error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, code: error.code, message: error.message });
+  }
+});
+
+router.post("/notices", verifyAdminWriteAccess, (req, res) => {
   try {
     const operation = contentDomainService.createNoticeOperation(req.body || {}, {
       idempotencyKey: req.get("idempotency-key") || "",
@@ -3660,7 +3698,7 @@ router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
+router.put("/notices/:id", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("notices", contentDomainService.NOTICES_PATH);
     const body = req.body || {};
@@ -3689,10 +3727,12 @@ router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.delete("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
+router.delete("/notices/:id", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("notices", contentDomainService.NOTICES_PATH);
-    const deleted = contentDomainService.deleteNotice(req.params.id);
+    const deleted = contentDomainService.deleteNotice(req.params.id, {
+      expectedVersion: req.get("if-match") || req.body && req.body.expectedVersion,
+    });
     writeAuditLog(req, "delete", "notices", req.params.id, `删除公告 id: ${req.params.id}`);
     return res.json({
       success: true,

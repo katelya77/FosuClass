@@ -457,11 +457,13 @@
   margin-top: 12rpx;
   padding: 16rpx 58rpx 16rpx 18rpx;
   border-radius: 14rpx;
-  background: linear-gradient(135deg, #eef4ff, #fbf8ff);
+  background: #fff;
+  border: 1rpx solid #e9e5e5;
 }
 
 .notice-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   min-width: 0;
   gap: 12rpx;
@@ -472,8 +474,8 @@
   height: 34rpx;
   padding: 0 12rpx;
   border-radius: 17rpx;
-  background: #e8f1ff;
-  color: #3654d4;
+  background: #f5f6f8;
+  color: #576270;
   font-size: 19rpx;
   font-weight: 900;
   display: inline-flex;
@@ -488,8 +490,8 @@
 }
 
 .notice-label.important {
-  background: #fff7e9;
-  color: #c27c13;
+  background: #fff3f1;
+  color: #ae3e38;
 }
 
 .notice-title {
@@ -500,6 +502,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.notice-card-content { grid-column: 1 / -1; color:#5c6774; font-size:21rpx; line-height:1.5; overflow-wrap:anywhere; }
+.notice-detail-date { margin-top:18rpx; color:#8b94a0; font-size:20rpx; }
 
 .notice-close {
   position: absolute;
@@ -531,29 +536,16 @@
   padding: 20rpx 22rpx 20rpx 18rpx;
   border: 1rpx solid #dcebe6;
   border-radius: 16rpx;
-  background: linear-gradient(116deg, #eff8f4 0%, #fffdf8 68%);
+  background: #f4faf7;
   box-shadow: 0 6rpx 18rpx rgba(36, 48, 66, 0.05);
-}
-
-.daily-knowledge::after {
-  content: "";
-  position: absolute;
-  top: -48rpx;
-  right: -34rpx;
-  width: 132rpx;
-  height: 132rpx;
-  border: 18rpx solid rgba(18, 122, 104, 0.06);
-  border-radius: 50%;
 }
 
 .daily-knowledge.warning {
   border-color: #f4ddc0;
-  background: linear-gradient(116deg, #fff4e5 0%, #fffdf8 68%);
+  background: #fff7ed;
 }
 
-.daily-knowledge.warning::after {
-  border-color: rgba(180, 83, 9, 0.07);
-}
+.daily-knowledge.campus { border-color:#f0d5d1; background:#fff8f7; }
 
 .daily-knowledge-art {
   position: relative;
@@ -569,8 +561,7 @@
   position: absolute;
   inset: 0;
   border: 2rpx solid rgba(18, 122, 104, 0.24);
-  border-radius: 22rpx 50% 22rpx 50%;
-  transform: rotate(-8deg);
+  border-radius: 16rpx;
 }
 
 .daily-knowledge.warning .daily-knowledge-ring {

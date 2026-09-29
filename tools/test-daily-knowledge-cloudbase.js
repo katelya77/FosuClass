@@ -66,6 +66,7 @@ const registry = {
 global.wx = {
   getStorageSync(key) { return storage.get(key); },
   setStorageSync(key, value) { storage.set(key, value); },
+  removeStorageSync(key) { storage.delete(key); },
   cloud: {
     database() {
       return {
@@ -102,6 +103,11 @@ const service = require("../miniprogram/services/dailyKnowledgeCloudService");
   const cached = await service.loadDailyKnowledge({ fallback, now });
   assert.strictEqual(cached.source, "cloudbase", "same-day local cache should survive CloudBase failure");
 
+  const disabledPolicy = { enabled: false, version: "policy-paused" };
+  const pausedOffline = await service.loadDailyKnowledge({ fallback: null, now, serverPolicy: disabledPolicy });
+  assert.strictEqual(pausedOffline, null, "Server pause must win even when CloudBase is offline");
+  assert.strictEqual(storage.has(service.CACHE_KEY), false, "Server pause must clear the cached item");
+
   storage.clear();
   const changedFallback = Object.assign({}, fallback, { content: "服务端已更新但云端尚未同步。" });
   const fallbackResult = await service.loadDailyKnowledge({ fallback: changedFallback, now: new Date("2026-09-01T08:00:00.000Z") });
@@ -113,8 +119,30 @@ const service = require("../miniprogram/services/dailyKnowledgeCloudService");
       return { doc() { return { get() { return Promise.resolve({ data: registry }); } }; } };
     },
   });
-  const disabled = await service.loadDailyKnowledge({ fallback, now });
-  assert.strictEqual(disabled, null, "disabled registry must suppress stale CloudBase and cache content");
+  const disabled = await service.loadDailyKnowledge({ fallback, now, serverPolicy: { enabled: true, version: "policy-running" } });
+  assert.strictEqual(disabled.content, fallback.content, "Server fallback must survive a disabled mirror");
+
+  registry.enabled = true;
+  storage.set(service.CACHE_KEY, { date: "2026-08-31", policyVersion: "old", item: fallback });
+  const pausedOnline = await service.loadDailyKnowledge({ fallback: null, now, serverPolicy: disabledPolicy });
+  assert.strictEqual(pausedOnline, null, "Server pause must override an enabled CloudBase registry");
+  assert.strictEqual(storage.has(service.CACHE_KEY), false, "Server pause must remove stale local cache");
+
+  const clientConfig = require("../miniprogram/services/appConfigService");
+  const request = require("../miniprogram/utils/request");
+  const originalGet = request.get;
+  storage.set(clientConfig.APP_CONFIG_CACHE_KEY, {
+    config: { dailyKnowledge: fallback, notices: [{ id: "stale", title: "旧公告", targetPage: "home" }] },
+  });
+  request.get = () => Promise.reject(new Error("offline"));
+  try {
+    const stale = await clientConfig.loadAppConfig({ force: true, requireFreshContent: true, silent: true });
+    assert.strictEqual(stale.dailyKnowledge, null, "stale app-config must not revive the daily card");
+    assert.strictEqual(stale.contentModules.dailyKnowledge.enabled, false);
+    assert.deepStrictEqual(stale.notices, [], "stale app-config must not revive announcements");
+  } finally {
+    request.get = originalGet;
+  }
   console.log("test-daily-knowledge-cloudbase passed");
 })().catch((error) => {
   console.error(error);

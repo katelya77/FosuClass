@@ -6,6 +6,7 @@ function createDailyKnowledgeListHandler({ safeLog }) {
     try {
       const data = contentService.getDailyKnowledgeAdminState(new Date());
       data.cloudbase = dailyKnowledgeCloudbaseService.getPlan(new Date());
+      data.cloudbase.mirror = dailyKnowledgeCloudbaseService.getMirrorStatus();
       return res.json({ success: true, data });
     } catch (error) {
       safeLog("admin-daily-knowledge-list-failed", { error: error.message });

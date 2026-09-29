@@ -268,8 +268,11 @@ Page({
   },
 
   loadPageConfig() {
-    return appConfigService.loadAppConfig()
+    const contentLoadSeq = (this._contentLoadSeq || 0) + 1;
+    this._contentLoadSeq = contentLoadSeq;
+    return appConfigService.loadAppConfig({ force: true, requireFreshContent: true })
       .then((config) => {
+        if (this._contentLoadSeq !== contentLoadSeq) return;
         const normalizedConfig = appConfigService.normalizeConfig
           ? appConfigService.normalizeConfig(config)
           : Object.assign({ notices: [], banners: [], news: [], appConfig: {} }, config || {});
@@ -300,15 +303,23 @@ Page({
           modalNotice,
           showAppNoticeModal: Boolean(shouldShowModal),
         });
-        dailyKnowledgeCloudService.loadDailyKnowledge({ fallback: serverDailyKnowledge })
+        dailyKnowledgeCloudService.loadDailyKnowledge({
+          fallback: serverDailyKnowledge,
+          serverPolicy: normalizedConfig.contentModules && normalizedConfig.contentModules.dailyKnowledge,
+        })
           .then((dailyKnowledge) => {
-            if (dailyKnowledge) this.setData({ dailyKnowledge });
+            if (this._contentLoadSeq === contentLoadSeq) this.setData({ dailyKnowledge: dailyKnowledge || null });
           })
           .catch(() => {});
       })
       .catch((err) => {
         console.warn("首页公告配置加载失败", err);
         this.setData({
+          homeNotice: null,
+          tickerNotice: null,
+          modalNotice: null,
+          showAppNoticeModal: false,
+          dailyKnowledge: null,
           appConfig: appConfigService.normalizeConfig
             ? appConfigService.normalizeConfig(this.data.appConfig)
             : Object.assign({ notices: [], banners: [], news: [], appConfig: {} }, this.data.appConfig || {}),
