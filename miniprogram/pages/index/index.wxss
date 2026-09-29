@@ -710,6 +710,7 @@
 
 /* 周课表控制区 */
 .schedule-tabs {
+  margin-top: 14rpx;
   margin-bottom: 14rpx;
   padding: 14rpx 0 12rpx;
   border-radius: 18rpx;

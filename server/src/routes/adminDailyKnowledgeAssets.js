@@ -113,15 +113,31 @@ const DAILY_KNOWLEDGE_STYLES = String.raw`
     .content-center-preview-mode { display:flex; gap:5px; margin:10px 0; }
     .content-center-preview-mode button { width:auto; min-height:28px; padding:4px 8px; font-size:10px; }
     .content-center-preview-mode button[aria-pressed="true"] { border-color:var(--knowledge-red); color:var(--knowledge-red); }
-    .content-center-phone-stack { display:grid; gap:9px; --surface:#fff; --border:#e4e8ed; --text-primary:#202830; --brand-soft:#fff3f2; --danger:#b92329; --danger-soft:#fff0f1; }
-    .content-center-phone-ticker { padding:9px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text-primary); font-size:10px; overflow-wrap:anywhere; }
-    .content-center-phone-ticker.important { color:var(--knowledge-red); border-color:color-mix(in srgb,var(--knowledge-red) 30%,var(--border)); background:var(--brand-soft); }
-    .content-center-phone-ticker.urgent { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 35%,var(--border)); background:var(--danger-soft); }
-    .content-center-phone-ticker strong { display:block; font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
-    .content-center-phone-ticker div { margin-top:6px; color:#66717d; font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
-    .content-center-phone-ticker.mode-card { padding:12px; border-radius:9px; }
-    .content-center-phone-ticker.mode-modal { padding:14px; border:2px solid #d2c9c9; box-shadow:0 8px 20px #18202b16; }
-    .content-center-phone-empty { padding:12px; color:#8a929c; font-size:10px; text-align:center; }
+    .content-center-phone-stack { display:flex; flex-direction:column; justify-content:flex-start; gap:8px; --surface:#fff; --border:#e4e8ed; --text-primary:#243042; --brand-soft:#fffafa; --danger:#b92329; --danger-soft:#fff7f6; }
+    .content-center-phone-home { display:flex; align-items:center; gap:7px; min-height:66px; padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:#fff; }
+    .content-center-phone-home-mark { display:grid; place-items:center; flex:0 0 26px; height:26px; border-radius:6px; background:#c62828; color:#fff; font-size:13px; font-weight:800; }
+    .content-center-phone-home-copy { min-width:0; }
+    .content-center-phone-home-copy strong { display:block; color:#172033; font-size:12px; line-height:1.3; }
+    .content-center-phone-home-copy span { color:#7c8795; font-size:9px; }
+    .content-center-phone-home-week { margin-left:auto; padding:3px 6px; border-radius:10px; background:#fff1f1; color:#b4232a; font-size:9px; white-space:nowrap; }
+    .content-center-phone-ticker { display:flex; align-items:center; gap:6px; min-height:36px; padding:5px 6px 5px 9px; border-radius:7px; border:1px solid #e8e9ed; background:#fff; color:#243042; font-size:10px; }
+    .content-center-phone-ticker.important { border-color:#e9c7c5; background:#fffafa; }
+    .content-center-phone-ticker.urgent { border-color:#e5aaa8; background:#fff7f6; }
+    .content-center-phone-ticker-label { flex:0 0 auto; padding:2px 4px; border-radius:3px; background:#fff1f0; color:#b4232a; font-size:9px; font-weight:700; }
+    .content-center-phone-ticker.urgent .content-center-phone-ticker-label { background:#c62828; color:#fff; }
+    .content-center-phone-ticker strong { display:block; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:600; line-height:1.4; }
+    .content-center-phone-ticker-arrow { color:#99a1ac; font-size:16px; line-height:1; }
+    .content-center-phone-ticker-close { display:grid; place-items:center; flex:0 0 20px; height:20px; color:#89929d; font-size:14px; font-weight:400; }
+    .content-center-phone-ticker.mode-banner,.content-center-phone-ticker.mode-card,.content-center-phone-ticker.mode-modal { display:block; padding:10px; }
+    .content-center-phone-ticker.mode-banner strong,.content-center-phone-ticker.mode-card strong,.content-center-phone-ticker.mode-modal strong { margin-top:5px; white-space:normal; overflow-wrap:anywhere; }
+    .content-center-phone-ticker-body { margin-top:5px; color:#66717d; font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
+    .content-center-phone-ticker.mode-modal { border-color:#e9c7c5; box-shadow:0 8px 20px #18202b16; }
+    .content-center-phone-schedule { padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:#fff; color:#172033; }
+    .content-center-phone-schedule-top { display:flex; justify-content:space-between; color:#172033; font-size:10px; font-weight:700; }
+    .content-center-phone-schedule-top span:last-child { color:#8a94a6; font-size:9px; font-weight:400; }
+    .content-center-phone-schedule-week { margin-top:13px; padding-top:10px; border-top:1px solid #edf0f3; font-size:11px; font-weight:700; }
+    .content-center-phone-schedule-days { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-top:9px; color:#8a94a6; font-size:8px; text-align:center; }
+    .content-center-phone-empty { padding:9px 6px; color:#8a929c; font-size:10px; text-align:center; }
     .content-center-mirror-warning { color:#9c5b12 !important; }
     @media (min-width:1101px) { .content-center-announcement-grid .knowledge-preview-box { grid-column:auto; max-width:none; position:sticky; } }
     @media (max-width:1100px) { .content-center-announcement-grid { grid-template-columns:minmax(250px,1fr) minmax(290px,1fr); } .content-center-announcement-grid .preview-box { grid-column:1/-1; max-width:340px; } }
@@ -205,13 +221,17 @@ const DAILY_KNOWLEDGE_SCRIPT = String.raw`
         var showDaily=(contentCenterPreviewMode==="daily"||contentCenterPreviewMode==="both")&&value("dailyKnowledgePolicyEnabled")!=="false";
         ["contentCenterPhoneScreen","dailyKnowledgePhoneScreen"].forEach(function(id){
           var screen=$(id);if(!screen)return;screen.textContent="";
-          var brand=document.createElement("div");brand.className="knowledge-phone-brand";brand.textContent="佛课小表 · 今日课表";screen.appendChild(brand);
-          if(showAnnouncement&&notice){
-            var mode=notice.displayMode||"ticker",box=document.createElement("div");
+          var brand=document.createElement("div");brand.className="content-center-phone-home";brand.innerHTML="<span class='content-center-phone-home-mark'>课</span><span class='content-center-phone-home-copy'><strong>佛课小表</strong><span>课表首页</span></span><span class='content-center-phone-home-week'>本周</span>";screen.appendChild(brand);
+          var noticeOnHome=showAnnouncement&&notice&&notice.enabled!==false&&(notice.targetPage==="home"||notice.targetPage==="all");
+          if(noticeOnHome){
+            var mode=notice.displayMode||"ticker",box=document.createElement("div"),label=document.createElement("span"),title=document.createElement("strong");
             box.className="content-center-phone-ticker "+(notice.priority||"normal")+" mode-"+mode;
-            var title=document.createElement("strong");title.textContent=(mode==="ticker"?"公告  ":"")+(notice.title||"")+(mode==="ticker"?"  ›":"");
-            box.appendChild(title);
-            if(mode!=="ticker"){var body=document.createElement("div");body.textContent=notice.content||"";box.appendChild(body);}
+            label.className="content-center-phone-ticker-label";label.textContent=notice.priority==="urgent"?"紧急":(notice.priority==="important"?"重要":"公告");box.appendChild(label);
+            title.textContent=notice.title||"";box.appendChild(title);
+            if(mode==="ticker"){
+              var arrow=document.createElement("span");arrow.className="content-center-phone-ticker-arrow";arrow.textContent="›";box.appendChild(arrow);
+              if(notice.closable!==false){var close=document.createElement("span");close.className="content-center-phone-ticker-close";close.textContent="×";box.appendChild(close);}
+            }else{var body=document.createElement("div");body.className="content-center-phone-ticker-body";body.textContent=notice.content||"";box.appendChild(body);}
             screen.appendChild(box);
           }
           if(showDaily&&tip){
@@ -220,7 +240,8 @@ const DAILY_KNOWLEDGE_SCRIPT = String.raw`
             card.innerHTML="<div class='knowledge-preview-art'>"+escapeHtml(meta.mark)+"</div><div><div class='knowledge-preview-meta'><span>"+escapeHtml(meta.label)+"</span><span>今日</span></div><div class='knowledge-preview-title'>"+escapeHtml(tip.title||meta.title)+"</div><div class='knowledge-preview-content'>"+escapeHtml(tip.content||"")+"</div></div>";
             screen.appendChild(card);
           }
-          if(!((showAnnouncement&&notice)||(showDaily&&tip))){var empty=document.createElement("div");empty.className="content-center-phone-empty";empty.textContent="当前没有首页内容";screen.appendChild(empty);}
+          if(!(noticeOnHome||(showDaily&&tip))){var empty=document.createElement("div");empty.className="content-center-phone-empty";empty.textContent="当前没有首页内容";screen.appendChild(empty);}
+          var schedule=document.createElement("div");schedule.className="content-center-phone-schedule";schedule.innerHTML="<div class='content-center-phone-schedule-top'><span>切换课表</span><span>我的课表</span></div><div class='content-center-phone-schedule-week'>周课表</div><div class='content-center-phone-schedule-days'><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>";screen.appendChild(schedule);
         });
       }
       function dailyKnowledgeCategoryMeta(category) { var map={mind:{label:"心理关怀",title:"心理小知识",mark:"心",type:"success"},fraud:{label:"防诈提醒",title:"防诈小知识",mark:"盾",type:"warning"},campus:{label:"校园日签",title:"校园小知识",mark:"校",type:"info"}};return map[category]||map.campus; }

@@ -87,10 +87,26 @@ async function run() {
       assert(await page.locator("#contentCenterNoticeList").count());
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       assert(!overflow, `${mode}/${width}: no horizontal page overflow`);
+      if (["normal", "important", "urgent", "long"].includes(mode)) {
+        const layout = await page.locator("#contentCenterPhoneScreen").evaluate((screen) => {
+          const home = screen.querySelector(".content-center-phone-home").getBoundingClientRect();
+          const tickerNode = screen.querySelector(".content-center-phone-ticker");
+          const ticker = tickerNode.getBoundingClientRect();
+          const next = tickerNode.nextElementSibling.getBoundingClientRect();
+          const close = screen.querySelector(".content-center-phone-ticker-close").getBoundingClientRect();
+          return { above: ticker.top - home.bottom, below: next.top - ticker.bottom, closeWidth: close.width, tickerWidth: ticker.width, screenWidth: screen.getBoundingClientRect().width };
+        });
+        assert(Math.abs(layout.above - layout.below) <= 1, `${mode}: announcement spacing should match above and below`);
+        assert(layout.closeWidth <= 24, `${mode}: close affordance should stay compact`);
+        assert(layout.tickerWidth <= layout.screenWidth + 1, `${mode}: ticker should fit phone width`);
+      }
       if (mode === "paused") assert.strictEqual(await page.locator("#contentCenterPhoneScreen .knowledge-preview-card").count(), 0);
       if (mode === "pending") assert.match(await page.locator("#dailyKnowledgeCloudbaseStatus").textContent(), /镜像状态落后/);
       if (mode === "many") assert.match(await page.locator("#contentCenterNoticePageSummary").textContent(), /第 1 \/ 2 页/);
       await page.screenshot({ path: path.join(out, `${mode}-${width}-${theme}.png`), fullPage: true });
+      if (mode === "normal" && theme === "light") {
+        await page.locator(".content-center-announcement-grid .preview-phone").screenshot({ path: path.join(out, "notice-phone-preview.png") });
+      }
       if (mode === "normal" && theme === "light") {
         await page.locator("#contentCenterNoticeTitle").fill("校园服务临时调整");
         await page.locator("#contentCenterNoticeContent").fill("请留意开放时间。");
