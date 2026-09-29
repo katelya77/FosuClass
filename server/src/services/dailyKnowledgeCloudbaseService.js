@@ -2,13 +2,65 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const appConfigService = require("./appConfigService");
 const { buildDeployment } = require("../content/dailyKnowledgeCloudbaseData");
 
 const ROOT = path.resolve(__dirname, "../../..");
 const SYNC_SCRIPT = path.join(ROOT, "tools/cloudbase/sync-daily-knowledge.js");
 const ENV_ID = "cloud1-d3g17rpe7566d3d5c";
+const MIRROR_STATE_PATH = path.join(path.dirname(appConfigService.CONFIG_PATH), "daily-knowledge-mirror-state.json");
+let syncRunning = false;
+
+function writeMirrorState(state) {
+  const directory = path.dirname(MIRROR_STATE_PATH);
+  fs.mkdirSync(directory, { recursive: true });
+  const temp = `${MIRROR_STATE_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify({ ...state, updatedAt: new Date().toISOString() }), "utf8");
+  if (process.platform === "win32" && fs.existsSync(MIRROR_STATE_PATH)) fs.unlinkSync(MIRROR_STATE_PATH);
+  fs.renameSync(temp, MIRROR_STATE_PATH);
+}
+
+function getMirrorStatus() {
+  const plan = getPlan();
+  let stored = {};
+  try { stored = JSON.parse(fs.readFileSync(MIRROR_STATE_PATH, "utf8")); } catch (_) {}
+  const matches = stored.contentVersion === plan.contentVersion && stored.enabled === plan.enabled;
+  return {
+    status: !stored.status ? "unknown" : (matches && stored.status === "synced" ? "synced" : "pending"),
+    enabled: plan.enabled,
+    contentVersion: plan.contentVersion,
+    lastError: matches ? String(stored.lastError || "") : "",
+    updatedAt: stored.updatedAt || "",
+  };
+}
+
+function queueSync() {
+  const plan = getPlan();
+  writeMirrorState({ status: "pending", enabled: plan.enabled, contentVersion: plan.contentVersion });
+  if (!plan.syncEnabled || syncRunning) return getMirrorStatus();
+  syncRunning = true;
+  const child = spawn(process.execPath, [SYNC_SCRIPT, "--execute", `--env=${ENV_ID}`, "--confirm=publish-fosu-daily-knowledge"], {
+    cwd: ROOT, windowsHide: true, stdio: ["ignore", "ignore", "pipe"],
+  });
+  child.stderr.on("data", () => {});
+  child.on("error", (error) => {
+    syncRunning = false;
+    writeMirrorState({ status: "pending", enabled: plan.enabled, contentVersion: plan.contentVersion, lastError: error.code || "SYNC_FAILED" });
+  });
+  child.on("close", (code) => {
+    syncRunning = false;
+    writeMirrorState({
+      status: code === 0 ? "synced" : "pending",
+      enabled: plan.enabled,
+      contentVersion: plan.contentVersion,
+      lastError: code === 0 ? "" : `SYNC_EXIT_${code}`,
+    });
+    const latest = getPlan();
+    if (latest.enabled !== plan.enabled || latest.contentVersion !== plan.contentVersion) queueSync();
+  });
+  return getMirrorStatus();
+}
 
 function getActiveManaged(now = new Date()) {
   const state = appConfigService.getDailyKnowledgeAdminState(now);
@@ -83,7 +135,11 @@ function verify() {
       },
     });
   }
-  return runScript(["--verify", `--env=${ENV_ID}`]);
+  const result = runScript(["--verify", `--env=${ENV_ID}`]);
+  if (result.verification && result.verification.ok) {
+    writeMirrorState({ status: "synced", enabled: plan.enabled, contentVersion: plan.contentVersion });
+  }
+  return result;
 }
 
 function sync() {
@@ -95,11 +151,13 @@ function sync() {
       message: "服务器未启用 CloudBase 自动写入；迁移命令已准备完成。",
     });
   }
-  return runScript([
+  const result = runScript([
     "--execute",
     `--env=${ENV_ID}`,
     "--confirm=publish-fosu-daily-knowledge",
   ]);
+  writeMirrorState({ status: "synced", enabled: plan.enabled, contentVersion: plan.contentVersion });
+  return result;
 }
 
-module.exports = { ENV_ID, getPlan, sync, verify };
+module.exports = { ENV_ID, getMirrorStatus, getPlan, queueSync, sync, verify };

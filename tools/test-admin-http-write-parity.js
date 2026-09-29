@@ -258,6 +258,56 @@ async function main() {
     assert.strictEqual(policyUpdate.status, 200, policyUpdate.text);
     assert.deepStrictEqual(policyUpdate.json.data.policy, { enabled: true, strategy: "sequential", rotationOffset: 4 });
 
+    const pauseDaily = await request(port, "POST", "/api/admin/daily-knowledge/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf, "If-Match": policyUpdate.json.data.state.policyVersion },
+      body: { enabled: false, strategy: "sequential", rotationOffset: 4 },
+    });
+    assert.strictEqual(pauseDaily.status, 200, pauseDaily.text);
+    assert.strictEqual(pauseDaily.json.data.mirror.status, "pending", "mirror failure must not roll back Server policy");
+    const publicPaused = await request(port, "GET", "/api/fosu/app-config");
+    assert.strictEqual(publicPaused.status, 200, publicPaused.text);
+    assert.strictEqual(publicPaused.json.data.dailyKnowledge, null);
+    assert.strictEqual(publicPaused.json.data.contentModules.dailyKnowledge.enabled, false);
+    const pauseConflict = await request(port, "POST", "/api/admin/daily-knowledge/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf, "If-Match": policyUpdate.json.data.state.policyVersion },
+      body: { enabled: true },
+    });
+    assert.strictEqual(pauseConflict.status, 409, "stale daily policy version must conflict");
+    const resumeDaily = await request(port, "POST", "/api/admin/daily-knowledge/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf, "If-Match": pauseDaily.json.data.state.policyVersion },
+      body: { enabled: true, strategy: "sequential", rotationOffset: 4 },
+    });
+    assert.strictEqual(resumeDaily.status, 200, resumeDaily.text);
+    const publicResumed = await request(port, "GET", "/api/fosu/app-config");
+    assert(publicResumed.json.data.dailyKnowledge);
+    assert.strictEqual(publicResumed.json.data.contentModules.dailyKnowledge.enabled, true);
+
+    const center = await request(port, "GET", "/api/admin/content-center", { cookie });
+    assert.strictEqual(center.status, 200, center.text);
+    const disableAnnouncements = await request(port, "PUT", "/api/admin/content-center/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf, "If-Match": center.json.data.modules.announcements.version },
+      body: { announcementsEnabled: false },
+    });
+    assert.strictEqual(disableAnnouncements.status, 200, disableAnnouncements.text);
+    const publicAnnouncementsOff = await request(port, "GET", "/api/fosu/app-config");
+    assert.strictEqual(publicAnnouncementsOff.json.data.contentModules.announcements.enabled, false);
+    assert(!publicAnnouncementsOff.json.data.notices.some((notice) => notice.id === createVue.json.item.id));
+    const noCsrf = await request(port, "PUT", "/api/admin/content-center/policy", {
+      cookie,
+      body: { announcementsEnabled: true },
+    });
+    assert.strictEqual(noCsrf.status, 403, "content policy write must require CSRF");
+    const enableAnnouncements = await request(port, "PUT", "/api/admin/content-center/policy", {
+      cookie,
+      headers: { "X-Fosu-CSRF": csrf, "If-Match": disableAnnouncements.json.data.announcements.version },
+      body: { announcementsEnabled: true },
+    });
+    assert.strictEqual(enableAnnouncements.status, 200, enableAnnouncements.text);
+
     const exportedDaily = await request(port, "GET", "/api/admin/daily-knowledge/export?scope=managed", { cookie });
     assert.strictEqual(exportedDaily.status, 200, exportedDaily.text);
     assert.strictEqual(exportedDaily.json.data.items.length, 2);

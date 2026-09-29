@@ -11,12 +11,12 @@ const switcherWxss = fs.readFileSync(path.join(root, "miniprogram/components/wee
 
 const knowledgeIndex = indexWxml.indexOf('class="daily-knowledge');
 const emptyIndex = indexWxml.indexOf('class="empty-schedule-card');
-const scheduleIndex = indexWxml.indexOf('class="schedule card" wx:else');
+const scheduleIndex = indexWxml.indexOf('class="schedule card" wx:if="{{hasBoundTarget}}"');
 const switcherIndex = indexWxml.indexOf("<week-switcher");
 
 assert.ok(knowledgeIndex >= 0, "home should render the optional daily knowledge card");
 assert.ok(emptyIndex > knowledgeIndex, "daily knowledge must stay outside the schedule if/else branch");
-assert.ok(scheduleIndex > emptyIndex, "bound schedule must remain the else branch of the empty state");
+assert.ok(scheduleIndex > emptyIndex, "bound schedule must remain gated by the selected timetable");
 assert.ok(switcherIndex > scheduleIndex, "bound schedule must keep the week switcher");
 assert.ok(
   /:host\s*\{[\s\S]*?display:\s*block;[\s\S]*?width:\s*100%;[\s\S]*?\}/.test(switcherWxss),

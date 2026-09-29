@@ -23,10 +23,10 @@ function slotDocumentId(slot) {
   return `slot_${String(slot).padStart(4, "0")}`;
 }
 
-function readCache(dateKey) {
+function readCache(dateKey, policyVersion) {
   try {
     const cached = wx.getStorageSync(CACHE_KEY);
-    if (cached && cached.date === dateKey && cached.item) {
+    if (cached && cached.date === dateKey && cached.policyVersion === policyVersion && cached.item) {
       return appConfigService.normalizeDailyKnowledge(cached.item);
     }
   } catch (error) {
@@ -35,12 +35,13 @@ function readCache(dateKey) {
   return null;
 }
 
-function writeCache(dateKey, registry, item) {
+function writeCache(dateKey, registry, item, policyVersion) {
   try {
     wx.setStorageSync(CACHE_KEY, {
       date: dateKey,
       collection: registry.activeCollection,
       version: registry.contentVersion || "",
+      policyVersion,
       item,
       updatedAt: new Date().toISOString(),
     });
@@ -88,10 +89,15 @@ function getDatabase() {
 }
 
 function loadDailyKnowledge(options) {
-  const opt = Object.assign({ fallback: null, now: new Date() }, options || {});
+  const opt = Object.assign({ fallback: null, now: new Date(), serverPolicy: null }, options || {});
+  if (opt.serverPolicy && opt.serverPolicy.enabled === false) {
+    clearCache();
+    return Promise.resolve(null);
+  }
   const date = shanghaiDateKey(opt.now);
   const fallback = appConfigService.normalizeDailyKnowledge(opt.fallback);
-  const cached = readCache(date);
+  const policyVersion = String(opt.serverPolicy && opt.serverPolicy.version || "");
+  const cached = readCache(date, policyVersion);
   if (cloudbaseConfig.DAILY_KNOWLEDGE_CLOUDBASE_ENABLED !== true) {
     return Promise.resolve(cached || fallback);
   }
@@ -115,7 +121,7 @@ function loadDailyKnowledge(options) {
         .then((itemResult) => ({ registry, item: itemResult && itemResult.data }));
     })
     .then(({ registry, item, disabled }) => {
-      if (disabled) return null;
+      if (disabled) return fallback;
       if (fallback && (
         String(item && item.sourceId || "") !== String(fallback.id || "") ||
         String(item && item.content || "") !== String(fallback.content || "")
@@ -127,7 +133,7 @@ function loadDailyKnowledge(options) {
         source: "cloudbase",
       }));
       if (!normalized) throw new Error("DAILY_KNOWLEDGE_ITEM_INVALID");
-      writeCache(date, registry, normalized);
+      writeCache(date, registry, normalized, policyVersion);
       return normalized;
     })
     .catch(() => cached || fallback);
@@ -138,6 +144,7 @@ module.exports = {
   CACHE_KEY,
   COLLECTION_PATTERN,
   loadDailyKnowledge,
+  clearCache,
   normalizeRegistry,
   shanghaiDateKey,
   slotDocumentId,

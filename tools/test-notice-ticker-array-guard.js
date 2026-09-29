@@ -41,4 +41,35 @@ assert.strictEqual(normalizedDaily.categoryLabel, "防诈提醒");
 assert.strictEqual(normalizedDaily.categoryMark, "盾");
 assert.strictEqual(normalizedDaily.dateLabel, "8月30日");
 
+const notices = [
+  { id: "a", title: "普通公告", content: "校园活动", priority: "normal", displayMode: "ticker", targetPage: "home", enabled: true, version: "1" },
+  { id: "b", title: "重要公告", content: "服务调整", priority: "important", displayMode: "ticker", targetPage: "all", enabled: true, version: "1" },
+  { id: "c", title: "紧急公告", content: "安全提醒", priority: "urgent", displayMode: "ticker", targetPage: "home", enabled: true, version: "1" },
+];
+const home = appConfigService.getPageNotices({ notices }, "home");
+const today = appConfigService.getPageNotices({ notices }, "today");
+assert.strictEqual(home.length, 3, "home and all targets should appear on home");
+assert.deepStrictEqual(today.map((notice) => notice.id), ["b"], "all targets should appear on another supported page");
+
+let definition;
+global.Component = (value) => { definition = value; };
+require(componentPath);
+const component = {
+  data: { notices, pageKey: "home", maxCount: 5, detailVisible: false, currentIndex: 0 },
+  setData(patch, callback) { Object.assign(this.data, patch); if (callback) callback(); },
+  triggerEvent() {},
+  ...definition.methods,
+};
+component.updateVisibleNotices();
+assert.deepStrictEqual(component.data.visibleNotices.map((notice) => notice.id), ["c", "b", "a"], "ticker should order urgent, important, normal");
+component.rotateNotice();
+assert.strictEqual(component.data.currentNotice.id, "b", "multiple tickers should rotate");
+component.rotateNotice();
+assert.strictEqual(component.data.currentNotice.id, "a");
+component.rotateNotice();
+assert.strictEqual(component.data.currentNotice.id, "c", "ticker rotation should wrap");
+component.openNoticeDetail();
+component.rotateNotice();
+assert.strictEqual(component.data.currentNotice.id, "c", "ticker rotation should pause while detail is open");
+
 console.log("test-notice-ticker-array-guard passed");

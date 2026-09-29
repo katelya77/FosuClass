@@ -21,11 +21,14 @@ function isTickerNotice(notice, pageKey) {
 
 function buildDisplayItem(notice) {
   const title = notice.title || "";
-  const content = notice.content || "";
-  const text = content ? `${title} · ${content}` : title;
+  const text = title;
   return Object.assign({}, notice, {
     tickerText: text,
     shouldScroll: text.length > 18,
+    dateText: notice.startAt ? String(notice.startAt).slice(0, 10) :
+      (notice.createdAt ? String(notice.createdAt).slice(0, 10) : ""),
+    validUntilText: notice.endAt ? String(notice.endAt).slice(0, 10) : "",
+    typeLabel: notice.typeLabel || ({ info: "校园通知", warning: "提醒", success: "好消息", update: "服务更新", maintenance: "维护通知" }[notice.type] || "校园通知"),
   });
 }
 
@@ -69,12 +72,18 @@ Component({
   data: {
     visibleNotices: [],
     currentNotice: null,
+    currentIndex: 0,
     detailVisible: false,
   },
 
   lifetimes: {
     attached() {
       this.updateVisibleNotices();
+      this._rotationTimer = setInterval(() => this.rotateNotice(), 6500);
+    },
+    detached() {
+      if (this._rotationTimer) clearInterval(this._rotationTimer);
+      this._rotationTimer = null;
     },
   },
 
@@ -94,9 +103,17 @@ Component({
 
       this.setData({
         visibleNotices,
+        currentIndex: 0,
         currentNotice: visibleNotices[0] || null,
         detailVisible: this.data.detailVisible && visibleNotices.length > 0,
       });
+    },
+
+    rotateNotice() {
+      const notices = this.data.visibleNotices || [];
+      if (this.data.detailVisible || notices.length < 2) return;
+      const currentIndex = (this.data.currentIndex + 1) % notices.length;
+      this.setData({ currentIndex, currentNotice: notices[currentIndex] });
     },
 
     openNoticeDetail() {

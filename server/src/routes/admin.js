@@ -30,6 +30,7 @@ const backupService = require("../services/backupService");
 const adminAuditService = require("../services/adminAuditService");
 const contentDomainService = require("../modules/content/service");
 const { createDailyKnowledgeRoutes } = require("../modules/content/dailyKnowledgeRoutes");
+const { createContentCenterRoutes } = require("../modules/content/contentCenterRoutes");
 const settingsDomainService = require("../modules/settings/service");
 const catalogDomainService = require("../modules/catalog/service");
 const qualityDomainService = require("../modules/quality/service");
@@ -3621,88 +3622,8 @@ router.post("/config", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    return res.json({
-      success: true,
-      items: contentDomainService.listNotices(),
-    });
-  } catch (error) {
-    safeLog("admin-notices-list-failed", { error: error.message });
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
 router.use(createDailyKnowledgeRoutes({ adminAuth, verifyAdminWriteAccess, createBackup, writeAuditLog, safeLog }));
-
-router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    const operation = contentDomainService.createNoticeOperation(req.body || {}, {
-      idempotencyKey: req.get("idempotency-key") || "",
-      beforeCreate: () => createBackup("notices", contentDomainService.NOTICES_PATH),
-    });
-    const item = operation.item;
-    if (!operation.replayed) {
-      writeAuditLog(req, "create", "notices", item.id, `创建公告: ${item.title}`);
-    }
-    return res.json({
-      success: true,
-      item,
-      replayed: operation.replayed,
-    });
-  } catch (error) {
-    safeLog("admin-notice-create-failed", { error: error.message });
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message,
-      code: error.code || undefined,
-    });
-  }
-});
-
-router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    createBackup("notices", contentDomainService.NOTICES_PATH);
-    const body = req.body || {};
-    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
-    const ifMatch = req.get("if-match") || body.expectedVersion || body.version;
-    const item = contentDomainService.updateNotice(req.params.id, body, {
-      expectedVersion: ifMatch,
-      ifMatch,
-      requireIfMatch: client === "next",
-      client,
-    });
-    writeAuditLog(req, "update", "notices", req.params.id, `编辑公告: ${item.title}`);
-    return res.json({
-      success: true,
-      item,
-      etag: item.version,
-    });
-  } catch (error) {
-    safeLog("admin-notice-update-failed", { id: req.params.id, error: error.message });
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message,
-      code: error.code || undefined,
-      currentVersion: error.currentVersion,
-    });
-  }
-});
-
-router.delete("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
-  try {
-    createBackup("notices", contentDomainService.NOTICES_PATH);
-    const deleted = contentDomainService.deleteNotice(req.params.id);
-    writeAuditLog(req, "delete", "notices", req.params.id, `删除公告 id: ${req.params.id}`);
-    return res.json({
-      success: true,
-      deleted,
-    });
-  } catch (error) {
-    safeLog("admin-notice-delete-failed", { id: req.params.id, error: error.message });
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
-  }
-});
+router.use(createContentCenterRoutes({ adminAuth, verifyAdminWriteAccess, createBackup, writeAuditLog, safeLog }));
 
 router.get("/news", adminAuth.verifyAdminAccess, (req, res) => {
   try {

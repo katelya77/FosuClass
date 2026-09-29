@@ -5835,7 +5835,7 @@ ${CAMPUS_SYNC_STYLES}
             <li class="nav-item" data-section="config"><button type="button" title="数据版本"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5"/></svg><span class="nav-label">数据版本</span></button></li>
 
             <li class="nav-group-label" data-nav-group="内容管理">内容管理</li>
-            <li class="nav-item" data-section="daily-knowledge"><button type="button" title="每日知识"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 4h6m-6 4h6m-6 4h4M4 7h2m-2 5h2m-2 5h2"/></svg><span class="nav-label">每日知识</span></button></li>
+            <li class="nav-item" data-section="daily-knowledge"><button type="button" title="首页内容"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 4h6m-6 4h6m-6 4h4M4 7h2m-2 5h2m-2 5h2"/></svg><span class="nav-label">首页内容</span></button></li>
             <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
             <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
             <li class="nav-item" data-section="assistant-kb"><button type="button" title="小序知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
@@ -7984,7 +7984,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         terms: "/admin/terms",
         quality: "/admin/quality",
         notices: "/admin/announcements",
-        "daily-knowledge": "/admin/daily-knowledge",
+        "daily-knowledge": "/admin/content-center",
         news: "/admin/news",
         config: "/admin/config",
         "ai-provider": "/admin/ai-provider",
@@ -8018,6 +8018,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         "/admin/notices": { section: "notices" },
         "/admin/announcements": { section: "notices" },
         "/admin/daily-knowledge": { section: "daily-knowledge" },
+        "/admin/content-center": { section: "daily-knowledge" },
         "/admin/daily-tips": { section: "daily-knowledge" },
         "/admin/news": { section: "news" },
         "/admin/config": { section: "config" },
@@ -8672,7 +8673,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           terms: "学期管理",
           quality: "数据质量中心",
           notices: "公告管理",
-          "daily-knowledge": "每日知识",
+          "daily-knowledge": "首页内容",
           news: "最新动态",
           config: "数据版本",
           "ai-provider": "查询服务",
@@ -8693,7 +8694,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           sync: "发布与运维 / 同步管线",
           config: "发布与运维 / 版本配置",
           notices: "内容管理 / 公告",
-          "daily-knowledge": "内容管理 / 每日知识",
+          "daily-knowledge": "内容管理 / 首页内容",
           news: "内容管理 / 动态",
           "assistant-kb": "内容管理 / 助手知识库",
           "campus-map": "内容管理 / 校园地图",
@@ -13538,6 +13539,7 @@ ${DAILY_KNOWLEDGE_SECTION}
       }
 
       function renderNotices() {
+        renderContentAnnouncements();
         if (!$("noticeListTable")) return;
         var list = state.notices.filter(function(item) { return item && item.displayMode !== "daily-tip"; });
         var tbody = $("noticeListTable");
@@ -16537,6 +16539,8 @@ ${DAILY_KNOWLEDGE_BINDINGS}
       }
 
       function initDailyKnowledgeModule() {
+        contentCenterResetNotice();
+        ignoreLoadError(loadContentCenter());
         if ($("dailyKnowledgeFormTitle")) {
           clearDailyKnowledgeForm();
         }
@@ -17248,6 +17252,7 @@ router.get([
   "/announcements",
   "/notices",
   "/daily-knowledge",
+  "/content-center",
   "/daily-tips",
   "/news",
   "/config",
