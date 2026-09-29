@@ -113,17 +113,17 @@ const DAILY_KNOWLEDGE_STYLES = String.raw`
     .content-center-preview-mode { display:flex; gap:5px; margin:10px 0; }
     .content-center-preview-mode button { width:auto; min-height:28px; padding:4px 8px; font-size:10px; }
     .content-center-preview-mode button[aria-pressed="true"] { border-color:var(--knowledge-red); color:var(--knowledge-red); }
-    .content-center-phone-stack { display:flex; flex-direction:column; justify-content:flex-start; gap:8px; --surface:#fff; --border:#e4e8ed; --text-primary:#243042; --brand-soft:#fffafa; --danger:#b92329; --danger-soft:#fff7f6; }
-    .content-center-phone-home { display:flex; align-items:center; gap:7px; min-height:66px; padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:#fff; }
+    .content-center-phone-stack { display:flex; flex-direction:column; justify-content:flex-start; gap:8px; --surface:#fff; --border:#e4e8ed; --text-primary:#243042; --brand-soft:#fffafa; --danger:#b92329; --danger-soft:#fff7f6; --phone-paper:#fff; --phone-week-soft:#fff1f1; --phone-notice-important:#fffafa; --phone-notice-urgent:#fff7f6; --phone-label-soft:#fff1f0; }
+    .content-center-phone-home { display:flex; align-items:center; gap:7px; min-height:66px; padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:var(--phone-paper); }
     .content-center-phone-home-mark { display:grid; place-items:center; flex:0 0 26px; height:26px; border-radius:6px; background:#c62828; color:#fff; font-size:13px; font-weight:800; }
     .content-center-phone-home-copy { min-width:0; }
     .content-center-phone-home-copy strong { display:block; color:#172033; font-size:12px; line-height:1.3; }
     .content-center-phone-home-copy span { color:#7c8795; font-size:9px; }
-    .content-center-phone-home-week { margin-left:auto; padding:3px 6px; border-radius:10px; background:#fff1f1; color:#b4232a; font-size:9px; white-space:nowrap; }
-    .content-center-phone-ticker { display:flex; align-items:center; gap:6px; min-height:36px; padding:5px 6px 5px 9px; border-radius:7px; border:1px solid #e8e9ed; background:#fff; color:#243042; font-size:10px; }
-    .content-center-phone-ticker.important { border-color:#e9c7c5; background:#fffafa; }
-    .content-center-phone-ticker.urgent { border-color:#e5aaa8; background:#fff7f6; }
-    .content-center-phone-ticker-label { flex:0 0 auto; padding:2px 4px; border-radius:3px; background:#fff1f0; color:#b4232a; font-size:9px; font-weight:700; }
+    .content-center-phone-home-week { margin-left:auto; padding:3px 6px; border-radius:10px; background:var(--phone-week-soft); color:#b4232a; font-size:9px; white-space:nowrap; }
+    .content-center-phone-ticker { display:flex; align-items:center; gap:6px; min-height:36px; padding:5px 6px 5px 9px; border-radius:7px; border:1px solid #e8e9ed; background:var(--phone-paper); color:#243042; font-size:10px; }
+    .content-center-phone-ticker.important { border-color:#e9c7c5; background:var(--phone-notice-important); }
+    .content-center-phone-ticker.urgent { border-color:#e5aaa8; background:var(--phone-notice-urgent); }
+    .content-center-phone-ticker-label { flex:0 0 auto; padding:2px 4px; border-radius:3px; background:var(--phone-label-soft); color:#b4232a; font-size:9px; font-weight:700; }
     .content-center-phone-ticker.urgent .content-center-phone-ticker-label { background:#c62828; color:#fff; }
     .content-center-phone-ticker strong { display:block; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:600; line-height:1.4; }
     .content-center-phone-ticker-arrow { color:#99a1ac; font-size:16px; line-height:1; }
@@ -132,7 +132,7 @@ const DAILY_KNOWLEDGE_STYLES = String.raw`
     .content-center-phone-ticker.mode-banner strong,.content-center-phone-ticker.mode-card strong,.content-center-phone-ticker.mode-modal strong { margin-top:5px; white-space:normal; overflow-wrap:anywhere; }
     .content-center-phone-ticker-body { margin-top:5px; color:#66717d; font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
     .content-center-phone-ticker.mode-modal { border-color:#e9c7c5; box-shadow:0 8px 20px #18202b16; }
-    .content-center-phone-schedule { padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:#fff; color:#172033; }
+    .content-center-phone-schedule { padding:10px; border:1px solid #e8e9ed; border-radius:8px; background:var(--phone-paper); color:#172033; }
     .content-center-phone-schedule-top { display:flex; justify-content:space-between; color:#172033; font-size:10px; font-weight:700; }
     .content-center-phone-schedule-top span:last-child { color:#8a94a6; font-size:9px; font-weight:400; }
     .content-center-phone-schedule-week { margin-top:13px; padding-top:10px; border-top:1px solid #edf0f3; font-size:11px; font-weight:700; }
