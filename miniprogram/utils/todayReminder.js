@@ -53,6 +53,7 @@ function getCurrentBoundSchedule() {
     semester,
     schedule,
     source,
+    targetType: schedule === target && target ? target.type : "",
   };
 }
 
@@ -139,7 +140,8 @@ function getTodayCoursesData(options = {}) {
   const termPhaseText = getTermPhaseText(termPhase);
 
   const boundInfo = getCurrentBoundSchedule();
-  const { classId, className, semester, schedule, source } = boundInfo;
+  const { classId, className, semester, schedule, source, targetType } = boundInfo;
+  const isPersonalSchedule = targetType === "personal-xls" || targetType === "personal-apaas";
 
   if (!schedule || !Array.isArray(schedule.courses) ||
       (schedule.courses.length === 0 && customCourseService.getEnabledCustomCourses().length === 0)) {
@@ -197,7 +199,7 @@ function getTodayCoursesData(options = {}) {
     const inWeek = isCourseActiveInCurrentWeek(course, currentWeek);
     const isToday = Number(course.weekday) === Number(weekday);
     const matchesSemester = !course.semester || course.semester === semester;
-    const classMatches = !className || !course.className || course.className === className;
+    const classMatches = isPersonalSchedule || !className || !course.className || course.className === className;
     const startSectionValid = typeof course.startSection === "number" && !Number.isNaN(course.startSection);
     const endSectionValid = typeof course.endSection === "number" && !Number.isNaN(course.endSection);
     const sectionValid = startSectionValid && endSectionValid && course.startSection <= course.endSection;

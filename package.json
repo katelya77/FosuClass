@@ -53,7 +53,7 @@
     "test:personal-sync-term-options": "node tools/test-personal-sync-term-options.js",
     "test:teaching-calendar-contract": "node tools/test-teaching-calendar-contract.js",
     "test:official-teaching-calendar-import": "node tools/test-official-teaching-calendar-import.js",
-    "test:today-page": "node tools/test-today-page-release-note-hidden.js",
+    "test:today-page": "node tools/test-today-page-release-note-hidden.js && node tools/test-today-personal-schedule.js",
     "test:school-page": "node tools/test-school-release-notice-dedupe.js",
     "test:campus-map": "node tools/test-campus-map.js && node tools/test-campus-map-assets.js && node tools/test-campus-map-miniprogram-fallback.js",
     "test:campus-map-ui-editor": "node tools/test-campus-map-ui-and-editor.js",
