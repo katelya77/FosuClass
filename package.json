@@ -156,6 +156,7 @@
     "test:admin-inline-script": "node tools/check-admin-inline-script.js",
     "test:admin-legacy-only": "node tools/test-admin-legacy-only.js",
     "test:admin-sync-browser": "node tools/capture-legacy-sync-compact.js",
+    "test:admin-content-center-notice-load": "node tools/test-admin-content-center-notice-load.js",
     "config:preflight": "node tools/config-preflight.js",
     "test:architecture-guards": "node tools/test-architecture-guards.js",
     "test:duplicate-admin-routes": "node tools/test-duplicate-admin-routes.js",

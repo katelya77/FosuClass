@@ -8738,6 +8738,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           ignoreLoadError(loadQualityReport());
         } else if (targetSection === "daily-knowledge") {
           ignoreLoadError(loadDailyKnowledge());
+          ignoreLoadError(loadNotices());
         } else if (targetSection === "settings") {
           ignoreLoadError(loadSettingsLogs());
         } else if (targetSection === "security") {
@@ -16083,6 +16084,7 @@ ${SCHEDULE_COLLECTOR_SCRIPT}
             ["全局配置", loadConfig()],
             ["查询服务", loadAiProviderConfig()],
             ["每日知识", loadDailyKnowledge()],
+            ["公告列表", loadNotices()],
             ["反馈管理", loadFeedbacks()]
           ];
           return Promise.allSettled(moduleLoaders.map(function (entry) { return entry[1]; })).then(function (results) {
@@ -16161,7 +16163,7 @@ ${DAILY_KNOWLEDGE_BINDINGS}
       safeBind("loginButton", "click", login);
       safeBind("loginPassword", "keydown", function (event) { if (event.key === "Enter") login(); });
       safeBind("logoutButton", "click", logout);
-      safeBind("refreshButton", "click", loadAll);
+      safeBind("refreshButton", "click", function() { loadAll(); });
       safeBind("refreshTermsBtn", "click", loadTerms);
       safeBind("createTermBtn", "click", createTerm);
       safeBind("checkTermReadinessBtn", "click", checkTermReadiness);
