@@ -104,6 +104,9 @@ jobs:
       - name: Legacy sync browser acceptance
         run: npm run test:admin-sync-browser
 
+      - name: Content center notice loading acceptance
+        run: npm run test:admin-content-center-notice-load
+
       - name: Upload browser artifacts
         if: always()
         continue-on-error: true
