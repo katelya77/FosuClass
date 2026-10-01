@@ -17,12 +17,14 @@
       <view class="notice-ticker-panel-tag {{currentNotice.priority || 'normal'}}">{{currentNotice.typeLabel}} · {{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '普通')}}</view>
       <view class="notice-ticker-panel-close" catchtap="closeNoticeDetail" role="button" aria-label="关闭公告详情"><text>×</text></view>
     </view>
-    <scroll-view scroll-y enhanced bounces="{{false}}" class="notice-ticker-panel-scroll">
+    <scroll-view scroll-y="{{panelBodyScroll}}" enhanced bounces="{{false}}" show-scrollbar="{{false}}" class="notice-ticker-panel-scroll" style="height:{{panelBodyHeight}};">
+      <view class="notice-ticker-panel-body">
       <view class="notice-ticker-panel-title" catchlongpress="openNoticePicker">{{currentNotice.title}}</view>
       <view class="notice-ticker-panel-content" catchlongpress="openNoticePicker">{{currentNotice.content}}</view>
       <view wx:if="{{currentNotice.dateText || currentNotice.validUntilText}}" class="notice-ticker-panel-date"><text wx:if="{{currentNotice.dateText}}">发布 {{currentNotice.dateText}}</text><text wx:if="{{currentNotice.validUntilText}}"> · 有效至 {{currentNotice.validUntilText}}</text></view>
-      <notice-reactions id="noticeDetailReactions" notice="{{currentNotice}}" bindchange="onReactionChange" />
+      <notice-reactions id="noticeDetailReactions" notice="{{currentNotice}}" bindchange="onReactionChange" bindlayout="measureDetail" />
+      </view>
     </scroll-view>
-    <view class="notice-ticker-panel-footer"><button class="notice-ticker-panel-action" bindtap="closeNoticeDetail">收起公告</button><button wx:if="{{currentNotice.closable}}" class="notice-ticker-panel-dismiss" bindtap="dismissNotice">不再显示这条</button></view>
+    <view class="notice-ticker-panel-footer"><view class="notice-ticker-panel-action" bindtap="closeNoticeDetail" role="button" aria-label="收起公告" hover-class="notice-ticker-panel-action-pressed" hover-stay-time="80">收起公告</view><view wx:if="{{currentNotice.closable}}" class="notice-ticker-panel-dismiss" bindtap="dismissNotice" role="button" aria-label="不再显示这条公告">不再显示这条</view></view>
   </view>
 </view>

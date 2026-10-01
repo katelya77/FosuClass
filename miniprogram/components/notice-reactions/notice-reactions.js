@@ -42,17 +42,17 @@ Component({
       service.get(notice.id).then((summary) => {
         if (!this._attached || generation !== this._generation || this.data.busy) return;
         const keepError = options && options.failedTarget !== undefined && summary.myReaction !== options.failedTarget;
-        this.setData(Object.assign({ error: keepError ? "回应未发送成功，请重新点选表情" : "" }, view(summary)));
+        this.setData(Object.assign({ error: keepError ? "回应未发送成功，请重新点选表情" : "" }, view(summary)), () => this.triggerEvent("layout"));
         this.triggerEvent("change", { noticeId: notice.id, summary });
-      }).catch(() => { if (this._attached && generation === this._generation) this.setData({ error: "表情暂未刷新，点此重试" }); });
+      }).catch(() => { if (this._attached && generation === this._generation) this.setData({ error: "表情暂未刷新，点此重试" }, () => this.triggerEvent("layout")); });
     },
     openPicker() {
       if (this.data.compact) { this.triggerEvent("openpicker"); return; }
       if (!this.data.summary.enabled || this.data.busy) return;
-      this.setData({ pickerOpen: !this.data.pickerOpen, error: "" });
+      this.setData({ pickerOpen: !this.data.pickerOpen, error: "" }, () => this.triggerEvent("layout"));
       if (typeof wx !== "undefined" && wx.vibrateShort) wx.vibrateShort({ type: "light", fail() {} });
     },
-    closePicker() { this.setData({ pickerOpen: false }); },
+    closePicker() { this.setData({ pickerOpen: false }, () => this.triggerEvent("layout")); },
     select(event) {
       if (this.data.busy || !this.data.notice) return;
       const id = event.currentTarget.dataset.id;
@@ -68,7 +68,7 @@ Component({
       }
       const optimistic = Object.assign({}, before, { items: items.filter((item) => item.count > 0).sort((a, b) => b.count - a.count), myReaction: target, total: (before.total || 0) + (target ? 1 : 0) - (before.myReaction ? 1 : 0) });
       const generation = this._generation, noticeId = this.data.notice.id;
-      this.setData(Object.assign({ busy: true, pickerOpen: false, error: "", pulseId: target }, view(optimistic)));
+      this.setData(Object.assign({ busy: true, pickerOpen: false, error: "", pulseId: target }, view(optimistic)), () => this.triggerEvent("layout"));
       service.set(noticeId, target).then((summary) => {
         if (!this._attached || generation !== this._generation) return;
         this.setData(Object.assign({ busy: false }, view(summary)));
@@ -76,7 +76,7 @@ Component({
         if (typeof wx !== "undefined" && wx.vibrateShort) wx.vibrateShort({ type: "light", fail() {} });
       }).catch((error) => {
         if (!this._attached || generation !== this._generation) return;
-        this.setData(Object.assign({ busy: false, error: error.message || "发送失败，点此重试", pulseId: "" }, view(before)));
+        this.setData(Object.assign({ busy: false, error: error.message || "发送失败，点此重试", pulseId: "" }, view(before)), () => this.triggerEvent("layout"));
         // A lost acknowledgement can still mean the server accepted the PUT.
         this.refresh({ failedTarget: target });
       });

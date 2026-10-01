@@ -31,11 +31,19 @@ async function run(){
     await page.locator("#contentCenterPhoneScreen .content-center-phone-ticker").click();
     await page.locator("#contentCenterPhoneScreen").getByRole("button",{name:"选择预览表情"}).click();
     assert.strictEqual(await page.locator("#contentCenterPhoneScreen .notice-preview-picker-grid button").count(),24);
+    const gridGeometry=await page.locator("#contentCenterPhoneScreen .notice-preview-picker-grid").evaluate(grid=>{
+      const rows=new Map(),width=grid.getBoundingClientRect().width;
+      for(const button of grid.children){const r=button.getBoundingClientRect();if(Math.abs(r.width-width/6)>1)return null;const y=Math.round(r.y);rows.set(y,(rows.get(y)||0)+1);}return [...rows.values()];
+    });assert.deepStrictEqual(gridGeometry,[6,6,6,6],"admin preview must match the mini program six-column layout");
     await page.waitForTimeout(250);
     await page.locator("#contentCenterPhoneScreen .notice-preview-detail").screenshot({path:path.join(output,"notice-detail-picker.png")});
     await page.screenshot({path:path.join(output,"admin-desktop.png"),fullPage:false});
     await page.locator("#contentCenterPhoneScreen .notice-preview-picker-grid").getByRole("button",{name:"喜欢",exact:true}).click();
     assert((await page.locator("#contentCenterPhoneScreen .notice-preview-reactions").innerText()).includes("43 人回应"));
+    await page.locator("#contentCenterPhoneScreen").getByRole("button",{name:"选择预览表情"}).click();
+    assert.strictEqual(await page.locator("#contentCenterPhoneScreen .notice-preview-picker-grid button[aria-pressed=true]").count(),1);
+    await page.locator("#contentCenterPhoneScreen").getByRole("button",{name:"收起表情",exact:true}).click();
+    assert.strictEqual(await page.locator("#contentCenterPhoneScreen .notice-preview-picker-grid").count(),0);
     await page.locator("#contentCenterPhoneScreen .notice-preview-chips .selected").click();
     assert((await page.locator("#contentCenterPhoneScreen .notice-preview-reactions").innerText()).includes("42 人回应"));assert.strictEqual(writes.length,0);
     await page.locator("#contentCenterReactionChoices").getByRole("button",{name:"节日快乐",exact:true}).click();
