@@ -101,10 +101,12 @@ Component({
         .slice(0, maxCount)
         .map(buildDisplayItem);
 
+      const previousId = this.data.currentNotice && this.data.currentNotice.id;
+      const currentIndex = this.data.detailVisible ? Math.max(0, visibleNotices.findIndex((notice) => notice.id === previousId)) : 0;
       this.setData({
         visibleNotices,
-        currentIndex: 0,
-        currentNotice: visibleNotices[0] || null,
+        currentIndex,
+        currentNotice: visibleNotices[currentIndex] || null,
         detailVisible: this.data.detailVisible && visibleNotices.length > 0,
       });
     },
@@ -124,6 +126,22 @@ Component({
 
     closeNoticeDetail() {
       this.setData({ detailVisible: false });
+    },
+
+    openNoticePicker() {
+      if (!this.data.currentNotice) return;
+      this.setData({ detailVisible: true }, () => {
+        const reactions = this.selectComponent("#noticeDetailReactions");
+        if (reactions) reactions.openPicker();
+      });
+    },
+
+    onReactionChange(event) {
+      const result = event.detail;
+      const visibleNotices = this.data.visibleNotices.map((notice) => notice.id === result.noticeId
+        ? Object.assign({}, notice, { reactions: result.summary }) : notice);
+      const currentNotice = visibleNotices.find((notice) => notice.id === this.data.currentNotice.id);
+      this.setData({ visibleNotices, currentNotice });
     },
 
     noop() {},

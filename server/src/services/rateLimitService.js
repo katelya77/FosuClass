@@ -6,6 +6,7 @@ const DEFAULT_PROFILES = {
   "session-bootstrap": { windowMs: 10 * 60 * 1000, limit: 10, burst: 3 },
   "static-ticket": { windowMs: 10 * 60 * 1000, limit: 20, burst: 5 },
   "dynamic-read": { windowMs: 60 * 1000, limit: 180, burst: 60 },
+  "notice-reaction-write": { windowMs: 60 * 1000, limit: 30, burst: 10 },
   search: { windowMs: 60 * 1000, limit: 60, burst: 20 },
   detail: { windowMs: 60 * 1000, limit: 240, burst: 80 },
   "feedback-write": { windowMs: 60 * 60 * 1000, limit: 10, burst: 3 },

@@ -1,4 +1,4 @@
-<view wx:if="{{currentNotice}}" class="notice-ticker notice-ticker-{{currentNotice.priority || 'normal'}} {{currentNotice.closable ? 'has-close' : ''}}" bindtap="openNoticeDetail" role="button" aria-label="查看公告：{{currentNotice.title}}">
+<view wx:if="{{currentNotice}}" class="notice-ticker notice-ticker-{{currentNotice.priority || 'normal'}} {{currentNotice.closable ? 'has-close' : ''}}" bindtap="openNoticeDetail" catchlongpress="openNoticePicker" role="button" aria-label="查看公告：{{currentNotice.title}}">
   <text class="notice-ticker-label">{{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '公告')}}</text>
   <view class="notice-ticker-track">
     <view class="notice-ticker-line {{currentNotice.shouldScroll ? 'is-scroll' : 'is-static'}}">
@@ -6,19 +6,23 @@
       <text wx:if="{{currentNotice.shouldScroll}}" class="notice-ticker-text">{{currentNotice.tickerText}}</text>
     </view>
   </view>
+  <notice-reactions compact notice="{{currentNotice}}" />
   <text class="notice-ticker-chevron">›</text>
   <view wx:if="{{currentNotice.closable}}" class="notice-ticker-close" catchtap="dismissNotice" role="button" aria-label="关闭这条公告"><text>×</text></view>
 </view>
 
-<view wx:if="{{detailVisible}}" class="notice-ticker-mask" bindtap="closeNoticeDetail">
+<view wx:if="{{detailVisible}}" class="notice-ticker-mask" bindtap="closeNoticeDetail" catchtouchmove="noop">
   <view class="notice-ticker-panel" catchtap="noop">
     <view class="notice-ticker-panel-head">
       <view class="notice-ticker-panel-tag {{currentNotice.priority || 'normal'}}">{{currentNotice.typeLabel}} · {{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '普通')}}</view>
       <view class="notice-ticker-panel-close" catchtap="closeNoticeDetail" role="button" aria-label="关闭公告详情"><text>×</text></view>
     </view>
-    <view class="notice-ticker-panel-title">{{currentNotice.title}}</view>
-    <view class="notice-ticker-panel-content">{{currentNotice.content}}</view>
-    <view wx:if="{{currentNotice.dateText || currentNotice.validUntilText}}" class="notice-ticker-panel-date"><text wx:if="{{currentNotice.dateText}}">发布 {{currentNotice.dateText}}</text><text wx:if="{{currentNotice.validUntilText}}"> · 有效至 {{currentNotice.validUntilText}}</text></view>
-    <button wx:if="{{currentNotice.closable}}" class="notice-ticker-panel-action" bindtap="dismissNotice">关闭这条公告</button>
+    <scroll-view scroll-y enhanced bounces="{{false}}" class="notice-ticker-panel-scroll">
+      <view class="notice-ticker-panel-title" catchlongpress="openNoticePicker">{{currentNotice.title}}</view>
+      <view class="notice-ticker-panel-content" catchlongpress="openNoticePicker">{{currentNotice.content}}</view>
+      <view wx:if="{{currentNotice.dateText || currentNotice.validUntilText}}" class="notice-ticker-panel-date"><text wx:if="{{currentNotice.dateText}}">发布 {{currentNotice.dateText}}</text><text wx:if="{{currentNotice.validUntilText}}"> · 有效至 {{currentNotice.validUntilText}}</text></view>
+      <notice-reactions id="noticeDetailReactions" notice="{{currentNotice}}" bindchange="onReactionChange" />
+    </scroll-view>
+    <view class="notice-ticker-panel-footer"><button class="notice-ticker-panel-action" bindtap="closeNoticeDetail">收起公告</button><button wx:if="{{currentNotice.closable}}" class="notice-ticker-panel-dismiss" bindtap="dismissNotice">不再显示这条</button></view>
   </view>
 </view>

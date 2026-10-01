@@ -50,7 +50,7 @@
   margin: 0 10rpx 0 12rpx;
 }
 
-.notice-ticker-chevron { flex: 0 0 auto; color: #99a1ac; font-size: 30rpx; line-height: 1; }
+.notice-ticker-chevron { flex: 0 0 auto; margin-left:10rpx; color: #99a1ac; font-size: 30rpx; line-height: 1; }
 
 .notice-ticker-line {
   display: inline-flex;
@@ -112,22 +112,29 @@
   bottom: 0;
   z-index: 999;
   background: rgba(15, 23, 42, 0.38);
+  animation: noticeMaskIn 180ms ease-out;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40rpx;
+  padding: 32rpx;
   box-sizing: border-box;
 }
 
 .notice-ticker-panel {
   width: 100%;
-  max-width: 620rpx;
-  border-radius: 20rpx;
+  max-width: 660rpx;
+  max-height: 84vh;
+  border-radius: 30rpx;
   background: #ffffff;
-  padding: 28rpx;
+  padding: 30rpx;
   box-sizing: border-box;
   box-shadow: 0 24rpx 60rpx rgba(15, 23, 42, 0.16);
+  animation: noticePanelIn 220ms cubic-bezier(.2,.8,.25,1);
 }
+.notice-ticker-panel-scroll { max-height:60vh; }
+.notice-ticker-panel-footer { padding-top:24rpx; }
+.notice-ticker-panel-footer button::after { border:0; }
+.notice-ticker-panel-dismiss { padding:10rpx; margin-top:8rpx; color:#9c9090; background:transparent; font-size:21rpx; line-height:1.8; }
 
 .notice-ticker-panel-head {
   display: flex;
@@ -189,7 +196,10 @@
 }
 
 .notice-ticker-panel-date { margin-top: 22rpx; color: #89919d; font-size: 22rpx; }
-.notice-ticker-panel-action { margin-top: 26rpx; background: #f5f6f8; color: #5b6673; font-size: 23rpx; }
+.notice-ticker-panel-action { display:flex; align-items:center; justify-content:center; min-height:76rpx; border-radius:16rpx; background:#fff0ee; color:#b4232a; font-size:25rpx; font-weight:600; }
+@keyframes noticeMaskIn { from { opacity:0; } to { opacity:1; } }
+@keyframes noticePanelIn { from { opacity:0; transform:translateY(18rpx) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media (prefers-reduced-motion:reduce) { .notice-ticker-mask,.notice-ticker-panel { animation:none; } }
 
 @keyframes noticeTickerScroll {
   0%, 8% {

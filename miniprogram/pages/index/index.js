@@ -781,6 +781,16 @@ Page({
     });
   },
 
+  onNoticeReactionChange(event) {
+    const result = event.detail;
+    const patch = {};
+    ["homeNotice", "selectedNotice", "modalNotice"].forEach((key) => {
+      const notice = this.data[key];
+      if (notice && notice.id === result.noticeId) patch[key] = Object.assign({}, notice, { reactions: result.summary });
+    });
+    this.setData(patch);
+  },
+
   closeNoticeDetail() {
     this.setData({
       showNoticeDetail: false,
