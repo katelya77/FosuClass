@@ -361,7 +361,7 @@
     "test:empty-room-unknown-building-hidden-by-default": "node tools/test-empty-room-filter-rules.js",
     "test:teacher-static-search": "node tools/test-teacher-static-search.js",
     "test:notice-ticker-array-guard": "node tools/test-notice-ticker-array-guard.js",
-    "test:notice-reactions": "node tools/test-notice-reactions.js && node tools/test-notice-reaction-client.js && node tools/test-notice-reaction-layout.js && node tools/test-admin-notice-reactions.js",
+    "test:notice-reactions": "node tools/test-notice-reactions.js && node tools/test-notice-reaction-client.js && node tools/test-notice-reaction-transport.js && node tools/test-notice-reaction-layout.js && node tools/test-admin-notice-reactions.js",
     "test:school-filter-cache-downgrade": "node tools/test-school-filter-cache-downgrade.js",
     "test:static-release-sync-script": "node tools/test-static-release-sync-script.js",
     "test:release-publish-static-sync": "node tools/test-release-publish-static-sync.js",

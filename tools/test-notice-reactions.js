@@ -16,7 +16,7 @@ let checks = 0;
 function eq(a,b) { assert.deepStrictEqual(a,b); checks++; }
 async function main() {
   const notice = content.createNotice({ title:"公告回应测试", content:"只有表情，没有文字评论。", displayMode:"ticker", targetPage:"home", enabled:true });
-  const app = express(); app.use(express.json()); app.use("/api/fosu",require("../server/src/routes/fosu"));
+  const app = express(); app.use(express.json()); app.use(express.urlencoded({extended:true})); app.use("/api/fosu",require("../server/src/routes/fosu"));
   const server = await new Promise((resolve)=>{const value=app.listen(0,"127.0.0.1",()=>resolve(value));});
   const base = "http://127.0.0.1:"+server.address().port;
   const sessionA=createSessionToken({appid:"test",openid:"notice-user-a"}).token;
@@ -25,6 +25,11 @@ async function main() {
     const res=await fetch(base+"/api/fosu/notices/"+encodeURIComponent(id)+"/reactions",{method,headers:{"Content-Type":"application/json","User-Agent":"MicroMessenger FosuClass-Test",...(token?{"X-Fosu-Session":token}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});
     return {status:res.status,body:await res.json(),cache:res.headers.get("cache-control")};
   }
+  async function form(body,token=nextSession) {
+    const res=await fetch(base+"/api/fosu/notices/"+encodeURIComponent(notice.id)+"/reactions",{method:"PUT",headers:{"Content-Type":"application/x-www-form-urlencoded","User-Agent":"MicroMessenger FosuClass-Test",...(token?{"X-Fosu-Session":token}:{})},body});
+    return {status:res.status,body:await res.json()};
+  }
+  let nextSession;
   try {
     eq((await call("GET")).body.data.total,0);
     eq((await call("PUT",{emoji:"like"})).status,401);
@@ -40,18 +45,33 @@ async function main() {
     const read=await call("GET",undefined,sessionA);
     eq(read.body.data.myReaction,"heart"); eq(read.cache,"private, no-store");
     eq(Object.keys(read.body.data).sort(),["allowedIds","enabled","items","myReaction","revision","total"].sort());
-    const nextSession=createSessionToken({appid:"test",openid:"notice-user-a"}).token;
+    nextSession=createSessionToken({appid:"test",openid:"notice-user-a"}).token;
     eq((await call("GET",undefined,nextSession)).body.data.myReaction,"heart");
     eq((await call("PUT",{emoji:null},nextSession)).body.data.total,1);
     eq((await call("PUT",{emoji:null},nextSession)).body.data.total,1);
+    eq((await form("emoji=party")).body.data.myReaction,"party");
+    const legacyWithdrawal=await form("emoji=null");
+    eq(legacyWithdrawal.status,200,"legacy wx.request form-encoded null must withdraw");
+    eq(legacyWithdrawal.body.data.total,1);eq(legacyWithdrawal.body.data.myReaction,"");
+    const withdrawnRevision=legacyWithdrawal.body.data.revision;
+    eq((await form("emoji=null")).body.data.revision,withdrawnRevision,"repeated legacy withdrawal is idempotent");
+    eq((await form("emoji=heart")).body.data.total,2);
+    eq((await form("emoji=")).body.data.total,1);
+    eq((await form("emoji=null",null)).status,401,"legacy withdrawal still requires a verified session");
+    eq((await form("emoji=null&userId=spoof")).status,400,"legacy withdrawal still rejects unknown fields");
+    eq((await form("")).status,400,"missing emoji must not silently withdraw");
+    eq((await call("PUT",{emoji:"null"},nextSession)).status,400,"JSON string null remains invalid");
+    eq((await call("PUT",{emoji:""},nextSession)).status,400,"JSON empty string remains invalid");
     const restarted=spawnSync(process.execPath,["-e","const s=require('./server/src/services/appConfigService'),r=require('./server/src/services/noticeReactionService');process.stdout.write(String(r.summary(s.listNotices()[0]).total))"],{cwd:path.join(__dirname,".."),env:process.env,encoding:"utf8"});
     eq(restarted.status,0);eq(restarted.stdout,"1");
     let current=content.updateNotice(notice.id,{reactionEmojis:["heart"]});
     eq((await call("PUT",{emoji:"like"},sessionA)).status,400);
     eq((await call("GET",undefined,sessionB)).body.data.items[0].id,"like");
+    eq((await call("PUT",{emoji:"heart"},sessionA)).body.data.total,2);
     current=content.updateNotice(notice.id,{reactionsEnabled:false});
     eq((await call("PUT",{emoji:"heart"},sessionA)).status,409);
-    eq((await call("PUT",{emoji:null},sessionB)).body.data.total,0);
+    eq((await call("PUT",{emoji:null},sessionB)).body.data.total,1);
+    eq((await form("emoji=null",sessionA)).body.data.total,0);
     current=content.updateNotice(notice.id,{enabled:false});eq((await call("PUT",{emoji:"heart"},sessionA)).status,404);
     current=content.updateNotice(notice.id,{enabled:true,reactionsEnabled:true,endAt:"2000-01-01"});eq((await call("GET")).status,404);
     current=content.updateNotice(notice.id,{endAt:"",startAt:"2099-01-01"});eq((await call("PUT",{emoji:"heart"},sessionA)).status,404);

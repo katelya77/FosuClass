@@ -26,7 +26,11 @@ function createNoticeReactionRoutes() {
         if (write && !checkRateLimit("notice-reaction-write", principal).allowed) {
           throw Object.assign(new Error("操作太快了，请稍后再试"), { statusCode: 429, code: "NOTICE_REACTION_RATE_LIMIT" });
         }
-        const result = write ? reactions.setReaction(notice, principal, req.body.emoji) : reactions.summary(notice, principal);
+        const emoji = req.body ? req.body.emoji : undefined;
+        // Older mini clients encode PUT data as forms, turning null into "null".
+        // Limit this compatibility conversion to form bodies; JSON stays strict.
+        const target = req.is("application/x-www-form-urlencoded") && (emoji === "null" || emoji === "") ? null : emoji;
+        const result = write ? reactions.setReaction(notice, principal, target) : reactions.summary(notice, principal);
         return res.json({ success: true, data: result });
       } catch (error) {
         return res.status(error.statusCode || 503).json({ success: false, code: error.code || "NOTICE_REACTIONS_UNAVAILABLE", message: error.statusCode ? error.message : "表情服务暂不可用，请稍后重试" });

@@ -6,5 +6,5 @@ function unpack(response) {
   return response.data;
 }
 function get(id) { return http.get(endpoint(id), {}, options).then(unpack); }
-function set(id, emoji) { return http.request(endpoint(id), "PUT", { emoji: emoji || null }, options).then(unpack); }
+function set(id, emoji) { return http.request(endpoint(id), "PUT", { emoji: emoji || null }, Object.assign({}, options, { header: { "content-type": "application/json" } })).then(unpack); }
 module.exports = { get, set };
