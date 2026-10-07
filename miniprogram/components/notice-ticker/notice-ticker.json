@@ -1,3 +1,4 @@
 {
-  "component": true
+  "component": true,
+  "usingComponents": { "notice-reactions": "/components/notice-reactions/notice-reactions" }
 }

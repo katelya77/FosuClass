@@ -1087,11 +1087,23 @@ function assertScheduleTermCoherence(allClassSchedules, activeSemester) {
   throw error;
 }
 
+function prepareClassSchedulesForPublication(schedules) {
+  const repaired = normalizer.repairClassScheduleEntries(schedules);
+  const errors = normalizer.validateClassScheduleIsolation(repaired);
+  if (errors.length) {
+    const error = new Error(`CLASS_SCHEDULE_ISOLATION_FAILED: ${errors.join("; ")}`);
+    error.code = "CLASS_SCHEDULE_ISOLATION_FAILED";
+    throw error;
+  }
+  return repaired;
+}
+
 function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, options = {}) {
   const version = generateSnapshotVersion();
   const activeSemester = resolveSnapshotTerm();
   const activePlan = getActiveSyncPlan();
   assertScheduleTermCoherence(allClassSchedules, activeSemester);
+  allClassSchedules = prepareClassSchedulesForPublication(allClassSchedules);
   const noScheduleCachePath = activePlan && activePlan.term
     ? syncCacheStore.negativePath(__dirname, activePlan.term, "class-schedule", activePlan.runId)
     : path.join(__dirname, ".debug", "no-schedule-majors.json");
@@ -3145,7 +3157,7 @@ async function buildResourcesForClassSchedules(classSchedules, resourceTypes, op
     includeClassrooms: types.includes("classroom"),
     includeCourses: types.includes("course"),
   };
-  const normalizedClassSchedules = (classSchedules || []).map((item) => normalizeScheduleEntryCourses(item, {
+  const normalizedClassSchedules = prepareClassSchedulesForPublication(classSchedules).map((item) => normalizeScheduleEntryCourses(item, {
     semester: item.semester || semester,
     sourceType: "class",
     audienceType: "student",
@@ -5040,7 +5052,8 @@ async function syncClassSchedules(page, catalog, majors) {
     }
   }
 
-  console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
+  allClassSchedules = prepareClassSchedulesForPublication(allClassSchedules);
+  console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 份课表。`);
 
   const unfinishedTargets = effectiveTargetMajors.filter((major) => !hasCompletedMajor(progress, major, activeSemester));
   if (unfinishedTargets.length > 0) {
@@ -5721,5 +5734,6 @@ if (require.main === module) {
     resolveSnapshotTerm,
     assertScheduleTermCoherence,
     buildSnapshot,
+    prepareClassSchedulesForPublication,
   };
 }

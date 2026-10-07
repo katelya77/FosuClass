@@ -6,6 +6,7 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 const axios = require("axios");
+const { validateClassScheduleIsolation } = require("../../server/src/utils/scheduleNormalizer");
 
 const {
   calculateFingerprintFromFile,
@@ -1319,6 +1320,7 @@ function validateStaging(stagingPath, expectedTerm, expectedTermConfig = null) {
   };
   const errors = [];
   if ((data.term || data.semester) !== expectedTerm) errors.push(`term mismatch: ${data.term || data.semester} != ${expectedTerm}`);
+  errors.push(...validateClassScheduleIsolation(classSchedules));
   if (!data.termConfig || !data.termConfig.termStartDate || !data.termConfig.totalWeeks) errors.push("termConfig incomplete");
   const canonicalConfig = normalizePublisherTermConfig(expectedTermConfig);
   const stagingConfig = normalizePublisherTermConfig(data.termConfig);

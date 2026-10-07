@@ -3,6 +3,7 @@
 const express = require("express");
 const contentService = require("./service");
 const cloudbaseService = require("../../services/dailyKnowledgeCloudbaseService");
+const noticeReactions = require("../../services/noticeReactionService");
 
 function createContentCenterRoutes({ adminAuth, verifyAdminWriteAccess, createBackup, writeAuditLog, safeLog }) {
   const router = express.Router();
@@ -46,7 +47,7 @@ function createContentCenterRoutes({ adminAuth, verifyAdminWriteAccess, createBa
 
   router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
     try {
-      return res.json({ success: true, items: contentService.listNotices() });
+      return res.json({ success: true, items: contentService.listNotices().map((item) => ({ ...item, reactions: noticeReactions.publicSummary(item) })) });
     } catch (error) {
       safeLog("admin-notices-list-failed", { error: error.message });
       return res.status(500).json({ success: false, message: error.message });

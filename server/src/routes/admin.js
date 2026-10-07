@@ -2726,7 +2726,8 @@ router.post(
                 sameMajorUploaded &&
                 !item.isAggregated &&
                 item.displayType !== "major-schedule" &&
-                !scheduleNormalizer.isReliableClassName(item.className, { courses: item.courses });
+                !scheduleNormalizer.isReliableClassName(item.className, { courses: item.courses, majorName: item.majorName, grade: item.grade,
+                  allowUnnumbered: item.classEvidenceSource === "administrative-row-header" });
               const staleAggregate =
                 sameMajorUploaded &&
                 incomingInfo.hasAdminClass &&

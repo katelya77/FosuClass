@@ -50,8 +50,12 @@ function getClassNames(course, context) {
   if (Array.isArray(course.audienceClasses)) values.push.apply(values, course.audienceClasses);
   if (Array.isArray(course.classes)) values.push.apply(values, course.classes);
   if (Array.isArray(course.classNames)) values.push.apply(values, course.classNames);
-  values.push(course.className, course.majorName, context && context.targetType === "class" ? context.targetName : "");
-  return uniqueTexts(values);
+  if (!values.length) {
+    values.push(course.originalClassName || course.className, context && context.targetType === "class" ? context.targetName : "");
+  }
+  // 专业聚合标题是展示名称，不是上课班级证据。
+  const actualClasses = values.filter(value => !/专业(?:课表|共享课程)|班级待核实/.test(String(value || "")));
+  return uniqueTexts(actualClasses);
 }
 
 function getWeeksKey(course) {

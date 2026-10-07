@@ -4,6 +4,7 @@ const zlib = require("zlib");
 const { promisify } = require("util");
 const { safeLog } = require("../utils/safeLogger");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
+const { validateClassScheduleIsolation } = require("../utils/scheduleNormalizer");
 const termRegistryService = require("./termRegistryService");
 const termReleaseIndexService = require("./termReleaseIndexService");
 const teachingCalendarService = require("./teachingCalendarService");
@@ -1811,6 +1812,7 @@ function validateReleaseSnapshot(snapshot) {
   }
 
   errors.push.apply(errors, validateScheduleList(snapshot.classSchedules, "classSchedules", true));
+  errors.push.apply(errors, validateClassScheduleIsolation(snapshot.classSchedules));
 
   const resources = getResources(snapshot);
   errors.push.apply(errors, validateScheduleList(resources.teacherSchedules, "resources.teacherSchedules", false));

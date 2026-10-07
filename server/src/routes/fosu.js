@@ -33,6 +33,7 @@ const {
 
 router.use(publicFosuGuard);
 router.use(routeSecurityPolicyMiddleware);
+router.use(require("../modules/content/noticeReactionRoutes").createNoticeReactionRoutes());
 
 const staticTicketCache = new Map();
 const STATIC_TICKET_CACHE_MAX = Math.max(20, Number(process.env.FOSU_STATIC_TICKET_CACHE_MAX || 500) || 500);

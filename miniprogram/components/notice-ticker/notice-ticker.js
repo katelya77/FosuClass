@@ -74,6 +74,8 @@ Component({
     currentNotice: null,
     currentIndex: 0,
     detailVisible: false,
+    panelBodyHeight: "auto",
+    panelBodyScroll: false,
   },
 
   lifetimes: {
@@ -85,6 +87,9 @@ Component({
       if (this._rotationTimer) clearInterval(this._rotationTimer);
       this._rotationTimer = null;
     },
+  },
+  pageLifetimes: {
+    resize() { this.measureDetail(); },
   },
 
   methods: {
@@ -101,12 +106,14 @@ Component({
         .slice(0, maxCount)
         .map(buildDisplayItem);
 
+      const previousId = this.data.currentNotice && this.data.currentNotice.id;
+      const currentIndex = this.data.detailVisible ? Math.max(0, visibleNotices.findIndex((notice) => notice.id === previousId)) : 0;
       this.setData({
         visibleNotices,
-        currentIndex: 0,
-        currentNotice: visibleNotices[0] || null,
+        currentIndex,
+        currentNotice: visibleNotices[currentIndex] || null,
         detailVisible: this.data.detailVisible && visibleNotices.length > 0,
-      });
+      }, () => this.measureDetail());
     },
 
     rotateNotice() {
@@ -118,12 +125,50 @@ Component({
 
     openNoticeDetail() {
       if (!this.data.currentNotice) return;
-      this.setData({ detailVisible: true });
+      this.setData({ detailVisible: true, panelBodyHeight: "auto", panelBodyScroll: false }, () => this.measureDetail());
       this.triggerEvent("open", { notice: this.data.currentNotice });
     },
 
     closeNoticeDetail() {
       this.setData({ detailVisible: false });
+    },
+
+    measureDetail() {
+      if (!this.data.detailVisible) return;
+      const generation = this._layoutGeneration = (this._layoutGeneration || 0) + 1;
+      this.createSelectorQuery()
+        .select(".notice-ticker-panel-body").boundingClientRect()
+        .select(".notice-ticker-panel-head").boundingClientRect()
+        .select(".notice-ticker-panel-footer").boundingClientRect()
+        .exec((rects) => {
+          if (!this.data.detailVisible || generation !== this._layoutGeneration || !rects || rects.some((rect) => !rect)) return;
+          const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+          const scale = windowInfo.windowWidth / 750;
+          // Reserve the mask margins, panel padding, heading gap and fixed footer.
+          const available = Math.max(0, windowInfo.windowHeight - 142 * scale - rects[1].height - rects[2].height);
+          const contentHeight = Math.ceil(rects[0].height);
+          this.setData({
+            panelBodyHeight: Math.min(contentHeight, Math.floor(available)) + "px",
+            panelBodyScroll: contentHeight > available,
+          });
+        });
+    },
+
+    openNoticePicker() {
+      if (!this.data.currentNotice) return;
+      this.setData({ detailVisible: true }, () => {
+        const reactions = this.selectComponent("#noticeDetailReactions");
+        if (reactions) reactions.openPicker();
+        this.measureDetail();
+      });
+    },
+
+    onReactionChange(event) {
+      const result = event.detail;
+      const visibleNotices = this.data.visibleNotices.map((notice) => notice.id === result.noticeId
+        ? Object.assign({}, notice, { reactions: result.summary }) : notice);
+      const currentNotice = visibleNotices.find((notice) => notice.id === this.data.currentNotice.id);
+      this.setData({ visibleNotices, currentNotice }, () => this.measureDetail());
     },
 
     noop() {},

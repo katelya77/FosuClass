@@ -24,6 +24,7 @@ function ensureWeeks(course) {
 
 function compactText(value) {
   return String(value || "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
     .trim()
     .replace(/\s+/g, "")
     .replace(/[【】\[\]（）()《》<>]/g, "");
@@ -82,7 +83,11 @@ function dedupeStrings(values) {
 }
 
 function normalizeClassName(name) {
-  const compact = compactText(name)
+  const compact = String(name || "")
+    .replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, "")
+    .replace(/\(/g, "（").replace(/\)/g, "）")
+    .replace(/[【】\[\]《》<>]/g, "")
     .replace(/^(班级|行政班级|行政班|上课班级|授课对象|教学班|上课对象)[:：]?/, "")
     .replace(/专业课表$/, "")
     .trim();
@@ -95,10 +100,11 @@ function normalizeClassName(name) {
 function splitClassNameCandidates(value) {
   const raw = Array.isArray(value) ? value.join("、") : String(value || "");
   const normalized = raw
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
     .replace(/(?:上课班级|授课对象|行政班级|行政班|班级|教学班|上课对象)\s*[:：]/g, " ")
     .replace(/[；;,，、/／|]+/g, " ");
   const matches = [];
-  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}\d{1,2}班?/g;
+  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}(?:[（(][^()（）\n<>]{1,60}[）)])*\d{1,2}班?/g;
   let match = null;
   while ((match = pattern.exec(normalized)) !== null) {
     matches.push(normalizeClassName(match[0]));
@@ -107,10 +113,10 @@ function splitClassNameCandidates(value) {
 }
 
 function getMajorAliases(majorName) {
-  const clean = compactText(majorName)
-    .replace(/[（(].*?[）)]/g, "")
-    .replace(/专业|方向|微/g, "");
-  const aliases = [clean];
+  const clean = compactText(String(majorName || "").replace(/[（(].*?[）)]/g, ""))
+    .replace(/(?:专业|方向)$/, "");
+  const aliases = [compactText(majorName), compactText(String(majorName || "").replace(/班([）)])/g, "$1")), clean];
+  if (clean === "转业军官专项培训") aliases.push("转业军官培训班");
   if (clean.includes("动物科学")) {
     aliases.push("动物科学", "动科");
   }
@@ -123,23 +129,21 @@ function getMajorAliases(majorName) {
   if (clean.includes("数学与应用数学")) {
     aliases.push("数学", "应用数学");
   }
-  if (clean.length >= 2) {
-    aliases.push(clean.slice(0, 2));
-  }
-  if (clean.length >= 4) {
-    aliases.push(clean.slice(0, 4));
-  }
   return dedupeStrings(aliases.filter((item) => item && item.length >= 2));
 }
 
 function hasClassNameShape(name, context = {}) {
   const compact = compactText(name);
-  const hasGradeToken = /(?:^|[^\d])(?:20\d{2}|\d{2})级?/.test(compact) || /^(?:20\d{2}|\d{2})/.test(compact);
-  const hasMajorText = /[\u4e00-\u9fa5A-Za-z]{2,}/.test(compact);
-  const hasClassNo = /\d{1,2}班?$/.test(compact) || /[一二三四五六七八九十]{1,3}班$/.test(compact);
+  const match = compact.match(/^(20\d{2}|\d{2})级?(.+)$/);
+  if (!match) return false;
+  if (context.grade && match[1].slice(-2) !== String(context.grade).slice(-2)) return false;
   const majorAliases = getMajorAliases(context.majorName);
-  const hasMajorName = majorAliases.length ? majorAliases.some((alias) => compact.includes(alias)) : true;
-  return hasGradeToken && hasMajorText && hasClassNo && hasMajorName;
+  // Some official administrative row labels have no numeric suffix. Accept
+  // those only with explicit row-header provenance and exact catalog identity.
+  if (context.allowUnnumbered && majorAliases.length && majorAliases.includes(match[2])) return true;
+  const numbered = match[2].match(/^([\u4e00-\u9fa5A-Za-z+]{2,140}?)(\d{1,2}|[一二三四五六七八九十]{1,3})班?$/);
+  if (!numbered || /^0+$/.test(numbered[2])) return false;
+  return !majorAliases.length || majorAliases.includes(numbered[1]);
 }
 
 function isLikelyClassName(name, context = {}) {
@@ -157,6 +161,11 @@ function isLikelyClassName(name, context = {}) {
     return false;
   }
 
+  if (!hasClassNameShape(compact, context)) return false;
+  // 明确的年级 + 专业 + 班号优先于课程名相似性。专业导论、英语等
+  // 课程名包含专业名，不能据此否定整份课表中的所有真实行政班。
+  if (getMajorAliases(context.majorName).length) return true;
+
   if (Array.isArray(context.courses)) {
     const cleanClassName = compact.replace(/^(20\d{2}|\d{2})级?/, "").replace(/\d+班$/, "").replace(/班$/, "");
     const isConfused = context.courses.some((course) => {
@@ -166,11 +175,6 @@ function isLikelyClassName(name, context = {}) {
       if (compact === cName) return true;
       if (cleanClassName && cleanCName) {
         if (cleanClassName === cleanCName) return true;
-        if (cleanClassName.includes(cleanCName) || cleanCName.includes(cleanClassName)) {
-          if (cleanClassName.length >= 2 && cleanCName.length >= 2) {
-            return true;
-          }
-        }
       }
       return false;
     });
@@ -192,6 +196,9 @@ function isReliableClassName(name, options = {}) {
 
 function getReliableClassNamesForCourse(course, context = {}) {
   const candidates = [];
+  const administrativeRowName = course && course.classEvidenceSource === "administrative-row-header"
+    ? course.sourceAdminClassName || "" : "";
+  if (administrativeRowName) candidates.push(administrativeRowName);
   if (Array.isArray(course && course.classNames)) {
     candidates.push.apply(candidates, course.classNames);
   }
@@ -210,6 +217,8 @@ function getReliableClassNamesForCourse(course, context = {}) {
       courseName: course && course.courseName,
       courses: context.courses,
       majorName: context.majorName,
+      grade: context.grade,
+      allowUnnumbered: Boolean(administrativeRowName && compactText(administrativeRowName) === compactText(className)),
     })
   );
 }
@@ -227,8 +236,11 @@ function buildMajorSharedScheduleName(context = {}) {
 }
 
 function withDisplayClassName(course, className, extra = {}) {
-  return Object.assign({}, course, extra, {
-    originalClassName: course && course.className ? course.className : "",
+  const normalized = Object.assign({}, course);
+  delete normalized.sharedByMajor;
+  delete normalized.sourceClassNameUnreliable;
+  return Object.assign(normalized, extra, {
+    originalClassName: course && (course.originalClassName || course.className) || "",
     className,
   });
 }
@@ -262,6 +274,7 @@ function buildClassScheduleEntries(courses, context = {}) {
       className: aggregateName,
       displayType: "major-schedule",
       isAggregated: true,
+      classAssignmentStatus: "unresolved",
       collegeCode: context.collegeCode,
       collegeName: context.collegeName || "",
       grade: context.grade,
@@ -276,21 +289,19 @@ function buildClassScheduleEntries(courses, context = {}) {
   const classEntries = Array.from(classGroups.entries())
     .sort(([left], [right]) => left.localeCompare(right, "zh-CN", { numeric: true }))
     .map(([className, groupedCourses]) => {
-    const copiedUnresolved = unresolvedCourses.map((course) => withDisplayClassName(course, className, {
-      sourceClassNameUnreliable: true,
-      sharedByMajor: true,
-    }));
     return {
       semester: context.semester,
       className,
       displayType: "class-schedule",
       isAggregated: false,
+      classEvidenceSource: groupedCourses.every(course => course.classEvidenceSource === "administrative-row-header")
+        ? "administrative-row-header" : "",
       collegeCode: context.collegeCode,
       collegeName: context.collegeName || "",
       grade: context.grade,
       majorCode: context.majorCode,
       majorName: context.majorName,
-      courses: groupedCourses.concat(copiedUnresolved),
+      courses: groupedCourses,
     };
   });
 
@@ -301,6 +312,7 @@ function buildClassScheduleEntries(courses, context = {}) {
       className: sharedName,
       displayType: "major-shared-schedule",
       isAggregated: true,
+      classAssignmentStatus: "unresolved",
       collegeCode: context.collegeCode,
       collegeName: context.collegeName || "",
       grade: context.grade,
@@ -308,12 +320,89 @@ function buildClassScheduleEntries(courses, context = {}) {
       majorName: context.majorName,
       courses: unresolvedCourses.map((course) => withDisplayClassName(course, sharedName, {
         sourceClassNameUnreliable: true,
-        sharedByMajor: true,
       })),
     });
   }
 
   return classEntries;
+}
+
+// 修复旧同步结果时只使用每门课程保留的班级证据，不按专业推断共享。
+// 普通行政班未受影响时原样保留；同一专业中旧版复制的待核实课程只保留一份。
+function repairClassScheduleEntries(schedules) {
+  const groups = new Map();
+  (schedules || []).forEach((schedule) => {
+    const key = [schedule.semester, schedule.collegeCode, schedule.grade, schedule.majorCode || schedule.majorName].join("::");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(schedule);
+  });
+  const result = [];
+  groups.forEach((group) => {
+    const context = group[0];
+    const needsRepair = group.some((schedule) =>
+      schedule.isAggregated || /^major-/.test(schedule.displayType || "") ||
+      (schedule.courses || []).some((course) => course.sharedByMajor)
+    );
+    if (!needsRepair) {
+      result.push(...group);
+      return;
+    }
+    const courses = [];
+    const seen = new Set();
+    group.forEach((schedule) => {
+      const aggregated = schedule.isAggregated || /^major-/.test(schedule.displayType || "");
+      (schedule.courses || []).forEach((course) => {
+        const source = Object.assign({}, course, {
+          className: course.originalClassName || (aggregated || course.sharedByMajor ? "" : schedule.className),
+        });
+        delete source.sharedByMajor;
+        delete source.sourceClassNameUnreliable;
+        // display className is synthetic on old aggregates and major-shared copies.
+        const key = JSON.stringify(Object.keys(source).sort().map((field) => [field, source[field]]));
+        if (!seen.has(key)) {
+          seen.add(key);
+          courses.push(source);
+        }
+      });
+    });
+    const rebuilt = buildClassScheduleEntries(courses, context);
+    rebuilt.forEach((entry) => {
+      const previous = group.find(s => s.className === entry.className);
+      const metadata = Object.assign({}, previous || context);
+      if (!previous) {
+        ["id", "classId", "detailId", "scheduleKey"].forEach(key => delete metadata[key]);
+      }
+      result.push(Object.assign(metadata, entry));
+    });
+  });
+  return result;
+}
+
+function validateClassScheduleIsolation(schedules) {
+  const errors = [];
+  (Array.isArray(schedules) ? schedules : []).forEach((schedule, index) => {
+    if (!schedule || typeof schedule !== "object") return;
+    const aggregated = schedule.isAggregated || /^major-/.test(schedule.displayType || "");
+    const courses = Array.isArray(schedule.courses) ? schedule.courses.filter(course => course && typeof course === "object") : [];
+    if (aggregated && courses.some(c => getReliableClassNamesForCourse(c, schedule).length)) {
+      errors.push(`classSchedules[${index}] contains recoverable administrative classes in an aggregate`);
+    }
+    if (!aggregated && courses.some(c => c.sharedByMajor)) {
+      errors.push(`classSchedules[${index}] contains unverified major-shared courses`);
+    }
+    if (!aggregated) {
+      const identity = name => normalizeClassName(name).replace(/^(?:20)?(\d{2})级?/, "$1");
+      const expected = identity(schedule.className);
+      const misplaced = courses.some((course) => {
+        // className can have been overwritten for display; it is not source evidence.
+        const source = Object.assign({}, course, { className: course.originalClassName || "" });
+        const names = getReliableClassNamesForCourse(source, schedule);
+        return names.length && !names.some(name => identity(name) === expected);
+      });
+      if (misplaced) errors.push(`classSchedules[${index}] contains courses assigned to a different administrative class`);
+    }
+  });
+  return errors;
 }
 
 /**
@@ -416,4 +505,6 @@ module.exports = {
   isReliableClassName,
   normalizeCourseItem,
   normalizeCourseList,
+  repairClassScheduleEntries,
+  validateClassScheduleIsolation,
 };

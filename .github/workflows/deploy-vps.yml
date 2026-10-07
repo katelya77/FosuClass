@@ -1,5 +1,9 @@
 name: Deploy to VPS
 
+concurrency:
+  group: fosuclass-production-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -51,8 +57,20 @@ jobs:
       - name: Install server dependencies
         run: npm --prefix server ci
 
+      - name: Install timetable sync dependencies
+        run: npm --prefix tools/fosu-sync-client ci
+
+      - name: Administrative class isolation regression
+        run: npm run test:class-schedule-isolation
+
       - name: Release preflight
         run: npm run release:preflight
+
+      - name: Notice reaction acceptance
+        run: npm run test:notice-reactions
+
+      - name: Production baseline regression
+        run: npm run test:production-baseline
 
       - name: Xiaofu Agent release gate
         run: npm run test:agent-release-gate
@@ -105,6 +123,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Check GitHub Secrets
         shell: bash
@@ -217,6 +237,29 @@ jobs:
 
       - name: Security acceptance tests
         run: npm run security:acceptance
+
+      - name: Preserve deployed production baseline
+        id: production_baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/check-production-baseline.js --workflow
+
+      - name: Verify live production baseline before upload
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -Eeuo pipefail
+            EXPECTED_SHA='${{ steps.production_baseline.outputs.baseline }}'
+            LIVE_SHA="$(curl --fail --silent --show-error --max-time 30 -H 'X-Admin-Token: ${{ secrets.ADMIN_API_TOKEN }}' http://127.0.0.1:18318/api/admin/security/status | node -e 'let text="";process.stdin.on("data",v=>text+=v);process.stdin.on("end",()=>{const value=JSON.parse(text).deployment?.commitSha;if(!/^[a-f0-9]{40}$/i.test(value||""))process.exit(1);process.stdout.write(value.toLowerCase());});')"
+            if [ "$LIVE_SHA" != "$EXPECTED_SHA" ]; then
+              echo "Production baseline changed or does not match the last verified deployment; upload blocked." >&2
+              exit 1
+            fi
+            echo "production_baseline_verified=$LIVE_SHA"
 
       - name: Build WYZ bundle for Oracle
         run: |
