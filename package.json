@@ -457,6 +457,7 @@
     "test:settings-data-diagnosis": "node tools/test-settings-data-diagnosis.js",
     "test:settings-weekend-default": "node tools/test-settings-weekend-default.js",
     "test:miniprogram-clean-ux": "node tools/test-settings-weekend-default.js && node tools/test-miniprogram-clean-ui-week-swipe.js",
+    "test:schedule-week-state-isolation": "node tools/test-schedule-week-state-isolation.js",
     "test:diagnosis-export-redacts-sensitive-fields": "node tools/test-settings-data-diagnosis.js",
     "test:miniprogram-config-defaults": "node tools/test-today-config-defaults.js",
     "test:miniprogram-no-sensitive-log": "node tools/test-miniprogram-no-sensitive-log.js",

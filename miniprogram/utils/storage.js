@@ -83,8 +83,6 @@ const defaultSettings = {
   className: "",
   semesterId: DEFAULT_TERM,
   semester: "",
-  currentWeek: 12,
-  manualWeekOverride: false,
   hideInactiveCourses: true,
   showWeekend: true,
   weekendShowMode: "overview",
@@ -96,6 +94,9 @@ function normalizeSettings(settings) {
   // Legacy display preference removed from the product. Keeping it in storage
   // must never revive the retired historical-grade branch.
   delete next.showHistoricalGrades;
+  // Browsing weeks belong to a page instance, never to persistent settings.
+  delete next.currentWeek;
+  delete next.manualWeekOverride;
   if (next.weekendShowMode !== "detail" && next.weekendShowMode !== "overview") {
     next.weekendShowMode = defaultSettings.weekendShowMode;
   }
@@ -107,7 +108,8 @@ function getSettings() {
     const saved = wx.getStorageSync(STORAGE_KEY);
     const normalizedSaved = normalizeSettings(saved);
     const next = Object.assign({}, defaultSettings, normalizedSaved);
-    if (saved && Object.prototype.hasOwnProperty.call(saved, "showHistoricalGrades")) {
+    if (saved && ["showHistoricalGrades", "currentWeek", "manualWeekOverride"].some((key) =>
+      Object.prototype.hasOwnProperty.call(saved, key))) {
       writeCriticalStorage(STORAGE_KEY, next);
     }
     return next;

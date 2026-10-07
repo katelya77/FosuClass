@@ -34,13 +34,6 @@ function getContentWidthRpx() {
   return 750 - PAGE_PADDING_RPX;
 }
 
-function resolveDisplayWeek(settings, todayInfo, termConfig) {
-  if (settings.manualWeekOverride) {
-    return clampWeek(settings.currentWeek, termConfig);
-  }
-  return todayInfo.weekNo;
-}
-
 function getScheduleTabIdentity(item) {
   const source = item || {};
   const name = String(source.name || source.className || source.title || "")
@@ -109,7 +102,7 @@ Page({
     dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
     syncActionText: "同步课表",
-    currentWeek: 12,
+    currentWeek: 1,
     teachingPeriodText: "教学周待同步",
     termPhase: "unknown",
     totalWeeks: TOTAL_WEEKS,
@@ -170,6 +163,11 @@ Page({
   },
 
   onShow() {
+    // Tab pages survive navigation. Each entry starts at today, except returning
+    // from this page's fullscreen view, which resumes the same schedule context.
+    if (!this._resumeFullscreenWeek) this._weekOverride = null;
+    this._resumeFullscreenWeek = false;
+    this._weekSwipeState = null;
     const { isScheduleInitialized, getCurrentScheduleTarget } = require("../../utils/storage");
     const initialized = isScheduleInitialized();
     const target = getCurrentScheduleTarget();
@@ -328,10 +326,13 @@ Page({
   },
 
   loadSchedule() {
+    const loadSeq = (this._scheduleLoadSeq || 0) + 1;
+    this._scheduleLoadSeq = loadSeq;
     const calendar = teachingCalendarService.getImmediateActiveCalendar();
     this.renderScheduleWithCalendar(calendar);
     teachingCalendarService.loadActiveTeachingCalendar()
       .then((latest) => {
+        if (this._scheduleLoadSeq !== loadSeq) return;
         if (calendarChanged(calendar, latest)) {
           this.renderScheduleWithCalendar(latest);
         }
@@ -350,7 +351,7 @@ Page({
     const now = new Date();
     const todayInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
     const currentWeek = this._weekOverride == null
-      ? resolveDisplayWeek(settings, todayInfo, termConfig)
+      ? getCurrentTeachingWeek(now, calendarWeeks, termConfig)
       : clampWeek(this._weekOverride, termConfig);
     const weekInfo = getWeekRangeByWeekNo(currentWeek, calendarWeeks, termConfig);
     const showWeekend = settings.showWeekend || false;
@@ -486,7 +487,7 @@ Page({
       ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
       : clampWeek(detail.week, termConfig);
     if (type !== "current" && nextWeek === this.data.currentWeek) return;
-    this._weekOverride = nextWeek;
+    this._weekOverride = type === "current" ? null : nextWeek;
     this.loadSchedule();
   },
 
@@ -507,14 +508,17 @@ Page({
       events: {
         weekChange: (event) => this.onWeekChange({ detail: { type: "select", week: event.week } }),
       },
-      success: (result) => result.eventChannel.emit("schedule", {
-        title: this.data.className,
-        courses,
-        target,
-        week: this.data.currentWeek,
-        showWeekend: this.data.showWeekend,
-        weekendShowMode: this.data.weekendShowMode,
-      }),
+      success: (result) => {
+        this._resumeFullscreenWeek = true;
+        result.eventChannel.emit("schedule", {
+          title: this.data.className,
+          courses,
+          target,
+          week: this.data.currentWeek,
+          showWeekend: this.data.showWeekend,
+          weekendShowMode: this.data.weekendShowMode,
+        });
+      },
     });
   },
 

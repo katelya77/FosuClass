@@ -24,9 +24,9 @@ assert.strictEqual(
   "new users should see all seven days in one overview"
 );
 assert.strictEqual(
-  storage.getSettings().manualWeekOverride,
+  Object.prototype.hasOwnProperty.call(storage.getSettings(), "manualWeekOverride"),
   false,
-  "new users should follow the teaching calendar"
+  "new users must not have a persistent manual week preference"
 );
 
 storage.saveSettings({
@@ -50,7 +50,8 @@ assert.strictEqual(
 );
 assert.strictEqual(storage.getSettings().hideInactiveCourses, true);
 assert.strictEqual(storage.getSettings().weekendShowMode, "overview");
-assert.strictEqual(storage.getSettings().manualWeekOverride, false);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(storage.getSettings(), "manualWeekOverride"), false);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(storage.getSettings(), "currentWeek"), false);
 
 storage.saveSettings({ showWeekend: false });
 storage.clearAppCache();
