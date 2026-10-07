@@ -21,6 +21,7 @@
 
     <view class="info-grid">
       <view class="class-line">{{className}}</view>
+      <view class="class-assignment-warning" wx:if="{{classAssignmentWarning}}" bindtap="goSchool">{{classAssignmentWarning}} ›</view>
       <view class="schedule-subtitle" wx:if="{{scheduleSubtitle}}">{{scheduleSubtitle}}</view>
       <view class="schedule-subtitle" wx:else>{{semester}}</view>
       <view class="date-line">

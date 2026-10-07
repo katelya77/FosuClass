@@ -98,6 +98,7 @@ Page({
     appName: BRAND.appName,
     className: "未选择课表",
     scheduleSubtitle: "",
+    classAssignmentWarning: "",
     semester: "",
     dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
@@ -448,6 +449,9 @@ Page({
     this.setData({
       className: displayClassName,
       scheduleSubtitle,
+      classAssignmentWarning: displayTarget && displayTarget.type === "class" &&
+        (displayTarget.isAggregated || /^major-/.test(displayTarget.displayType || "") || /专业(?:课表|共享课程)$/.test(displayClassName))
+        ? "当前排课未核实行政班，可能包含其他班级课程。请到全校课表重新选择具体班级。" : "",
       semester: calendar.semesterText || termConfig.semesterText || termConfig.term || "",
       dataSourceText: sourceText,
       lastSyncText,

@@ -13,6 +13,7 @@
     "doc": "docs"
   },
   "scripts": {
+    "test:class-schedule-isolation": "node --test tools/test-class-schedule-isolation.js tools/test-class-schedule-ui-isolation.js tools/test-class-schedule-release-isolation.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js && node tools/test-semester-repair.js",
     "test:term-deletion-lifecycle": "node tools/test-term-deletion-lifecycle.js",

@@ -51,6 +51,12 @@ jobs:
       - name: Install server dependencies
         run: npm --prefix server ci
 
+      - name: Install timetable sync dependencies
+        run: npm --prefix tools/fosu-sync-client ci
+
+      - name: Administrative class isolation regression
+        run: npm run test:class-schedule-isolation
+
       - name: Release preflight
         run: npm run release:preflight
 

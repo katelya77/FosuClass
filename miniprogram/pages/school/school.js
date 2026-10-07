@@ -114,29 +114,18 @@ function writeReleaseNoticeState(patch) {
   }
 }
 
-function isValidClassName(name) {
-  if (!name) return false;
-  const excludeKeywords = ['体育', '化学', '解剖', '微积分', '物理', '英语', '毛泽东', '马克思', '形势与政策', '创业', '心理', '美育', '军事', '劳动', '思想道德', '大学', '程序设计', '基础', '俱乐部', '指导'];
-  for (const kw of excludeKeywords) {
-    if (name.includes(kw)) return false;
-  }
-  const reg = /\d/;
-  if (!reg.test(name)) return false;
-  return true;
-}
-
 function formatClassResultItem(item) {
   const source = item || {};
-  const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule" || source.displayType === "major-shared-schedule");
+  const isAggregated = Boolean(source.isAggregated || /^major-/.test(source.displayType || ""));
   const rawClassName = source.className || source.name || "";
   const className = safeDecodeURIComponent(rawClassName);
   const courseCount = Number(source.courseCount || source.count || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0;
   return Object.assign({}, source, {
     detailId: source.detailId || source.id || source.classId || className,
     scheduleKey: `${source.semester || ""}-${source.collegeCode || ""}-${source.grade || ""}-${source.majorCode || ""}-${className}`,
-    displayTitle: className,
+    displayTitle: isAggregated && source.majorName ? `${source.grade || ""}级${source.majorName}排课（班级待核实）` : className,
     displaySubtitle: `${source.majorName || "未知专业"} · ${source.grade || ""}级 · ${courseCount}门课`,
-    statusText: isAggregated ? "专业聚合" : "行政班",
+    statusText: isAggregated ? "班级待核实" : "行政班",
     isAggregated,
     courses: Array.isArray(source.courses) ? source.courses : [],
   });
@@ -145,19 +134,18 @@ function formatClassResultItem(item) {
 function splitClassResultGroups(items) {
   const list = (items || [])
     .map(formatClassResultItem)
-    .filter(item => item.isAggregated || isValidClassName(item.className));
+    .filter(item => item.className);
   
   const admin = list.filter((item) => !item.isAggregated);
   
-  const activeAdminMajorGrades = new Set(admin.map(item => `${item.majorCode}_${item.grade}`));
-  const aggregate = list.filter((item) => item.isAggregated && !activeAdminMajorGrades.has(`${item.majorCode}_${item.grade}`));
+  const aggregate = list.filter((item) => item.isAggregated);
 
   return {
     list,
     admin,
     aggregate,
-    noticeText: !admin.length && aggregate.length
-      ? "暂未拆出行政班，已展示该专业完整排课。"
+    noticeText: aggregate.length
+      ? "部分排课的班级归属尚未核实，不能作为个人班级课表；请优先选择行政班。"
       : "",
   };
 }
@@ -1747,7 +1735,6 @@ Page({
         if (res && res.success) {
           const items = (res.items || []).map(formatClassResultItem);
           const adminClasses = items.filter((item) => !item.isAggregated);
-          const majorAggregates = items.filter((item) => item.isAggregated);
 
           adminClasses.forEach(c => {
             classesOptions.push({
@@ -1768,24 +1755,6 @@ Page({
             });
           });
 
-          majorAggregates.forEach(c => {
-            classesOptions.push({
-              classId: c.detailId || c.classId || c.id,
-              className: c.className,
-              label: c.className.includes("共享") ? c.className : `${c.className} (共享课表)`,
-              detailId: c.detailId || c.id || c.classId || c.className,
-              scheduleVersion: res.version || c.scheduleVersion || "",
-              courseCount: c.courseCount || 0,
-              semester: c.semester || semester,
-              collegeCode: c.collegeCode || collegeCode,
-              grade: c.grade || grade,
-              majorCode: c.majorCode || majorCode,
-              majorName: c.majorName || "",
-              displayType: c.displayType || "major-shared-schedule",
-              isAggregated: true,
-              group: "aggregate"
-            });
-          });
         }
         this.setData({
           classesOptions,
@@ -1809,15 +1778,6 @@ Page({
                   label: c.className,
                   isAggregated: false,
                   group: "admin"
-                });
-              });
-              (res.majorAggregates || []).forEach(c => {
-                classesOptions.push({
-                  classId: c.classId,
-                  className: c.className,
-                  label: c.className.includes("共享") ? c.className : `${c.className} (共享课表)`,
-                  isAggregated: true,
-                  group: "aggregate"
                 });
               });
             }

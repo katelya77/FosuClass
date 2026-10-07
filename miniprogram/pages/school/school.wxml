@@ -269,7 +269,7 @@
 
           <view class="result-group" wx:if="{{classAggregateResults.length}}">
             <view class="result-group-head" bindtap="toggleAggregate" style="cursor: pointer;">
-              <view class="result-group-title">专业共享课表</view>
+              <view class="result-group-title">班级待核实的排课</view>
               <view class="result-group-count">{{classAggregateTotal || classAggregateResults.length}}项 {{showAggregate ? '▼' : '▶'}}</view>
             </view>
             <view wx:if="{{showAggregate}}">
@@ -286,7 +286,7 @@
                   <view class="result-meta">{{item.displaySubtitle}}</view>
                 </view>
                 <view class="result-side">
-                  <view class="status ready aggregate">{{item.statusText || "专业聚合"}}</view>
+                  <view class="status ready aggregate">{{item.statusText || "班级待核实"}}</view>
                 </view>
               </view>
               <view class="load-more-row" wx:if="{{hasMoreClassAggregate}}" bindtap="loadMoreActiveResults">

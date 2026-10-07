@@ -69,8 +69,8 @@ function getScheduleKindText(type, displayType, isAggregated) {
   if (type !== "class") {
     return getTypeText(type);
   }
-  if (isAggregated || displayType === "major-schedule" || displayType === "major-shared-schedule") {
-    return "专业聚合课表 · 暂未拆分行政班";
+  if (isAggregated || /^major-/.test(displayType || "")) {
+    return "班级归属待核实 · 不可设为个人课表";
   }
   return "行政班级课表";
 }
@@ -146,7 +146,7 @@ Page({
       (localActiveRelease && localActiveRelease.releaseVersion) ||
       "";
     const decodedDisplayType = safeDecodeURIComponent(displayType);
-    const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
+    const aggregated = isTruthyParam(isAggregated) || /^major-/.test(decodedDisplayType);
     const title = decodedName || decodedId;
     const isFromShare = !!shareScheduleId;
     this._initialWeek = parsePositiveIntParam(week);
@@ -184,7 +184,7 @@ Page({
           hasLoadedData = hasUsableCourses;
           const schedule = data.schedule || {};
           const nextDisplayType = schedule.displayType || this.data.displayType;
-          const nextAggregated = Boolean(schedule.isAggregated || this.data.isAggregated || nextDisplayType === "major-schedule" || nextDisplayType === "major-shared-schedule");
+          const nextAggregated = Boolean(schedule.isAggregated || this.data.isAggregated || /^major-/.test(nextDisplayType));
           this.setData({
             allCourses: data.courses,
             displayType: nextDisplayType,
@@ -583,6 +583,15 @@ Page({
   },
 
   toggleBindTarget() {
+    const meta = this.data.scheduleMeta || {};
+    if (this.data.type === "class" && (this.data.isAggregated || meta.isAggregated || /^major-/.test(meta.displayType || this.data.displayType || ""))) {
+      wx.showModal({
+        title: "请先选择行政班",
+        content: "这些排课的班级归属尚未核实，同一专业不同班级的课程可能不同，不能设为个人课表。请返回全校课表选择具体行政班。",
+        showCancel: false,
+      });
+      return;
+    }
     if (this.data.isCurrentTarget) {
       wx.showToast({
         title: "已是当前首页课表",
@@ -592,7 +601,6 @@ Page({
     }
 
     const nowStr = new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
-    const meta = this.data.scheduleMeta || {};
     const releaseVersion = meta.scheduleVersion || meta.releaseVersion || meta.version || "";
     const detailId = meta.detailId || meta.id || meta.scheduleId || meta.classId || this.data.name || "";
     const target = {
