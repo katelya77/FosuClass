@@ -30,7 +30,8 @@ const personalSyncConfig = require("../../config/personalSync");
 const studentScheduleSource = require("../../services/studentScheduleSource");
 const { createFosuDirectClient } = require("../../services/fosuDirectClient");
 const { buildSafeDiagnostic } = require("../../services/fosuDirectDiagnostics");
-const { getRuntimeTermConfig, getTodayTeachingInfo } = require("../../utils/week");
+const { getRuntimeTermConfig, getCurrentTeachingWeek } = require("../../utils/week");
+const teachingCalendarService = require("../../services/teachingCalendarService");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const WEEKDAY_TABS = [
@@ -200,19 +201,8 @@ function clampPreviewWeek(week) {
 }
 
 function resolveStudentCurrentPreviewWeek() {
-  const settings = getSettings && getSettings() || {};
-  const termConfig = getRuntimeTermConfig();
-  if (settings.manualWeekOverride && settings.currentWeek) {
-    return clampPreviewWeek(settings.currentWeek);
-  }
-  const todayInfo = getTodayTeachingInfo(new Date(), [], termConfig);
-  if (todayInfo && todayInfo.isInTerm && todayInfo.weekNo) {
-    return clampPreviewWeek(todayInfo.weekNo);
-  }
-  if (settings.currentWeek) {
-    return clampPreviewWeek(settings.currentWeek);
-  }
-  return 0;
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  return clampPreviewWeek(getCurrentTeachingWeek(new Date(), calendar.weeks || [], calendar.termConfig || {}));
 }
 
 function toNumberList(values, max) {

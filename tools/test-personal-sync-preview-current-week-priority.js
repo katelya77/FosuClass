@@ -13,11 +13,11 @@ delete global.Component;
 
 function renderCourses(grid) {
   let nextData = null;
-  capturedComponent.observers["grid, sectionHeight, dayColumnWidth"].call({
+  capturedComponent.observers["grid, sectionHeight, dayColumnWidth, dayCount"].call({
     setData(data) {
       nextData = data;
     },
-  }, grid, 72, 120);
+  }, grid, 72, 120, 1);
   return nextData.columns[0].courses;
 }
 

@@ -12,7 +12,6 @@ const {
 } = require("../../utils/storage");
 const teachingCalendarService = require("../../services/teachingCalendarService");
 const {
-  clampWeek,
   formatFullDateLabel,
   getTeachingPeriodText,
   getTodayTeachingInfo,
@@ -38,16 +37,6 @@ function getSelectedTerm(settings) {
   const globalData = app && app.globalData || {};
   const pointer = globalData.runtimePointer || globalData.activeReleasePointer || globalData.activeRelease || {};
   return runtime.term || pointer.activeTerm || pointer.term || "";
-}
-
-function buildWeekOptions(totalWeeks) {
-  const options = [];
-  const calendar = teachingCalendarService.getImmediateActiveCalendar();
-  const count = Number(totalWeeks || calendar.termConfig && calendar.termConfig.totalWeeks || 19) || 19;
-  for (let week = 1; week <= count; week += 1) {
-    options.push(`第${week}周`);
-  }
-  return options;
 }
 
 function formatSemesterLabel(term, semesterText) {
@@ -176,7 +165,6 @@ Page({
     termStartDate: "",
     termStartWeekdayText: "",
     totalTeachingWeeks: "",
-    weekOptions: buildWeekOptions(),
     feedbackTypes: FEEDBACK_TYPES,
     feedbackVisible: false,
     feedbackSubmitting: false,
@@ -281,22 +269,19 @@ Page({
     }
     const settings = getSettings();
     const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], termConfig);
-    const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, termConfig) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
     const startWeekdayText = getWeekdayLabel(termConfig.termStartDate) || "周一";
     const xiaofuFloatEnabled = xiaofuFloatService.isEnabled();
     this.setData({
       settings: Object.assign({}, settings, {
-        currentWeek: effectiveWeek,
         semester: selectedTerm || termConfig.term || "",
         semesterId: selectedTerm || termConfig.term || "",
       }),
       teachingInfo,
-      teachingPeriodText: getTeachingPeriodText(teachingInfo, effectiveWeek),
+      teachingPeriodText: getTeachingPeriodText(teachingInfo, teachingInfo.weekNo),
       termStartDate: formatFullDateLabel(termConfig.termStartDate) || "日期待同步",
       termStartWeekdayText: startWeekdayText,
       totalTeachingWeeks: termConfig.totalWeeks ? `${termConfig.totalWeeks}周` : "日期待同步",
-      weekOptions: buildWeekOptions(termConfig.totalWeeks),
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
       semesterDisplayText: formatSemesterLabel(
         selectedTerm || termConfig.term || "",
@@ -319,15 +304,13 @@ Page({
           Number(latestConfig.totalWeeks || 0) !== Number(termConfig.totalWeeks || 0)
         ) {
           const latestInfo = getTodayTeachingInfo(new Date(), latest.weeks || [], latestConfig);
-          const nextWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, latestConfig) : latestInfo.weekNo;
           this.setData({
             settings: Object.assign({}, this.data.settings, {
-              currentWeek: nextWeek,
               semester: latestConfig.term || this.data.settings.semester || "",
               semesterId: latestConfig.term || this.data.settings.semesterId || "",
             }),
             teachingInfo: latestInfo,
-            teachingPeriodText: getTeachingPeriodText(latestInfo, nextWeek),
+            teachingPeriodText: getTeachingPeriodText(latestInfo, latestInfo.weekNo),
             semesterDisplayText: formatSemesterLabel(
               latestConfig.term || this.data.settings.semester || "",
               latest.semesterText || latestConfig.semesterText || ""
@@ -335,34 +318,10 @@ Page({
             termStartDate: formatFullDateLabel(latestConfig.termStartDate) || "日期待同步",
             termStartWeekdayText: getWeekdayLabel(latestConfig.termStartDate) || "周一",
             totalTeachingWeeks: latestConfig.totalWeeks ? `${latestConfig.totalWeeks}周` : "日期待同步",
-            weekOptions: buildWeekOptions(latestConfig.totalWeeks),
           });
         }
       })
       .catch(() => {});
-  },
-
-  onWeekChange(event) {
-    const currentWeek = Number(event.detail.value) + 1;
-    saveSettings({
-      currentWeek,
-      manualWeekOverride: true,
-    });
-    this.loadSettings();
-  },
-
-  restoreAutoWeek() {
-    const calendar = teachingCalendarService.getImmediateActiveCalendar();
-    const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], calendar.termConfig || {});
-    saveSettings({
-      currentWeek: teachingInfo.weekNo,
-      manualWeekOverride: false,
-    });
-    this.loadSettings();
-    wx.showToast({
-      title: "已恢复自动",
-      icon: "success",
-    });
   },
 
   onSwitchChange(event) {

@@ -9,7 +9,7 @@ const { getSettings } = require("./storage");
 const customCourseService = require("../services/customCourseService");
 const courseOverrideService = require("../services/courseOverrideService");
 const teachingCalendarService = require("../services/teachingCalendarService");
-const { clampWeek, getTermPhaseText, getTodayTeachingInfo, getTodayWeekday } = require("./week");
+const { getTermPhaseText, getTodayTeachingInfo, getTodayWeekday } = require("./week");
 const { getCourseWeekStatus } = require("./courseWeekRules");
 
 function isCourseActiveInCurrentWeek(course, currentWeek) {
@@ -126,16 +126,13 @@ function shouldShowTodayStartupReminder(todayData) {
 }
 
 function getTodayCoursesData(options = {}) {
-  const settings = getSettings();
   const now = options.now ? new Date(options.now) : new Date();
   const calendar = teachingCalendarService.getImmediateActiveCalendar();
   const termConfig = calendar.termConfig || {};
   const weeks = calendar.weeks || [];
   const todayInfo = getTodayTeachingInfo(now, weeks, termConfig);
   const weekday = todayInfo.weekday || getTodayWeekday(now);
-  const currentWeek = settings.manualWeekOverride
-    ? clampWeek(settings.currentWeek, termConfig)
-    : todayInfo.weekNo;
+  const currentWeek = todayInfo.weekNo;
   const termPhase = todayInfo.termPhase || "unknown";
   const termPhaseText = getTermPhaseText(termPhase);
 

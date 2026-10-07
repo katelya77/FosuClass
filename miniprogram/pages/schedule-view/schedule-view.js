@@ -109,7 +109,7 @@ Page({
     currentWeekCourseCount: 0,
     scheduleMeta: null,
     
-    currentWeek: 12,
+    currentWeek: 1,
     totalWeeks: TOTAL_WEEKS,
     weekRangeText: "",
     weekScopeText: "周一至周五",
@@ -151,6 +151,7 @@ Page({
     const isFromShare = !!shareScheduleId;
     this._initialWeek = parsePositiveIntParam(week);
     this._initialWeekday = parsePositiveIntParam(weekday);
+    this._hasChosenWeek = false;
     
     this.setData({
       type,
@@ -382,13 +383,17 @@ Page({
   },
 
   initScheduleLayout() {
+    const loadSeq = (this._calendarLoadSeq || 0) + 1;
+    this._calendarLoadSeq = loadSeq;
     const settings = getSettings();
     const calendar = teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const now = new Date();
-    const currentWeek = this._initialWeek
-      ? clampWeek(this._initialWeek, termConfig)
-      : getCurrentTeachingWeek(now, calendar.weeks || [], termConfig);
+    const currentWeek = this._hasChosenWeek
+      ? clampWeek(this.data.currentWeek, termConfig)
+      : this._initialWeek
+        ? clampWeek(this._initialWeek, termConfig)
+        : getCurrentTeachingWeek(now, calendar.weeks || [], termConfig);
     const showWeekend = this._initialWeekday >= 6 ? true : (settings.showWeekend || false);
     this.activeTeachingCalendar = calendar;
       
@@ -402,6 +407,7 @@ Page({
     });
     teachingCalendarService.loadActiveTeachingCalendar({ term: this.data.semester })
       .then((latest) => {
+        if (this._calendarLoadSeq !== loadSeq) return;
         if (!calendarChanged(this.activeTeachingCalendar, latest)) return;
         this.activeTeachingCalendar = latest;
         const latestConfig = latest.termConfig || {};

@@ -56,6 +56,8 @@ function testHomeWeekSwipe() {
   mockEnv.clearStorage();
   const storage = require("../miniprogram/utils/storage");
   const page = loadPage("miniprogram/pages/index/index.js");
+  const settingsBefore = storage.getSettings();
+  const storedBefore = wx.getStorageSync(storage.STORAGE_KEY);
   page.setData({
     currentWeek: 2,
     totalWeeks: 19,
@@ -65,8 +67,8 @@ function testHomeWeekSwipe() {
 
   swipe(page, touch(280, 300), touch(180, 306));
   assert.strictEqual(page.data.currentWeek, 3, "left swipe should move from week 2 to week 3");
-  assert.strictEqual(storage.getSettings().currentWeek, 12, "home browsing must not change shared settings");
-  assert.strictEqual(storage.getSettings().manualWeekOverride, false);
+  assert.deepStrictEqual(storage.getSettings(), settingsBefore, "home browsing must not change shared settings");
+  assert.deepStrictEqual(wx.getStorageSync(storage.STORAGE_KEY), storedBefore, "swiping must not persist settings");
 
   swipe(page, touch(180, 300), touch(280, 294));
   assert.strictEqual(page.data.currentWeek, 2, "right swipe should move from week 3 to week 2");
@@ -149,6 +151,8 @@ function testScheduleViewKeepsWeekLocal() {
   mockEnv.clearStorage();
   const storage = require("../miniprogram/utils/storage");
   const page = loadPage("miniprogram/pages/schedule-view/schedule-view.js");
+  const settingsBefore = storage.getSettings();
+  const storedBefore = wx.getStorageSync(storage.STORAGE_KEY);
   page.activeTeachingCalendar = {
     weeks: [],
     termConfig: { totalWeeks: 19 },
@@ -156,10 +160,11 @@ function testScheduleViewKeepsWeekLocal() {
   page.setData({ currentWeek: 2, totalWeeks: 19, allCourses: [] });
   page.onWeekChange({ detail: { type: "next", week: 3 } });
   assert.strictEqual(page.data.currentWeek, 3);
-  assert.strictEqual(storage.getSettings().currentWeek, 12, "school schedule browsing must not change home week");
-  assert.strictEqual(storage.getSettings().manualWeekOverride, false);
+  assert.deepStrictEqual(storage.getSettings(), settingsBefore, "school browsing must not change shared settings");
+  assert.deepStrictEqual(wx.getStorageSync(storage.STORAGE_KEY), storedBefore);
   page.onWeekChange({ detail: { type: "current", week: 3 } });
-  assert.strictEqual(storage.getSettings().manualWeekOverride, false, "back-to-current must not write shared settings");
+  assert.deepStrictEqual(storage.getSettings(), settingsBefore, "back-to-current must not change shared settings");
+  assert.deepStrictEqual(wx.getStorageSync(storage.STORAGE_KEY), storedBefore, "back-to-current must not write settings");
 
   page.setData({ currentWeek: 2, totalWeeks: 19, scrollX: false });
   page.onScheduleTouchStart({ touches: [touch(280, 300)] });
@@ -202,7 +207,8 @@ function testRestoreDefaultsConfirmation() {
     assert.strictEqual(restored.hideInactiveCourses, true);
     assert.strictEqual(restored.showWeekend, true);
     assert.strictEqual(restored.weekendShowMode, "overview");
-    assert.strictEqual(restored.manualWeekOverride, false);
+    assert(!Object.prototype.hasOwnProperty.call(restored, "manualWeekOverride"));
+    assert(!Object.prototype.hasOwnProperty.call(restored, "currentWeek"));
     assert.strictEqual(storage.getCurrentScheduleTarget(), null);
     assert.strictEqual(page.data.moreSettingsVisible, false);
   } finally {
@@ -248,6 +254,9 @@ function testHistoricalGradeRemovalAndSettingsHierarchy() {
     assert(!primarySettings.includes(copy), `primary settings must hide maintenance copy: ${copy}`);
   });
   assert(settingsWxml.includes("恢复默认设置"), "restore defaults should remain in more settings");
+  ["settings.currentWeek", "manualWeekOverride", "restoreAutoWeek", "当前周次"].forEach((retired) => {
+    assert(!settingsWxml.includes(retired), `settings must not expose the retired global week: ${retired}`);
+  });
 
   const indexWxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/index/index.wxml"), "utf8");
   const scheduleViewWxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/schedule-view/schedule-view.wxml"), "utf8");

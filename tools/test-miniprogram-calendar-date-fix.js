@@ -209,7 +209,8 @@ assertNoBadDateText(indexPage.data, "index page data");
 
 const settingsPage = createPage(pages[1]);
 settingsPage.loadSettings();
-assert.strictEqual(settingsPage.data.settings.currentWeek, 14);
+assert.strictEqual(settingsPage.data.teachingInfo.weekNo, 14);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(settingsPage.data.settings, "currentWeek"), false);
 assert.strictEqual(settingsPage.data.settings.semester, "2025-2026-2");
 assert.strictEqual(settingsPage.data.semesterDisplayText, "2025-2026学年第二学期");
 assert.strictEqual(settingsPage.data.settings.showWeekend, true);

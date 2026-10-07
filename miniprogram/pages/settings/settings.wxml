@@ -47,7 +47,7 @@
       <view class="setting-row" bindtap="showMoreSettings" role="button">
         <view class="row-copy">
           <view class="row-title">更多显示设置</view>
-          <view class="row-desc">当前周次与七天显示方式</view>
+          <view class="row-desc">七天显示方式与默认设置</view>
         </view>
         <view class="row-arrow">›</view>
       </view>
@@ -144,16 +144,6 @@
         <button class="close-button" bindtap="hideMoreSettings">×</button>
       </view>
       <view class="settings-list more-settings-list">
-        <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
-          <view class="setting-row">
-            <view class="row-title">当前周次</view>
-            <view class="row-value">{{settings.manualWeekOverride ? "第" + settings.currentWeek + "周" : "跟随当前日期"}} <text class="row-arrow">›</text></view>
-          </view>
-        </picker>
-        <view wx:if="{{settings.manualWeekOverride}}" class="setting-row" bindtap="restoreAutoWeek">
-          <view class="row-title">跟随当前日期</view>
-          <view class="row-arrow">›</view>
-        </view>
         <picker wx:if="{{settings.showWeekend}}" mode="selector" range="{{['七天概览', '七天详细']}}" value="{{settings.weekendShowMode === 'detail' ? 1 : 0}}" bindchange="onWeekendModeChange">
           <view class="setting-row">
             <view class="row-title">课表显示方式</view>
