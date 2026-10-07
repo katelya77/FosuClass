@@ -1,5 +1,9 @@
 name: Deploy to VPS
 
+concurrency:
+  group: fosuclass-production-deploy
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -59,6 +65,12 @@ jobs:
 
       - name: Release preflight
         run: npm run release:preflight
+
+      - name: Notice reaction acceptance
+        run: npm run test:notice-reactions
+
+      - name: Production baseline regression
+        run: npm run test:production-baseline
 
       - name: Xiaofu Agent release gate
         run: npm run test:agent-release-gate
@@ -111,6 +123,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Check GitHub Secrets
         shell: bash
@@ -223,6 +237,11 @@ jobs:
 
       - name: Security acceptance tests
         run: npm run security:acceptance
+
+      - name: Preserve deployed production baseline
+        env:
+          ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
+        run: node tools/check-production-baseline.js
 
       - name: Build WYZ bundle for Oracle
         run: |

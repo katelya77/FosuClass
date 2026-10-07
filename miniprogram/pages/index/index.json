@@ -5,6 +5,7 @@
     "course-detail-popup": "/components/course-detail-popup/index",
     "empty-state": "/components/empty-state/index",
     "notice-ticker": "/components/notice-ticker/notice-ticker",
+    "notice-reactions": "/components/notice-reactions/notice-reactions",
     "week-switcher": "/components/week-switcher/index"
   }
 }

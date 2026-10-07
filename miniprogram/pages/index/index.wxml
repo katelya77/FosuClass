@@ -56,6 +56,7 @@
     <view class="notice-main">
       <view class="notice-label {{homeNotice.priority}}">{{homeNotice.priority === 'urgent' ? '紧急' : (homeNotice.priority === 'important' ? '重要' : '公告')}}</view>
       <view class="notice-title">{{homeNotice.title}}</view>
+      <notice-reactions compact notice="{{homeNotice}}" />
       <view wx:if="{{homeNotice.displayMode === 'card'}}" class="notice-card-content">{{homeNotice.content}}</view>
     </view>
     <button wx:if="{{homeNotice.closable}}" class="notice-close" catchtap="dismissHomeNotice">×</button>
@@ -408,6 +409,7 @@
       <scroll-view scroll-y enhanced bounces="{{false}}" class="disclaimer-scroll">
         <view class="disclaimer-text">{{selectedNotice.content}}</view>
         <view wx:if="{{selectedNotice.publishedDate || selectedNotice.validUntilDate}}" class="notice-detail-date"><text wx:if="{{selectedNotice.publishedDate}}">发布 {{selectedNotice.publishedDate}}</text><text wx:if="{{selectedNotice.validUntilDate}}"> · 有效至 {{selectedNotice.validUntilDate}}</text></view>
+        <notice-reactions notice="{{selectedNotice}}" bindchange="onNoticeReactionChange" />
       </scroll-view>
       <view class="popup-footer">
         <button class="footer-btn primary-btn" bindtap="closeNoticeDetail">知道了</button>
@@ -420,6 +422,7 @@
       <view class="notice-modal-icon">告</view>
       <view class="notice-modal-title">{{modalNotice.title}}</view>
       <view class="notice-modal-content">{{modalNotice.content}}</view>
+      <notice-reactions notice="{{modalNotice}}" bindchange="onNoticeReactionChange" />
       <button class="notice-modal-btn" bindtap="closeAppNoticeModal">我知道了</button>
     </view>
   </view>

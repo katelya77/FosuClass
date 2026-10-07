@@ -12,6 +12,8 @@ const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dir
 const CONFIG_PATH = path.join(STORAGE_DIR, "admin-config.json");
 const NOTICES_PATH = path.join(STORAGE_DIR, "notices.json");
 const NOTICE_IDEMPOTENCY_PATH = path.join(STORAGE_DIR, "notice-idempotency.json");
+const noticeReactions = require("./noticeReactionService");
+const { normalizeIds: normalizeReactionIds } = require("../content/noticeReactions");
 const NEWS_PATH = path.join(STORAGE_DIR, "news.json");
 const SYNC_META_PATH = path.join(STORAGE_DIR, "sync-meta.json");
 
@@ -122,6 +124,7 @@ function publicNotice(item) {
     targetPage: NOTICE_TARGET_PAGES.has(item.targetPage) ? item.targetPage : "all",
     enabled: true,
     closable: item.closable !== false,
+    reactions: noticeReactions.publicSummary(item),
     startAt: clean(item.startAt, 80),
     endAt: clean(item.endAt, 80),
     version: clean(item.version, 120),
@@ -241,9 +244,20 @@ function normalizeNotice(payload, existing) {
   const now = nowIso();
   const source = payload || {};
   const base = existing || {};
+  if (source.reactionEmojis !== undefined && (!Array.isArray(source.reactionEmojis) ||
+      source.reactionEmojis.some((id) => typeof id !== "string" || !noticeReactions.CATALOG.some((item) => item.id === id)))) {
+    throw Object.assign(new Error("请选择支持的公告表情"), { statusCode: 400, code: "NOTICE_REACTION_INVALID" });
+  }
+  if (source.reactionsEnabled !== undefined && typeof source.reactionsEnabled !== "boolean") {
+    throw Object.assign(new Error("表情互动状态必须为布尔值"), { statusCode: 400, code: "NOTICE_REACTION_INVALID" });
+  }
   let type = NOTICE_TYPES.has(source.type) ? source.type : (NOTICE_TYPES.has(base.type) ? base.type : "info");
   const priority = NOTICE_PRIORITIES.has(source.priority) ? source.priority : (NOTICE_PRIORITIES.has(base.priority) ? base.priority : "normal");
   const displayMode = NOTICE_DISPLAY_MODES.has(source.displayMode) ? source.displayMode : (NOTICE_DISPLAY_MODES.has(base.displayMode) ? base.displayMode : "banner");
+  if (displayMode !== "daily-tip" && (source.reactionsEnabled !== undefined ? source.reactionsEnabled : base.reactionsEnabled) !== false &&
+      !normalizeReactionIds(source.reactionEmojis !== undefined ? source.reactionEmojis : base.reactionEmojis).length) {
+    throw Object.assign(new Error("开放表情互动时至少保留一个表情"), { statusCode: 400, code: "NOTICE_REACTION_INVALID" });
+  }
   const requestedTargetPage = NOTICE_TARGET_PAGES.has(source.targetPage) ? source.targetPage : (NOTICE_TARGET_PAGES.has(base.targetPage) ? base.targetPage : "all");
   const targetPage = displayMode === "daily-tip" ? "home" : requestedTargetPage;
   const title = toNoticeText(source.title !== undefined ? source.title : base.title, 120);
@@ -273,6 +287,8 @@ function normalizeNotice(payload, existing) {
     endAt: normalizeOptionalDate(source.endAt !== undefined ? source.endAt : base.endAt),
     enabled: toBool(source.enabled, base.enabled !== undefined ? base.enabled : true),
     closable: toBool(source.closable, base.closable !== undefined ? base.closable : true),
+    reactionsEnabled: displayMode !== "daily-tip" && toBool(source.reactionsEnabled, base.reactionsEnabled !== false),
+    reactionEmojis: normalizeReactionIds(source.reactionEmojis !== undefined ? source.reactionEmojis : base.reactionEmojis),
     ...(category ? { category } : {}),
     ...(displayMode === "daily-tip" && (source.externalId || base.externalId)
       ? { externalId: toText(source.externalId !== undefined ? source.externalId : base.externalId, 160) }
@@ -398,6 +414,8 @@ function noticeBusinessFingerprint(item) {
     endAt: item.endAt,
     enabled: item.enabled,
     closable: item.closable,
+    reactionsEnabled: item.reactionsEnabled,
+    reactionEmojis: item.reactionEmojis,
     category: item.category || "",
   })).digest("hex");
 }

@@ -13,6 +13,7 @@
     "doc": "docs"
   },
   "scripts": {
+    "test:production-baseline": "node --test tools/test-production-baseline.js",
     "test:class-schedule-isolation": "node --test tools/test-class-schedule-isolation.js tools/test-class-schedule-ui-isolation.js tools/test-class-schedule-release-isolation.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js && node tools/test-semester-repair.js",
@@ -70,7 +71,7 @@
     "release:formal:check": "node tools/release-check.js formal",
     "security:acceptance": "npm run test:security-full",
     "build:miniprogram-info": "node tools/generate-miniprogram-build-info.js",
-    "build:miniprogram-compat": "node tools/generate-miniprogram-runtime-compat.js",
+    "build:miniprogram-compat": "node tools/generate-miniprogram-runtime-compat.js && node tools/generate-notice-reactions.js",
     "build:wechat-ai-preview": "node tools/build-wechat-ai-preview.js",
     "test:wechat-ai-preview": "node tools/test-wechat-ai-preview.js",
     "preview:wechat-ai": "node tools/preview-wechat-ai.js",
@@ -362,6 +363,7 @@
     "test:empty-room-unknown-building-hidden-by-default": "node tools/test-empty-room-filter-rules.js",
     "test:teacher-static-search": "node tools/test-teacher-static-search.js",
     "test:notice-ticker-array-guard": "node tools/test-notice-ticker-array-guard.js",
+    "test:notice-reactions": "node tools/test-notice-reactions.js && node tools/test-notice-reaction-client.js && node tools/test-notice-reaction-transport.js && node tools/test-notice-reaction-layout.js && node tools/test-admin-notice-reactions.js",
     "test:school-filter-cache-downgrade": "node tools/test-school-filter-cache-downgrade.js",
     "test:static-release-sync-script": "node tools/test-static-release-sync-script.js",
     "test:release-publish-static-sync": "node tools/test-release-publish-static-sync.js",
