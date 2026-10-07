@@ -125,13 +125,20 @@ assert(!/console\.(?:log|error)\s*\(\s*token\s*\)/.test(tokenSmoke), "admin toke
 assert(!workflow.includes("/tmp/fosu-admin-token-contract.json"), "admin token smoke must not leave a temporary response file");
 assert(!/(?:release|terms?|active[-_ ]?pointer)/i.test(tokenSmoke), "admin token smoke must not touch Release, Term, or Active Pointer");
 
-const remoteDeployScriptMatch = workflow.replace(/\r/g, "").match(/          script: \|\n([\s\S]*?)(?=\n      - name: Show Deployment Info)/);
+const deployStepStart = workflow.indexOf("- name: SSH Remote Deploy & Health Check");
+assert(deployStepStart >= 0, "named remote deployment step must be present");
+// There is also a read-only SSH attestation step before upload; each Actions script has its own limit.
+const remoteDeployScriptMatch = workflow.slice(deployStepStart).replace(/\r/g, "").match(/          script: \|\n([\s\S]*?)(?=\n      - name: Show Deployment Info)/);
 assert(remoteDeployScriptMatch, "remote deploy script block must be present");
 const remoteDeployScript = remoteDeployScriptMatch[1].replace(/^ {12}/gm, "");
 assert(
   remoteDeployScript.length <= 20_750,
   `remote deploy script must stay below the GitHub Actions expression limit (got ${remoteDeployScript.length} characters)`,
 );
+for (const match of workflow.replace(/\r/g, "").matchAll(/          script: \|\n((?: {12}[^\n]*\n|\n)*)/g)) {
+  const script = match[1].replace(/^ {12}/gm, "");
+  assert(script.length <= 20_750, `each SSH script must stay below the expression limit (got ${script.length} characters)`);
+}
 
 // Deploy guard must be wired as an SCP-shipped script (keeps the inline script
 // under the expression limit and the logic lintable). pre runs before the

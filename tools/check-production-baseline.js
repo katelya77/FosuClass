@@ -1,5 +1,6 @@
 "use strict";
 const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 
 function commitSha(value) {
   if (typeof value !== "string" || !/^[a-f0-9]{40}$/i.test(value)) {
@@ -31,15 +32,26 @@ async function readProductionCommit({ baseUrl = "https://class.katelya.eu.org", 
   return commitSha(status.deployment && status.deployment.commitSha);
 }
 
+function readSuccessfulDeployment({ run = spawnSync, cwd = process.cwd() } = {}) {
+  const result = run("gh", ["run", "list", "--workflow", "deploy-vps.yml", "--status", "success", "--limit", "1", "--json", "headSha,status,conclusion"], { cwd, encoding: "utf8", windowsHide: true });
+  if (result.status !== 0) throw new Error("Cannot read the last successful controlled production deployment");
+  let rows;
+  try { rows = JSON.parse(result.stdout); } catch { throw new Error("Invalid controlled deployment record"); }
+  if (!Array.isArray(rows) || rows.length !== 1 || rows[0].status !== "completed" || rows[0].conclusion !== "success") throw new Error("No verified successful production deployment baseline");
+  return commitSha(rows[0].headSha);
+}
+
 async function main(args = process.argv.slice(2)) {
   const baselineArg = args.find(arg => arg.startsWith("--baseline="));
-  if (args.some(arg => !arg.startsWith("--baseline="))) throw new Error("Unsupported production baseline argument");
-  // Explicit SHA mode is for local ancestry checks; the deployment workflow always reads production.
-  const baseline = baselineArg ? commitSha(baselineArg.slice("--baseline=".length)) : await readProductionCommit();
+  const workflow = args.includes("--workflow");
+  if (args.some(arg => !arg.startsWith("--baseline=") && arg !== "--workflow") || (workflow && baselineArg)) throw new Error("Unsupported production baseline argument");
+  // CI reads the last verified workflow; the existing protected SSH step then attests the live origin before any upload.
+  const baseline = workflow ? readSuccessfulDeployment() : baselineArg ? commitSha(baselineArg.slice("--baseline=".length)) : await readProductionCommit();
   const result = verifyAncestry(baseline);
+  if (workflow && process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `baseline=${baseline}\n`);
   console.log(JSON.stringify(result));
   return result;
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { commitSha, verifyAncestry, readProductionCommit, main };
+module.exports = { commitSha, verifyAncestry, readProductionCommit, readSuccessfulDeployment, main };
