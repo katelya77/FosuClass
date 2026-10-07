@@ -62,6 +62,50 @@ test("班名必须属于当前年级专业，不能靠专业名前两个字模�
   assert.equal(normalizer.isReliableClassName("26法学4", { ...context, majorName: "法学（涉外法治人才实验班）" }), true);
 });
 
+test("括号方向班名从100网表头保留，各班课程不会合并", () => {
+  for (const majorName of ["汉语言文学（师范）", "英语（师范）", "法学（涉外法治人才实验班）"]) {
+    const cfg={...context,majorName};
+    const html='<table id="kbtable"><tr><td></td><td>星期一</td></tr><tr><td>班级\\节次</td><td>[03-04]节</td></tr>'+
+      `<tr><td>26${majorName}1</td><td>专业导论<br>测试教师甲<br>6-7周<br>C7-118[03-04]节</td></tr>`+
+      `<tr><td>26${majorName}2</td><td>大学英语1<br>测试教师乙<br>6-7周<br>C7-203[03-04]节</td></tr></table>`;
+    const entries=normalizer.buildClassScheduleEntries(parser.parseClassScheduleIfrHtml(html,cfg).courses,cfg);
+    assert.deepEqual(entries.map(s=>s.className),[`26${majorName}1班`,`26${majorName}2班`]);
+    assert.deepEqual(entries.map(s=>s.courses.map(c=>c.teacherName)),[["测试教师甲"],["测试教师乙"]]);
+    assert.deepEqual(normalizer.validateClassScheduleIsolation(entries),[]);
+  }
+});
+
+test("官方行政班表头未标班号时沿用真实标签，不虚构1班", () => {
+  const cfg={...context,majorName:"英语（师范）（人工智能+交叉创新班）"};
+  const label=`26${cfg.majorName}`;
+  const html=`<table id="kbtable"><tr><td></td><td>星期一</td></tr><tr><td>班级\\节次</td><td>[03-04]节</td></tr><tr><td>${label}</td><td>大学英语1<br>测试教师<br>6-7周<br>C7-118[03-04]节</td></tr></table>`;
+  const entries=normalizer.buildClassScheduleEntries(parser.parseClassScheduleIfrHtml(html,cfg).courses,cfg);
+  assert.equal(entries.length,1);assert.equal(entries[0].className,label);assert.equal(entries[0].isAggregated,false);
+  assert.equal(entries[0].classEvidenceSource,"administrative-row-header");
+  assert.deepEqual(normalizer.repairClassScheduleEntries(entries),entries);
+  assert.deepEqual(normalizer.validateClassScheduleIsolation(entries),[]);
+});
+
+test("无班号且无官方行政表头证据，不能按专业名称推断班级", () => {
+  const cfg={...context,majorName:"英语（师范）"};
+  assert.equal(normalizer.isReliableClassName("26英语（师范）",cfg),false);
+  const entries=normalizer.buildClassScheduleEntries([course("大学英语1",["26英语（师范）"])],cfg);
+  assert.equal(entries[0].isAggregated,true);
+  const html='<table id="kbtable"><tr><td>课程</td><td>星期一</td></tr><tr><td>26英语（师范）</td><td>大学英语1<br>测试教师<br>6-7周<br>C7-118[03-04]节</td></tr></table>';
+  const parsed=parser.parseClassScheduleIfrHtml(html,cfg);assert.ok(parsed.courses.every(c=>!c.classEvidenceSource));
+});
+
+test("官方班级表头允许目录方向省略班字及明确培训名称别名", () => {
+  for(const [majorName,label] of [["光源与照明（卓越工程师班）","26光源与照明（卓越工程师）1"],["转业军官专项培训","26转业军官培训班"]]){
+    const cfg={...context,majorName};
+    const html=`<table id="kbtable"><tr><td>班级\\节次</td><td>星期一</td></tr><tr><td>${label}</td><td>专业概论<br>测试教师<br>6-7周<br>C7-118[03-04]节</td></tr></table>`;
+    const entries=normalizer.buildClassScheduleEntries(parser.parseClassScheduleIfrHtml(html,cfg).courses,cfg);
+    assert.equal(entries.length,1);assert.equal(entries[0].isAggregated,false);
+    assert.equal(entries[0].className,label.endsWith("1")?label+"班":label);
+    assert.deepEqual(normalizer.validateClassScheduleIsolation(entries),[]);
+  }
+});
+
 test("旧专业聚合按保留的课程班级证据恢复，并且可重复修复", () => {
   const old = [{ ...context, className: "2026级生物工程专业课表", isAggregated: true, displayType: "major-schedule", classId: "old-aggregate",
     courses: [course("生物工程导论", ["26生物工程1"], { className: "2026级生物工程专业课表", originalClassName: "26生物工程1", sourceClassNameUnreliable: true }),

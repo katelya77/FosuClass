@@ -281,7 +281,7 @@ function getClassNameMatches(text) {
     .replace(/&nbsp;/gi, " ")
     .replace(/\u00a0/g, " ");
   const matches = [];
-  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}\d{1,2}班?/g;
+  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}(?:[（(][^()（）\n<>]{1,60}[）)])*\d{1,2}班?/g;
   let match = null;
   while ((match = pattern.exec(value)) !== null) {
     matches.push(match[0]);
@@ -637,6 +637,9 @@ function parseScheduleHtml(html, context, parserOptions) {
   const rows = parseTableRows(tableHtml);
   const columnGroupSize = getColumnGroupSize(rows);
   const courses = [];
+  const administrativeTable = config.sourceType === "class" && rows.slice(0, 2).some(row =>
+    row[0] && /^(?:行政)?班级/.test(row[0].text.trim())
+  );
   const meta = {
     rowCount: rows.length,
     firstRowColumnCounts: rows.slice(0, 3).map((row) => row.length),
@@ -645,8 +648,12 @@ function parseScheduleHtml(html, context, parserOptions) {
 
   rows.forEach((row, rowIndex) => {
     const rowHeader = row[0] ? normalizeLineBreaks(row[0].html || row[0].text).trim() : "";
+    if (administrativeTable && (/^(?:行政)?班级/.test(rowHeader) || (rowIndex === 0 && !rowHeader))) return;
+    const verifiedAdministrativeRow = administrativeTable && require("./scheduleNormalizer").isReliableClassName(
+      rowHeader, Object.assign({}, context, { allowUnnumbered: true })
+    );
     const rowClassInfo = extractClassInfoFromText(rowHeader);
-    const rowClassName = rowClassInfo.className || "";
+    const rowClassName = verifiedAdministrativeRow ? rowHeader : rowClassInfo.className || "";
 
     row.forEach((cell, cellIndex) => {
       if (cellIndex === 0 || !isLikelyCourseCell(cell.text)) {
@@ -681,6 +688,7 @@ function parseScheduleHtml(html, context, parserOptions) {
           ),
         }).map((course) => Object.assign({}, course, {
           rawHtml: cell.rawHtml,
+          ...(verifiedAdministrativeRow ? { classEvidenceSource: "administrative-row-header", sourceAdminClassName: rowHeader } : {}),
           sourceType: config.sourceType || course.sourceType,
           audienceType: config.audienceType || course.audienceType,
         }));

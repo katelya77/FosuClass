@@ -83,7 +83,11 @@ function dedupeStrings(values) {
 }
 
 function normalizeClassName(name) {
-  const compact = compactText(name)
+  const compact = String(name || "")
+    .replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, "")
+    .replace(/\(/g, "（").replace(/\)/g, "）")
+    .replace(/[【】\[\]《》<>]/g, "")
     .replace(/^(班级|行政班级|行政班|上课班级|授课对象|教学班|上课对象)[:：]?/, "")
     .replace(/专业课表$/, "")
     .trim();
@@ -100,7 +104,7 @@ function splitClassNameCandidates(value) {
     .replace(/(?:上课班级|授课对象|行政班级|行政班|班级|教学班|上课对象)\s*[:：]/g, " ")
     .replace(/[；;,，、/／|]+/g, " ");
   const matches = [];
-  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}\d{1,2}班?/g;
+  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}(?:[（(][^()（）\n<>]{1,60}[）)])*\d{1,2}班?/g;
   let match = null;
   while ((match = pattern.exec(normalized)) !== null) {
     matches.push(normalizeClassName(match[0]));
@@ -111,7 +115,8 @@ function splitClassNameCandidates(value) {
 function getMajorAliases(majorName) {
   const clean = compactText(String(majorName || "").replace(/[（(].*?[）)]/g, ""))
     .replace(/(?:专业|方向)$/, "");
-  const aliases = [clean];
+  const aliases = [compactText(majorName), compactText(String(majorName || "").replace(/班([）)])/g, "$1")), clean];
+  if (clean === "转业军官专项培训") aliases.push("转业军官培训班");
   if (clean.includes("动物科学")) {
     aliases.push("动物科学", "动科");
   }
@@ -129,11 +134,16 @@ function getMajorAliases(majorName) {
 
 function hasClassNameShape(name, context = {}) {
   const compact = compactText(name);
-  const match = compact.match(/^(20\d{2}|\d{2})级?([\u4e00-\u9fa5A-Za-z]{2,40}?)(\d{1,2}|[一二三四五六七八九十]{1,3})班?$/);
-  if (!match || /^0+$/.test(match[3])) return false;
+  const match = compact.match(/^(20\d{2}|\d{2})级?(.+)$/);
+  if (!match) return false;
   if (context.grade && match[1].slice(-2) !== String(context.grade).slice(-2)) return false;
   const majorAliases = getMajorAliases(context.majorName);
-  return !majorAliases.length || majorAliases.includes(match[2]);
+  // Some official administrative row labels have no numeric suffix. Accept
+  // those only with explicit row-header provenance and exact catalog identity.
+  if (context.allowUnnumbered && majorAliases.length && majorAliases.includes(match[2])) return true;
+  const numbered = match[2].match(/^([\u4e00-\u9fa5A-Za-z+]{2,140}?)(\d{1,2}|[一二三四五六七八九十]{1,3})班?$/);
+  if (!numbered || /^0+$/.test(numbered[2])) return false;
+  return !majorAliases.length || majorAliases.includes(numbered[1]);
 }
 
 function isLikelyClassName(name, context = {}) {
@@ -186,6 +196,9 @@ function isReliableClassName(name, options = {}) {
 
 function getReliableClassNamesForCourse(course, context = {}) {
   const candidates = [];
+  const administrativeRowName = course && course.classEvidenceSource === "administrative-row-header"
+    ? course.sourceAdminClassName || "" : "";
+  if (administrativeRowName) candidates.push(administrativeRowName);
   if (Array.isArray(course && course.classNames)) {
     candidates.push.apply(candidates, course.classNames);
   }
@@ -205,6 +218,7 @@ function getReliableClassNamesForCourse(course, context = {}) {
       courses: context.courses,
       majorName: context.majorName,
       grade: context.grade,
+      allowUnnumbered: Boolean(administrativeRowName && compactText(administrativeRowName) === compactText(className)),
     })
   );
 }
@@ -280,6 +294,8 @@ function buildClassScheduleEntries(courses, context = {}) {
       className,
       displayType: "class-schedule",
       isAggregated: false,
+      classEvidenceSource: groupedCourses.every(course => course.classEvidenceSource === "administrative-row-header")
+        ? "administrative-row-header" : "",
       collegeCode: context.collegeCode,
       collegeName: context.collegeName || "",
       grade: context.grade,
