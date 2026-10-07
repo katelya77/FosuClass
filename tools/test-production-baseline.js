@@ -51,7 +51,7 @@ test("受控发布必须在上传之前验证生产基线，并保留两组业�
   assert.match(workflow, /run: npm run test:production-baseline/);
 });
 test("CI只能选已成功终结的受控部署，并由SSH在源站再次核对", () => {
-  const sha=readSuccessfulDeployment({run(command,args){assert.equal(command,"gh");assert.ok(args.includes("deploy-vps.yml")&&args.includes("success"));return {status:0,stdout:JSON.stringify([{headSha:production,status:"completed",conclusion:"success"}])};}});
+  const sha=readSuccessfulDeployment({run(command,args){assert.equal(command,"gh");assert.ok(args.includes("deploy-vps.yml"));assert.ok(!args.includes("--status"),"read recent records then filter conclusions locally");return {status:0,stdout:JSON.stringify([{headSha:base,status:"completed",conclusion:"failure"},{headSha:base,status:"in_progress",conclusion:""},{headSha:production,status:"completed",conclusion:"success"},{headSha:base,status:"completed",conclusion:"success"}])};}});
   assert.equal(sha,production);
 });
 test("缺少成功记录、未终结记录或读取失败不能跳过基线", () => {

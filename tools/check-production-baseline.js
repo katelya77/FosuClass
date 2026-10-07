@@ -33,12 +33,13 @@ async function readProductionCommit({ baseUrl = "https://class.katelya.eu.org", 
 }
 
 function readSuccessfulDeployment({ run = spawnSync, cwd = process.cwd() } = {}) {
-  const result = run("gh", ["run", "list", "--workflow", "deploy-vps.yml", "--status", "success", "--limit", "1", "--json", "headSha,status,conclusion"], { cwd, encoding: "utf8", windowsHide: true });
+  const result = run("gh", ["run", "list", "--workflow", "deploy-vps.yml", "--limit", "100", "--json", "headSha,status,conclusion"], { cwd, encoding: "utf8", windowsHide: true });
   if (result.status !== 0) throw new Error("Cannot read the last successful controlled production deployment");
   let rows;
   try { rows = JSON.parse(result.stdout); } catch { throw new Error("Invalid controlled deployment record"); }
-  if (!Array.isArray(rows) || rows.length !== 1 || rows[0].status !== "completed" || rows[0].conclusion !== "success") throw new Error("No verified successful production deployment baseline");
-  return commitSha(rows[0].headSha);
+  const verified = Array.isArray(rows) && rows.find(row => row.status === "completed" && row.conclusion === "success");
+  if (!verified) throw new Error("No verified successful production deployment baseline");
+  return commitSha(verified.headSha);
 }
 
 async function main(args = process.argv.slice(2)) {
