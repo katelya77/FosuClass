@@ -31,16 +31,28 @@ function acquireLock(root) {
 function pruneRuns(root, current, lastSuccess) {
   const runs = path.join(root, "runs");
   if (!fs.existsSync(runs)) return;
+  const failed = [];
+  for (const term of fs.readdirSync(runs, { withFileTypes: true })) {
+    if (!term.isDirectory() || term.isSymbolicLink()) continue;
+    const termDir = path.join(runs, term.name);
+    for (const run of fs.readdirSync(termDir, { withFileTypes: true })) {
+      if (!run.isDirectory() || run.isSymbolicLink() || !/^sc-[a-f0-9-]+$/.test(run.name)) continue;
+      const target = path.join(termDir, run.name);
+      if (readJson(path.join(target, "state.json"), {}).status === "failed") failed.push({ target, modified: fs.statSync(target).mtimeMs });
+    }
+  }
+  failed.sort((left, right) => right.modified - left.modified);
+  const recoverable = failed[0] && failed[0].target;
   for (const term of fs.readdirSync(runs, { withFileTypes: true })) {
     if (!term.isDirectory() || term.isSymbolicLink()) continue;
     const termDir = path.join(runs, term.name);
     for (const run of fs.readdirSync(termDir, { withFileTypes: true })) {
       if (!run.isDirectory() || run.isSymbolicLink()) continue;
       const target = path.join(termDir, run.name);
-      if ([current, lastSuccess].includes(target)) continue;
+      if ([current, lastSuccess, recoverable].includes(target)) continue;
       const state = readJson(path.join(target, "state.json"), {});
-      // Preserve unfinished checkpoints; prune only terminal runs owned by this collector.
-      if (!["completed", "cancelled"].includes(state.status)) continue;
+      // Current/last-success and the newest failed run retain recovery data.
+      if (!/^sc-[a-f0-9-]+$/.test(run.name) || !["completed", "cancelled", "failed"].includes(state.status)) continue;
       if (!path.relative(path.resolve(runs), path.resolve(target)).startsWith("..")) fs.rmSync(target, { recursive: true });
     }
   }

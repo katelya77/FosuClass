@@ -159,6 +159,7 @@ async function runOnce(cfg, deps = {}) {
     const code = /^[A-Z0-9_:-]{1,80}$/.test(error.code || "") ? error.code : "COLLECTOR_FAILED";
     if (!cancelled) await report({ failureCode: code }).catch(() => {});
     writeJsonAtomic(path.join(dir, "state.json"), { status: "failed", code });
+    pruneRuns(cfg.dataRoot, dir, readJson(path.join(cfg.dataRoot, "last-success.json"), {}).directory);
     throw failure(code);
   } finally { if (timer) clearInterval(timer); }
 }

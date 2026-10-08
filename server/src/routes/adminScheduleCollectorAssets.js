@@ -15,7 +15,7 @@ const SCHEDULE_COLLECTOR_CARD = `
           <div class="button-row">
             <button type="button" class="secondary" id="scValidateBtn">验证当前 Staging</button>
             <button type="button" class="secondary" id="scPublishBtn">发布当前 Staging</button>
-            <button type="button" class="secondary" id="scMirrorBtn">镜像 CloudBase</button>
+            <button type="button" class="secondary" id="scMirrorBtn">镜像 CloudBase（复制安全命令）</button>
             <button type="button" class="secondary" id="scReportBtn">查看最新同步报告</button>
           </div>
           <pre id="scReport" hidden></pre>
@@ -71,8 +71,9 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
           if (!window.confirm("确定取消当前采集任务吗？")) return;
           post("/api/admin/schedule-collector/actions/cancel");
         });
-        document.getElementById("scValidateBtn").addEventListener("click", function () { if (typeof loadStagingPreview === "function") loadStagingPreview(); });
-        document.getElementById("scPublishBtn").addEventListener("click", function () { var button = document.getElementById("stagingPublishBtn"); if (button) { button.scrollIntoView(); button.focus(); } });
+        function showStaging() { var tab = document.getElementById("sync-tab-upload"); if (tab) tab.click(); if (typeof loadStagingPreview === "function") loadStagingPreview(); }
+        document.getElementById("scValidateBtn").addEventListener("click", showStaging);
+        document.getElementById("scPublishBtn").addEventListener("click", function () { showStaging(); var button = document.getElementById("stagingPublishBtn"); if (button) { button.scrollIntoView(); button.focus(); } });
         document.getElementById("scMirrorBtn").addEventListener("click", function () { if (typeof copyText === "function") copyText("npm run cloudbase:release:sync-active -- --execute --mirror-only"); });
         document.getElementById("scReportBtn").addEventListener("click", function () { document.getElementById("scReport").hidden = !document.getElementById("scReport").hidden; refresh(); });
         refresh();
