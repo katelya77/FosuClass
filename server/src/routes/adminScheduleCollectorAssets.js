@@ -34,8 +34,8 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
             + " · 上次心跳 " + (status.lastHeartbeat || "-")
             + " · 上次运行 " + (status.lastRunAt || "-")
             + " · 上次成功 " + (status.lastSuccessAt || "-")
-            + " · 下次日常 " + (status.nextRoutineAt || "-")
-            + " · 下次完整 " + (status.nextFullAt || "-"));
+            + " · 下次日常 " + (status.timerVerified && status.enabled ? status.nextRoutineAt || "-" : "未启用")
+            + " · 完整同步：人工按需运行");
           var current = status.current;
           text("scMessage", status.sessionMessage || (current ? (current.mode + " / " + current.stage + " / " + (current.result || "进行中")) : "当前阶段：idle"));
           var progress = document.getElementById("scDirectProgress");

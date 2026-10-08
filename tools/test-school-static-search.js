@@ -26,6 +26,10 @@ async function main() {
     assert.equal(cached.fromStorage, true); assert.equal(calls.length, before);
     const noMatch = await service.searchSchoolContract(type, Object.assign({}, query, { q: "不存在" }));
     assert.equal(noMatch.total, 0); assert.equal(calls.length, before);
+    mock.storage.set(service.getIndexCacheKey(term, version, type), { savedAt: Date.now(), data: { success: true, type, term, releaseVersion: "fixture-wrong-version", items } });
+    const recovered = await service.searchSchoolContract(type, query);
+    assert.equal(recovered.releaseVersion, version);
+    assert.ok(calls.length > before, "version-mismatched cache must be discarded and reloaded");
     if (type === "class") {
       assert.equal((await service.searchSchoolContract(type, Object.assign({}, query, { grade: "2025" }))).total, 0);
       assert.equal((await service.searchSchoolContract(type, Object.assign({}, query, { collegeCode: "fixture", grade: "2026", majorCode: "fixture-major" }))).total, 1);

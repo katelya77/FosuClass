@@ -852,6 +852,7 @@ function normalizeIndexPayload(type, payload, fallback = {}) {
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
   assertTermMatch(term, fallback.term || "", "INDEX_TERM_MISMATCH");
+  if (fallback.releaseVersion && releaseVersion !== fallback.releaseVersion) throw Object.assign(new Error("INDEX_RELEASE_MISMATCH"), { code: "INDEX_RELEASE_MISMATCH" });
   const teacherSchema = type === "teacher"
     ? (Number(source.teacherIndexSchemaVersion) || detectTeacherIndexSchemaVersion(source) || 0)
     : undefined;

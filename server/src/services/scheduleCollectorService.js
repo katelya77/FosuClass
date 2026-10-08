@@ -100,7 +100,8 @@ function heartbeat(agentId, now, body = {}) {
   let cancelled = false;
   if (body.runId) { try { requireRun(body.runId, agentId, body.claimId, stamp); state.lock.expiresAt = stamp + LEASE_TTL_MS; } catch (_) { cancelled = true; } }
   const p = shanghaiParts(stamp), dayKey = [p.year, p.month + 1, p.date].join("-");
-  const due = stamp >= shanghaiToUtc(p.year, p.month, p.date, 4, 30);
+  const slot = shanghaiToUtc(p.year, p.month, p.date, 4, 30);
+  const due = stamp >= slot && stamp < slot + 30 * 60 * 1000;
   const successes = state.runs.filter((run) => run.finishedAt && ["PENDING REVIEW", "NO CHANGE"].includes(run.result)).length;
   if (!state.paused && !state.stopForDay && process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1" && successes >= 3 && due && state.lastScheduledDay !== dayKey && (!state.current || state.current.finishedAt)) {
     state.lastScheduledDay = dayKey;
