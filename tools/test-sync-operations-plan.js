@@ -52,8 +52,8 @@ assert.strictEqual(syncPlan.applyPlanToParams(full, {}).crawlMode, "full-fresh")
 const classes = plan("daily:classes");
 assert(classes.scopes.includes("classSchedules"), "class-only daily should crawl class schedules");
 assert.strictEqual(classes.sourceRequirements.classSchedules.mode, "network-direct");
-assert.strictEqual(classes.sourceRequirements.teacherSchedules.mode, "derived-current-run");
-assert.strictEqual(syncPlan.applyPlanToParams(classes, {}).resourceSource, "derived");
+assert.strictEqual(classes.sourceRequirements.teacherSchedules.mode, "network-direct");
+assert.strictEqual(syncPlan.applyPlanToParams(classes, {}).resourceSource, "direct");
 
 const teacher = plan("daily:teachers");
 assert(teacher.scopes.includes("classSchedules"), "teacher direct refresh should include a current-run class seed");

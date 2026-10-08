@@ -187,7 +187,7 @@ async function runPreflight(options = {}) {
     ? runCommand("where.exe", ["tcb"], { timeoutMs: 30000 })
     : runCommand("which", ["tcb"], { timeoutMs: 30000 });
 
-  commands.tcbLogin = runCommand("tcb", ["login"], { timeoutMs: options.loginTimeoutMs || 10 * 60 * 1000 });
+  commands.tcbLogin = runCommand("tcb", ["login"], { timeoutMs: options.loginTimeoutMs || 60000 });
   commands.envList = runCommand("tcb", ["env", "list"], { timeoutMs: 120000 });
   commands.envUse = runCommand("tcb", ["env", "use", envId], { timeoutMs: 120000 });
   commands.envUsage = runCommand("tcb", ["env", "usage", "-e", envId], { timeoutMs: 120000 });
@@ -231,6 +231,8 @@ async function runPreflight(options = {}) {
   const miniprogramBuild = getMiniProgramBuildConfig();
   const warnings = [];
   const errors = [];
+  for (const name of ["tcbLogin", "envList", "envUse", "hostingDetail", "hostingList"]) if (!commands[name].ok) errors.push("CLOUDBASE_REQUIRED_CAPABILITY_FAILED:" + name);
+  if (!commands.envUsage.ok || /not in resource-point|不是资源点|不支持/i.test(commands.envUsage.stdout + commands.envUsage.stderr)) warnings.push("CLOUDBASE_CAPACITY_UNKNOWN: console quota verification required");
   if (compareVersion(miniprogramBuild.libVersion, "3.15.1") < 0) {
     errors.push(`effective libVersion ${miniprogramBuild.libVersion || "(empty)"} is lower than 3.15.1`);
   }

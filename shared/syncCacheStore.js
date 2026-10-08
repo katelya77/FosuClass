@@ -131,14 +131,29 @@ function writeScheduleLatest(baseDir, term, scope, items, metadataInput = {}) {
   ensureDir(runDir);
   writeJsonAtomic(path.join(runDir, `${runId}.json`), payload);
   writeJsonAtomic(path.join(runDir, `${runId}.meta.json`), metadata);
-  writeJsonAtomic(path.join(dir, "latest.json"), payload);
-  writeJsonAtomic(path.join(dir, "metadata.json"), metadata);
+  if (metadataInput.promote === true && metadataInput.validated === true && !metadata.partial && !metadata.failed) {
+    writeJsonAtomic(path.join(dir, "latest.json"), payload);
+    writeJsonAtomic(path.join(dir, "metadata.json"), metadata);
+  }
   return {
     latestPath: path.join(dir, "latest.json"),
     metadataPath: path.join(dir, "metadata.json"),
     runPath: path.join(runDir, `${runId}.json`),
     metadata,
   };
+}
+
+function promoteValidatedRun(baseDir, term, runId, scopes, validation) {
+  if (!validation || validation.valid !== true || !/^[a-f0-9]{64}$/.test(validation.canonicalHash || "")) throw Object.assign(new Error("CACHE_PROMOTION_REJECTED"), { code: "CACHE_PROMOTION_REJECTED" });
+  const prepared = (scopes || []).map((scope) => {
+    const dir = scheduleDir(baseDir, term, scope);
+    const payload = readJson(path.join(dir, "runs", `${runId}.json`), null);
+    const metadata = readJson(path.join(dir, "runs", `${runId}.meta.json`), null);
+    if (!payload || !metadata || metadata.term !== term || metadata.runId !== runId || metadata.sourceMode !== "network-direct" || metadata.failed || metadata.partial || metadata.hash !== hashJson(payload.items)) throw Object.assign(new Error("CACHE_PROMOTION_REJECTED"), { code: "CACHE_PROMOTION_REJECTED" });
+    return { dir, payload, metadata };
+  });
+  prepared.forEach(({ dir, payload, metadata }) => { writeJsonAtomic(path.join(dir, "latest.json"), payload); writeJsonAtomic(path.join(dir, "metadata.json"), metadata); });
+  writeJsonAtomic(path.join(ensureTermCache(baseDir, term), "validated-run.json"), { term, runId, scopes });
 }
 
 function readScheduleLatest(baseDir, term, scope) {
@@ -180,6 +195,7 @@ module.exports = {
   hashJson,
   negativePath,
   progressPath,
+  promoteValidatedRun,
   readJson,
   readScheduleLatest,
   reportPath,

@@ -9,7 +9,7 @@ const releaseService = require("../../server/src/services/releaseService");
 const runtimePointerService = require("../../server/src/services/runtimePointerService");
 
 const ENV_ID = cloudbaseConfig.ENV_ID;
-const DEFAULT_KEEP_LATEST = 2;
+const DEFAULT_KEEP_LATEST = 3;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 
 const TEXT_SCAN_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv", ".tsv"]);
@@ -95,6 +95,7 @@ function getPublicReleaseRoot(options = {}) {
 }
 
 function getReleaseDir(releaseVersion, options = {}) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(String(releaseVersion || ""))) throw Object.assign(new Error("CLOUDBASE_RELEASE_VERSION_INVALID"), { code: "CLOUDBASE_RELEASE_VERSION_INVALID" });
   return path.join(getPublicReleaseRoot(options), String(releaseVersion || ""));
 }
 
@@ -115,7 +116,7 @@ function collectPrivacyFindings(rootDir) {
         findings.push({
           file: relativePath,
           rule: rule.name,
-          sample: String(match[0] || "").slice(0, 120),
+          sample: "[redacted]",
         });
       }
     });
@@ -181,9 +182,12 @@ function verifyManifestFileMeta(releaseDir, manifest) {
   const files = manifest.files && typeof manifest.files === "object" ? manifest.files : {};
   const checked = [];
   Object.keys(files).forEach((relativePath) => {
+    if (!/^(?:index\/(?:class|teacher|classroom|course)(?:\/.*)?\.json|detail\/(?:class|teacher|classroom|course)\/[^/]+\.json|empty-room\/.*\.json|calendar\.json|bootstrap\.json)$/.test(relativePath) || relativePath.split(/[\\/]/).includes("..")) throw Object.assign(new Error("CLOUDBASE_PUBLIC_FILE_REJECTED"), { code: "CLOUDBASE_PUBLIC_FILE_REJECTED" });
     const expected = files[relativePath] || {};
     const absolutePath = path.join(releaseDir, relativePath);
     const actual = fileMeta(absolutePath);
+    if (fs.existsSync(absolutePath) && fs.lstatSync(absolutePath).isSymbolicLink()) throw Object.assign(new Error("CLOUDBASE_PUBLIC_FILE_REJECTED"), { code: "CLOUDBASE_PUBLIC_FILE_REJECTED" });
+    if (actual && actual.size > 50 * 1024 * 1024) throw Object.assign(new Error("CLOUDBASE_SINGLE_FILE_LIMIT"), { code: "CLOUDBASE_SINGLE_FILE_LIMIT" });
     if (!actual) {
       const error = new Error(`manifest file missing: ${relativePath}`);
       error.code = "CLOUDBASE_RELEASE_FILE_MISSING";
@@ -201,6 +205,16 @@ function verifyManifestFileMeta(releaseDir, manifest) {
     }
     checked.push(relativePath);
   });
+  const unexpected = listFiles(releaseDir).map((file) => toPosixPath(path.relative(releaseDir, file))).filter((file) => {
+    const plain = file.replace(/\.gz$/, "");
+    if (plain !== "manifest.json" && !Object.prototype.hasOwnProperty.call(files, plain)) return true;
+    if (file.endsWith(".gz")) {
+      const bytes = require("zlib").gunzipSync(fs.readFileSync(path.join(releaseDir, file)), { maxOutputLength: 50 * 1024 * 1024 });
+      if (sha1(bytes) !== fileMeta(path.join(releaseDir, plain)).hash) throw Object.assign(new Error("CLOUDBASE_GZIP_HASH_MISMATCH"), { code: "CLOUDBASE_GZIP_HASH_MISMATCH" });
+    }
+    return false;
+  });
+  if (unexpected.length) throw Object.assign(new Error("CLOUDBASE_UNTRACKED_FILE_REJECTED"), { code: "CLOUDBASE_UNTRACKED_FILE_REJECTED" });
   return checked;
 }
 
@@ -788,16 +802,26 @@ async function cutoverReleasePack(options = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `fosu-cloudbase-pointer-${process.pid}-`));
   const pointerPath = path.join(tmpDir, "active.json");
   writeJson(pointerPath, pointer);
+  const previous = options.previousPointer || (await fetchJsonWithText(joinUrl(remoteBaseUrl, "runtime", "active.json?backup=" + Date.now()))).json;
+  if (!previous || !previous.releaseVersion) throw Object.assign(new Error("CLOUDBASE_ROLLBACK_POINT_REQUIRED"), { code: "CLOUDBASE_ROLLBACK_POINT_REQUIRED" });
+  const backupPath = path.join(tmpDir, "previous.json");
+  writeJson(backupPath, previous);
   const commandRunner = options.commandRunner || runTcbHostingDeploy;
   const commands = [];
-  try {
-    commands.push(commandRunner(pointerPath, "runtime/active.json", options));
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
   const pointerVerifier = options.runtimePointerVerifier || verifyCloudbaseRuntimePointer;
-  const pointerVerification = await pointerVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
-  const remoteAfter = await remoteVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+  let pointerVerification, remoteAfter;
+  try {
+    commands.push(await commandRunner(pointerPath, "runtime/active.json", options));
+    pointerVerification = await pointerVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+    remoteAfter = await remoteVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+  } catch (error) {
+    try {
+      await commandRunner(backupPath, "runtime/active.json", options);
+      await pointerVerifier(Object.assign({}, options, { releaseVersion: previous.releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+      error.pointerRollback = "verified";
+    } catch (_) { error.pointerRollback = "failed-human-action-required"; }
+    throw error;
+  } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }
   return {
     success: true,
     releaseVersion,

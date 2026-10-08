@@ -107,6 +107,7 @@ function buildStagingUploadSummary(stagingData, safety, extra = {}) {
     generatedAt: stagingData.generatedAt || stagingData.updatedAt || "",
     counts: safety && safety.counts || summarizeStagingData(stagingData).counts,
     resourceCounts,
+    directSourceSummary: stagingData.directSourceSummary || stagingData.meta && stagingData.meta.directSourceSummary,
     totalScheduleDocuments: (
       Number(resourceCounts && resourceCounts.class && resourceCounts.class.scheduleDocuments || 0) +
       Number(resourceCounts && resourceCounts.teacher && resourceCounts.teacher.scheduleDocuments || 0) +
@@ -151,6 +152,14 @@ async function finalizeChunkedUpload(input, job) {
     throw error;
   }
   stagingData.stagingUploadId = finalized.manifest.uploadId;
+
+  if (input.collectorRun) {
+    const collector = require("./scheduleCollectorService");
+    collector.load();
+    collector.requireRun(input.collectorRun.runId, input.collectorRun.agentId, input.collectorRun.claimId);
+    require("../shared/fourDirectSourceContract").assertFourSources(stagingData, input.collectorRun.term);
+    stagingData.meta = Object.assign({}, stagingData.meta, { collectorRunId: input.collectorRun.runId, requireFourDirectSources: true });
+  }
 
   progress(job, uploadId, 52, "hashing");
   const beforeLatest = getLatestStagingCanonicalHash();
@@ -217,6 +226,7 @@ async function finalizeChunkedUpload(input, job) {
   const activeSnapshot = releaseService.readActiveReleaseSnapshot();
   const safety = buildStagingSafety(stagingData, activeSnapshot);
   const summary = buildStagingUploadSummary(stagingData, safety, {
+    directSourceSummary: stagingData.directSourceSummary || stagingData.meta && stagingData.meta.directSourceSummary,
     warnings: safety.warnings,
     blockers: safety.blockers,
     blockerDetails: safety.blockerDetails,
@@ -228,6 +238,11 @@ async function finalizeChunkedUpload(input, job) {
   });
 
   progress(job, uploadId, 86, "writing-staging");
+  if (input.collectorRun) {
+    const collector = require("./scheduleCollectorService");
+    collector.load();
+    collector.requireRun(input.collectorRun.runId, input.collectorRun.agentId, input.collectorRun.claimId);
+  }
   writeJsonAtomic(STAGING_LATEST_PATH, stagingData);
   const upload = stagingUploadService.markUploadPendingReview(uploadId, summary);
   appendAudit(input.reqMeta, "upload", "staging-upload", uploadId, `CLI chunk upload finalized: ${stagingData.term || ""}`);

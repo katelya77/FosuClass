@@ -5,8 +5,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { pipeline } = require("stream/promises");
-const zlib = require("zlib");
+const { hashFile, gzipFile, readChunk } = require("./uploadFileIO");
 const {
   buildSidecarMeta,
   calculateFingerprintFromFile,
@@ -122,25 +121,6 @@ function formatElapsedMs(ms) {
   const minutes = Math.floor(seconds / 60);
   const rest = Math.round(seconds % 60);
   return `${minutes}m${String(rest).padStart(2, "0")}s`;
-}
-
-function hashFile(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = fs.createReadStream(filePath);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("error", reject);
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
-}
-
-async function gzipFile(inputPath, outputPath) {
-  await pipeline(
-    fs.createReadStream(inputPath),
-    zlib.createGzip({ level: 9 }),
-    fs.createWriteStream(outputPath)
-  );
-  return outputPath;
 }
 
 function readLeadingText(filePath, maxBytes = 4 * 1024 * 1024) {
@@ -278,17 +258,6 @@ async function uploadChunkWithRetry(url, buffer, headers, timeoutMs, attemptCoun
   throw lastError;
 }
 
-function readChunk(filePath, start, endInclusive) {
-  const length = endInclusive - start + 1;
-  const buffer = Buffer.allocUnsafe(length);
-  const fd = fs.openSync(filePath, "r");
-  try {
-    fs.readSync(fd, buffer, 0, length, start);
-    return buffer;
-  } finally {
-    fs.closeSync(fd);
-  }
-}
 
 function normalizeServer(value) {
   return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");

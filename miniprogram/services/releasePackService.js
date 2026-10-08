@@ -852,6 +852,7 @@ function normalizeIndexPayload(type, payload, fallback = {}) {
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
   assertTermMatch(term, fallback.term || "", "INDEX_TERM_MISMATCH");
+  if (fallback.releaseVersion && releaseVersion !== fallback.releaseVersion) throw Object.assign(new Error("INDEX_RELEASE_MISMATCH"), { code: "INDEX_RELEASE_MISMATCH" });
   const teacherSchema = type === "teacher"
     ? (Number(source.teacherIndexSchemaVersion) || detectTeacherIndexSchemaVersion(source) || 0)
     : undefined;
@@ -1692,7 +1693,7 @@ function searchSchoolContract(type, params = {}, options = {}) {
   if (source.limit != null && source.limit !== "") query.limit = source.limit;
   if (source.offset != null && source.offset !== "") query.offset = source.offset;
 
-  return request.get("/api/fosu/release-pack/search", query, {
+  const compatibilityFallback = () => request.get("/api/fosu/release-pack/search", query, {
     showLoading: false,
     silentError: true,
     timeout: options.timeout || 7500,
@@ -1712,6 +1713,28 @@ function searchSchoolContract(type, params = {}, options = {}) {
     if (!filtered) throw error;
     return buildLocalFallbackResponse(normalizedType, query, filtered, error);
   });
+  const local = readCachedSearchIndex(normalizedType, query);
+  const strictTeacherFilter = normalizedType === "teacher" && (query.collegeCode || query.collegeName);
+  if (local && !options.forceNetwork && (!strictTeacherFilter || teacherIndexSupportsStrictCollegeFilter(local))) {
+    return Promise.resolve(Object.assign({}, local, {
+      success: true, type: normalizedType, contractVersion: LOCAL_FALLBACK_CONTRACT_VERSION,
+      decision: buildLocalSearchDecision(normalizedType, local, Object.assign({}, query, { term: local.term, releaseVersion: local.releaseVersion })),
+      source: "local_cache", fromStorage: true, offline: false,
+    }));
+  }
+  // Reuse the version-bound full static index and existing origin/LKG validation.
+  // Search hits never overwrite that full index cache.
+  return loadIndex(normalizedType, { term: query.term, releaseVersion: query.releaseVersion }, Object.assign({}, options, { retries: 0 }))
+    .then((index) => {
+      if (strictTeacherFilter && !teacherIndexSupportsStrictCollegeFilter(index)) throw Object.assign(new Error("TEACHER_INDEX_SCHEMA_STALE"), { code: "TEACHER_INDEX_SCHEMA_STALE" });
+      const filtered = filterIndexPayload(normalizedType, index, query);
+      if (index.fallback) return buildLocalFallbackResponse(normalizedType, query, filtered, { code: index.fallbackReason });
+      return Object.assign({}, filtered, {
+        success: true, type: normalizedType, contractVersion: LOCAL_FALLBACK_CONTRACT_VERSION,
+        decision: buildLocalSearchDecision(normalizedType, filtered, Object.assign({}, query, { term: filtered.term, releaseVersion: filtered.releaseVersion })),
+        source: index.fromStorage ? "local_cache" : "static_index",
+      });
+    }).catch(compatibilityFallback);
 }
 
 function normalizeDetailPayload(type, id, payload, fallback = {}) {

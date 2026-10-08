@@ -1,5 +1,7 @@
 # CloudBase Release Pack 发布手册
 
+WYZ Collector 的采集与发布保持解耦。`sync-active-release --execute --mirror-only` 只上传/验证版本目录；首次正式 pointer 切换仍需人工确认。新流程和容量实测见 [MVP 手册](wyz-four-source-mvp.md)。
+
 ## 一次性准备
 
 1. 安装 CloudBase CLI：

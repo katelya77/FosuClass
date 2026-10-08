@@ -650,6 +650,7 @@ function seedIndexCache(env, type, items, extra) {
 
 function mockRequestFailDisconnected() {
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     setTimeout(() => options.fail({ errMsg: "request:fail disconnected" }), 1);
   };
 }
@@ -696,6 +697,7 @@ async function runGroup11ClientOnlinePassthrough() {
   };
   let captured = null;
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     captured = { url: options.url, data: options.data };
     setTimeout(() => options.success({ statusCode: 200, data: payload }), 1);
   };
@@ -712,6 +714,7 @@ async function runGroup11ClientOnlinePassthrough() {
 
   // 在线响应形态非法（缺 decision/契约版本不符）：不得冒充在线，转入降级链（无缓存 → 抛错）
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     setTimeout(() => options.success({ statusCode: 200, data: { success: true } }), 1);
   };
   await assert.rejects(
@@ -742,7 +745,7 @@ async function runGroup12ClientLocalFallbackDegraded() {
   seedIndexCache(env, "teacher", TEACHER_ITEMS);
   mockRequestFailDisconnected();
 
-  const res = await releasePackServiceMini.searchSchoolContract("teacher", { q: "陈芳", term: TERM, releaseVersion: RELEASE });
+  const res = await releasePackServiceMini.searchSchoolContract("teacher", { q: "陈芳", term: TERM, releaseVersion: RELEASE }, { forceNetwork: true });
   assert.strictEqual(res.success, true, "g12 降级响应 success（本地缓存兜底可用）");
   assert.strictEqual(res.contractVersion, "local-fallback", "g12 降级响应 contractVersion 必须是真实标识 local-fallback");
   assert.strictEqual(res.contractVersion, releasePackServiceMini.LOCAL_FALLBACK_CONTRACT_VERSION, "g12 local-fallback 标识来自服务层导出常数");
@@ -767,7 +770,7 @@ async function runGroup12ClientLocalFallbackDegraded() {
   assert.ok(res.decision.navigation.url.includes(`releaseVersion=${RELEASE}`), "g12 URL 透传 releaseVersion");
 
   // 降级链同样保持全局精确隔离（陈芳 vs 陈芳华，学院过滤正确为空）
-  const isolated = await releasePackServiceMini.searchSchoolContract("teacher", { q: "陈芳", collegeCode: "07", term: TERM, releaseVersion: RELEASE });
+  const isolated = await releasePackServiceMini.searchSchoolContract("teacher", { q: "陈芳", collegeCode: "07", term: TERM, releaseVersion: RELEASE }, { forceNetwork: true });
   assert.strictEqual(isolated.degraded, true, "g12 隔离查询同样走降级标识");
   assert.strictEqual(isolated.total, 0, "g12 降级链全局精确隔离（学院 07 不得模糊扩散出陈芳华）");
   assert.strictEqual(isolated.decision.kind, "none", "g12 隔离零命中 → decision none");
@@ -793,7 +796,7 @@ async function runGroup13ClientOfflineCandidateCap() {
   seedIndexCache(env, "classroom", [{ roomName: "B305", name: "B305", campus: "仙溪", semester: TERM }]);
   mockRequestFailDisconnected();
 
-  const res = await releasePackServiceMini.searchSchoolContract("course", { q: "示例课程", term: TERM, releaseVersion: RELEASE, limit: 30 });
+  const res = await releasePackServiceMini.searchSchoolContract("course", { q: "示例课程", term: TERM, releaseVersion: RELEASE, limit: 30 }, { forceNetwork: true });
   assert.strictEqual(res.degraded, true, "g13 降级标识");
   assert.strictEqual(res.total, 10, "g13 课程模糊命中 10 条");
   assert.strictEqual(res.decision.kind, "candidate", "g13 多候选 → candidate");
@@ -812,7 +815,7 @@ async function runGroup13ClientOfflineCandidateCap() {
   assert.strictEqual(directOpenCount, miniContract.DECISION.candidateOpenMax, "g13 离线直开预算同样受 candidateOpenMax 约束");
 
   // 缺 detailId：本地决策不伪造，按 reason code 兜底跳全校页
-  const noId = await releasePackServiceMini.searchSchoolContract("classroom", { q: "B305", term: TERM, releaseVersion: RELEASE });
+  const noId = await releasePackServiceMini.searchSchoolContract("classroom", { q: "B305", term: TERM, releaseVersion: RELEASE }, { forceNetwork: true });
   assert.strictEqual(noId.decision.kind, "unique", "g13 B305 唯一命中");
   assert.strictEqual(noId.decision.detailId, "", "g13 缺 id 时不得伪造 detailId");
   assert.strictEqual(noId.decision.canOpen, false, "g13 缺 id 不可直开");
@@ -852,6 +855,7 @@ async function runGroup14SchoolPageDecisionConsumption() {
   // a) 唯一结果直开：统一端点 unique decision → openIndexedSchedule（schedule-view 链）
   let captured = null;
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     captured = { url: options.url, data: options.data };
     setTimeout(() => options.success({
       statusCode: 200,
@@ -896,6 +900,7 @@ async function runGroup14SchoolPageDecisionConsumption() {
   opened = null;
   modal = null;
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     setTimeout(() => options.success({
       statusCode: 200,
       data: {
@@ -935,6 +940,7 @@ async function runGroup14SchoolPageDecisionConsumption() {
   opened = null;
   modal = null;
   global.wx.mockRequest = (options) => {
+    if (!options.url.includes("/api/fosu/release-pack/search")) { setTimeout(() => options.fail({ errMsg: "fixture static origin unavailable" }), 1); return; }
     setTimeout(() => options.success({
       statusCode: 200,
       data: {
@@ -997,12 +1003,12 @@ async function runGroup14SchoolPageDecisionConsumption() {
   });
   await sleep(120);
   assert.ok(rendered, "g14d 降级响应必须照常渲染（全校页保持可用）");
-  assert.strictEqual(rendered.degraded, true, "g14d degraded=true 透传页面");
+  assert.strictEqual(rendered.fromStorage, true, "g14d 已验证缓存优先，搜索不需要网络");
   assert.strictEqual(rendered.source, "local_cache", "g14d source=local_cache 透传页面");
   assert.strictEqual(rendered.contractVersion, "local-fallback", "g14d 降级响应不得冒充在线契约版本");
   assert.strictEqual(caught, null, "g14d 有本地缓存兜底时不得进入 catchFn 错误态");
   assert.strictEqual(page2.data.loadingState, "none", "g14d 降级渲染后 loadingState=none");
-  assert.ok(String(page2.data.restoreHint || "").includes("缓存"), "g14d 降级响应必须有可辨识缓存标识（restoreHint）");
+  assert.strictEqual(rendered.offline, false, "g14d 未尝试联网时不伪造离线状态");
 }
 
 // ---------------------------------------------------------------------------

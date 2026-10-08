@@ -1,5 +1,7 @@
 # FosuClass 校园网同步自动化
 
+WYZ 四源 Collector 使用现有 Oracle full-sync 控制面，部署和人工验收见 [MVP 手册](../../../docs/wyz-four-source-mvp.md)。首次学校试采、完整采集和 CloudBase active 切换需要人工批准，timer 默认 disabled until verified。
+
 FosuClass 的数据采集与发布采用“校园网/EasyConnect 采集 + VPS 离线快照发布”的闭环架构：
 
 1. 校园网或 EasyConnect 环境中的维护者运行 `tools/fosu-sync-client`。

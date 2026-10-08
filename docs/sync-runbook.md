@@ -1,5 +1,7 @@
 # FosuClass 同步运维手册
 
+WYZ 四源 Collector 的安装、断点恢复、四类直采约束及首次人工验收命令见 [MVP 手册](wyz-four-source-mvp.md)。生产 routine/full 禁止用 derived 资源替代教师、教室或课程直接来源。
+
 ## 边界
 
 `100.fosu.edu.cn` 只能从校园网或本机 VPN 访问。不要把 VPS 改造成抓取器，不要在 VPS 上安装校园 VPN。VPS 只接收 Staging、校验、构建 Release、同步静态文件、切换 runtime pointer 和对外服务。
