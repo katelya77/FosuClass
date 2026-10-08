@@ -191,7 +191,7 @@ function defaultScopeSources(scopes, params, profile) {
         mode: "network-direct",
         endpointFamily: "class-schedule",
       };
-    } else if (profile === "daily-classes" && DYNAMIC_SCOPES.includes(scope)) {
+    } else if (allowDerived && profile === "daily-classes" && DYNAMIC_SCOPES.includes(scope)) {
       sources[scope] = {
         mode: "derived-current-run",
         endpointFamily: "class-schedule",
@@ -280,7 +280,7 @@ function buildSyncPlan(action, params = {}, env = process.env) {
     activate,
     verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
     allowPartial: boolParam(params, "allow-partial", false),
-    allowDerived: boolParam(params, "allow-derived", isNewTerm),
+    allowDerived: boolParam(params, "allow-derived", false),
     forceRefresh: schedulePolicy === "network-only" && !isUploadOnly && progressPolicy === "ignore",
     ignoreProgress: progressPolicy === "ignore",
     ignoreNoScheduleCache: negativeCachePolicy === "ignore",
@@ -327,7 +327,7 @@ function applyPlanToParams(plan, params = {}) {
   next.schedulePolicy = plan.schedulePolicy;
   next.progressPolicy = plan.progressPolicy;
   next.negativeCachePolicy = plan.negativeCachePolicy;
-  next.resourceSource = plan.profile === "daily-classes" || plan.allowDerived ? "derived" : "direct";
+  next.resourceSource = plan.allowDerived ? "derived" : "direct";
   next.allowDerived = plan.allowDerived;
   next.allowPartial = plan.allowPartial;
   next.syncProfile = plan.profile;

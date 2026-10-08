@@ -262,12 +262,13 @@ async function syncActiveRelease(options = {}) {
         message: "Oracle and CloudBase release files match, but runtime pointer metadata differs; dry-run did not update CloudBase pointer.",
       }));
     }
+    if (options.mirrorOnly || options.confirmation !== "CONFIRM_CLOUDBASE_CUTOVER") return writeReceipt(Object.assign({}, baseReceipt, { success: true, action: "pointer-confirmation-pending", remote, pointerChanged: false }));
     const cutover = await cutoverReleasePack({
       envId,
       publicRoot: options.outputRoot || DEFAULT_OUTPUT_ROOT,
       releaseVersion: oracleActive.releaseVersion,
       hostingBaseUrl,
-      confirmation: "CONFIRM_CLOUDBASE_CUTOVER",
+      confirmation: options.confirmation,
       oracleActiveReleaseVersion: oracleActive.releaseVersion,
       gitStatusRecorded: true,
       activePointerOverride: oracleActive.pointer,
@@ -303,12 +304,13 @@ async function syncActiveRelease(options = {}) {
     dryRun: false,
     verifyRemote: true,
   });
+  if (options.mirrorOnly || options.confirmation !== "CONFIRM_CLOUDBASE_CUTOVER") return writeReceipt(Object.assign({}, baseReceipt, { success: true, action: "uploaded-pointer-pending", pulled, deployed, pointerChanged: false }));
   const cutover = await cutoverReleasePack({
     envId,
     publicRoot: pulled.outputRoot,
     releaseVersion: oracleActive.releaseVersion,
     hostingBaseUrl,
-    confirmation: "CONFIRM_CLOUDBASE_CUTOVER",
+    confirmation: options.confirmation,
     oracleActiveReleaseVersion: oracleActive.releaseVersion,
     gitStatusRecorded: true,
   });
@@ -336,7 +338,8 @@ async function main() {
       "  --hosting-base-url=<url>  CloudBase hosting origin",
       "  --oracle-base-url=<url>   Oracle origin",
       "  --output-root=<path>      Local release cache root",
-      "  --execute                 Upload and update runtime/active.json",
+      "  --execute                 Upload the version directory; pointer needs --confirm=CONFIRM_CLOUDBASE_CUTOVER",
+      "  --mirror-only             Upload/verify only; never change the active pointer",
       "  --dry-run                 Compare only, no CloudBase writes (default)",
     ].join("\n"));
     return;
@@ -346,6 +349,8 @@ async function main() {
     hostingBaseUrl: args["hosting-base-url"] || args.hostingBaseUrl || cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL,
     oracleBaseUrl: args["oracle-base-url"] || args.oracleBaseUrl,
     outputRoot: args["output-root"] || args.outputRoot,
+    mirrorOnly: args["mirror-only"] === true,
+    confirmation: args.confirmation || args.confirm,
     execute: args.execute === true,
     dryRun: args.execute !== true,
   });

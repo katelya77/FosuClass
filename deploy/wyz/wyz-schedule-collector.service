@@ -4,10 +4,14 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-WorkingDirectory=/opt/fosuclass
+Type=simple
+WorkingDirectory=/opt/fosuclass/schedule-collector/current
 ExecStart=/usr/bin/node tools/wyz-schedule-collector/collector.js
 EnvironmentFile=/etc/fosuclass/full-sync.env
+Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/fosuclass/schedule-collector/browsers
+Restart=on-failure
+RestartSec=60
+KillMode=control-group
 Nice=10
 IOSchedulingClass=idle
 CPUQuota=40%

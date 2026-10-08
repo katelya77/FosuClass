@@ -1,5 +1,7 @@
 # FosuClass 本地同步客户端
 
+WYZ Linux Collector 的生产接入以 [四源 MVP 手册](../../docs/wyz-four-source-mvp.md) 为准：独立 root-only session、headless、四类 network-direct、claim/checkpoint/Staging、默认人工审核。routine/full 不再启用 derived；单 scope 命令继续保留原有 syncPlan 范围契约。
+
 `fosu-sync-client` 是唯一允许抓取 `100.fosu.edu.cn` 的组件。请在已连接校园网或 VPN 的 Windows 本机运行。服务器只接收 Staging、校验、构建 Release、同步静态文件和切换 runtime pointer。
 
 不要提交 Cookie、密码、JSESSIONID、CAS ticket、Session、Token、原始 HTML 或真实课表缓存。

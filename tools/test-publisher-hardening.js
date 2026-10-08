@@ -229,7 +229,8 @@ async function run() {
   const crawlPlan = publisher.buildCrawlArgs("routine", incrementalArgs, { runDir: path.join(root, ".local", "test-run") }, "2026-2027-1");
   assert(crawlPlan.args.includes("--progress-policy=resume"));
   assert(crawlPlan.args.includes("--grades=2026"));
-  assert(crawlPlan.args.includes("--concurrency=8"));
+  assert(crawlPlan.args.includes("--concurrency=2"), "school concurrency is capped at 2 even when 8 is requested");
+  assert(crawlPlan.args.includes("--allow-derived=false"));
   assert(crawlPlan.args.includes("--term-start-date=2026-09-07"));
   assert(crawlPlan.args.includes("--total-weeks=19"));
   assert(crawlPlan.args.includes("--week-start=monday"));
@@ -237,7 +238,7 @@ async function run() {
 
   const syncSource = fs.readFileSync(path.join(root, "tools", "fosu-sync-client", "sync.js"), "utf8");
   assert(syncSource.includes("loadSyncClientEnv()"), "sync.js should load explicit client .env");
-  assert(syncSource.includes("main().catch"), "sync.js should set nonzero exit on fatal errors");
+  assert(/main\(\)[\s\S]*\.catch\(/.test(syncSource) && syncSource.includes("process.exitCode = 1"), "sync.js should set nonzero exit on fatal errors");
   assert(syncSource.includes("UNKNOWN_SYNC_ACTION"), "sync.js unknown action should be fatal");
 
   fs.mkdirSync(runsRoot, { recursive: true });
