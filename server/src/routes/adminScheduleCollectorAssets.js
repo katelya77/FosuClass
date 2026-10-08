@@ -3,20 +3,23 @@ const SCHEDULE_COLLECTOR_CARD = `
           <div class="card-header"><h3>自动同步</h3><span id="scEnabled">检测中</span></div>
           <p id="scSummary" class="muted">Collector 状态加载中</p>
           <p id="scMessage"></p>
-          <div id="scDirectProgress" aria-live="polite"></div>
-          <p class="muted">仅采集，不发布。新数据完成校验后进入 PENDING REVIEW。</p>
           <div class="button-row">
             <button type="button" id="scRoutineBtn">立即执行日常同步</button>
             <button type="button" class="secondary" id="scFullBtn">执行完整同步</button>
             <button type="button" class="secondary" id="scPauseBtn">暂停自动同步</button>
             <button type="button" class="secondary" id="scResumeBtn">恢复自动同步</button>
             <button type="button" class="secondary" id="scCancelBtn">取消当前任务</button>
+          </div>
+          <details id="scDetails"><summary>四源进度与 Staging 操作（仅采集，不发布）</summary>
+          <div id="scDirectProgress" aria-live="polite"></div>
+          <div class="button-row">
             <button type="button" class="secondary" id="scValidateBtn">验证当前 Staging</button>
             <button type="button" class="secondary" id="scPublishBtn">发布当前 Staging</button>
             <button type="button" class="secondary" id="scMirrorBtn">镜像 CloudBase</button>
             <button type="button" class="secondary" id="scReportBtn">查看最新同步报告</button>
           </div>
           <pre id="scReport" hidden></pre>
+          </details>
         </div>`;
 
 const SCHEDULE_COLLECTOR_SCRIPT = `
