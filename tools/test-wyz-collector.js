@@ -7,12 +7,14 @@ const path = require("path");
 const express = require("../server/node_modules/express");
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-wyz-test-"));
 process.env.FOSU_STORAGE_DIR = path.join(temp, "oracle");
+process.env.FOSU_DATA_DIR = path.join(temp, "data");
 process.env.SCHEDULE_COLLECTOR_DIR = path.join(temp, "control");
 process.env.FULL_SYNC_AGENT_TOKEN = crypto.randomBytes(32).toString("hex");
 process.env.FULL_SYNC_SIGNING_SECRET = crypto.randomBytes(32).toString("hex");
 process.env.FULL_SYNC_AGENT_ID = "wyz-schedule-collector";
 const collector = require("./wyz-schedule-collector/collector");
 const control = require("../server/src/services/scheduleCollectorService");
+require("../server/src/services/termRegistryService").createPlannedTerm({ term: "2026-2027-1", semesterText: "2026-2027-1", termStartDate: "2026-09-07", totalWeeks: 20, weekStart: "monday" });
 const { acquireLock, runDirectory } = require("./wyz-schedule-collector/runStore");
 let cases = 0;
 function check(fn) { fn(); cases++; }
@@ -47,7 +49,7 @@ async function main() {
       check(() => assert.equal(control.snapshot().sessionExpired, true));
       await assert.rejects(() => api("POST", "/api/full-sync/v1/runs/" + run.id + "/report", { claimId: run.claimId, stage: "class" }), /ORACLE_HTTP_409/); cases++;
     }
-    const { run: queued } = control.requestRun("routine", "test");
+    const { run: queued } = control.requestRun("routine", "test", Date.now(), { term: "2026-2027-1" });
     const run = (await api("POST", "/api/full-sync/v1/runs/claim", {})).run;
     await assert.rejects(() => api("POST", "/api/full-sync/v1/runs/" + run.id + "/report", { claimId: run.claimId, cookie: "fixture" }), /ORACLE_HTTP_400/); cases++;
     await assert.rejects(() => api("POST", "/api/full-sync/v1/runs/" + run.id + "/report", { claimId: run.claimId, complete: true, canonicalHash: "a".repeat(64) }), /ORACLE_HTTP_409/); cases++;
@@ -72,6 +74,20 @@ async function main() {
     const completed = await api("POST", "/api/full-sync/v1/runs/" + uploadRun.id + "/report", { claimId: uploadRun.claimId, complete: true, uploadId: finalized.uploadId, canonicalHash: data.canonicalHash, directSourceSummary: data.directSourceSummary });
     check(() => assert.equal(completed.run.result, "PENDING REVIEW"));
     check(() => assert.equal(fs.existsSync(path.join(temp, "oracle", "active-release.json")), false));
+    const release = require("../server/src/services/releaseService");
+    const originalActive = release.getActiveReleaseInfo;
+    release.getActiveReleaseInfo = () => ({ term: data.term, canonicalHash: data.canonicalHash, resourceCounts: require("../server/src/shared/resourceCountContract").buildResourceCountContract(data) });
+    try {
+      control.requestRun("routine", "fixture", Date.now(), { term: data.term });
+      let uploadCalled = false;
+      const noChange = await collector.runOnce(Object.assign({}, cfg, { execute: true, dataRoot: path.join(temp, "campus") }), {
+        request: api, assertSession: () => {}, promoteRun: () => {},
+        executeSync: async (run, cfg, dir) => fs.writeFileSync(path.join(dir, "staging.json"), JSON.stringify(data)),
+        upload: async () => { uploadCalled = true; throw new Error("unchanged data must not upload"); },
+      });
+      check(() => assert.equal(noChange.status, "NO CHANGE"));
+      check(() => assert.equal(uploadCalled, false));
+    } finally { release.getActiveReleaseInfo = originalActive; }
   } finally { await new Promise((resolve) => server.close(resolve)); }
   console.log("wyz-collector: " + cases + " PASS (local signed HTTP; no school requests)");
 }

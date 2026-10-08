@@ -2,7 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { loadTermConfig, resolvePreferredTerm } = require("../../../shared/termConfig");
+const termRegistry = require("./termRegistryService");
 const { assertPublicData } = require("../shared/fourDirectSourceContract");
 
 const STAGES = ["idle", "auth-check", "catalog", "class", "teacher", "classroom", "course", "schedule", "normalize", "hash", "upload", "validate", "publish", "mirror"];
@@ -77,7 +77,9 @@ function requestRun(mode, actor, now, options = {}) {
     delete run.finishedAt; delete run.failureCode; delete run.result;
     run.stage = "idle";
   } else {
-    const termConfig = loadTermConfig(options.term || resolvePreferredTerm());
+    const record = options.term ? termRegistry.getTerm(options.term) : termRegistry.getActiveTerm();
+    if (!record || !record.termStartDate || !Number.isInteger(record.totalWeeks)) fail("COLLECTOR_TERM_CONFIG_MISSING", 400);
+    const termConfig = { term: record.term, semesterText: record.semesterText, termStartDate: record.termStartDate, totalWeeks: record.totalWeeks, weekStart: record.weekStart || "monday" };
     run = { id: "sc-" + crypto.randomBytes(12).toString("hex"), mode, term: termConfig.term, termConfig, stage: "idle", actor: String(actor || "admin").slice(0, 64), startedAt: new Date(Number(now || Date.now())).toISOString() };
     state.runs.unshift(run); state.runs = state.runs.slice(0, 20);
   }
@@ -128,6 +130,7 @@ function applyReport(runId, body, agentId, now = Date.now()) {
       const stat = {};
       for (const key of ["discoveredEntities", "requestedEntities", "success", "empty", "failed", "scheduleDocuments", "courseEvents", "parserErrors", "requestCount", "elapsedMs", "estimatedRemainingMs", "completedEntities"]) if (source[key] !== undefined) { if (!Number.isSafeInteger(source[key]) || source[key] < 0) fail("COLLECTOR_METRIC_REJECTED", 400); stat[key] = source[key]; }
       stat.sourceMode = source.sourceMode === "network-direct" ? "network-direct" : "unknown";
+      if (source.entityUnit === "major-request-group") stat.entityUnit = source.entityUnit;
       stat.coverageValid = source.coverageValid === true; summary[kind] = stat;
     }
     run.directSourceSummary = summary;

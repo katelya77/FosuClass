@@ -41,6 +41,7 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
           ["class", "teacher", "classroom", "course"].forEach(function(kind, index) {
             var stat = summary[kind] || {}, row = document.createElement("p");
             row.textContent = ["班级", "教师", "教室", "课程"][index] + " " + (stat.requestedEntities || 0) + " / " + (stat.discoveredEntities || 0)
+              + (stat.entityUnit === "major-request-group" ? " 专业请求组" : " 实体") + " · 文档 " + (stat.scheduleDocuments || 0) + " · 课程事件 " + (stat.courseEvents || 0)
               + " · success " + (stat.success || 0) + " · empty " + (stat.empty || 0) + " · failed " + (stat.failed || 0)
               + " · requests " + (stat.requestCount || 0) + " · 耗时 " + Math.round((stat.elapsedMs || 0) / 1000) + "s"
               + " · 预计剩余 " + Math.round((stat.estimatedRemainingMs || 0) / 1000) + "s";

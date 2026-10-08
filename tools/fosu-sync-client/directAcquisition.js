@@ -51,7 +51,7 @@ async function collectEntities(options) {
         if (code === "SCHEDULE_PARSE_FAILED") stat.parserErrors++;
         fatal = failure(code);
         stat.requestedEntities++;
-        if (["SESSION_EXPIRED", "SCHOOL_SECURITY_CHALLENGE"].includes(code)) break;
+        if (["SESSION_EXPIRED", "SCHOOL_SECURITY_CHALLENGE", "SCHEDULE_PARSE_FAILED"].includes(code)) break;
         // Preserve successful checkpoints; never retry a school POST automatically.
         continue;
       }

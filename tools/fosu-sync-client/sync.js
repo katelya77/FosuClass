@@ -255,6 +255,7 @@ const SESSION_PATH = process.env.FOSU_COLLECTOR_SESSION || path.join(SYNC_DATA_D
 const directAcquisition = require("./directAcquisition");
 const fourSources = require("../../server/src/shared/fourDirectSourceContract");
 function strictDirectPlan() { const plan = getActiveSyncPlan(); return Boolean(plan && plan.schedulePolicy === "network-only" && !plan.allowDerived && plan.dynamicScopes.length); }
+function fourSourcePlan() { const plan = getActiveSyncPlan(); return strictDirectPlan() && ALL_SCOPES.every((scope) => plan.scopes.includes(scope)); }
 function collectorProgress(stage, kind, summary) {
   global.DIRECT_SOURCE_SUMMARY = global.DIRECT_SOURCE_SUMMARY || {};
   if (kind && summary) global.DIRECT_SOURCE_SUMMARY[kind] = summary;
@@ -2275,9 +2276,9 @@ async function handleLocalCampusStaging(page, params) {
   if (strictDirectPlan()) {
     snapshot = stripDirectRaw(snapshot);
     snapshot.directSourceSummary = global.DIRECT_SOURCE_SUMMARY || {};
-    snapshot.meta = Object.assign({}, snapshot.meta, { directSourceSummary: snapshot.directSourceSummary, allowDerived: false, requireFourDirectSources: true, actualNetworkRequestCount: global.SCHOOL_REQUEST_COUNT || 0 });
+    snapshot.meta = Object.assign({}, snapshot.meta, { directSourceSummary: snapshot.directSourceSummary, allowDerived: false, requireFourDirectSources: fourSourcePlan(), actualNetworkRequestCount: global.SCHOOL_REQUEST_COUNT || global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.actualNetworkRequestCount || 0 });
     collectorProgress("normalize");
-    if (!params.diagnostic) fourSources.assertFourSources(snapshot, snapshot.term || snapshot.semester);
+    if (fourSourcePlan() && !params.diagnostic) fourSources.assertFourSources(snapshot, snapshot.term || snapshot.semester);
   }
 
   const defaultOutput = path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`);
@@ -2302,11 +2303,11 @@ async function handleLocalCampusStaging(page, params) {
     rawSizeBytes,
   }));
   fs.writeFileSync(sidecarPath, JSON.stringify(sidecarMeta, null, 2), "utf-8");
-  if (strictDirectPlan() && !params.diagnostic) {
+  if (strictDirectPlan() && !params.diagnostic && process.env.FOSU_COLLECTOR_MODE !== "1") {
     const plan = getActiveSyncPlan();
-    syncCacheStore.promoteValidatedRun(SYNC_DATA_DIR, plan.term, plan.runId, plan.dynamicScopes, fourSources.assertFourSources(snapshot, plan.term));
+    syncCacheStore.promoteValidatedRun(SYNC_DATA_DIR, plan.term, plan.runId, plan.dynamicScopes, fourSourcePlan() ? fourSources.assertFourSources(snapshot, plan.term) : { valid: true, canonicalHash: fingerprint.canonicalHash });
     const catalogRoot = process.env.FOSU_SYNC_CATALOG_CACHE;
-    if (catalogRoot) {
+    if (catalogRoot && fourSourcePlan()) {
       const termRoot = path.join(catalogRoot, plan.term, "catalog");
       const sourceRoot = path.join(syncCacheStore.ensureTermCache(SYNC_DATA_DIR, plan.term), "catalog");
       fs.mkdirSync(termRoot, { recursive: true });
@@ -2531,6 +2532,8 @@ async function discoverStrictDirectory(page, type, semester) {
       if (allowed.test(name)) controls[name] = input.value || "";
     }
     const selects = Array.from(document.querySelectorAll("select[name]"));
+    const scopeFields = kind === "teacher" ? ["skyx", "kkyx", "jszc"] : kind === "classroom" ? ["xqid", "jzwid"] : ["skyx", "kkyx", "zzdKcSX"];
+    if (selects.some((select) => scopeFields.includes(select.name) && select.value && !/全部|不限|所有|请选择|^--/.test(select.selectedOptions[0] && select.selectedOptions[0].textContent || ""))) return { targets: [], controls, scopeIncomplete: true };
     const match = selects.find((select) => {
       const marker = String(select.name || "").toLowerCase();
       if (kind === "teacher") return /^(js|skjs|teacher|jzg|jzgid|gh|jsid)$/.test(marker);
@@ -2541,12 +2544,13 @@ async function discoverStrictDirectory(page, type, semester) {
     const targets = Array.from(match.options || []).map((option) => ({ key: clean(option.value), name: clean(option.textContent), field: match.name })).filter((item) => item.key && item.name && !/^请选择|^全部|^--/.test(item.name));
     return { targets, controls };
   }, type);
-  if (!directory.targets.length) throw directAcquisition.failure("DIRECT_" + type.toUpperCase() + "_DIRECTORY_INCOMPLETE");
+  if (directory.scopeIncomplete || !directory.targets.length) throw directAcquisition.failure("DIRECT_" + type.toUpperCase() + "_DIRECTORY_INCOMPLETE");
   const seen = new Set();
   for (const target of directory.targets) {
     if (seen.has(target.key) || !isUsableResourceName(target.name) || type === "teacher" && isInvalidTeacherName(target.name)) throw directAcquisition.failure("DIRECT_DIRECTORY_INVALID");
     seen.add(target.key);
-    target.controls = Object.assign({}, directory.controls, { xnxqh: semester, [target.field]: target.key });
+    if (!directory.controls.xnxqh) throw directAcquisition.failure("DIRECT_TERM_PARAMETER_MISSING");
+    target.controls = Object.assign({}, directory.controls, { [target.field]: target.key });
   }
   return directory.targets;
 }
@@ -2566,12 +2570,14 @@ async function crawlStrictResources(page, types, semester) {
         const parsed = generic.parse(html, context);
         const courses = strictCourses(parsed, { semester, sourceType: type, audienceType: type });
         if (courses.some((event) => !event.courseName || /未知|临班/.test(event.courseName))) throw directAcquisition.failure("SCHEDULE_PARSE_FAILED");
-        return [{ [generic.targetKey]: target.name, name: target.name, id: target.key, semester, source: "direct", courses }];
+        const identity = "entity-" + crypto.createHash("sha256").update(semester + ":" + type + ":" + target.key).digest("hex").slice(0, 24);
+        return [{ [generic.targetKey]: target.name, name: target.name, id: identity, semester, source: "direct", courses }];
       },
     }));
     saveStrictScope(type, result);
+    recordScopeSource(config.indexKey, { sourceMode: "network-direct", endpointFamily: type + "-directory", requested: targets.length, succeeded: targets.length, failed: 0, cacheHits: 0 });
     resources[config.schedulesKey] = result.schedules;
-    resources[config.indexKey] = targets.map((target) => ({ [generic.targetKey]: target.name, name: target.name, id: target.key, source: "direct" }));
+    resources[config.indexKey] = targets.map((target) => ({ [generic.targetKey]: target.name, name: target.name, id: "entity-" + crypto.createHash("sha256").update(semester + ":" + type + ":" + target.key).digest("hex").slice(0, 24), source: "direct" }));
   }
   return resources;
 }

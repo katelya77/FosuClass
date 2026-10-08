@@ -205,7 +205,15 @@ function verifyManifestFileMeta(releaseDir, manifest) {
     }
     checked.push(relativePath);
   });
-  const unexpected = listFiles(releaseDir).map((file) => toPosixPath(path.relative(releaseDir, file))).filter((file) => file !== "manifest.json" && !Object.prototype.hasOwnProperty.call(files, file));
+  const unexpected = listFiles(releaseDir).map((file) => toPosixPath(path.relative(releaseDir, file))).filter((file) => {
+    const plain = file.replace(/\.gz$/, "");
+    if (plain !== "manifest.json" && !Object.prototype.hasOwnProperty.call(files, plain)) return true;
+    if (file.endsWith(".gz")) {
+      const bytes = require("zlib").gunzipSync(fs.readFileSync(path.join(releaseDir, file)), { maxOutputLength: 50 * 1024 * 1024 });
+      if (sha1(bytes) !== fileMeta(path.join(releaseDir, plain)).hash) throw Object.assign(new Error("CLOUDBASE_GZIP_HASH_MISMATCH"), { code: "CLOUDBASE_GZIP_HASH_MISMATCH" });
+    }
+    return false;
+  });
   if (unexpected.length) throw Object.assign(new Error("CLOUDBASE_UNTRACKED_FILE_REJECTED"), { code: "CLOUDBASE_UNTRACKED_FILE_REJECTED" });
   return checked;
 }

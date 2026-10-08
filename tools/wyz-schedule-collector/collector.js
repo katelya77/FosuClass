@@ -42,6 +42,8 @@ function assertSession(file, platform = process.platform) {
   if (!fs.existsSync(file)) throw failure("SESSION_EXPIRED");
   const stat = fs.lstatSync(file);
   if (!stat.isFile() || stat.isSymbolicLink() || (platform !== "win32" && (stat.uid !== 0 || (stat.mode & 0o077)))) throw failure("SESSION_PERMISSIONS_REJECTED");
+  const parent = fs.lstatSync(path.dirname(file));
+  if (platform !== "win32" && (parent.isSymbolicLink() || parent.uid !== 0 || (parent.mode & 0o077))) throw failure("SESSION_PERMISSIONS_REJECTED");
   const data = readJson(file, null);
   if (!data || !Array.isArray(data.cookies) || !Array.isArray(data.origins)) throw failure("SESSION_EXPIRED");
 }
@@ -93,6 +95,15 @@ async function upload(request, run, dir, data, hooks = {}) {
   }
   return Object.assign({}, finalized, { uploadId, rawBytes: originalSize, gzipBytes: uploadSize });
 }
+function promoteRun(cfg, run, dir, verified) {
+  const cache = require("../../shared/syncCacheStore");
+  const base = path.join(dir, "client");
+  cache.promoteValidatedRun(base, run.term, run.id, ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules"], verified);
+  const source = path.join(cache.ensureTermCache(base, run.term), "catalog");
+  const target = path.join(cfg.dataRoot, "catalog", run.term, "catalog");
+  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+  for (const name of ["catalog.json", "majors.json", "metadata.json", "majors.metadata.json"]) if (fs.existsSync(path.join(source, name))) fs.copyFileSync(path.join(source, name), path.join(target, name));
+}
 async function runOnce(cfg, deps = {}) {
   const request = deps.request || client(cfg);
   await request("POST", "/api/full-sync/v1/heartbeat", { ok: true });
@@ -129,6 +140,7 @@ async function runOnce(cfg, deps = {}) {
     if (run.activeCanonicalHash && verified.canonicalHash === run.activeCanonicalHash) {
       if (timer) clearInterval(timer);
       await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, noChange: true });
+      (deps.promoteRun || promoteRun)(cfg, run, dir, verified);
       writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "NO CHANGE" });
       writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
       pruneRuns(cfg.dataRoot, dir, dir);
@@ -137,11 +149,12 @@ async function runOnce(cfg, deps = {}) {
     await report({ stage: "upload", directSourceSummary: verified.directSourceSummary });
     const result = await (deps.upload || upload)(request, run, dir, data, { progress: report });
     if (timer) clearInterval(timer);
-    await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
+    const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
+    (deps.promoteRun || promoteRun)(cfg, run, dir, verified);
     writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "PENDING REVIEW" });
     writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
     pruneRuns(cfg.dataRoot, dir, dir);
-    return { status: result.unchanged ? "NO CHANGE" : "PENDING REVIEW", runId: run.id };
+    return { status: completion && completion.run && completion.run.result || "PENDING REVIEW", runId: run.id };
   } catch (error) {
     const code = /^[A-Z0-9_:-]{1,80}$/.test(error.code || "") ? error.code : "COLLECTOR_FAILED";
     if (!cancelled) await report({ failureCode: code }).catch(() => {});

@@ -1,0 +1,25 @@
+name: WYZ Four Source CI
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  four-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm --prefix tools/fosu-sync-client ci
+      - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - run: npm run test:wyz-four-source
+      - run: npm run test:security-full
+      - run: npm run test:architecture-guards
+      - run: npm run release:preflight

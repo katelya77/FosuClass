@@ -4,7 +4,7 @@ const { buildResourceCountContract } = require("./resourceCountContract");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
 const KINDS = Object.freeze(["class", "teacher", "classroom", "course"]);
 const SCOPES = Object.freeze(KINDS.map((kind) => `${kind}Schedules`));
-const SENSITIVE_KEY = /^(?:password|passwd|pwd|cookie|set-cookie|authorization|jsessionid|castgc|ticket|execution|studentId|studentNumber|studentName|studentNames|students|rawHtml|rawXls|base64|apiKey|secretId|secretKey|accessToken|sessionToken)$/i;
+const SENSITIVE_KEY = /^(?:password|passwd|pwd|cookie|set-cookie|authorization|jsessionid|castgc|ticket|execution|username|account|schoolAccount|studentId|studentNumber|studentName|studentNames|students|rawHtml|rawXls|base64|apiKey|secretId|secretKey|accessToken|sessionToken)$/i;
 const SENSITIVE_VALUE = /(?:JSESSIONID|CASTGC)\s*[=:]|Bearer\s+[\w.~+/=-]{8,}|(?:[?&](?:ticket|execution|password|token)=)|-----BEGIN .*PRIVATE KEY-----/i;
 
 function rejected(code) { return Object.assign(new Error(code), { code, statusCode: 400 }); }

@@ -4,6 +4,8 @@ const os = require("os");
 const path = require("path");
 
 process.env.SCHEDULE_COLLECTOR_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-collector-"));
+process.env.FOSU_STORAGE_DIR = path.join(process.env.SCHEDULE_COLLECTOR_DIR, "oracle");
+process.env.FOSU_DATA_DIR = path.join(process.env.SCHEDULE_COLLECTOR_DIR, "data");
 process.env.FULL_SYNC_AGENT_TOKEN = "full-sync-token-0123456789abcdef";
 process.env.FULL_SYNC_SIGNING_SECRET = "full-sync-secret-0123456789abcdef";
 process.env.FULL_SYNC_AGENT_ID = "wyz-schedule-collector";
@@ -11,6 +13,7 @@ process.env.CAMPUS_AGENT_TOKEN = "campus-agent-token-0123456789abcd";
 process.env.CAMPUS_AGENT_SIGNING_SECRET = "campus-agent-secret-0123456789abc";
 
 const collector = require("../server/src/services/scheduleCollectorService");
+require("../server/src/services/termRegistryService").createPlannedTerm({ term: "2026-2027-1", semesterText: "2026-2027-1", termStartDate: "2026-09-07", totalWeeks: 20, weekStart: "monday" });
 const signature = require("../server/src/security/fullSyncSignature");
 
 collector.resetForTests();
@@ -43,7 +46,7 @@ const drop = collector.classifyRelease({ canonicalHash: "abc", counts: { class: 
 assert.strictEqual(drop.result, "PENDING REVIEW");
 assert.ok(drop.reasons.includes("class-drop"));
 
-const queued = collector.requestRun("routine", "admin", now);
+const queued = collector.requestRun("routine", "admin", now, { term: "2026-2027-1" });
 assert.strictEqual(queued.skipped, false);
 const claimed = collector.claim("wyz-schedule-collector", now);
 assert.ok(claimed);
@@ -52,7 +55,7 @@ collector.applyReport(claimed.id, { claimId: claimed.claimId, failureCode: "SESS
 assert.strictEqual(collector.snapshot(now).sessionExpired, true);
 
 collector.resetForTests();
-const again = collector.requestRun("full", "admin", now);
+const again = collector.requestRun("full", "admin", now, { term: "2026-2027-1" });
 const lease = collector.claim("wyz-schedule-collector", now);
 assert.throws(() => collector.applyReport(again.run.id, {
   claimId: lease.claimId,
@@ -93,6 +96,8 @@ function request(extra) {
 signature.resetNonces();
 assert.strictEqual(signature.verifySignedRequest(request(), now).ok, true);
 assert.strictEqual(signature.verifySignedRequest(request(), now).ok, false);
+signature.resetNonces();
+assert.strictEqual(signature.verifySignedRequest(request({ headers: Object.assign({}, request().headers, { "x-full-sync-signature": "0".repeat(64) }) }), now).ok, false);
 signature.resetNonces();
 assert.strictEqual(signature.verifySignedRequest(request({
   headers: { authorization: "Bearer " + process.env.CAMPUS_AGENT_TOKEN },
