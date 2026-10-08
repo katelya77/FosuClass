@@ -32,7 +32,7 @@ async function main() {
     catch (_) { browser = await chromium.launch({ headless: true }); }
     const page = await browser.newPage();
     const classes = await sync.crawlStrictClassSchedules(page, { colleges: [{ code: "fixture-college", name: "测试学院" }], grades: ["2026"] }, [{ collegeCode: "fixture-college", grade: "2026", code: "fixture-major", name: "测试专业" }]);
-    assert.equal(classes.length, 1);
+    assert.equal(classes.filter((item) => item.className === "26测试1班").length, 1, "the administrative class from the school row must remain distinct from any auxiliary major document");
     const resources = await sync.crawlStrictResources(page, ["teacher", "classroom", "course"], "2026-2027-1");
     for (const kind of ["teacher", "classroom", "course"]) { assert.equal(resources[kind + "Schedules"].length, 1); assert.equal(global.DIRECT_SOURCE_SUMMARY[kind].sourceMode, "network-direct"); }
     assert.deepEqual(requests.map((item) => item.path), ["/kbcx/kbxx_xzb_ifr", "/kbcx/kbxx_teacher_ifr", "/kbcx/kbxx_classroom_ifr", "/kbcx/kbxx_kc_ifr"]);
