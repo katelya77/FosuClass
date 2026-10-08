@@ -225,6 +225,7 @@ async function run() {
 
   const cutoverCalls = [];
   const cutover = await utils.cutoverReleasePack({
+    previousPointer: { releaseVersion: "fixture-previous", term: "2025-2026-2" },
     publicRoot: good.root,
     releaseVersion: version,
     hostingBaseUrl: "https://cloud.example.com",
@@ -241,6 +242,16 @@ async function run() {
   assert.strictEqual(cutover.success, true);
   assert.deepStrictEqual(cutoverCalls.map((item) => item.cloudPath), ["runtime/active.json"], "cutover should upload only active pointer after prior release verification");
   assert(cutover.readyRecommendation.includes("CLOUDBASE_HOSTING_READY"), "READY=true recommendation is allowed only after pointer verification");
+  const rollbackCalls = [];
+  await assert.rejects(() => utils.cutoverReleasePack({
+    publicRoot: good.root, releaseVersion: version, hostingBaseUrl: "https://cloud.example.com", confirmation: "CONFIRM_CLOUDBASE_CUTOVER", gitStatusRecorded: true,
+    previousPointer: { releaseVersion: "fixture-previous", term: "2025-2026-2" },
+    remoteVerifier: async () => ({ success: true }),
+    commandRunner: (file, cloudPath) => { rollbackCalls.push({ cloudPath, pointer: JSON.parse(fs.readFileSync(file, "utf8")) }); return {}; },
+    runtimePointerVerifier: async (options) => { if (options.releaseVersion === version) throw new Error("fixture cutover failed"); return { success: true }; },
+  }), (error) => error.pointerRollback === "verified");
+  assert.deepStrictEqual(rollbackCalls.map((call) => call.pointer.releaseVersion), [version, "fixture-previous"]);
+  assert(rollbackCalls.every((call) => call.cloudPath === "runtime/active.json"));
 
   const driftPointer = utils.buildCloudbasePointer(verified.manifest, {
     releaseVersion: version,
