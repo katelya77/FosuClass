@@ -51,7 +51,17 @@ function validateFourSources(data, expectedTerm) {
       const id = String(schedule.id || schedule.classId || schedule.teacherId || schedule.roomId || schedule.courseId || name);
       if (seen.has(id)) errors.push(`${kind}:DUPLICATE_ENTITY`);
       seen.add(id);
+      const events = new Set();
+      for (const event of schedule.courses || []) {
+        const key = require("../utils/stagingFingerprint").stableStringify(event);
+        if (events.has(key)) errors.push(`${kind}:DUPLICATE_SCHEDULE`);
+        events.add(key);
+      }
       if (schedule.semester && schedule.semester !== term || schedule.term && schedule.term !== term) errors.push(`${kind}:TERM_MISMATCH`);
+    }
+    if (kind !== "class") {
+      const directory = resources[{ teacher: "teachers", classroom: "classrooms", course: "courses" }[kind]];
+      if (!Array.isArray(directory) || directory.length !== stat.discoveredEntities || schedules && schedules.length !== directory.length) errors.push(`${kind}:DIRECTORY_INCOMPLETE`);
     }
   }
   return { valid: errors.length === 0, errors: Array.from(new Set(errors)), directSourceSummary: summary, resourceCounts };

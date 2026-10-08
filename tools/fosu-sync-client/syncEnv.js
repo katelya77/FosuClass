@@ -73,7 +73,7 @@ function loadSyncClientEnv(options = {}) {
   const env = options.env || process.env;
   const envPath = options.envPath || SYNC_ENV_PATH;
   const deps = options.deps || {};
-  const parsed = Object.prototype.hasOwnProperty.call(options, "envPath")
+  const parsed = env.FOSU_COLLECTOR_MODE === "1" ? {} : Object.prototype.hasOwnProperty.call(options, "envPath")
     ? readSyncClientEnv(envPath, deps)
     : Object.assign(
       {},

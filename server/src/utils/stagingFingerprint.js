@@ -94,6 +94,7 @@ function eventSortKey(item) {
 }
 
 function entitySortKey(item, path) {
+  if (!item || typeof item !== "object") return JSON.stringify(item);
   const source = item && typeof item === "object" ? item : {};
   const key = path[path.length - 1] || "";
   if (key === "colleges") return [firstOf(source, ["code", "collegeCode"]), firstOf(source, ["name", "collegeName"])].join("\u0001");
@@ -102,7 +103,7 @@ function entitySortKey(item, path) {
   if (key === "teacherSchedules" || key === "teachers") return [firstOf(source, ["teacherId", "id"]), firstOf(source, ["teacherName", "name"])].join("\u0001");
   if (key === "classroomSchedules" || key === "classrooms") return [firstOf(source, ["roomId", "classroomId", "id"]), firstOf(source, ["roomName", "classroomName", "name"])].join("\u0001");
   if (key === "courseSchedules") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("\u0001");
-  if (key === "courses" && (source.weekday || source.startSection || source.endSection || source.teacherName || source.classroom)) return eventSortKey(source);
+  if (key === "courses" && (source.weekday || source.startSection || source.endSection || source.teacherName || source.classroom)) return eventSortKey(source) + "\u0001" + stableStringify(source);
   if (key === "courses") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("\u0001");
   if (source.weekday || source.startSection || source.endSection || source.courseName) return eventSortKey(source);
   return stableStringify(source);

@@ -1234,7 +1234,7 @@ function buildCrawlArgs(mode, args, run, term, termConfig = null) {
     args.concurrency ||
     process.env.SYNC_PUBLISH_CLASS_CONCURRENCY ||
     process.env.SYNC_CLASS_MAX_CONCURRENCY ||
-    (mode === "full" ? 4 : 5)
+    1
   );
   const defaultDelayMs = String(
     args["delay-ms"] ||
@@ -1251,7 +1251,8 @@ function buildCrawlArgs(mode, args, run, term, termConfig = null) {
     "--schedule-policy=network-only",
     `--progress-policy=${progressPolicy}`,
     `--negative-cache-policy=${negativeCachePolicy}`,
-    "--allow-derived",
+    "--allow-derived=false",
+    "--resource-source=direct",
     "--class-scope=all",
   ];
   const canonicalConfig = normalizePublisherTermConfig(termConfig) || loadPublisherTermConfig(term, args);
@@ -1265,7 +1266,7 @@ function buildCrawlArgs(mode, args, run, term, termConfig = null) {
   }
   const grades = args.grades || args.grade;
   if (grades) base.push(`--grades=${grades}`);
-  if (defaultConcurrency) base.push(`--concurrency=${defaultConcurrency}`);
+  if (defaultConcurrency) base.push(`--concurrency=${Math.max(1, Math.min(2, Number(defaultConcurrency) || 1))}`);
   if (defaultDelayMs) base.push(`--delay-ms=${defaultDelayMs}`);
   if (args.include) base.push(`--include=${args.include}`);
   if (args["college-codes"]) base.push(`--college-codes=${args["college-codes"]}`);
@@ -1313,6 +1314,7 @@ function validateStaging(stagingPath, expectedTerm, expectedTermConfig = null) {
   });
   const includeScopes = data.meta && data.meta.includeScopes || [];
   const sourceModes = {
+    class: data.scopeSources && data.scopeSources.classSchedules && data.scopeSources.classSchedules.sourceMode,
     teacher: contract.teacher.sourceMode,
     classroom: contract.classroom.sourceMode,
     course: contract.course.sourceMode,
@@ -1332,9 +1334,10 @@ function validateStaging(stagingPath, expectedTerm, expectedTermConfig = null) {
   if (!summary.classSchedules) errors.push("classSchedules is empty");
   if (!summary.teacherSchedules || !summary.classroomSchedules || !summary.courseSchedules) errors.push("four scheduleDocuments are required");
   if (!counts.collegeCount || !counts.majorCount) errors.push("catalog entity counts are empty");
-  if (sourceModes.teacher !== "derived-current-run" || sourceModes.classroom !== "derived-current-run" || sourceModes.course !== "derived-current-run") {
+  if (Object.values(sourceModes).some((mode) => mode !== "network-direct")) {
     errors.push(`sourceMode mismatch: ${JSON.stringify(sourceModes)}`);
   }
+  try { require("../../server/src/shared/fourDirectSourceContract").assertFourSources(data, expectedTerm); } catch (_) { errors.push("four direct sources incomplete"); }
   const blockingDiagnostics = (contract.diagnostics || []).filter((item) => item && item.severity === "error");
   if (blockingDiagnostics.length) {
     errors.push(`resource diagnostics failed: ${blockingDiagnostics.map((item) => item.code || item.resource || "unknown").join(",")}`);
@@ -1479,7 +1482,7 @@ function buildDiffReport(stagingMeta, fingerprintStatus, run) {
   );
   const riskReasons = [];
   if (!newCounts.classSchedules) riskReasons.push("classSchedules=0");
-  if (stagingMeta.sourceModes && Object.values(stagingMeta.sourceModes).some((value) => value !== "derived-current-run")) riskReasons.push("sourceMode mismatch");
+  if (stagingMeta.sourceModes && Object.values(stagingMeta.sourceModes).some((value) => value !== "network-direct")) riskReasons.push("sourceMode mismatch");
   if (Number(stagingMeta.actualNetworkRequestCount || 0) <= 0) riskReasons.push("actual network request count is zero");
   if (newCounts.teacherSchedules > 0 && newCounts.teacherSchedules < 500) riskReasons.push("teacher schedules unexpectedly low");
   Object.keys(dimensions).forEach((key) => {
@@ -2190,22 +2193,26 @@ function buildMockStaging(term) {
       classroomSchedules,
       courseSchedules,
     },
+    directSourceSummary: Object.fromEntries([["class", classSchedules], ["teacher", teacherSchedules], ["classroom", classroomSchedules], ["course", courseSchedules]].map(([kind, items]) => [kind, { sourceMode: "network-direct", discoveredEntities: items.length, requestedEntities: items.length, success: items.length, empty: 0, failed: 0, scheduleDocuments: items.length, courseEvents: items.length, coverageValid: true }])),
     scopeSources: {
-      teacherSchedules: { sourceMode: "derived-current-run" },
-      classroomSchedules: { sourceMode: "derived-current-run" },
-      courseSchedules: { sourceMode: "derived-current-run" },
+      classSchedules: { sourceMode: "network-direct" },
+      teacherSchedules: { sourceMode: "network-direct" },
+      classroomSchedules: { sourceMode: "network-direct" },
+      courseSchedules: { sourceMode: "network-direct" },
     },
     meta: {
+      allowDerived: false,
+      requireFourDirectSources: true,
       includeScopes: ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "teachers", "classrooms", "courses"],
       actualNetworkRequestCount: 3,
-      resourceSource: "derived-current-run",
+      resourceSource: "network-direct",
       usedProgressCache: false,
       usedNoScheduleCache: false,
       usedClassScheduleCache: false,
       scopeSources: {
-        teacherSchedules: { sourceMode: "derived-current-run" },
-        classroomSchedules: { sourceMode: "derived-current-run" },
-        courseSchedules: { sourceMode: "derived-current-run" },
+        teacherSchedules: { sourceMode: "network-direct" },
+        classroomSchedules: { sourceMode: "network-direct" },
+        courseSchedules: { sourceMode: "network-direct" },
       },
     },
   };

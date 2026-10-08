@@ -224,6 +224,10 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
   const { counts, resourceCounts: stagingResourceCounts } = summarizeStagingData(data);
   const validation = validateStagingData(data);
   const blockers = validation.errors.slice();
+  if (data.meta && data.meta.requireFourDirectSources) {
+    const direct = require("../shared/fourDirectSourceContract").validateFourSources(data, data.term || data.semester);
+    blockers.push(...direct.errors);
+  }
   const warnings = validation.warnings.slice();
   const activeInfo = releaseService.getActiveReleaseInfo();
   const activeResourceCounts = activeSnapshot
@@ -259,10 +263,10 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
     const stagingCount = Number(counts[item.key] || 0);
     if (crossTermReadyCandidate || !activeResourceCounts || activeCount <= 0 || stagingCount >= activeCount) return;
     const dropRate = (activeCount - stagingCount) / activeCount;
-    if (dropRate <= 0.3) return;
+    if (dropRate <= (data.meta && data.meta.requireFourDirectSources ? 0.1 : 0.3)) return;
     const dropPercent = parseFloat((dropRate * 100).toFixed(2));
     maxDropRate = Math.max(maxDropRate, dropRate);
-    if (dropRate > 0.5) severeDrop = true;
+    if (dropRate > (data.meta && data.meta.requireFourDirectSources ? 0.1 : 0.5)) severeDrop = true;
     riskDrops.push({
       key: item.key,
       label: item.label,

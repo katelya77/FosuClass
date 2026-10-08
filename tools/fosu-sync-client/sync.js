@@ -250,7 +250,16 @@ function printLocalCampusPathSummary(params, outputPath) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
 const FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
-const SESSION_PATH = path.join(__dirname, ".session", "session.json");
+const SYNC_DATA_DIR = path.resolve(process.env.FOSU_SYNC_DATA_DIR || __dirname);
+const SESSION_PATH = process.env.FOSU_COLLECTOR_SESSION || path.join(SYNC_DATA_DIR, ".session", "session.json");
+const directAcquisition = require("./directAcquisition");
+const fourSources = require("../../server/src/shared/fourDirectSourceContract");
+function strictDirectPlan() { const plan = getActiveSyncPlan(); return Boolean(plan && plan.schedulePolicy === "network-only" && !plan.allowDerived && plan.dynamicScopes.length); }
+function collectorProgress(stage, kind, summary) {
+  global.DIRECT_SOURCE_SUMMARY = global.DIRECT_SOURCE_SUMMARY || {};
+  if (kind && summary) global.DIRECT_SOURCE_SUMMARY[kind] = summary;
+  if (process.env.FOSU_COLLECTOR_PROGRESS_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_PROGRESS_FILE, { stage, schoolRequestCount: global.SCHOOL_REQUEST_COUNT || 0, directSourceSummary: global.DIRECT_SOURCE_SUMMARY });
+}
 
 function getEnvFlag(name, defaultValue) {
   const value = process.env[name];
@@ -285,7 +294,7 @@ function isPlanNetworkOnly() {
 function findTermByRunId(runId) {
   const id = String(runId || "").trim();
   if (!id) return "";
-  const root = path.join(__dirname, ".cache");
+  const root = path.join(SYNC_DATA_DIR, ".cache");
   if (!fs.existsSync(root)) return "";
   const terms = fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory());
   for (const term of terms) {
@@ -1093,8 +1102,8 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const activePlan = getActiveSyncPlan();
   assertScheduleTermCoherence(allClassSchedules, activeSemester);
   const noScheduleCachePath = activePlan && activePlan.term
-    ? syncCacheStore.negativePath(__dirname, activePlan.term, "class-schedule", activePlan.runId)
-    : path.join(__dirname, ".debug", "no-schedule-majors.json");
+    ? syncCacheStore.negativePath(SYNC_DATA_DIR, activePlan.term, "class-schedule", activePlan.runId)
+    : path.join(SYNC_DATA_DIR, ".debug", "no-schedule-majors.json");
   const noScheduleMajors = readJsonArray(noScheduleCachePath);
   const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
   const updatedSchedules = (allClassSchedules || []).map((item) => {
@@ -1113,7 +1122,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const syncPlan = activePlan;
   const allowOldResourceFallback = Boolean(syncPlan && syncPlan.mergeOldData);
   let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
-  const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
+  const oldResourcesPath = path.join(SYNC_DATA_DIR, ".debug", "resources-latest.json");
   if (allowOldResourceFallback && fs.existsSync(oldResourcesPath)) {
     try {
       oldResources = JSON.parse(fs.readFileSync(oldResourcesPath, "utf-8"));
@@ -1625,7 +1634,7 @@ async function uploadWithRetry(endpoint, chunk, chunkNumber, totalChunks) {
  * @returns {Object} 进度对象
  */
 function readUploadProgress(sourceFilePath) {
-  const progressPath = path.join(__dirname, ".debug", "class-upload-progress.json");
+  const progressPath = path.join(SYNC_DATA_DIR, ".debug", "class-upload-progress.json");
   const forceRestart = getEnvFlag("SYNC_UPLOAD_FORCE_RESTART", false);
 
   if (forceRestart) {
@@ -1659,7 +1668,7 @@ function readUploadProgress(sourceFilePath) {
  * @param {Array<number>} uploadedChunkIndexes 已成功的分块序号列表
  */
 function writeUploadProgress(sourceFilePath, semester, total, chunkSize, uploadedChunkIndexes) {
-  const progressPath = path.join(__dirname, ".debug", "class-upload-progress.json");
+  const progressPath = path.join(SYNC_DATA_DIR, ".debug", "class-upload-progress.json");
   const progress = {
     sourceFile: sourceFilePath,
     semester,
@@ -1678,7 +1687,7 @@ function writeUploadProgress(sourceFilePath, semester, total, chunkSize, uploade
  * @returns {Object} 包含所保存的文件路径
  */
 function saveFullClassSchedules(allClassSchedules, semester) {
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
@@ -1701,7 +1710,7 @@ function saveFullClassSchedules(allClassSchedules, semester) {
   try {
     const plan = getActiveSyncPlan();
     const runId = plan && plan.runId || `class-${Date.now()}`;
-    const cacheResult = syncCacheStore.writeScheduleLatest(__dirname, semester, "classSchedules", allClassSchedules, {
+    const cacheResult = syncCacheStore.writeScheduleLatest(SYNC_DATA_DIR, semester, "classSchedules", allClassSchedules, {
       runId,
       command: global.GENERATED_COMMAND || process.argv.join(" "),
       sourceMode: "network-direct",
@@ -1805,7 +1814,7 @@ async function uploadClassSchedulesInChunks(classSchedules, debugDir, sourceFile
  * @returns {Object} 包含 items (数组) 和 filePath (绝对路径)
  */
 function readClassSchedulesFromFile() {
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   const candidates = [];
 
   // 1. 优先读取环境变量指定的路径
@@ -1816,7 +1825,7 @@ function readClassSchedulesFromFile() {
   // 2. 依次读取可能存在的文件
   const preferredTerm = String((global.CLI_PARAMS || {}).term || process.env.PREFERRED_SEMESTER || "").trim();
   if (preferredTerm) {
-    candidates.push(syncCacheStore.scheduleLatestPath(__dirname, preferredTerm, "classSchedules"));
+    candidates.push(syncCacheStore.scheduleLatestPath(SYNC_DATA_DIR, preferredTerm, "classSchedules"));
   }
   const activePlan = getActiveSyncPlan();
   const allowLegacyFallback = !activePlan || activePlan.mergeOldData || activePlan.profile === "upload-staging";
@@ -1969,7 +1978,7 @@ function printPowerShellCommands() {
  * 处理仅上传逻辑 (UPLOAD_ONLY 模式入口)
  */
 async function handleUploadOnly() {
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   try {
     const { items, filePath } = readClassSchedulesFromFile();
     const semester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
@@ -1992,9 +2001,9 @@ async function handleOfflineRelease() {
   const zlib = require("zlib");
   console.log("🚀 开始在 offline-release 模式下发布快照...");
   
-  const catalogPath = path.join(__dirname, "last-catalog.json");
-  const majorsPath = path.join(__dirname, "last-majors.json");
-  const schedPath = path.join(__dirname, ".debug", "class-schedules-latest.json");
+  const catalogPath = path.join(SYNC_DATA_DIR, "last-catalog.json");
+  const majorsPath = path.join(SYNC_DATA_DIR, "last-majors.json");
+  const schedPath = path.join(SYNC_DATA_DIR, ".debug", "class-schedules-latest.json");
   
   if (!fs.existsSync(catalogPath) || !fs.existsSync(majorsPath) || !fs.existsSync(schedPath)) {
     throw new Error("离线模式下，必须存在 last-catalog.json, last-majors.json 和 .debug/class-schedules-latest.json 缓存文件！");
@@ -2023,7 +2032,7 @@ async function handleOfflineRelease() {
   const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
   const compressedBuffer = zlib.gzipSync(snapshotBuffer);
 
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
@@ -2159,7 +2168,8 @@ function writeLocalStagingDebugFailure(params, catalog, majors, error) {
 }
 
 function readTermCatalogCache(term) {
-  const root = syncCacheStore.ensureTermCache(__dirname, term);
+  let root = syncCacheStore.ensureTermCache(SYNC_DATA_DIR, term);
+  if (process.env.FOSU_SYNC_CATALOG_CACHE && !fs.existsSync(path.join(root, "catalog", "catalog.json"))) root = path.join(process.env.FOSU_SYNC_CATALOG_CACHE, term);
   const catalog = syncCacheStore.readJson(path.join(root, "catalog", "catalog.json"), null);
   const majors = syncCacheStore.readJson(path.join(root, "catalog", "majors.json"), null);
   const catalogMeta = syncCacheStore.readJson(path.join(root, "catalog", "metadata.json"), null);
@@ -2170,8 +2180,8 @@ function readTermCatalogCache(term) {
   if (!Array.isArray(majors) || majors.length === 0) {
     return null;
   }
-  if (catalogMeta && catalogMeta.term && catalogMeta.term !== term) return null;
-  if (majorsMeta && majorsMeta.term && majorsMeta.term !== term) return null;
+  if (!catalogMeta || catalogMeta.term !== term || catalogMeta.sourceMode !== "network-direct" || catalogMeta.hash !== syncCacheStore.hashJson(catalog)) return null;
+  if (!majorsMeta || majorsMeta.term !== term || majorsMeta.sourceMode !== "network-direct" || majorsMeta.hash !== syncCacheStore.hashJson(majors)) return null;
   return { catalog, majors, catalogMeta, majorsMeta };
 }
 
@@ -2211,6 +2221,8 @@ async function handleLocalCampusStaging(page, params) {
     }
   }
 
+  fs.mkdirSync(SYNC_DATA_DIR, { recursive: true, mode: 0o700 });
+  collectorProgress("catalog");
   const { catalog, majors } = await withSyncStage("directory-fetch", () => resolveCatalogForPlan(page, params));
   
   let allClassSchedules = [];
@@ -2218,8 +2230,9 @@ async function handleLocalCampusStaging(page, params) {
     try {
       allClassSchedules = await withSyncStage("schedule-fetch", () => syncClassSchedules(page, catalog, majors));
     } catch (error) {
+      if (process.env.FOSU_COLLECTOR_MODE === "1") throw error;
       const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
-      throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
+      throw Object.assign(new Error(`${error.message} 已生成 debug JSON: ${debugPath}`), { code: error.code });
     }
     if (!allClassSchedules || allClassSchedules.length === 0) {
       const error = new Error("本机校园网采集结果为空，未生成正式 Staging JSON");
@@ -2250,7 +2263,7 @@ async function handleLocalCampusStaging(page, params) {
         semester: process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value,
       }))
     : null;
-  const snapshot = measureSyncStage("normalize", () => buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
+  let snapshot = measureSyncStage("normalize", () => buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
     resources: resourceIncludeOptions,
   }));
   if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
@@ -2259,6 +2272,13 @@ async function handleLocalCampusStaging(page, params) {
     throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
   }
   validateLocalReleaseSnapshot(snapshot);
+  if (strictDirectPlan()) {
+    snapshot = stripDirectRaw(snapshot);
+    snapshot.directSourceSummary = global.DIRECT_SOURCE_SUMMARY || {};
+    snapshot.meta = Object.assign({}, snapshot.meta, { directSourceSummary: snapshot.directSourceSummary, allowDerived: false, requireFourDirectSources: true, actualNetworkRequestCount: global.SCHOOL_REQUEST_COUNT || 0 });
+    collectorProgress("normalize");
+    if (!params.diagnostic) fourSources.assertFourSources(snapshot, snapshot.term || snapshot.semester);
+  }
 
   const defaultOutput = path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`);
   const output = resolveOutputFilePath(params.output || defaultOutput);
@@ -2282,6 +2302,17 @@ async function handleLocalCampusStaging(page, params) {
     rawSizeBytes,
   }));
   fs.writeFileSync(sidecarPath, JSON.stringify(sidecarMeta, null, 2), "utf-8");
+  if (strictDirectPlan() && !params.diagnostic) {
+    const plan = getActiveSyncPlan();
+    syncCacheStore.promoteValidatedRun(SYNC_DATA_DIR, plan.term, plan.runId, plan.dynamicScopes, fourSources.assertFourSources(snapshot, plan.term));
+    const catalogRoot = process.env.FOSU_SYNC_CATALOG_CACHE;
+    if (catalogRoot) {
+      const termRoot = path.join(catalogRoot, plan.term, "catalog");
+      const sourceRoot = path.join(syncCacheStore.ensureTermCache(SYNC_DATA_DIR, plan.term), "catalog");
+      fs.mkdirSync(termRoot, { recursive: true });
+      for (const name of ["catalog.json", "majors.json", "metadata.json", "majors.metadata.json"]) if (fs.existsSync(path.join(sourceRoot, name))) fs.copyFileSync(path.join(sourceRoot, name), path.join(termRoot, name));
+    }
+  }
   console.log(`💾 Staging JSON 已生成: ${output}`);
   console.log(`🧾 Staging meta 已生成: ${sidecarPath}`);
   console.log(`📦 最终 staging 文件大小: ${(rawSizeBytes / 1024 / 1024).toFixed(2)} MB`);
@@ -2417,6 +2448,134 @@ async function publishCurrentStaging(plan, snapshot) {
   return result;
 }
 
+
+function strictResultOptions(kind, targets, directoryComplete = true) {
+  const plan = getActiveSyncPlan();
+  const limit = Number((global.CLI_PARAMS || {})["entity-limit"] || 0);
+  return {
+    term: plan.term, scope: kind + "Schedules", runId: plan.runId, baseDir: SYNC_DATA_DIR,
+    targets: limit > 0 ? targets.slice(0, limit) : targets,
+    directoryComplete: directoryComplete && !(limit > 0 && targets.length > limit),
+    progress: (summary) => collectorProgress(kind, kind, summary),
+  };
+}
+function stripDirectRaw(value) {
+  if (Array.isArray(value)) return value.map(stripDirectRaw);
+  if (!value || typeof value !== "object") return value;
+  const next = {};
+  for (const key of Object.keys(value)) if (!["rawHtml", "rawText", "hiddenInputText"].includes(key)) next[key] = stripDirectRaw(value[key]);
+  return next;
+}
+function strictCourses(parsed, context) {
+  if (parsed.warnings && parsed.warnings.length) throw directAcquisition.failure("SCHEDULE_PARSE_FAILED");
+  return normalizer.normalizeCourseList(parsed.courses || [], context).map((course) => {
+    const event = stripDirectRaw(course);
+    delete event.id;
+    event.id = "event-" + crypto.createHash("sha256").update(require("../../server/src/utils/stagingFingerprint").stableStringify(event)).digest("hex").slice(0, 24);
+    return event;
+  });
+}
+function saveStrictScope(kind, result) {
+  const plan = getActiveSyncPlan();
+  global.DIRECT_SOURCE_SUMMARY = global.DIRECT_SOURCE_SUMMARY || {};
+  global.DIRECT_SOURCE_SUMMARY[kind] = result.summary;
+  syncCacheStore.writeScheduleLatest(SYNC_DATA_DIR, plan.term, kind + "Schedules", result.schedules, {
+    runId: plan.runId, sourceMode: "network-direct", endpointFamily: kind + "-schedule",
+    requested: result.summary.requestedEntities, succeeded: result.summary.success + result.summary.empty,
+    failed: result.summary.failed, partial: !result.summary.coverageValid, fresh: true,
+  });
+  recordScopeSource(kind + "Schedules", Object.assign({}, result.summary, {
+    sourceMode: "network-direct", endpointFamily: kind + "-schedule",
+    requested: result.summary.requestedEntities, succeeded: result.summary.success + result.summary.empty, cacheHits: 0,
+  }));
+}
+async function crawlStrictClassSchedules(page, catalog, majors) {
+  const plan = getActiveSyncPlan();
+  if (!page || !catalog || !Array.isArray(majors) || !majors.length) throw directAcquisition.failure("DIRECT_DIRECTORY_INCOMPLETE");
+  const grades = new Set(getActiveGradesBySemester(plan.term, { originalGrades: catalog.grades, activeGradeCount: 5 }));
+  const allowed = (key, value) => !plan.filters[key].length || plan.filters[key].includes(String(value));
+  const targets = majors.filter((major) => grades.has(String(major.grade)) && allowed("grades", major.grade) && allowed("collegeCodes", major.collegeCode) && allowed("majorCodes", major.code)).map((major) => Object.assign({}, major, { key: [major.collegeCode, major.grade, major.code].join(":") }));
+  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
+  const collegeNames = new Map((catalog.colleges || []).map((item) => [String(item.code), item.name]));
+  const result = await directAcquisition.collectEntities(Object.assign(strictResultOptions("class", targets), {
+    request: (target) => page.evaluate(async (input) => {
+      const response = await fetch("/kbcx/kbxx_xzb_ifr", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, credentials: "include", body: new URLSearchParams({ xnxqh: input.term, skyx: input.target.collegeCode, sknj: input.target.grade, skzy: input.target.code, zc1: "", zc2: "", jc1: "", jc2: "" }).toString() });
+      return { ok: response.ok, status: response.status, text: await response.text() };
+    }, { term: plan.term, target }),
+    parse: (html, major) => {
+      const context = { semester: plan.term, collegeCode: major.collegeCode, collegeName: collegeNames.get(String(major.collegeCode)) || major.collegeName || "", grade: major.grade, majorCode: major.code, majorName: major.name };
+      const parsed = parser.parseClassScheduleIfrHtml(html, context);
+      const courses = strictCourses(parsed, { semester: plan.term, sourceType: "class", audienceType: "student" });
+      if (!courses.length) return [];
+      return normalizer.buildClassScheduleEntries(courses, context);
+    },
+  }));
+  result.summary.entityUnit = "major-request-group";
+  saveStrictScope("class", result);
+  global.SYNC_CRAWL_STATS = { actualNetworkRequestCount: result.summary.requestCount, freshRunId: plan.runId, requestedTargetCount: result.summary.requestedEntities, succeededTargetCount: result.summary.success + result.summary.empty, failedTargetCount: result.summary.failed, usedProgressCache: result.summary.requestCount < result.summary.requestedEntities, usedNoScheduleCache: false, usedClassScheduleCache: false, resumedFromRunProgress: result.summary.requestCount < result.summary.requestedEntities, progressCacheRunId: plan.runId };
+  // The administrative endpoint accepts college/grade/major groups, not one class per POST.
+  // Keep request-group counts distinct from schedule documents and administrative entities.
+  return result.schedules;
+}
+async function discoverStrictDirectory(page, type, semester) {
+  const config = type === "teacher" ? { pagePath: "/kbcx/kbxx_teacher" } : getGenericDirectResourceConfig(type);
+  if (!page) throw directAcquisition.failure("RESOURCE_DIRECT_CRAWL_REQUIRED");
+  await gotoPage(page, config.pagePath, { waitUntil: "networkidle", timeout: 20000 });
+  await selectSemester(page, semester);
+  const directory = await page.evaluate((kind) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const controls = {};
+    const allowed = /^(xnxqh|skyx|kkyx|jszc|xqid|jzwid|zc1|zc2|jc1|jc2|zzdKcSX)$/i;
+    for (const input of document.querySelectorAll("input[name],select[name]")) {
+      const name = input.getAttribute("name");
+      if (allowed.test(name)) controls[name] = input.value || "";
+    }
+    const selects = Array.from(document.querySelectorAll("select[name]"));
+    const match = selects.find((select) => {
+      const marker = String(select.name || "").toLowerCase();
+      if (kind === "teacher") return /^(js|skjs|teacher|jzg|jzgid|gh|jsid)$/.test(marker);
+      if (kind === "classroom") return /^(jsid|js|room|roomid|classroom|classroomid)$/.test(marker);
+      return /^(kc|kcid|course|courseid)$/.test(marker);
+    });
+    if (!match) return { targets: [], controls };
+    const targets = Array.from(match.options || []).map((option) => ({ key: clean(option.value), name: clean(option.textContent), field: match.name })).filter((item) => item.key && item.name && !/^请选择|^全部|^--/.test(item.name));
+    return { targets, controls };
+  }, type);
+  if (!directory.targets.length) throw directAcquisition.failure("DIRECT_" + type.toUpperCase() + "_DIRECTORY_INCOMPLETE");
+  const seen = new Set();
+  for (const target of directory.targets) {
+    if (seen.has(target.key) || !isUsableResourceName(target.name) || type === "teacher" && isInvalidTeacherName(target.name)) throw directAcquisition.failure("DIRECT_DIRECTORY_INVALID");
+    seen.add(target.key);
+    target.controls = Object.assign({}, directory.controls, { xnxqh: semester, [target.field]: target.key });
+  }
+  return directory.targets;
+}
+async function crawlStrictResources(page, types, semester) {
+  const resources = emptySnapshotResources();
+  for (const type of types) {
+    const config = RESOURCE_SYNC_CONFIGS[type];
+    const targets = await discoverStrictDirectory(page, type, semester);
+    const generic = type === "teacher" ? { ifrPath: "/kbcx/kbxx_teacher_ifr", parse: parser.parseTeacherScheduleIfrHtml, targetKey: "teacherName" } : getGenericDirectResourceConfig(type);
+    const result = await directAcquisition.collectEntities(Object.assign(strictResultOptions(type, targets), {
+      request: (target) => page.evaluate(async (input) => {
+        const response = await fetch(input.ifrPath, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" }, credentials: "include", body: new URLSearchParams(input.target.controls).toString() });
+        return { ok: response.ok, status: response.status, text: await response.text() };
+      }, { target, ifrPath: generic.ifrPath }),
+      parse: (html, target) => {
+        const context = { semester, [generic.targetKey]: target.name };
+        const parsed = generic.parse(html, context);
+        const courses = strictCourses(parsed, { semester, sourceType: type, audienceType: type });
+        if (courses.some((event) => !event.courseName || /未知|临班/.test(event.courseName))) throw directAcquisition.failure("SCHEDULE_PARSE_FAILED");
+        return [{ [generic.targetKey]: target.name, name: target.name, id: target.key, semester, source: "direct", courses }];
+      },
+    }));
+    saveStrictScope(type, result);
+    resources[config.schedulesKey] = result.schedules;
+    resources[config.indexKey] = targets.map((target) => ({ [generic.targetKey]: target.name, name: target.name, id: target.key, source: "direct" }));
+  }
+  return resources;
+}
+
 async function handlePlannedSync(page, params) {
   const plan = getActiveSyncPlan();
   if (!plan) throw new Error("SYNC_PLAN_NOT_RESOLVED");
@@ -2438,7 +2597,7 @@ async function handlePlannedSync(page, params) {
   }
   if (!snapshot) snapshot = await handleLocalCampusStaging(page, params);
   if (!plan.upload) {
-    syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "crawl-report"), {
+    syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(SYNC_DATA_DIR, plan.term, "crawl-report"), {
       success: true,
       profile: plan.profile,
       runId: plan.runId,
@@ -2467,7 +2626,7 @@ async function handlePlannedSync(page, params) {
     publishResult,
     generatedAt: new Date().toISOString(),
   };
-  syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "publish-report"), report);
+  syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(SYNC_DATA_DIR, plan.term, "publish-report"), report);
   return report;
 }
 
@@ -2680,7 +2839,7 @@ async function collectDirectTeacherTargets(page, derivedResources, semester) {
     console.warn(`[resources:teacher:direct] semester select fallback: ${error.message}`);
   }
   const html = await page.content();
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   fs.writeFileSync(path.join(debugDir, "direct-teacher-page.html"), html, "utf-8");
   const dom = await page.evaluate(() => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -2796,7 +2955,7 @@ async function fetchDirectTeacherScheduleHtml(page, target, semester) {
 
 async function crawlDirectTeacherResources(page, derivedResources = {}, options = {}) {
   const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
   const delayConfig = getResourceDelayConfig();
   const collected = await collectDirectTeacherTargets(page, derivedResources, semester);
@@ -2944,7 +3103,7 @@ async function collectGenericDirectResourceTargets(page, type, derivedResources,
     console.warn(`[resources:${type}:direct] semester select fallback: ${error.message}`);
   }
   const html = await page.content();
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   fs.writeFileSync(path.join(debugDir, `direct-${type}-page.html`), html, "utf-8");
   const dom = await page.evaluate((resourceType) => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -3068,7 +3227,7 @@ async function crawlGenericDirectResources(type, page, derivedResources = {}, op
   const config = getGenericDirectResourceConfig(type);
   if (!config) throw new Error(`Unsupported direct resource type: ${type}`);
   const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
   const delayConfig = getResourceDelayConfig();
   const collected = await collectGenericDirectResourceTargets(page, type, derivedResources, semester);
@@ -3140,6 +3299,7 @@ async function crawlGenericDirectResources(type, page, derivedResources = {}, op
 async function buildResourcesForClassSchedules(classSchedules, resourceTypes, options = {}) {
   const types = normalizeResourceTypeList(resourceTypes);
   const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  if (strictDirectPlan()) return crawlStrictResources(options.page, types, semester);
   const includeOptions = {
     includeTeachers: types.includes("teacher"),
     includeClassrooms: types.includes("classroom"),
@@ -3193,7 +3353,7 @@ async function buildResourcesForClassSchedules(classSchedules, resourceTypes, op
           [config.schedulesKey]: directResources[config.schedulesKey] || [],
         });
       }
-      syncCacheStore.writeScheduleLatest(__dirname, semester, config.schedulesKey, result[config.schedulesKey] || [], {
+      syncCacheStore.writeScheduleLatest(SYNC_DATA_DIR, semester, config.schedulesKey, result[config.schedulesKey] || [], {
         runId: getActiveSyncPlan() && getActiveSyncPlan().runId || `resource-${Date.now()}`,
         command: global.GENERATED_COMMAND || process.argv.join(" "),
         sourceMode: "network-direct",
@@ -3325,7 +3485,7 @@ async function uploadResourceSchedules(resources, resourceTypes, semester) {
 }
 
 async function handleResourcesSync(resourceTypes, options = {}) {
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
@@ -3489,7 +3649,7 @@ async function initBrowserContext() {
   for (const channel of channels) {
     try {
       const config = {
-        headless: false, // 设为 false 以确保与系统通道的最大兼容性，并且能够直观展示同步过程
+        headless: process.env.FOSU_SYNC_HEADLESS === "1",
         args: launchArgs,
       };
       if (channel) {
@@ -3554,6 +3714,26 @@ async function initBrowserContext() {
     throw error;
   }
 
+  if (process.env.FOSU_COLLECTOR_MODE === "1") {
+    const countFile = path.join(SYNC_DATA_DIR, "request-count.json");
+    global.SCHOOL_REQUEST_COUNT = Number(syncCacheStore.readJson(countFile, {}).count || 0);
+    let schoolQueue = Promise.resolve(), lastSchoolRequest = 0;
+    await context.route("**/*", async (route) => {
+      if (new URL(route.request().url()).hostname !== "100.fosu.edu.cn") return route.continue();
+      const task = schoolQueue.catch(() => {}).then(async () => {
+        const delay = Math.max(0, lastSchoolRequest + 900 + Math.floor(Math.random() * 401) - Date.now());
+        if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+        global.SCHOOL_REQUEST_COUNT++;
+        syncCacheStore.writeJsonAtomic(countFile, { count: global.SCHOOL_REQUEST_COUNT });
+        lastSchoolRequest = Date.now();
+        await route.continue();
+        const response = await route.request().response();
+        if (response) await response.finished();
+      });
+      schoolQueue = task;
+      return task;
+    });
+  }
   return { browser, context };
 }
 
@@ -3771,10 +3951,11 @@ let savedSampleCount = 0;
  * 保存原始专业联动响应样本
  */
 function saveMajorResponseSample(rawText, meta, parsedCount, emptyNameCount) {
+  if (process.env.FOSU_COLLECTOR_MODE === "1") return;
   if (savedSampleCount >= 3) return;
   savedSampleCount++;
 
-  const sampleDir = path.join(__dirname, ".debug", "major-response-samples");
+  const sampleDir = path.join(SYNC_DATA_DIR, ".debug", "major-response-samples");
   if (!fs.existsSync(sampleDir)) {
     fs.mkdirSync(sampleDir, { recursive: true });
   }
@@ -4087,9 +4268,9 @@ async function syncCatalog(page) {
   await uploadToVps("/api/admin/sync/catalog", catalogPayload);
   
   // 本地保存一份
-  fs.writeFileSync(path.join(__dirname, "last-catalog.json"), JSON.stringify(catalogPayload, null, 2), "utf-8");
+  fs.writeFileSync(path.join(SYNC_DATA_DIR, "last-catalog.json"), JSON.stringify(catalogPayload, null, 2), "utf-8");
   const catalogTerm = process.env.PREFERRED_SEMESTER || (catalogPayload.semesters && catalogPayload.semesters[0] && catalogPayload.semesters[0].value) || inferPreferredSemester();
-  const catalogCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, catalogTerm), "catalog");
+  const catalogCacheDir = path.join(syncCacheStore.ensureTermCache(SYNC_DATA_DIR, catalogTerm), "catalog");
   syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "catalog.json"), catalogPayload);
   syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "metadata.json"), syncCacheStore.buildMetadata({
     term: catalogTerm,
@@ -4175,8 +4356,8 @@ function getActiveGradesBySemester(semester, options = {}) {
 async function syncMajors(page, catalog) {
   console.log("\n=== [步骤 2] 开始抓取 Majors 专业联动 ===");
   if (!catalog) {
-    if (fs.existsSync(path.join(__dirname, "last-catalog.json"))) {
-      catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "last-catalog.json"), "utf-8"));
+    if (fs.existsSync(path.join(SYNC_DATA_DIR, "last-catalog.json"))) {
+      catalog = JSON.parse(fs.readFileSync(path.join(SYNC_DATA_DIR, "last-catalog.json"), "utf-8"));
     } else {
       console.error("❌ 找不到 Catalog 数据，请先运行 sync:catalog");
       return;
@@ -4346,7 +4527,7 @@ async function syncMajors(page, catalog) {
   }
 
   // 2. 保存调试文件
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
@@ -4412,9 +4593,9 @@ async function syncMajors(page, catalog) {
     throw err;
   }
   
-  fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(cleaned, null, 2), "utf-8");
+  fs.writeFileSync(path.join(SYNC_DATA_DIR, "last-majors.json"), JSON.stringify(cleaned, null, 2), "utf-8");
   const majorsTerm = process.env.PREFERRED_SEMESTER || (catalog && catalog.semesters && catalog.semesters[0] && catalog.semesters[0].value) || inferPreferredSemester();
-  const majorsCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, majorsTerm), "catalog");
+  const majorsCacheDir = path.join(syncCacheStore.ensureTermCache(SYNC_DATA_DIR, majorsTerm), "catalog");
   syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.json"), cleaned);
   syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.metadata.json"), syncCacheStore.buildMetadata({
     term: majorsTerm,
@@ -4484,9 +4665,10 @@ async function getCurrentStudentClass(page) {
  */
 async function syncClassSchedules(page, catalog, majors) {
   console.log("\n=== [步骤 3] 开始抓取班级课表 Class Schedules ===");
+  if (strictDirectPlan()) return crawlStrictClassSchedules(page, catalog, majors);
   if (!catalog) {
-    if (fs.existsSync(path.join(__dirname, "last-catalog.json"))) {
-      catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "last-catalog.json"), "utf-8"));
+    if (fs.existsSync(path.join(SYNC_DATA_DIR, "last-catalog.json"))) {
+      catalog = JSON.parse(fs.readFileSync(path.join(SYNC_DATA_DIR, "last-catalog.json"), "utf-8"));
     } else {
       console.error("❌ 找不到 Catalog 数据，请先运行 sync:catalog");
       return;
@@ -4494,15 +4676,15 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   if (!majors) {
-    if (fs.existsSync(path.join(__dirname, "last-majors.json"))) {
-      majors = JSON.parse(fs.readFileSync(path.join(__dirname, "last-majors.json"), "utf-8"));
+    if (fs.existsSync(path.join(SYNC_DATA_DIR, "last-majors.json"))) {
+      majors = JSON.parse(fs.readFileSync(path.join(SYNC_DATA_DIR, "last-majors.json"), "utf-8"));
     } else {
       console.error("❌ 找不到 Majors 数据，请先运行 sync:majors");
       return;
     }
   }
 
-  const debugDir = path.join(__dirname, ".debug");
+  const debugDir = path.join(SYNC_DATA_DIR, ".debug");
   const rawPagesDir = path.join(debugDir, "raw-pages");
   if (!fs.existsSync(rawPagesDir)) {
     fs.mkdirSync(rawPagesDir, { recursive: true });
@@ -4535,7 +4717,7 @@ async function syncClassSchedules(page, catalog, majors) {
   const syncPlan = getActiveSyncPlan();
   const runId = syncPlan && syncPlan.runId || cliParams.freshRunId || cliParams["fresh-run-id"] || `class-${Date.now()}`;
   const PROGRESS_PATH = isPlanNetworkOnly()
-    ? syncCacheStore.progressPath(__dirname, activeSemester, "class", runId)
+    ? syncCacheStore.progressPath(SYNC_DATA_DIR, activeSemester, "class", runId)
     : path.join(debugDir, "sync-progress.json");
   const PROGRESS_CLASS_SCHEDULES_PATH = PROGRESS_PATH.replace(/\.json$/i, ".classSchedules.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
@@ -4568,7 +4750,7 @@ async function syncClassSchedules(page, catalog, majors) {
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
   const noScheduleCacheRunId = syncPlan && syncPlan.negativeCachePolicy === "use" ? "" : runId;
   const noScheduleCachePath = isPlanNetworkOnly()
-    ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", noScheduleCacheRunId)
+    ? syncCacheStore.negativePath(SYNC_DATA_DIR, activeSemester, "class-schedule", noScheduleCacheRunId)
     : path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
@@ -5269,8 +5451,8 @@ async function handleQuickSync(page) {
   console.log("\n================ [开始执行一键快速同步 (sync:quick)] ================");
 
   // 1. 从历史缓存中加载 catalog 和 majors
-  const catalogPath = path.join(__dirname, "last-catalog.json");
-  const majorsPath = path.join(__dirname, "last-majors.json");
+  const catalogPath = path.join(SYNC_DATA_DIR, "last-catalog.json");
+  const majorsPath = path.join(SYNC_DATA_DIR, "last-majors.json");
   if (!fs.existsSync(catalogPath) || !fs.existsSync(majorsPath)) {
     throw new Error("没有找到本地 catalog 或 majors 历史缓存！请先运行一次 npm run sync:fresh。");
   }
@@ -5409,8 +5591,8 @@ async function main() {
     process.env.SYNC_CLASS_MAJOR_CODES = params["major-codes"];
   }
   if (params.concurrency) {
-    process.env.SYNC_RESOURCE_MAX_CONCURRENCY = params.concurrency;
-    process.env.SYNC_CLASS_MAX_CONCURRENCY = params.concurrency;
+    process.env.SYNC_RESOURCE_MAX_CONCURRENCY = String(Math.max(1, Math.min(2, Number(params.concurrency) || 1)));
+    process.env.SYNC_CLASS_MAX_CONCURRENCY = process.env.SYNC_RESOURCE_MAX_CONCURRENCY;
   }
   if (params["delay-ms"]) {
     process.env.SYNC_RESOURCE_REQUEST_DELAY_MS = params["delay-ms"];
@@ -5619,7 +5801,7 @@ async function main() {
       const snapshotJson = JSON.stringify(snapshot, null, 2);
       const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
       const compressedBuffer = zlib.gzipSync(snapshotBuffer);
-      const debugDir = path.join(__dirname, ".debug");
+      const debugDir = path.join(SYNC_DATA_DIR, ".debug");
       if (!fs.existsSync(debugDir)) {
         fs.mkdirSync(debugDir, { recursive: true });
       }
@@ -5674,8 +5856,8 @@ async function main() {
     }
 
   } catch (error) {
-    console.error(`❌ 执行同步时发生致命异常: ${error.message}`);
-    console.error(error.stack);
+    console.error(`❌ 执行同步时发生致命异常: ${process.env.FOSU_COLLECTOR_MODE === "1" ? error.code || "SYNC_FAILED" : error.message}`);
+    if (process.env.FOSU_COLLECTOR_MODE !== "1") console.error(error.stack);
     printPowerShellCommands();
     process.exitCode = 1;
     throw error;
@@ -5688,8 +5870,9 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((error) => {
+  main().then(() => { if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
     process.exitCode = 1;
+    if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: error.code || "SYNC_FAILED" });
     if (!error || !error.__syncLogged) {
       console.error(JSON.stringify({
         success: false,
@@ -5701,6 +5884,9 @@ if (require.main === module) {
 } else {
   module.exports = {
     selectSemester,
+    crawlStrictClassSchedules,
+    crawlStrictResources,
+    discoverStrictDirectory,
     getCollegeSlug,
     saveMajorResponseSample,
     parseMajorOptionsFromResponse,

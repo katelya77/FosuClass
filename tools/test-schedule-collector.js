@@ -33,10 +33,11 @@ const command = collector.collectorCommand("routine");
 assert.strictEqual(command.publishesRelease, false);
 assert.ok(command.concurrency <= 2);
 assert.ok(!command.script.includes("fosu-publisher"));
-assert.deepStrictEqual(collector.findSensitive({ cookie: "a" }), ["cookie"]);
+assert.deepStrictEqual(collector.findSensitive({ cookie: "a" }), ["sensitive"]);
 assert.deepStrictEqual(collector.findSensitive({ note: "ok" }), []);
 
-const same = collector.classifyRelease({ canonicalHash: "abc", counts: { class: 10 } }, { canonicalHash: "abc", counts: { class: 10 } });
+const directSourceSummary = Object.fromEntries(["class", "teacher", "classroom", "course"].map((kind) => [kind, { sourceMode: "network-direct", coverageValid: true, scheduleDocuments: 10 }]));
+const same = collector.classifyRelease({ canonicalHash: "abc", counts: { class: 10 } }, { canonicalHash: "abc", counts: { class: 10 }, directSourceSummary, coverageValid: true });
 assert.strictEqual(same.result, "NO CHANGE");
 const drop = collector.classifyRelease({ canonicalHash: "abc", counts: { class: 100 } }, { canonicalHash: "def", counts: { class: 10 }, coverageValid: true });
 assert.strictEqual(drop.result, "PENDING REVIEW");
@@ -47,22 +48,22 @@ assert.strictEqual(queued.skipped, false);
 const claimed = collector.claim("wyz-schedule-collector", now);
 assert.ok(claimed);
 assert.strictEqual(collector.claim("wyz-schedule-collector", now), null);
-collector.applyReport(claimed.id, { failureCode: "SESSION_EXPIRED" });
+collector.applyReport(claimed.id, { claimId: claimed.claimId, failureCode: "SESSION_EXPIRED" }, "wyz-schedule-collector", now);
 assert.strictEqual(collector.snapshot(now).sessionExpired, true);
 
 collector.resetForTests();
 const again = collector.requestRun("full", "admin", now);
-collector.claim("wyz-schedule-collector", now);
-const finished = collector.applyReport(again.run.id, {
+const lease = collector.claim("wyz-schedule-collector", now);
+assert.throws(() => collector.applyReport(again.run.id, {
+  claimId: lease.claimId,
   complete: true,
   canonicalHash: "same",
   counts: { class: 10, teacher: 10, classroom: 10, course: 10 },
   term: "2026-2027-1",
   sourceMode: "school",
   coverageValid: true,
-});
-assert.strictEqual(finished.result, "PENDING REVIEW");
-assert.strictEqual(finished.recommendation, "AUTO SAFE PUBLISH");
+}, "wyz-schedule-collector", now), /COLLECTOR_FINALIZE_REQUIRED/);
+assert.strictEqual(collector.snapshot(now).autoPublish, false);
 assert.throws(() => collector.applyReport(again.run.id, { password: "no" }), (error) => error.code === "STAGING_SENSITIVE");
 
 const body = Buffer.from("{}");
