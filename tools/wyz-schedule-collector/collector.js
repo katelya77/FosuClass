@@ -58,13 +58,13 @@ function executeSync(run, cfg, dir, onChild) {
   });
 }
 async function upload(request, run, dir, data, hooks = {}) {
-  const zlib = require("zlib");
+  const { hashFile, gzipFile, readChunk } = require("../fosu-sync-client/uploadFileIO");
   const file = path.join(dir, "staging.json"), gzipPath = file + ".gz";
-  const original = fs.readFileSync(file);
-  if (!fs.existsSync(gzipPath)) fs.writeFileSync(gzipPath, zlib.gzipSync(original, { level: 9 }), { mode: 0o600 });
-  const bytes = fs.readFileSync(gzipPath), hash = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
+  await gzipFile(file, gzipPath);
+  const originalSize = fs.statSync(file).size, uploadSize = fs.statSync(gzipPath).size;
+  const originalSha256 = await hashFile(file), uploadSha256 = await hashFile(gzipPath);
   const chunkSize = hooks.chunkSize || 4 * 1024 * 1024;
-  const metadata = { term: run.term, fileName: "staging.json", contentEncoding: "gzip", contentType: "application/json", uploadSize: bytes.length, uploadSha256: hash(bytes), originalSize: original.length, originalSha256: hash(original), canonicalHash: data.canonicalHash, chunkSize, totalChunks: Math.ceil(bytes.length / chunkSize) };
+  const metadata = { term: run.term, fileName: "staging.json", contentEncoding: "gzip", contentType: "application/json", uploadSize, uploadSha256, originalSize, originalSha256, canonicalHash: data.canonicalHash, chunkSize, totalChunks: Math.ceil(uploadSize / chunkSize) };
   const base = "/api/full-sync/v1/runs/" + run.id;
   const initialized = await request("POST", base + "/upload/init", Object.assign({ claimId: run.claimId }, metadata));
   if (initialized.unchanged) return initialized;
@@ -72,26 +72,26 @@ async function upload(request, run, dir, data, hooks = {}) {
   const received = new Set(initialized.upload.receivedChunks || []);
   for (let index = 0; index < metadata.totalChunks; index++) {
     if (received.has(index)) continue;
-    const chunk = bytes.subarray(index * chunkSize, Math.min(bytes.length, (index + 1) * chunkSize));
+    const chunk = readChunk(gzipPath, index * chunkSize, Math.min(uploadSize, (index + 1) * chunkSize) - 1);
     let error;
     for (let attempt = 0; attempt < 3; attempt++) {
       try { await request("POST", base + "/upload/" + uploadId + "/chunks/" + index + "/" + run.claimId, chunk, true); error = null; break; }
       catch (caught) { error = caught; if (caught.status && caught.status < 500 && caught.status !== 408 && caught.status !== 429) break; if (attempt < 2) await (hooks.sleep || sleep)(700 * 2 ** attempt); }
     }
     if (error) throw error;
-    if (hooks.progress) await hooks.progress({ uploadBytes: Math.min(bytes.length, (index + 1) * chunkSize) });
+    if (hooks.progress) await hooks.progress({ uploadBytes: Math.min(uploadSize, (index + 1) * chunkSize) });
   }
   const finalized = await request("POST", base + "/upload/finalize", Object.assign({ claimId: run.claimId, uploadId }, metadata));
   if (finalized.job) {
     for (let attempt = 0; attempt < 1200; attempt++) {
       const status = await request("GET", base + "/upload/status/" + run.claimId);
-      if (status.status === "success") return Object.assign({}, status.result, { uploadId, rawBytes: original.length, gzipBytes: bytes.length });
+      if (status.status === "success") return Object.assign({}, status.result, { uploadId, rawBytes: originalSize, gzipBytes: uploadSize });
       if (status.status === "failed") throw failure(status.code || "STAGING_VALIDATION_FAILED");
       await (hooks.sleep || sleep)(2000);
     }
     throw failure("STAGING_FINALIZE_TIMEOUT");
   }
-  return Object.assign({}, finalized, { uploadId, rawBytes: original.length, gzipBytes: bytes.length });
+  return Object.assign({}, finalized, { uploadId, rawBytes: originalSize, gzipBytes: uploadSize });
 }
 async function runOnce(cfg, deps = {}) {
   const request = deps.request || client(cfg);
@@ -105,7 +105,8 @@ async function runOnce(cfg, deps = {}) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const started = Date.now();
   let child, timer, cancelled = false, lastLease = Date.now(), tickRunning = false;
-  const report = (patch) => request("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch));
+  let reportQueue = Promise.resolve();
+  const report = (patch) => (reportQueue = reportQueue.catch(() => {}).then(() => request("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch))));
   writeJsonAtomic(path.join(dir, "state.json"), { runId: run.id, term: run.term, status: "running" });
   try {
     await report({ stage: "auth-check" });
@@ -120,19 +121,23 @@ async function runOnce(cfg, deps = {}) {
       } catch (_) { if (Date.now() - lastLease > 90000) { cancelled = true; if (child) child.kill("SIGTERM"); } }
       finally { tickRunning = false; }
     }, 30000);
-    await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; });
+    if (!fs.existsSync(path.join(dir, "staging.json"))) await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; });
     if (cancelled) throw failure("CANCELLED");
     await report({ stage: "hash" });
     const data = readJson(path.join(dir, "staging.json"), null);
     const verified = assertFourSources(data, run.term);
     if (run.activeCanonicalHash && verified.canonicalHash === run.activeCanonicalHash) {
-      await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, noChange: true });
+      if (timer) clearInterval(timer);
+      await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, noChange: true });
       writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "NO CHANGE" });
+      writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
+      pruneRuns(cfg.dataRoot, dir, dir);
       return { status: "NO CHANGE", runId: run.id };
     }
     await report({ stage: "upload", directSourceSummary: verified.directSourceSummary });
     const result = await (deps.upload || upload)(request, run, dir, data, { progress: report });
-    await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
+    if (timer) clearInterval(timer);
+    await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
     writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "PENDING REVIEW" });
     writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
     pruneRuns(cfg.dataRoot, dir, dir);

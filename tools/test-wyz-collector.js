@@ -54,6 +54,24 @@ async function main() {
     control.cancelCurrent();
     const cancelled = await api("POST", "/api/full-sync/v1/heartbeat", { runId: queued.id, claimId: run.claimId });
     check(() => assert.equal(cancelled.cancelled, true));
+    control.requestRun("full", "fixture", Date.now(), { term: "2026-2027-1" });
+    const uploadRun = (await api("POST", "/api/full-sync/v1/runs/claim", {})).run;
+    const data = require("./fixtures/four-direct-source")();
+    data.canonicalHash = require("../server/src/utils/stagingFingerprint").calculateFingerprint(data).canonicalHash;
+    const dir = runDirectory(temp, uploadRun.term, uploadRun.id);
+    fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, "staging.json"), JSON.stringify(data));
+    let retried = false, chunks = 0;
+    const retryApi = async (...args) => {
+      if (args[1].includes("/chunks/")) { chunks++; if (!retried) { retried = true; throw Object.assign(new Error("fixture transient upload failure"), { status: 503 }); } }
+      return api(...args);
+    };
+    const finalized = await collector.upload(retryApi, uploadRun, dir, data, { chunkSize: 100, sleep: async () => new Promise((resolve) => setTimeout(resolve, 20)) });
+    check(() => assert.ok(chunks > 1 && retried));
+    check(() => assert.ok(finalized.rawBytes > finalized.gzipBytes));
+    check(() => assert.ok(fs.existsSync(path.join(temp, "oracle", "staging-latest.json"))));
+    const completed = await api("POST", "/api/full-sync/v1/runs/" + uploadRun.id + "/report", { claimId: uploadRun.claimId, complete: true, uploadId: finalized.uploadId, canonicalHash: data.canonicalHash, directSourceSummary: data.directSourceSummary });
+    check(() => assert.equal(completed.run.result, "PENDING REVIEW"));
+    check(() => assert.equal(fs.existsSync(path.join(temp, "oracle", "active-release.json")), false));
   } finally { await new Promise((resolve) => server.close(resolve)); }
   console.log("wyz-collector: " + cases + " PASS (local signed HTTP; no school requests)");
 }
