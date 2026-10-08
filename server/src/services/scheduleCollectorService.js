@@ -64,7 +64,7 @@ function publicRun(run) {
 }
 function snapshot(now) {
   ensureLoaded(); const current = Number(now || Date.now()), schedule = nextSchedule(current);
-  return { enabled: !state.paused, timerVerified: false, collectorOnline: Boolean(state.lastHeartbeat && current - Date.parse(state.lastHeartbeat) < HEARTBEAT_TTL_MS), lastHeartbeat: state.lastHeartbeat, lastRunAt: state.lastRunAt, lastSuccessAt: state.lastSuccessAt, nextRoutineAt: schedule.routineAt, nextFullAt: schedule.fullAt, sessionExpired: state.sessionExpired, sessionMessage: state.sessionExpired ? "校内采集会话已失效，请人工刷新" : "", stopForDay: state.stopForDay, current: publicRun(state.current), recent: state.runs.slice(0, 8).map(publicRun), autoPublish: false };
+  return { enabled: !state.paused, timerVerified: process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1", collectorOnline: Boolean(state.lastHeartbeat && current - Date.parse(state.lastHeartbeat) < HEARTBEAT_TTL_MS), lastHeartbeat: state.lastHeartbeat, lastRunAt: state.lastRunAt, lastSuccessAt: state.lastSuccessAt, nextRoutineAt: schedule.routineAt, nextFullAt: schedule.fullAt, sessionExpired: state.sessionExpired, sessionMessage: state.sessionExpired ? "校内采集会话已失效，请人工刷新" : "", stopForDay: state.stopForDay, current: publicRun(state.current), recent: state.runs.slice(0, 8).map(publicRun), autoPublish: false };
 }
 function requestRun(mode, actor, now, options = {}) {
   ensureLoaded();
@@ -96,6 +96,13 @@ function heartbeat(agentId, now, body = {}) {
   state.lastHeartbeat = new Date(stamp).toISOString(); state.agentId = String(agentId || "").slice(0, 64);
   let cancelled = false;
   if (body.runId) { try { requireRun(body.runId, agentId, body.claimId, stamp); state.lock.expiresAt = stamp + LEASE_TTL_MS; } catch (_) { cancelled = true; } }
+  const p = shanghaiParts(stamp), dayKey = [p.year, p.month + 1, p.date].join("-");
+  const due = stamp >= shanghaiToUtc(p.year, p.month, p.date, 4, 30);
+  const successes = state.runs.filter((run) => run.finishedAt && ["PENDING REVIEW", "NO CHANGE"].includes(run.result)).length;
+  if (!state.paused && !state.stopForDay && process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1" && successes >= 3 && due && state.lastScheduledDay !== dayKey && (!state.current || state.current.finishedAt)) {
+    state.lastScheduledDay = dayKey;
+    requestRun("routine", "verified-timer", stamp);
+  }
   persist(); return { ok: true, paused: state.paused, cancelled };
 }
 function claim(agentId, now) {
