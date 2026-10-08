@@ -49,6 +49,10 @@ test("受控发布必须在上传之前验证生产基线，并保留两组业�
   assert.match(workflow, /run: npm run test:notice-reactions/);
   assert.match(workflow, /run: npm run test:class-schedule-isolation/);
   assert.match(workflow, /run: npm run test:production-baseline/);
+  assert.match(workflow, /npm run test:wyz-four-source/);
+  assert.match(workflow, /node tools\/wyz-schedule-collector\/build-package.js/);
+  assert.match(workflow, /sha256sum -c wyz-schedule-collector.sha256/);
+  assert.ok(!/systemctl (?:start|enable) wyz-schedule-collector/.test(workflow), "Oracle only prepares the independent package; WYZ installation remains manual");
 });
 test("CI只能选已成功终结的受控部署，并由SSH在源站再次核对", () => {
   const sha=readSuccessfulDeployment({run(command,args){assert.equal(command,"gh");assert.ok(args.includes("deploy-vps.yml"));assert.ok(!args.includes("--status"),"read recent records then filter conclusions locally");return {status:0,stdout:JSON.stringify([{headSha:base,status:"completed",conclusion:"failure"},{headSha:base,status:"in_progress",conclusion:""},{headSha:production,status:"completed",conclusion:"success"},{headSha:base,status:"completed",conclusion:"success"}])};}});

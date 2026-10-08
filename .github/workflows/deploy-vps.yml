@@ -72,6 +72,13 @@ jobs:
       - name: Production baseline regression
         run: npm run test:production-baseline
 
+      - name: Four-source collector production gates
+        run: |
+          npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+          npm run test:wyz-four-source
+          npm run test:security-full
+          npm run test:architecture-guards
+
       - name: Xiaofu Agent release gate
         run: npm run test:agent-release-gate
 
@@ -268,6 +275,10 @@ jobs:
           cp ".local/wyz-campus-agent-${{ github.sha }}.tar.gz" route2-artifacts/
           echo "deployment_sha=${GITHUB_SHA}" > route2-artifacts/agent-release-truth.txt
           sha256sum "route2-artifacts/wyz-campus-agent-${{ github.sha }}.tar.gz" | tee route2-artifacts/wyz-campus-agent.sha256
+          node tools/wyz-schedule-collector/build-package.js
+          cp ".local/collector-packages/wyz-schedule-collector-${{ github.sha }}.tar.gz" route2-artifacts/
+          cp deploy/wyz/install-schedule-collector.sh route2-artifacts/
+          sha256sum "route2-artifacts/wyz-schedule-collector-${{ github.sha }}.tar.gz" | sed 's#route2-artifacts/##' | tee route2-artifacts/wyz-schedule-collector.sha256
 
       - name: Upload WYZ bundle to Oracle
         uses: appleboy/scp-action@v0.1.7
@@ -740,6 +751,11 @@ jobs:
             echo "wyz_bundle_path=$bundle"
             sha256sum "$bundle"
             stat -c 'wyz_bundle_bytes=%s' "$bundle"
+            cd '${{ secrets.VPS_APP_DIR }}/route2-artifacts'
+            sha256sum -c wyz-schedule-collector.sha256
+            collector_bundle="wyz-schedule-collector-${{ github.sha }}.tar.gz"
+            stat -c 'collector_bundle_bytes=%s' "$collector_bundle"
+            test -f install-schedule-collector.sh
 
       - name: Configure and verify Coze workload
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.configure_coze_workload }}
