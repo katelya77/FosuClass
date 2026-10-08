@@ -67,7 +67,7 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
           if (!window.confirm("确定取消当前采集任务吗？")) return;
           post("/api/admin/schedule-collector/actions/cancel");
         });
-        document.getElementById("scValidateBtn").addEventListener("click", function () { if (typeof previewStaging === "function") previewStaging(); });
+        document.getElementById("scValidateBtn").addEventListener("click", function () { if (typeof loadStagingPreview === "function") loadStagingPreview(); });
         document.getElementById("scPublishBtn").addEventListener("click", function () { var button = document.getElementById("stagingPublishBtn"); if (button) { button.scrollIntoView(); button.focus(); } });
         document.getElementById("scMirrorBtn").addEventListener("click", function () { if (typeof copyText === "function") copyText("npm run cloudbase:release:sync-active -- --execute --mirror-only"); });
         document.getElementById("scReportBtn").addEventListener("click", function () { document.getElementById("scReport").hidden = !document.getElementById("scReport").hidden; refresh(); });
