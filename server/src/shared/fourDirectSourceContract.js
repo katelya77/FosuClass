@@ -31,6 +31,7 @@ function validateFourSources(data, expectedTerm) {
   const sources = data && (data.scopeSources || data.meta && data.meta.scopeSources) || {};
   const resourceCounts = buildResourceCountContract(data || {});
   const resources = data && data.resources || {};
+  if (!resourceCounts.class.administrativeClasses) errors.push("class:NO_ADMINISTRATIVE_CLASSES");
   for (const kind of KINDS) {
     const scope = `${kind}Schedules`;
     const stat = summary[kind] || {};

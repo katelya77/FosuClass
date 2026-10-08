@@ -43,6 +43,7 @@ function classifyRelease(previous, incoming) {
   for (const kind of ["class", "teacher", "classroom", "course"]) {
     const stat = next.directSourceSummary && next.directSourceSummary[kind];
     if (!stat || stat.sourceMode !== "network-direct" || stat.coverageValid !== true || stat.failed || stat.parserErrors) reasons.push(kind + "-source-invalid");
+    if (stat && stat.empty / Math.max(1, stat.success + stat.empty) > 0.5) reasons.push(kind + "-empty-rate");
     const before = Number(prior.resourceCounts && prior.resourceCounts[kind] && prior.resourceCounts[kind].scheduleDocuments || prior.counts && prior.counts[kind]);
     const after = Number(next.resourceCounts && next.resourceCounts[kind] && next.resourceCounts[kind].scheduleDocuments || stat && stat.scheduleDocuments || next.counts && next.counts[kind]);
     if (!after) reasons.push(kind + "-empty");
