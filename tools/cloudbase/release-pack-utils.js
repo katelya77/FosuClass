@@ -765,8 +765,10 @@ async function deployReleasePack(options = {}) {
 
 async function cutoverReleasePack(options = {}) {
   const guard=require("../../server/src/shared/publicationGuard");
-  const unlock=guard.acquire(path.join(path.dirname(path.dirname(releaseService.ACTIVE_RELEASE_PATH)),"ops","publication"));
-  try { return await cutoverReleasePackLocked(options); } finally { unlock(); }
+  const lockDir=path.join(path.dirname(path.dirname(releaseService.ACTIVE_RELEASE_PATH)),"ops","publication");
+  if(options.publicationLease)guard.assertOwned(lockDir,options.publicationLease);
+  const unlock=options.publicationLease ? null : guard.acquire(lockDir);
+  try { return await cutoverReleasePackLocked(options); } finally { if(unlock)unlock(); }
 }
 
 async function cutoverReleasePackLocked(options = {}) {
@@ -822,10 +824,19 @@ async function cutoverReleasePackLocked(options = {}) {
     pointerVerification = await pointerVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
     remoteAfter = await remoteVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
   } catch (error) {
+    let rollbackAllowed = true;
+    if (options.strictPublication) {
+      try {
+        const latest = await options.currentPointerReader();
+        rollbackAllowed = latest.releaseVersion === pointer.releaseVersion && Number(latest.cacheEpoch) === Number(pointer.cacheEpoch);
+      } catch (_) { rollbackAllowed = false; }
+    }
     try {
-      await commandRunner(backupPath, "runtime/active.json", options);
-      await pointerVerifier(Object.assign({}, options, { releaseVersion: previous.releaseVersion, hostingBaseUrl: remoteBaseUrl }));
-      error.pointerRollback = "verified";
+      if (rollbackAllowed) {
+        await commandRunner(backupPath, "runtime/active.json", options);
+        await pointerVerifier(Object.assign({}, options, { releaseVersion: previous.releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+        error.pointerRollback = "verified";
+      } else error.pointerRollback = "skipped-current-pointer-unverified-or-changed";
     } catch (_) { error.pointerRollback = "failed-human-action-required"; }
     throw error;
   } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }

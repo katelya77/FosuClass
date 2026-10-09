@@ -33,6 +33,7 @@ jobs:
       - run: node tools/test-publisher-retention-plan.js
       - run: node tools/test-publication-guard.js
       - run: node tools/test-dual-origin-publication.js
+      - run: node tools/test-dual-origin-release-adapter.js
       - run: node tools/test-production-budget-and-health.js
       - run: sudo "$(command -v node)" tools/test-collector-runtime-repair.js
       - run: node tools/test-full-sync-env-persistence.js

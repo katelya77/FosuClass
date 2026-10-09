@@ -5,8 +5,8 @@ const {assertExpectedVersion}=require("./publicationGuard");
 async function publish(plan,operations){
   if(!plan || plan.approved!==true || plan.confirmation!=="CONFIRM_DUAL_ORIGIN_PUBLICATION" || !plan.releaseVersion || !/^[a-f0-9]{64}$/.test(plan.canonicalHash||""))throw Object.assign(new Error("PUBLICATION_APPROVAL_REQUIRED"),{code:"PUBLICATION_APPROVAL_REQUIRED"});
   for(const key of ["verifyImmutableRelease","prepareOracle","mirrorCloudbase","verifyOracle","verifyCloudbase","readOraclePointer","activateOracle","activateCloudbase","audit"])if(typeof operations[key]!=="function")throw Object.assign(new Error("PUBLICATION_ADAPTER_REQUIRED"),{code:"PUBLICATION_ADAPTER_REQUIRED"});
-  const receipt={schema:1,releaseVersion:plan.releaseVersion,canonicalHash:plan.canonicalHash,events:[],status:"preparing",oracleActivated:false,cloudbaseActivated:false};
-  async function step(name,fn){await operations.audit({...receipt,event:name,state:"started"});const result=await fn();receipt.events.push(name);await operations.audit({...receipt,event:name,state:"completed"});return result;}
+  const receipt={schema:1,releaseVersion:plan.releaseVersion,canonicalHash:plan.canonicalHash,events:[],verification:{},status:"preparing",oracleActivated:false,cloudbaseActivated:false};
+  async function step(name,fn){await operations.audit({...receipt,event:name,state:"started"});const result=await fn();if(name.startsWith("verify-")&&result){if(result.success===false||result.complete===false)throw Object.assign(new Error("PUBLICATION_VERIFICATION_FAILED"),{code:"PUBLICATION_VERIFICATION_FAILED"});const metric={};for(const key of ["verifiedFiles","expectedBytes","receivedBytes"])if(Number.isSafeInteger(result[key])&&result[key]>=0)metric[key]=result[key];receipt.verification[name]=metric;}receipt.events.push(name);await operations.audit({...receipt,event:name,state:"completed"});return result;}
   try{
     await step("verify-immutable-release",()=>operations.verifyImmutableRelease(plan));
     await step("prepare-oracle",()=>operations.prepareOracle(plan));
@@ -17,16 +17,17 @@ async function publish(plan,operations){
     // A resumed transaction can reconcile the mirror after Oracle committed.
     if(current.releaseVersion!==plan.releaseVersion){
       assertExpectedVersion(current.releaseVersion,plan.expectedActiveReleaseVersion);
-      await step("activate-oracle",()=>operations.activateOracle(plan));
+      await step("activate-oracle",async()=>{const result=await operations.activateOracle(plan);receipt.oracleActivated=true;return result;});
     }
     receipt.oracleActivated=true;
     // The CloudBase adapter must enforce the same epoch and compare its current
     // pointer before commit/rollback. Resources are already available on both.
     const authoritative=await operations.readOraclePointer();
     assertExpectedVersion(authoritative.releaseVersion,plan.releaseVersion);
-    await step("activate-cloudbase",()=>operations.activateCloudbase({...plan,pointer:authoritative}));
-    receipt.cloudbaseActivated=true;receipt.status="published";
+    receipt.cacheEpoch=authoritative.cacheEpoch;
+    await step("activate-cloudbase",async()=>{const result=await operations.activateCloudbase({...plan,pointer:authoritative});receipt.cloudbaseActivated=true;return result;});
+    receipt.status="published";
     await operations.audit({...receipt,event:"publication-finished",state:"completed"});return receipt;
-  }catch(error){receipt.status=receipt.oracleActivated?"reconciliation-required":"failed-before-activation";await operations.audit({...receipt,event:"publication-finished",state:"failed",code:error.code||"PUBLICATION_FAILED"});error.receipt=receipt;throw error;}
+  }catch(error){try{const actual=await operations.readOraclePointer();if(actual.releaseVersion===plan.releaseVersion)receipt.oracleActivated=true;}catch(_){}receipt.status=receipt.oracleActivated?"reconciliation-required":"failed-before-activation";try{await operations.audit({...receipt,event:"publication-finished",state:"failed",code:error.code||"PUBLICATION_FAILED"});}catch(_){receipt.auditFailure=true;}error.receipt=receipt;throw error;}
 }
 module.exports={publish};

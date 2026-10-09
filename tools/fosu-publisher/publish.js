@@ -1517,6 +1517,14 @@ function buildPreUploadSafety(stagingMeta, fingerprintStatus) {
   };
 }
 
+function buildStagingPublicationRequest(args = {}) {
+  const body = { force: false, readyOnly: false, releaseNote: args.note || "Published by fosu-publisher" };
+  if (args["publication-confirmation"] !== undefined) {
+    if (args["publication-confirmation"] !== "CONFIRM_DUAL_ORIGIN_PUBLICATION") throw Object.assign(new Error("PUBLICATION_APPROVAL_REQUIRED"), { code: "PUBLICATION_APPROVAL_REQUIRED" });
+    body.publicationConfirmation = args["publication-confirmation"];
+  }
+  return body;
+}
 async function publishStaging(baseUrl, run, args) {
   if (process.env.FOSU_PUBLISHER_MOCK === "1") {
     if (process.env.FOSU_PUBLISHER_MOCK_ORACLE_PUBLISH_FAIL === "1") {
@@ -1526,11 +1534,7 @@ async function publishStaging(baseUrl, run, args) {
     }
     return { success: true, releaseVersion: "mock-release", term: args.term || "2025-2026-2", activeReleaseVersion: "mock-release" };
   }
-  const data = await postJson(`${baseUrl.replace(/\/+$/g, "")}/api/admin/sync/staging/publish`, {
-    force: false,
-    readyOnly: false,
-    releaseNote: args.note || "Published by fosu-publisher",
-  }, { headers: axiosHeaders(), timeoutMs: 60000 });
+  const data = await postJson(`${baseUrl.replace(/\/+$/g, "")}/api/admin/sync/staging/publish`, buildStagingPublicationRequest(args), { headers: axiosHeaders(), timeoutMs: 60000 });
   if (data && data.job && data.job.id) {
     return waitAdminJob(baseUrl, data.job.id, "staging publish", run);
   }
@@ -2307,6 +2311,7 @@ module.exports = {
   buildMockStaging,
   checkCampusNetworkForPublisher,
   cloudbasePreflightAndMirror,
+  buildStagingPublicationRequest,
   exportCloudbaseManualPackage,
   formatLockStatus,
   getProcessCommandLine,

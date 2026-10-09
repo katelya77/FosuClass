@@ -3327,6 +3327,7 @@ router.get("/sync/status", verifyAdminWriteAccess, async (req, res) => {
       staticClassIndexUrl: staticSync.staticClassIndexUrl,
       staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
       openRestyStaticSyncStatus: staticSync.status,
+      dualOriginPublicationEnabled: process.env.FOSU_DUAL_ORIGIN_PUBLICATION === "1",
       lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
       staticRetainedReleases: staticSync.keptReleases || [],
       storageMounted: isStorageMounted(),
@@ -5400,12 +5401,19 @@ router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res
   return sendJobStatus(res, "release-pack-verify", req.query.id);
 });
 
+function readPublicationConfirmation(body) {
+  if (body.publicationConfirmation === undefined) return "";
+  if (body.publicationConfirmation !== "CONFIRM_DUAL_ORIGIN_PUBLICATION") throw Object.assign(new Error("双源发布确认值无效"), { code: "PUBLICATION_APPROVAL_REQUIRED", statusCode: 400 });
+  if (process.env.FOSU_DUAL_ORIGIN_PUBLICATION !== "1") throw Object.assign(new Error("双源发布适配尚未获准启用"), { code: "DUAL_ORIGIN_PUBLICATION_DISABLED", statusCode: 409 });
+  return body.publicationConfirmation;
+}
 router.post("/sync/staging/publish/start", verifyAdminWriteAccess, adminAuth.requireScopes(["release:publish"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const input = {
       force: req.body.force === true,
       readyOnly: req.body.readyOnly === true,
+      publicationConfirmation: readPublicationConfirmation(req.body),
       releaseNote: req.body.releaseNote || "",
       ip: req.ip || "",
       headers: {
@@ -5629,6 +5637,7 @@ router.post("/sync/staging/publish", verifyAdminWriteAccess, adminAuth.requireSc
     const input = {
       force: req.body.force === true,
       readyOnly: req.body.readyOnly === true,
+      publicationConfirmation: readPublicationConfirmation(req.body),
       releaseNote: req.body.releaseNote || "",
       ip: req.ip || "",
       headers: {

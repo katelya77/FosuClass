@@ -64,7 +64,7 @@ transport 严格匹配包源码 schema：
 
 源码中的 control agent 空闲超时5000毫秒低于心跳间隔30000毫秒，导致下次心跳通常重新建立TCP。候选只把 control pool 空闲生命周期改为75000毫秒，data pool仍5000；TCP/TLS建立上限6000、心跳请求15000、租约90000、重试/冷却、CA/SNI/HMAC均不变。本地真实TLS fixture等待30.5秒，旧5秒池重新连接，新池复用经过验证的TLS连接。它降低连接建立暴露频率，但不能证明校园/跨境路径故障已经修复。
 
-明天人工验收用 `deploy/wyz/apply-control-keepalive.py`，只替换现有b1包的heartbeat-only验收runner，不安装B–F整包；绑定原runner SHA，保留0600原文件备份并原子替换，只重启全校Collector。默认dry-run；真实apply必须由用户在PAM执行。经PAM传入该脚本及更新后的观察器后：
+后续人工验收用 `deploy/wyz/apply-control-keepalive.py`，只替换现有b1包的heartbeat-only验收runner，不安装B–F整包；绑定原runner SHA，保留0600原文件备份并原子替换，只重启全校Collector。默认dry-run；真实apply必须由用户在PAM执行。经PAM传入该脚本及更新后的观察器后：
 
 ```bash
 cd /root/fosu-collector-install/b1bc12f96692768d53004e2573e78e6bd5a62d5d
@@ -75,7 +75,19 @@ python3 observe-oracle-direct.py
 python3 apply-control-keepalive.py --rollback
 ```
 
-更新后的观察器补充成功连接的复用/新建次数与失败阶段，不降低原验收门槛。当前修复未在WYZ执行；未获60分钟PASS前仍禁止学校访问/定时。若TCP建立依然不稳定，保留现有正式课表与Windows人工接管，先处理网络路径，不强行采集。
+更新后的观察器补充成功连接的复用/新建次数与失败阶段，不降低原验收门槛。2026-10-10用户已在WYZ执行apply，备份control-keepalive-20261009T190406Z-1757992；约1171.75秒的回传为39成功/0失败、38复用/1新建、最长间隔30.25秒、TLS授权通过、重启0、学校请求0。尚不足3600秒，因此NOT_PASSED是时长门禁，不能提前宣布通过。个人Agent在apply时active，结束后状态待确认；保持同一次观察，不重apply/重启。未获60分钟PASS前仍禁止学校访问/定时。若TCP建立依然不稳定，保留现有正式课表与Windows人工接管，先处理网络路径，不强行采集。
+
+用户担心PAM自动退出时，可以只Ctrl+C停止前台观察器，再将它交给一次性systemd transient service；从后台启动时重新计满60分钟，不重启Collector/个人Agent、不重apply、也不发网络/学校请求。观察JSON本来已每30秒原子保存为root-only文件，旧部分样本保留。[systemd v239官方说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd-run.xml)确认transient service由服务管理器作为父进程，脱离调用终端；[RuntimeMaxSec说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd.service.xml)用于限制异常长运行。以下后台启动由用户执行，当前尚未收到启动确认：
+
+```bash
+systemd-run --unit=fosu-oracle-direct-acceptance \
+  --property=UMask=0077 --property=RuntimeMaxSec=3900 \
+  "$(command -v python3)" \
+  /root/fosu-collector-install/b1bc12f96692768d53004e2573e78e6bd5a62d5d/observe-oracle-direct.py
+systemctl is-active fosu-oracle-direct-acceptance.service
+```
+
+确认active后可退出PAM。明天读取acceptance/observation-*.json中最新文件并核对durationSeconds≥3600和acceptance，再检查个人Agent；无需重启任何采集服务。观察器PASS后自行退出；NOT_PASSED会以1退出，只有观察unit失败，不等同Collector或个人Agent停止。unit已存在时不要强制覆盖/重启，先读取现有结果。
 
 ```bash
 # transport 回到旧 Cloudflare 路径；仍保持 heartbeat-only
@@ -160,7 +172,7 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 
 候选新增共享 publication lock 与 expectedActiveReleaseVersion：同一 Oracle 存储上的服务器/发布工具互斥，晚完成任务发现 active 改变则拒绝；CloudBase pointer 拒绝低 epoch 写入。异常退出留下锁时先确认所有发布进程停止再人工解除，不自动猜测 stale lock。异机直接写 CloudBase 无法被本机锁物理覆盖；上线严格政策前须约束为唯一 Oracle 发布控制面。
 
-`dualOriginPublication` 的本地契约已测试有序准备、完整校验、旧任务拒绝、镜像失败状态和幂等恢复。生产 adapter 尚未启用，不能声称跨源物理原子。受控上线顺序必须是：
+`dualOriginPublication` 的本地契约已测试有序准备、完整校验、旧任务拒绝、镜像失败状态和幂等恢复。2026-10-10 候选补齐 `dualOriginReleaseService` 执行适配，接到既有管理员 Staging 发布接口；默认关闭，未部署/启用，不能声称跨源物理原子。受控上线顺序必须是：
 
 1. 锁定审核通过的 Staging hash、学期、期望 active 和不可变 Release。
 2. 完整构建并 deep verify；记录数据来源、质量、审核人/政策版本。
@@ -168,6 +180,34 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 4. 两个源均可用后，在共享锁内检查期望 active；以单调 epoch 激活 Oracle。
 5. CloudBase 采用相同 Release/epoch，检查当前 pointer 后切换并复验；失败时记录 reconciliation-required，保留两份已验证文件与 last-good。
 6. 重试先读真实 active，已完成的激活不生成另一 epoch；新任务已推进时旧任务拒绝，不覆盖新指针。
+
+新适配在同一 Oracle 存储的发布锁内执行，锁凭据不可由 JSON 请求伪造。覆盖率/来源/下降门禁沿用同一 Staging safety；管理员 `release:publish` scope、现有写入鉴权仍必需。准备阶段 `prepareOnly` 不复制 runtime pointer、不删除历史文件；ready-only 新学期也采用此模式。按 manifest 对两个源的所有课表资源逐文件 HTTP 校验 hash/size，包含抽样遗漏的详情；TLS 必须验证，超时/重定向/缺失即停止激活。此校验只用于发布，不增加普通查询请求。
+
+启用前必须另行审批 `FOSU_DUAL_ORIGIN_PUBLICATION=1`，确认 Oracle 的 CloudBase CLI/部署身份、静态目录和唯一发布写入方已配置。后台现有发布按钮从受保护的 status 读取模式；只有管理员主动发布时才带 `CONFIRM_DUAL_ORIGIN_PUBLICATION`。Windows 原命令默认保持现有流程；获批的严格模式通过 `--publication-confirmation=CONFIRM_DUAL_ORIGIN_PUBLICATION` 共用同一接口，后台生成的 Windows 命令也会附带该参数。配置错误或确认值错误会拒绝，不隐式退回另一种发布方式。自动发布仍为 false。
+
+异常事件写入受保护的 `ops/dual-origin-publication/<releaseVersion>.jsonl`，只包含版本/hash/epoch、阶段、错误码、每源校验数量/正文 bytes。Oracle 已提交但 CloudBase 未完成时标记 reconciliation-required；保留文件和旧版本，不删除、不重建同一提交 epoch。CloudBase 失败回退前检查指针仍为本次候选；未知或被其他任务改变时停止写入，避免回退覆盖较新任务。跨主机独立 CLI 写入仍无法取得腾讯侧原子 CAS，必须通过运维/权限约束唯一 Oracle 发布控制面；本机锁不是跨云原子保证。
+
+服务端受控恢复入口默认只做本地 dry-run：
+
+```bash
+node server/scripts/publish-prepared-dual-origin.js --release=<已审核不可变版本>
+# 下行属于生产 pointer 写入：部署、身份、引用/回滚点和本次版本/hash 另行审批后才执行
+node server/scripts/publish-prepared-dual-origin.js --release=<版本> --canonical-hash=<dry-run哈希> --expected-active=<本次审核基线> --execute --confirm=CONFIRM_DUAL_ORIGIN_PUBLICATION
+```
+
+若上次 Oracle 已提交，同一 plan 可完成 CloudBase 对账；若另一新版本已提交，旧 plan 会拒绝，需重新审核。dry-run 展示每源校验文件数及完整正文预算；这是发布验证成本，须加入月流量计算，不能只算用户查询。实际计费流量还受编码、CDN 回源和控制台计量影响；不把此本地正文预算称为已测账单。NO CHANGE 不重建或重发整个 Release。
+
+版本激活及主动回滚使用严格递增 epoch；runtime pointer 使用本次激活 epoch，避免旧 manifest 的时间造成回滚版本被客户端当成倒退。激活内部异常恢复 active、兼容快照、学期索引/注册表和两个 Oracle runtime 文件，并复核恢复结果。仍需真实微信版本对这个协议的兼容验收。
+
+2026-10-10 本地13项执行适配 fixture通过：默认关闭/确认/hash、未抽样详情缺失、旧任务拒绝、Oracle提交后中断与同epoch恢复、CloudBase超前拒绝、锁不可伪造、单调回滚、激活故障完整恢复、Windows原payload以及异步构建期间基线变化。全部 HTTP 为本机 fixture，生产写入/学校请求均0；不代表真实 CloudBase 发布通过。
+
+## 定时排队的实际入口与审批
+
+Collector 是常驻心跳服务，Linux timer 对已经运行的服务不产生额外抓取。Oracle 心跳处理才是任务排队入口；WYZ execute=0 不 claim 学校任务。已有 `FOSU_COLLECTOR_TIMER_VERIFIED=1` 仍需至少3次成功采集记录和人工启用审批；本轮没有设置它。
+
+候选 `FOSU_COLLECTOR_SCHEDULE_POLICY=four-source-v1` 为另行审批的排队政策：周一至周六04:30 routine，周日05:00 full，周日不先排第二个 routine。默认窗口30分钟，可批准30–180分钟的窗口内补采；窗口外不补请求，避免网络恢复后全天自动访问学校。未知配置停止排队。未选择新政策时保留已有每日 routine 行为，后台不再把尚未排队的 full 展示成已安排任务。
+
+排队任务和日期去重标记一起持久化，重复心跳及 Oracle 进程重载不重复排队；有未完成任务、暂停、会话/安全挑战阻断或失败冷却时不另起任务。质量blocked的完成记录不计入3次启用基线。失败冷却30分钟/2小时/6小时只作为限制，不表示已经实现无限自动重试；安全停止需人工恢复，不能在换日期时自动清除学校挑战。14项本地 fixture通过，生产 timer/学校频率未改变。
 7. 回滚先确认自身仍拥有对应 commit/epoch，再使用受控回滚流程；不可盲目恢复一份旧备份覆盖别的发布。
 
 现有工具的 mirror-only 不切 pointer：
@@ -290,4 +330,4 @@ npm run sync:publish -- --help
 
 最终代码f5091282的[Linux四源/隔离浏览器CI](https://github.com/katelya77/FosuClass/actions/runs/37953237462)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37953062468)、[仅被动源站审计](https://github.com/katelya77/FosuClass/actions/runs/37953247047)全部通过，Linux补足POSIX ownership/SIGTERM及验收runner原子回滚。本地网络23、TLS20（含真实b1 factory兼容）、观察器10和被动诊断9通过；security-full/architecture/preflight再次通过。后续提交仅补写文档/公开验收证据。今晚生产冻结与明天恢复步骤见 `docs/production/handoff-20261009-night.md`。
 
-未完成的生产门禁：WYZ失败分层诊断、根因修复后重新60分钟验收；学校长期凭据批准、真实Session与小范围四源试采；严格双源生产发布adapter及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。
+未完成的生产门禁：WYZ连接复用修复后同一次完整60分钟验收及个人Agent结束状态；学校长期凭据批准、真实Session与小范围四源试采；严格双源发布adapter的真实部署身份/验收及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。
