@@ -2,6 +2,10 @@ name: Prepare WYZ Schedule Collector
 on:
   workflow_dispatch:
     inputs:
+      diagnose_only:
+        description: 'Only read-only Oracle network diagnostics; no package or deployment'
+        type: boolean
+        default: false
       audit_credentials:
         description: 'Read-only audit of existing collector credentials (no rotation)'
         type: boolean
@@ -13,7 +17,12 @@ concurrency:
   group: fosuclass-production-deploy
   cancel-in-progress: false
 jobs:
+  diagnose:
+    if: ${{ inputs.diagnose_only }}
+    uses: ./.github/workflows/collector-oracle-diagnostics.yml
+    secrets: inherit
   package:
+    if: ${{ !inputs.diagnose_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -31,6 +40,7 @@ jobs:
       - name: Package production gates
         run: |
           sudo "$(command -v node)" tools/test-collector-network-recovery.js
+          sudo "$(command -v node)" tools/test-collector-oracle-transport.js
           sudo "$(command -v node)" tools/test-collector-runtime-repair.js
           node tools/test-full-sync-env-persistence.js
           python3 tools/test-collector-archive.py
