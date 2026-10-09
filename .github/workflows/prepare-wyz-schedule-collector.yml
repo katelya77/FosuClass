@@ -26,6 +26,7 @@ jobs:
       - name: Package production gates
         run: |
           sudo "$(command -v node)" tools/test-collector-runtime-repair.js
+          node tools/test-full-sync-env-persistence.js
           python3 tools/test-collector-archive.py
           sudo "$(command -v node)" tools/test-collector-install-linux.js
           node tools/wyz-schedule-collector/browser-smoke.js
