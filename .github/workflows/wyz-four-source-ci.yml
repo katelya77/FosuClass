@@ -19,6 +19,7 @@ jobs:
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - run: sudo "$(command -v node)" tools/test-collector-network-recovery.js
       - run: sudo "$(command -v node)" tools/test-collector-runtime-repair.js
       - run: node tools/test-full-sync-env-persistence.js
       - run: python3 tools/test-collector-archive.py
@@ -26,6 +27,7 @@ jobs:
       - run: bash -n deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh
       - run: node tools/wyz-schedule-collector/browser-smoke.js
       - run: npm run test:wyz-four-source
+      - run: npm run test:collector-personal-regression
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
