@@ -16,7 +16,8 @@ function config(env = process.env) {
   const url = new URL(env.FOSU_API_BASE || "https://class.katelya.eu.org");
   if (url.origin !== "https://class.katelya.eu.org" || url.username || url.password || url.search || url.pathname !== "/") throw failure("ORACLE_ORIGIN_REJECTED");
   const token = env.FULL_SYNC_AGENT_TOKEN || "", secret = env.FULL_SYNC_SIGNING_SECRET || "";
-  if (!token || !secret) throw failure("COLLECTOR_CONFIGURATION_MISSING");
+  if (!env.FULL_SYNC_AGENT_ID || !token || !secret) throw failure("COLLECTOR_CONFIGURATION_MISSING");
+  if (env.FOSU_COLLECTOR_EXECUTE !== undefined && !["0", "1"].includes(env.FOSU_COLLECTOR_EXECUTE)) throw failure("COLLECTOR_EXECUTION_MODE_REJECTED");
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector") || token.length < 32 || secret.length < 32 || token === secret || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(token) || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(secret)) throw failure("COLLECTOR_CREDENTIALS_REJECTED");
   return { oracle: url.origin, token, secret, agentId: env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector", execute: env.FOSU_COLLECTOR_EXECUTE === "1", sessionPath: env.FOSU_COLLECTOR_SESSION || "/var/lib/fosuclass/schedule-collector/session.json", dataRoot: env.FOSU_COLLECTOR_DATA_DIR || "/var/lib/fosuclass/schedule-collector", concurrency: Math.max(1, Math.min(2, Number(env.SCHOOL_CONCURRENCY) || 1)) };
 }

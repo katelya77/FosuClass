@@ -5,6 +5,7 @@ const signature = require(require("path").resolve(__dirname.startsWith("/app/sto
 async function audit() {
   const status = Object.fromEntries(["FULL_SYNC_AGENT_ID", "FULL_SYNC_AGENT_TOKEN", "FULL_SYNC_SIGNING_SECRET"].map(key => [key, process.env[key] ? "CONFIGURED" : "MISSING"]));
   console.log(JSON.stringify(status));
+  if (Object.values(status).includes("MISSING")) throw new Error("FULL_SYNC_CONFIGURATION_MISSING");
   const configured = signature.secretsConfigured();
   if (!configured) throw new Error("FULL_SYNC_CONFIGURATION_INVALID");
   // Real HTTP authentication against the running Broker. No job claim, upload,
