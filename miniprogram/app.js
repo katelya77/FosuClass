@@ -119,12 +119,19 @@ App({
   },
 
   onShow() {
+    if (this._releaseForegroundTimer) clearInterval(this._releaseForegroundTimer);
+    this._releaseForegroundTimer=setInterval(()=>this.checkReleasePackForeground().catch(()=>null),45000);
     const now = Date.now();
     if (this._lastForegroundReleaseCheckAt && now - this._lastForegroundReleaseCheckAt < 30000) {
       return;
     }
     this._lastForegroundReleaseCheckAt = now;
     scheduleLowPriority(() => this.checkReleasePackForeground(), 800);
+  },
+
+  onHide() {
+    if (this._releaseForegroundTimer) clearInterval(this._releaseForegroundTimer);
+    this._releaseForegroundTimer=null;
   },
 
   checkReleasePackForeground() {

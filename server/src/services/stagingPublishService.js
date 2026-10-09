@@ -160,6 +160,8 @@ function throwPublishError(code, message, extra) {
 }
 
 async function writeReleasePackAndActivate(stagingData, job) {
+  const baseline=releaseService.getActiveReleaseInfo() || {};
+  const expectedActiveReleaseVersion=baseline.releaseVersion || baseline.version || "";
   if (job) job.progress(18, "loading snapshot");
   const written = await releaseService.writeReleaseSnapshotAsync(stagingData, { job });
   const releaseVersion = written.version || written.releaseVersion;
@@ -180,7 +182,7 @@ async function writeReleasePackAndActivate(stagingData, job) {
     releaseVersion,
     staticSyncStatus: staticSync.status,
   });
-  const activated = releaseService.activateReleaseVersion(releaseVersion);
+  const activated = releaseService.activateReleaseVersion(releaseVersion,{expectedActiveReleaseVersion});
   return Object.assign({}, written, activated, { staticSync, deepStatus });
 }
 

@@ -28,34 +28,9 @@ function acquireLock(root) {
   return () => { const owner = readJson(file, {}); if (owner.pid === process.pid) fs.unlinkSync(file); };
 }
 
-function pruneRuns(root, current, lastSuccess) {
-  const runs = path.join(root, "runs");
-  if (!fs.existsSync(runs)) return;
-  const failed = [];
-  for (const term of fs.readdirSync(runs, { withFileTypes: true })) {
-    if (!term.isDirectory() || term.isSymbolicLink()) continue;
-    const termDir = path.join(runs, term.name);
-    for (const run of fs.readdirSync(termDir, { withFileTypes: true })) {
-      if (!run.isDirectory() || run.isSymbolicLink() || !/^sc-[a-f0-9-]+$/.test(run.name)) continue;
-      const target = path.join(termDir, run.name);
-      if (readJson(path.join(target, "state.json"), {}).status === "failed") failed.push({ target, modified: fs.statSync(target).mtimeMs });
-    }
-  }
-  failed.sort((left, right) => right.modified - left.modified);
-  const recoverable = failed[0] && failed[0].target;
-  for (const term of fs.readdirSync(runs, { withFileTypes: true })) {
-    if (!term.isDirectory() || term.isSymbolicLink()) continue;
-    const termDir = path.join(runs, term.name);
-    for (const run of fs.readdirSync(termDir, { withFileTypes: true })) {
-      if (!run.isDirectory() || run.isSymbolicLink()) continue;
-      const target = path.join(termDir, run.name);
-      if ([current, lastSuccess, recoverable].includes(target)) continue;
-      const state = readJson(path.join(target, "state.json"), {});
-      // Current/last-success and the newest failed run retain recovery data.
-      if (!/^sc-[a-f0-9-]+$/.test(run.name) || !["completed", "cancelled", "failed"].includes(state.status)) continue;
-      if (!path.relative(path.resolve(runs), path.resolve(target)).startsWith("..")) fs.rmSync(target, { recursive: true });
-    }
-  }
+function pruneRuns(root, current, lastSuccess, options = {}) {
+  const plan = require("./retentionPlan").plan(root,current,lastSuccess,options);
+  writeJsonAtomic(path.join(root,"cleanup-plan.json"),plan);
+  return plan;
 }
-
 module.exports = { acquireLock, pruneRuns, runDirectory, safeId, readJson, writeJsonAtomic };

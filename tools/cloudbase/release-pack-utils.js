@@ -764,6 +764,12 @@ async function deployReleasePack(options = {}) {
 }
 
 async function cutoverReleasePack(options = {}) {
+  const guard=require("../../server/src/shared/publicationGuard");
+  const unlock=guard.acquire(path.join(path.dirname(path.dirname(releaseService.ACTIVE_RELEASE_PATH)),"ops","publication"));
+  try { return await cutoverReleasePackLocked(options); } finally { unlock(); }
+}
+
+async function cutoverReleasePackLocked(options = {}) {
   const confirmation = String(options.confirmation || options.confirm || "").trim();
   if (confirmation !== "CONFIRM_CLOUDBASE_CUTOVER") {
     const error = new Error("Exact confirmation text CONFIRM_CLOUDBASE_CUTOVER is required");
@@ -799,11 +805,12 @@ async function cutoverReleasePack(options = {}) {
     hostingBaseUrl: remoteBaseUrl,
     activePointer: options.activePointerOverride || options.activePointer,
   });
+  const previous = options.previousPointer || (await fetchJsonWithText(joinUrl(remoteBaseUrl, "runtime", "active.json?backup=" + Date.now()))).json;
+  if (!previous || !previous.releaseVersion) throw Object.assign(new Error("CLOUDBASE_ROLLBACK_POINT_REQUIRED"), { code: "CLOUDBASE_ROLLBACK_POINT_REQUIRED" });
+  require("../../server/src/shared/publicationGuard").assertNotOlder(pointer,previous);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `fosu-cloudbase-pointer-${process.pid}-`));
   const pointerPath = path.join(tmpDir, "active.json");
   writeJson(pointerPath, pointer);
-  const previous = options.previousPointer || (await fetchJsonWithText(joinUrl(remoteBaseUrl, "runtime", "active.json?backup=" + Date.now()))).json;
-  if (!previous || !previous.releaseVersion) throw Object.assign(new Error("CLOUDBASE_ROLLBACK_POINT_REQUIRED"), { code: "CLOUDBASE_ROLLBACK_POINT_REQUIRED" });
   const backupPath = path.join(tmpDir, "previous.json");
   writeJson(backupPath, previous);
   const commandRunner = options.commandRunner || runTcbHostingDeploy;

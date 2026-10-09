@@ -2239,7 +2239,18 @@ function restoreActivationState(previousState) {
   clearDerivedCache();
 }
 
-function activateReleaseVersion(version) {
+function activateReleaseVersion(version,options={}) {
+  ensureStorageDirs();
+  const guard=require("../shared/publicationGuard");
+  const unlock=guard.acquire(path.join(STORAGE_DIR,"ops","publication"));
+  try {
+    const current=getActiveReleaseInfo() || {};
+    guard.assertExpectedVersion(current.releaseVersion || current.version,options.expectedActiveReleaseVersion);
+    return activateReleaseVersionUnlocked(version);
+  } finally { unlock(); }
+}
+
+function activateReleaseVersionUnlocked(version) {
   ensureStorageDirs();
   const normalizedVersion = normalizeVersion(version);
   const snapshot = readReleaseSnapshot(normalizedVersion);

@@ -24,14 +24,6 @@ const DESKTOP_UA = "";
 const FOSU_LOGIN_UA_MODE = String(process.env.FOSU_LOGIN_UA_MODE || process.env.FOSU_LOGIN_PROFILE || "mobile").toLowerCase() === "desktop" ? "desktop" : "mobile";
 const LOGIN_AUTO = process.argv.includes("--auto") || process.argv.includes("auto") || process.env.FOSU_LOGIN_AUTO === "true";
 
-function maskStudentId(studentId) {
-  const value = String(studentId || "").trim();
-  if (!value) return "";
-  if (process.env.FOSU_LOGIN_SHOW_STUDENT_ID === "true") return value;
-  if (value.length <= 8) return `${value.slice(0, 2)}****`;
-  return `${value.slice(0, 4)}****${value.slice(-4)}`;
-}
-
 function getLoginCredentials() {
   const studentId = String(
     process.env.FOSU_SYNC_STUDENT_ID ||
@@ -102,11 +94,7 @@ async function login() {
   }
   console.log(`登录 UA 模式: ${FOSU_LOGIN_UA_MODE}${LOGIN_AUTO ? "，自动登录" : "，手动登录"}`);
 
-  const launchArgs = withDirectBrowserArgs([
-    "--disable-blink-features=AutomationControlled",
-    "--ignore-certificate-errors",
-    "--disable-web-security"
-  ]);
+  const launchArgs = withDirectBrowserArgs([]);
 
   let browser;
   // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium
@@ -139,12 +127,12 @@ async function login() {
   const context = await browser.newContext({
     userAgent,
     viewport,
-    ignoreHTTPSErrors: true,
+    ignoreHTTPSErrors: false,
   });
 
   const page = await context.newPage();
 
-  const CAS_SERVICE_URL = 'http://100.fosu.edu.cn/caslogin.jsp?kstzType=null';
+  const CAS_SERVICE_URL = 'https://100.fosu.edu.cn/caslogin.jsp?kstzType=null';
   const AUTH_LOGIN_URL = 'https://authserver.fosu.edu.cn/authserver/login?type=userNameLogin&service=' + encodeURIComponent(CAS_SERVICE_URL);
 
   console.log(`优先通过账号密码登录页进行登录: ${AUTH_LOGIN_URL} ...`);
@@ -177,7 +165,7 @@ async function login() {
       process.exitCode = 1;
       return;
     }
-    console.log(`自动登录账号: ${maskStudentId(configuredCredentials.studentId)}`);
+    console.log("自动登录凭据已配置（不记录账号）。");
   }
 
   try {
@@ -267,7 +255,7 @@ async function login() {
           }
           
           if (userEl && passEl) {
-            console.log(`检测到未填写的账号密码输入框，尝试自动填充账号 ${maskStudentId(username)}...`);
+            console.log("检测到未填写的账号密码输入框，尝试使用本机配置填充。");
             await userEl.fill(username);
             await passEl.fill(password);
             if (LOGIN_AUTO && !autoSubmitted) {

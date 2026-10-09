@@ -36,24 +36,10 @@ function activeBaseline() {
   return { canonicalHash: info.canonicalHash || info.manifest && info.manifest.canonicalHash || "", term: info.term || info.semester || "", resourceCounts: info.resourceCounts || info.manifest && info.manifest.resourceCounts || null };
 }
 function classifyRelease(previous, incoming) {
-  const prior = previous || {}, next = incoming || {};
-  const reasons = [];
-  if (prior.term && next.term !== prior.term) reasons.push("semester-change");
-  if (next.coverageValid !== true) reasons.push("coverage-invalid");
-  for (const kind of ["class", "teacher", "classroom", "course"]) {
-    const stat = next.directSourceSummary && next.directSourceSummary[kind];
-    if (!stat || stat.sourceMode !== "network-direct" || stat.coverageValid !== true || stat.failed || stat.parserErrors) reasons.push(kind + "-source-invalid");
-    if (stat && stat.empty / Math.max(1, stat.success + stat.empty) > 0.5) reasons.push(kind + "-empty-rate");
-    const before = Number(prior.resourceCounts && prior.resourceCounts[kind] && prior.resourceCounts[kind].scheduleDocuments || prior.counts && prior.counts[kind]);
-    const after = Number(next.resourceCounts && next.resourceCounts[kind] && next.resourceCounts[kind].scheduleDocuments || stat && stat.scheduleDocuments || next.counts && next.counts[kind]);
-    if (!after) reasons.push(kind + "-empty");
-    if (before > 0 && after < before * 0.9) reasons.push(kind + "-drop");
-  }
-  if (!reasons.length && prior.canonicalHash && next.canonicalHash === prior.canonicalHash) return { result: "NO CHANGE", autoPublish: false, reasons: [] };
-  return { result: "PENDING REVIEW", autoPublish: false, reasons: reasons.length ? reasons : ["auto-publish-disabled"] };
+  return require("../shared/schedulePublicationPolicy").evaluate(previous,incoming);
 }
 function backoffFor(failureCount, code) {
-  if (["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(code)) return { stop: true, delayMs: null, message: "校内采集会话已失效，请人工刷新" };
+  if (["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(code) || /^SCHOOL_(AUTH|LOGIN|SESSION|TLS|PAGE)_/.test(code||"")) return { stop: true, delayMs: null, message: "校内采集会话已失效，请人工刷新" };
   if (failureCount >= 4) return { stop: true, delayMs: null, message: "当天连续异常，已停止自动重试" };
   return { stop: false, delayMs: BACKOFF_MS[Math.max(0, Math.min(failureCount - 1, 2))], message: "" };
 }

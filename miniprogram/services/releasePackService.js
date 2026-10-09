@@ -29,6 +29,7 @@ const FRESHNESS_TIMEOUT_MS = 2000;
 const activeManifestInflight = new Map();
 const switchReleaseInflight = new Map();
 let runtimePointerInflight = null;
+let lastRuntimePointerCheckAt = 0;
 let runtimePointerCircuit = null;
 let freshnessCheckStarted = false;
 
@@ -116,7 +117,7 @@ function normalizeManifest(payload) {
   if (!releaseVersion) return null;
   const term = source.term || source.semester || DEFAULT_TERM;
   const updatedAt = source.updatedAt || source.publishedAt || "";
-  const cacheEpoch = source.cacheEpoch || source.dataEpoch || Date.parse(updatedAt || "") || Date.now();
+  const cacheEpoch = source.cacheEpoch || source.dataEpoch || Date.parse(updatedAt || "") || 0;
   const forceRefreshToken = source.forceRefreshToken || source.dataEpoch || `${releaseVersion}:${cacheEpoch}`;
   return Object.assign({}, source, {
     success: true,
@@ -271,6 +272,8 @@ function readCachedManifest(term) {
 
 function writeManifestCache(manifest) {
   const normalized = assertManifest(normalizeManifest(manifest));
+  const previousActive=getLocalActiveRelease(normalized.term);
+  if(previousActive && previousActive.manifest && comparePointerOrder(normalized,previousActive.manifest)<0) throw Object.assign(new Error("RELEASE_SWITCH_SUPERSEDED"),{code:"RELEASE_SWITCH_SUPERSEDED"});
   if (isPointerOnlyManifest(normalized)) {
     const error = new Error("POINTER_ONLY_MANIFEST_NOT_CACHEABLE");
     error.code = "POINTER_ONLY_MANIFEST_NOT_CACHEABLE";
@@ -315,7 +318,7 @@ function normalizeRuntimePointer(payload) {
     term,
     releaseVersion,
     updatedAt: source.updatedAt || "",
-    cacheEpoch: source.cacheEpoch || Date.parse(source.updatedAt || "") || Date.now(),
+    cacheEpoch: source.cacheEpoch || Date.parse(source.updatedAt || "") || 0,
     forceRefreshToken: source.forceRefreshToken || "",
     termConfig: Object.assign({}, termConfig, {
       term: termConfig.term || term,
@@ -344,6 +347,9 @@ function writeRuntimePointerCache(pointer) {
   const normalized = normalizeRuntimePointer(pointer);
   if (!normalized) return null;
   const store = readRuntimePointerStore();
+  const priorEntry = store.terms[store.lastTerm];
+  const prior = normalizeRuntimePointer(priorEntry && (priorEntry.pointer || priorEntry));
+  if (prior && (comparePointerOrder(normalized,prior)<0 || comparePointerOrder(normalized,prior)===0 && getRuntimePointerReleaseKey(normalized)!==getRuntimePointerReleaseKey(prior))) return prior;
   const entry = {
     savedAt: Date.now(),
     term: normalized.term,
@@ -467,10 +473,10 @@ function comparablePointerTime(pointer) {
 function comparePointerOrder(left, right) {
   const leftEpoch = Number(left && left.cacheEpoch || 0) || 0;
   const rightEpoch = Number(right && right.cacheEpoch || 0) || 0;
-  if (leftEpoch && rightEpoch && leftEpoch !== rightEpoch) return leftEpoch - rightEpoch;
+  if (leftEpoch !== rightEpoch) return leftEpoch - rightEpoch;
   const leftUpdatedAt = Date.parse(left && left.updatedAt || "") || 0;
   const rightUpdatedAt = Date.parse(right && right.updatedAt || "") || 0;
-  if (leftUpdatedAt && rightUpdatedAt && leftUpdatedAt !== rightUpdatedAt) return leftUpdatedAt - rightUpdatedAt;
+  if (leftUpdatedAt !== rightUpdatedAt) return leftUpdatedAt - rightUpdatedAt;
   return 0;
 }
 
@@ -618,9 +624,12 @@ function getCachedRuntimePointer(options = {}) {
 }
 
 function resolveRuntimePointer(options = {}) {
-  if (runtimePointerInflight && options.dedupe !== false && !options.forceNetwork) {
+  if (runtimePointerInflight && options.dedupe !== false) {
     return runtimePointerInflight;
   }
+  const cached = getCachedRuntimePointer(options);
+  if (!options.forceNetwork && cached && Date.now()-lastRuntimePointerCheckAt<30000) return Promise.resolve(cached);
+  lastRuntimePointerCheckAt = Date.now();
   const openCircuit = !options.forceNetwork && readRuntimeCircuit();
   if (openCircuit) {
     const fallbackPointer = getCachedRuntimePointer(options);
@@ -639,18 +648,24 @@ function resolveRuntimePointer(options = {}) {
     skipSession: true,
     suppressWarn: options.suppressWarn === undefined ? true : options.suppressWarn,
   };
-  const task = staticOriginService.fetchRuntimePointer(requestOptions)
+  const task = staticOriginService.fetchRuntimePointer(Object.assign({},requestOptions,{
+    minimumPointer:readRuntimePointerCache(),
+    onNewerPointer:payload=>{
+      const normalized=normalizeRuntimePointer(payload);
+      if(normalized) { const selected=writeRuntimePointerCache(normalized); if(options.onNewerPointer) options.onNewerPointer(selected); }
+    },
+  }))
     .catch(() => request.get("/api/fosu/runtime/active", {}, Object.assign({}, requestOptions, {
       skipSession: true,
     })))
     .then((payload) => {
-      const pointer = normalizeRuntimePointer(payload);
+      let pointer = normalizeRuntimePointer(payload);
       if (!pointer) {
         const error = new Error("INVALID_RUNTIME_POINTER");
         error.code = "INVALID_RUNTIME_POINTER";
         throw error;
       }
-      writeRuntimePointerCache(pointer);
+      pointer=writeRuntimePointerCache(pointer);
       clearRuntimeCircuit();
       const localManifest = readCompleteManifestForPointer(pointer);
       if (!localManifest) return pointer;
@@ -1086,6 +1101,8 @@ function switchReleaseSafely(options = {}) {
         ? options.warmupTypes
         : ["class"];
       const finishSwitch = (indexes) => {
+        const latest=readRuntimePointerCache();
+        if(options.pointer && latest && latest.releaseVersion!==verifiedManifest.releaseVersion && comparePointerOrder(latest,options.pointer)>0) throw Object.assign(new Error("RELEASE_SWITCH_SUPERSEDED"),{code:"RELEASE_SWITCH_SUPERSEDED"});
         const normalized = writeManifestCache(verifiedManifest);
         clearOldReleaseCaches({
           keepLatestN: options.keepLatestN || 2,
@@ -1114,15 +1131,16 @@ function switchReleaseSafely(options = {}) {
       }).then(finishSwitch);
     })
     .catch((error) => {
-      if (previous && previous.manifest) {
+      const fallback=getLocalActiveRelease(options.term || DEFAULT_TERM) || previous;
+      if (fallback && fallback.manifest) {
         return {
           success: true,
           switched: false,
           fallback: true,
           fromStorage: true,
-          term: previous.term,
-          releaseVersion: previous.releaseVersion,
-          manifest: previous.manifest,
+          term: fallback.term,
+          releaseVersion: fallback.releaseVersion,
+          manifest: fallback.manifest,
           fallbackReason: error && (error.code || error.reasonCode || error.errMsg || error.message || "networkError"),
         };
       }
@@ -2251,6 +2269,15 @@ function getVersionFromCacheKey(key) {
 
 function clearOldReleaseCaches(options = {}) {
   const keep = new Set(options.keepReleases || []);
+  getStorageKeys().forEach(key=>{
+    if(key.startsWith(`${CACHE_PREFIX}:last-good:`) || key===LOCAL_ACTIVE_RELEASE_KEY || key.startsWith(`${LOCAL_ACTIVE_RELEASE_KEY}:`)){
+      const entry=readStorage(key);
+      const version=entry && (entry.releaseVersion || entry.manifest && entry.manifest.releaseVersion);
+      if(version)keep.add(version);
+    }
+  });
+  const pointers=readRuntimePointerStore();
+  Object.keys(pointers.terms).forEach(term=>{const entry=pointers.terms[term];const version=entry && (entry.releaseVersion || entry.pointer && entry.pointer.releaseVersion);if(version)keep.add(version);});
   const keepLatestN = Math.max(1, Number(options.keepLatestN || 2) || 2);
   const versionStats = new Map();
   getStorageKeys().forEach((key) => {
@@ -2284,6 +2311,7 @@ function __resetForTest() {
   activeManifestInflight.clear();
   switchReleaseInflight.clear();
   runtimePointerInflight = null;
+  lastRuntimePointerCheckAt = 0;
   runtimePointerCircuit = null;
   freshnessCheckStarted = false;
 }

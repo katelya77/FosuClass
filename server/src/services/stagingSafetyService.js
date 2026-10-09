@@ -224,9 +224,16 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
   const { counts, resourceCounts: stagingResourceCounts } = summarizeStagingData(data);
   const validation = validateStagingData(data);
   const blockers = validation.errors.slice();
+  let publicationPolicy = null;
   if (data.meta && data.meta.requireFourDirectSources) {
     const direct = require("../shared/fourDirectSourceContract").validateFourSources(data, data.term || data.semester);
     blockers.push(...direct.errors);
+    const policy=require("../shared/schedulePublicationPolicy");
+    const prior=activeSnapshot || {};
+    publicationPolicy=policy.evaluate({ ...prior,term:prior.term || prior.semester,resourceCounts:prior.resourceCounts,canonicalHash:prior.canonicalHash },{
+      term:data.term || data.semester,canonicalHash:data.canonicalHash,resourceCounts:direct.resourceCounts,directSourceSummary:direct.directSourceSummary,coverageValid:direct.valid,
+    },{changeSummary:policy.changeSummary(prior,data)});
+    blockers.push(...publicationPolicy.blockers);
   }
   const warnings = validation.warnings.slice();
   const activeInfo = releaseService.getActiveReleaseInfo();
@@ -328,6 +335,7 @@ function buildStagingSafety(data, activeSnapshot, options = {}) {
 
   return {
     allowPublish: blockers.length === 0,
+    publicationPolicy,
     requiresForceConfirm: severeDrop || releaseVersionExists,
     blockers,
     warnings,

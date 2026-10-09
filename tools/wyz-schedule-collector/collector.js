@@ -157,7 +157,6 @@ async function runOnce(cfg, deps = {}) {
     leaseTimer = setInterval(() => { if (now() - lastLease >= leaseMs) stop("COLLECTOR_LEASE_EXPIRED"); }, deps.watchIntervalMs || 1000);
     await report({ stage: "auth-check" });
     if (stopCode) throw failure(stopCode);
-    (deps.assertSession || assertSession)(cfg.sessionPath);
     timer = setInterval(async () => {
       if (tickRunning) return;
       tickRunning = true;
@@ -170,6 +169,9 @@ async function runOnce(cfg, deps = {}) {
       finally { tickRunning = false; }
     }, deps.heartbeatIntervalMs || 30000);
     if (stopCode) throw failure(stopCode);
+    await (deps.ensureSchoolSession || require("./schoolSession").ensureSession)(cfg, { signal:leaseControl.signal });
+    if (stopCode) throw failure(stopCode);
+    (deps.assertSession || assertSession)(cfg.sessionPath);
     if (!fs.existsSync(path.join(dir, "staging.json"))) await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; if (stopCode) child.kill("SIGTERM"); else if (deps.signal && deps.signal.aborted) onAbort(); });
     if (cancelled) throw failure(stopCode || "CANCELLED");
     await report({ stage: "hash" });

@@ -18,3 +18,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script_path: deploy/wyz/diagnose-oracle-transport.sh
           command_timeout: 5m
+      - name: Read-only live fingerprint and origin security controls
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_path: deploy/wyz/audit-oracle-origin-security.sh
+          command_timeout: 3m

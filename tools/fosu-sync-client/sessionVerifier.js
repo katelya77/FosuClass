@@ -44,12 +44,7 @@ async function launchBrowser(chromium, options = {}) {
     try {
       const config = {
         headless: options.headless !== false,
-        args: withDirectBrowserArgs([
-          "--disable-blink-features=AutomationControlled",
-          "--ignore-certificate-errors",
-          "--disable-web-security",
-          "--allow-running-insecure-content"
-        ]),
+        args: withDirectBrowserArgs([]),
       };
       if (channel) config.channel = channel;
       return await chromium.launch(config);
@@ -90,7 +85,7 @@ async function verifySession(options = {}) {
   try {
     context = await browser.newContext({
       storageState: sessionPath,
-      ignoreHTTPSErrors: true,
+      ignoreHTTPSErrors: false,
     });
     const page = await context.newPage();
     const baseUrl = String(env.FOSU_BASE_URL || "https://100.fosu.edu.cn").replace(/\/+$/g, "");

@@ -320,6 +320,8 @@ Page({
   },
 
   onUnload() {
+    if(this._releaseRefreshTimer) clearInterval(this._releaseRefreshTimer);
+    this._releaseRefreshTimer=null;
     this.saveSearchPrefs();
     if (this.keywordSearchTimer) {
       clearTimeout(this.keywordSearchTimer);
@@ -335,6 +337,8 @@ Page({
   },
 
   onHide() {
+    if(this._releaseRefreshTimer) clearInterval(this._releaseRefreshTimer);
+    this._releaseRefreshTimer=null;
     this.saveSearchPrefs();
   },
 
@@ -383,6 +387,8 @@ Page({
   },
 
   onShow() {
+    if(this._releaseRefreshTimer) clearInterval(this._releaseRefreshTimer);
+    this._releaseRefreshTimer=setInterval(()=>this.checkActiveSnapshotFreshness(),45000);
     // 拦截设置页清除缓存引发的重载标志
     const needAutoReload = wx.getStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD");
     if (needAutoReload) {
