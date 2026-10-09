@@ -27,6 +27,7 @@ jobs:
       - run: node tools/test-runtime-primary-fast.js
       - run: node tools/test-schedule-publication-policy.js
       - run: node tools/test-collector-retention-plan.js
+      - run: node tools/test-publisher-retention-plan.js
       - run: node tools/test-publication-guard.js
       - run: node tools/test-dual-origin-publication.js
       - run: node tools/test-production-budget-and-health.js

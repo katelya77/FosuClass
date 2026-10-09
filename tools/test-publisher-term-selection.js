@@ -113,8 +113,10 @@ assert(crawl.args.includes("--total-weeks=19"));
 assert(crawl.args.includes("--week-start=monday"));
 assert(crawl.args.includes("--override-term-config"));
 
-assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "uploaded-and-cutover" }, {}).shouldPrune, true);
+assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "uploaded-and-cutover" }, {}).shouldPrune, false);
+assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "uploaded-and-cutover" }, {}).shouldPlan, true);
 assert.strictEqual(resolveCloudbaseRetentionPlan({}, { action: "no-op" }, {}).shouldPrune, false);
-assert.strictEqual(resolveCloudbaseRetentionPlan({ "prune-cloudbase": true }, { action: "no-op" }, {}).shouldPrune, true);
+assert.strictEqual(resolveCloudbaseRetentionPlan({ "prune-cloudbase": true }, { action: "no-op" }, {}).shouldPrune, false);
+assert.strictEqual(resolveCloudbaseRetentionPlan({ "prune-cloudbase": true }, { action: "no-op" }, {}).shouldPlan, true);
 assert.strictEqual(resolveCloudbaseRetentionPlan({ "skip-cloudbase-prune": true }, { action: "uploaded-and-cutover" }, {}).shouldPrune, false);
 console.log("test-publisher-term-selection passed");

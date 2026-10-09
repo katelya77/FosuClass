@@ -219,6 +219,10 @@ monthly HTTP 数分别为 DAU×30×上述请求数。若回源率10%，同三种
 
 候选 Collector 的旧“每次任务后直接 rm 旧 run”已经改为 `cleanup-plan.json` dry-run。保护当前 run、最近成功、每学期成功/失败恢复点、待审核、未知终态、缺失完成时间、保留期和 symlink；外部引用不完整时没有可删除候选。默认30天可配置，但只能按真实终态/引用，不能仅按文件创建或 mtime。计划给数量、实际文件字节、学期、引用理由及恢复边界；本轮 executeAllowed=false。
 
+Windows Publisher 此前每次完成自动删除仅保留最近两次以外的终态 run，且镜像成功会自动调用 CloudBase 历史 Release 删除并内置确认文本。本候选把本机 run 清理改为同样只预览，保留失败/部分成功的断点、各学期恢复点、未知完成时间与外部引用。完成时间来自 receipt，不用 mtime 判定。`FOSU_PUBLISHER_RETENTION_DAYS` 默认30天；`FOSU_PUBLISHER_KEEP_RUNS` 只增加保护，不能授权删除。
+
+Publisher 的旧 `FOSU_CLOUDBASE_AUTO_PRUNE` 和 `--prune-cloudbase` 现在最多请求只读清理预览，不提供 execute 或删除确认文本。Windows 采集/人工发布/镜像/恢复入口保持可用。独立历史删除工具仍需先完整引用审计和人工批准；本次没有使用其 execute 功能。生产版本未部署本候选，现网旧自动清理行为尚未因代码提交改变。
+
 | 数据 | 保护及清理契约 |
 | --- | --- |
 | WYZ checkpoint、失败任务、分片 | 未确认上传/审核完成不清；保留断点和每学期恢复点；未来隔离期后再审批清理 |

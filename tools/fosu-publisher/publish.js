@@ -846,42 +846,12 @@ function releaseLock(run) {
 }
 
 function cleanupPublisherRunArtifacts(options = {}) {
-  const keepLatest = Math.max(1, Number(options.keepLatest || process.env.FOSU_PUBLISHER_KEEP_RUNS || 2) || 2);
-  if (!fs.existsSync(RUNS_ROOT)) return { removed: [], kept: [], keepLatest };
   const latest = readJsonSafe(LATEST_PATH, {});
-  const keepRunIds = new Set([options.currentRunId, latest.runId].filter(Boolean));
-  const entries = fs.readdirSync(RUNS_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const runDir = path.join(RUNS_ROOT, entry.name);
-      const state = readJsonSafe(path.join(runDir, "state.json"), null);
-      return {
-        runId: entry.name,
-        runDir,
-        state,
-        terminal: isTerminalRunState(state),
-        updatedAt: state && state.updatedAt || "",
-        mtimeMs: fs.statSync(runDir).mtimeMs,
-      };
-    })
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.updatedAt || "") || left.mtimeMs || 0;
-      const rightTime = Date.parse(right.updatedAt || "") || right.mtimeMs || 0;
-      return rightTime - leftTime;
-    });
-  entries.slice(0, keepLatest).forEach((item) => keepRunIds.add(item.runId));
-  const removed = [];
-  const kept = [];
-  entries.forEach((item) => {
-    if (keepRunIds.has(item.runId) || !item.terminal) {
-      kept.push(item.runId);
-      return;
-    }
-    if (!assertInside(RUNS_ROOT, item.runDir)) return;
-    fs.rmSync(item.runDir, { recursive: true, force: true });
-    removed.push(item.runId);
-  });
-  return { removed, kept, keepLatest };
+  return require("./retentionPlan").plan(RUNS_ROOT, Object.assign({}, options, {
+    latestRunId: latest.runId,
+    keepLatest: options.keepLatest || process.env.FOSU_PUBLISHER_KEEP_RUNS || 2,
+    retentionDays: options.retentionDays || process.env.FOSU_PUBLISHER_RETENTION_DAYS || 30,
+  }));
 }
 
 function selectPublisherTerm({ cliTerm = "", envTerm = "", activeTerm = "", activeReleaseVersion = "", activeSource = "", canonicalTerm = "" } = {}) {
@@ -1630,44 +1600,46 @@ function resolveCloudbaseRetentionPlan(args = {}, mirror = {}, env = process.env
     enabled,
     forced,
     skipped,
-    shouldPrune: enabled && !skipped && (forced || mirror.action === "uploaded-and-cutover"),
+    // Legacy auto-prune settings and --prune-cloudbase request a preview only.
+    // Publication is never authorization to delete production history.
+    shouldPrune: false,
+    shouldPlan: !skipped && (forced || enabled && mirror.action === "uploaded-and-cutover"),
+    dryRun: true,
+    executeAllowed: false,
     keepLatest: Math.max(2, Number(args["cloudbase-keep-latest"] || env.FOSU_CLOUDBASE_KEEP_LATEST || 3) || 3),
   };
 }
 
-async function cloudbasePreflightAndMirror(args) {
+async function cloudbasePreflightAndMirror(args, deps = {}) {
   if (process.env.FOSU_PUBLISHER_MOCK !== "1") {
-    runCommand("npm", ["run", "cloudbase:preflight"], { code: "CLOUDBASE_PREFLIGHT_FAILED", timeoutMs: 360000 });
+    (deps.runCommand || runCommand)("npm", ["run", "cloudbase:preflight"], { code: "CLOUDBASE_PREFLIGHT_FAILED", timeoutMs: 360000 });
   }
-  const mirror = await mirrorCloudbase(args);
+  const mirror = await (deps.mirrorCloudbase || mirrorCloudbase)(args);
   const retentionPlan = resolveCloudbaseRetentionPlan(args, mirror);
   let retention = {
     success: true,
     skipped: true,
     reason: retentionPlan.enabled ? "no-new-cloudbase-release" : "disabled",
   };
-  if (retentionPlan.shouldPrune && process.env.FOSU_PUBLISHER_MOCK !== "1") {
+  if (retentionPlan.shouldPlan && process.env.FOSU_PUBLISHER_MOCK !== "1") {
     try {
-      retention = await pruneRemoteReleasePack({
+      retention = await (deps.pruneRemoteReleasePack || pruneRemoteReleasePack)({
         envId: args["env-id"] || DEFAULT_ENV_ID,
         hostingBaseUrl: args["hosting-base-url"] || DEFAULT_CLOUDBASE_BASE_URL,
         keepLatest: retentionPlan.keepLatest,
         keep: [mirror.releaseVersion].filter(Boolean),
-        execute: true,
-        dryRun: false,
-        confirm: "CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES",
+        execute: false,
+        dryRun: true,
       });
     } catch (error) {
-      // A retention failure must not roll back a release that already passed
-      // mirror verification and pointer cutover. Keep the warning in the
-      // Publisher receipt so operations can retry only the cleanup.
+      // An unavailable preview must not roll back a verified publication.
       retention = {
         success: false,
         skipped: false,
         code: error.code || "CLOUDBASE_RETENTION_FAILED",
-        message: error.message,
+        message: "CloudBase retention preview unavailable",
       };
-      console.warn(`  CloudBase 旧版本清理未完成：${retention.code} ${retention.message}`);
+      console.warn(`  CloudBase 历史清理预览未完成：${retention.code}`);
     }
   }
   return {
@@ -2229,7 +2201,7 @@ async function main(argv = process.argv.slice(2)) {
       "  npm run sync:publish -- --mode=full --term=2026-2027-1",
       "  npm run sync:publish -- --mode=resume --run-id=<runId>",
       "  npm run sync:publish -- --mode=mirror-only --term=2026-2027-1",
-      "  npm run sync:publish -- --mode=mirror-only --term=2026-2027-1 --prune-cloudbase",
+      "  npm run sync:publish -- --mode=mirror-only --term=2026-2027-1 --prune-cloudbase  # 仅清理预览",
       "  npm run sync:export-cloudbase -- --release=<releaseVersion>",
     ].join(os.EOL));
     return null;
@@ -2334,6 +2306,7 @@ module.exports = {
   buildTermRegistryPatch,
   buildMockStaging,
   checkCampusNetworkForPublisher,
+  cloudbasePreflightAndMirror,
   exportCloudbaseManualPackage,
   formatLockStatus,
   getProcessCommandLine,
