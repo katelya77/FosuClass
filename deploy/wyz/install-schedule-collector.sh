@@ -28,7 +28,12 @@ receipt=$destination/.install-complete.json
 if [[ -f $receipt ]]; then
   node -e 'const r=require(process.argv[1]);if(r.revision!==process.argv[2]||r.bundleSha256!==process.argv[3])process.exit(1)' "$receipt" "$revision" "$expected" || { echo INSTALL_RECEIPT_CONFLICT; exit 1; }
   echo SAME_REVISION_SOURCE=VERIFIED
-else
+fi
+dependencies_ready=true
+for package_dir in "$destination/tools/fosu-sync-client" "$destination/server"; do
+  npm --prefix "$package_dir" ls --omit=dev --depth=0 >/dev/null 2>&1 || dependencies_ready=false
+done
+if [[ ! -f $receipt || $dependencies_ready != true ]]; then
   npm --prefix "$destination/tools/fosu-sync-client" ci --omit=dev --ignore-scripts
   npm --prefix "$destination/server" ci --omit=dev --ignore-scripts
 fi
@@ -37,7 +42,7 @@ if [[ ! -f $state/browser-runtime.json ]] || ! node -e 'if(require(process.argv[
   "$destination/tools/fosu-sync-client/node_modules/.bin/playwright" install chromium
 fi
 bash "$destination/deploy/wyz/repair-browser.sh" "$destination" --repair
-if [[ -L $base/current && $(readlink -f "$base/current") == "$destination" && -f $receipt ]]; then
+if [[ -L $base/current && $(readlink -f "$base/current") == "$destination" && -f $receipt ]] && cmp -s "$destination/deploy/wyz/wyz-schedule-collector.service" /etc/systemd/system/wyz-schedule-collector.service && cmp -s "$destination/deploy/wyz/wyz-schedule-collector.timer" /etc/systemd/system/wyz-schedule-collector.timer; then
   echo ALREADY_INSTALLED_COMPLETE
   exit 0
 fi

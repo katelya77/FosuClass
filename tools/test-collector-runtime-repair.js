@@ -49,6 +49,8 @@ async function main() {
     await check(async () => { assert.equal(watcher.leaseAlive(leaseFile), false); assert.equal(await watcher.run(["-e", "process.exit(0)"], { FOSU_COLLECTOR_WATCHDOG_FILE: leaseFile }), 65); });
     fs.writeFileSync(leaseFile, JSON.stringify({ deadline: Date.now() + 80000 }));
     await check(async () => assert.equal(await watcher.run(["-e", "process.exit(0)"], { FOSU_COLLECTOR_WATCHDOG_FILE: leaseFile }), 0));
+    fs.writeFileSync(leaseFile, JSON.stringify({ deadline: Date.now() + 100 }));
+    await check(async () => assert.equal(await watcher.run(["-e", "setInterval(()=>{},1000)"], { FOSU_COLLECTOR_WATCHDOG_FILE: leaseFile }), 65));
     const lease = path.join(dir, "session.json"), run = path.join(dir, "run"), catalog = path.join(dir, "catalog");
     fs.writeFileSync(lease, "{}", { mode: 0o600 }); fs.mkdirSync(run); fs.mkdirSync(catalog);
     await check(() => assert.equal(workerCommand("node", [], {}, { dataRoot: dir, sessionPath: lease }, run, dir).executable, "node"));
