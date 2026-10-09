@@ -40,6 +40,7 @@ jobs:
       - name: Package production gates
         run: |
           sudo "$(command -v node)" tools/test-collector-network-recovery.js
+          sudo "$(command -v node)" tools/test-collector-oracle-transport.js
           sudo "$(command -v node)" tools/test-collector-runtime-repair.js
           node tools/test-full-sync-env-persistence.js
           python3 tools/test-collector-archive.py
