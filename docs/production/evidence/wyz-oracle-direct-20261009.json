@@ -20,6 +20,32 @@
   "personalAgentFinalState": "active",
   "personalAgentRestarts": 0,
   "leaseSeconds": 90,
+  "candidateCodeCommit": "f5091282eab67805d9426d0260a94e96d60b7d50",
+  "candidateDeployedToWyz": false,
+  "candidateCi": {
+    "fourSourceLinux": 37953237462,
+    "publicSecurity": 37953062468,
+    "oraclePassiveAudit": 37953247047,
+    "conclusions": "success"
+  },
+  "oraclePassiveAudit": {
+    "commitSha": "a3dfd1989705f51c921f13883bcde1cce4502883",
+    "schoolRequests": 0,
+    "wanRequests": 0,
+    "configurationChanged": false,
+    "classContainingConfigIdleTimeouts": ["60"],
+    "classContainingConfigRequestLimits": ["5000"],
+    "classVhostInheritance": "REQUIRES_SEPARATE_VERIFICATION",
+    "hostAllPortCumulativeCounters": {
+      "SyncookiesSent": 774,
+      "SyncookiesFailed": 31,
+      "ListenOverflows": 0,
+      "ListenDrops": 179,
+      "TCPReqQFullDoCookies": 774,
+      "TCPReqQFullDrop": 0
+    },
+    "countersScope": "host all ports cumulative; not attributable to WYZ or this observation window"
+  },
   "failureLayer": "RECENT_FAILURES_TCP_CONNECT",
   "passiveDiagnostic": {
     "windowHours": 2,

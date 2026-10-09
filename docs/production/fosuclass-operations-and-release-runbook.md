@@ -9,7 +9,7 @@
 | GitHub main | fetch 后 `5c8db23e0bf209687a7e5086654dafe0adbc93f8` | 已核实 |
 | PR #82–#86 | GitHub 查询为 MERGED | 已核实 |
 | PR #79/#81 | GitHub 查询为 OPEN | 保留，未合并或修改 |
-| 生产祖先 | 只读源站审计 `37945292721` 再次确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 本轮真实指纹；未部署候选 |
+| 生产祖先 | 只读源站审计 `37953247047` 再次确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 本轮真实指纹；未部署候选 |
 | 本轮候选基线 | `b1bc12f96692768d53004e2573e78e6bd5a62d5d` 同时包含 main 与生产祖先 | 防止丢失班级隔离及公告表情行为 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
 | WYZ 安装 | 用户 PAM 回传 `SOURCE_INTEGRITY=PASS`、`INSTALL_COMPLETE`、`TRANSPORT_SCHEMA_PASS`、`ORACLE_DIRECT_STARTED` | b1bc12f9 已人工安装 |
@@ -287,5 +287,7 @@ npm run sync:publish -- --help
 本轮已运行：依赖在独立worktree安装；网络23用例、TLS19用例；四源22套、个人采集51套、班级隔离26用例；Agent foundation 41套、regression 196套、ai-competition、final-convergence；学校Session、双源发布契约、写入fence、快速pointer（包括晚完成manifest）、retention、预算/六状态的新增fixture；`test:security-full`、`test:architecture-guards`、`release:preflight`。Windows的POSIX ownership/SIGTERM项目显式跳过，Linux CI必须补足。只有公开数据HTTP与Oracle只读诊断访问现网；学校请求0。
 
 候选为 [draft PR #87](https://github.com/katelya77/FosuClass/pull/87)，暂以包含生产祖先的 b1bc12f9 准备分支为 base，不能直接把 main 作为生产部署候选。[WYZ/Linux 四源及隔离浏览器 CI](https://github.com/katelya77/FosuClass/actions/runs/37945281850)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37945207236)、[源站只读审计](https://github.com/katelya77/FosuClass/actions/runs/37945292721) 对 df02887e 已通过。后续提交仍需对应 CI，之前的成功不能替代新提交验证。测试生成的截图/审计文件不作为源码提交。WYZ已安装的仍是原b1包，不含B–F候选；Oracle和微信也未部署这些改动。
+
+最终代码f5091282的[Linux四源/隔离浏览器CI](https://github.com/katelya77/FosuClass/actions/runs/37953237462)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37953062468)、[仅被动源站审计](https://github.com/katelya77/FosuClass/actions/runs/37953247047)全部通过，Linux补足POSIX ownership/SIGTERM及验收runner原子回滚。本地网络23、TLS20（含真实b1 factory兼容）、观察器10和被动诊断9通过；security-full/architecture/preflight再次通过。后续提交仅补写文档/公开验收证据。今晚生产冻结与明天恢复步骤见 `docs/production/handoff-20261009-night.md`。
 
 未完成的生产门禁：WYZ失败分层诊断、根因修复后重新60分钟验收；学校长期凭据批准、真实Session与小范围四源试采；严格双源生产发布adapter及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。

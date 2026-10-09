@@ -21,6 +21,10 @@
 
 GitHub CI在本机断网后仍可继续，不能把此前绿色结果当成后续提交的验证。明天先查询PR当前head和对应CI；不要在错误工作区重做安装或从main部署。
 
+已锁定的代码提交 `f5091282eab67805d9426d0260a94e96d60b7d50`：[Linux四源/隔离浏览器CI](https://github.com/katelya77/FosuClass/actions/runs/37953237462)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37953062468)、[源站仅被动审计](https://github.com/katelya77/FosuClass/actions/runs/37953247047)全部通过。随后仅补写文档/公开验收证据，执行代码没有再次改变。
+
+最新被动审计确认后端仍a3dfd198；含class vhost的已加载配置摘要出现idle60秒、keepalive_requests5000，具体vhost继承仍需验证。主机所有端口累计ListenDrops179、SyncookiesSent774、SyncookiesFailed31不属于WYZ专属或本次故障时间窗口，不能据此断定TCP丢包位置。审计学校请求0、外网探针0、配置修改0。
+
 ## 明天恢复顺序
 
 1. 在独立worktree `C:\Users\Katelya\.codex\worktrees\production-operations\FosuClass` fetch，确认branch/HEAD/未提交文件、PR head及CI。原工作区 `C:\Users\Katelya\Documents\VScode\FosuClass` 是指向D盘的junction，不能覆盖用户project配置。
