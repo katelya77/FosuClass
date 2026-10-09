@@ -8,12 +8,20 @@ function model(measurement,options={}){
   const pointer=find("/active.json"),manifest=find("/manifest.json"),classIndex=find("/index/class/all.json");
   const classDetail=records.find(r=>r.path.includes("/detail/class/")).httpBodyBytes;
   const details=records.filter(r=>r.path.includes("/detail/")),indexes=records.filter(r=>r.path.includes("/index/"));
+  const userOperations = {
+    pointerCheck: { requests: 1, httpBodyBytes: pointer },
+    classColdRead: { requests: 4, httpBodyBytes: pointer+manifest+classIndex+classDetail },
+    teacherColdRead: { requests: 4, httpBodyBytes: pointer+manifest+find("/index/teacher/all.json")+records.find(r=>r.path.includes("/detail/teacher/")).httpBodyBytes },
+    cachedScheduleView: { scheduleDownloadBytes: 0, pointerCheckBytesWhenDue: pointer },
+    measuredFourTypeReads: { requests: records.length, httpBodyBytes: cloud.totalHttpBodyBytes },
+    boundary: "schedule resources only; excludes bootstrap, announcements, TLS/header overhead and other API traffic; cached view assumes a valid unchanged release"
+  };
   const profiles=[
     {name:"weekly-class-cache",description:"6 pointer reads/day; one new class manifest/index/detail per week",requestsPerUserDay:6+3/7,bytesPerUserDay:6*pointer+(manifest+classIndex+classDetail)/7},
     {name:"cold-four-source-daily",description:"Every day downloads pointer, manifest, all four indexes, four details",requestsPerUserDay:10,bytesPerUserDay:cloud.totalHttpBodyBytes},
     {name:"heavy-search-cache",description:"10 pointers + 10 uncached details/day; manifest + four indexes weekly",requestsPerUserDay:20+5/7,bytesPerUserDay:10*pointer+10*details.reduce((a,r)=>a+r.httpBodyBytes,0)/details.length+(manifest+indexes.reduce((a,r)=>a+r.httpBodyBytes,0))/7}
   ];
-  return {measuredRelease:cloud.releaseVersion,quotaBasis:"verified personal quota plan; actual monthly usage/overage switch still UNKNOWN",quota:{storageTrafficGB:10,originTrafficGB:10,calls:200000,hostingGB:1},assumptions:{days:30,GB:1e9,originMissRates:[0,0.1,1],dynamicCloudCallsPerUserDay:options.dynamicCalls||0,otherResourceUsage:"not included",wireBytes:"encoded HTTP body only"},profiles,scenarios:profiles.flatMap(profile=>[500,1000,2000,5000,10000].map(dau=>{
+  return {measuredRelease:cloud.releaseVersion,userOperations,quotaBasis:"user console fixed-quota evidence and official fixed-quota document; actual monthly usage/billing mode/overage switch still UNKNOWN; resource-point plans must not be substituted",quota:{storageTrafficGB:10,originTrafficGB:10,calls:200000,hostingGB:1},assumptions:{days:30,GB:1e9,originMissRates:[0,0.1,1],dynamicCloudCallsPerUserDay:options.dynamicCalls||0,otherResourceUsage:"not included",wireBytes:"encoded HTTP body only"},profiles,scenarios:profiles.flatMap(profile=>[500,1000,2000,5000,10000].map(dau=>{
     const httpRequests=dau*30*profile.requestsPerUserDay,trafficGB=dau*30*profile.bytesPerUserDay/1e9;
     return {profile:profile.name,dau,requestsPerUserDay:profile.requestsPerUserDay,bytesPerUserDay:profile.bytesPerUserDay,monthlyHostingHttpRequests:Math.ceil(httpRequests),monthlyStorageTrafficGB:trafficGB,
       originSensitivity:[0,0.1,1].map(missRate=>({missRate,monthlyBilledCalls:Math.ceil(httpRequests*missRate+dau*30*(options.dynamicCalls||0)),monthlyOriginTrafficGB:trafficGB*missRate,estimatedTrafficOverageYuan:Math.max(0,trafficGB-10)*0.21+Math.max(0,trafficGB*missRate-10)*0.15})),

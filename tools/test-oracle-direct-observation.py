@@ -13,6 +13,9 @@ def records():
 
 good = records()
 assert module.summarize(good,0,3600,0,{'123'},True)['acceptance']=='PASS'
+r = module.summarize(good,0,3600,0,{'123'},True)
+assert r['successfulNewConnections'] == 120 and r['successfulReusedConnections'] == 0
+assert r['failedConnectionPhases'] == {}
 assert module.summarize(good,0,3599,0,{'123'},True)['acceptance']=='NOT_PASSED'
 assert module.summarize([e for e in good if not 90<=e[0]<=180],0,3600,0,{'123'},True)['acceptance']=='NOT_PASSED'
 assert module.summarize(good,0,3600,1,{'123'},True)['acceptance']=='NOT_PASSED'

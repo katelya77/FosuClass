@@ -54,11 +54,28 @@ transport 严格匹配包源码 schema：
 
 观察器只读取 journal 和 systemd 属性，无额外网络请求。保留 PAM 连接至少 60 分钟。输出包含成功数、失败尝试数、成功率、成功心跳最大间隔、观察到的失败窗口、TLS 授权、实际地址、重启数、PID 数。最大确认间隔是租约相关的保守观测值，并不等于连续网络监测得到的物理断网时间。只有完整窗口、至少 100 次成功、失败 0、最大间隔 <90 秒、重启 0、单一 PID、TLS 授权和实际源站地址一致才 PASS。PASS 仅放行通信，不放行学校访问或 timer。
 
-2026-10-09 用户完成观察的汇总见 `docs/production/evidence/wyz-oracle-direct-20261009.json`：3605.86 秒，51 成功/19 失败，成功率 72.86%，最长确认心跳间隔 459.96 秒，重启 0、单一 PID、Collector active。成功样本 TLS 验证通过，实际地址是批准 IPv4；不能据此声称所有失败都是 TLS 正常或网络健康。个人 Agent 在安装前为 active，本次最终状态尚未回传。
+2026-10-09 用户完成观察的汇总见 `docs/production/evidence/wyz-oracle-direct-20261009.json`：3605.86 秒，51 成功/19 失败，成功率 72.86%，最长确认心跳间隔 459.96 秒，重启 0、单一 PID、Collector active。成功样本 TLS 验证通过，实际地址是批准 IPv4；不能据此声称所有失败都是 TLS 正常或网络健康。后续被动诊断已确认个人 Agent active、重启0，Collector active、重启0，timer inactive。
 
 此结果为 NOT_PASSED，不能维持现有 90 秒租约门禁。保持学校访问关闭、execute=0、timer disabled。下一步只做被动日志分层诊断，先区分 connect/TLS/response 与 timeout/reset/HTTP 拒绝；不重新安装、不重复短时探针，不通过延长租约、缩短安全冷却或关闭证书校验掩盖故障。
 
 `deploy/wyz/diagnose-oracle-direct.py` 兼容 Python 3.6，只读取最近两小时 journal/systemd 并输出白名单错误、连接阶段、耗时及个人 Agent 状态。只计 oracle-direct 的 heartbeat-only 尝试，排除重复 cooldown 日志；与最近连接记录相隔超过20秒时标记 UNKNOWN，不猜测失败层。经 PAM 传到安装目录后运行 `python3 diagnose-oracle-direct.py`。根因修复审查后才重新开始完整60分钟验收。root-only 的 `acceptance/observation-*.json` 只有汇总；不回传 env/session/raw journal。
+
+用户回传的被动诊断最近20条都是 connect 阶段 ETIMEDOUT，6002–6009毫秒，尚未建立TCP，未进入TLS；remoteAddress不可用不代表连接到了错误地址。两小时总窗口有ECONNRESET24/ETIMEDOUT28，但当时内联命令未按transportMode过滤，不能把52次全部归因于Oracle Direct。实际底层丢包位置（校园出口、跨境路径、OCI入口）仍未知。
+
+源码中的 control agent 空闲超时5000毫秒低于心跳间隔30000毫秒，导致下次心跳通常重新建立TCP。候选只把 control pool 空闲生命周期改为75000毫秒，data pool仍5000；TCP/TLS建立上限6000、心跳请求15000、租约90000、重试/冷却、CA/SNI/HMAC均不变。本地真实TLS fixture等待30.5秒，旧5秒池重新连接，新池复用经过验证的TLS连接。它降低连接建立暴露频率，但不能证明校园/跨境路径故障已经修复。
+
+明天人工验收用 `deploy/wyz/apply-control-keepalive.py`，只替换现有b1包的heartbeat-only验收runner，不安装B–F整包；绑定原runner SHA，保留0600原文件备份并原子替换，只重启全校Collector。默认dry-run；真实apply必须由用户在PAM执行。经PAM传入该脚本及更新后的观察器后：
+
+```bash
+cd /root/fosu-collector-install/b1bc12f96692768d53004e2573e78e6bd5a62d5d
+python3 apply-control-keepalive.py --dry-run
+python3 apply-control-keepalive.py --apply
+python3 observe-oracle-direct.py
+# 需要撤回本次runner修改时（不改代码current或transport）
+python3 apply-control-keepalive.py --rollback
+```
+
+更新后的观察器补充成功连接的复用/新建次数与失败阶段，不降低原验收门槛。当前修复未在WYZ执行；未获60分钟PASS前仍禁止学校访问/定时。若TCP建立依然不稳定，保留现有正式课表与Windows人工接管，先处理网络路径，不强行采集。
 
 ```bash
 # transport 回到旧 Cloudflare 路径；仍保持 heartbeat-only
@@ -173,6 +190,10 @@ npm run cloudbase:release:sync-active -- --execute --mirror-only
 本地新增测试证明：快 CloudBase 不等待未完成 Oracle、晚到较新 Oracle 可对账、持久化不降级、30 秒去重、坏主源回退。既有四类搜索、版本缓存切换、周次/空教室隔离和个人路径回归通过；60 秒检测、国内 P50/P95 和真机浏览状态仍是待验证 SLO。当前远端 `active.json` Cache-Control=120 秒，query bucket 是否改变实际 CDN cache key 未核实，不能保证现网 60 秒目标。
 
 ## E：个人版实际容量、流量与域名
+
+先按一次用户操作理解成本：整个Hosting约385MB是服务器保存的版本文件，不是每位用户都下载385MB。当前公开版本的一次班级冷加载测量合计982,418 bytes（pointer+manifest+班级索引+一个详情，约0.98MB）；教师冷加载约2.11MB。已有缓存浏览不重新下载整表，版本检查本次pointer约3KB；实际页面还可能请求bootstrap/公告等，不能把这四项当成整次启动的完整流量。一次采集上传整份Release约197MB，和用户按需查询是两种不同的动作。
+
+下面的DAU表是行为情景，不是实际账单或承载人数上限；每日全四源冷下载是压力情景，不能当作每位普通用户的日常行为。速度与及时性优先：不故意延后新版本、不降低必要采集频率、不把正常查询导回美国；优先压缩真正的HTTP传输、版本缓存、按需加载和去重。月真实用量及计费模式确认后再决定费用方案。当前官方同时有[资源点计费说明](https://docs.cloudbase.net/quick-start/resource-point)，而用户控制台提供的是固定配额证据，不能自动套用新购套餐或切换计费模式。
 
 CLI 3.5.6，环境 `cloud1-d3g17rpe7566d3d5c`：ap-shanghai、个人版、prepayment、NORMAL、Hosting online。6979 个条目共 384,709,023 bytes；其中 active 3528 文件 197,085,521 bytes，旧正式版本 187,188,125 bytes，验证目录 43,532 bytes。未删除任何目录。月用量、额度剩余、超限不停服开关、账单实际折扣未通过 CLI 核实，不填 0。
 

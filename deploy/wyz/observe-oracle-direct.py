@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Passive journal observation; no network or school requests, no raw log output."""
-import datetime, json, os, subprocess, time
+import collections, datetime, json, os, subprocess, time
 from pathlib import Path
 
 UNIT = 'wyz-schedule-collector.service'
@@ -38,6 +38,9 @@ def summarize(events, start, end, restarts, pids, active):
     tls = bool(verified) and all(c.get('tlsAuthorized') is True and c.get('servername') == 'class.katelya.eu.org' for c in verified)
     passed = end-start >= 3600 and len(success) >= 100 and gap < 90 and failures == 0 and fatal == 0 and restarts == 0 and len(pids) == 1 and active and tls and addresses == ['146.235.201.244']
     return dict(durationSeconds=round(end-start,2), successfulHeartbeats=len(success), failedAttempts=failures,
+                successfulReusedConnections=sum(c.get('reusedSocket') is True for c in verified),
+                successfulNewConnections=sum(c.get('reusedSocket') is not True for c in verified),
+                failedConnectionPhases=dict(collections.Counter(c.get('phase') if c.get('phase') in ('connect','tls','response') else 'UNKNOWN' for c in connections if c.get('phase')!='complete')),
                 successRate=len(success)/(len(success)+failures) if success or failures else None,
                 longestConfirmedHeartbeatGapSeconds=round(gap,2), longestObservedFailureWindowSeconds=round(max(failure_windows,default=0),2), tlsAuthorized=tls, actualAddresses=addresses,
                 restarts=restarts, pidCount=len(pids), collectorActive=active, schoolRequests=0,

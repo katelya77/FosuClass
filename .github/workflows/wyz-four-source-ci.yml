@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # regression loads the real b1 deployed transport factory
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -24,6 +26,7 @@ jobs:
       - run: sudo "$(command -v node)" tools/test-school-session-lifecycle.js
       - run: python3 tools/test-oracle-direct-observation.py
       - run: python3 tools/test-oracle-direct-diagnosis.py
+      - run: sudo python3 tools/test-control-keepalive-runner.py
       - run: node tools/test-runtime-primary-fast.js
       - run: node tools/test-schedule-publication-policy.js
       - run: node tools/test-collector-retention-plan.js
@@ -35,7 +38,7 @@ jobs:
       - run: node tools/test-full-sync-env-persistence.js
       - run: python3 tools/test-collector-archive.py
       - run: sudo "$(command -v node)" tools/test-collector-install-linux.js
-      - run: bash -n deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh deploy/wyz/accept-oracle-direct.sh deploy/wyz/audit-oracle-origin-security.sh
+      - run: bash -n deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh deploy/wyz/accept-oracle-direct.sh deploy/wyz/audit-oracle-origin-security.sh deploy/wyz/audit-oracle-control-sockets.sh
       - run: node tools/wyz-schedule-collector/browser-smoke.js
       - run: npm run test:wyz-four-source
       - run: npm run test:collector-personal-regression

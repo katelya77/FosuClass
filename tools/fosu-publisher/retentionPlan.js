@@ -1,6 +1,6 @@
 "use strict";
 const fs = require("fs"), path = require("path");
-const TERMINAL = new Set(["completed", "failed", "partial-success", "no-change"]);
+const TERMINAL = new Set(["success", "completed", "failed", "partial-success", "no-change"]);
 function readState(file) {
   try {
     const stat = fs.lstatSync(file);

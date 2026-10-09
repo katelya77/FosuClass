@@ -1,6 +1,7 @@
 "use strict";
 const fs = require("fs"), path = require("path"), dns = require("dns"), https = require("https");
 const HOST = "class.katelya.eu.org", ORIGIN = "https://" + HOST, ORIGIN_IPV4 = "146.235.201.244";
+const CONTROL_IDLE_TIMEOUT_MS = 75000;
 const DEFAULT = Object.freeze({ schema: 1, mode: "cloudflare-default" });
 function reject() { throw Object.assign(new Error("COLLECTOR_TRANSPORT_REJECTED"), { code: "COLLECTOR_TRANSPORT_REJECTED" }); }
 function validate(value) {
@@ -26,7 +27,9 @@ function connectionOptions(policy) {
   return { family: 4, autoSelectFamily: false, servername: HOST, minVersion: "TLSv1.2", rejectUnauthorized: true, lookup, keepAlive: true, maxSockets: 1, maxFreeSockets: 1, timeout: 5000, scheduling: "lifo" };
 }
 function createFetcher(policy, options = {}) {
-  const agent = new https.Agent(connectionOptions(policy));
+  // A 30-second heartbeat must be able to reuse its verified TLS socket.
+  // This is an idle lifetime, not the connect/request/lease timeout.
+  const agent = new https.Agent({ ...connectionOptions(policy), timeout: CONTROL_IDLE_TIMEOUT_MS });
   // Control-plane heartbeats must not wait behind an upload/finalize connection.
   const dataAgent = new https.Agent(connectionOptions(policy));
   const request = options.request || https.request;
@@ -70,4 +73,4 @@ function createFetcher(policy, options = {}) {
   fetcher.close = () => { agent.destroy(); dataAgent.destroy(); };
   return fetcher;
 }
-module.exports = { DEFAULT, HOST, ORIGIN, ORIGIN_IPV4, connectionOptions, createFetcher, load, validate };
+module.exports = { CONTROL_IDLE_TIMEOUT_MS, DEFAULT, HOST, ORIGIN, ORIGIN_IPV4, connectionOptions, createFetcher, load, validate };

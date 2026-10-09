@@ -17,8 +17,25 @@
   "acceptance": "NOT_PASSED",
   "schoolAccessApproved": false,
   "timerApproved": false,
-  "personalAgentFinalState": "NOT_REPORTED",
+  "personalAgentFinalState": "active",
+  "personalAgentRestarts": 0,
   "leaseSeconds": 90,
-  "failureLayer": "AWAITING_PASSIVE_DIAGNOSTIC",
+  "failureLayer": "RECENT_FAILURES_TCP_CONNECT",
+  "passiveDiagnostic": {
+    "windowHours": 2,
+    "windowAllTransportFailureCounts": {
+      "connection-reset/ECONNRESET": 24,
+      "timeout/ETIMEDOUT": 28
+    },
+    "countsScope": "inline diagnostic did not filter transportMode; not all counts attributed to oracle-direct",
+    "recentFailureSamples": 20,
+    "recentCategory": "timeout",
+    "recentTransportCode": "ETIMEDOUT",
+    "recentConnectionPhase": "connect",
+    "recentElapsedMsRange": [6002, 6009],
+    "recentTlsHandshakeReached": false,
+    "recentSocketReuse": false,
+    "underlyingNetworkDropLocation": "UNKNOWN"
+  },
   "gapMeaning": "confirmed successful heartbeat interval; not physical network outage duration"
 }
