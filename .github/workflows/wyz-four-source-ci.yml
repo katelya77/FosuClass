@@ -20,6 +20,7 @@ jobs:
       - run: npm --prefix tools/fosu-sync-client ci
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
       - run: sudo "$(command -v node)" tools/test-collector-network-recovery.js
+      - run: sudo "$(command -v node)" tools/test-collector-oracle-transport.js
       - run: sudo "$(command -v node)" tools/test-collector-runtime-repair.js
       - run: node tools/test-full-sync-env-persistence.js
       - run: python3 tools/test-collector-archive.py

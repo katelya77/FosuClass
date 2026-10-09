@@ -40,17 +40,18 @@ function createHeartbeat(request, options = {}) {
   let hadFailure = false;
   function emit(patch) { Object.assign(state, patch); if (options.onState) options.onState({ ...state }); }
   async function heartbeat(body = { ok: true }, bounds = {}) {
+    const signal = AbortSignal.any([options.signal, bounds.signal].filter(Boolean));
     for (let attempt = 0; attempt <= delays.length; attempt++) {
-      if (options.signal && options.signal.aborted) throw stopped();
+      if (signal.aborted) throw stopped();
       if (bounds.deadline && now() >= bounds.deadline) throw error("COLLECTOR_LEASE_EXPIRED", { retryable: false });
       const started = now();
       try {
-        const response = await request("POST", HEARTBEAT, body);
+        const response = await request("POST", HEARTBEAT, body, false, { signal });
         if (!response || response.ok !== true) throw error("ORACLE_HEARTBEAT_REJECTED", { errorCategory: "protocol", retryable: false });
         emit({ networkStatus: state.consecutiveSuccesses + 1 >= 3 ? "healthy" : "recovering", lastSuccessfulHeartbeatAt: new Date(now()).toISOString(), consecutiveFailures: 0, consecutiveSuccesses: state.consecutiveSuccesses + 1, errorCategory: null, transportCode: null, retryWaitMs: 0, lastSuccessfulConnectionMs: Math.max(0, now() - started) });
         return response;
       } catch (caught) {
-        if (options.signal && options.signal.aborted || caught.code === "COLLECTOR_STOPPED") throw stopped();
+        if (signal.aborted || caught.code === "COLLECTOR_STOPPED") throw stopped();
         hadFailure = true;
         const problem = caught.code && caught.code.startsWith("ORACLE_") ? caught : classify(caught);
         problem.heartbeatFailure = true;
@@ -58,7 +59,7 @@ function createHeartbeat(request, options = {}) {
         emit({ networkStatus: problem.retryable ? "degraded" : "fatal", consecutiveFailures: state.consecutiveFailures + 1, consecutiveSuccesses: 0, errorCategory: problem.errorCategory || "protocol", transportCode: problem.transportCode || null, retryWaitMs: delay });
         if (!delay) throw problem;
         const remaining = bounds.deadline ? Math.max(0, bounds.deadline - now()) : delay;
-        await sleep(Math.min(delay, remaining), options.signal);
+        await sleep(Math.min(delay, remaining), signal);
       }
     }
   }
@@ -73,7 +74,7 @@ function exitCode(cause) {
   if (cause.errorCategory === "authentication") return 77;
   if (cause.retryable || ["COLLECTOR_LOCKED", "COLLECTOR_LEASE_EXPIRED", "RUN_LEASE_REJECTED"].includes(cause.code)) return 75;
   if (["ENOENT", "EACCES", "EPERM", "EROFS"].includes(cause.code)) return 78;
-  if (/^(ORACLE_|COLLECTOR_(CONFIGURATION|CREDENTIALS|EXECUTION_MODE)|PRIVATE_|READ_ONLY_)/.test(cause.code || "")) return 78;
+  if (/^(ORACLE_|COLLECTOR_(CONFIGURATION|CREDENTIALS|EXECUTION_MODE|TRANSPORT)|PRIVATE_|READ_ONLY_)/.test(cause.code || "")) return 78;
   return 1;
 }
 module.exports = { COOLDOWN_MS, HEARTBEAT, RETRY_DELAYS, classify, createHeartbeat, error, exitCode, httpError, stopped, wait };

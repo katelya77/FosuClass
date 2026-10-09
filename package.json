@@ -16,6 +16,7 @@
     "test:production-baseline": "node --test tools/test-production-baseline.js",
     "test:class-schedule-isolation": "node --test tools/test-class-schedule-isolation.js tools/test-class-schedule-ui-isolation.js tools/test-class-schedule-release-isolation.js",
     "test:collector-network": "node tools/test-collector-network-recovery.js",
+    "test:collector-transport": "node tools/test-collector-oracle-transport.js",
     "test:collector-personal-regression": "node tools/run-collector-personal-regression.js",
     "test:wyz-four-source": "node tools/run-wyz-four-source-tests.js",
     "test": "echo \"Error: no test specified\" && exit 1",
