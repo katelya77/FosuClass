@@ -33,6 +33,9 @@ probe('origin-public-ip', 'https://class.katelya.eu.org/api/health', 'class.kate
 for ip in ['104.21.76.75', '172.67.191.25']:
     time.sleep(15)
     probe('cloudflare-'+ip, 'https://class.katelya.eu.org/api/health', 'class.katelya.eu.org:443:'+ip)
+for suffix in ['/', '/admin', '/api/campus-sync/jobs']:
+    time.sleep(15)
+    probe('personal-broker-protection:'+suffix, 'https://agent-broker.katelya.eu.org'+suffix)
 
 code, names, _ = run(['docker', 'ps', '--format', '{{.Names}}'])
 nginx_names = [n for n in names.splitlines() if re.fullmatch(r'[A-Za-z0-9_.-]+', n) and re.search('openresty|nginx', n, re.I)]

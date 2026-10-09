@@ -9,6 +9,7 @@ const { buildSyncPlan, ALL_SCOPES } = require("../../shared/syncPlan");
 const { assertFourSources } = require("../../server/src/shared/fourDirectSourceContract");
 const { acquireLock, runDirectory, readJson, writeJsonAtomic, pruneRuns } = require("./runStore");
 const recovery = require("./heartbeatRecovery");
+const transport = require("./oracleTransport");
 
 const ROOT = path.resolve(__dirname, "../..");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,21 +23,22 @@ function config(env = process.env) {
   if (!env.FULL_SYNC_AGENT_ID || !token || !secret) throw failure("COLLECTOR_CONFIGURATION_MISSING");
   if (env.FOSU_COLLECTOR_EXECUTE !== undefined && !["0", "1"].includes(env.FOSU_COLLECTOR_EXECUTE)) throw failure("COLLECTOR_EXECUTION_MODE_REJECTED");
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector") || token.length < 32 || secret.length < 32 || token === secret || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(token) || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(secret)) throw failure("COLLECTOR_CREDENTIALS_REJECTED");
-  return { oracle: url.origin, token, secret, agentId: env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector", execute: env.FOSU_COLLECTOR_EXECUTE === "1", sessionPath: env.FOSU_COLLECTOR_SESSION || "/var/lib/fosuclass/schedule-collector/session.json", dataRoot: env.FOSU_COLLECTOR_DATA_DIR || "/var/lib/fosuclass/schedule-collector", concurrency: Math.max(1, Math.min(2, Number(env.SCHOOL_CONCURRENCY) || 1)) };
+  const dataRoot = env.FOSU_COLLECTOR_DATA_DIR || "/var/lib/fosuclass/schedule-collector";
+  return { oracle: url.origin, token, secret, agentId: env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector", execute: env.FOSU_COLLECTOR_EXECUTE === "1", sessionPath: env.FOSU_COLLECTOR_SESSION || "/var/lib/fosuclass/schedule-collector/session.json", dataRoot, transport: transport.load(dataRoot), concurrency: Math.max(1, Math.min(2, Number(env.SCHOOL_CONCURRENCY) || 1)) };
 }
 function client(cfg, fetcher = fetch, options = {}) {
-  return async function request(method, pathname, value, binary = false) {
+  return async function request(method, pathname, value, binary = false, bounds = {}) {
     const raw = binary ? value : Buffer.from(value === undefined ? "" : JSON.stringify(value));
     const timestamp = String((options.now || Date.now)()), nonce = crypto.randomBytes(20).toString("hex");
     const signature = signRequest(cfg.secret, { method, path: pathname, timestamp, nonce, body: raw });
     let response;
     const timeout = AbortSignal.timeout(options.timeoutMs || (pathname === recovery.HEARTBEAT ? 15000 : 120000));
-    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    const signal = AbortSignal.any([options.signal, bounds.signal, timeout].filter(Boolean));
     try { response = await fetcher(cfg.oracle + pathname, { method, redirect: "error", signal, headers: { authorization: "Bearer " + cfg.token, "content-type": binary ? "application/octet-stream" : "application/json", "x-full-sync-agent-id": cfg.agentId, "x-full-sync-timestamp": timestamp, "x-full-sync-nonce": nonce, "x-full-sync-signature": signature }, body: method === "GET" ? undefined : raw }); }
-    catch (error) { throw options.signal && options.signal.aborted ? recovery.stopped() : recovery.classify(error); }
+    catch (error) { throw options.signal && options.signal.aborted || bounds.signal && bounds.signal.aborted ? recovery.stopped() : recovery.classify(error); }
     if (response.status === 204) return null;
     if (!response.ok) { if (response.body) await response.body.cancel().catch(() => {}); throw recovery.httpError(response.status); }
-    try { return await response.json(); } catch (error) { if (options.signal && options.signal.aborted) throw recovery.stopped(); if (error.name === "SyntaxError") throw recovery.error("ORACLE_RESPONSE_INVALID", { errorCategory: "protocol", retryable: false }); throw recovery.classify(error); }
+    try { return await response.json(); } catch (error) { if (options.signal && options.signal.aborted || bounds.signal && bounds.signal.aborted) throw recovery.stopped(); if (error.name === "SyntaxError") throw recovery.error("ORACLE_RESPONSE_INVALID", { errorCategory: "protocol", retryable: false }); throw recovery.classify(error); }
   };
 }
 function validateRun(run) {
@@ -133,9 +135,11 @@ async function runOnce(cfg, deps = {}) {
   let child, timer, leaseTimer, killTimer, cancelled = false, stopCode, stopProblem, lastLease = Date.now(), tickRunning = false;
   const now = deps.now || Date.now, leaseMs = deps.leaseMs || 90000;
   lastLease = now();
+  const leaseControl = new AbortController();
   const stop = (code, problem) => {
     if (stopCode) return;
     stopCode = code; stopProblem = problem; cancelled = true;
+    leaseControl.abort();
     writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: 0 });
     if (child) {
       child.kill("SIGTERM");
@@ -145,7 +149,7 @@ async function runOnce(cfg, deps = {}) {
   };
   const onAbort = () => stop("COLLECTOR_STOPPED");
   if (deps.signal) deps.signal.addEventListener("abort", onAbort, { once: true });
-  const leasedRequest = async (...args) => { if (stopCode) throw recovery.error(stopCode, { retryable: false }); const result = await request(...args); if (stopCode) throw recovery.error(stopCode, { retryable: false }); return result; };
+  const leasedRequest = async (method, route, value, binary = false) => { if (stopCode) throw recovery.error(stopCode, { retryable: false }); const result = await request(method, route, value, binary, { signal: leaseControl.signal }); if (stopCode) throw recovery.error(stopCode, { retryable: false }); return result; };
   let reportQueue = Promise.resolve();
   const report = (patch) => (reportQueue = reportQueue.catch(() => {}).then(() => leasedRequest("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch))));
   writeJsonAtomic(path.join(dir, "state.json"), { runId: run.id, term: run.term, status: "running" });
@@ -158,7 +162,7 @@ async function runOnce(cfg, deps = {}) {
       if (tickRunning) return;
       tickRunning = true;
       try {
-        const heartbeat = await heartbeatRequest({ runId: run.id, claimId: run.claimId }, { deadline: lastLease + leaseMs });
+        const heartbeat = await heartbeatRequest({ runId: run.id, claimId: run.claimId }, { deadline: lastLease + leaseMs, signal: leaseControl.signal });
         if (stopCode) return;
         if (heartbeat.cancelled) stop("CANCELLED");
         else { lastLease = now(); writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: lastLease + 90000 }); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
@@ -197,7 +201,7 @@ async function runOnce(cfg, deps = {}) {
     writeJsonAtomic(path.join(dir, "state.json"), { status: "failed", code });
     pruneRuns(cfg.dataRoot, dir, readJson(path.join(cfg.dataRoot, "last-success.json"), {}).directory);
     throw Object.assign(failure(code), { retryable: stopProblem ? stopProblem.retryable : error.retryable, errorCategory: stopProblem ? stopProblem.errorCategory : error.errorCategory });
-  } finally { if (timer) clearInterval(timer); if (leaseTimer) clearInterval(leaseTimer); if (killTimer) clearTimeout(killTimer); if (deps.signal) deps.signal.removeEventListener("abort", onAbort); }
+  } finally { leaseControl.abort(); if (timer) clearInterval(timer); if (leaseTimer) clearInterval(leaseTimer); if (killTimer) clearTimeout(killTimer); if (deps.signal) deps.signal.removeEventListener("abort", onAbort); }
 }
 async function runLoop(cfg, deps = {}) {
   const request = deps.request || client(cfg, deps.fetcher || fetch, { signal: deps.signal });
@@ -220,10 +224,11 @@ async function main(deps = {}) {
   const cfg = config(deps.env || process.env);
   const release = acquireLock(cfg.dataRoot);
   const control = new AbortController(), stop = () => control.abort();
+  const fetcher = deps.fetcher || (cfg.transport.mode === "cloudflare-default" ? fetch : transport.createFetcher(cfg.transport));
   process.once("SIGTERM", stop); process.once("SIGINT", stop);
   try {
-    await runLoop(cfg, { ...deps, signal: control.signal, once: process.argv.includes("--once"), onResult: result => console.log(JSON.stringify(result)), onState: state => { writeJsonAtomic(path.join(cfg.dataRoot, "collector-status.json"), state); console.log(JSON.stringify(state)); } });
-  } finally { process.removeListener("SIGTERM", stop); process.removeListener("SIGINT", stop); release(); }
+    await runLoop(cfg, { ...deps, fetcher, signal: control.signal, once: process.argv.includes("--once"), onResult: result => console.log(JSON.stringify(result)), onState: state => { const status = { ...state, transportMode: cfg.transport.mode }; writeJsonAtomic(path.join(cfg.dataRoot, "collector-status.json"), status); console.log(JSON.stringify(status)); } });
+  } finally { if (fetcher.close) fetcher.close(); process.removeListener("SIGTERM", stop); process.removeListener("SIGINT", stop); release(); }
 }
 if (require.main === module) main().catch((error) => { console.error(JSON.stringify({ status: "failed", code: error.code || "COLLECTOR_FAILED" })); process.exitCode = recovery.exitCode(error); });
 module.exports = { assertSession, client, config, executeSync, main, runLoop, runOnce, upload, validateRun };
