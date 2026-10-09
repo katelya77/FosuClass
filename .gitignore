@@ -62,6 +62,12 @@ server/storage/public/
 server/storage/campus-map/
 server/storage/snapshots/
 output/playwright/
+output/class-schedule-isolation-2026-10-07/
+output/content-center-acceptance/
+output/wyz-four-source-delivery-2026-10-09/
+miniprogram/project.config.json
+# Identity documents require a separate public-data review.
+/软件著作权申请资料/正式资料/*.pdf
 output/campus-map-acceptance/
 output/admin-modernization-browser/
 output/security/*.json
