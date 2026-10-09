@@ -139,22 +139,24 @@ async function runOnce(cfg, deps = {}) {
     const verified = assertFourSources(data, run.term);
     if (run.activeCanonicalHash && verified.canonicalHash === run.activeCanonicalHash) {
       if (timer) clearInterval(timer);
-      await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, noChange: true });
+      const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, noChange: true });
+      const outcome = completion && completion.run && completion.run.result || "PENDING REVIEW";
       (deps.promoteRun || promoteRun)(cfg, run, dir, verified);
-      writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "NO CHANGE" });
+      writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: outcome });
       writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
       pruneRuns(cfg.dataRoot, dir, dir);
-      return { status: "NO CHANGE", runId: run.id };
+      return { status: outcome, runId: run.id };
     }
     await report({ stage: "upload", directSourceSummary: verified.directSourceSummary });
     const result = await (deps.upload || upload)(request, run, dir, data, { progress: report });
     if (timer) clearInterval(timer);
     const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
+    const outcome = completion && completion.run && completion.run.result || "PENDING REVIEW";
     (deps.promoteRun || promoteRun)(cfg, run, dir, verified);
-    writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: "PENDING REVIEW" });
+    writeJsonAtomic(path.join(dir, "state.json"), { status: "completed", result: outcome });
     writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
     pruneRuns(cfg.dataRoot, dir, dir);
-    return { status: completion && completion.run && completion.run.result || "PENDING REVIEW", runId: run.id };
+    return { status: outcome, runId: run.id };
   } catch (error) {
     const code = /^[A-Z0-9_:-]{1,80}$/.test(error.code || "") ? error.code : "COLLECTOR_FAILED";
     if (!cancelled) await report({ failureCode: code }).catch(() => {});

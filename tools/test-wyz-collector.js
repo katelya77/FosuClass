@@ -28,6 +28,14 @@ async function main() {
   const releaseLock = acquireLock(temp);
   check(() => assert.throws(() => acquireLock(temp), /COLLECTOR_LOCKED/));
   releaseLock();
+  const packageWorkflow = fs.readFileSync(path.join(__dirname, "../.github/workflows/prepare-wyz-schedule-collector.yml"), "utf8");
+  check(() => {
+    assert.match(packageWorkflow, /fetch-depth: 0/);
+    assert.match(packageWorkflow, /git merge-base --is-ancestor/);
+    assert.ok(packageWorkflow.indexOf("name: Verify live baseline before package upload") < packageWorkflow.indexOf("name: Upload independent collector package"));
+    assert.match(packageWorkflow, /sha256sum -c wyz-schedule-collector.sha256/);
+  });
+  check(() => assert.ok(!/systemctl|docker compose|hosting deploy|wyz-campus-agent|runtime\/active.json/.test(packageWorkflow), "preparing a package must not deploy the backend, personal agent, timer, or active pointer"));
   const app = express();
   app.use(express.json({ verify(req, res, buf) { req.rawBody = buf; } }));
   app.use("/api/full-sync/v1", require("../server/src/routes/fullSyncAgent"));
@@ -87,6 +95,19 @@ async function main() {
       });
       check(() => assert.equal(noChange.status, "NO CHANGE"));
       check(() => assert.equal(uploadCalled, false));
+      control.requestRun("routine", "fixture-review-response", Date.now(), { term: data.term });
+      const reviewRoot = path.join(temp, "campus-review-response");
+      const review = await collector.runOnce(Object.assign({}, cfg, { execute: true, dataRoot: reviewRoot }), {
+        request: async (...args) => {
+          const response = await api(...args);
+          return args[2] && args[2].complete ? { success: true, run: Object.assign({}, response.run, { result: "PENDING REVIEW" }) } : response;
+        },
+        assertSession: () => {}, promoteRun: () => {},
+        executeSync: async (run, cfg, dir) => fs.writeFileSync(path.join(dir, "staging.json"), JSON.stringify(data)),
+        upload: async () => { throw new Error("identical canonical data must still skip upload"); },
+      });
+      check(() => assert.equal(review.status, "PENDING REVIEW", "the Oracle completion response controls the local result"));
+      check(() => assert.equal(JSON.parse(fs.readFileSync(path.join(runDirectory(reviewRoot, data.term, review.runId), "state.json"))).result, "PENDING REVIEW"));
     } finally { release.getActiveReleaseInfo = originalActive; }
   } finally { await new Promise((resolve) => server.close(resolve)); }
   console.log("wyz-collector: " + cases + " PASS (local signed HTTP; no school requests)");
