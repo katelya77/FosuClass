@@ -70,7 +70,15 @@ for filename in configs:
         if not re.search(r'server_name\s+[^;]*\b'+re.escape(domain)+r'\b', text):
             continue
         found.add(domain)
-        emit('vhost', domain=domain, configFound=True, proxyLoopback18318=bool(re.search(r'proxy_pass\s+http://127\.0\.0\.1:18318\s*;', text)), fullSyncLocation=bool(re.search(r'location\s+[^\n{]*full-sync', text)))
+        expanded = text
+        for included in re.finditer(r'\binclude\s+([^\s;]+)', text):
+            pattern = str(host_path(included[1].strip('"')))
+            for entry in glob.glob(pattern)[:20]:
+                item = pathlib.Path(entry)
+                if item.suffix=='.conf' and item.is_file() and item.stat().st_size<=1024*1024:
+                    expanded += '\n'+item.read_text(errors='replace')
+        proxy_found = bool(re.search(r'\bproxy_pass\s+', expanded))
+        emit('vhost', domain=domain, configFound=True, proxyFound=proxy_found, proxyLoopback18318=bool(re.search(r'proxy_pass\s+http://127\.0\.0\.1:18318(?:[/$;\s])', expanded)) if proxy_found else None, fullSyncLocation=bool(re.search(r'location\s+[^\n{]*full-sync', expanded)))
         for match in re.finditer(r'\b(access_log|error_log)\s+([^\s;]+)', text):
             if match[2].startswith('/'):
                 logs.add((match[1], str(host_path(match[2].strip('"')))))
@@ -134,5 +142,9 @@ emit('listeners', tcp443=bool(re.search(r':443\s', sockets)), loopback18318=bool
 for command in [['ufw', 'status'], ['firewall-cmd', '--query-port=443/tcp']]:
     c, out, _ = run(command)
     emit('host-firewall-summary', tool=command[0], available=c!=-1, exitCode=c, active='active' in out.lower() and 'inactive' not in out.lower(), tcp443Mentioned='443' in out or out.strip()=='yes')
+for tool in ['iptables', 'ip6tables']:
+    c, out, _ = run([tool, '-S', 'INPUT'])
+    policy = re.search(r'^-P INPUT (ACCEPT|DROP|REJECT)', out, re.M)
+    emit('host-firewall-summary', tool=tool, available=c!=-1, exitCode=c, inputPolicy=policy[1] if policy else 'UNKNOWN', explicitTcp443Accept=any('--dport 443 ' in line and '-j ACCEPT' in line for line in out.splitlines()), fullRules='NOT_EXPORTED')
 emit('limits', ociSecurityGroup='UNKNOWN_NO_OCI_CONTROL_PLANE', cloudflareSecurityEvents='UNKNOWN_NO_CLOUDFLARE_CONNECTOR', rawLogs='NOT_EXPORTED', configurationChanged=False)
 PY
