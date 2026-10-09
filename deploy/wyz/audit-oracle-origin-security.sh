@@ -30,7 +30,7 @@ for name in names.splitlines():
     code,config=run(['docker','exec',name,'sh','-c','nginx -T 2>/dev/null || openresty -T 2>/dev/null'])
     # Inherited directives and included config are inspected, never exported.
     sizes=re.findall(r'\bclient_max_body_size\s+([0-9]+[kKmMgG]?)\s*;',config)
-    emit('origin-nginx-controls',configReadable=code==0,fullSyncSpecificLocation=bool(re.search(r'location\s+[^\n{]*full-sync',config)),limitRequestConfigured=bool(re.search(r'\blimit_req\s+',config)),limitRequestZoneConfigured=bool(re.search(r'\blimit_req_zone\s+',config)),bodyLimits=sizes,adminNetworkRestrictionConfigured=bool(re.search(r'location\s+[^\n{]*admin[^}]*\b(?:deny|allow|auth_request)\s',config,re.S)))
+    emit('origin-nginx-controls',scope='all-loaded-config-summary',classVhostInheritance='REQUIRES_SEPARATE_VERIFICATION',configReadable=code==0,fullSyncSpecificLocation=bool(re.search(r'location\s+[^\n{]*full-sync',config)),limitRequestConfigured=bool(re.search(r'\blimit_req\s+',config)),limitRequestZoneConfigured=bool(re.search(r'\blimit_req_zone\s+',config)),bodyLimits=sizes,adminNetworkRestrictionConfigured=bool(re.search(r'location\s+[^\n{]*admin[^}]*\b(?:deny|allow|auth_request)\s',config,re.S)))
 for route in ['/api/admin/security/status','/api/full-sync/v1/runs/claim']:
     args=['curl','--noproxy','*','--resolve','class.katelya.eu.org:443:146.235.201.244','--proto','=https','--connect-timeout','6','--max-time','12','-sS','-o','/dev/null','-w','%{http_code} %{ssl_verify_result}','https://class.katelya.eu.org'+route]
     if route.endswith('claim'):args[1:1]=['-X','POST','-H','Content-Type: application/json','--data','{}']
