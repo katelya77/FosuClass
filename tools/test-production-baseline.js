@@ -52,6 +52,7 @@ test("受控发布必须在上传之前验证生产基线，并保留两组业�
   assert.match(workflow, /npm run test:wyz-four-source/);
   assert.match(workflow, /node tools\/wyz-schedule-collector\/build-package.js/);
   assert.match(workflow, /sha256sum -c wyz-schedule-collector.sha256/);
+  assert.match(workflow, /node scripts\/prepare-full-sync-env.js "\$tmp_env" .env/);
   assert.ok(!/systemctl (?:start|enable) wyz-schedule-collector/.test(workflow), "Oracle only prepares the independent package; WYZ installation remains manual");
 });
 test("CI只能选已成功终结的受控部署，并由SSH在源站再次核对", () => {
@@ -60,6 +61,33 @@ test("CI只能选已成功终结的受控部署，并由SSH在源站再次核对
 });
 test("缺少成功记录、未终结记录或读取失败不能跳过基线", () => {
   for(const result of [{status:1},{status:0,stdout:"[]"},{status:0,stdout:"invalid"},{status:0,stdout:JSON.stringify([{headSha:production,status:"in_progress",conclusion:""}])}])assert.throws(()=>readSuccessfulDeployment({run:()=>result}));
+});
+test("独立Collector凭据首次生成、部署保留且不改变个人Agent", () => {
+  const { prepare, values } = require("../server/scripts/prepare-full-sync-env");
+  const previousFile = path.join(root, "previous.env"), target = path.join(root, "next.env");
+  const personal = "CAMPUS_AGENT_TOKEN=" + "p".repeat(40) + "\nCAMPUS_AGENT_SIGNING_SECRET=" + "s".repeat(40) + "\n";
+  fs.writeFileSync(target, personal);
+  const receipt = prepare(target);
+  const first = values(fs.readFileSync(target, "utf8"));
+  assert.equal(receipt.token, "present"); assert.equal(receipt.signingSecret, "present");
+  assert.equal(first.FULL_SYNC_AGENT_TOKEN.length, 64); assert.equal(first.FULL_SYNC_SIGNING_SECRET.length, 64);
+  assert.notEqual(first.FULL_SYNC_AGENT_TOKEN, first.FULL_SYNC_SIGNING_SECRET);
+  assert.equal(first.CAMPUS_AGENT_TOKEN, "p".repeat(40)); assert.equal(first.CAMPUS_AGENT_SIGNING_SECRET, "s".repeat(40));
+  assert.equal(first.FOSU_COLLECTOR_TIMER_VERIFIED, "0");
+  if (process.platform !== "win32") assert.equal(fs.statSync(target).mode & 0o777, 0o600);
+  fs.copyFileSync(target, previousFile); fs.writeFileSync(target, personal);
+  assert.equal(prepare(target, previousFile).created, false);
+  const next = values(fs.readFileSync(target, "utf8"));
+  assert.equal(next.FULL_SYNC_AGENT_TOKEN, first.FULL_SYNC_AGENT_TOKEN); assert.equal(next.FULL_SYNC_SIGNING_SECRET, first.FULL_SYNC_SIGNING_SECRET);
+});
+test("凭据碰撞和非法导出路径在写入前阻断", () => {
+  const { prepare } = require("../server/scripts/prepare-full-sync-env");
+  const { exportLease } = require("../server/scripts/export-full-sync-agent-env");
+  const target = path.join(root, "rejected.env"), content = "CAMPUS_AGENT_TOKEN=" + "p".repeat(40) + "\nFULL_SYNC_AGENT_TOKEN=" + "p".repeat(40) + "\n";
+  fs.writeFileSync(target, content);
+  assert.throws(() => prepare(target), /ISOLATION_REJECTED/);
+  assert.equal(fs.readFileSync(target, "utf8"), content);
+  assert.throws(() => exportLease(target), /PRIVATE_EXPORT_PATH_REJECTED|ROOT_REQUIRED/);
 });
 after(() => {
   const relative = path.relative(os.tmpdir(), path.resolve(root));

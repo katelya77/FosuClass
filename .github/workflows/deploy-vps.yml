@@ -560,6 +560,7 @@ jobs:
               exit 1
             fi
             node scripts/check-campus-agent-env.js "$tmp_env"
+            node scripts/prepare-full-sync-env.js "$tmp_env" .env
             effective_security_mode="$(grep '^FOSU_SECURITY_MODE=' "$tmp_env" | cut -d= -f2-)"
             if [ "$effective_security_mode" != "observe" ]; then
               for key in WECHAT_APPID WECHAT_APPSECRET FOSU_SESSION_SECRET_CURRENT; do
@@ -756,6 +757,7 @@ jobs:
             collector_bundle="wyz-schedule-collector-${{ github.sha }}.tar.gz"
             stat -c 'collector_bundle_bytes=%s' "$collector_bundle"
             test -f install-schedule-collector.sh
+            sudo docker exec fosuclass-api node -e 'if(!require("./src/security/fullSyncSignature").secretsConfigured())process.exit(1);console.log("full_sync_credentials=present");'
 
       - name: Configure and verify Coze workload
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.configure_coze_workload }}

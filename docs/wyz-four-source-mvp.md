@@ -28,7 +28,15 @@ systemctl is-enabled wyz-schedule-collector.timer || true
 systemctl status wyz-campus-agent.service --no-pager
 ```
 
-full-sync.env只包含独立 FULL_SYNC_AGENT_ID、FULL_SYNC_AGENT_TOKEN、FULL_SYNC_SIGNING_SECRET、FOSU_API_BASE、FOSU_COLLECTOR_EXECUTE=1、SCHOOL_CONCURRENCY=1。不能与个人 Agent 共用签名密钥；CloudBase 凭据放在 Oracle 发布侧独立的 `/etc/fosuclass/cloudbase.env`（600），WYZ Collector 不需要 CloudBase 权限。安装脚本不启动或 enable任何服务/timer，不修改 wyz-campus-agent.service。
+full-sync.env只包含独立 FULL_SYNC_AGENT_ID、FULL_SYNC_AGENT_TOKEN、FULL_SYNC_SIGNING_SECRET、FOSU_API_BASE、FOSU_COLLECTOR_EXECUTE、SCHOOL_CONCURRENCY=1。不能与个人 Agent 共用签名密钥；CloudBase 凭据放在 Oracle 发布侧独立的 `/etc/fosuclass/cloudbase.env`（600），WYZ Collector 不需要 CloudBase 权限。安装脚本不启动或 enable任何服务/timer，不修改 wyz-campus-agent.service。
+
+保留现有线上基线的 Oracle 部署候选会首次安全生成独立 Broker token/signing secret，存入权限600的服务端env；后续部署保留原值，并将自动定时门禁保持关闭。不会在日志打印凭据。需要向WYZ传输时，在Oracle受保护终端执行以下命令，然后通过PAM将宿主机server/storage/secure/wyz-full-sync.env传到WYZ的/etc/fosuclass/full-sync.env（root:root、600）；不能通过普通聊天、PR或日志传输。导出文件默认禁止执行任务，首次完整四源采集获批准后才用受保护编辑器设置FOSU_COLLECTOR_EXECUTE=1：
+
+```bash
+sudo docker exec -u 0 fosuclass-api node scripts/export-full-sync-agent-env.js /app/storage/secure/wyz-full-sync.env
+```
+
+导出不覆盖已有文件，源文件必须在传输后按运维流程受保护保留或移除。
 
 ## HUMAN_FIRST_REAL_RUN_COMMANDS
 
