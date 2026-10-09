@@ -19,7 +19,24 @@ jobs:
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - run: sudo "$(command -v node)" tools/test-collector-runtime-repair.js
+      - run: node tools/test-full-sync-env-persistence.js
+      - run: python3 tools/test-collector-archive.py
+      - run: sudo "$(command -v node)" tools/test-collector-install-linux.js
+      - run: bash -n deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh
+      - run: node tools/wyz-schedule-collector/browser-smoke.js
       - run: npm run test:wyz-four-source
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
+  isolated-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build version-matched isolated worker
+        run: |
+          version=$(node -p "require('./tools/fosu-sync-client/package-lock.json').packages['node_modules/playwright'].version")
+          docker build --build-arg "PLAYWRIGHT_VERSION=$version" -f deploy/wyz/Collector.Dockerfile -t fosu-collector-test .
+      - name: Real local browser lifecycle with no network
+        run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test

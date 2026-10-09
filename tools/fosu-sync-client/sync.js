@@ -3662,9 +3662,12 @@ async function initBrowserContext() {
   ]);
 
   let browser;
+  if (process.env.FOSU_COLLECTOR_MODE === "1") {
+    browser = await require("../wyz-schedule-collector/browserRuntime").launch(chromium, launchArgs);
+  }
   // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium
   const channels = ["msedge", "chrome", null];
-  for (const channel of channels) {
+  for (const channel of browser ? [] : channels) {
     try {
       const config = {
         headless: process.env.FOSU_SYNC_HEADLESS === "1",

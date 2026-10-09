@@ -25,6 +25,11 @@ jobs:
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
       - name: Package production gates
         run: |
+          sudo "$(command -v node)" tools/test-collector-runtime-repair.js
+          node tools/test-full-sync-env-persistence.js
+          python3 tools/test-collector-archive.py
+          sudo "$(command -v node)" tools/test-collector-install-linux.js
+          node tools/wyz-schedule-collector/browser-smoke.js
           npm run test:wyz-four-source
           npm run test:security-full
           npm run test:architecture-guards
@@ -56,6 +61,12 @@ jobs:
           mkdir -p route2-artifacts
           cp ".local/collector-packages/wyz-schedule-collector-${{ github.sha }}.tar.gz" route2-artifacts/
           cp deploy/wyz/install-schedule-collector.sh route2-artifacts/
+          cp deploy/wyz/recover-release.py route2-artifacts/
+          cp deploy/wyz/repair-browser.sh route2-artifacts/
+          cp deploy/wyz/oracle-seal-credentials.sh route2-artifacts/
+          mkdir -p route2-artifacts/collector-maintenance
+          cp server/scripts/audit-full-sync-credentials.js server/scripts/seal-full-sync-credentials.js route2-artifacts/collector-maintenance/
+          cp tools/wyz-schedule-collector/credentials.js route2-artifacts/collector-maintenance/
           sha256sum "route2-artifacts/wyz-schedule-collector-${{ github.sha }}.tar.gz" | sed 's#route2-artifacts/##' | tee route2-artifacts/wyz-schedule-collector.sha256
       - name: Upload independent collector package
         uses: appleboy/scp-action@v0.1.7
@@ -77,3 +88,15 @@ jobs:
             sha256sum -c wyz-schedule-collector.sha256
             stat -c 'collector_bundle_bytes=%s' 'wyz-schedule-collector-${{ github.sha }}.tar.gz'
             test -f install-schedule-collector.sh
+            handoff='/root/fosu-collector-install/${{ github.sha }}'
+            sudo install -d -m 700 "$handoff"
+            sudo install -m 600 'wyz-schedule-collector-${{ github.sha }}.tar.gz' wyz-schedule-collector.sha256 install-schedule-collector.sh recover-release.py "$handoff/"
+            sudo install -m 600 oracle-seal-credentials.sh /root/oracle-seal-credentials.sh
+            maintenance='${{ secrets.VPS_APP_DIR }}/route2-artifacts/collector-maintenance'
+            sudo docker exec fosuclass-api install -d -m 700 /app/storage/secure/collector-maintenance
+            sudo docker cp "$maintenance/audit-full-sync-credentials.js" fosuclass-api:/app/storage/secure/collector-maintenance/audit-full-sync-credentials.js
+            sudo docker cp "$maintenance/seal-full-sync-credentials.js" fosuclass-api:/app/storage/secure/collector-maintenance/seal-full-sync-credentials.js
+            sudo docker cp "$maintenance/credentials.js" fosuclass-api:/app/storage/secure/collector-maintenance/credentials.js
+            sudo docker exec fosuclass-api chmod 600 /app/storage/secure/collector-maintenance/audit-full-sync-credentials.js /app/storage/secure/collector-maintenance/seal-full-sync-credentials.js /app/storage/secure/collector-maintenance/credentials.js
+            test "$(stat -c '%a' '${{ secrets.VPS_APP_DIR }}/server/.env')" = 600
+            sudo docker exec -i fosuclass-api node /app/storage/secure/collector-maintenance/audit-full-sync-credentials.js --persisted-stdin < '${{ secrets.VPS_APP_DIR }}/server/.env'

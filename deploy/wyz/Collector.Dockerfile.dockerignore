@@ -1,0 +1,11 @@
+**/node_modules
+**/.env*
+**/.session
+**/session.json
+**/storage
+**/data
+**/.debug
+**/.cache
+.git
+.local
+output

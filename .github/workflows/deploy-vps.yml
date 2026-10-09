@@ -585,6 +585,7 @@ jobs:
                 fi
               done
             fi
+            node scripts/prepare-full-sync-env.js "$tmp_env" "$existing_env"
             mv "$tmp_env" .env
 
             node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')"

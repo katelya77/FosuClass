@@ -45,6 +45,6 @@
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
     "playwright": "^1.43.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

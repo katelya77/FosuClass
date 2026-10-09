@@ -16,7 +16,9 @@ function config(env = process.env) {
   const url = new URL(env.FOSU_API_BASE || "https://class.katelya.eu.org");
   if (url.origin !== "https://class.katelya.eu.org" || url.username || url.password || url.search || url.pathname !== "/") throw failure("ORACLE_ORIGIN_REJECTED");
   const token = env.FULL_SYNC_AGENT_TOKEN || "", secret = env.FULL_SYNC_SIGNING_SECRET || "";
-  if (token.length < 32 || secret.length < 32 || token === secret || token === env.CAMPUS_AGENT_TOKEN || secret === env.CAMPUS_AGENT_SIGNING_SECRET) throw failure("COLLECTOR_CREDENTIALS_REJECTED");
+  if (!env.FULL_SYNC_AGENT_ID || !token || !secret) throw failure("COLLECTOR_CONFIGURATION_MISSING");
+  if (env.FOSU_COLLECTOR_EXECUTE !== undefined && !["0", "1"].includes(env.FOSU_COLLECTOR_EXECUTE)) throw failure("COLLECTOR_EXECUTION_MODE_REJECTED");
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector") || token.length < 32 || secret.length < 32 || token === secret || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(token) || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(secret)) throw failure("COLLECTOR_CREDENTIALS_REJECTED");
   return { oracle: url.origin, token, secret, agentId: env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector", execute: env.FOSU_COLLECTOR_EXECUTE === "1", sessionPath: env.FOSU_COLLECTOR_SESSION || "/var/lib/fosuclass/schedule-collector/session.json", dataRoot: env.FOSU_COLLECTOR_DATA_DIR || "/var/lib/fosuclass/schedule-collector", concurrency: Math.max(1, Math.min(2, Number(env.SCHOOL_CONCURRENCY) || 1)) };
 }
 function client(cfg, fetcher = fetch) {
@@ -24,10 +26,12 @@ function client(cfg, fetcher = fetch) {
     const raw = binary ? value : Buffer.from(value === undefined ? "" : JSON.stringify(value));
     const timestamp = String(Date.now()), nonce = crypto.randomBytes(20).toString("hex");
     const signature = signRequest(cfg.secret, { method, path: pathname, timestamp, nonce, body: raw });
-    const response = await fetcher(cfg.oracle + pathname, { method, redirect: "error", signal: AbortSignal.timeout(120000), headers: { authorization: "Bearer " + cfg.token, "content-type": binary ? "application/octet-stream" : "application/json", "x-full-sync-agent-id": cfg.agentId, "x-full-sync-timestamp": timestamp, "x-full-sync-nonce": nonce, "x-full-sync-signature": signature }, body: method === "GET" ? undefined : raw });
+    let response;
+    try { response = await fetcher(cfg.oracle + pathname, { method, redirect: "error", signal: AbortSignal.timeout(pathname.endsWith("/heartbeat") ? 15000 : 120000), headers: { authorization: "Bearer " + cfg.token, "content-type": binary ? "application/octet-stream" : "application/json", "x-full-sync-agent-id": cfg.agentId, "x-full-sync-timestamp": timestamp, "x-full-sync-nonce": nonce, "x-full-sync-signature": signature }, body: method === "GET" ? undefined : raw }); }
+    catch (error) { throw failure(["AbortError", "TimeoutError"].includes(error.name) ? "ORACLE_TIMEOUT" : "ORACLE_NETWORK_FAILED"); }
     if (response.status === 204) return null;
-    if (!response.ok) throw Object.assign(failure("ORACLE_HTTP_" + response.status), { status: response.status });
-    return response.json();
+    if (!response.ok) throw Object.assign(failure(({ 401: "ORACLE_AUTH_REJECTED", 403: "ORACLE_SIGNATURE_OR_CLOCK_REJECTED", 404: "ORACLE_AUTH_OR_ENDPOINT_REJECTED" })[response.status] || "ORACLE_HTTP_" + response.status), { status: response.status });
+    try { return await response.json(); } catch (_) { throw failure("ORACLE_RESPONSE_INVALID"); }
   };
 }
 function validateRun(run) {
@@ -53,10 +57,13 @@ function executeSync(run, cfg, dir, onChild) {
   Object.assign(env, { FOSU_COLLECTOR_MODE: "1", FOSU_SYNC_HEADLESS: "1", FOSU_COLLECTOR_SESSION: cfg.sessionPath, FOSU_SYNC_DATA_DIR: path.join(dir, "client"), FOSU_SYNC_CATALOG_CACHE: path.join(cfg.dataRoot, "catalog"), FOSU_COLLECTOR_PROGRESS_FILE: path.join(dir, "progress.json"), FOSU_COLLECTOR_RESULT_FILE: path.join(dir, "sync-result.json"), SYNC_LOCAL_STAGING_ONLY: "true", SYNC_CLASS_CRAWL_ONLY: "true", SYNC_RESOURCE_DELAY_MIN_MS: "900", SYNC_RESOURCE_DELAY_MAX_MS: "1300", FOSU_API_BASE: cfg.oracle });
   const args = ["tools/fosu-sync-client/sync.js", "crawl:daily", "--term=" + run.term, "--run-id=" + run.id, "--output=" + path.join(dir, "staging.json"), "--catalog-policy=" + (run.mode === "full" ? "network-only" : "reuse-validated"), "--schedule-policy=network-only", "--progress-policy=resume", "--negative-cache-policy=ignore", "--allow-derived=false", "--resource-source=direct", "--class-scope=all", "--concurrency=" + cfg.concurrency, "--delay-ms=900", "--term-start-date=" + run.termConfig.termStartDate, "--total-weeks=" + run.termConfig.totalWeeks, "--week-start=" + run.termConfig.weekStart];
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd: ROOT, env, stdio: "ignore", windowsHide: true });
+    fs.mkdirSync(path.join(cfg.dataRoot, "catalog"), { recursive: true, mode: 0o700 });
+    const command = require("./browserRuntime").workerCommand(process.execPath, args, env, cfg, dir, ROOT);
+    writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: Date.now() + 90000 });
+    const child = spawn(command.executable, command.args, { cwd: command.cwd, env: command.env, stdio: "ignore", windowsHide: true });
     onChild(child);
     child.once("error", () => reject(failure("SYNC_LAUNCH_FAILED")));
-    child.once("exit", (code) => { const result = readJson(path.join(dir, "sync-result.json"), {}); code === 0 ? resolve() : reject(failure(result.code || "SYNC_FAILED")); });
+    child.once("exit", (code) => { const result = readJson(path.join(dir, "sync-result.json"), {}); code === 0 ? resolve() : reject(failure(code === 65 ? "COLLECTOR_LEASE_EXPIRED" : result.code || "SYNC_FAILED")); });
   });
 }
 async function upload(request, run, dir, data, hooks = {}) {
@@ -106,7 +113,8 @@ function promoteRun(cfg, run, dir, verified) {
 }
 async function runOnce(cfg, deps = {}) {
   const request = deps.request || client(cfg);
-  await request("POST", "/api/full-sync/v1/heartbeat", { ok: true });
+  const heartbeat = await request("POST", "/api/full-sync/v1/heartbeat", { ok: true });
+  if (!heartbeat || heartbeat.ok !== true) throw failure("ORACLE_HEARTBEAT_REJECTED");
   if (!cfg.execute) return { status: "heartbeat-only" };
   const claimed = await request("POST", "/api/full-sync/v1/runs/claim", {});
   if (!claimed) return { status: "idle" };
@@ -128,7 +136,7 @@ async function runOnce(cfg, deps = {}) {
       try {
         const heartbeat = await request("POST", "/api/full-sync/v1/heartbeat", { runId: run.id, claimId: run.claimId });
         if (heartbeat.cancelled) { cancelled = true; if (child) child.kill("SIGTERM"); }
-        else { lastLease = Date.now(); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
+        else { lastLease = Date.now(); writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: lastLease + 90000 }); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
       } catch (_) { if (Date.now() - lastLease > 90000) { cancelled = true; if (child) child.kill("SIGTERM"); } }
       finally { tickRunning = false; }
     }, 30000);
@@ -166,6 +174,8 @@ async function runOnce(cfg, deps = {}) {
   } finally { if (timer) clearInterval(timer); }
 }
 async function main() {
+  const envArg = process.argv.find(value => value.startsWith("--env-file="));
+  if (envArg) Object.assign(process.env, require("./credentials").readEnvFile(envArg.slice(11)));
   const cfg = config();
   const release = acquireLock(cfg.dataRoot);
   try {
