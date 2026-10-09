@@ -373,10 +373,12 @@ async function run() {
   });
   await checkAsync("A44", async () => {
     const owner = "quota-restart-user";
-    syncQuota.consume(owner, Date.parse("2026-09-25T02:00:00.000Z"));
+    // Persistence must use a live quota day; reload legitimately prunes expired days.
+    const acceptedAt = Date.now();
+    syncQuota.consume(owner, acceptedAt);
     syncQuota.flushNow();
     syncQuota.reload();
-    assert.strictEqual(syncQuota.acceptedFor(owner, Date.parse("2026-09-25T02:00:00.000Z")), 1);
+    assert.strictEqual(syncQuota.acceptedFor(owner, acceptedAt), 1);
   });
   await checkAsync("A45", async () => {
     syncPolicy.update({ dailyLimit: 1, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 }, "ctf");

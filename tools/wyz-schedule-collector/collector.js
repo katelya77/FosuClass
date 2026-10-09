@@ -8,30 +8,35 @@ const { signRequest } = require("../../server/src/security/fullSyncSignature");
 const { buildSyncPlan, ALL_SCOPES } = require("../../shared/syncPlan");
 const { assertFourSources } = require("../../server/src/shared/fourDirectSourceContract");
 const { acquireLock, runDirectory, readJson, writeJsonAtomic, pruneRuns } = require("./runStore");
+const recovery = require("./heartbeatRecovery");
 
 const ROOT = path.resolve(__dirname, "../..");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function failure(code) { return Object.assign(new Error(code), { code }); }
 function config(env = process.env) {
-  const url = new URL(env.FOSU_API_BASE || "https://class.katelya.eu.org");
-  if (url.origin !== "https://class.katelya.eu.org" || url.username || url.password || url.search || url.pathname !== "/") throw failure("ORACLE_ORIGIN_REJECTED");
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED === "0") throw failure("ORACLE_TLS_POLICY_REJECTED");
+  let url;
+  try { url = new URL(env.FOSU_API_BASE || "https://class.katelya.eu.org"); } catch (_) { throw failure("ORACLE_ORIGIN_REJECTED"); }
+  if (url.origin !== "https://class.katelya.eu.org" || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw failure("ORACLE_ORIGIN_REJECTED");
   const token = env.FULL_SYNC_AGENT_TOKEN || "", secret = env.FULL_SYNC_SIGNING_SECRET || "";
   if (!env.FULL_SYNC_AGENT_ID || !token || !secret) throw failure("COLLECTOR_CONFIGURATION_MISSING");
   if (env.FOSU_COLLECTOR_EXECUTE !== undefined && !["0", "1"].includes(env.FOSU_COLLECTOR_EXECUTE)) throw failure("COLLECTOR_EXECUTION_MODE_REJECTED");
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector") || token.length < 32 || secret.length < 32 || token === secret || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(token) || [env.CAMPUS_AGENT_TOKEN, env.CAMPUS_AGENT_SIGNING_SECRET].includes(secret)) throw failure("COLLECTOR_CREDENTIALS_REJECTED");
   return { oracle: url.origin, token, secret, agentId: env.FULL_SYNC_AGENT_ID || "wyz-schedule-collector", execute: env.FOSU_COLLECTOR_EXECUTE === "1", sessionPath: env.FOSU_COLLECTOR_SESSION || "/var/lib/fosuclass/schedule-collector/session.json", dataRoot: env.FOSU_COLLECTOR_DATA_DIR || "/var/lib/fosuclass/schedule-collector", concurrency: Math.max(1, Math.min(2, Number(env.SCHOOL_CONCURRENCY) || 1)) };
 }
-function client(cfg, fetcher = fetch) {
+function client(cfg, fetcher = fetch, options = {}) {
   return async function request(method, pathname, value, binary = false) {
     const raw = binary ? value : Buffer.from(value === undefined ? "" : JSON.stringify(value));
-    const timestamp = String(Date.now()), nonce = crypto.randomBytes(20).toString("hex");
+    const timestamp = String((options.now || Date.now)()), nonce = crypto.randomBytes(20).toString("hex");
     const signature = signRequest(cfg.secret, { method, path: pathname, timestamp, nonce, body: raw });
     let response;
-    try { response = await fetcher(cfg.oracle + pathname, { method, redirect: "error", signal: AbortSignal.timeout(pathname.endsWith("/heartbeat") ? 15000 : 120000), headers: { authorization: "Bearer " + cfg.token, "content-type": binary ? "application/octet-stream" : "application/json", "x-full-sync-agent-id": cfg.agentId, "x-full-sync-timestamp": timestamp, "x-full-sync-nonce": nonce, "x-full-sync-signature": signature }, body: method === "GET" ? undefined : raw }); }
-    catch (error) { throw failure(["AbortError", "TimeoutError"].includes(error.name) ? "ORACLE_TIMEOUT" : "ORACLE_NETWORK_FAILED"); }
+    const timeout = AbortSignal.timeout(options.timeoutMs || (pathname === recovery.HEARTBEAT ? 15000 : 120000));
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    try { response = await fetcher(cfg.oracle + pathname, { method, redirect: "error", signal, headers: { authorization: "Bearer " + cfg.token, "content-type": binary ? "application/octet-stream" : "application/json", "x-full-sync-agent-id": cfg.agentId, "x-full-sync-timestamp": timestamp, "x-full-sync-nonce": nonce, "x-full-sync-signature": signature }, body: method === "GET" ? undefined : raw }); }
+    catch (error) { throw options.signal && options.signal.aborted ? recovery.stopped() : recovery.classify(error); }
     if (response.status === 204) return null;
-    if (!response.ok) throw Object.assign(failure(({ 401: "ORACLE_AUTH_REJECTED", 403: "ORACLE_SIGNATURE_OR_CLOCK_REJECTED", 404: "ORACLE_AUTH_OR_ENDPOINT_REJECTED" })[response.status] || "ORACLE_HTTP_" + response.status), { status: response.status });
-    try { return await response.json(); } catch (_) { throw failure("ORACLE_RESPONSE_INVALID"); }
+    if (!response.ok) { if (response.body) await response.body.cancel().catch(() => {}); throw recovery.httpError(response.status); }
+    try { return await response.json(); } catch (error) { if (options.signal && options.signal.aborted) throw recovery.stopped(); if (error.name === "SyntaxError") throw recovery.error("ORACLE_RESPONSE_INVALID", { errorCategory: "protocol", retryable: false }); throw recovery.classify(error); }
   };
 }
 function validateRun(run) {
@@ -85,7 +90,7 @@ async function upload(request, run, dir, data, hooks = {}) {
     let error;
     for (let attempt = 0; attempt < 3; attempt++) {
       try { await request("POST", base + "/upload/" + uploadId + "/chunks/" + index + "/" + run.claimId, chunk, true); error = null; break; }
-      catch (caught) { error = caught; if (caught.status && caught.status < 500 && caught.status !== 408 && caught.status !== 429) break; if (attempt < 2) await (hooks.sleep || sleep)(700 * 2 ** attempt); }
+      catch (caught) { error = caught; if (caught.retryable === false || caught.status && caught.status < 500 && caught.status !== 408 && caught.status !== 429) break; if (attempt < 2) await (hooks.sleep || sleep)(700 * 2 ** attempt); }
     }
     if (error) throw error;
     if (hooks.progress) await hooks.progress({ uploadBytes: Math.min(uploadSize, (index + 1) * chunkSize) });
@@ -112,10 +117,12 @@ function promoteRun(cfg, run, dir, verified) {
   for (const name of ["catalog.json", "majors.json", "metadata.json", "majors.metadata.json"]) if (fs.existsSync(path.join(source, name))) fs.copyFileSync(path.join(source, name), path.join(target, name));
 }
 async function runOnce(cfg, deps = {}) {
-  const request = deps.request || client(cfg);
-  const heartbeat = await request("POST", "/api/full-sync/v1/heartbeat", { ok: true });
-  if (!heartbeat || heartbeat.ok !== true) throw failure("ORACLE_HEARTBEAT_REJECTED");
+  const request = deps.request || client(cfg, deps.fetcher || fetch, { signal: deps.signal });
+  const heartbeatRequest = deps.heartbeat || recovery.createHeartbeat(request, { execute: cfg.execute, signal: deps.signal });
+  await heartbeatRequest({ ok: true });
   if (!cfg.execute) return { status: "heartbeat-only" };
+  if (deps.signal && deps.signal.aborted) throw recovery.stopped();
+  if (!heartbeatRequest.readyToClaim()) return { status: "waiting-for-heartbeat-stability" };
   const claimed = await request("POST", "/api/full-sync/v1/runs/claim", {});
   if (!claimed) return { status: "idle" };
   const run = claimed.run;
@@ -123,25 +130,44 @@ async function runOnce(cfg, deps = {}) {
   const dir = runDirectory(cfg.dataRoot, run.term, run.id);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const started = Date.now();
-  let child, timer, cancelled = false, lastLease = Date.now(), tickRunning = false;
+  let child, timer, leaseTimer, killTimer, cancelled = false, stopCode, stopProblem, lastLease = Date.now(), tickRunning = false;
+  const now = deps.now || Date.now, leaseMs = deps.leaseMs || 90000;
+  lastLease = now();
+  const stop = (code, problem) => {
+    if (stopCode) return;
+    stopCode = code; stopProblem = problem; cancelled = true;
+    writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: 0 });
+    if (child) {
+      child.kill("SIGTERM");
+      killTimer = setTimeout(() => child.kill("SIGKILL"), 5000);
+      killTimer.unref();
+    }
+  };
+  const onAbort = () => stop("COLLECTOR_STOPPED");
+  if (deps.signal) deps.signal.addEventListener("abort", onAbort, { once: true });
+  const leasedRequest = async (...args) => { if (stopCode) throw recovery.error(stopCode, { retryable: false }); const result = await request(...args); if (stopCode) throw recovery.error(stopCode, { retryable: false }); return result; };
   let reportQueue = Promise.resolve();
-  const report = (patch) => (reportQueue = reportQueue.catch(() => {}).then(() => request("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch))));
+  const report = (patch) => (reportQueue = reportQueue.catch(() => {}).then(() => leasedRequest("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch))));
   writeJsonAtomic(path.join(dir, "state.json"), { runId: run.id, term: run.term, status: "running" });
   try {
+    leaseTimer = setInterval(() => { if (now() - lastLease >= leaseMs) stop("COLLECTOR_LEASE_EXPIRED"); }, deps.watchIntervalMs || 1000);
     await report({ stage: "auth-check" });
+    if (stopCode) throw failure(stopCode);
     (deps.assertSession || assertSession)(cfg.sessionPath);
     timer = setInterval(async () => {
       if (tickRunning) return;
       tickRunning = true;
       try {
-        const heartbeat = await request("POST", "/api/full-sync/v1/heartbeat", { runId: run.id, claimId: run.claimId });
-        if (heartbeat.cancelled) { cancelled = true; if (child) child.kill("SIGTERM"); }
-        else { lastLease = Date.now(); writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: lastLease + 90000 }); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
-      } catch (_) { if (Date.now() - lastLease > 90000) { cancelled = true; if (child) child.kill("SIGTERM"); } }
+        const heartbeat = await heartbeatRequest({ runId: run.id, claimId: run.claimId }, { deadline: lastLease + leaseMs });
+        if (stopCode) return;
+        if (heartbeat.cancelled) stop("CANCELLED");
+        else { lastLease = now(); writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: lastLease + 90000 }); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
+      } catch (error) { if (!error.retryable || now() - lastLease >= leaseMs) stop(error.retryable ? "COLLECTOR_LEASE_EXPIRED" : error.code || "COLLECTOR_LEASE_EXPIRED", error); }
       finally { tickRunning = false; }
-    }, 30000);
-    if (!fs.existsSync(path.join(dir, "staging.json"))) await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; });
-    if (cancelled) throw failure("CANCELLED");
+    }, deps.heartbeatIntervalMs || 30000);
+    if (stopCode) throw failure(stopCode);
+    if (!fs.existsSync(path.join(dir, "staging.json"))) await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; if (stopCode) child.kill("SIGTERM"); else if (deps.signal && deps.signal.aborted) onAbort(); });
+    if (cancelled) throw failure(stopCode || "CANCELLED");
     await report({ stage: "hash" });
     const data = readJson(path.join(dir, "staging.json"), null);
     const verified = assertFourSources(data, run.term);
@@ -156,7 +182,7 @@ async function runOnce(cfg, deps = {}) {
       return { status: outcome, runId: run.id };
     }
     await report({ stage: "upload", directSourceSummary: verified.directSourceSummary });
-    const result = await (deps.upload || upload)(request, run, dir, data, { progress: report });
+    const result = await (deps.upload || upload)(leasedRequest, run, dir, data, { progress: report, sleep: ms => recovery.wait(ms, deps.signal) });
     if (timer) clearInterval(timer);
     const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
     const outcome = completion && completion.run && completion.run.result || "PENDING REVIEW";
@@ -166,21 +192,38 @@ async function runOnce(cfg, deps = {}) {
     pruneRuns(cfg.dataRoot, dir, dir);
     return { status: outcome, runId: run.id };
   } catch (error) {
-    const code = /^[A-Z0-9_:-]{1,80}$/.test(error.code || "") ? error.code : "COLLECTOR_FAILED";
+    const code = stopCode || (/^[A-Z0-9_:-]{1,80}$/.test(error.code || "") ? error.code : "COLLECTOR_FAILED");
     if (!cancelled) await report({ failureCode: code }).catch(() => {});
     writeJsonAtomic(path.join(dir, "state.json"), { status: "failed", code });
     pruneRuns(cfg.dataRoot, dir, readJson(path.join(cfg.dataRoot, "last-success.json"), {}).directory);
-    throw failure(code);
-  } finally { if (timer) clearInterval(timer); }
+    throw Object.assign(failure(code), { retryable: stopProblem ? stopProblem.retryable : error.retryable, errorCategory: stopProblem ? stopProblem.errorCategory : error.errorCategory });
+  } finally { if (timer) clearInterval(timer); if (leaseTimer) clearInterval(leaseTimer); if (killTimer) clearTimeout(killTimer); if (deps.signal) deps.signal.removeEventListener("abort", onAbort); }
 }
-async function main() {
+async function runLoop(cfg, deps = {}) {
+  const request = deps.request || client(cfg, deps.fetcher || fetch, { signal: deps.signal });
+  const heartbeat = recovery.createHeartbeat(request, { execute: cfg.execute, signal: deps.signal, now: deps.now, sleep: deps.sleep, delays: deps.delays, onState: deps.onState });
+  const wait = deps.sleep || recovery.wait;
+  try {
+    while (!deps.signal || !deps.signal.aborted) {
+      try { const result = await runOnce(cfg, { ...deps, request, heartbeat }); if (deps.onResult) deps.onResult(result); if (deps.once) return result; }
+      catch (error) { if (error.code === "COLLECTOR_STOPPED") break; if (!error.heartbeatFailure || !error.retryable || deps.once) throw error; heartbeat.cooldown(); await wait(recovery.COOLDOWN_MS, deps.signal); continue; }
+      if (deps.signal && deps.signal.aborted) break;
+      await wait(30000, deps.signal);
+    }
+  } catch (error) { if (error.code !== "COLLECTOR_STOPPED") throw error; }
+  finally { if (deps.signal && deps.signal.aborted) heartbeat.stopped(); }
+  return { status: "stopped" };
+}
+async function main(deps = {}) {
   const envArg = process.argv.find(value => value.startsWith("--env-file="));
   if (envArg) Object.assign(process.env, require("./credentials").readEnvFile(envArg.slice(11)));
-  const cfg = config();
+  const cfg = config(deps.env || process.env);
   const release = acquireLock(cfg.dataRoot);
+  const control = new AbortController(), stop = () => control.abort();
+  process.once("SIGTERM", stop); process.once("SIGINT", stop);
   try {
-    do { const result = await runOnce(cfg); console.log(JSON.stringify(result)); if (process.argv.includes("--once")) break; await sleep(30000); } while (true);
-  } finally { release(); }
+    await runLoop(cfg, { ...deps, signal: control.signal, once: process.argv.includes("--once"), onResult: result => console.log(JSON.stringify(result)), onState: state => { writeJsonAtomic(path.join(cfg.dataRoot, "collector-status.json"), state); console.log(JSON.stringify(state)); } });
+  } finally { process.removeListener("SIGTERM", stop); process.removeListener("SIGINT", stop); release(); }
 }
-if (require.main === module) main().catch((error) => { console.error(JSON.stringify({ status: "failed", code: error.code || "COLLECTOR_FAILED" })); process.exitCode = 1; });
-module.exports = { assertSession, client, config, executeSync, runOnce, upload, validateRun };
+if (require.main === module) main().catch((error) => { console.error(JSON.stringify({ status: "failed", code: error.code || "COLLECTOR_FAILED" })); process.exitCode = recovery.exitCode(error); });
+module.exports = { assertSession, client, config, executeSync, main, runLoop, runOnce, upload, validateRun };
