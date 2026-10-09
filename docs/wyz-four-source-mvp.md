@@ -93,3 +93,5 @@ CloudBase只上传manifest列出的公开JSON及与其内容hash一致的gzip si
 WYZ回滚：停止新Collector，按previous-install.txt恢复current软链接，再人工启动；不操作个人Agent。Oracle按既有Deploy备份/版本工作流回滚代码，Release pointer保留上一稳定版本。CloudBase测试目录与active隔离，无需改变当前生产pointer。定时器保持disabled；至少3次真实成功且人工确认后才设置Oracle FOSU_COLLECTOR_TIMER_VERIFIED=1并建议04:30 Asia/Shanghai。
 
 WYZ只保留当前run、最近成功run和最近失败run的恢复缓存；其它终态run会清理。CloudBase镜像按钮复制安全CLI命令，不声称已经完成发布。桌面实测当前CloudBase JSON响应为identity编码，不能把9.4MB的本地gzip估算当作实际CDN流量；压缩与版本目录长期缓存配置需要单独验收。
+
+后端已通过部署验收后，WYZ安装包更新可以单独运行 `Prepare WYZ Schedule Collector` 手工工作流：`gh workflow run prepare-wyz-schedule-collector.yml --ref=<包含当前线上提交的候选分支>`。该流程复跑采集、安全、架构和preflight，核对线上Git祖先与受保护指纹，然后仅上传并校验Oracle的独立安装包，不替换后端、不启动WYZ、不切任何active pointer。main尚未包含其它已上线任务时，不能用main生成生产候选包；祖先检查必须阻断此操作。Collector本地终态遵从Oracle report响应，不能凭本地相同hash覆盖后台PENDING REVIEW判断。

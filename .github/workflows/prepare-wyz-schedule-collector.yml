@@ -1,0 +1,79 @@
+name: Prepare WYZ Schedule Collector
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: fosuclass-production-deploy
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm --prefix tools/fosu-sync-client ci
+      - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - name: Package production gates
+        run: |
+          npm run test:wyz-four-source
+          npm run test:security-full
+          npm run test:architecture-guards
+          npm run release:preflight
+      - name: Preserve deployed ancestry
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          baseline="$(gh run list --workflow deploy-vps.yml --limit 100 --json headSha,status,conclusion | jq -r '[.[] | select(.status == "completed" and .conclusion == "success")][0].headSha // empty')"
+          [[ "$baseline" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$baseline" HEAD
+          echo "sha=$baseline" >> "$GITHUB_OUTPUT"
+      - name: Verify live baseline before package upload
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            live="$(curl --fail --silent --max-time 30 -H 'X-Admin-Token: ${{ secrets.ADMIN_API_TOKEN }}' http://127.0.0.1:18318/api/admin/security/status | node -e 'let text="";process.stdin.on("data",v=>text+=v);process.stdin.on("end",()=>{const sha=JSON.parse(text).deployment?.commitSha;if(!/^[a-f0-9]{40}$/.test(sha||""))process.exit(1);process.stdout.write(sha);});')"
+            test "$live" = '${{ steps.baseline.outputs.sha }}'
+            echo "live_baseline_verified=$live"
+      - name: Build independent collector package
+        run: |
+          node tools/wyz-schedule-collector/build-package.js
+          mkdir -p route2-artifacts
+          cp ".local/collector-packages/wyz-schedule-collector-${{ github.sha }}.tar.gz" route2-artifacts/
+          cp deploy/wyz/install-schedule-collector.sh route2-artifacts/
+          sha256sum "route2-artifacts/wyz-schedule-collector-${{ github.sha }}.tar.gz" | sed 's#route2-artifacts/##' | tee route2-artifacts/wyz-schedule-collector.sha256
+      - name: Upload independent collector package
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: route2-artifacts
+          target: ${{ secrets.VPS_APP_DIR }}
+      - name: Verify prepared package
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/route2-artifacts'
+            sha256sum -c wyz-schedule-collector.sha256
+            stat -c 'collector_bundle_bytes=%s' 'wyz-schedule-collector-${{ github.sha }}.tar.gz'
+            test -f install-schedule-collector.sh
