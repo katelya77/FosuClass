@@ -23,6 +23,7 @@ jobs:
       - run: sudo "$(command -v node)" tools/test-collector-oracle-transport.js
       - run: sudo "$(command -v node)" tools/test-school-session-lifecycle.js
       - run: python3 tools/test-oracle-direct-observation.py
+      - run: python3 tools/test-oracle-direct-diagnosis.py
       - run: node tools/test-runtime-primary-fast.js
       - run: node tools/test-schedule-publication-policy.js
       - run: node tools/test-collector-retention-plan.js

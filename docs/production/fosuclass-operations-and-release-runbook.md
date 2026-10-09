@@ -9,12 +9,12 @@
 | GitHub main | fetch 后 `5c8db23e0bf209687a7e5086654dafe0adbc93f8` | 已核实 |
 | PR #82–#86 | GitHub 查询为 MERGED | 已核实 |
 | PR #79/#81 | GitHub 查询为 OPEN | 保留，未合并或修改 |
-| 生产祖先 | 包准备任务 `37931374900` 在源站确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 包准备时的真实指纹；新审计另行刷新 |
+| 生产祖先 | 只读源站审计 `37945292721` 再次确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 本轮真实指纹；未部署候选 |
 | 本轮候选基线 | `b1bc12f96692768d53004e2573e78e6bd5a62d5d` 同时包含 main 与生产祖先 | 防止丢失班级隔离及公告表情行为 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
 | WYZ 安装 | 用户 PAM 回传 `SOURCE_INTEGRITY=PASS`、`INSTALL_COMPLETE`、`TRANSPORT_SCHEMA_PASS`、`ORACLE_DIRECT_STARTED` | b1bc12f9 已人工安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
-| WYZ 60 分钟观察 | 安装后的观察器需 Python 3.6 的 `universal_newlines=True` | 等待最终连续观察 JSON |
+| WYZ 60 分钟观察 | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | NOT_PASSED，学校访问与 timer 门禁继续关闭 |
 | 正式微信构建版本/合法域名/真机刷新 | Git 配置和本地开发者工具配置不能证明已上线包 | 未核实，人工门禁 |
 
 当前常用工作区路径是指向 `D:\Dev\VScode\FosuClass` 的 junction，有用户未提交的两份 project 配置。本任务使用独立 worktree；不得用候选覆盖这些配置。main 尚不包含全部生产祖先；不能仅因“最新 main”而部署。
@@ -54,7 +54,11 @@ transport 严格匹配包源码 schema：
 
 观察器只读取 journal 和 systemd 属性，无额外网络请求。保留 PAM 连接至少 60 分钟。输出包含成功数、失败尝试数、成功率、成功心跳最大间隔、观察到的失败窗口、TLS 授权、实际地址、重启数、PID 数。最大确认间隔是租约相关的保守观测值，并不等于连续网络监测得到的物理断网时间。只有完整窗口、至少 100 次成功、失败 0、最大间隔 <90 秒、重启 0、单一 PID、TLS 授权和实际源站地址一致才 PASS。PASS 仅放行通信，不放行学校访问或 timer。
 
-失败时保持学校访问门禁关闭。不要延长 90 秒 watchdog 以掩盖断线。root-only 的 `acceptance/observation-*.json` 只有汇总；回传最终汇总即可，不回传 env/session/raw journal。
+2026-10-09 用户完成观察的汇总见 `docs/production/evidence/wyz-oracle-direct-20261009.json`：3605.86 秒，51 成功/19 失败，成功率 72.86%，最长确认心跳间隔 459.96 秒，重启 0、单一 PID、Collector active。成功样本 TLS 验证通过，实际地址是批准 IPv4；不能据此声称所有失败都是 TLS 正常或网络健康。个人 Agent 在安装前为 active，本次最终状态尚未回传。
+
+此结果为 NOT_PASSED，不能维持现有 90 秒租约门禁。保持学校访问关闭、execute=0、timer disabled。下一步只做被动日志分层诊断，先区分 connect/TLS/response 与 timeout/reset/HTTP 拒绝；不重新安装、不重复短时探针，不通过延长租约、缩短安全冷却或关闭证书校验掩盖故障。
+
+`deploy/wyz/diagnose-oracle-direct.py` 兼容 Python 3.6，只读取最近两小时 journal/systemd 并输出白名单错误、连接阶段、耗时及个人 Agent 状态。只计 oracle-direct 的 heartbeat-only 尝试，排除重复 cooldown 日志；与最近连接记录相隔超过20秒时标记 UNKNOWN，不猜测失败层。经 PAM 传到安装目录后运行 `python3 diagnose-oracle-direct.py`。根因修复审查后才重新开始完整60分钟验收。root-only 的 `acceptance/observation-*.json` 只有汇总；不回传 env/session/raw journal。
 
 ```bash
 # transport 回到旧 Cloudflare 路径；仍保持 heartbeat-only
@@ -86,6 +90,8 @@ bash accept-oracle-direct.sh status
 | 故障 | 有限重试、5 分钟冷却、连续三次恢复才 claim、90 秒 watchdog | 学校 worker 停止，checkpoint 保留；断线不能表示“课表数据仍新鲜” |
 
 新增 `deploy/wyz/audit-oracle-origin-security.sh` 通过同一只读工作流刷新真实部署 commit、Nginx 控制摘要及源站无凭据拒绝结果。它只输出白名单元数据；不导出配置、env、原始日志或私有部署位置。任何网络配置修复都先提供 diff、备份、回滚、鉴权与拒绝探针，等待审批；本轮不修改公网策略或已有 agent-broker 域名。
+
+只读任务 `37945292721` 的结果：源站 `/api/admin/security/status` 无凭据为401、`/api/full-sync/v1/runs/claim` 无凭据为404，curl TLS校验结果0。404仅证明本次请求未获成功，不能单凭它区分路由隐藏和授权拒绝。加载的两组 Nginx 配置摘要未发现 limit_req/limit_req_zone、专用 full-sync location 或管理员网络限制；其中一组出现50m/8m body limit，class vhost 的具体继承仍需单独核实。不能把这个摘要描述成已完成443暴露面隔离。
 
 PAM 安装输出的 10 项 server 依赖漏洞已用 npm 官方 registry 复核：3 moderate、5 high、2 critical。包括代理/IP 解析、HTTP 客户端、压缩、sm-crypto 和 XLS 解析依赖。完整清单只放本机审计输出，不执行 `npm audit fix --force`。现有依赖问题在 b1bc12f9 安装前已存在，单独限制下一次发布；学校登录和 XLS 行为必须经过专项兼容回归后才升级相关依赖。
 
@@ -255,6 +261,6 @@ npm run sync:publish -- --help
 
 本轮已运行：依赖在独立worktree安装；网络23用例、TLS19用例；四源22套、个人采集51套、班级隔离26用例；Agent foundation 41套、regression 196套、ai-competition、final-convergence；学校Session、双源发布契约、写入fence、快速pointer（包括晚完成manifest）、retention、预算/六状态的新增fixture；`test:security-full`、`test:architecture-guards`、`release:preflight`。Windows的POSIX ownership/SIGTERM项目显式跳过，Linux CI必须补足。只有公开数据HTTP与Oracle只读诊断访问现网；学校请求0。
 
-CI/PR链接、最终测试数量及源站新指纹随本轮候选提交后更新。测试生成的截图/审计文件不作为源码提交。WYZ已安装的仍是原b1包，不含B–F候选；Oracle和微信也未部署这些改动。
+候选为 [draft PR #87](https://github.com/katelya77/FosuClass/pull/87)，暂以包含生产祖先的 b1bc12f9 准备分支为 base，不能直接把 main 作为生产部署候选。[WYZ/Linux 四源及隔离浏览器 CI](https://github.com/katelya77/FosuClass/actions/runs/37945281850)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37945207236)、[源站只读审计](https://github.com/katelya77/FosuClass/actions/runs/37945292721) 对 df02887e 已通过。后续提交仍需对应 CI，之前的成功不能替代新提交验证。测试生成的截图/审计文件不作为源码提交。WYZ已安装的仍是原b1包，不含B–F候选；Oracle和微信也未部署这些改动。
 
-未完成的生产门禁：WYZ60分钟最终汇总；学校长期凭据批准、真实Session与小范围四源试采；严格双源生产发布adapter及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。
+未完成的生产门禁：WYZ失败分层诊断、根因修复后重新60分钟验收；学校长期凭据批准、真实Session与小范围四源试采；严格双源生产发布adapter及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。
