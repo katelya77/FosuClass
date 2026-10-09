@@ -7,8 +7,8 @@ const { execFileSync } = require("child_process");
 const root = path.resolve(__dirname, "../..");
 function build(outputRoot = path.join(root, ".local", "collector-packages")) {
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
-  const candidates = execFileSync("git", ["ls-files", "tools/wyz-schedule-collector", "tools/fosu-sync-client", "server/src", "server/config", "server/package.json", "server/package-lock.json", "shared", "config/terms", "miniprogram/utils/courseWeekRules.js", "deploy/wyz/wyz-schedule-collector.service", "deploy/wyz/wyz-schedule-collector.timer", "deploy/wyz/install-schedule-collector.sh"], { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim().split(/\r?\n/);
-  const files = candidates.filter((file) => /\.(js|json|service|timer|sh)$/.test(file) && !/(?:^|\/)(?:session|\.env|storage|data|debug|raw|node_modules)(?:[./]|$)/i.test(file));
+  const candidates = execFileSync("git", ["ls-files", "tools/wyz-schedule-collector", "tools/fosu-sync-client", "server/src", "server/config", "server/package.json", "server/package-lock.json", "shared", "config/terms", "miniprogram/utils/courseWeekRules.js", "deploy/wyz"], { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim().split(/\r?\n/);
+  const files = candidates.filter((file) => (/\.(js|json|service|timer|sh|py)$/.test(file) || /Collector\.Dockerfile(?:\.dockerignore)?$/.test(file)) && !/(?:^|\/)(?:session|\.env|storage|data|debug|raw|node_modules)(?:[./]|$)/i.test(file));
   fs.mkdirSync(outputRoot, { recursive: true });
   const tar = path.join(outputRoot, "collector-source-" + sha + ".tar");
   execFileSync("git", ["archive", "--format=tar", "--output=" + tar, "HEAD", "--", ...files], { cwd: root });
