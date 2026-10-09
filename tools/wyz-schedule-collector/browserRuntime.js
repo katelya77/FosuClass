@@ -22,10 +22,11 @@ function workerCommand(executable, args, env, cfg, dir, root) {
   const containerArgs = ["run", "--rm", "--init", "--name", "fosu-collector-worker", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--cpus=1", "--memory=768m", "--pids-limit=256", "--shm-size=256m", "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m", "--workdir", "/collector"];
   for (const [source, readonly] of [[cfg.sessionPath, true], [dir, false], [path.join(cfg.dataRoot, "catalog"), false]]) containerArgs.push("--mount", "type=bind,src=" + source + ",dst=" + source + (readonly ? ",readonly" : ""));
   const childEnv = Object.assign({}, env);
+  childEnv.FOSU_COLLECTOR_WATCHDOG_FILE = path.join(dir, "worker-lease.json");
   delete childEnv.PLAYWRIGHT_BROWSERS_PATH;
   delete childEnv.NODE_PATH;
   for (const key of Object.keys(childEnv)) if (!/^(PATH|Path|HOME|USERPROFILE|SystemRoot|TEMP|TMP)$/.test(key)) containerArgs.push("--env", key);
-  containerArgs.push(selected.image, "node", ...args);
+  containerArgs.push(selected.image, "node", "tools/wyz-schedule-collector/container-worker.js", ...args);
   return { executable: "/usr/bin/" + selected.engine, args: containerArgs, cwd: root, env: childEnv };
 }
 async function launch(chromium, args = []) {

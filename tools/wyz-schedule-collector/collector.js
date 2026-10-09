@@ -59,10 +59,11 @@ function executeSync(run, cfg, dir, onChild) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.join(cfg.dataRoot, "catalog"), { recursive: true, mode: 0o700 });
     const command = require("./browserRuntime").workerCommand(process.execPath, args, env, cfg, dir, ROOT);
+    writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: Date.now() + 90000 });
     const child = spawn(command.executable, command.args, { cwd: command.cwd, env: command.env, stdio: "ignore", windowsHide: true });
     onChild(child);
     child.once("error", () => reject(failure("SYNC_LAUNCH_FAILED")));
-    child.once("exit", (code) => { const result = readJson(path.join(dir, "sync-result.json"), {}); code === 0 ? resolve() : reject(failure(result.code || "SYNC_FAILED")); });
+    child.once("exit", (code) => { const result = readJson(path.join(dir, "sync-result.json"), {}); code === 0 ? resolve() : reject(failure(code === 65 ? "COLLECTOR_LEASE_EXPIRED" : result.code || "SYNC_FAILED")); });
   });
 }
 async function upload(request, run, dir, data, hooks = {}) {
@@ -135,7 +136,7 @@ async function runOnce(cfg, deps = {}) {
       try {
         const heartbeat = await request("POST", "/api/full-sync/v1/heartbeat", { runId: run.id, claimId: run.claimId });
         if (heartbeat.cancelled) { cancelled = true; if (child) child.kill("SIGTERM"); }
-        else { lastLease = Date.now(); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
+        else { lastLease = Date.now(); writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: lastLease + 90000 }); const progress = readJson(path.join(dir, "progress.json"), null); if (progress) await report(progress); }
       } catch (_) { if (Date.now() - lastLease > 90000) { cancelled = true; if (child) child.kill("SIGTERM"); } }
       finally { tickRunning = false; }
     }, 30000);
