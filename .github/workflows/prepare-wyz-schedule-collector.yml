@@ -88,6 +88,10 @@ jobs:
             sha256sum -c wyz-schedule-collector.sha256
             stat -c 'collector_bundle_bytes=%s' 'wyz-schedule-collector-${{ github.sha }}.tar.gz'
             test -f install-schedule-collector.sh
+            handoff='/root/fosu-collector-install/${{ github.sha }}'
+            sudo install -d -m 700 "$handoff"
+            sudo install -m 600 'wyz-schedule-collector-${{ github.sha }}.tar.gz' wyz-schedule-collector.sha256 install-schedule-collector.sh recover-release.py "$handoff/"
+            sudo install -m 600 oracle-seal-credentials.sh /root/oracle-seal-credentials.sh
             maintenance='${{ secrets.VPS_APP_DIR }}/route2-artifacts/collector-maintenance'
             sudo docker exec fosuclass-api install -d -m 700 /app/storage/secure/collector-maintenance
             sudo docker cp "$maintenance/audit-full-sync-credentials.js" fosuclass-api:/app/storage/secure/collector-maintenance/audit-full-sync-credentials.js
