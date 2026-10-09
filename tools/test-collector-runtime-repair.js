@@ -21,7 +21,7 @@ async function main() {
   await check(() => assert.rejects(collector.runOnce(cfg, { request: async () => ({ success: true }) }), /ORACLE_HEARTBEAT_REJECTED/));
   for (const [status, code] of [[401, "ORACLE_AUTH_REJECTED"], [403, "ORACLE_SIGNATURE_OR_CLOCK_REJECTED"], [404, "ORACLE_AUTH_OR_ENDPOINT_REJECTED"], [500, "ORACLE_HTTP_500"]]) await check(() => assert.rejects(collector.client(cfg, async () => ({ status, ok: false }))("POST", "/api/full-sync/v1/heartbeat", {}), new RegExp(code)));
   for (const [name, code] of [["TimeoutError", "ORACLE_TIMEOUT"], ["TypeError", "ORACLE_NETWORK_FAILED"]]) await check(() => assert.rejects(collector.client(cfg, async () => { throw Object.assign(new Error("sensitive upstream detail"), { name }); })("POST", "/api/full-sync/v1/heartbeat", {}), error => error.code === code && !error.message.includes("sensitive")));
-  await check(() => assert.rejects(collector.client(cfg, async () => ({ ok: true, status: 200, json: async () => { throw new Error("raw response"); } }))("POST", "/api/full-sync/v1/heartbeat", {}), /ORACLE_RESPONSE_INVALID/));
+  await check(() => assert.rejects(collector.client(cfg, async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("raw response"); } }))("POST", "/api/full-sync/v1/heartbeat", {}), /ORACLE_RESPONSE_INVALID/));
   Object.assign(process.env, env); signature.resetNonces();
   await check(async () => {
     let requests = 0;

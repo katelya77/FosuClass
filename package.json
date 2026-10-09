@@ -13,6 +13,8 @@
     "doc": "docs"
   },
   "scripts": {
+    "test:collector-network": "node tools/test-collector-network-recovery.js",
+    "test:collector-personal-regression": "node tools/run-collector-personal-regression.js",
     "test:wyz-four-source": "node tools/run-wyz-four-source-tests.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js && node tools/test-semester-repair.js",
