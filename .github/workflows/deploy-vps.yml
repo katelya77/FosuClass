@@ -279,7 +279,6 @@ jobs:
             sudo chmod 755 "$OPENRESTY_HOST_RELEASE_DIR"
             sudo chmod 755 "$OPENRESTY_HOST_RUNTIME_DIR"
 
-            # Pre-deploy backup + state record; failure aborts before any mutation.
             bash scripts/deploy-guard.sh pre "$APP_DIR" "$CONTAINER_NAME" "$COMMIT_SHA"
 
             restart_before="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME" 2>/dev/null || echo 0)"
