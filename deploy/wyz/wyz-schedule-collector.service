@@ -11,6 +11,9 @@ EnvironmentFile=/etc/fosuclass/full-sync.env
 Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/fosuclass/schedule-collector/browsers
 Restart=on-failure
 RestartSec=60
+RestartPreventExitStatus=75 77 78
+TimeoutStopSec=20
+KillSignal=SIGTERM
 KillMode=control-group
 Nice=10
 IOSchedulingClass=idle

@@ -1,6 +1,11 @@
 name: Prepare WYZ Schedule Collector
 on:
   workflow_dispatch:
+    inputs:
+      audit_credentials:
+        description: 'Read-only audit of existing collector credentials (no rotation)'
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -25,12 +30,14 @@ jobs:
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
       - name: Package production gates
         run: |
+          sudo "$(command -v node)" tools/test-collector-network-recovery.js
           sudo "$(command -v node)" tools/test-collector-runtime-repair.js
           node tools/test-full-sync-env-persistence.js
           python3 tools/test-collector-archive.py
           sudo "$(command -v node)" tools/test-collector-install-linux.js
           node tools/wyz-schedule-collector/browser-smoke.js
           npm run test:wyz-four-source
+          npm run test:collector-personal-regression
           npm run test:security-full
           npm run test:architecture-guards
           npm run release:preflight
@@ -91,6 +98,16 @@ jobs:
             handoff='/root/fosu-collector-install/${{ github.sha }}'
             sudo install -d -m 700 "$handoff"
             sudo install -m 600 'wyz-schedule-collector-${{ github.sha }}.tar.gz' wyz-schedule-collector.sha256 install-schedule-collector.sh recover-release.py "$handoff/"
+      - name: Audit existing collector credentials (optional)
+        if: ${{ inputs.audit_credentials }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/route2-artifacts'
             sudo install -m 600 oracle-seal-credentials.sh /root/oracle-seal-credentials.sh
             maintenance='${{ secrets.VPS_APP_DIR }}/route2-artifacts/collector-maintenance'
             sudo docker exec fosuclass-api install -d -m 700 /app/storage/secure/collector-maintenance
