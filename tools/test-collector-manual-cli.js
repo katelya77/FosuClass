@@ -37,6 +37,7 @@ async function main(){
   await test(async()=>{clear();const r=await cli.main(["login","--approve-school-access","--login-profile=desktop"],{...base,authDeps:deps()});assert.equal(r.status,"SESSION_SAVED");assert.equal(r.loginProfile,"desktop");assert.equal(outputs.some(v=>JSON.stringify(v).includes("fixture-only-secret")),false);});
   if(!process.stdin.isTTY)await test(async()=>{await assert.rejects(cli.main(["login","--approve-school-access"],{...base,ask:undefined,authDeps:{createAdapter:()=>assert.fail("no network without TTY")}}),/TTY_REQUIRED/);});
   await test(()=>{assert.equal(cli.errorCode({code:"SESSION_EXPIRED"}),"SCHOOL_SESSION_EXPIRED");assert.equal(cli.errorCode({name:"TimeoutError",message:"url private fixture"}),"SCHOOL_NETWORK_TIMEOUT");assert.equal(cli.errorCode({message:"ERR_CERT_AUTHORITY_INVALID private"}),"SCHOOL_TLS_OR_ORIGIN_REJECTED");assert.equal(cli.errorCode({code:"STAGING_SAMPLE_API_UNAVAILABLE"}),"STAGING_SAMPLE_API_UNAVAILABLE");});
+  await test(()=>{for(const code of ["DIRECT_DIRECTORY_INCOMPLETE","CANONICAL_HASH_MISMATCH","SAMPLE_SCOPE_EXCEEDED"])assert.equal(cli.errorCode({code}),"FOUR_SOURCE_INCOMPLETE");});
   if(process.platform!=="win32")await test(async()=>{clear();fs.chmodSync(root,0o755);try{await assert.rejects(auth.interactiveSession(cfg,deps()),/PERMISSIONS_REJECTED/);}finally{fs.chmodSync(root,0o700);}});
   console.log("collector-manual-cli: "+cases+" PASS; fixture only; schoolRequests=0; productionWrites=0");
 }

@@ -45,7 +45,7 @@ function errorCode(error) {
   let code = auth.transportCode(error);
   if (/^(ORACLE_|COLLECTOR_|RUN_|PRIVATE_|READ_ONLY_|SAMPLE_|CLI_)/.test(error.code || "") && /^[A-Z0-9_]+$/.test(error.code)) code=error.code;
   if (code === "SESSION_EXPIRED" || error.code === "SESSION_EXPIRED") code = "SCHOOL_SESSION_EXPIRED";
-  if (error.code === "FOUR_DIRECT_SOURCE_INVALID" || /^SAMPLE_(SOURCE|DATA|CONTRACT)_/.test(error.code || "")) code = "FOUR_SOURCE_INCOMPLETE";
+  if (["FOUR_DIRECT_SOURCE_INVALID","CANONICAL_HASH_MISMATCH"].includes(error.code) || /^DIRECT_|^SAMPLE_(SOURCE|DATA|CONTRACT|SCOPE)_/.test(error.code || "")) code = "FOUR_SOURCE_INCOMPLETE";
   if (/^(STAGING_|SAMPLE_FINALIZE)/.test(error.code || "")) code = error.code === "STAGING_SAMPLE_API_UNAVAILABLE" ? error.code : "STAGING_UPLOAD_FAILED";
   if (/^(ROOT_REQUIRED|CLI_ARGUMENT_REJECTED|COLLECTOR_LOCKED|SESSION_PERMISSIONS_REJECTED)$/.test(error.code || "")) code = error.code;
   if (error.code === "ORACLE_AUTH_OR_ENDPOINT_REJECTED") code = "STAGING_SAMPLE_API_UNAVAILABLE";
