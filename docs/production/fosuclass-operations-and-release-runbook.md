@@ -23,9 +23,19 @@
 
 生产门禁保持：学校访问未批准；`execute=0`；timer disabled；自动发布关闭；生产 pointer、DNS、防火墙、代理、个人 Agent、微信正式版、付费资源均不由本轮 Agent 自动修改。所有手册中的生产写命令由人工在对应门禁批准后执行。
 
-## Stage A：统一交互式入口（候选，尚未部署）
+## PR #88 安装后：CAS 移动登录修复候选
 
-新分支 `codex/wyz-interactive-manual-sync` 延续PR #87。Windows登录、同步、应急上传保留；两端共用 `schoolLoginProfile.js`。WYZ mobile为Chromium的iPhone Safari UA、390×844 viewport/screen、isMobile/hasTouch=true、scale=3；desktop使用桌面配置。Windows默认微信iOS UA及自定义UA优先级保留。这是移动模拟，不是原生Safari或学校真实登录证据。实际CAS页面/权限仍待阶段B核实。
+最新用户 PAM 证据：已安装 `df4ed1e985630002f614d37db246a76dcaad65a8`；STAGE_A_INSTALL_PASS、Collector active/NRestarts=0、个人 Agent active、timer disabled。一轮 mobile 真实登录返回 SCHOOL_LOGIN_FORM_CHANGED，未建立 Session。以上为用户回传，本轮没有重新访问学校、Oracle 或 CloudBase。
+
+修复候选延续 #88；详见 [CAS 修复记录](wyz-cas-mobile-repair.md)。mobile 现在映射 mobile-wechat，与 Windows 默认一致；显式 mobile-safari 仍可用。新增 auth-state 只读本机、diagnose-login 只检查获批的公开 CAS 页。旧错误码的直接触发点都在密码填写/点击前；不能据此退还旧计数，真实页面触发点待单独批准诊断。
+
+表单/资源检查先于凭据提示，官方预检查保留、未知响应停止；独立阶段诊断不含正文或认证参数。认证 POST 预留预算后才放行，崩溃未确认的预留也消耗预算。30 分钟冷却、24 小时两次及 blocked 保护继续有效，不删除或重置历史记录。
+
+安装、公开页诊断、一次真实登录是三个独立人工门禁。候选包 PAM-HANDOFF 提供固定提交/哈希和升级/df4ed1e9 回滚；回滚保留现有认证预算和 Session。新凭据只在 PAM 隐藏输入，聊天披露密码应先更换。登录成功不批准 sample/full、后端部署、timer 或发布。
+
+## Stage A 历史交付：统一交互式入口
+
+分支 `codex/wyz-interactive-manual-sync` 延续PR #87。Windows登录、同步、应急上传保留；两端共用 `schoolLoginProfile.js`。原 Stage A mobile 使用 Safari UA；本次修复的映射以上节为准。两种移动配置均为390×844 viewport/screen、isMobile/hasTouch=true、scale=3；desktop使用桌面配置。Windows自定义UA优先级保留。这是移动模拟，不是原生Safari或学校真实登录证据。实际CAS页面/权限仍待核实。
 
 安装后root-only `/usr/local/bin/fosu-collector` 指向current：
 

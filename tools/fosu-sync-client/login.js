@@ -18,9 +18,11 @@ prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const SESSION_DIR = path.join(__dirname, ".session");
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
-const { MOBILE_SAFARI_UA, WECHAT_IOS_UA, contextOptions, CAS_SERVICE_URL, AUTH_LOGIN_URL } = require("./schoolLoginProfile");
+const { MOBILE_SAFARI_UA, WECHAT_IOS_UA, contextOptions, CAS_SERVICE_URL, AUTH_LOGIN_URL, PROFILES } = require("./schoolLoginProfile");
+const { SELECTORS } = require("./schoolCasPage");
 const DESKTOP_UA = "";
-const FOSU_LOGIN_UA_MODE = String(process.env.FOSU_LOGIN_UA_MODE || process.env.FOSU_LOGIN_PROFILE || "mobile").toLowerCase() === "desktop" ? "desktop" : "mobile";
+const requestedProfile=String(process.env.FOSU_LOGIN_UA_MODE || process.env.FOSU_LOGIN_PROFILE || "mobile").toLowerCase();
+const FOSU_LOGIN_UA_MODE = PROFILES.includes(requestedProfile)?requestedProfile:"mobile";
 const LOGIN_AUTO = process.argv.includes("--auto") || process.argv.includes("auto") || process.env.FOSU_LOGIN_AUTO === "true";
 
 function getLoginCredentials() {
@@ -83,8 +85,8 @@ async function login() {
   // 根据配置设定 User-Agent
   let userAgent = undefined;
   let viewport = undefined;
-  if (FOSU_LOGIN_UA_MODE === "mobile") {
-    userAgent = process.env.FOSU_LOGIN_UA || process.env.FOSU_IMPORT_MOBILE_UA || WECHAT_IOS_UA || MOBILE_SAFARI_UA;
+  if (FOSU_LOGIN_UA_MODE !== "desktop") {
+    userAgent = process.env.FOSU_LOGIN_UA || process.env.FOSU_IMPORT_MOBILE_UA || (FOSU_LOGIN_UA_MODE==='mobile-safari'?MOBILE_SAFARI_UA:WECHAT_IOS_UA);
     viewport = { width: 390, height: 844 };
   } else if (process.env.FOSU_LOGIN_UA) {
     userAgent = process.env.FOSU_LOGIN_UA;
@@ -132,15 +134,15 @@ async function login() {
   const page = await context.newPage();
 
 
-  console.log(`优先通过账号密码登录页进行登录: ${AUTH_LOGIN_URL} ...`);
+  console.log("优先通过学校官方账号密码登录页进行登录...");
   try {
     await page.goto(AUTH_LOGIN_URL, { timeout: 25000 });
   } catch (error) {
-    console.warn(`⚠️ 访问账号密码登录页失败 (${error.message})，尝试直接访问统一身份认证登录路径...`);
+    console.warn("⚠️ 访问账号密码登录页失败，尝试学校统一身份认证路径...");
     try {
-      await page.goto('https://authserver.fosu.edu.cn/authserver/login', { timeout: 25000 });
+      await page.goto(AUTH_LOGIN_URL, { timeout: 25000 });
     } catch (authError) {
-      console.error(`❌ 导航统一身份认证系统彻底失败: ${authError.message}`);
+      console.error("❌ 导航统一身份认证系统失败；请检查学校网络与证书。");
       console.log("💡 请确认 EasyConnect 是否成功连接，或已处于校园网环境中。");
     }
   }
@@ -224,8 +226,8 @@ async function login() {
       const password = configuredCredentials.password;
       if ((LOGIN_AUTO || username && password) && username && password) {
         try {
-          const userSelectors = ['input[name="username"]', '#username', 'input[type="text"]'];
-          const passSelectors = ['input[name="password"]', '#password', 'input[type="password"]'];
+          const userSelectors = SELECTORS.account;
+          const passSelectors = SELECTORS.password;
           
           let userEl = null;
           for (const sel of userSelectors) {
@@ -256,14 +258,7 @@ async function login() {
             await userEl.fill(username);
             await passEl.fill(password);
             if (LOGIN_AUTO && !autoSubmitted) {
-              const submitSelectors = [
-                "#login_submit",
-                "#login",
-                "button[type='submit']",
-                "input[type='submit']",
-                ".login-btn",
-                "text=/^(登录|登 录|提交)$/"
-              ];
+              const submitSelectors = [...SELECTORS.submit,"text=/^(登录|登 录|提交)$/"];
               for (const selector of submitSelectors) {
                 const submit = page.locator(selector).first();
                 if (await submit.isVisible()) {

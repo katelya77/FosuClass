@@ -1,8 +1,8 @@
 "use strict";
 const fs = require("fs"), path = require("path");
-const { readJson, writeJsonAtomic, acquireLock } = require("./runStore");
-const { AUTH_ORIGIN, SCHOOL_ORIGIN, AUTH_LOGIN_URL, contextOptions } = require("../fosu-sync-client/schoolLoginProfile");
-const COOLDOWN_MS = 30 * 60 * 1000, DAY_MS = 24 * 60 * 60 * 1000;
+const { readJson, acquireLock } = require("./runStore");
+const { AUTH_ORIGIN, SCHOOL_ORIGIN } = require("../fosu-sync-client/schoolLoginProfile");
+const {COOLDOWN_MS}=require('./schoolAuthState');
 function fail(code) { return Object.assign(new Error(code), { code }); }
 function transportCode(error) {
   if (/^(INVALID_CREDENTIALS|SCHOOL_[A-Z_]+|COLLECTOR_STOPPED)$/.test(error.code || "")) return error.code;
@@ -35,8 +35,8 @@ function allowedUrl(input) {
 }
 function classifyPage(url, text) {
   if (!allowedUrl(url)) return "SCHOOL_TLS_OR_ORIGIN_REJECTED";
-  if (/密码错误|用户名或密码|账号或密码|认证失败|不存在|incorrect/i.test(text)) return "INVALID_CREDENTIALS";
-  if (/验证码|滑块|拼图|人机|风险|风控|安全验证|captcha|risk control/i.test(text)) return "SCHOOL_SECURITY_CHALLENGE";
+  if (require("../fosu-sync-client/schoolCasPage").credentialFailure(text)) return "INVALID_CREDENTIALS";
+  if (require("../fosu-sync-client/schoolCasPage").explicitChallenge(text)) return "SCHOOL_SECURITY_CHALLENGE";
   if (new URL(url).origin === SCHOOL_ORIGIN && /教学一体化服务平台|我的桌面|学期理论课表/.test(text) && !/统一身份认证|密码登录/.test(text)) return "SESSION_VALID";
   if (new URL(url).origin === AUTH_ORIGIN || /统一身份认证|密码登录/.test(text)) return "SESSION_EXPIRED";
   return "SCHOOL_PAGE_CHANGED";
@@ -46,96 +46,7 @@ function assertSafeRuntime() {
   if ((process.env.DEBUG || "").trim() || process.env.PWDEBUG && process.env.PWDEBUG !== "0" || /http|https|tls|net|undici|\*/i.test(process.env.NODE_DEBUG || "")) throw fail("SCHOOL_AUTH_DEBUG_REJECTED");
 }
 async function createAdapter(cfg, deps = {}) {
-  assertSafeRuntime();
-  const chromium = deps.chromium || require("../fosu-sync-client/node_modules/playwright").chromium;
-  // A container browser must be integrated separately; never pass credentials to a container command line.
-  if (require("./browserRuntime").runtime(cfg.dataRoot).mode !== "native") throw fail("SCHOOL_AUTH_NATIVE_BROWSER_REQUIRED");
-  const browser = await chromium.launch({ headless: true, timeout: 30000, args: ["--no-proxy-server"] });
-  const contexts = [];
-  let schoolRequests = 0, originRejected = false;
-  const abort = () => browser.close().catch(() => {});
-  if (deps.signal) { if (deps.signal.aborted) { await browser.close(); throw fail("COLLECTOR_STOPPED"); } deps.signal.addEventListener("abort", abort, { once: true }); }
-  async function pageFor(storageState) {
-    const context = await browser.newContext({ ...contextOptions(cfg.loginProfile || "mobile"), serviceWorkers: "block", ...(storageState ? { storageState } : {}) });
-    contexts.push(context);
-    const page = await context.newPage();
-    // Playwright routing can skip redirect hops. Chromium Fetch pauses every
-    // outgoing hop before sending, including 307 POSTs and HTTPS -> HTTP.
-    const guard = await context.newCDPSession(page);
-    guard.on("Fetch.requestPaused", event => {
-      const responseStage = event.responseStatusCode !== undefined || event.responseErrorReason !== undefined;
-      let allowed = allowedUrl(event.request.url);
-      if (allowed && [301,302,303,307,308].includes(event.responseStatusCode)) {
-        const location = (event.responseHeaders || []).find(h=>h.name.toLowerCase()==="location");
-        let next;
-        try { next=new URL(location && location.value,event.request.url); } catch (_) {}
-        allowed = Boolean(location && next && allowedUrl(next.href));
-        // Never replay a password POST because of a 307/308 response.
-        if ([307,308].includes(event.responseStatusCode) && event.request.method==="POST") allowed=false;
-      }
-      if (allowed && !responseStage) schoolRequests++;
-      else if (!allowed && ["Document","XHR","Fetch"].includes(event.resourceType)) originRejected = true;
-      guard.send(allowed ? "Fetch.continueRequest" : "Fetch.failRequest", allowed ?
-        { requestId:event.requestId } : { requestId:event.requestId,errorReason:"BlockedByClient" }).catch(() => {
-          if (!browser.isConnected || browser.isConnected()) { originRejected = true; abort(); }
-        });
-    });
-    await guard.send("Fetch.enable", { patterns:[{urlPattern:"*",requestStage:"Request"},{urlPattern:"*",requestStage:"Response"}] });
-    return { context, page };
-  }
-  async function inspect(page) { return classifyPage(page.url(), await page.locator("body").innerText()); }
-  const adapter = {
-    stats: () => ({ schoolRequests }),
-    async check(sessionPath) {
-      if (!fs.existsSync(sessionPath)) return "SESSION_EXPIRED";
-      secureFile(sessionPath);
-      validateSession(readJson(sessionPath, null));
-      const { page } = await pageFor(sessionPath);
-      await page.goto(SCHOOL_ORIGIN+"/framework/xsMain.jsp", { waitUntil:"domcontentloaded", timeout:25000 });
-      return inspect(page);
-    },
-    async login(credentials) {
-      // Fresh context; never merge old cookies with a new account/session.
-      const { context, page } = await pageFor();
-      await page.goto(AUTH_LOGIN_URL, { waitUntil:"domcontentloaded",timeout:25000 });
-      const initial = await inspect(page);
-      if (initial !== "SESSION_EXPIRED") throw fail(initial === "SESSION_VALID" ? "SCHOOL_LOGIN_FORM_CHANGED" : initial);
-      const account = page.locator('#username'), password = page.locator('#password'), submit = page.locator('#login_submit');
-      if (await account.count() !== 1 || await password.count() !== 1 || await submit.count() !== 1 || !await account.isVisible() || !await password.isVisible() || !await submit.isVisible()) throw fail("SCHOOL_LOGIN_FORM_CHANGED");
-      const formAction = await submit.evaluate(el => el.form && el.form.action);
-      if (!allowedUrl(formAction) || new URL(formAction).origin !== AUTH_ORIGIN) throw fail("SCHOOL_TLS_OR_ORIGIN_REJECTED");
-      await account.fill(credentials.account);
-      // Official CAS pre-login check. No password is sent when a challenge is required.
-      schoolRequests++;
-      const captcha = await context.request.get(AUTH_ORIGIN+"/authserver/checkNeedCaptcha.htl?username="+encodeURIComponent(credentials.account), { timeout:10000,maxRedirects:0 });
-      if (!captcha.ok() || !allowedUrl(captcha.url())) throw fail("SCHOOL_LOGIN_FORM_CHANGED");
-      let need; try { need = await captcha.json(); } catch (_) { throw fail("SCHOOL_LOGIN_FORM_CHANGED"); }
-      if (!need || typeof need.isNeed !== "boolean") throw fail("SCHOOL_LOGIN_FORM_CHANGED");
-      if (need.isNeed) throw fail("SCHOOL_SECURITY_CHALLENGE");
-      if (await inspect(page) !== "SESSION_EXPIRED") throw fail("SCHOOL_SECURITY_CHALLENGE");
-      await password.fill(credentials.password);
-      await submit.click(); // Exactly one submission; no password retry.
-      let status = "SESSION_EXPIRED";
-      for (let i=0;i<20;i++) {
-        await page.waitForTimeout(1000);
-        status = await inspect(page);
-        if (status !== "SESSION_EXPIRED") break;
-      }
-      if (status !== "SESSION_VALID") throw fail(status === "SESSION_EXPIRED" ? "SCHOOL_LOGIN_NOT_COMPLETED" : status);
-      // Redirect/landing alone is insufficient: verify a protected page before saving.
-      await page.goto(SCHOOL_ORIGIN+"/framework/xsMain.jsp", { waitUntil:"domcontentloaded", timeout:25000 });
-      const protectedStatus = await inspect(page);
-      if (protectedStatus !== "SESSION_VALID") throw fail(protectedStatus === "SESSION_EXPIRED" ? "SCHOOL_SESSION_EXPIRED" : protectedStatus);
-      return context.storageState();
-    },
-    async close() { if (deps.signal) deps.signal.removeEventListener("abort",abort); await browser.close(); }
-  };
-  for (const key of ["check","login"]) {
-    const work=adapter[key];
-    adapter[key]=async (...args)=>{try { const result=await work(...args);if(originRejected)throw fail("SCHOOL_TLS_OR_ORIGIN_REJECTED");return result; }
-      catch(error){throw originRejected ? fail("SCHOOL_TLS_OR_ORIGIN_REJECTED") : error;}};
-  }
-  return adapter;
+  return require("./schoolBrowserAdapter").createAdapter(cfg,deps);
 }
 async function checkSessionUnlocked(cfg, deps = {}) {
   // Explicit school access approval, even when no password is read or submitted.
@@ -149,7 +60,7 @@ async function checkSessionUnlocked(cfg, deps = {}) {
     if (!["SESSION_VALID", "SESSION_EXPIRED"].includes(status)) throw fail(/^(INVALID_CREDENTIALS|SCHOOL_[A-Z_]+)$/.test(status || "") ? status : "SCHOOL_SESSION_INVALID");
     return { status,schoolLoginAttempts:0,sessionChanged:false };
   } catch (error) {
-    throw fail(transportCode(error));
+    throw Object.assign(fail(transportCode(error)),{diagnostic:error.diagnostic});
   } finally { await adapter.close(); }
 }
 async function ensureSessionUnlocked(cfg, deps = {}) {
@@ -159,21 +70,14 @@ async function ensureSessionUnlocked(cfg, deps = {}) {
   if (!credentials.recoveryEnabled && !deps.manualRecovery) return { status:"manual-session",schoolLoginAttempts:0 };
   const now = (deps.now || Date.now)();
   if (deps.approved !== true && !(credentials.recoveryEnabled && Date.parse(credentials.approvedUntil || "") > now)) throw fail("SCHOOL_AUTH_APPROVAL_REQUIRED");
-  const statePath = path.join(cfg.dataRoot,"school-auth-state.json");
-  let state = readJson(statePath, {});
-  if (state.blocked) throw fail("SCHOOL_AUTH_MANUAL_ACTION_REQUIRED");
-  if (state.cooldownUntil > now) throw fail("SCHOOL_AUTH_COOLDOWN");
+  const lifecycle=require("./schoolAuthState").lifecycle(cfg,deps);
+  lifecycle.check();
   const adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
   try {
     const status = await adapter.check(cfg.sessionPath);
     if (status === "SESSION_VALID") return { status,schoolLoginAttempts:0 };
     if (status !== "SESSION_EXPIRED") throw fail(status);
-    if (state.windowStart && now-state.windowStart < DAY_MS && state.attempts >= 2) throw fail("SCHOOL_AUTH_DAILY_LIMIT");
-    if (!state.windowStart || now-state.windowStart >= DAY_MS) state = { windowStart:now,attempts:0 };
-    state.attempts++;
-    state.cooldownUntil = now+COOLDOWN_MS;
-    writeJsonAtomic(statePath,state); // A crash cannot erase the attempt/cooldown.
-    const session = await adapter.login(credentials);
+    const session = await adapter.login(credentials,lifecycle.hooks);
     if (deps.signal && deps.signal.aborted) throw fail("COLLECTOR_STOPPED");
     validateSession(session);
     const candidate = cfg.sessionPath+".candidate";
@@ -183,14 +87,13 @@ async function ensureSessionUnlocked(cfg, deps = {}) {
       if (await adapter.check(candidate) !== "SESSION_VALID") throw fail("SCHOOL_SESSION_INVALID");
       fs.renameSync(candidate,cfg.sessionPath);
     } finally { if (fs.existsSync(candidate)) fs.unlinkSync(candidate); }
-    writeJsonAtomic(statePath,{ ...state,cooldownUntil:0,lastSuccessAt:now });
-    return { status:"SESSION_RECOVERED",schoolLoginAttempts:1 };
+    lifecycle.success(cfg.loginProfile || "mobile");
+    return { status:"SESSION_RECOVERED",schoolLoginAttempts:lifecycle.attempts() };
   } catch (error) {
     // Only allowlisted codes persist; browser URLs/HTML/credentials never leave this module.
     const code = transportCode(error);
-    const blocked = /INVALID_CREDENTIALS|CHALLENGE|CHANGED|TLS|SESSION_INVALID/.test(code);
-    writeJsonAtomic(statePath,{ ...state,cooldownUntil:now+COOLDOWN_MS,blocked,lastFailureCode:code });
-    throw fail(code);
+    lifecycle.failure(code,error.diagnostic);
+    throw Object.assign(fail(code),{diagnostic:error.diagnostic});
   } finally { await adapter.close(); }
 }
 async function withSessionLock(cfg, deps, work) {
@@ -214,21 +117,17 @@ async function interactiveSession(cfg, deps = {}) {
     if (deps.signal && deps.signal.aborted) throw fail("COLLECTOR_STOPPED");
     const checked = await checkSessionUnlocked(cfg, { ...deps, approved: true });
     if (checked.status === "SESSION_VALID" && await deps.confirmReuse()) return { ...checked, status: "SESSION_REUSED", loginProfile: cfg.loginProfile || "mobile" };
-    const statePath = path.join(cfg.dataRoot, "school-auth-state.json"), now = (deps.now || Date.now)();
-    let state = readJson(statePath, {});
-    if (state.blocked && deps.acknowledgeFailure !== true) throw fail("SCHOOL_AUTH_MANUAL_ACTION_REQUIRED");
-    if (state.cooldownUntil > now) throw fail("SCHOOL_AUTH_COOLDOWN");
-    if (state.windowStart && now - state.windowStart < DAY_MS && state.attempts >= 2) throw fail("SCHOOL_AUTH_DAILY_LIMIT");
-    if (!state.windowStart || now - state.windowStart >= DAY_MS) state = { windowStart: now, attempts: 0 };
+    const lifecycle=require("./schoolAuthState").lifecycle(cfg,deps);
+    lifecycle.check();
     // No school-auth.json is read/written. Credentials exist only in this process.
     let credentials, adapter;
     try {
+      adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
+      // Detect local page adaptation failures before requesting credentials.
+      if(adapter.prepare)await adapter.prepare();
       credentials = await deps.readCredentials();
       if (!credentials || typeof credentials.account !== "string" || !credentials.account.trim() || typeof credentials.password !== "string" || !credentials.password) throw fail("SCHOOL_AUTH_INPUT_REQUIRED");
-      adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
-      state = { ...state, attempts: (state.attempts || 0) + 1, cooldownUntil: now + COOLDOWN_MS, blocked: false };
-      writeJsonAtomic(statePath, state);
-      const session = validateSession(await adapter.login(credentials));
+      const session = validateSession(await adapter.login(credentials,lifecycle.hooks));
       credentials.account = ""; credentials.password = ""; credentials = null;
       if (deps.signal && deps.signal.aborted) throw fail("COLLECTOR_STOPPED");
       const candidate = cfg.sessionPath + ".candidate";
@@ -248,12 +147,12 @@ async function interactiveSession(cfg, deps = {}) {
           try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); }
         }
       } finally { if (fs.existsSync(candidate)) fs.unlinkSync(candidate); }
-      writeJsonAtomic(statePath, { ...state, cooldownUntil: 0, blocked: false, lastSuccessAt: now, lastFailureCode: null, loginProfile: cfg.loginProfile || "mobile" });
-      return { status: "SESSION_SAVED", schoolLoginAttempts: 1, schoolAuthRequests: adapter.stats ? adapter.stats().schoolRequests : null, sessionChanged: true, passwordPersisted: false, loginProfile: cfg.loginProfile || "mobile" };
+      lifecycle.success(cfg.loginProfile || "mobile");
+      return { status: "SESSION_SAVED", schoolLoginAttempts: lifecycle.attempts(), schoolAuthRequests: adapter.stats ? adapter.stats().schoolRequests : null, sessionChanged: true, passwordPersisted: false, loginProfile: cfg.loginProfile || "mobile" };
     } catch (error) {
       const code = transportCode(error);
-      if (adapter) writeJsonAtomic(statePath, { ...state, cooldownUntil: now + COOLDOWN_MS, blocked: /INVALID_CREDENTIALS|CHALLENGE|CHANGED|TLS|SESSION_INVALID/.test(code), lastFailureCode: code });
-      throw fail(code);
+      if (adapter) lifecycle.failure(code,error.diagnostic);
+      throw Object.assign(fail(code),{diagnostic:error.diagnostic});
     } finally {
       if (credentials) { credentials.account = ""; credentials.password = ""; }
       if (adapter) await adapter.close();
