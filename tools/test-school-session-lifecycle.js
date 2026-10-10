@@ -34,16 +34,17 @@ async function main(){
   for(const file of ["login.js","sync.js","sessionVerifier.js"]){const s=fs.readFileSync(path.join(__dirname,"fosu-sync-client",file),"utf8");assert.ok(!s.includes("ignoreHTTPSErrors: true"));assert.ok(!s.includes("--ignore-certificate-errors"));}
   async function adapterFixture(challenge=false){
     let url="https://authserver.fosu.edu.cn/authserver/login",submitted=0,passwordFills=0,captchaChecks=0;
-    const contexts=[],routes=[];
+    const contexts=[],guards=[];
     const page={url:()=>url,goto:async target=>{url=target;},waitForTimeout:async()=>{},locator:selector=>({
       count:async()=>1,isVisible:async()=>true,innerText:async()=>url.includes("framework")?"教学一体化服务平台":"统一身份认证 账号登录",
       evaluate:async()=>"https://authserver.fosu.edu.cn/authserver/login",fill:async()=>{if(selector==="#password")passwordFills++;},click:async()=>{submitted++;url="https://100.fosu.edu.cn/framework/xsMain.jsp";}
     })};
-    const browser={close:async()=>{},newContext:async options=>{contexts.push(options);return {route:async(_,handler)=>routes.push(handler),newPage:async()=>page,storageState:async()=>({cookies:[],origins:[]}),request:{get:async(target,options)=>{captchaChecks++;assert.equal(options.maxRedirects,0);return {ok:()=>true,url:()=>target,json:async()=>({isNeed:challenge})};}}};}};
+    let aborted=false;
+    const browser={close:async()=>{},newContext:async options=>{contexts.push(options);return {newCDPSession:async()=>({on:(_,fn)=>guards.push(fn),send:async method=>{if(method==="Fetch.failRequest")aborted=true;}}),newPage:async()=>page,storageState:async()=>({cookies:[],origins:[]}),request:{get:async(target,options)=>{captchaChecks++;assert.equal(options.maxRedirects,0);return {ok:()=>true,url:()=>target,json:async()=>({isNeed:challenge})};}}};}};
     const real=await auth.createAdapter(cfg,{chromium:{launch:async options=>{assert.ok(!options.args.some(a=>a.includes("certificate")));return browser;}}});
     if(challenge)await assert.rejects(real.login({account:"fixture-user",password:"synthetic"}),/SECURITY_CHALLENGE/);else await real.login({account:"fixture-user",password:"synthetic"});
     assert.equal(contexts[0].ignoreHTTPSErrors,false);assert.equal(contexts[0].storageState,undefined);assert.equal(captchaChecks,1);assert.equal(submitted,challenge?0:1);assert.equal(passwordFills,challenge?0:1);
-    let aborted=false;await routes[0]({request:()=>({url:()=>"http://100.fosu.edu.cn"}),abort:async()=>{aborted=true;},continue:()=>assert.fail("HTTP school route")});assert.equal(aborted,true);await real.close();
+    guards[0]({requestId:"fixture",resourceType:"Document",request:{url:"http://100.fosu.edu.cn",method:"GET"}});assert.equal(aborted,true);await real.close();
   }
   await adapterFixture(false);await adapterFixture(true);
   // Explicit, read-only check does not read credentials or attempt recovery.

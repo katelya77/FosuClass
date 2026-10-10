@@ -42,6 +42,10 @@ if [[ ! -f $state/browser-runtime.json ]] || ! node -e 'if(require(process.argv[
   "$destination/tools/fosu-sync-client/node_modules/.bin/playwright" install chromium
 fi
 bash "$destination/deploy/wyz/repair-browser.sh" "$destination" --repair
+[[ -f $destination/deploy/wyz/fosu-collector.sh && ! -L $destination/deploy/wyz/fosu-collector.sh ]] || { echo CLI_SOURCE_REQUIRED; exit 1; }
+[[ ! -L /usr/local/bin/fosu-collector ]] || { echo CLI_TARGET_REJECTED; exit 1; }
+[[ ! -e /usr/local/bin/fosu-collector ]] || cmp -s "$destination/deploy/wyz/fosu-collector.sh" /usr/local/bin/fosu-collector || { echo CLI_TARGET_CONFLICT; exit 1; }
+install -m 700 "$destination/deploy/wyz/fosu-collector.sh" /usr/local/bin/fosu-collector
 if [[ -L $base/current && $(readlink -f "$base/current") == "$destination" && -f $receipt ]] && cmp -s "$destination/deploy/wyz/wyz-schedule-collector.service" /etc/systemd/system/wyz-schedule-collector.service && cmp -s "$destination/deploy/wyz/wyz-schedule-collector.timer" /etc/systemd/system/wyz-schedule-collector.timer; then
   echo ALREADY_INSTALLED_COMPLETE
   exit 0

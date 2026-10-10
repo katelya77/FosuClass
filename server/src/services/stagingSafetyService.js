@@ -60,6 +60,7 @@ function validateTermConfig(data, errors) {
 function validateStagingData(data) {
   const errors = [];
   const warnings = [];
+  if (data && data.meta && data.meta.sampleOnly) errors.push("SAMPLE_NOT_PUBLISHABLE");
 
   if (!data || typeof data !== "object") {
     errors.push("Staging data must be a JSON object");

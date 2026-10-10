@@ -18,8 +18,7 @@ prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const SESSION_DIR = path.join(__dirname, ".session");
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
-const MOBILE_SAFARI_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
-const WECHAT_IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
+const { MOBILE_SAFARI_UA, WECHAT_IOS_UA, contextOptions, CAS_SERVICE_URL, AUTH_LOGIN_URL } = require("./schoolLoginProfile");
 const DESKTOP_UA = "";
 const FOSU_LOGIN_UA_MODE = String(process.env.FOSU_LOGIN_UA_MODE || process.env.FOSU_LOGIN_PROFILE || "mobile").toLowerCase() === "desktop" ? "desktop" : "mobile";
 const LOGIN_AUTO = process.argv.includes("--auto") || process.argv.includes("auto") || process.env.FOSU_LOGIN_AUTO === "true";
@@ -86,7 +85,7 @@ async function login() {
   let viewport = undefined;
   if (FOSU_LOGIN_UA_MODE === "mobile") {
     userAgent = process.env.FOSU_LOGIN_UA || process.env.FOSU_IMPORT_MOBILE_UA || WECHAT_IOS_UA || MOBILE_SAFARI_UA;
-    viewport = { width: 390, height: 844, isMobile: true };
+    viewport = { width: 390, height: 844 };
   } else if (process.env.FOSU_LOGIN_UA) {
     userAgent = process.env.FOSU_LOGIN_UA;
   } else if (DESKTOP_UA) {
@@ -125,15 +124,13 @@ async function login() {
   }
 
   const context = await browser.newContext({
+    ...contextOptions(FOSU_LOGIN_UA_MODE, userAgent),
     userAgent,
-    viewport,
-    ignoreHTTPSErrors: false,
+    ...(viewport ? { viewport } : {}),
   });
 
   const page = await context.newPage();
 
-  const CAS_SERVICE_URL = 'https://100.fosu.edu.cn/caslogin.jsp?kstzType=null';
-  const AUTH_LOGIN_URL = 'https://authserver.fosu.edu.cn/authserver/login?type=userNameLogin&service=' + encodeURIComponent(CAS_SERVICE_URL);
 
   console.log(`优先通过账号密码登录页进行登录: ${AUTH_LOGIN_URL} ...`);
   try {

@@ -42,7 +42,16 @@ function client(cfg, fetcher = fetch, options = {}) {
   };
 }
 function validateRun(run) {
-  if (!run || !/^sc-[A-Za-z0-9-]+$/.test(run.id) || !["routine", "full"].includes(run.mode) || !/^[a-f0-9]{48}$/.test(run.claimId || "")) throw failure("RUN_REJECTED");
+  if (!run || !/^sc-[A-Za-z0-9-]+$/.test(run.id) || !["sample", "routine", "full"].includes(run.mode) || !/^[a-f0-9]{48}$/.test(run.claimId || "")) throw failure("RUN_REJECTED");
+  if (run.mode === "sample") {
+    const policy = require("../../server/src/shared/sampleCollectionContract").policy(run.samplePolicy?.kind, run.samplePolicy?.requestBudget);
+    if (run.samplePolicy.entityLimit !== 1 || Date.parse(run.approvalExpiresAt || "") <= Date.now() || !Number.isFinite(Date.parse(run.approvalExpiresAt || ""))) throw failure("SCHOOL_ACCESS_NOT_AUTHORIZED");
+    const tc = run.termConfig || {};
+    if (tc.term !== run.term || !/^\d{4}-\d{2}-\d{2}$/.test(tc.termStartDate || "") || !Number.isInteger(tc.totalWeeks) || tc.totalWeeks < 1 || tc.totalWeeks > 30 || !["monday", "sunday"].includes(tc.weekStart)) throw failure("RUN_TERM_CONFIG_REJECTED");
+    const plan = buildSyncPlan("crawl:scopes", { term: run.term, include: policy.scopes.join(","), "allow-derived": false, "no-publish": true }, {});
+    if (!plan.termValid || plan.upload || plan.activate || plan.allowDerived) throw failure("RUN_PLAN_REJECTED");
+    return plan;
+  }
   const plan = buildSyncPlan("crawl:daily", { term: run.term, "run-id": run.id, "allow-derived": false, "catalog-policy": run.mode === "full" ? "network-only" : "reuse-validated", "progress-policy": "resume", "negative-cache-policy": "ignore", "no-publish": true }, {});
   if (!plan.termValid || plan.upload || plan.activate || plan.allowDerived || ALL_SCOPES.some((scope) => !plan.scopes.includes(scope))) throw failure("RUN_PLAN_REJECTED");
   const tc = run.termConfig || {};
@@ -62,7 +71,18 @@ function executeSync(run, cfg, dir, onChild) {
   const env = {};
   for (const key of ["PATH", "Path", "HOME", "USERPROFILE", "SystemRoot", "TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH", "NODE_PATH"]) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { FOSU_COLLECTOR_MODE: "1", FOSU_SYNC_HEADLESS: "1", FOSU_COLLECTOR_SESSION: cfg.sessionPath, FOSU_SYNC_DATA_DIR: path.join(dir, "client"), FOSU_SYNC_CATALOG_CACHE: path.join(cfg.dataRoot, "catalog"), FOSU_COLLECTOR_PROGRESS_FILE: path.join(dir, "progress.json"), FOSU_COLLECTOR_RESULT_FILE: path.join(dir, "sync-result.json"), SYNC_LOCAL_STAGING_ONLY: "true", SYNC_CLASS_CRAWL_ONLY: "true", SYNC_RESOURCE_DELAY_MIN_MS: "900", SYNC_RESOURCE_DELAY_MAX_MS: "1300", FOSU_API_BASE: cfg.oracle });
+  env.FOSU_COLLECTOR_LOGIN_PROFILE = cfg.loginProfile || "mobile";
   const args = ["tools/fosu-sync-client/sync.js", "crawl:daily", "--term=" + run.term, "--run-id=" + run.id, "--output=" + path.join(dir, "staging.json"), "--catalog-policy=" + (run.mode === "full" ? "network-only" : "reuse-validated"), "--schedule-policy=network-only", "--progress-policy=resume", "--negative-cache-policy=ignore", "--allow-derived=false", "--resource-source=direct", "--class-scope=all", "--concurrency=" + cfg.concurrency, "--delay-ms=900", "--term-start-date=" + run.termConfig.termStartDate, "--total-weeks=" + run.termConfig.totalWeeks, "--week-start=" + run.termConfig.weekStart];
+  if (run.mode === "sample") {
+    const policy = require("../../server/src/shared/sampleCollectionContract").policy(run.samplePolicy.kind, run.samplePolicy.requestBudget);
+    args[1] = "crawl:scopes";
+    args.push("--include=" + policy.scopes.join(","), "--entity-limit=1", "--diagnostic");
+    args[args.findIndex(a => a.startsWith("--catalog-policy="))] = "--catalog-policy=network-only";
+    args[args.findIndex(a => a.startsWith("--progress-policy="))] = "--progress-policy=ignore";
+    args[args.findIndex(a => a.startsWith("--concurrency="))] = "--concurrency=1";
+    env.FOSU_COLLECTOR_SAMPLE_KIND = policy.kind;
+    env.FOSU_COLLECTOR_REQUEST_BUDGET = String(policy.requestBudget);
+  }
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.join(cfg.dataRoot, "catalog"), { recursive: true, mode: 0o700 });
     const command = require("./browserRuntime").workerCommand(process.execPath, args, env, cfg, dir, ROOT);
@@ -125,14 +145,15 @@ async function runOnce(cfg, deps = {}) {
   if (!cfg.execute) return { status: "heartbeat-only" };
   if (deps.signal && deps.signal.aborted) throw recovery.stopped();
   if (!heartbeatRequest.readyToClaim()) return { status: "waiting-for-heartbeat-stability" };
-  const claimed = await request("POST", "/api/full-sync/v1/runs/claim", {});
+  const claimed = await request("POST", "/api/full-sync/v1/runs/claim", deps.claimSelector || {});
   if (!claimed) return { status: "idle" };
   const run = claimed.run;
+  if (deps.claimSelector && (run.id !== deps.claimSelector.runId || run.mode !== deps.claimSelector.mode)) throw failure("RUN_REJECTED");
   validateRun(run);
   const dir = runDirectory(cfg.dataRoot, run.term, run.id);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const started = Date.now();
-  let child, timer, leaseTimer, killTimer, cancelled = false, stopCode, stopProblem, lastLease = Date.now(), tickRunning = false;
+  let child, timer, leaseTimer, killTimer, sessionUnlock, cancelled = false, stopCode, stopProblem, lastLease = Date.now(), tickRunning = false;
   const now = deps.now || Date.now, leaseMs = deps.leaseMs || 90000;
   lastLease = now();
   const leaseControl = new AbortController();
@@ -151,11 +172,12 @@ async function runOnce(cfg, deps = {}) {
   if (deps.signal) deps.signal.addEventListener("abort", onAbort, { once: true });
   const leasedRequest = async (method, route, value, binary = false) => { if (stopCode) throw recovery.error(stopCode, { retryable: false }); const result = await request(method, route, value, binary, { signal: leaseControl.signal }); if (stopCode) throw recovery.error(stopCode, { retryable: false }); return result; };
   let reportQueue = Promise.resolve();
-  const report = (patch) => (reportQueue = reportQueue.catch(() => {}).then(() => leasedRequest("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch))));
+  const report = (patch) => { if (deps.onProgress) deps.onProgress(patch); return (reportQueue = reportQueue.catch(() => {}).then(() => leasedRequest("POST", "/api/full-sync/v1/runs/" + run.id + "/report", Object.assign({ claimId: run.claimId, durationMs: Date.now() - started }, patch)))); };
   writeJsonAtomic(path.join(dir, "state.json"), { runId: run.id, term: run.term, status: "running" });
   try {
     leaseTimer = setInterval(() => { if (now() - lastLease >= leaseMs) stop("COLLECTOR_LEASE_EXPIRED"); }, deps.watchIntervalMs || 1000);
     await report({ stage: "auth-check" });
+    sessionUnlock = acquireLock(cfg.dataRoot, "school-session.lock");
     if (stopCode) throw failure(stopCode);
     timer = setInterval(async () => {
       if (tickRunning) return;
@@ -169,15 +191,15 @@ async function runOnce(cfg, deps = {}) {
       finally { tickRunning = false; }
     }, deps.heartbeatIntervalMs || 30000);
     if (stopCode) throw failure(stopCode);
-    await (deps.ensureSchoolSession || require("./schoolSession").ensureSession)(cfg, { signal:leaseControl.signal });
+    await (deps.ensureSchoolSession || require("./schoolSession").ensureSession)(cfg, { signal:leaseControl.signal, sessionLockHeld:true });
     if (stopCode) throw failure(stopCode);
     (deps.assertSession || assertSession)(cfg.sessionPath);
     if (!fs.existsSync(path.join(dir, "staging.json"))) await (deps.executeSync || executeSync)(run, cfg, dir, (value) => { child = value; if (stopCode) child.kill("SIGTERM"); else if (deps.signal && deps.signal.aborted) onAbort(); });
     if (cancelled) throw failure(stopCode || "CANCELLED");
     await report({ stage: "hash" });
     const data = readJson(path.join(dir, "staging.json"), null);
-    const verified = assertFourSources(data, run.term);
-    if (run.activeCanonicalHash && verified.canonicalHash === run.activeCanonicalHash) {
+    const verified = run.mode === "sample" ? require("../../server/src/shared/sampleCollectionContract").assertSample(data, run.term, run.samplePolicy) : assertFourSources(data, run.term);
+    if (run.mode !== "sample" && run.activeCanonicalHash && verified.canonicalHash === run.activeCanonicalHash) {
       if (timer) clearInterval(timer);
       const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, noChange: true });
       const outcome = completion && completion.run && completion.run.result || "PENDING REVIEW";
@@ -192,6 +214,15 @@ async function runOnce(cfg, deps = {}) {
     if (timer) clearInterval(timer);
     const completion = await report({ complete: true, canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount || 0, uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes });
     const outcome = completion && completion.run && completion.run.result || "PENDING REVIEW";
+    if (run.mode === "sample") {
+      if (outcome !== "PENDING SAMPLE REVIEW") throw failure("SAMPLE_FINALIZE_REQUIRED");
+      const summary = { runId: run.id, term: run.term, mode: "sample", sampleKind: run.samplePolicy.kind, status: "completed", result: outcome,
+        canonicalHash: verified.canonicalHash, directSourceSummary: verified.directSourceSummary, schoolRequestCount: data.meta.actualNetworkRequestCount,
+        uploadId: result.uploadId, stagingRawBytes: result.rawBytes, stagingGzipBytes: result.gzipBytes, published: false, finishedAt: new Date().toISOString() };
+      writeJsonAtomic(path.join(dir, "state.json"), summary);
+      writeJsonAtomic(path.join(cfg.dataRoot, "last-manual-sample.json"), summary);
+      return summary;
+    }
     (deps.promoteRun || promoteRun)(cfg, run, dir, verified);
     writeJsonAtomic(path.join(dir, "state.json"), { runId:run.id,term:run.term,status: "completed", result: outcome,finishedAt:new Date().toISOString() });
     writeJsonAtomic(path.join(cfg.dataRoot, "last-success.json"), { directory: dir, runId: run.id });
@@ -203,7 +234,7 @@ async function runOnce(cfg, deps = {}) {
     writeJsonAtomic(path.join(dir, "state.json"), { runId:run.id,term:run.term,status: "failed", code,finishedAt:new Date().toISOString() });
     pruneRuns(cfg.dataRoot, dir, readJson(path.join(cfg.dataRoot, "last-success.json"), {}).directory);
     throw Object.assign(failure(code), { retryable: stopProblem ? stopProblem.retryable : error.retryable, errorCategory: stopProblem ? stopProblem.errorCategory : error.errorCategory });
-  } finally { leaseControl.abort(); if (timer) clearInterval(timer); if (leaseTimer) clearInterval(leaseTimer); if (killTimer) clearTimeout(killTimer); if (deps.signal) deps.signal.removeEventListener("abort", onAbort); }
+  } finally { leaseControl.abort(); if (timer) clearInterval(timer); if (leaseTimer) clearInterval(leaseTimer); if (killTimer) clearTimeout(killTimer); if (sessionUnlock) sessionUnlock(); if (deps.signal) deps.signal.removeEventListener("abort", onAbort); }
 }
 async function runLoop(cfg, deps = {}) {
   const request = deps.request || client(cfg, deps.fetcher || fetch, { signal: deps.signal });

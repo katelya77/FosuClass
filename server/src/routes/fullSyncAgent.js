@@ -18,8 +18,14 @@ router.post("/heartbeat", requireAgent, (req, res) => {
   res.json(collector.heartbeat(req.fullSyncAgentId, Date.now(), req.body || {}));
 });
 
+router.get("/status", requireAgent, (req, res) => {
+  const status = collector.snapshot();
+  res.json({ protocol: "collector-manual.v1", status });
+});
 router.post("/runs/claim", requireAgent, (req, res) => {
-  const run = collector.claim(req.fullSyncAgentId);
+  const selector = req.body || {};
+  if (Object.keys(selector).some(k => !["runId", "mode"].includes(k)) || selector.runId && !/^sc-[A-Za-z0-9-]+$/.test(selector.runId) || selector.mode && !["sample", "routine", "full"].includes(selector.mode)) return res.status(400).end();
+  const run = collector.claim(req.fullSyncAgentId, undefined, selector);
   if (!run) return res.status(204).end();
   return res.json({ run });
 });

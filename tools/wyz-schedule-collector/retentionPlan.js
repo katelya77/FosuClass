@@ -21,7 +21,7 @@ function plan(root,current,lastSuccess,options={}){
     item.protection=[];
     if(references.has(path.resolve(item.path)))item.protection.push("referenced-or-term-recovery");
     if(!["completed","cancelled","failed"].includes(item.status))item.protection.push("non-terminal-or-unknown");
-    if(item.result==="PENDING REVIEW")item.protection.push("pending-review");
+    if(["PENDING REVIEW","PENDING SAMPLE REVIEW"].includes(item.result))item.protection.push("pending-review");
     if(!item.finishedAt||now-item.finishedAt<age)item.protection.push("unconfirmed-finish-or-retention");
     if(item.unsafe)item.protection.push("symlink-detected");
     if(options.referencesComplete!==true)item.protection.push("external-references-not-attested");

@@ -319,6 +319,7 @@ async function runStagingPublish(input = {}, job) {
 
   if (job) job.progress(12, "loading snapshot");
   const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
+  if (stagingData.meta?.sampleOnly) throw Object.assign(new Error("SAMPLE_NOT_PUBLISHABLE"), { code:"SAMPLE_NOT_PUBLISHABLE",statusCode:400 });
   if (stagingData.meta && stagingData.meta.requireFourDirectSources) require("../shared/fourDirectSourceContract").assertFourSources(stagingData, stagingData.term || stagingData.semester);
   const activeSnapshot = releaseService.readActiveReleaseSnapshot();
   const reviewedActiveVersion = activeSnapshot && (activeSnapshot.releaseVersion || activeSnapshot.version) || "";
