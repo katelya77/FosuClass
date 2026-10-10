@@ -25,7 +25,38 @@
 
 ## PR #88 安装后：CAS 移动登录修复候选
 
-最新用户 PAM 证据：已安装 `df4ed1e985630002f614d37db246a76dcaad65a8`；STAGE_A_INSTALL_PASS、Collector active/NRestarts=0、个人 Agent active、timer disabled。一轮 mobile 真实登录返回 SCHOOL_LOGIN_FORM_CHANGED，未建立 Session。以上为用户回传，本轮没有重新访问学校、Oracle 或 CloudBase。
+### PR #89：升级后的 ExecStart 误判修复
+
+用户最新 PAM 回传：`6eea0ec099930f40d16cd3f0ea641e3572f9c675` 已通过 SOURCE_INTEGRITY、依赖安装和 NATIVE_BROWSER，current 已切换；旧交付辅助脚本报 INSTALL_FAILED_COLLECTOR_STOPPED_USE_REVIEWED_ROLLBACK，Collector inactive、个人 Agent active、timer disabled。本次没有安装 WYZ；用户先独立恢复已安装版本，实际恢复输出尚待回传。此前 60 分钟 HMAC 心跳验收仍保留，不因安装辅助脚本故障重复进行网络诊断。
+
+旧脚本在停止服务、安装器 daemon-reload 后，以完整 `systemctl show ... -p ExecStart --value` 与停止前快照作字符串相等判断。该属性包含命令与运行记录，停止会更新 stop_time/code/status，reload/start 可改变时间和 PID。隔离 Linux 中执行旧交付脚本及真实安装器，已复现“安装成功、current 已切换、尚未 start 就误判”的路径；另以本地真实 systemd 临时 sleep unit 证明：命令参数不变，完整属性仍不相等。没有读取 WYZ 的原始属性，不能声称已远程确认具体哪个运行字段发生变化。
+
+新 `deploy/wyz/upgrade-candidate.sh` 纳入版本控制，与 CI、交付包共用。它读取包内 `upgrade-candidate.json` 的 fromRevision/revision/bundle/sha256，验证 archive 哈希、四份执行辅助文件与 archive 字节相等、current 前驱指纹及升级锁，保留 root-only unit/drop-in/current 备份后停止 Collector。安装器原有校验全部保留。
+
+`check-heartbeat-service.py` 通过 systemd D-Bus 的类型化 ExecStart 数组验证唯一 executable 和逐个 argv，而非拆分拼接后的文本：必须是 `/usr/bin/env`、`FOSU_COLLECTOR_EXECUTE=0`、`/usr/bin/node`、受保护的 `acceptance/heartbeat-only-runner.js`，且 ignore-failure=false。不接收额外参数、多个命令或替代 runner。WorkingDirectory 必须为 managed current；额外执行 hook 拒绝；timer loaded/disabled/inactive/dead；个人 Agent active/running，双方无启动/停止依赖关联。runner 权限为 root:root 0600，相关目录 0700。升级前后的 runner 哈希与个人 Agent 有效命令哈希必须一致；不读取密码、env 或 Session，不输出命令原文。
+
+该门禁在升级前、停止后、reload 后启动前、启动后和最终返回前分别运行。启动后连续 5 秒检查 active/running、Result=success、NRestarts=0；这是本机服务稳定性检查，不冒充新的网络/HMAC验收。运行身份比较排除 PID/时间戳/退出记录。失败输出 `INSTALL_FAILED gate=<阶段> exit=<退出码> collector_state=<实际状态> recovery=<恢复要求>`；校验器另输出 `HEARTBEAT_GATE_FAILED gate=<具体子门禁>`。若本次尚未开始修改则保持原服务；开始修改后失败只停止 Collector，不自动回滚，不改个人 Agent/timer。
+
+可重复构建（仅源码与本地包，不安装）：
+
+```text
+node tools/wyz-schedule-collector/build-package.js
+python tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision 6eea0ec099930f40d16cd3f0ea641e3572f9c675
+```
+
+新包全部源码与 Git HEAD 逐字节比对；不再从本地未跟踪的 Python 字符串生成升级脚本。当前任务不要求再次安装。用户已按原 heartbeat-only 门禁恢复 6ee 后，可经 PAM 传入已审查的新校验器，仅做只读核查（无学校访问/凭据输入/服务变更）：
+
+```bash
+python3 check-heartbeat-service.py --state active --health
+```
+
+未来另行批准升级时，在经 SHA256 核对并审查的 root-only 新包目录执行 `bash upgrade-candidate.sh --approve-install`。必须与 manifest 的 fromRevision 匹配；不支持对半完成的旧升级自动重试。保留 `BACKUP_PATH` 和 `rollback-backup.path`。未知 busctl 格式、缺少工具或任何 Gate 失败均停止，不能删掉门禁来恢复。
+
+新辅助脚本失败后的代码回滚需另行批准。先人工核对 `BACKUP_PATH` 为本次 root-only `cas-mobile-backup-<UTC时间>`、其中 current.txt 等于 manifest 的 fromRevision 路径、目标 release 存在且不是 symlink，并确认 timer disabled/inactive、个人 Agent active。随后只停止 Collector，以本包原有 `rollback-schedule-collector.sh` 恢复 previous-install 指向（安装未完成时应人工核对 current.txt 并原子恢复 symlink），恢复备份 service/timer/drop-in，执行 daemon-reload。**先用本包校验器 `--state inactive --baseline "$backup/heartbeat-signatures.json"` 通过，才允许人工 start Collector，再执行 `--state active --health --baseline ...`。** Gate 不通过则保持停止，交由人工审查；保留 Session、auth-state、checkpoint、所有 Release，不恢复或删除认证历史。不把含私密信息的备份回传聊天。
+
+本轮自动证据：隔离 Linux 完整升级/安装器 fixture 与真实本地 systemd 临时 unit；均不是 WYZ 安装验收。学校登录、sample、Oracle/CloudBase active、定时器、个人 Agent、微信发布和费用没有变化，仍受各自人工门禁约束。
+
+此前 PR #88 用户 PAM 证据：已安装 `df4ed1e985630002f614d37db246a76dcaad65a8`；STAGE_A_INSTALL_PASS、Collector active/NRestarts=0、个人 Agent active、timer disabled。一轮 mobile 真实登录返回 SCHOOL_LOGIN_FORM_CHANGED，未建立 Session。以上为用户回传，本轮没有重新访问学校、Oracle 或 CloudBase。
 
 修复候选延续 #88；详见 [CAS 修复记录](wyz-cas-mobile-repair.md)。mobile 现在映射 mobile-wechat，与 Windows 默认一致；显式 mobile-safari 仍可用。新增 auth-state 只读本机、diagnose-login 只检查获批的公开 CAS 页。旧错误码的直接触发点都在密码填写/点击前；不能据此退还旧计数，真实页面触发点待单独批准诊断。
 

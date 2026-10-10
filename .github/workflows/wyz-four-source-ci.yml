@@ -48,7 +48,9 @@ jobs:
       - run: node tools/test-full-sync-env-persistence.js
       - run: python3 tools/test-collector-archive.py
       - run: sudo "$(command -v node)" tools/test-collector-install-linux.js
-      - run: bash -n deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh deploy/wyz/accept-oracle-direct.sh deploy/wyz/audit-oracle-origin-security.sh deploy/wyz/audit-oracle-control-sockets.sh
+      - run: sudo python3 tools/test-collector-upgrade-linux.py
+      - run: sudo python3 tools/test-heartbeat-systemd.py
+      - run: bash -n deploy/wyz/upgrade-candidate.sh deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh deploy/wyz/accept-oracle-direct.sh deploy/wyz/audit-oracle-origin-security.sh deploy/wyz/audit-oracle-control-sockets.sh
       - run: node tools/wyz-schedule-collector/browser-smoke.js
       - run: npm run test:wyz-four-source
       - run: npm run test:collector-personal-regression
