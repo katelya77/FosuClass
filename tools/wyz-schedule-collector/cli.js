@@ -10,7 +10,7 @@ const HELP = `佛课小表 WYZ 手动入口
   fosu-collector diagnose-login --approve-school-access [--login-profile=mobile]
   fosu-collector login [--login-profile=mobile|desktop] [--approve-school-access]
   fosu-collector manual-sync [--mode=sample] [--sample-kind=class|four] [--run-id=sc-…]
-      [--login-profile=mobile|desktop] [--approve-school-access]
+      [--login-profile=mobile|desktop] --approve-school-access
   fosu-collector inspect
 账号和密码只从 PAM TTY 隐藏输入。mobile 映射 mobile-wechat（与 Windows 默认一致）。
 可选 mobile-safari / mobile-wechat / desktop；均为 Chromium 配置，并非原生 iOS 验收。
@@ -18,6 +18,7 @@ diagnose-login 只访问公开 CAS 页，不读取凭据、不执行账号预检
 表单就绪与网络兼容性分别报告；未知后台 POST 会被阻断并返回待审核，不能继续登录。
 auth-state 只读本机冷却和提交预算；旧计数无请求证据，保守保留。
 sample 必须先由 Oracle 管理员创建限期、有界任务；不会发布或替换正式 Staging。
+sample 只复用既有有效 Session；缺失/失效立即停止，需要单独批准 login，不读取凭据。
 阶段 A 的 routine/full 锁定，等待真实权限与覆盖验收。所有真实访问须单独批准。
 status 默认只读本机与 Oracle；检查学校 Session 需要 --check-session 和授权。
 认证失败后不会自动重试；人工处理后可加 --acknowledge-auth-failure（冷却/日限仍生效）。
@@ -130,6 +131,30 @@ function sampleView(value) {
   }
   return result;
 }
+function sampleReadinessView(value) {
+  const ready=value?.protocol==="collector-manual.v1"&&value.ready===true&&value.sampleOnly===true&&value.publishable===false&&value.coverageValid===false&&value.entityLimit===1&&value.maxRequestBudget===120&&value.leaseTtlMs===120000&&value.approvalTtlMs===1800000&&JSON.stringify(value.sampleKinds)===JSON.stringify(["class","four"]);
+  const output={oracleSampleReady:ready,oracleSampleCode:/^[A-Z0-9_]{1,80}$/.test(value?.code||"")?value.code:ready?"SAMPLE_READY":"STAGING_SAMPLE_API_UNAVAILABLE"};
+  if(value?.protocol==="collector-manual.v1"){
+    output.oracleSampleProtocol=value.protocol;
+    output.oracleSampleKinds=Array.isArray(value.sampleKinds)?value.sampleKinds.filter(kind=>["class","four"].includes(kind)):[];
+    for(const key of ["entityLimit","maxRequestBudget","leaseTtlMs","approvalTtlMs"])if(Number.isSafeInteger(value[key])&&value[key]>=0)output[key]=value[key];
+    for(const key of ["sampleOnly","publishable","coverageValid"])output[key]=typeof value[key]==="boolean"?value[key]:null;
+    output.authenticatedRead=true;
+  }
+  return output;
+}
+function sampleReviewView(value) {
+  if(value?.protocol!=="collector-manual.v1"||!value.review||!/^sc-[A-Za-z0-9-]+$/.test(value.review.runId||""))return null;
+  const review=value.review,output={runId:review.runId,authenticatedRead:true,ownershipConfirmed:review.ownershipConfirmed===true};
+  for(const key of ["canonicalHash"])if(/^[a-f0-9]{64}$/.test(review[key]||""))output[key]=review[key];
+  if(/^[A-Za-z0-9_-]{1,128}$/.test(review.uploadId||""))output.uploadId=review.uploadId;
+  if(["class","four"].includes(review.sampleKind))output.sampleKind=review.sampleKind;
+  for(const key of ["schoolRequestCount","requestBudget"])if(Number.isSafeInteger(review[key])&&review[key]>=0)output[key]=review[key];
+  for(const [key,allowed] of Object.entries({result:["PENDING SAMPLE REVIEW"],stagingState:["sample-review"],releaseState:["not-built"],runtimeState:["inactive"]}))if(allowed.includes(review[key]))output[key]=review[key];
+  for(const key of ["sampleOnly","publishable","coverageValid"])output[key]=typeof review[key]==="boolean"?review[key]:null;
+  output.directSourceSummary=sampleView({runId:review.runId,mode:"sample",directSourceSummary:review.directSourceSummary}).directSourceSummary;
+  return output;
+}
 function connection(deps) {
   if (deps.connection) return deps.connection();
   const env = require("./credentials").readEnvFile("/etc/fosuclass/full-sync.env");
@@ -177,7 +202,12 @@ async function main(args = process.argv.slice(2), deps = {}) {
   if (options.command === "status") {
     const status = localStatus(cfg,ctx);
     let conn;
-    try { conn=connection(ctx); const remote = await conn.request("GET","/api/full-sync/v1/status"); status.oracleProtocol=remote.protocol; status.lastFullCollectionAt=remote.status?.lastSuccessAt || null;status.recent=remote.status?.recent; }
+    try { conn=connection(ctx); const remote = await conn.request("GET","/api/full-sync/v1/status"); status.oracleProtocol=remote.protocol; status.lastFullCollectionAt=remote.status?.lastSuccessAt || null;status.recent=remote.status?.recent;
+      // The optional readiness endpoint may be absent on the deployed ancestor.
+      // Keep the installed/local status visible and report this gate separately.
+      try{Object.assign(status,sampleReadinessView(await conn.request("GET","/api/full-sync/v1/sample/readiness")));}
+      catch(error){status.oracleSampleReady=false;status.oracleSampleCode=errorCode(error);}
+    }
     catch (error) { status.oracleStatus="UNVERIFIED"; status.oracleCode=errorCode(error); }
     finally { if(conn)conn.close(); }
     if (options.checkSession) {
@@ -196,9 +226,13 @@ async function main(args = process.argv.slice(2), deps = {}) {
     try{
       conn=connection(ctx);const remote=await conn.request("GET","/api/full-sync/v1/status");
       if(remote.protocol!=="collector-manual.v1")throw fail("STAGING_SAMPLE_API_UNAVAILABLE");
-      const run=(remote.status?.recent||[]).find(r=>r.id===value?.runId);
-      inspection.oracleStagingStatus=run?.result||"NO_MATCHING_RUN";
-      inspection.uploadMatches=Boolean(run&&run.uploadId===value?.uploadId);
+      if(value){
+        const review=sampleReviewView(await conn.request("GET","/api/full-sync/v1/runs/"+value.runId+"/sample-review"));
+        inspection.oracleSampleReview=review;
+        inspection.oracleStagingStatus=review?.result||"NO_MATCHING_RUN";
+        inspection.uploadMatches=Boolean(review&&review.ownershipConfirmed&&review.runId===value.runId&&review.uploadId===value.uploadId);
+        inspection.canonicalHashMatches=Boolean(review&&review.canonicalHash===value.canonicalHash);
+      }else inspection.oracleStagingStatus="NO_SAMPLE";
     }catch(error){inspection.oracleCode=errorCode(error);}finally{if(conn)conn.close();}
     output(inspection);
     return value;
@@ -220,9 +254,13 @@ async function main(args = process.argv.slice(2), deps = {}) {
         !Number.isFinite(Date.parse(queued.approvalExpiresAt || "")) || Date.parse(queued.approvalExpiresAt) <= Date.now() ||
         remote.status.enabled !== true || remote.status.stopForDay || queued.stage !== "idle") throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
     require("../../server/src/shared/sampleCollectionContract").policy(queued.samplePolicy.kind,queued.samplePolicy.requestBudget);
+    if(!options.approved)throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
     output("阶段 1/6：Oracle 已审核 sample 任务 " + queued.id + "；每类一个请求目标，预算 " + queued.samplePolicy.requestBudget + " 次。班级接口的一个目标是专业/年级请求组。");
     if (await ctx.ask("确认本次 sample 范围并上传私有审核记录，输入 SAMPLE " + options.sampleKind + ": ") !== "SAMPLE " + options.sampleKind) throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
-    await login(cfg,options,ctx);
+    output("阶段 2/6：只检查并复用既有学校 Session；本次 sample 不读取账号密码、不执行登录。");
+    const checked=await auth.checkSession(cfg,{...deps.authDeps,signal:deps.signal,approved:true});
+    if(checked.status!=="SESSION_VALID")throw fail("SCHOOL_SESSION_EXPIRED");
+    output("阶段 3/6：既有 Session 有效；不会修改认证预算或重新提交密码。");
     output("阶段 4/6：领取指定 sample 租约，低频直采；不会自动重新登录。");
     let previousProgress;
     const result=await collector.runOnce({...conn.cfg,...cfg,execute:true,concurrency:1},{
@@ -239,8 +277,13 @@ async function run(args, deps = {}) {
   const control = new AbortController(), stop=()=>control.abort();
   process.once("SIGINT",stop);process.once("SIGTERM",stop);
   try { return await main(args,{...deps,signal:control.signal}); }
-  catch(error) { const code=errorCode(error); (deps.errorOutput || console.error)(JSON.stringify({status:"failed",code,message:MESSAGES[code] || "操作失败，已停止；请按错误码检查环境或权限。",...(error.diagnostic?{diagnostic:error.diagnostic}:{})})); process.exitCode=code==="COLLECTOR_STOPPED"?130:1; }
+  catch(error) { const code=errorCode(error); (deps.errorOutput || console.error)(JSON.stringify({status:"failed",code,message:MESSAGES[code] || "操作失败，已停止；请按错误码检查环境或权限。",...(error.diagnostic?{diagnostic:error.diagnostic}:{})}));
+    // PAM may tee stdout while stdin/stderr remain interactive TTYs. Include a
+    // minimal terminal outcome in that safe receipt, without prompts or secrets.
+    (deps.output || (value=>console.log(JSON.stringify(value))))({status:"failed",code:/^[A-Z0-9_]{1,80}$/.test(code)?code:"CLI_OPERATION_FAILED"});
+    process.exitCode=code==="COLLECTOR_STOPPED"?130:1;
+  }
   finally { process.removeListener("SIGINT",stop);process.removeListener("SIGTERM",stop); }
 }
 if(require.main===module)run(process.argv.slice(2));
-module.exports={main,run,parse,errorCode,localStatus,HELP,MESSAGES};
+module.exports={main,run,parse,errorCode,localStatus,sampleReadinessView,sampleReviewView,HELP,MESSAGES};

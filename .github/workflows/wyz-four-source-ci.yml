@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55]
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # regression loads the real b1 deployed transport factory
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -25,12 +26,14 @@ jobs:
       - run: sudo "$(command -v node)" tools/test-collector-oracle-transport.js
       - run: sudo "$(command -v node)" tools/test-school-session-lifecycle.js
       - run: sudo "$(command -v node)" tools/test-collector-manual-cli.js
+      - run: sudo "$(command -v node)" tools/test-collector-closure-acceptance.js
       - run: sudo "$(command -v node)" tools/test-collector-auth-evidence.js
       - run: sudo "$(command -v node)" tools/test-collector-sample-contract.js
       - run: node tools/test-collector-sample-request-budget.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-login-browser-fixture.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-mobile.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-post-policy.js
+      - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-public-audit.js
       - run: sudo python3 tools/test-school-recovery-consent.py
       - run: python3 tools/test-oracle-direct-observation.py
       - run: python3 tools/test-oracle-direct-diagnosis.py
@@ -59,11 +62,25 @@ jobs:
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
+      - name: Package the exact committed CAS candidate
+        run: |
+          node tools/wyz-schedule-collector/build-package.js
+          python3 tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision=6fe02a552e7511bc27a2f4751db302ebb7a8e001
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cas-sample-source-candidate
+          path: |
+            .local/collector-packages/wyz-schedule-collector-*.tar.gz*
+            .local/collector-packages/heartbeat-upgrade-*.zip*
+          if-no-files-found: error
   windows-compatibility:
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -74,6 +91,8 @@ jobs:
       - run: npx --prefix tools/fosu-sync-client playwright install chromium
       - run: node tools/test-collector-cas-mobile.js
       - run: node tools/test-collector-cas-post-policy.js
+      - run: node tools/test-collector-cas-public-audit.js
+      - run: node tools/test-collector-closure-acceptance.js
       - run: npm run test:collector-personal-regression
       - run: python tools/test-collector-delivery.py
   isolated-browser:
@@ -81,6 +100,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Build version-matched isolated worker
         run: |
           version=$(node -p "require('./tools/fosu-sync-client/package-lock.json').packages['node_modules/playwright'].version")
