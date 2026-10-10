@@ -31,7 +31,11 @@ sudo node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" \
   --app-dir="$APP_DIR" --runtime-dir="$RUNTIME_DIR" --manifest="$MANIFEST"
 ```
 
-必须 PASS：在线 SHA 与镜像标签均为 a3dfd198、容器 healthy、原镜像仍在、既有个人 Broker 签名 GET health 成功、没有任何运行/排队作业和 Collector 租约、旧 JSON 可读兼容、备份空间足够、内外 active 一致。检查复用 Oracle 本机现有个人 Agent 凭据，只调用固定 `/api/campus-agent/v1/health`，不领取任务、不发 heartbeat、不改凭据；缺失或与 Collector 凭据混用直接 BLOCKED。输出仅版本、受保护文件 hash、原镜像身份、状态。状态损坏不得清除/重置；有在途任务则等待，不中断个人 Agent。
+必须 PASS：在线 SHA 与容器及实际镜像标签均为 a3dfd198、容器 healthy、原镜像仍在、既有个人 Broker 签名 GET health 成功、受保护 `/api/admin/campus-sync/snapshot` 的真实 queued/processing/active 均为0、没有 Collector 租约、旧 JSON 可读兼容、备份空间足够、内外 active/四索引一致。签名 health 只证明鉴权可用，不能代替空闲证明。缺失快照字段或任何在途任务直接 BLOCKED；等待终态，不中断 WYZ 个人 Agent。
+
+预检还锁定容器实际 Compose project/working_dir/config_files/env-file、解析后的环境/端口/挂载/网络与运行配置。`APP_DIR/server/storage` 和 `RUNTIME_DIR` 必须对应实际 bind mount；不会因为传入目录可读就猜测它是生产数据。实际 `FOSU_DATA_DIR` 必须落在现有持久 mount 内，且由本次 storage 备份覆盖。原 Dockerfile 默认 `/app/data`、原 Compose 没有该 data mount：若现网没有已有 override 或 env 将其安全持久化，结果为 `RUNTIME_DATA_NOT_PERSISTENT` / `UNBACKED_DATA_DIR`，需单独状态保留方案审批；本候选不加 mount、不迁移数据。输出只有版本、hash、原镜像身份与布尔状态，不打印私有目录、配置或凭据。
+
+只读空闲快照不能阻止检查后出现新任务。实际切换另需批准短维护窗口，包含既有受保护后台 `/api/admin/campus-sync/actions/pause` / `resume` 的个人任务入站门禁、保存及恢复原 pause 状态。操作员通过现有后台确认/Origin/CSRF/scope/审计入口执行，不用无鉴权 curl 代替；先记录原 `personalAdmissionPaused`，仅当原状态为 false 才在窗口开始暂停新请求，等待 active=0。WYZ 个人 Agent 服务保持 active。未批准入站门禁则实际部署仍 BLOCKED，不能以连续两次空闲检查替代。
 
 ## 经单独部署批准后的操作顺序
 
@@ -87,66 +91,114 @@ sudo node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" \
 CAS 候选的 WYZ 回滚独立：使用既有 `rollback-schedule-collector.sh` 回到安装前的 `6fe02a55`，保留本地 Session 与认证预算，保持 execute=0/timer disabled/个人 Agent active；无需回滚 Oracle Sample 服务。详见另一候选的 CAS 手册。
 
 
-## 审批后可复制的备份与代码回滚
+## 审批后可复制的备份、部署与代码回滚
 
-以下为另行 Oracle 部署批准后的操作，当前不执行。先取得同一 Git 提交的 source receipt、ARM image 及 `SHA256SUMS`，在 PAM 校验两个 archive；使用原 Compose 配置，不能拿旧未提交包或 main 整树代替。`APP_DIR`/`RUNTIME_DIR` 延续上述主机配置。已通过的 preflight 写入 `deploy-before.json`，其中 `rollbackImage` 是原镜像实际 image ID；现在没有生产主机读取，不能预先虚构此值或备份成功。
+以下命令只在另行批准的 Oracle 部署及短维护窗口执行，本轮不执行。source receipt、source archive、ARM image archive 必须属于同一已批准且 CI 通过的完整提交；旧未提交包不可使用。`APP_DIR`/`RUNTIME_DIR` 延续主机既有配置，`IMAGE_DIR` 是 CI ARM artifact 目录，包含 image archive、`image-inspect.json`、`commit.txt`、`SHA256SUMS`。旧镜像、实际挂载及备份现在未知，不能预填成功证据。
 
-代码和一致性状态备份（root TTY；输出不含 env 内容）：
+先保存窗口前只读结果的原 `personalAdmissionPaused`。经单独批准，由操作员通过既有受保护后台 pause/resume 入口建立入站门禁，保留 Origin/CSRF/scope/审计，等待个人队列和 Collector 租约归零；不改 WYZ 个人 Agent 服务。`deploy-before.json` 在门禁建立后生成，贯穿备份、切换、验收及回滚。恢复原 pause 设置会改变 control 时间戳及审计，属于窗口结束的显式动作；恢复后另存健康结果，不能把新 control hash 冒充为暂停前字节相等。
+
+一致性备份（root TTY，Node >=20）：
 
 ```bash
 set -Eeuo pipefail
 umask 077
+: "${APP_DIR:?原应用目录}" "${RUNTIME_DIR:?原runtime目录}" "${CANDIDATE_DIR:?已审核候选}" "${MANIFEST:?同提交receipt}"
 BACKUP=/root/fosu-oracle-sample-backup/$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p -m 700 /root/fosu-oracle-sample-backup
 mkdir -m 700 "$BACKUP"
+node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" --app-dir="$APP_DIR" --runtime-dir="$RUNTIME_DIR" --manifest="$MANIFEST" > "$BACKUP/deploy-before.json"
+node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1])); if(p.status!=="PASS"||p.personalAdmissionPaused!==true) process.exit(2)' "$BACKUP/deploy-before.json"
 OLD_IMAGE=$(docker inspect --format '{{.Image}}' fosuclass-api)
 docker image inspect "$OLD_IMAGE" >/dev/null
 docker image save "$OLD_IMAGE" | gzip -n > "$BACKUP/previous-image.tar.gz"
-printf '%s
-' "$OLD_IMAGE" > "$BACKUP/previous-image-id.txt"
+printf '%s\n' "$OLD_IMAGE" > "$BACKUP/previous-image-id.txt"
+docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' fosuclass-api > "$BACKUP/compose-project.txt"
+docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' fosuclass-api > "$BACKUP/compose-working-dir.txt"
 docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' fosuclass-api > "$BACKUP/compose-config-files.txt"
+docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.environment_file" }}' fosuclass-api > "$BACKUP/compose-env-files.txt"
+PROJECT_DIR=$(cat "$BACKUP/compose-working-dir.txt")
+ENV_FILES=$(cat "$BACKUP/compose-env-files.txt")
+if [[ -z $ENV_FILES || $ENV_FILES == '<no value>' ]]; then printf '%s\n' "$PROJECT_DIR/.env" > "$BACKUP/compose-env-files.txt"; fi
 IFS=',' read -r -a ORIG_COMPOSE_FILES < "$BACKUP/compose-config-files.txt"
-(( ${#ORIG_COMPOSE_FILES[@]} > 0 ))
 for i in "${!ORIG_COMPOSE_FILES[@]}"; do
   [[ ${ORIG_COMPOSE_FILES[$i]} == /* && -f ${ORIG_COMPOSE_FILES[$i]} && ! -L ${ORIG_COMPOSE_FILES[$i]} ]] || exit 1
   cp -- "${ORIG_COMPOSE_FILES[$i]}" "$BACKUP/compose-$i.yml"
 done
+IFS=',' read -r -a ORIG_ENV_FILES < "$BACKUP/compose-env-files.txt"
+for i in "${!ORIG_ENV_FILES[@]}"; do
+  [[ ${ORIG_ENV_FILES[$i]} == /* && -f ${ORIG_ENV_FILES[$i]} && ! -L ${ORIG_ENV_FILES[$i]} ]] || exit 1
+  cp -- "${ORIG_ENV_FILES[$i]}" "$BACKUP/compose-env-$i.env"
+done
 cp -- "$APP_DIR/server/.env" "$BACKUP/previous.env"
-cp -- deploy-before.json "$BACKUP/deploy-before.json"
-trap 'docker unpause fosuclass-api >/dev/null 2>&1 || true' EXIT
-# preflight 已证明无任务/租约；暂停 API 只为获得一致性快照，不停止个人 Agent。
+trap 'docker unpause fosuclass-api >/dev/null 2>&1 || true' EXIT INT TERM HUP
 docker pause fosuclass-api >/dev/null
 tar -czf "$BACKUP/state.tar.gz" -C "$APP_DIR/server" storage .env
 docker unpause fosuclass-api >/dev/null
-trap - EXIT
+trap - EXIT INT TERM HUP
 tar -tzf "$BACKUP/state.tar.gz" >/dev/null
-sha256sum "$BACKUP/previous-image.tar.gz" "$BACKUP/state.tar.gz" > "$BACKUP/SHA256SUMS"
+(cd "$BACKUP"; sha256sum previous-image.tar.gz state.tar.gz previous-image-id.txt previous.env deploy-before.json compose-*.txt compose-*.yml compose-env-*.env > SHA256SUMS)
 chmod 600 "$BACKUP"/*
-printf 'ORACLE_BACKUP_CREATED_VERIFY_BEFORE_DEPLOY
-'
+printf 'ORACLE_BACKUP_CREATED_VERIFY_BEFORE_DEPLOY\n'
 ```
 
-这段不删除旧备份、不轮转历史。需要核对现网 Compose override 已保存、镜像与快照校验成功后，才允许实际切换。新镜像先校验 CI archive hash 再 `docker load`；本次 override 只设 `image: fosu-oracle-sample:<候选完整SHA>`、`pull_policy: never`、`environment.FOSU_DEPLOY_COMMIT_SHA: <同一SHA>`。镜像 tag 的 OCI revision 必须匹配，禁止 pull main/latest。继续使用原 Compose 加原现网 override，再加本次受审阅 override，仅重建 `fosu-api`。
+这段不删除备份或历史。实际 data dir 只有由 storage 持久挂载覆盖才会通过预检；若位于可写镜像层或另一个尚未纳入备份的 data mount，先 BLOCKED 并准备单独状态保留方案，不复制空目录掩盖风险。
 
-独立代码回滚时，先停止新 Sample 创建、确认无在途任务/租约，不自动恢复状态快照：
+同一维护窗口内加载已验证 ARM 镜像，只重建 `fosu-api`。CI checksum 可能包含构建时目录前缀，下面按唯一 archive basename 核对实际文件；仍须与审核的 CI run/交付 SHA256 对照。Compose project/working_dir/env-file 从实际容器记录读取，全部原配置使用私有备份副本；新 override 只设置 image ID、pull policy 与同一 SHA。
 
 ```bash
 set -Eeuo pipefail
-: "${BACKUP:?选择本次已校验备份}"
-: "${APP_DIR:?原应用目录}"
-sha256sum -c "$BACKUP/SHA256SUMS"
-OLD_IMAGE=$(cat "$BACKUP/previous-image-id.txt")
-docker image inspect "$OLD_IMAGE" >/dev/null || docker load -i "$BACKUP/previous-image.tar.gz"
-ROLLBACK_COMPOSE_ARGS=()
+: "${BACKUP:?本次已校验备份}" "${IMAGE_DIR:?同提交的CI ARM artifact}" "${CANDIDATE_SHA:?已批准且CI通过的完整SHA}"
+[[ $CANDIDATE_SHA =~ ^[a-f0-9]{40}$ ]]
+(cd "$BACKUP"; sha256sum -c SHA256SUMS)
+[[ $(cat "$IMAGE_DIR/commit.txt") == "$CANDIDATE_SHA" ]]
+IMAGE_ARCHIVE="$IMAGE_DIR/fosu-oracle-sample-$CANDIDATE_SHA-arm64.image.tar.gz"
+IMAGE_SHA=$(awk -v wanted="$(basename "$IMAGE_ARCHIVE")" '{ name=$2; sub(/^.*\//,"",name); if(name==wanted) print $1 }' "$IMAGE_DIR/SHA256SUMS")
+[[ $IMAGE_SHA =~ ^[a-f0-9]{64}$ ]]
+printf '%s  %s\n' "$IMAGE_SHA" "$IMAGE_ARCHIVE" | sha256sum -c -
+docker load -i "$IMAGE_ARCHIVE" > "$BACKUP/candidate-image-load.txt"
+IMAGE_REF="fosu-oracle-sample:$CANDIDATE_SHA"
+[[ $(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE_REF") == "$CANDIDATE_SHA" ]]
+[[ $(docker image inspect --format '{{.Architecture}}' "$IMAGE_REF") == arm64 ]]
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")
+[[ $IMAGE_ID == $(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1]))[0].Id' "$IMAGE_DIR/image-inspect.json") ]]
+PROJECT=$(cat "$BACKUP/compose-project.txt")
+PROJECT_DIR=$(cat "$BACKUP/compose-working-dir.txt")
+[[ $PROJECT =~ ^[a-z0-9][a-z0-9_-]*$ && $PROJECT_DIR == /* && -d $PROJECT_DIR ]]
+COMPOSE_ARGS=(--project-directory "$PROJECT_DIR" -p "$PROJECT")
+IFS=',' read -r -a ORIG_ENV_FILES < "$BACKUP/compose-env-files.txt"
+for file in "${ORIG_ENV_FILES[@]}"; do COMPOSE_ARGS+=(--env-file "$file"); done
 IFS=',' read -r -a ORIG_COMPOSE_FILES < "$BACKUP/compose-config-files.txt"
-for i in "${!ORIG_COMPOSE_FILES[@]}"; do
-  [[ -f $BACKUP/compose-$i.yml ]] || exit 1
-  ROLLBACK_COMPOSE_ARGS+=(-f "$BACKUP/compose-$i.yml")
-done
+for i in "${!ORIG_COMPOSE_FILES[@]}"; do COMPOSE_ARGS+=(-f "$BACKUP/compose-$i.yml"); done
+OLD_IMAGE=$(cat "$BACKUP/previous-image-id.txt")
+printf 'services:\n  fosu-api:\n    image: "%s"\n    pull_policy: never\n    environment:\n      FOSU_DEPLOY_COMMIT_SHA: "%s"\n' "$IMAGE_ID" "$CANDIDATE_SHA" > "$BACKUP/sample-image.yml"
 printf 'services:\n  fosu-api:\n    image: "%s"\n    pull_policy: never\n    environment:\n      FOSU_DEPLOY_COMMIT_SHA: a3dfd1989705f51c921f13883bcde1cce4502883\n' "$OLD_IMAGE" > "$BACKUP/rollback-image.yml"
-# 原配置与额外 override 全部保留；只锁定旧 API image/旧指纹。
-# 不复制旧 env 或 state.tar.gz 覆盖当前数据，不删除 Sample/private review。
-docker compose --project-directory "$APP_DIR/server" "${ROLLBACK_COMPOSE_ARGS[@]}" -f "$BACKUP/rollback-image.yml" up -d --no-build --pull never --no-deps fosu-api
+wait_api_healthy() {
+  for (( attempt=0; attempt<60; attempt++ )); do
+    [[ $(docker inspect --format '{{.State.Health.Status}}' fosuclass-api 2>/dev/null) == healthy ]] && return 0
+    sleep 2
+  done
+  return 1
+}
+rollback_code() {
+  docker image inspect "$OLD_IMAGE" >/dev/null 2>&1 || docker load -i "$BACKUP/previous-image.tar.gz" >/dev/null || return 1
+  docker compose "${COMPOSE_ARGS[@]}" -f "$BACKUP/rollback-image.yml" up -d --no-build --pull never --no-deps fosu-api > "$BACKUP/rollback-compose.log" 2>&1 || return 1
+  wait_api_healthy || return 1
+  node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" --app-dir="$APP_DIR" --runtime-dir="$RUNTIME_DIR" --manifest="$MANIFEST" --compare-before="$BACKUP/deploy-before.json" > "$BACKUP/rollback-after.json" || return 1
+}
+# 再次核对门禁下的真实状态与备份基线；BLOCKED禁止进入up。
+node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" --app-dir="$APP_DIR" --runtime-dir="$RUNTIME_DIR" --manifest="$MANIFEST" --compare-before="$BACKUP/deploy-before.json" > "$BACKUP/deploy-recheck.json"
+if ! docker compose "${COMPOSE_ARGS[@]}" -f "$BACKUP/sample-image.yml" up -d --no-build --pull never --no-deps fosu-api > "$BACKUP/deploy-compose.log" 2>&1 \
+  || ! wait_api_healthy \
+  || ! node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" --app-dir="$APP_DIR" --runtime-dir="$RUNTIME_DIR" --manifest="$MANIFEST" --verify-after="$CANDIDATE_SHA" --before="$BACKUP/deploy-before.json" > "$BACKUP/deploy-after.json"; then
+  rollback_code || { printf 'ORACLE_ROLLBACK_FAILED_KEEP_MAINTENANCE_AND_EVIDENCE\n'; exit 2; }
+  printf 'ORACLE_CODE_ROLLBACK_PASS_REVIEW_BEFORE_RESTORING_ADMISSION\n'
+  exit 1
+fi
+printf 'ORACLE_SAMPLE_DEPLOY_VERIFIED_PUBLICATION_NOT_APPROVED\n'
 ```
 
-备份从现有容器 Compose label 保存完整原配置文件列表，包括原 override；回滚使用其私有副本及原 project-directory，额外只锁定 `OLD_IMAGE`，不引用本次 Sample override，也不凭 tag 猜测。等待 healthy 后运行本目录 preflight 默认 a3 模式，比较 `deploy-before.json` 受保护文件与 env hash；检查个人 Broker、旧 routine/full 的只读 status/paused/timer 门禁、正式 active/四索引、公告与 Windows入口。无法一致验证则 BLOCKED，保留现场；状态恢复需要单独审批。
+失败自动回滚只限本次尚未运行 Sample 的部署窗口，入站门禁保持，状态与私有历史不恢复、不删除。成功部署/回滚后，由操作员通过既有后台显式恢复原 pause 状态并保存审计，再用对应 SHA 的 preflight 另存只读健康结果；这个有意 control 改动不参与旧字节 hash 比较。
+
+独立代码回滚入口在同一已批准会话中为 `rollback_code`。换会话时，重新指定原 APP_DIR/RUNTIME_DIR/CANDIDATE_DIR/MANIFEST/BACKUP，复用上面读取原 Compose 参数及函数定义的部分，不执行新镜像切换；先单独批准入站门禁、停止新 Sample 创建并确认真实队列/租约为空，再调用该入口。无法确认则 BLOCKED，不中断运行中的采集；不粘贴脱离原 project/env/mount 的单独 `docker compose up`。默认 a3 `--compare-before` 验证旧代码/实际镜像、个人签名协议、env、active/四索引/公告/表情和稳定容器契约。WYZ 个人 Agent、timer、routine/full、Windows 入口不执行写操作；任何数据快照恢复仍需单独审批。
+
+Compose 路径和项目名检查遵循 Docker 的 [project name precedence](https://docs.docker.com/compose/how-tos/project-name/)、[合并路径规则](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/) 和 [环境插值规则](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)。本手册准备的是审批后的操作，不构成生产验收证据。

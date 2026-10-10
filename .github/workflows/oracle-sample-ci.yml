@@ -46,6 +46,13 @@ jobs:
           run_check npm run test:notice-reactions
           run_check npm run test:oracle-release-source
           run_check npm run test:static-release-manifest-first
+          for suite in staging-active-count-comparison staging-status-semantics staging-grouping staging-summary-item-count \
+            large-staging-finalize-worker release-publish-safety release-publish-requires-healthy-pack release-publish-static-sync \
+            release-lifecycle storage-lifecycle duplicate-cleanup-safety release-pack-build release-pack-api static-release-pack \
+            release-index-rebuild admin-release-pack-jobs release-build-job-lock openresty-status-schema release-list-summary-only \
+            release-pack-teacher-health runtime-pointer static-release-sync-script; do
+            run_check node "tools/test-$suite.js"
+          done
           run_check npm run test:wyz-four-source
           run_check node tools/run-collector-personal-regression.js
           run_check npm run test:agent-foundation
@@ -57,7 +64,12 @@ jobs:
           run_check npm run release:preflight
           test "$failed" = 0
       - name: Build the pinned ancestor overlay
-        run: python3 tools/oracle-sample/build_candidate.py --require-commit
+        run: |
+          # Existing browser/control-plane tests regenerate only these tracked
+          # fixture outputs. Restore them before the committed-source gate;
+          # any other changed runtime file is still rejected by the builder.
+          git restore -- output/admin-campus-sync-acceptance output/agent-config-plane-browser server/data/admin-audit-log.jsonl
+          python3 tools/oracle-sample/build_candidate.py --require-commit
       - uses: actions/upload-artifact@v4
         with:
           name: oracle-sample-source-candidate
