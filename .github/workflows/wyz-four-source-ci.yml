@@ -62,6 +62,17 @@ jobs:
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
+      - name: Package the exact committed CAS candidate
+        run: |
+          node tools/wyz-schedule-collector/build-package.js
+          python3 tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision=6fe02a552e7511bc27a2f4751db302ebb7a8e001
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cas-sample-source-candidate
+          path: |
+            .local/collector-packages/wyz-schedule-collector-*.tar.gz*
+            .local/collector-packages/heartbeat-upgrade-*.zip*
+          if-no-files-found: error
   windows-compatibility:
     runs-on: windows-latest
     timeout-minutes: 25

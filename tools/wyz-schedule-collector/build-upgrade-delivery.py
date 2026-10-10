@@ -56,13 +56,19 @@ def build(previous):
     (folder / (archive.name + '.receipt.json')).write_text(json.dumps(receipt, indent=2), encoding='utf8')
     (folder / 'fosuclass-operations-and-release-runbook.md').write_bytes(source['docs/production/fosuclass-operations-and-release-runbook.md'])
     (folder / 'wyz-cas-mobile-repair.md').write_bytes(source['docs/production/wyz-cas-mobile-repair.md'])
+    for name, committed_path in (
+        ('cas-sample-closure-acceptance.md', 'docs/production/cas-sample-closure-acceptance.md'),
+        ('CAS-COMPATIBILITY.md', 'docs/cas-sample-closure/CAS-COMPATIBILITY.md'),
+        ('PAM-PUBLIC-AUDIT.sh', 'docs/cas-sample-closure/PAM-PUBLIC-AUDIT.sh'),
+    ):
+        (folder / name).write_bytes(source[committed_path])
     (folder / 'PAM-HANDOFF.md').write_text('''# CAS POST classification candidate
 
 Commit: {revision}
 Expected installed predecessor: {previous}
 Source SHA256: {digest}
 
-This package has not been installed. WYZ already runs the recovered 6eea0ec service.
+This package has not been installed. WYZ already runs the verified {previous} service.
 Installing this new CAS fix requires separate operator approval.
 All helpers are exact committed source; source.sha256 and upgrade-candidate.json
 bind the archive. Review the runbook before any separately approved installation.
