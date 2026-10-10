@@ -6,11 +6,17 @@ const { readJson, acquireLock } = require("./runStore");
 const DATA_ROOT = "/var/lib/fosuclass/schedule-collector";
 const HELP = `佛课小表 WYZ 手动入口
   fosu-collector status [--check-session --approve-school-access]
+  fosu-collector auth-state
+  fosu-collector diagnose-login --approve-school-access [--login-profile=mobile]
   fosu-collector login [--login-profile=mobile|desktop] [--approve-school-access]
   fosu-collector manual-sync [--mode=sample] [--sample-kind=class|four] [--run-id=sc-…]
       [--login-profile=mobile|desktop] [--approve-school-access]
   fosu-collector inspect
-账号和密码只从 PAM TTY 隐藏输入。默认 mobile（Chromium 移动模拟）。
+账号和密码只从 PAM TTY 隐藏输入。mobile 映射 mobile-wechat（与 Windows 默认一致）。
+可选 mobile-safari / mobile-wechat / desktop；均为 Chromium 配置，并非原生 iOS 验收。
+diagnose-login 只访问公开 CAS 页，不读取凭据、不执行账号预检查、不保存 Session。
+表单就绪与网络兼容性分别报告；未知后台 POST 会被阻断并返回待审核，不能继续登录。
+auth-state 只读本机冷却和提交预算；旧计数无请求证据，保守保留。
 sample 必须先由 Oracle 管理员创建限期、有界任务；不会发布或替换正式 Staging。
 阶段 A 的 routine/full 锁定，等待真实权限与覆盖验收。所有真实访问须单独批准。
 status 默认只读本机与 Oracle；检查学校 Session 需要 --check-session 和授权。
@@ -20,7 +26,21 @@ const MESSAGES = {
   INVALID_CREDENTIALS:"学校账号或密码不正确；已停止，请确认或更换密码后人工处理。",
   SCHOOL_SECURITY_CHALLENGE:"学校要求验证码或安全核验；已停止，不会绕过或再次提交密码。",
   SCHOOL_LOGIN_FORM_CHANGED:"学校登录页面或表单已变化；已停止，需要检查适配。",
+  SCHOOL_LOGIN_ACCOUNT_FIELD_CHANGED:"账号输入框未能唯一匹配；密码尚未提交，需要检查移动页适配。",
+  ["SCHOOL_LOGIN_PASSWORD_FIELD_CHANGED"]:"密码输入框未能唯一匹配；密码尚未提交，需要检查移动页适配。",
+  SCHOOL_LOGIN_SUBMIT_CHANGED:"登录按钮或表单提交方式未能安全确认；已停止。",
+  SCHOOL_LOGIN_PRECHECK_CHANGED:"官方验证码预检查返回未知结构；密码未提交，需要检查接口适配。",
+  SCHOOL_LOGIN_PRECHECK_FAILED:"官方验证码预检查未成功响应；密码未提交，已停止。",
+  SCHOOL_LOGIN_PAGE_REJECTED:"公开 CAS 页面出现明确拒绝提示；尚未提交密码，不能据此判定凭据错误。",
+  SCHOOL_LOGIN_RESOURCE_REJECTED:"CAS 所需脚本或样式来源未受信任；已拒绝加载，需要单独核实官方来源。",
+  ["SCHOOL_PASSWORD_RESUBMISSION_BLOCKED"]:"已审核的 CAS 主认证请求出现重复提交；已阻止第二次放行。",
+  SCHOOL_AUTH_POST_NOT_AUTHORIZED:"页面尝试发起尚未授权的 CAS 认证 POST；已拦截，不能视为密码已提交。",
+  SCHOOL_CREDENTIAL_REQUEST_BLOCKED:"凭据填写阶段出现未审核的页面请求；已拦截，停止本次登录。",
+  SCHOOL_AUTH_BROWSER_CLOSED:"登录浏览器已退出；本次已停止并释放会话锁，不会重试密码。",
+  SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED:"表单可能已就绪，但页面有未审核的后台请求；网络兼容性待确认，不能继续登录。",
+  SCHOOL_AUTH_STATE_INVALID:"本机认证保护记录损坏；已停止，不会重置预算或冷却。",
   SCHOOL_PAGE_CHANGED:"受保护教务页面结构已变化；无法确认登录有效。",
+  SCHOOL_PROTECTED_PAGE_REJECTED:"受保护教务页面未成功返回；不能保存或报告有效 Session。",
   SCHOOL_SESSION_EXPIRED:"学校 Session 已失效；本轮已停止，需要人工重新登录。",
   SCHOOL_TLS_OR_ORIGIN_REJECTED:"学校证书或跳转来源不可信；严格 TLS 校验已拒绝访问。",
   SCHOOL_NETWORK_TIMEOUT:"访问学校超时；已停止，没有自动重试密码。",
@@ -53,7 +73,7 @@ function errorCode(error) {
 }
 function parse(args) {
   const options = { command:args[0] || "help", mode:"sample", sampleKind:"class", loginProfile:"mobile" };
-  if (!["help","status","login","manual-sync","inspect"].includes(options.command)) throw fail("CLI_ARGUMENT_REJECTED");
+  if (!["help","status","login","manual-sync","inspect","auth-state","diagnose-login"].includes(options.command)) throw fail("CLI_ARGUMENT_REJECTED");
   const seen = new Set();
   for (const arg of args.slice(1)) {
     const match = arg.match(/^--(mode|sample-kind|login-profile|run-id)=(.+)$/);
@@ -66,14 +86,15 @@ function parse(args) {
     else if (arg === "--acknowledge-auth-failure") options.acknowledgeFailure = true;
     else throw fail("CLI_ARGUMENT_REJECTED");
   }
-  if (!["sample","routine","full"].includes(options.mode) || !["class","four"].includes(options.sampleKind) || !["mobile","desktop"].includes(options.loginProfile) || options.runId && !/^sc-[A-Za-z0-9-]+$/.test(options.runId)) throw fail("CLI_ARGUMENT_REJECTED");
+  if (!["sample","routine","full"].includes(options.mode) || !["class","four"].includes(options.sampleKind) || !require('../fosu-sync-client/schoolLoginProfile').PROFILES.includes(options.loginProfile) || options.runId && !/^sc-[A-Za-z0-9-]+$/.test(options.runId)) throw fail("CLI_ARGUMENT_REJECTED");
   const allowed = {
-    help:[], inspect:[], status:["--check-session","--approve-school-access","login-profile"],
+    help:[], inspect:[], "auth-state":[], "diagnose-login":["--approve-school-access","login-profile"], status:["--check-session","--approve-school-access","login-profile"],
     login:["--approve-school-access","--acknowledge-auth-failure","login-profile"],
     "manual-sync":["mode","sample-kind","run-id","login-profile","--approve-school-access","--acknowledge-auth-failure"],
   }[options.command];
   if ([...seen].some(key => !allowed.includes(key))) throw fail("CLI_ARGUMENT_REJECTED");
   if (options.checkSession && !options.approved) throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
+  if (options.command==='diagnose-login'&&!options.approved)throw fail('SCHOOL_ACCESS_NOT_AUTHORIZED');
   return options;
 }
 function serviceState(name, action, deps) {
@@ -126,6 +147,7 @@ async function login(cfg, options, deps) {
   deps.output("阶段 1/3：检查学校 Session；有效 Session 会询问是否复用。");
   const result = await auth.interactiveSession(cfg,{
     ...deps, approved:true, acknowledgeFailure:options.acknowledgeFailure,
+    onDiagnostic:value=>deps.output(value),
     readCredentials:()=>{deps.output("阶段 2/3：新建隔离 CAS 会话；账号和密码隐藏输入，仅提交一次。");return terminal.credentials({signal:deps.signal,...deps.terminal});},
     confirmReuse:async()=> { const answer=await deps.ask("已有有效学校 Session。输入 REUSE 复用；输入 LOGIN 重新登录: "); if(!["REUSE","LOGIN"].includes(answer))throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");return answer==="REUSE"; },
     ...(deps.authDeps || {}),
@@ -141,6 +163,17 @@ async function main(args = process.argv.slice(2), deps = {}) {
   auth.assertSafeRuntime();
   const cfg = { dataRoot:DATA_ROOT,sessionPath:path.join(DATA_ROOT,"session.json"),...(deps.cfg || {}),loginProfile:options.loginProfile };
   const ctx = { ...deps,output,ask:deps.ask || (prompt=>terminal.readHidden(prompt,{signal:deps.signal,...deps.terminal})) };
+  if(options.command==='auth-state'){
+    auth.secureDirectory(cfg.dataRoot,deps.platform);
+    const result=require('./schoolAuthState').view(cfg,deps);output(result);return result;
+  }
+  if(options.command==='diagnose-login'){
+    auth.secureDirectory(cfg.dataRoot,deps.platform);
+    const unlock=acquireLock(cfg.dataRoot,'school-session.lock');let adapter;
+    try{adapter=await (deps.authDeps?.createAdapter||auth.createAdapter)(cfg,{signal:deps.signal,onDiagnostic:output,...deps.authDeps});const result=await adapter.diagnose();output(result);
+      if(result.networkCompatibility==='REVIEW_REQUIRED')throw Object.assign(fail('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED'),{diagnostic:result});return result;}
+    finally{try{if(adapter)await adapter.close();}finally{unlock();}}
+  }
   if (options.command === "status") {
     const status = localStatus(cfg,ctx);
     let conn;
@@ -206,7 +239,7 @@ async function run(args, deps = {}) {
   const control = new AbortController(), stop=()=>control.abort();
   process.once("SIGINT",stop);process.once("SIGTERM",stop);
   try { return await main(args,{...deps,signal:control.signal}); }
-  catch(error) { const code=errorCode(error); (deps.errorOutput || console.error)(JSON.stringify({status:"failed",code,message:MESSAGES[code] || "操作失败，已停止；请按错误码检查环境或权限。"})); process.exitCode=code==="COLLECTOR_STOPPED"?130:1; }
+  catch(error) { const code=errorCode(error); (deps.errorOutput || console.error)(JSON.stringify({status:"failed",code,message:MESSAGES[code] || "操作失败，已停止；请按错误码检查环境或权限。",...(error.diagnostic?{diagnostic:error.diagnostic}:{})})); process.exitCode=code==="COLLECTOR_STOPPED"?130:1; }
   finally { process.removeListener("SIGINT",stop);process.removeListener("SIGTERM",stop); }
 }
 if(require.main===module)run(process.argv.slice(2));
