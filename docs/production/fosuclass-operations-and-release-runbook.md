@@ -161,7 +161,7 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 
 正常登录通过后，自动恢复的独立授权文件可由root原子修改；审批有效期必须为未来且最多30天。获学校允许并由用户明确批准后才使用 `configure-school-recovery.py --approve-until <批准的UTC截止时间>`；`--disable`关闭恢复并移除有效期，保留凭据，不改Broker env、timer、Collector或个人Agent。Python3.6语法/到期边界在本地验证，root权限/原子保留/拒绝symlink须由Linux CI验证。Playwright DEBUG/PWDEBUG及网络NODE_DEBUG开启时拒绝凭据浏览器，防止调试输出包含账号或密码。
 
-升级新包的实施计划：先提供commit、SHA256、CI、旧current和受保护备份；只停止全校Collector，使用既有安装器保留旧Release/浏览器/checkpoint/Broker env，timer仍disabled。当前`90-heartbeat-acceptance.conf`显式强制execute=0，其runner绑定b1；安装后必须核对实际ExecStart和运行代码，不能把current指向新包等同新Collector已经运行。先保留此门禁做独立Session检查，再另行审批将全校服务切到新代码的execute=0入口；首次试采与定时启用分别批准。安装失败恢复旧current/unit/dropin；全程不修改个人Agent，不启动真实学校采集或发布。
+升级新包的实施计划：先提供commit、SHA256、CI、旧current和受保护备份；只停止全校Collector，使用既有安装器保留旧Release/浏览器/checkpoint/Broker env，timer仍disabled。当前`90-heartbeat-acceptance.conf`显式强制execute=0；验收runner由b1包生成，但require的是current目录，因此更换current后重启就会加载新代码，必须把这一步纳入安装审批并核对实际ExecStart/运行代码。保留execute=0门禁，只检查学校Session须另外批准；真实登录、首次试采与定时启用分别批准。安装失败恢复旧current/unit/dropin；全程不修改个人Agent，不启动真实学校采集或发布。需要撤销b1连接复用patch时，先恢复b1代码指向再调用其hash/版本绑定回滚工具，不能在新current下绕过版本检查。
 
 人工处理后，只在核对账号、刷新 Session、确认已无挑战后，清理本机非敏感 auth-state 的阻断标记。不得清理标记来持续重试错误密码。学校试采始终先 `check-session`，再一实体诊断，最后首次完整四源；各门禁分开。
 
