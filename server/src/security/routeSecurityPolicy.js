@@ -17,6 +17,8 @@ const policies = [
   { path: "/security/client-check", methods: ["POST"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 8 * 1024, cachePolicy: "no-store" },
 
   { path: "/app-config", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
+  { path: "/notices/:id/reactions", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
+  { path: "/notices/:id/reactions", methods: ["PUT"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 2048, cachePolicy: "no-store" },
   { path: "/bootstrap", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
   { path: "/prefetch", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
   { path: "/periodic-data", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "mixed" },

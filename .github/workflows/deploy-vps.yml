@@ -54,6 +54,9 @@ jobs:
       - name: Release preflight
         run: npm run release:preflight
 
+      - name: Notice reaction acceptance
+        run: npm run test:notice-reactions
+
       - name: Xiaofu Agent release gate
         run: npm run test:agent-release-gate
 

@@ -58,6 +58,11 @@ const component = {
   data: { notices, pageKey: "home", maxCount: 5, detailVisible: false, currentIndex: 0 },
   setData(patch, callback) { Object.assign(this.data, patch); if (callback) callback(); },
   triggerEvent() {},
+  createSelectorQuery() {
+    // This state-only harness has no rendered DOM; layout is tested separately.
+    const query = { select() { return query; }, boundingClientRect() { return query; }, exec(callback) { callback([null, null, null]); } };
+    return query;
+  },
   ...definition.methods,
 };
 component.updateVisibleNotices();
