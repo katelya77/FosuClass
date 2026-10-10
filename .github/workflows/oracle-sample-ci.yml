@@ -1,0 +1,102 @@
+name: Oracle Sample candidate CI
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/oracle-sample-ci.yml'
+      - 'server/src/services/scheduleCollectorService.js'
+      - 'server/src/services/sampleReviewService.js'
+      - 'server/src/services/staging*.js'
+      - 'server/src/routes/fullSyncAgent.js'
+      - 'server/src/modules/schedule-collector/**'
+      - 'server/src/shared/*SourceContract.js'
+      - 'server/src/shared/sampleCollectionContract.js'
+      - 'tools/oracle-sample/**'
+      - 'tools/test-oracle-sample-*.js'
+      - 'deploy/oracle-sample/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: git merge-base --is-ancestor a3dfd1989705f51c921f13883bcde1cce4502883 HEAD
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm --prefix tools/fosu-sync-client ci
+      - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - name: Fixture-only source and deployment gates
+        run: |
+          export NODE_OPTIONS="--require=$PWD/tools/fixture-network-only.js"
+          failed=0
+          run_check() { "$@" || { echo "FAILED: $*"; failed=1; }; }
+          run_check node --test tools/test-oracle-sample-backend.js tools/test-oracle-sample-queue.js tools/test-oracle-sample-preflight.js
+          run_check python3 tools/oracle-sample/test_build_candidate.py
+          run_check npm run test:production-baseline
+          run_check npm run test:class-schedule-isolation
+          run_check npm run test:notice-reactions
+          run_check npm run test:oracle-release-source
+          run_check npm run test:static-release-manifest-first
+          run_check npm run test:wyz-four-source
+          run_check node tools/run-collector-personal-regression.js
+          run_check npm run test:agent-foundation
+          run_check npm run test:agent-regression
+          run_check npm run test:ai-competition
+          run_check npm run test:agent-final-convergence
+          run_check npm run test:security-full
+          run_check npm run test:architecture-guards
+          run_check npm run release:preflight
+          test "$failed" = 0
+      - name: Build the pinned ancestor overlay
+        run: python3 tools/oracle-sample/build_candidate.py --require-commit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oracle-sample-source-candidate
+          path: .local/oracle-sample-candidates/*
+          if-no-files-found: error
+  arm64-image:
+    needs: regression
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: python3 tools/oracle-sample/build_candidate.py --require-commit
+      - name: Build without publishing or deploying
+        run: |
+          mkdir -p .local/oracle-build-context
+          tar -xzf .local/oracle-sample-candidates/*.tar.gz -C .local/oracle-build-context
+          revision=$(git rev-parse HEAD)
+          docker build --target browser --platform linux/arm64 --build-arg "GIT_REVISION=$revision" -f .local/oracle-build-context/server/Dockerfile -t "fosu-oracle-sample:$revision" .local/oracle-build-context
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "fosu-oracle-sample:$revision")" = "$revision"
+          docker run --rm --network=none --entrypoint node "fosu-oracle-sample:$revision" -e "for (const file of ['sampleCollectionContract','fourDirectSourceContract']) require('./src/shared/'+file); console.log('SAMPLE_IMAGE_IMPORT_PASS')"
+      - name: Existing API and Agent container smoke on native ARM
+        run: FOSU_DOCKER_SMOKE_IMAGE="fosu-oracle-sample:$(git rev-parse HEAD)" node tools/test-server-docker-smoke.js
+      - name: Save the exact tested candidate image
+        run: |
+          revision=$(git rev-parse HEAD)
+          mkdir -p .local/oracle-image
+          docker image inspect "fosu-oracle-sample:$revision" > .local/oracle-image/image-inspect.json
+          docker save "fosu-oracle-sample:$revision" | gzip -n > ".local/oracle-image/fosu-oracle-sample-$revision-arm64.image.tar.gz"
+          sha256sum .local/oracle-image/*.image.tar.gz > .local/oracle-image/SHA256SUMS
+          printf '%s\n' "$revision" > .local/oracle-image/commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oracle-sample-arm64-image
+          path: .local/oracle-image/*
+          if-no-files-found: error
+          retention-days: 7

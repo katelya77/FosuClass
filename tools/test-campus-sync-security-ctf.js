@@ -373,10 +373,21 @@ async function run() {
   });
   await checkAsync("A44", async () => {
     const owner = "quota-restart-user";
-    syncQuota.consume(owner, Date.parse("2026-09-25T02:00:00.000Z"));
-    syncQuota.flushNow();
-    syncQuota.reload();
-    assert.strictEqual(syncQuota.acceptedFor(owner, Date.parse("2026-09-25T02:00:00.000Z")), 1);
+    // reload() applies retention using Date.now(); the persisted sample must use
+    // the same clock instead of a historical date that eventually expires.
+    const sampleNow = Date.now();
+    const realNow = Date.now;
+    Date.now = () => sampleNow;
+    try {
+      assert.strictEqual(syncQuota.consume(owner, sampleNow).ok, true);
+      syncQuota.flushNow();
+      const persisted = JSON.parse(fs.readFileSync(path.join(process.env.CAMPUS_SYNC_OPS_DIR, "quota.json"), "utf8"));
+      assert.strictEqual(persisted.days[syncQuota.shanghaiDate(sampleNow)].users[syncQuota.hashKey(owner)], 1);
+      syncQuota.reload();
+      assert.strictEqual(syncQuota.acceptedFor(owner, sampleNow), 1);
+    } finally {
+      Date.now = realNow;
+    }
   });
   await checkAsync("A45", async () => {
     syncPolicy.update({ dailyLimit: 1, rateLimit: 5, rateWindowSeconds: 600, globalActiveCap: 10 }, "ctf");

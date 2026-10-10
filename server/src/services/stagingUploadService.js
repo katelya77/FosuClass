@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { pipeline } = require("stream/promises");
+const { Transform } = require("stream");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
 const releaseService = require("./releaseService");
@@ -503,6 +504,12 @@ function writeChunk(uploadId, chunkIndexRaw, buffer, actor, options = {}) {
   }
 
   const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+  if (manifest.source === "wyz-schedule-sample") {
+    const prior = manifest.receivedChunks[String(chunkIndex)];
+    if (prior && prior.sha256 !== sha256) throw Object.assign(new Error("SAMPLE_CHUNK_CONFLICT"), { code: "SAMPLE_CHUNK_CONFLICT", statusCode: 409 });
+    if (prior && prior.sha256 === sha256) return Object.assign(publicManifest(manifest), getChunkStatus(manifest));
+    if (!["initialized", "uploading"].includes(manifest.status)) throw Object.assign(new Error("SAMPLE_UPLOAD_IMMUTABLE"), { code: "SAMPLE_UPLOAD_IMMUTABLE", statusCode: 409 });
+  }
   const expectedHash = normalizeHash(options.chunkSha256);
   if (expectedHash && expectedHash !== sha256) {
     const error = new Error(`Chunk ${chunkIndex} hash mismatch`);
@@ -604,9 +611,16 @@ async function finalizeUploadFiles(uploadId, actor, expected = {}) {
   const jsonPath = path.join(manifest.uploadDir, "payload.json");
   assertInside(manifest.uploadDir, jsonPath);
   if (manifest.contentEncoding === "gzip") {
+    let sampleBytes = 0;
+    const sampleLimit = new Transform({ transform(chunk, encoding, done) {
+      sampleBytes += chunk.length;
+      if (sampleBytes > require("../shared/sampleCollectionContract").MAX_ORIGINAL_BYTES || sampleBytes > manifest.originalSize) return done(Object.assign(new Error("SAMPLE_UPLOAD_SIZE_EXCEEDED"), { code: "SAMPLE_UPLOAD_SIZE_EXCEEDED", statusCode: 400 }));
+      done(null, chunk);
+    } });
     await pipeline(
       fs.createReadStream(merged.joinedPath),
       zlib.createGunzip(),
+      ...(manifest.source === "wyz-schedule-sample" ? [sampleLimit] : []),
       fs.createWriteStream(jsonPath)
     );
   } else if (merged.joinedPath !== jsonPath) {
@@ -732,6 +746,7 @@ function normalizePublishedSummary(summary, manifest, version, extra = {}) {
 function markUploadPublished(uploadId, version, extra = {}) {
   try {
     const manifest = readManifest(uploadId);
+    if (manifest.source === "wyz-schedule-sample" || manifest.summary && manifest.summary.sampleOnly) throw Object.assign(new Error("SAMPLE_NOT_PUBLISHABLE"), { code: "SAMPLE_NOT_PUBLISHABLE" });
     manifest.status = "published";
     manifest.stagingState = "published";
     manifest.releaseState = "published";
@@ -1208,6 +1223,7 @@ function reconcileWithReleaseState(options = {}) {
     .filter(Boolean);
 
   const candidates = manifests.filter((manifest) => {
+    if (manifest.source === "wyz-schedule-sample" || manifest.summary && manifest.summary.sampleOnly) return false;
     const canonicalHash = getManifestCanonicalHash(manifest);
     const releaseVersion = getManifestReleaseVersion(manifest);
     if (activeCanonicalHash && canonicalHash && canonicalHash === activeCanonicalHash) return true;

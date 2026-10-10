@@ -302,6 +302,7 @@ async function runStagingPublish(input = {}, job) {
 
   if (job) job.progress(12, "loading snapshot");
   const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
+  if (stagingData.meta && stagingData.meta.sampleOnly) throwPublishError("SAMPLE_NOT_PUBLISHABLE", "样本仅可私有审核，禁止正式发布。", {});
   if (stagingData.meta && stagingData.meta.requireFourDirectSources) require("../shared/fourDirectSourceContract").assertFourSources(stagingData, stagingData.term || stagingData.semester);
   const activeSnapshot = releaseService.readActiveReleaseSnapshot();
   const stagingFingerprintInfo = getSnapshotFingerprint(stagingData);
