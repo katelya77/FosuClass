@@ -101,6 +101,12 @@ function sampleView(value) {
   if (!value || !/^sc-[A-Za-z0-9-]+$/.test(value.runId || "") || value.mode !== "sample") return null;
   const result = {};
   for (const key of ["runId","term","mode","sampleKind","result","schoolRequestCount","stagingRawBytes","stagingGzipBytes","published","finishedAt","canonicalHash","uploadId"]) result[key] = value[key];
+  result.directSourceSummary={};
+  for(const kind of ["class","teacher","classroom","course"]){
+    const stat=value.directSourceSummary?.[kind];if(!stat)continue;
+    result.directSourceSummary[kind]={sourceMode:stat.sourceMode==="network-direct"?"network-direct":"UNVERIFIED"};
+    for(const key of ["discoveredEntities","requestedEntities","success","empty","failed","parserErrors","requestCount","scheduleDocuments","courseEvents"])result.directSourceSummary[kind][key]=Number.isSafeInteger(stat[key])&&stat[key]>=0?stat[key]:null;
+  }
   return result;
 }
 function connection(deps) {
@@ -150,8 +156,18 @@ async function main(args = process.argv.slice(2), deps = {}) {
     output(status); return status;
   }
   if (options.command === "inspect") {
+    auth.secureDirectory(cfg.dataRoot,deps.platform);
     const value = sampleView(readJson(path.join(cfg.dataRoot,"last-manual-sample.json"),null));
-    output({lastSample:value,stagingStatus:value ? value.result : "NO_SAMPLE",publication:"人工门禁；sample 不能发布"});
+    const inspection={lastSample:value,localResult:value?value.result:"NO_SAMPLE",oracleStagingStatus:"UNVERIFIED",comparison:"sample不能证明全校覆盖或与完整Release比较",publication:"人工门禁；sample不能发布"};
+    let conn;
+    try{
+      conn=connection(ctx);const remote=await conn.request("GET","/api/full-sync/v1/status");
+      if(remote.protocol!=="collector-manual.v1")throw fail("STAGING_SAMPLE_API_UNAVAILABLE");
+      const run=(remote.status?.recent||[]).find(r=>r.id===value?.runId);
+      inspection.oracleStagingStatus=run?.result||"NO_MATCHING_RUN";
+      inspection.uploadMatches=Boolean(run&&run.uploadId===value?.uploadId);
+    }catch(error){inspection.oracleCode=errorCode(error);}finally{if(conn)conn.close();}
+    output(inspection);
     return value;
   }
   if (options.command === "manual-sync" && options.mode !== "sample") throw fail("SCHOOL_SCOPE_REVIEW_REQUIRED");

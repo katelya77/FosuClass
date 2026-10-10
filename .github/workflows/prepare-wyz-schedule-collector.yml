@@ -44,7 +44,7 @@ jobs:
           sudo "$(command -v node)" tools/test-collector-runtime-repair.js
           sudo "$(command -v node)" tools/test-school-session-lifecycle.js
           sudo "$(command -v node)" tools/test-collector-manual-cli.js
-          node tools/test-collector-sample-contract.js
+          sudo "$(command -v node)" tools/test-collector-sample-contract.js
           node tools/test-collector-sample-request-budget.js
           sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-login-browser-fixture.js
           node tools/test-full-sync-env-persistence.js

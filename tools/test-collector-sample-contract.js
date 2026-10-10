@@ -74,7 +74,8 @@ async function main(){
       const upload=require("../server/src/services/stagingUploadService").getUploadStatus(result.uploadId,{type:"full-sync",id:result.runId});
       check(()=>assert.equal(upload.summary.sampleOnly,true));check(()=>assert.equal(upload.summary.coverageValid,false));
       const cli=require("./wyz-schedule-collector/cli");
-      const inspection=await cli.main(["inspect"],{skipRootCheck:true,cfg,output:()=>{}});check(()=>assert.equal(inspection.result,"PENDING SAMPLE REVIEW"));
+      let view;const inspection=await cli.main(["inspect"],{skipRootCheck:true,cfg,output:value=>view=value,connection:()=>({cfg,request:api,close:()=>{}})});check(()=>assert.equal(inspection.result,"PENDING SAMPLE REVIEW"));
+      check(()=>{assert.equal(view.oracleStagingStatus,"PENDING SAMPLE REVIEW");assert.equal(view.uploadMatches,true);assert.equal(view.lastSample.directSourceSummary.class.sourceMode,"network-direct");});
     }
   }finally{await new Promise(resolve=>server.close(resolve));}
   console.log("collector-sample-contract: "+cases+" PASS; signed localhost upload + real local worker; schoolRequests=0; active unchanged");
