@@ -5,10 +5,11 @@ const root=fs.mkdtempSync(path.join(os.tmpdir(),"fosu-cas-browser-fixture-")),cf
 const FORM="<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head><body>统一身份认证 密码登录<form method='post' action='https://authserver.fosu.edu.cn/authserver/login'><input id='username' name='username'><input id='password' name='password' type='password'><button id='login_submit'>登录</button></form></body></html>";
 async function scenario(challenge,rejectedTarget,scenarioOptions={}){
   cfg.loginProfile=scenarioOptions.profile||"mobile";
+  if(scenarioOptions.interactive)for(const name of ['session.json','school-auth-state.json'])fs.rmSync(path.join(root,name),{force:true});
   let browser;
   const launch={headless:true,proxy:{server:"http://127.0.0.1:9"}};
   try{browser=await chromium.launch({...launch,channel:"msedge"});}catch{browser=await chromium.launch(launch);}
-  let submits=0,captcha=0,contexts=[],pages=[],blockedBeforeSend=0,diagnostics=[],reserved=0,released=0;
+  let submits=0,captcha=0,contexts=[],pages=[],blockedBeforeSend=0,diagnostics=[],reserved=0,released=0,backgroundReleased=0;
   const wrapped={close:()=>browser.close(),isConnected:()=>browser.isConnected(),newContext:async options=>{
     contexts.push(options);const ctx=await browser.newContext(options);
     return {
@@ -31,9 +32,11 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
             if(event.request.method==="POST"){submits++;status=scenarioOptions.ajax||scenarioOptions.credentialRejected?200:rejectedTarget?307:302;if(status!==200)headers.push({name:"Location",value:rejectedTarget||"https://100.fosu.edu.cn/framework/xsMain.jsp"});if(!scenarioOptions.credentialRejected)headers.push({name:"Set-Cookie",value:"fixture_session=synthetic; Domain=.fosu.edu.cn; Path=/; Secure; HttpOnly"});body=scenarioOptions.credentialRejected?'<html><body>统一身份认证 用户名或密码错误</body></html>':'{}';}
             else {assert.equal(u.searchParams.get('service'),require('./fosu-sync-client/schoolLoginProfile').CAS_SERVICE_URL);body=scenarioOptions.form||FORM;}
           }else if(u.origin==="https://100.fosu.edu.cn"&&u.pathname==="/framework/xsMain.jsp"){
-            status=scenarioOptions.protectedStatus||200;
+            status=scenarioOptions.candidateRejected&&options.storageState?.endsWith('.candidate')?500:scenarioOptions.protectedStatus||200;
             const cookies=await ctx.cookies(u.href);
             body=cookies.some(c=>c.name==="fixture_session"&&c.value==="synthetic")?"<html><body>教学一体化服务平台 我的桌面</body></html>":FORM;
+          }else if(u.origin==='https://authserver.fosu.edu.cn'&&u.pathname==='/authserver/fixture-public-config'&&event.request.method==='POST'){
+            backgroundReleased++;body='{}';headers=[{name:'Content-Type',value:'application/json'}];
           }else status=404;
           const fixtureResponse={requestId:params.requestId,responseCode:status,responseHeaders:headers,body:Buffer.from(body).toString("base64")};
           // FulfillRequest at Request stage skips Chromium's response pause;
@@ -48,14 +51,27 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
       request:{get:async(target,options)=>{captcha++;assert.ok(target.startsWith("https://authserver.fosu.edu.cn/authserver/checkNeedCaptcha.htl?"));assert.equal(options.maxRedirects,0);return {ok:()=>scenarioOptions.precheckOk!==false,url:()=>target,text:async()=>scenarioOptions.precheck===undefined?JSON.stringify({isNeed:challenge}):scenarioOptions.precheck};}},
     };
   }};
-  const adapter=await auth.createAdapter(cfg,{onDiagnostic:value=>diagnostics.push(value),chromium:{launch:async options=>{assert.equal(options.headless,true);assert.ok(!options.args.some(a=>/certificate/.test(a)));return wrapped;}}});
+  const control=new AbortController();
+  if(scenarioOptions.authState)fs.writeFileSync(path.join(root,'school-auth-state.json'),JSON.stringify(scenarioOptions.authState),{mode:0o600});
+  const snapshots=new Map(['session.json','school-auth-state.json'].filter(name=>fs.existsSync(path.join(root,name))).map(name=>[name,fs.readFileSync(path.join(root,name))]));
+  const adapter=await auth.createAdapter(cfg,{signal:control.signal,onDiagnostic:value=>{diagnostics.push(value);if(value.stage==='form-ready'){if(scenarioOptions.cancel)control.abort();if(scenarioOptions.browserExit)browser.close().catch(()=>{});}},reviewedPublicPosts:scenarioOptions.reviewedPublicPosts,chromium:{launch:async options=>{assert.equal(options.headless,true);assert.ok(!options.args.some(a=>/certificate/.test(a)));return wrapped;}}});
   try{
     const expected=scenarioOptions.error||(rejectedTarget?'SCHOOL_TLS_OR_ORIGIN_REJECTED':challenge?'SCHOOL_SECURITY_CHALLENGE':null);
     const hooks={beforeAuthSubmit:()=>reserved++,onAuthSubmitReleased:()=>released++};
-    const work=()=>scenarioOptions.diagnose?adapter.diagnose():adapter.login({account:"fixture-user",password:"fixture-only-secret"},hooks);
+    let credentialsRead=0;
+    const work=()=>scenarioOptions.interactive?auth.interactiveSession(cfg,{approved:true,signal:control.signal,confirmReuse:()=>false,
+      readCredentials:()=>{credentialsRead++;return {account:'fixture-user',password:'fixture-only-secret'};},createAdapter:()=>({
+        prepare:()=>adapter.prepare(),stats:()=>adapter.stats(),close:()=>adapter.close(),check:p=>adapter.check(p),login:(c,h)=>adapter.login(c,{
+          ...h,beforeAuthSubmit:async()=>{await h.beforeAuthSubmit();reserved++;},onAuthSubmitReleased:async()=>{await h.onAuthSubmitReleased();released++;}})})}):scenarioOptions.invokeCLI?require('./wyz-schedule-collector/cli').main(['diagnose-login','--approve-school-access'],{
+      skipRootCheck:true,cfg,signal:control.signal,output:value=>diagnostics.push(value),connection:()=>assert.fail('diagnose must not contact Oracle'),ask:()=>assert.fail('diagnose must not prompt credentials'),
+      authDeps:{createAdapter:()=>adapter}}):scenarioOptions.diagnose?adapter.diagnose():adapter.login({account:"fixture-user",password:"fixture-only-secret"},hooks);
     if(expected)await assert.rejects(work(),error=>{assert.equal(error.code,expected);assert.ok(error.diagnostic.stage);return true;});
-    else if(scenarioOptions.diagnose){const result=await work();assert.equal(result.credentialsRead,false);assert.equal(result.sessionSaved,false);}
-    else {
+    else if(scenarioOptions.diagnose){const result=await work();assert.equal(result.credentialsRead,false);assert.equal(result.sessionSaved,false);if(scenarioOptions.networkStatus){assert.equal(result.networkCompatibility,scenarioOptions.networkStatus);assert.equal(result.formReady,true);assert.equal(result.loginReady,scenarioOptions.networkStatus!=='REVIEW_REQUIRED');}}
+    else if(scenarioOptions.interactive){
+      const result=await work();assert.equal(result.status,'SESSION_SAVED');assert.equal(result.passwordPersisted,false);assert.equal(result.schoolLoginAttempts,1);
+      auth.validateSession(JSON.parse(fs.readFileSync(cfg.sessionPath)));assert.ok(contexts.some(c=>c.storageState===cfg.sessionPath+'.candidate'));
+      if(process.platform!=='win32')assert.equal(fs.statSync(cfg.sessionPath).mode&0o777,0o600);
+    }else {
       const state=await work();
       auth.validateSession(state);fs.writeFileSync(cfg.sessionPath,JSON.stringify(state),{mode:0o600});
       assert.equal(await adapter.check(cfg.sessionPath),"SESSION_VALID");assert.equal(contexts[1].storageState,cfg.sessionPath);
@@ -63,11 +79,16 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
     const expectedSubmits=scenarioOptions.posts===undefined?(scenarioOptions.diagnose||challenge||scenarioOptions.error?0:1):scenarioOptions.posts;
     assert.equal(submits,expectedSubmits);assert.equal(reserved,expectedSubmits);assert.equal(released,expectedSubmits);
     assert.equal(captcha,scenarioOptions.captcha===undefined?(scenarioOptions.diagnose?0:1):scenarioOptions.captcha);
+    assert.equal(backgroundReleased,scenarioOptions.backgroundReleased||0);
+    if(scenarioOptions.interactive){assert.equal(credentialsRead,scenarioOptions.captcha===0?0:1);assert.ok(!fs.existsSync(cfg.sessionPath+'.candidate'));assert.ok(!fs.existsSync(path.join(root,'school-session.lock')));if(scenarioOptions.candidateRejected)assert.ok(!fs.existsSync(cfg.sessionPath));assert.equal(JSON.parse(fs.readFileSync(path.join(root,'school-auth-state.json'))).attempts||0,expectedSubmits);}
     const output=JSON.stringify(diagnostics);
-    for(const secret of ['fixture-user','fixture-only-secret','synthetic-session','fixture-csrf','?service=','?username='])assert.ok(!output.includes(secret),'diagnostics leaked fixture secret');
+    for(const secret of ['fixture-user','fixture-only-secret','fixture_session','synthetic','fixture-csrf','?service=','?username='])assert.ok(!output.includes(secret),'diagnostics leaked fixture secret');
+    if(scenarioOptions.postEvidence){const records=diagnostics.filter(d=>d.stage==='request-classification');assert.ok(records.length);for(const [key,value] of Object.entries(scenarioOptions.postEvidence))assert.ok(records.some(d=>d[key]===value),key);assert.ok(!output.includes('/fixture-public-config'));}
+    if(scenarioOptions.diagnose){assert.equal(adapter.stats().passwordSubmissions,0);assert.equal(adapter.stats().submissionReservations,0);for(const [name,value] of snapshots)assert.deepEqual(fs.readFileSync(path.join(root,name)),value);assert.ok(!fs.existsSync(path.join(root,'school-session.lock')));}
     if(rejectedTarget){assert.equal(blockedBeforeSend,1,"307 redirect denied before sending");return;}
     if(!scenarioOptions.blocked)assert.equal(blockedBeforeSend,0);
     for(const context of contexts){assert.equal(context.ignoreHTTPSErrors,false);assert.equal(context.isMobile,true);assert.equal(context.hasTouch,true);assert.equal(context.deviceScaleFactor,3);}
+    if(scenarioOptions.cancel||scenarioOptions.browserExit||scenarioOptions.invokeCLI||scenarioOptions.interactive)return;
     const device=await pages[0].evaluate(()=>({userAgent:navigator.userAgent,scale:devicePixelRatio,touch:navigator.maxTouchPoints,screenWidth:screen.width}));
     assert.match(device.userAgent,scenarioOptions.profile==="mobile-safari"?/iPhone.*Safari/:/iPhone.*MicroMessenger/);assert.equal(device.scale,3);assert.ok(device.touch>0);assert.equal(device.screenWidth,390);
   }finally{await adapter.close();}

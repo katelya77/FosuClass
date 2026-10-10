@@ -15,6 +15,7 @@ const HELP = `佛课小表 WYZ 手动入口
 账号和密码只从 PAM TTY 隐藏输入。mobile 映射 mobile-wechat（与 Windows 默认一致）。
 可选 mobile-safari / mobile-wechat / desktop；均为 Chromium 配置，并非原生 iOS 验收。
 diagnose-login 只访问公开 CAS 页，不读取凭据、不执行账号预检查、不保存 Session。
+表单就绪与网络兼容性分别报告；未知后台 POST 会被阻断并返回待审核，不能继续登录。
 auth-state 只读本机冷却和提交预算；旧计数无请求证据，保守保留。
 sample 必须先由 Oracle 管理员创建限期、有界任务；不会发布或替换正式 Staging。
 阶段 A 的 routine/full 锁定，等待真实权限与覆盖验收。所有真实访问须单独批准。
@@ -32,7 +33,11 @@ const MESSAGES = {
   SCHOOL_LOGIN_PRECHECK_FAILED:"官方验证码预检查未成功响应；密码未提交，已停止。",
   SCHOOL_LOGIN_PAGE_REJECTED:"公开 CAS 页面出现明确拒绝提示；尚未提交密码，不能据此判定凭据错误。",
   SCHOOL_LOGIN_RESOURCE_REJECTED:"CAS 所需脚本或样式来源未受信任；已拒绝加载，需要单独核实官方来源。",
-  ["SCHOOL_PASSWORD_RESUBMISSION_BLOCKED"]:"认证请求目标不符合审核范围或出现重复提交；已在放行前停止。",
+  ["SCHOOL_PASSWORD_RESUBMISSION_BLOCKED"]:"已审核的 CAS 主认证请求出现重复提交；已阻止第二次放行。",
+  SCHOOL_AUTH_POST_NOT_AUTHORIZED:"页面尝试发起尚未授权的 CAS 认证 POST；已拦截，不能视为密码已提交。",
+  SCHOOL_CREDENTIAL_REQUEST_BLOCKED:"凭据填写阶段出现未审核的页面请求；已拦截，停止本次登录。",
+  SCHOOL_AUTH_BROWSER_CLOSED:"登录浏览器已退出；本次已停止并释放会话锁，不会重试密码。",
+  SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED:"表单可能已就绪，但页面有未审核的后台请求；网络兼容性待确认，不能继续登录。",
   SCHOOL_AUTH_STATE_INVALID:"本机认证保护记录损坏；已停止，不会重置预算或冷却。",
   SCHOOL_PAGE_CHANGED:"受保护教务页面结构已变化；无法确认登录有效。",
   SCHOOL_PROTECTED_PAGE_REJECTED:"受保护教务页面未成功返回；不能保存或报告有效 Session。",
@@ -165,7 +170,8 @@ async function main(args = process.argv.slice(2), deps = {}) {
   if(options.command==='diagnose-login'){
     auth.secureDirectory(cfg.dataRoot,deps.platform);
     const unlock=acquireLock(cfg.dataRoot,'school-session.lock');let adapter;
-    try{adapter=await (deps.authDeps?.createAdapter||auth.createAdapter)(cfg,{signal:deps.signal,onDiagnostic:output,...deps.authDeps});const result=await adapter.diagnose();output(result);return result;}
+    try{adapter=await (deps.authDeps?.createAdapter||auth.createAdapter)(cfg,{signal:deps.signal,onDiagnostic:output,...deps.authDeps});const result=await adapter.diagnose();output(result);
+      if(result.networkCompatibility==='REVIEW_REQUIRED')throw Object.assign(fail('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED'),{diagnostic:result});return result;}
     finally{try{if(adapter)await adapter.close();}finally{unlock();}}
   }
   if (options.command === "status") {

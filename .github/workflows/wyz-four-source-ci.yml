@@ -30,6 +30,7 @@ jobs:
       - run: node tools/test-collector-sample-request-budget.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-login-browser-fixture.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-mobile.js
+      - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-post-policy.js
       - run: sudo python3 tools/test-school-recovery-consent.py
       - run: python3 tools/test-oracle-direct-observation.py
       - run: python3 tools/test-oracle-direct-diagnosis.py
@@ -47,6 +48,7 @@ jobs:
       - run: sudo "$(command -v node)" tools/test-collector-runtime-repair.js
       - run: node tools/test-full-sync-env-persistence.js
       - run: python3 tools/test-collector-archive.py
+      - run: python3 tools/test-collector-delivery.py
       - run: sudo "$(command -v node)" tools/test-collector-install-linux.js
       - run: sudo python3 tools/test-collector-upgrade-linux.py
       - run: sudo python3 tools/test-heartbeat-systemd.py
@@ -57,6 +59,23 @@ jobs:
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
+  windows-compatibility:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm --prefix tools/fosu-sync-client ci
+      - run: npx --prefix tools/fosu-sync-client playwright install chromium
+      - run: node tools/test-collector-cas-mobile.js
+      - run: node tools/test-collector-cas-post-policy.js
+      - run: npm run test:collector-personal-regression
+      - run: python tools/test-collector-delivery.py
   isolated-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 25

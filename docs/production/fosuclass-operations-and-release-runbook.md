@@ -12,11 +12,11 @@
 | 生产祖先 | 只读工作流 `38037091970` 确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 学校请求0、配置未改、未部署候选 |
 | Stage A 候选基线 | PR #87 Draft OPEN，HEAD `5e2473ecfa87cc0a2651cf49f105c415c64e7e1a`，base `codex/wyz-oracle-transport-package` | 从真实 #87 HEAD 继续，包含 main、已安装bff与生产祖先 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
-| WYZ 当前安装 | 用户 PAM：B_STAGE_PREFLIGHT_PASS、SOURCE_INTEGRITY=PASS、NATIVE_BROWSER=PASS、INSTALL_COMPLETE、COLLECTOR_REVISION_PASS | `bff952bc9d2f214dba0c011c022ca12862829327`；本轮未安装 |
+| WYZ 当前安装 | 用户 PAM：CAS_REPAIR_SERVICE_RECOVERED、Collector active/running、NRestarts=0、个人 Agent active、timer disabled、execute=0 | `6eea0ec099930f40d16cd3f0ea641e3572f9c675`；本轮未安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
 | WYZ 首次观察（修复前） | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | 历史 NOT_PASSED，保留故障证据 |
 | 当前版本一小时观察 | 用户 PAM：3607.22秒、119成功/0失败、118复用、最长间隔30.58秒、TLS授权通过、实际地址146.235.201.244、重启0、学校请求0 | PASS；Collector及个人Agent active，timer disabled/inactive，execute=0 |
-| 学校阻断 | 用户 PAM：SESSION_FILE_MISSING、SCHOOL_AUTH_NOT_CONFIGURED；check-only为SESSION_EXPIRED、登录尝试0、Session未变 | 未配置，不是密码错误；下一步先批准仅登录 |
+| 学校阻断 | 用户 PAM：公开移动页 form-ready 后 POST 守卫报 PASSWORD_RESUBMISSION_BLOCKED，但 passwordSubmissions/reservations=0 | 表单已识别，后台 POST 用途未知；先修复分类再单独批准公开诊断，不能判为密码错误 |
 | 正式微信构建版本/合法域名/真机刷新 | Git 配置和本地开发者工具配置不能证明已上线包 | 未核实，人工门禁 |
 
 当前常用工作区路径是指向 `D:\Dev\VScode\FosuClass` 的 junction，有用户未提交的两份 project 配置。本任务使用独立 worktree；不得用候选覆盖这些配置。main 尚不包含全部生产祖先；不能仅因“最新 main”而部署。
@@ -27,7 +27,7 @@
 
 ### PR #89：升级后的 ExecStart 误判修复
 
-用户最新 PAM 回传：`6eea0ec099930f40d16cd3f0ea641e3572f9c675` 已通过 SOURCE_INTEGRITY、依赖安装和 NATIVE_BROWSER，current 已切换；旧交付辅助脚本报 INSTALL_FAILED_COLLECTOR_STOPPED_USE_REVIEWED_ROLLBACK，Collector inactive、个人 Agent active、timer disabled。本次没有安装 WYZ；用户先独立恢复已安装版本，实际恢复输出尚待回传。此前 60 分钟 HMAC 心跳验收仍保留，不因安装辅助脚本故障重复进行网络诊断。
+历史安装故障：`6eea0ec099930f40d16cd3f0ea641e3572f9c675` 已通过 SOURCE_INTEGRITY、依赖安装和 NATIVE_BROWSER，current 已切换；旧辅助脚本误判导致 Collector inactive。最新用户 PAM 已确认 CAS_REPAIR_SERVICE_RECOVERED、Collector active/running/NRestarts=0、个人 Agent active、timer disabled、execute=0、Oracle Direct PASS。ExecStart 修复已在 d2ef1758 及对应 Linux CI 完成；本轮不重复修复或部署。此前 60 分钟 HMAC 心跳验收保留。
 
 旧脚本在停止服务、安装器 daemon-reload 后，以完整 `systemctl show ... -p ExecStart --value` 与停止前快照作字符串相等判断。该属性包含命令与运行记录，停止会更新 stop_time/code/status，reload/start 可改变时间和 PID。隔离 Linux 中执行旧交付脚本及真实安装器，已复现“安装成功、current 已切换、尚未 start 就误判”的路径；另以本地真实 systemd 临时 sleep unit 证明：命令参数不变，完整属性仍不相等。没有读取 WYZ 的原始属性，不能声称已远程确认具体哪个运行字段发生变化。
 
@@ -62,7 +62,25 @@ python3 check-heartbeat-service.py --state active --health
 
 表单/资源检查先于凭据提示，官方预检查保留、未知响应停止；独立阶段诊断不含正文或认证参数。认证 POST 预留预算后才放行，崩溃未确认的预留也消耗预算。30 分钟冷却、24 小时两次及 blocked 保护继续有效，不删除或重置历史记录。
 
-安装、公开页诊断、一次真实登录是三个独立人工门禁。候选包 PAM-HANDOFF 提供固定提交/哈希和升级/df4ed1e9 回滚；回滚保留现有认证预算和 Session。新凭据只在 PAM 隐藏输入，聊天披露密码应先更换。登录成功不批准 sample/full、后端部署、timer 或发布。
+安装、公开页诊断、一次真实登录是三个独立人工门禁。本轮升级前驱/回滚版本为 6eea0ec0；PAM-HANDOFF 固定提交与哈希，保留现有认证预算和 Session。新凭据只在 PAM 隐藏输入，聊天披露密码应先更换。登录成功不批准 sample/full、后端部署、timer 或发布。
+
+### PR #89：公开页 POST 分类与后续样本门禁
+
+最新 WYZ 公开诊断已经 navigationComplete、formPresent/三个输入按钮计数唯一、jsSubmit=true、无可见挑战、无来源阻断；随后错误来自旧守卫把所有非主认证 POST 归为密码重复提交。不能由 schoolRequests=24 推断后台 POST 的端点、用途或学校认证失败；实际放行密码次数为 0。
+
+新守卫将未知官方后台 POST 阻断并标为 BACKGROUND_POST_UNREVIEWED，独立于认证预算/致命 policyError。公开诊断输出 formReady 与 networkCompatibility 两个状态：未知请求只能 REVIEW_REQUIRED、loginReady=false，并以 SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED 非零退出。只有已有审查证据明确为 optional 的公开端点才允许“非关键请求被阻断但兼容”；生产 REVIEWED_PUBLIC_POSTS 目前为空，不新增端点、域名或校验绕过。账号预检查仍由获批登录显式调用既有 GET，不允许公开页自动执行账户预检查。详见 [分类、升级、回滚及验收命令](wyz-cas-mobile-repair.md#本轮公开页-post-修复与交付)。
+
+当前 auth-state 的 LEGACY_UNVERIFIED/blocked=true/预算1/日限2/冷却0 作为用户回传保留。diagnose-login 不读取凭据或 Session，也不写历史。解除 blocked 只能在问题修复、网络兼容性确认、无学校挑战且单独批准真实登录后，通过 --acknowledge-auth-failure；不删除状态文件，不退还旧预算，不越过冷却和日限。
+
+后续闭环必须逐阶段批准，不把登录就绪当作采集或发布授权：
+
+1. 候选安装另行批准；一次公开 CAS 页诊断。若 REVIEW_REQUIRED，停止，先取得批准范围内的端点/用途/固定参数证据，提交最小规则并复测；不反复请求学校。
+2. 兼容性通过并单独批准一次移动登录：PAM 隐藏输入新密码；受保护页与候选 Session 新 context 均通过后原子保存。任何挑战/身份拒绝/结构/TLS错误停止。
+3. Oracle 当前尚未部署 collector-manual.v1（用户事实）。先准备独立受控后端候选：锁定包含生产祖先的提交，跑 sample-contract/request-budget 与个人回归，备份原配置与版本，列出最小路由/权限 diff、回滚及健康指纹；部署须另行批准。管理员预设 enabled=false、无可领取任务，签名密钥沿现有 Collector 独立权限，不借用个人 Agent。受控部署结束只读验证 /api/full-sync/v1/status 的协议和指纹；CLI 不匹配协议时在学校访问前停止。不能声称 main 或本地测试已使现网协议生效。
+4. 批准一个班级请求组：先确认学期/目录范围/权限和用途，再创建 entityLimit=1、限期（最多30分钟）和请求预算任务；并发1、900–1300ms间隔、幂等 GET 最多一次重试，认证/挑战/过期不重试。验证实际响应、节次、周次、来源与分页；失败不扩大范围。
+5. 四类各一个获准样本，必须分别网络直采，allowDerived=false；不能把班级派生的教师/教室/课程作为独立来源。账号能登录不等于全部数据公开授权。
+6. 有界四源经独立 HMAC、指定 runId/租约、checkpoint、请求预算、canonicalHash/隐私/来源校验上传 Oracle 私有 Staging，终态必须 PENDING SAMPLE REVIEW。服务端 sampleOnly=true、qualityBlocked=true、sample-not-publishable，不能被审核为正式 Release，也不切 CloudBase active。
+7. 确认完整学校权限、频率与公开用途后才单独批准首次全量。Windows 人工同步保持共同的标准化/hash/Staging审核契约；其先后任务不可绕过租约或覆盖已审核的新数据。国内静态查询与个人版配置保持现状，不新增域名/付费资源。routine/full、timer、自动审核与正式发布继续锁定。
 
 ## Stage A 历史交付：统一交互式入口
 

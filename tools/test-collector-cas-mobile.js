@@ -23,7 +23,7 @@ async function main(){
     {form:form.replace('</head>',"<script src='https://unapproved.invalid/fixture.js'></script></head>"),error:'SCHOOL_LOGIN_RESOURCE_REJECTED',captcha:0,blocked:true},
     {diagnose:true},
     {form:form.replace("action='https://authserver.fosu.edu.cn/authserver/login'","action='https://authserver.fosu.edu.cn/authserver/login?service=https%3A%2F%2Fevil.invalid'"),error:'SCHOOL_TLS_OR_ORIGIN_REJECTED',captcha:0},
-    {form:form.replace("type='submit'","class='login-btn' type='button' onclick=\"fetch('/authserver/unreviewed',{method:'POST',body:'fixture'})\""),error:'SCHOOL_PASSWORD_RESUBMISSION_BLOCKED',blocked:true},
+    {form:form.replace("type='submit'","class='login-btn' type='button' onclick=\"fetch('/authserver/unreviewed',{method:'POST',body:'fixture'})\""),error:'SCHOOL_CREDENTIAL_REQUEST_BLOCKED',blocked:true},
     {ajax:true,form:"<html><body>统一身份认证 密码登录<div class='login-form'><input name='username'><input name='password' type='password'><button class='login-btn' type='button' onclick=\"fetch('/authserver/login',{method:'POST',body:'fixture'}).then(()=>location.href='https://100.fosu.edu.cn/framework/xsMain.jsp')\">登录</button></div></body></html>"},
     {form:form.replace("type='submit'","class='login-btn' type='button' onclick=\"fetch('/authserver/login',{method:'POST',body:'fixture'});fetch('/authserver/login',{method:'POST',body:'fixture'})\""),error:'SCHOOL_PASSWORD_RESUBMISSION_BLOCKED',posts:1,blocked:true},
     {credentialRejected:true,error:'INVALID_CREDENTIALS',posts:1},
