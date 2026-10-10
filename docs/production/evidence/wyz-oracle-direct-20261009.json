@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "source": "user-pam-observation",
+  "date": "2026-10-09",
+  "collectorRevision": "b1bc12f96692768d53004e2573e78e6bd5a62d5d",
+  "durationSeconds": 3605.86,
+  "successfulHeartbeats": 51,
+  "failedAttempts": 19,
+  "successRate": 0.7285714285714285,
+  "longestConfirmedHeartbeatGapSeconds": 459.96,
+  "tlsAuthorized": true,
+  "actualAddresses": ["146.235.201.244"],
+  "restarts": 0,
+  "pidCount": 1,
+  "collectorActive": true,
+  "schoolRequests": 0,
+  "acceptance": "NOT_PASSED",
+  "schoolAccessApproved": false,
+  "timerApproved": false,
+  "personalAgentFinalState": "active",
+  "personalAgentRestarts": 0,
+  "leaseSeconds": 90,
+  "candidateCodeCommit": "f5091282eab67805d9426d0260a94e96d60b7d50",
+  "candidateDeployedToWyz": false,
+  "candidateCi": {
+    "fourSourceLinux": 37953237462,
+    "publicSecurity": 37953062468,
+    "oraclePassiveAudit": 37953247047,
+    "conclusions": "success"
+  },
+  "oraclePassiveAudit": {
+    "commitSha": "a3dfd1989705f51c921f13883bcde1cce4502883",
+    "schoolRequests": 0,
+    "wanRequests": 0,
+    "configurationChanged": false,
+    "classContainingConfigIdleTimeouts": ["60"],
+    "classContainingConfigRequestLimits": ["5000"],
+    "classVhostInheritance": "REQUIRES_SEPARATE_VERIFICATION",
+    "hostAllPortCumulativeCounters": {
+      "SyncookiesSent": 774,
+      "SyncookiesFailed": 31,
+      "ListenOverflows": 0,
+      "ListenDrops": 179,
+      "TCPReqQFullDoCookies": 774,
+      "TCPReqQFullDrop": 0
+    },
+    "countersScope": "host all ports cumulative; not attributable to WYZ or this observation window"
+  },
+  "failureLayer": "RECENT_FAILURES_TCP_CONNECT",
+  "passiveDiagnostic": {
+    "windowHours": 2,
+    "windowAllTransportFailureCounts": {
+      "connection-reset/ECONNRESET": 24,
+      "timeout/ETIMEDOUT": 28
+    },
+    "countsScope": "inline diagnostic did not filter transportMode; not all counts attributed to oracle-direct",
+    "recentFailureSamples": 20,
+    "recentCategory": "timeout",
+    "recentTransportCode": "ETIMEDOUT",
+    "recentConnectionPhase": "connect",
+    "recentElapsedMsRange": [6002, 6009],
+    "recentTlsHandshakeReached": false,
+    "recentSocketReuse": false,
+    "underlyingNetworkDropLocation": "UNKNOWN"
+  },
+  "gapMeaning": "confirmed successful heartbeat interval; not physical network outage duration"
+}

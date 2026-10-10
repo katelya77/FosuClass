@@ -21,6 +21,7 @@ async function main() {
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   process.env.FOSU_COLLECTOR_MODE = "1";
+  process.env.FOSU_SYNC_FIXTURE_ONLY = "1"; // HTTP is permitted only on 127.0.0.1, never a school host.
   process.env.FOSU_BASE_URL = "http://127.0.0.1:" + server.address().port;
   process.env.FOSU_SYNC_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-adapters-"));
   global.SYNC_PLAN = buildSyncPlan("crawl:daily", { term: "2026-2027-1", "run-id": "fixture-direct", "allow-derived": false }, {});

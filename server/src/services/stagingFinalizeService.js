@@ -152,6 +152,11 @@ async function finalizeChunkedUpload(input, job) {
     throw error;
   }
   stagingData.stagingUploadId = finalized.manifest.uploadId;
+  // Windows and WYZ four-source plans share the server-side integrity gate.
+  if (stagingData.meta && stagingData.meta.allowDerived === false && ["classSchedules","teacherSchedules","classroomSchedules","courseSchedules"].every(scope=>(stagingData.meta.includeScopes||[]).includes(scope))) {
+    require("../shared/fourDirectSourceContract").assertFourSources(stagingData,stagingData.term || stagingData.semester);
+    stagingData.meta.requireFourDirectSources=true;
+  }
 
   if (input.collectorRun) {
     const collector = require("./scheduleCollectorService");

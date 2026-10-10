@@ -319,7 +319,7 @@ function selectNewestRuntimePointer(pointers) {
 }
 
 function fetchRuntimePointer(options = {}) {
-  const bucket = Math.floor(now() / 60000);
+  const bucket = Math.floor(now() / 20000);
   const origins = getOrigins().filter((origin) => isUsableUrl(origin.runtimeRoot));
   const buildUrl = (origin) => withQuery(joinUrl(origin.runtimeRoot, "active.json"), { bucket });
   const baseOptions = Object.assign({
@@ -329,20 +329,31 @@ function fetchRuntimePointer(options = {}) {
     return requestAcrossOrigins("runtime", buildUrl, baseOptions);
   }
 
-  // Runtime pointers are tiny control-plane records. Read every ready origin in
-  // parallel and choose the newest pointer, so a lagging CDN cannot roll the
-  // miniprogram back to the previous active term. Release/index/detail reads
-  // remain primary-first for performance.
-  return Promise.all(origins.map((origin) => requestAcrossOrigins("runtime", buildUrl, Object.assign({}, baseOptions, {
-    forceOrigin: origin.name,
-    dedupe: false,
-  })).then((pointer) => ({ pointer }), (error) => ({ error }))))
-    .then((results) => {
-      const pointer = selectNewestRuntimePointer(results.map((result) => result.pointer));
-      if (pointer) return pointer;
-      const failed = results.find((result) => result.error);
-      throw failed && failed.error || Object.assign(new Error("STATIC_ORIGIN_UNAVAILABLE"), { code: "STATIC_ORIGIN_UNAVAILABLE" });
+  // CloudBase may satisfy the foreground immediately. Oracle reconciles in the
+  // background; a cached high-water pointer prevents a lagging mirror rollback.
+  let selected = options.minimumPointer || null;
+  const candidates = [];
+  const merge = pointer => {
+    const next = selectNewestRuntimePointer([selected,pointer]);
+    if (next && (!selected || runtimePointerTime(next)>runtimePointerTime(selected) || next.releaseVersion===selected.releaseVersion)) selected=next;
+    return selected;
+  };
+  const pending = origins.map(origin => requestAcrossOrigins("runtime",buildUrl,Object.assign({},baseOptions,{forceOrigin:origin.name,dedupe:false}))
+    .then(pointer=>{
+      if (!pointer || pointer.success===false || !pointer.releaseVersion || !(pointer.activeTerm || pointer.term)) throw Object.assign(new Error("INVALID_RUNTIME_POINTER"),{code:"INVALID_RUNTIME_POINTER"});
+      candidates.push(pointer);
+      const before=selected, next=merge(pointer);
+      if (options.onNewerPointer && next!==before) { try { options.onNewerPointer(next); } catch (_) {} }
+      return {pointer:next};
+    }).catch(error=>({error})));
+  return pending[0].then(primary=>{
+    if(primary.pointer) return merge(selectNewestRuntimePointer(candidates));
+    return Promise.all(pending).then(results=>{
+      const pointer=selectNewestRuntimePointer(results.map(r=>r.pointer));
+      if(pointer) return merge(pointer);
+      throw primary.error || Object.assign(new Error("STATIC_ORIGIN_UNAVAILABLE"),{code:"STATIC_ORIGIN_UNAVAILABLE"});
     });
+  });
 }
 
 function fetchManifest(releaseVersion, options = {}) {

@@ -1,5 +1,5 @@
 "use strict";
-const assert = require("assert/strict"), fs = require("fs"), os = require("os"), path = require("path"), https = require("https"), net = require("net"), crypto = require("crypto"), { execFileSync } = require("child_process");
+const assert = require("assert/strict"), fs = require("fs"), os = require("os"), path = require("path"), https = require("https"), net = require("net"), crypto = require("crypto"), vm = require("vm"), Module = require("module"), { execFileSync } = require("child_process");
 const transport = require("./wyz-schedule-collector/oracleTransport"), collector = require("./wyz-schedule-collector/collector"), recovery = require("./wyz-schedule-collector/heartbeatRecovery"), signature = require("../server/src/security/fullSyncSignature");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-tls-fixture-")); fs.chmodSync(root, 0o700);
 const policy = { schema: 1, mode: "oracle-direct", originIpv4: transport.ORIGIN_IPV4 };
@@ -51,13 +51,13 @@ async function main() {
       if (mode==="503-once") {mode="ok";res.statusCode=503;res.end('{}');return;}
       res.statusCode = Number(mode) || 200; res.setHeader("content-type", "application/json"); if(mode==="redirect"){res.statusCode=307;res.setHeader("Location","https://example.org");} res.end('{"ok":true}');
     });
-  }); server.on("secureConnection", () => connections++); server.on("tlsClientError",()=>{});
+  }); server.keepAliveTimeout = 65000; server.on("secureConnection", () => connections++); server.on("tlsClientError",()=>{});
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
   const agents = [];
-  function fetcher(target = server, trust = true, timeout) {
+  function fetcher(target = server, trust = true, timeout, idleOverride) {
     const pools=new Map();
     return transport.createFetcher(policy, { connectTimeoutMs:timeout, onConnection: t=>traces.push(t), request: (url,opts,cb) => {
-      if(!pools.has(opts.agent)){const agent=new https.Agent({keepAlive:true,maxSockets:1,...(trust?{ca}:{}),lookup:(_,hint,done)=>hint.all?done(null,[{address:"127.0.0.1",family:4}]):done(null,"127.0.0.1",4)});pools.set(opts.agent,agent);agents.push(agent);}
+      if(!pools.has(opts.agent)){const agent=new https.Agent({...opts.agent.options,...(idleOverride===undefined?{}:{timeout:idleOverride}),...(trust?{ca}:{}),lookup:(_,hint,done)=>hint.all?done(null,[{address:"127.0.0.1",family:4}]):done(null,"127.0.0.1",4)});pools.set(opts.agent,agent);agents.push(agent);}
       return https.request(url,{...opts,port:target.address().port,agent:pools.get(opts.agent)},cb);
     } });
   }
@@ -66,6 +66,31 @@ async function main() {
     await check("real TLS, Host, SNI, fresh HMAC and connection reuse", async () => {
       await api("POST",recovery.HEARTBEAT,{}); await api("POST",recovery.HEARTBEAT,{});
       assert.equal(connections,1); assert.equal(new Set(nonces).size,2); assert.equal(traces.at(-1).reusedSocket,true); assert.equal(traces.at(-1).tlsAuthorized,true);
+    });
+    await check("30-second idle heartbeat reuses TLS; legacy 5-second idle pool reconnects", async () => {
+      const oldPool = fetcher(server,true,undefined,5000), newPool = fetcher();
+      const oldApi = collector.client(cfg,oldPool), newApi = collector.client(cfg,newPool);
+      // Run the actual deployed b1 factory through the proposed PAM wrapper.
+      // All HTTP is still redirected to this local, CA-verified fixture.
+      const legacy = new Module(path.join(root,"b1-oracle-transport.js"));
+      legacy._compile(execFileSync("git",["show","b1bc12f96692768d53004e2573e78e6bd5a62d5d:tools/wyz-schedule-collector/oracleTransport.js"],{encoding:"utf8"}),legacy.id);
+      const wrapper = fs.readFileSync(path.join(__dirname,"../deploy/wyz/apply-control-keepalive.py"),"utf8").match(/REPLACEMENT = '''([\s\S]*?)'''/)[1];
+      const compatPools = new Map();
+      const compat = vm.runInNewContext(wrapper+"\nfetcher;",{transport:legacy.exports,cfg:{transport:policy},console:{log:value=>traces.push(JSON.parse(value).acceptanceConnection)},require:name=>{
+        assert.equal(name,"https");return {request:(url,opts,cb)=>{
+          if(!compatPools.has(opts.agent)){const agent=new https.Agent({...opts.agent.options,ca,lookup:(_,hint,done)=>hint.all?done(null,[{address:"127.0.0.1",family:4}]):done(null,"127.0.0.1",4)});compatPools.set(opts.agent,agent);agents.push(agent);}
+          return https.request(url,{...opts,port:server.address().port,agent:compatPools.get(opts.agent)},cb);
+        }};
+      }});
+      const compatApi = collector.client(cfg,compat);
+      try {
+        await oldApi("POST",recovery.HEARTBEAT,{}); await newApi("POST",recovery.HEARTBEAT,{}); await compatApi("POST",recovery.HEARTBEAT,{});
+        await new Promise(resolve => setTimeout(resolve,30500));
+        await oldApi("POST",recovery.HEARTBEAT,{}); assert.equal(traces.at(-1).reusedSocket,false);
+        await newApi("POST",recovery.HEARTBEAT,{}); assert.equal(traces.at(-1).reusedSocket,true);
+        await compatApi("POST",recovery.HEARTBEAT,{}); assert.equal(traces.at(-1).reusedSocket,true);
+        assert.equal(traces.at(-1).tlsAuthorized,true); assert.equal(new Set(nonces).size,nonces.length);
+      } finally { oldPool.close();newPool.close();compat.close(); }
     });
     await check("reset recovers without route switching or credential exposure", async () => {
       mode="reset"; const hb=recovery.createHeartbeat(api,{delays:[1]}); await hb(); assert.equal(hb.state.consecutiveFailures,0); assert.ok(!JSON.stringify(traces).includes(env.FULL_SYNC_AGENT_TOKEN));

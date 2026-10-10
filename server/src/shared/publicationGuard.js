@@ -1,0 +1,24 @@
+"use strict";
+const fs=require("fs"),path=require("path"),crypto=require("crypto");
+const leases = new WeakMap();
+function fail(code){return Object.assign(new Error(code),{code,statusCode:409});}
+function acquire(directory){
+  fs.mkdirSync(directory,{recursive:true,mode:0o700});
+  if(fs.lstatSync(directory).isSymbolicLink())throw fail("PUBLICATION_LOCK_PATH_REJECTED");
+  const file=path.join(directory,"publication.lock"),owner=crypto.randomBytes(16).toString("hex");
+  let fd;try{fd=fs.openSync(file,"wx",0o600);}catch(e){if(e.code==="EEXIST")throw fail("PUBLICATION_LOCKED");throw e;}
+  try{fs.writeFileSync(fd,JSON.stringify({pid:process.pid,owner,startedAt:new Date().toISOString()}));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+  const release=()=>{assertOwned(directory,release);fs.unlinkSync(file);leases.delete(release);};
+  leases.set(release,{directory:path.resolve(directory),file,owner});
+  return release;
+}
+function assertOwned(directory,lease){
+  const record=(typeof lease==="function" || lease && typeof lease==="object") && leases.get(lease);
+  if(!record || record.directory!==path.resolve(directory))throw fail("PUBLICATION_LEASE_REJECTED");
+  const entry=JSON.parse(fs.readFileSync(record.file,"utf8"));
+  if(entry.pid!==process.pid || entry.owner!==record.owner)throw fail("PUBLICATION_LEASE_REJECTED");
+}
+function assertExpectedVersion(actual,expected){if(expected!==undefined&&String(actual||"")!==String(expected||""))throw fail("PUBLICATION_BASELINE_CHANGED");}
+function epoch(pointer){const value=Number(pointer&&pointer.cacheEpoch);return Number.isSafeInteger(value)&&value>0?value:Date.parse(pointer&&pointer.updatedAt||"")||0;}
+function assertNotOlder(candidate,current){if(epoch(current)>epoch(candidate))throw fail("PUBLICATION_POINTER_REGRESSION");}
+module.exports={acquire,assertOwned,assertExpectedVersion,assertNotOlder,epoch};

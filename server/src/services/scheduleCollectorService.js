@@ -4,13 +4,14 @@ const path = require("path");
 const crypto = require("crypto");
 const termRegistry = require("./termRegistryService");
 const { assertPublicData } = require("../shared/fourDirectSourceContract");
+const schedulePolicy = require("../shared/scheduleCollectorPolicy");
 
 const STAGES = ["idle", "auth-check", "catalog", "class", "teacher", "classroom", "course", "schedule", "normalize", "hash", "upload", "validate", "publish", "mirror"];
 const BACKOFF_MS = [30 * 60 * 1000, 2 * 60 * 60 * 1000, 6 * 60 * 60 * 1000];
 const SCHOOL_CONCURRENCY = 1;
 const HEARTBEAT_TTL_MS = 90000, LEASE_TTL_MS = 120000;
 let state, loaded = false;
-function emptyState() { return { paused: false, lastHeartbeat: null, lastRunAt: null, lastSuccessAt: null, failureCount: 0, stopForDay: false, sessionExpired: false, lock: null, current: null, runs: [] }; }
+function emptyState() { return { paused: false, lastHeartbeat: null, lastRunAt: null, lastSuccessAt: null, failureCount: 0, stopForDay: false, sessionExpired: false, retryNotBefore: null, lock: null, current: null, runs: [] }; }
 function opsDir() { return path.resolve(process.env.SCHEDULE_COLLECTOR_DIR || path.join(__dirname, "../../storage/ops/schedule-collector")); }
 function statePath() { return path.join(opsDir(), "state.json"); }
 function persist() {
@@ -36,36 +37,22 @@ function activeBaseline() {
   return { canonicalHash: info.canonicalHash || info.manifest && info.manifest.canonicalHash || "", term: info.term || info.semester || "", resourceCounts: info.resourceCounts || info.manifest && info.manifest.resourceCounts || null };
 }
 function classifyRelease(previous, incoming) {
-  const prior = previous || {}, next = incoming || {};
-  const reasons = [];
-  if (prior.term && next.term !== prior.term) reasons.push("semester-change");
-  if (next.coverageValid !== true) reasons.push("coverage-invalid");
-  for (const kind of ["class", "teacher", "classroom", "course"]) {
-    const stat = next.directSourceSummary && next.directSourceSummary[kind];
-    if (!stat || stat.sourceMode !== "network-direct" || stat.coverageValid !== true || stat.failed || stat.parserErrors) reasons.push(kind + "-source-invalid");
-    if (stat && stat.empty / Math.max(1, stat.success + stat.empty) > 0.5) reasons.push(kind + "-empty-rate");
-    const before = Number(prior.resourceCounts && prior.resourceCounts[kind] && prior.resourceCounts[kind].scheduleDocuments || prior.counts && prior.counts[kind]);
-    const after = Number(next.resourceCounts && next.resourceCounts[kind] && next.resourceCounts[kind].scheduleDocuments || stat && stat.scheduleDocuments || next.counts && next.counts[kind]);
-    if (!after) reasons.push(kind + "-empty");
-    if (before > 0 && after < before * 0.9) reasons.push(kind + "-drop");
-  }
-  if (!reasons.length && prior.canonicalHash && next.canonicalHash === prior.canonicalHash) return { result: "NO CHANGE", autoPublish: false, reasons: [] };
-  return { result: "PENDING REVIEW", autoPublish: false, reasons: reasons.length ? reasons : ["auto-publish-disabled"] };
+  return require("../shared/schedulePublicationPolicy").evaluate(previous,incoming);
 }
 function backoffFor(failureCount, code) {
-  if (["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(code)) return { stop: true, delayMs: null, message: "校内采集会话已失效，请人工刷新" };
+  if (["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(code) || /^SCHOOL_(AUTH|LOGIN|SESSION|TLS|PAGE)_/.test(code||"")) return { stop: true, delayMs: null, message: "校内采集会话已失效，请人工刷新" };
   if (failureCount >= 4) return { stop: true, delayMs: null, message: "当天连续异常，已停止自动重试" };
   return { stop: false, delayMs: BACKOFF_MS[Math.max(0, Math.min(failureCount - 1, 2))], message: "" };
 }
 function publicRun(run) {
   if (!run) return null;
   const result = {};
-  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId"]) if (run[key] !== undefined) result[key] = run[key];
+  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId", "scheduleKey", "schedulePolicy", "reviewClass", "qualityBlocked"]) if (run[key] !== undefined) result[key] = run[key];
   return result;
 }
 function snapshot(now) {
-  ensureLoaded(); const current = Number(now || Date.now()), schedule = nextSchedule(current);
-  return { enabled: !state.paused, timerVerified: process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1", collectorOnline: Boolean(state.lastHeartbeat && current - Date.parse(state.lastHeartbeat) < HEARTBEAT_TTL_MS), lastHeartbeat: state.lastHeartbeat, lastRunAt: state.lastRunAt, lastSuccessAt: state.lastSuccessAt, nextRoutineAt: schedule.routineAt, nextFullAt: schedule.fullAt, sessionExpired: state.sessionExpired, sessionMessage: state.sessionExpired ? "校内采集会话已失效，请人工刷新" : "", stopForDay: state.stopForDay, current: publicRun(state.current), recent: state.runs.slice(0, 8).map(publicRun), autoPublish: false };
+  ensureLoaded(); const current = Number(now || Date.now()), schedule = schedulePolicy.nextSchedule(current), scheduling = schedulePolicy.decision(state, current);
+  return { enabled: !state.paused, timerVerified: process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1", schedulePolicy: schedule.policy, scheduleDecision: scheduling.reason, scheduleWindowMinutes: schedulePolicy.config().windowMs / 60000, retryNotBefore: state.retryNotBefore ? new Date(state.retryNotBefore).toISOString() : null, collectorOnline: Boolean(state.lastHeartbeat && current - Date.parse(state.lastHeartbeat) < HEARTBEAT_TTL_MS), lastHeartbeat: state.lastHeartbeat, lastRunAt: state.lastRunAt, lastSuccessAt: state.lastSuccessAt, nextRoutineAt: schedule.routineAt, nextFullAt: schedule.fullAt, sessionExpired: state.sessionExpired, sessionMessage: state.sessionExpired ? "校内采集会话已失效，请人工刷新" : "", stopForDay: state.stopForDay, current: publicRun(state.current), recent: state.runs.slice(0, 8).map(publicRun), autoPublish: false };
 }
 function requestRun(mode, actor, now, options = {}) {
   ensureLoaded();
@@ -85,6 +72,14 @@ function requestRun(mode, actor, now, options = {}) {
     state.runs.unshift(run); state.runs = state.runs.slice(0, 20);
   }
   state.current = run; state.lock = null; state.lastRunAt = run.startedAt; state.stopForDay = false; state.sessionExpired = false;
+  state.retryNotBefore = null;
+  if (options.schedule) {
+    state.lastScheduledKey = options.schedule.slot.key;
+    const p = shanghaiParts(Number(now || Date.now()));
+    state.lastScheduledDay = [p.year, p.month + 1, p.date].join("-");
+    run.scheduleKey = options.schedule.slot.key;
+    run.schedulePolicy = options.schedule.policy;
+  }
   persist(); return { skipped: false, run: publicRun(run), status: snapshot(now) };
 }
 function setPaused(paused) { ensureLoaded(); state.paused = Boolean(paused); persist(); return snapshot(); }
@@ -99,13 +94,11 @@ function heartbeat(agentId, now, body = {}) {
   state.lastHeartbeat = new Date(stamp).toISOString(); state.agentId = String(agentId || "").slice(0, 64);
   let cancelled = false;
   if (body.runId) { try { requireRun(body.runId, agentId, body.claimId, stamp); state.lock.expiresAt = stamp + LEASE_TTL_MS; } catch (_) { cancelled = true; } }
-  const p = shanghaiParts(stamp), dayKey = [p.year, p.month + 1, p.date].join("-");
-  const slot = shanghaiToUtc(p.year, p.month, p.date, 4, 30);
-  const due = stamp >= slot && stamp < slot + 30 * 60 * 1000;
-  const successes = state.runs.filter((run) => run.finishedAt && ["PENDING REVIEW", "NO CHANGE"].includes(run.result)).length;
-  if (!state.paused && !state.stopForDay && process.env.FOSU_COLLECTOR_TIMER_VERIFIED === "1" && successes >= 3 && due && state.lastScheduledDay !== dayKey && (!state.current || state.current.finishedAt)) {
-    state.lastScheduledDay = dayKey;
-    requestRun("routine", "verified-timer", stamp);
+  const scheduling = schedulePolicy.decision(state, stamp);
+  if (scheduling.allowed) {
+    // Reserve only after a valid active term allowed the run to be created.
+    // requestRun/persist are synchronous in the single control-plane writer.
+    requestRun(scheduling.slot.mode, "verified-timer", stamp, { schedule: scheduling });
   }
   persist(); return { ok: true, paused: state.paused, cancelled };
 }
@@ -140,8 +133,9 @@ function applyReport(runId, body, agentId, now = Date.now()) {
   if (body.failureCode) {
     if (!/^[A-Z0-9_:-]{1,80}$/.test(body.failureCode)) fail("COLLECTOR_FAILURE_REJECTED", 400);
     const plan = backoffFor(++state.failureCount, body.failureCode);
+    state.retryNotBefore = plan.delayMs ? now + plan.delayMs : null;
     run.result = "FAILED"; run.failureCode = body.failureCode; run.finishedAt = new Date(now).toISOString(); state.lock = null;
-    if (plan.stop) { state.stopForDay = true; state.sessionExpired = ["SESSION_EXPIRED", "INVALID_CREDENTIALS"].includes(body.failureCode); }
+    if (plan.stop) { state.stopForDay = true; state.sessionExpired = ["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(body.failureCode) || /^SCHOOL_(AUTH|LOGIN|SESSION|TLS|PAGE)_/.test(body.failureCode); }
   } else if (body.complete) {
     let verified;
     const baseline = activeBaseline();
@@ -157,8 +151,10 @@ function applyReport(runId, body, agentId, now = Date.now()) {
       run.resourceCounts = summary.resourceCounts; run.counts = summary.counts;
     }
     const decision = classifyRelease(baseline, verified);
+    run.reviewClass = decision.reviewClass; run.qualityBlocked = Boolean(decision.blockers && decision.blockers.length);
     run.result = decision.result; run.reasons = decision.reasons; run.canonicalHashChanged = decision.result !== "NO CHANGE"; run.finishedAt = new Date(now).toISOString(); run.stage = decision.result === "NO CHANGE" ? "hash" : "validate";
     state.lastSuccessAt = run.finishedAt; state.failureCount = 0; state.stopForDay = false; state.sessionExpired = false; state.lock = null;
+    state.retryNotBefore = null;
   }
   persist(); return publicRun(run);
 }

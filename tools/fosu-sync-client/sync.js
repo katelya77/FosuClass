@@ -695,6 +695,12 @@ async function gotoPage(page, relativePath, options = { waitUntil: "networkidle"
   const cleanPath = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
   const httpUrl = `${FOSU_BASE_URL.replace(/^https:/i, "http:")}${cleanPath}`;
   const httpsUrl = `${FOSU_BASE_URL}${cleanPath}`;
+  if (process.env.FOSU_COLLECTOR_MODE === "1") {
+    const fixture=new URL(httpsUrl);
+    if (process.env.FOSU_SYNC_FIXTURE_ONLY === "1" && fixture.protocol==="http:" && fixture.hostname==="127.0.0.1") return page.goto(httpsUrl,options);
+    if (new URL(httpsUrl).origin !== "https://100.fosu.edu.cn") throw Object.assign(new Error("SCHOOL_TLS_OR_ORIGIN_REJECTED"), { code:"SCHOOL_TLS_OR_ORIGIN_REJECTED" });
+    return page.goto(httpsUrl, options);
+  }
   
   try {
     await page.goto(httpUrl, options);
@@ -3654,12 +3660,7 @@ async function handleResourcesSync(resourceTypes, options = {}) {
  * 初始化已登录的 Playwright 上下文
  */
 async function initBrowserContext() {
-  const launchArgs = withDirectBrowserArgs([
-    "--disable-blink-features=AutomationControlled",
-    "--ignore-certificate-errors",
-    "--disable-web-security",
-    "--allow-running-insecure-content"
-  ]);
+  const launchArgs = withDirectBrowserArgs([]);
 
   let browser;
   if (process.env.FOSU_COLLECTOR_MODE === "1") {
@@ -3710,7 +3711,7 @@ async function initBrowserContext() {
     }
     context = await browser.newContext({
       storageState: SESSION_PATH,
-      ignoreHTTPSErrors: true,
+      ignoreHTTPSErrors: false,
     });
   } else if (FOSU_SYNC_AUTH_MODE === "manual-cookie") {
     if (!process.env.FOSU_MANUAL_COOKIE) {
@@ -3721,7 +3722,7 @@ async function initBrowserContext() {
       throw error;
     }
     context = await browser.newContext({
-      ignoreHTTPSErrors: true,
+      ignoreHTTPSErrors: false,
     });
     // 注入浏览器会话凭据
     const cookies = parseCookieString(process.env.FOSU_MANUAL_COOKIE, FOSU_BASE_URL);
@@ -3740,6 +3741,8 @@ async function initBrowserContext() {
     global.SCHOOL_REQUEST_COUNT = Number(syncCacheStore.readJson(countFile, {}).count || 0);
     let schoolQueue = Promise.resolve(), lastSchoolRequest = 0;
     await context.route("**/*", async (route) => {
+      const target=new URL(route.request().url());
+      if (["100.fosu.edu.cn","authserver.fosu.edu.cn"].includes(target.hostname) && target.protocol!=="https:") return route.abort("blockedbyclient");
       if (new URL(route.request().url()).hostname !== "100.fosu.edu.cn") return route.continue();
       const task = schoolQueue.catch(() => {}).then(async () => {
         const delay = Math.max(0, lastSchoolRequest + 900 + Math.floor(Math.random() * 401) - Date.now());

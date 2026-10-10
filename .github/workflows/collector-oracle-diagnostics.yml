@@ -1,7 +1,16 @@
 name: Collector Oracle Read-only Diagnostics
 on:
   workflow_dispatch:
+    inputs:
+      passive_only:
+        description: 'Read connection configuration/counters only; no WAN probes'
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      passive_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -11,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Read-only Oracle path, TLS and sanitized log summaries
+        if: ${{ !inputs.passive_only }}
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2; supports script_path
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -18,3 +28,21 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script_path: deploy/wyz/diagnose-oracle-transport.sh
           command_timeout: 5m
+      - name: Read-only live fingerprint and origin security controls
+        if: ${{ !inputs.passive_only }}
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_path: deploy/wyz/audit-oracle-origin-security.sh
+          command_timeout: 3m
+      - name: Passive control socket settings and listener counters
+        if: ${{ inputs.passive_only }}
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_path: deploy/wyz/audit-oracle-control-sockets.sh
+          command_timeout: 3m

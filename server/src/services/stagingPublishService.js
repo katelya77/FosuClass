@@ -159,7 +159,12 @@ function throwPublishError(code, message, extra) {
   throw error;
 }
 
-async function writeReleasePackAndActivate(stagingData, job) {
+async function writeReleasePackAndActivate(stagingData, job, options = {}) {
+  const strict = process.env.FOSU_DUAL_ORIGIN_PUBLICATION === "1";
+  if (strict && options.publicationConfirmation !== "CONFIRM_DUAL_ORIGIN_PUBLICATION") throwPublishError("PUBLICATION_APPROVAL_REQUIRED", "双源发布需要确认已审核的数据和目标版本。");
+  if (!strict && options.publicationConfirmation) throwPublishError("DUAL_ORIGIN_PUBLICATION_DISABLED", "双源发布适配尚未获准启用。");
+  const baseline=releaseService.getActiveReleaseInfo() || {};
+  const expectedActiveReleaseVersion=options.expectedActiveReleaseVersion !== undefined ? options.expectedActiveReleaseVersion : baseline.releaseVersion || baseline.version || "";
   if (job) job.progress(18, "loading snapshot");
   const written = await releaseService.writeReleaseSnapshotAsync(stagingData, { job });
   const releaseVersion = written.version || written.releaseVersion;
@@ -173,6 +178,16 @@ async function writeReleasePackAndActivate(stagingData, job) {
     throw error;
   }
 
+  if (strict) {
+    if (job) job.progress(72, "preparing and verifying both origins", { releaseVersion });
+    const fingerprint = getSnapshotFingerprint(releaseService.readReleaseSnapshot(releaseVersion));
+    const publication = await require("./dualOriginReleaseService").publishPrepared({
+      releaseVersion, canonicalHash: fingerprint && fingerprint.canonicalHash,
+      expectedActiveReleaseVersion, confirmation: options.publicationConfirmation,
+    });
+    return Object.assign({}, written, { publication, deepStatus, staticSync: staticReleaseSyncService.getSyncStatus({ version: releaseVersion }) });
+  }
+
   if (job) job.progress(72, "syncing OpenResty", { releaseVersion });
   const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion, { job });
 
@@ -180,7 +195,7 @@ async function writeReleasePackAndActivate(stagingData, job) {
     releaseVersion,
     staticSyncStatus: staticSync.status,
   });
-  const activated = releaseService.activateReleaseVersion(releaseVersion);
+  const activated = releaseService.activateReleaseVersion(releaseVersion,{expectedActiveReleaseVersion});
   return Object.assign({}, written, activated, { staticSync, deepStatus });
 }
 
@@ -200,7 +215,7 @@ async function writeReleasePackAndBindReady(stagingData, job) {
   }
 
   if (job) job.progress(72, "syncing OpenResty", { releaseVersion, term });
-  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion, { job });
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion, { job, prepareOnly: true });
 
   if (!termRegistryService.getTerm(term)) {
     termRegistryService.createPlannedTerm(Object.assign({}, stagingData.termConfig || {}, {
@@ -289,6 +304,8 @@ function finalizeReleaseActivation(options = {}) {
 }
 
 async function runStagingPublish(input = {}, job) {
+  if (input.publicationConfirmation && input.publicationConfirmation !== "CONFIRM_DUAL_ORIGIN_PUBLICATION") throwPublishError("PUBLICATION_APPROVAL_REQUIRED", "双源发布确认值无效。");
+  if (input.publicationConfirmation && process.env.FOSU_DUAL_ORIGIN_PUBLICATION !== "1") throwPublishError("DUAL_ORIGIN_PUBLICATION_DISABLED", "双源发布适配尚未获准启用。");
   const forcePublish = input.force === true;
   const releaseNote = input.releaseNote || "";
   const auditReq = {
@@ -304,6 +321,7 @@ async function runStagingPublish(input = {}, job) {
   const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
   if (stagingData.meta && stagingData.meta.requireFourDirectSources) require("../shared/fourDirectSourceContract").assertFourSources(stagingData, stagingData.term || stagingData.semester);
   const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  const reviewedActiveVersion = activeSnapshot && (activeSnapshot.releaseVersion || activeSnapshot.version) || "";
   const stagingFingerprintInfo = getSnapshotFingerprint(stagingData);
   const activeCanonicalHash = getActiveCanonicalHash();
   if (stagingFingerprintInfo && stagingFingerprintInfo.canonicalHash && activeCanonicalHash && stagingFingerprintInfo.canonicalHash === activeCanonicalHash) {
@@ -381,7 +399,7 @@ async function runStagingPublish(input = {}, job) {
   const activeTerm = termRegistryService.getActiveTerm();
   const shouldActivate = Boolean(!readyOnly && activeTerm && activeTerm.term === stagingTerm);
   const publishResult = shouldActivate
-    ? await writeReleasePackAndActivate(stagingData, job)
+    ? await writeReleasePackAndActivate(stagingData, job, Object.assign({}, input, { expectedActiveReleaseVersion: reviewedActiveVersion }))
     : await writeReleasePackAndBindReady(stagingData, job);
   if (!shouldActivate) {
     const status = releaseService.getReleaseStatus();
@@ -454,6 +472,7 @@ async function runStagingPublish(input = {}, job) {
     quickHealth,
     deepStatus: publishResult.deepStatus,
     staticSync: publishResult.staticSync,
+    publication: publishResult.publication || null,
     lifecycle,
   };
 }

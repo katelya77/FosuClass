@@ -2231,15 +2231,37 @@ function restoreFileBuffer(filePath, buffer) {
 }
 
 function restoreActivationState(previousState) {
-  if (!previousState) return;
+  if (!previousState) return false;
   restoreFileBuffer(ACTIVE_RELEASE_PATH, previousState.active);
   restoreFileBuffer(CURRENT_SNAPSHOT_PATH, previousState.currentSnapshot);
   restoreFileBuffer(CURRENT_SNAPSHOT_GZ_PATH, previousState.currentSnapshotGz);
   restoreFileBuffer(termReleaseIndexService.TERM_INDEX_PATH, previousState.termIndex);
+  restoreFileBuffer(termRegistryService.REGISTRY_PATH, previousState.termRegistry);
+  restoreFileBuffer(runtimePointerService.ACTIVE_RUNTIME_PATH, previousState.runtimePointer);
+  if (previousState.openrestyRuntimePath) restoreFileBuffer(previousState.openrestyRuntimePath, previousState.openrestyRuntimePointer);
+  termRegistryService.clearCache();
+  runtimePointerService.clearCache();
   clearDerivedCache();
+  return [[ACTIVE_RELEASE_PATH, previousState.active], [CURRENT_SNAPSHOT_PATH, previousState.currentSnapshot], [CURRENT_SNAPSHOT_GZ_PATH, previousState.currentSnapshotGz], [termReleaseIndexService.TERM_INDEX_PATH, previousState.termIndex], [termRegistryService.REGISTRY_PATH, previousState.termRegistry], [runtimePointerService.ACTIVE_RUNTIME_PATH, previousState.runtimePointer], [previousState.openrestyRuntimePath, previousState.openrestyRuntimePointer]].filter(([file]) => file).every(([file, expected]) => {
+    const actual = readFileBufferIfExists(file);
+    return expected === null ? actual === null : Buffer.isBuffer(actual) && actual.equals(expected);
+  });
 }
 
-function activateReleaseVersion(version) {
+function activateReleaseVersion(version,options={}) {
+  ensureStorageDirs();
+  const guard=require("../shared/publicationGuard");
+  const lockDir=path.join(STORAGE_DIR,"ops","publication");
+  if(options.publicationLease)guard.assertOwned(lockDir,options.publicationLease);
+  const unlock=options.publicationLease ? null : guard.acquire(lockDir);
+  try {
+    const current=getActiveReleaseInfo() || {};
+    guard.assertExpectedVersion(current.releaseVersion || current.version,options.expectedActiveReleaseVersion);
+    return activateReleaseVersionUnlocked(version);
+  } finally { if(unlock)unlock(); }
+}
+
+function activateReleaseVersionUnlocked(version) {
   ensureStorageDirs();
   const normalizedVersion = normalizeVersion(version);
   const snapshot = readReleaseSnapshot(normalizedVersion);
@@ -2267,13 +2289,19 @@ function activateReleaseVersion(version) {
   }
   const packStatus = assertHealthyReleasePack(normalizedVersion);
   const fingerprint = calculateFingerprint(snapshot);
-  const cacheEpoch = Date.now();
+  const previousActive = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+  const previousRuntime = runtimePointerService.readActivePointer() || {};
+  const cacheEpoch = Math.max(Date.now(), (Number(previousActive.cacheEpoch) || 0) + 1, (Number(previousRuntime.cacheEpoch) || 0) + 1);
   const forceRefreshToken = `${normalizedVersion}:${cacheEpoch}`;
   const previousState = {
     active: readFileBufferIfExists(ACTIVE_RELEASE_PATH),
     currentSnapshot: readFileBufferIfExists(CURRENT_SNAPSHOT_PATH),
     currentSnapshotGz: readFileBufferIfExists(CURRENT_SNAPSHOT_GZ_PATH),
     termIndex: readFileBufferIfExists(termReleaseIndexService.TERM_INDEX_PATH),
+    termRegistry: readFileBufferIfExists(termRegistryService.REGISTRY_PATH),
+    runtimePointer: readFileBufferIfExists(runtimePointerService.ACTIVE_RUNTIME_PATH),
+    openrestyRuntimePath: process.env.OPENRESTY_STATIC_RUNTIME_DIR ? path.join(path.resolve(process.env.OPENRESTY_STATIC_RUNTIME_DIR), "active.json") : "",
+    openrestyRuntimePointer: process.env.OPENRESTY_STATIC_RUNTIME_DIR ? readFileBufferIfExists(path.join(path.resolve(process.env.OPENRESTY_STATIC_RUNTIME_DIR), "active.json")) : null,
   };
   const active = {
     version: normalizedVersion,
@@ -2319,8 +2347,7 @@ function activateReleaseVersion(version) {
       runtimePointerService.writeActivePointerForManifest(manifest);
     }
   } catch (error) {
-    restoreActivationState(previousState);
-    error.rollbackApplied = true;
+    error.rollbackApplied = restoreActivationState(previousState);
     throw error;
   }
 

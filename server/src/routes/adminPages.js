@@ -11598,7 +11598,8 @@ ${DAILY_KNOWLEDGE_SECTION}
         var winSlash = String.fromCharCode(92);
         var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
         return "cd " + projectDirWin + String.fromCharCode(10) +
-          "npm run sync:publish -- --term=" + (term || "请先输入学期");
+          "npm run sync:publish -- --term=" + (term || "请先输入学期") +
+          (state.syncStatus && state.syncStatus.dualOriginPublicationEnabled ? " --publication-confirmation=CONFIRM_DUAL_ORIGIN_PUBLICATION" : "");
       }
 
       function refreshPublisherQuickCommand(forceTerm) {
@@ -11723,6 +11724,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         var publisherArgs = [
           "--term=" + (term || "请先选择学期")
         ];
+        if (state.syncStatus && state.syncStatus.dualOriginPublicationEnabled) publisherArgs.push("--publication-confirmation=CONFIRM_DUAL_ORIGIN_PUBLICATION");
         if (scriptName === "sync:publish:full") {
           publisherArgs.unshift("--mode=full");
         }
@@ -12884,13 +12886,15 @@ ${DAILY_KNOWLEDGE_SECTION}
         var force = forceConfirm ? forceConfirm.checked : false;
         var readyOnly = readyOnlyOverride === true || (!sourceButton && state.stagingPublishReadyOnly === true);
         
-        setStatus(readyOnly ? "正在生成待激活课表版本..." : "正在正式发布课表快照版本...");
+        var publishBody = { force: force, readyOnly: readyOnly };
+        if (!readyOnly && state.syncStatus && state.syncStatus.dualOriginPublicationEnabled) publishBody.publicationConfirmation = "CONFIRM_DUAL_ORIGIN_PUBLICATION";
+        setStatus(readyOnly ? "正在生成待激活课表版本..." : (publishBody.publicationConfirmation ? "正在校验 Oracle 与 CloudBase 版本文件，随后发布..." : "正在正式发布课表快照版本..."));
         var publishBtn = sourceButton || $("stagingPublishBtn");
         var restoreButton = setButtonLoading(publishBtn, readyOnly ? "生成中..." : "发布中...");
         
         api("/api/admin/sync/staging/publish/start", {
           method: "POST",
-          body: JSON.stringify({ force: force, readyOnly: readyOnly })
+          body: JSON.stringify(publishBody)
         })
           .then(function(res) {
             var publishJob = res.job || {};

@@ -86,6 +86,9 @@ function applyManifestActivation(result, pointer) {
   const app = getApp && getApp();
   if (app && app.globalData) {
     const sourcePointer = pointer || app.globalData.runtimePointer || {};
+    const current=app.globalData.runtimePointer;
+    if(current && sourcePointer.releaseVersion!==current.releaseVersion && Number(current.cacheEpoch)>Number(sourcePointer.cacheEpoch||0)) return result;
+    if(result.releaseVersion && result.releaseVersion!==sourcePointer.releaseVersion && app.globalData.activeRelease) return result;
     app.globalData.activeRelease = {
       term: result.term,
       releaseVersion: result.releaseVersion,
@@ -131,7 +134,12 @@ function scheduleFreshnessCheck(pointer, options = {}) {
 }
 
 function resolveRuntimePointer(options = {}) {
-  return singleflight("runtime-pointer", () => releasePackService.resolveRuntimePointer(options)
+  const runtimeOptions=Object.assign({},options,{onNewerPointer:pointer=>{
+    const applied=applyPointerToApp(pointer);
+    scheduleManifestActivation(applied,options);
+    if(options.onNewerPointer) options.onNewerPointer(applied);
+  }});
+  return singleflight("runtime-pointer", () => releasePackService.resolveRuntimePointer(runtimeOptions)
     .then((pointer) => {
       const applied = applyPointerToApp(pointer);
       scheduleManifestActivation(applied, options);

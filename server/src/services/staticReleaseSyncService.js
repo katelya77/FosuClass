@@ -539,15 +539,15 @@ async function syncStaticRelease(version, options = {}) {
       timeoutMs: options.timeoutMs || config.httpTimeoutMs,
       concurrency: config.verifyConcurrency,
     });
-    progressJob(job, 82, "syncing-runtime-pointer", { releaseVersion });
-    const runtimeSync = syncRuntimePointerFile(config, releaseVersion);
-    const verifiedRuntimeUrl = await verifyPublicRuntimeUrl(config.runtimePublicBaseUrl, {
+    progressJob(job, 82, options.prepareOnly ? "prepared-without-pointer" : "syncing-runtime-pointer", { releaseVersion });
+    const runtimeSync = options.prepareOnly ? {} : syncRuntimePointerFile(config, releaseVersion);
+    const verifiedRuntimeUrl = options.prepareOnly ? null : await verifyPublicRuntimeUrl(config.runtimePublicBaseUrl, {
       verifyHttp: config.verifyHttp,
       timeoutMs: options.timeoutMs || config.httpTimeoutMs,
     });
     progressJob(job, 86, "pruning-old-releases", { releaseVersion });
     const activeVersion = releaseService.getActiveReleaseInfo()?.version || "";
-    const retention = pruneOldReleases(dstRoot, [
+    const retention = options.prepareOnly ? { keptReleases: [], prunedReleases: [] } : pruneOldReleases(dstRoot, [
       releaseVersion,
       activeVersion,
       previousStatus.syncedReleaseVersion,
@@ -555,7 +555,8 @@ async function syncStaticRelease(version, options = {}) {
     ], config.keepLatestN);
     const finishedAt = new Date().toISOString();
     const result = recordStatus({
-      status: "success",
+      status: options.prepareOnly ? "prepared" : "success",
+      preparedOnly: options.prepareOnly === true,
       success: true,
       releaseVersion,
       syncedReleaseVersion: releaseVersion,
