@@ -35,6 +35,7 @@ const MESSAGES = {
   ["SCHOOL_PASSWORD_RESUBMISSION_BLOCKED"]:"认证请求目标不符合审核范围或出现重复提交；已在放行前停止。",
   SCHOOL_AUTH_STATE_INVALID:"本机认证保护记录损坏；已停止，不会重置预算或冷却。",
   SCHOOL_PAGE_CHANGED:"受保护教务页面结构已变化；无法确认登录有效。",
+  SCHOOL_PROTECTED_PAGE_REJECTED:"受保护教务页面未成功返回；不能保存或报告有效 Session。",
   SCHOOL_SESSION_EXPIRED:"学校 Session 已失效；本轮已停止，需要人工重新登录。",
   SCHOOL_TLS_OR_ORIGIN_REJECTED:"学校证书或跳转来源不可信；严格 TLS 校验已拒绝访问。",
   SCHOOL_NETWORK_TIMEOUT:"访问学校超时；已停止，没有自动重试密码。",

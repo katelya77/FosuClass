@@ -32,6 +32,7 @@ async function createAdapter(cfg,deps={}){
         if([307,308].includes(event.responseStatusCode)&&event.request.method==='POST')allowed=false;
       }
       try{
+        if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED',stats.stage);
         if(!responseStage&&credentialsPhase&&!stats.submissionReservations&&!authenticationPost){allowed=false;reject('SCHOOL_PASSWORD_RESUBMISSION_BLOCKED','authentication-request');}
         if(!allowed){
           stats.blockedResources++;
@@ -56,6 +57,7 @@ async function createAdapter(cfg,deps={}){
           emit('authentication-response',{responseReceived:true,httpStatus:event.responseStatusCode||0});
         }
         if(!allowed){await guard.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'});return;}
+        if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED',stats.stage);
         if(!responseStage)stats.schoolRequests++;
         await guard.send('Fetch.continueRequest',{requestId:event.requestId});
         if(!responseStage&&authenticationPost){
@@ -74,15 +76,22 @@ async function createAdapter(cfg,deps={}){
     const status=auth.classifyPage(page.url(),state.visibleText);
     return status==='SESSION_VALID'&&state.passwordCount>0?'SESSION_EXPIRED':status;
   };
+  const protectedCheck=async page=>{
+    emit('protected-session-check');
+    const response=await page.goto(SCHOOL_ORIGIN+'/framework/xsMain.jsp',{waitUntil:'domcontentloaded',timeout:25000});
+    await page.waitForLoadState('load',{timeout:10000});
+    emit('protected-page-response',{httpStatus:response?.status()||0});
+    if(!response||response.status()!==200)throw fail('SCHOOL_PROTECTED_PAGE_REJECTED','protected-page-response');
+    if(new URL(page.url()).origin===SCHOOL_ORIGIN&&new URL(page.url()).pathname!=='/framework/xsMain.jsp')return 'SCHOOL_PAGE_CHANGED';
+    return inspect(page);
+  };
   const adapter={
     stats:()=>({...stats}),
     async check(sessionPath){
       if(!fs.existsSync(sessionPath))return 'SESSION_EXPIRED';
       auth.secureFile(sessionPath);auth.validateSession(require('./runStore').readJson(sessionPath,null));
       const {page}=await pageFor(sessionPath);
-      emit('protected-session-check');
-      await page.goto(SCHOOL_ORIGIN+'/framework/xsMain.jsp',{waitUntil:'domcontentloaded',timeout:25000});
-      return inspect(page);
+      return protectedCheck(page);
     },
     async prepare(){
       if(prepared)return;
@@ -114,14 +123,15 @@ async function createAdapter(cfg,deps={}){
       for(let i=0;i<20;i++){
         if(policyError)throw policyError;
         await page.waitForTimeout(1000);
-        status=await inspect(page);if(status!=='SESSION_EXPIRED')break;
+        status=await inspect(page);
+        if(stats.passwordSubmissions&&new URL(page.url()).origin===SCHOOL_ORIGIN)break;
+        if(!['SESSION_EXPIRED','SCHOOL_PAGE_CHANGED'].includes(status))break;
       }
       if(policyError)throw policyError;
       if(!stats.submissionReservations||!stats.passwordSubmissions)throw fail('SCHOOL_LOGIN_NOT_COMPLETED','authentication-request');
-      if(status!=='SESSION_VALID')throw fail(status==='SESSION_EXPIRED'?'SCHOOL_LOGIN_NOT_COMPLETED':status,'authentication-result');
-      emit('protected-session-check');
-      await page.goto(SCHOOL_ORIGIN+'/framework/xsMain.jsp',{waitUntil:'domcontentloaded',timeout:25000});
-      const protectedStatus=await inspect(page);
+      if(new URL(page.url()).origin!==SCHOOL_ORIGIN)throw fail(status==='SESSION_EXPIRED'?'SCHOOL_LOGIN_NOT_COMPLETED':status,'authentication-result');
+      if(['INVALID_CREDENTIALS','SCHOOL_SECURITY_CHALLENGE','SCHOOL_TLS_OR_ORIGIN_REJECTED'].includes(status))throw fail(status,'authentication-result');
+      const protectedStatus=await protectedCheck(page);
       if(protectedStatus!=='SESSION_VALID')throw fail(protectedStatus==='SESSION_EXPIRED'?'SCHOOL_SESSION_EXPIRED':protectedStatus,'protected-session-check');
       emit('protected-session-valid',{protectedSessionValid:true});return context.storageState();
     },

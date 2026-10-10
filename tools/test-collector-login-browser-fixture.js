@@ -31,6 +31,7 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
             if(event.request.method==="POST"){submits++;status=scenarioOptions.ajax||scenarioOptions.credentialRejected?200:rejectedTarget?307:302;if(status!==200)headers.push({name:"Location",value:rejectedTarget||"https://100.fosu.edu.cn/framework/xsMain.jsp"});if(!scenarioOptions.credentialRejected)headers.push({name:"Set-Cookie",value:"fixture_session=synthetic; Domain=.fosu.edu.cn; Path=/; Secure; HttpOnly"});body=scenarioOptions.credentialRejected?'<html><body>统一身份认证 用户名或密码错误</body></html>':'{}';}
             else {assert.equal(u.searchParams.get('service'),require('./fosu-sync-client/schoolLoginProfile').CAS_SERVICE_URL);body=scenarioOptions.form||FORM;}
           }else if(u.origin==="https://100.fosu.edu.cn"&&u.pathname==="/framework/xsMain.jsp"){
+            status=scenarioOptions.protectedStatus||200;
             const cookies=await ctx.cookies(u.href);
             body=cookies.some(c=>c.name==="fixture_session"&&c.value==="synthetic")?"<html><body>教学一体化服务平台 我的桌面</body></html>":FORM;
           }else status=404;

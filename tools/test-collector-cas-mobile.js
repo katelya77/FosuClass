@@ -28,6 +28,7 @@ async function main(){
     {form:form.replace("type='submit'","class='login-btn' type='button' onclick=\"fetch('/authserver/login',{method:'POST',body:'fixture'});fetch('/authserver/login',{method:'POST',body:'fixture'})\""),error:'SCHOOL_PASSWORD_RESUBMISSION_BLOCKED',posts:1,blocked:true},
     {credentialRejected:true,error:'INVALID_CREDENTIALS',posts:1},
     {form:fixture.FORM.replace('统一身份认证 密码登录','统一身份认证 登录失败'),error:'SCHOOL_LOGIN_PAGE_REJECTED',captcha:0},
+    {protectedStatus:500,error:'SCHOOL_PROTECTED_PAGE_REJECTED',posts:1},
   ];
   for(const [index,variant] of variants.entries()){
     try{await fixture.scenario(false,undefined,variant);console.log('fixture scenario '+(index+1)+' PASS');}catch(error){console.error('fixture scenario '+(index+1)+' failed; assertion='+(error.code||error.name));throw error;}
