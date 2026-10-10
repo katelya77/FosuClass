@@ -7,7 +7,8 @@ const { execFileSync } = require("child_process");
 const root = path.resolve(__dirname, "../..");
 function build(outputRoot = path.join(root, ".local", "collector-packages")) {
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
-  const documents = ["docs/production/fosuclass-operations-and-release-runbook.md","docs/production/wyz-cas-mobile-repair.md"];
+  const documents = ["docs/production/fosuclass-operations-and-release-runbook.md","docs/production/wyz-cas-mobile-repair.md",
+    "docs/production/cas-sample-closure-acceptance.md","docs/cas-sample-closure/CAS-COMPATIBILITY.md","docs/cas-sample-closure/PAM-PUBLIC-AUDIT.sh"];
   const candidates = execFileSync("git", ["ls-files", "tools/wyz-schedule-collector", "tools/fosu-sync-client", "server/src", "server/config", "server/package.json", "server/package-lock.json", "shared", "config/terms", "miniprogram/utils/courseWeekRules.js", "deploy/wyz", ...documents], { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim().split(/\r?\n/);
   const files = candidates.filter((file) => (/\.(js|json|service|timer|sh|py)$/.test(file) || documents.includes(file) || /Collector\.Dockerfile(?:\.dockerignore)?$/.test(file)) && !/(?:^|\/)(?:session|\.env|storage|data|debug|raw|node_modules)(?:[./]|$)/i.test(file));
   fs.mkdirSync(outputRoot, { recursive: true });
