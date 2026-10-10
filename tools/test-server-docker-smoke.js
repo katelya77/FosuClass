@@ -6,7 +6,9 @@ const { spawnSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const SERVER_DIR = path.join(ROOT, "server");
-const imageTag = `fosuclass-api-smoke:${process.pid}`;
+const suppliedImage = process.env.FOSU_DOCKER_SMOKE_IMAGE || "";
+if (suppliedImage && !/^fosu-oracle-sample:[a-f0-9]{40}$/.test(suppliedImage)) throw new Error("DOCKER_SMOKE_IMAGE_REJECTED");
+const imageTag = suppliedImage || `fosuclass-api-smoke:${process.pid}`;
 const containerName = `fosuclass-api-smoke-${process.pid}`;
 const envPath = path.join(SERVER_DIR, `.env.smoke.${process.pid}`);
 
@@ -169,10 +171,9 @@ async function run() {
   writeSmokeEnv(port);
   try {
     // Dockerfile uses the repository root context for server paths.
-    let result = runDocker(
-      ["build", "-f", "server/Dockerfile", "-t", imageTag, "."],
-      { cwd: ROOT }
-    );
+    let result = suppliedImage
+      ? runDocker(["image", "inspect", imageTag], { cwd: ROOT })
+      : runDocker(["build", "-f", "server/Dockerfile", "-t", imageTag, "."], { cwd: ROOT });
     if (result.status !== 0) {
       throw new Error(sanitize(`${result.stdout}\n${result.stderr}`));
     }
@@ -232,7 +233,7 @@ async function run() {
   } finally {
     printLogs();
     runDocker(["rm", "-f", containerName], { cwd: ROOT });
-    runDocker(["rmi", "-f", imageTag], { cwd: ROOT });
+    if (!suppliedImage) runDocker(["rmi", "-f", imageTag], { cwd: ROOT });
     try {
       fs.unlinkSync(envPath);
     } catch (error) {

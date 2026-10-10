@@ -68,6 +68,20 @@ function buildRelease(options = {}) {
     rooms: [],
     buildings: [],
   });
+  if (!options.omitRequiredRoots) {
+    writeJson(path.join(releaseDir, "calendar.json"), {
+      success: true,
+      term,
+      releaseVersion,
+      weeks: [{ weekNo: 1, startDate: "2026-03-09", endDate: "2026-03-15" }],
+    });
+    writeJson(path.join(releaseDir, "bootstrap.json"), {
+      success: true,
+      term,
+      releaseVersion,
+      catalog: { colleges: [{ code: "01", name: "test" }] },
+    });
+  }
   const files = {};
   listJsonFiles(releaseDir).forEach((filePath) => {
     const relativePath = rel(releaseDir, filePath);
@@ -82,6 +96,9 @@ function buildRelease(options = {}) {
   }
   if (options.hashMismatch) {
     files["index/teacher/all.json"].hash = "0".repeat(40);
+  }
+  if (options.rootHashMismatch) {
+    files["calendar.json"].hash = "0".repeat(40);
   }
   const manifest = {
     success: true,
@@ -184,6 +201,17 @@ async function testPullReleaseAndResumePart() {
     assert.strictEqual(result.term, term);
     assert.strictEqual(result.verification.local.samples.length, 4);
     assert.strictEqual(result.verification.privacy.success, true);
+    ["calendar.json", "bootstrap.json"].forEach((rootFile) => {
+      const downloadedFile = path.join(result.releaseDir, rootFile);
+      const downloaded = result.downloaded.find((item) => item.relativePath === rootFile);
+      assert(downloaded, `${rootFile} must be downloaded, not supplied from local state`);
+      assert(result.verification.local.checkedFiles.includes(rootFile), `${rootFile} must pass manifest integrity verification`);
+      assert.strictEqual(sha1(downloadedFile), built.manifest.files[rootFile].hash);
+      assert.strictEqual(fs.statSync(downloadedFile).size, built.manifest.files[rootFile].size);
+      const payload = JSON.parse(fs.readFileSync(downloadedFile, "utf8"));
+      assert.strictEqual(payload.term, term);
+      assert.strictEqual(payload.releaseVersion, releaseVersion);
+    });
     assert(stats.rangeRequests >= 1, "existing .part should trigger a Range resume request");
     assert(!fs.existsSync(partPath), ".part should be atomically renamed after successful resume");
     assert.strictEqual(sha1(path.join(outputRoot, releaseVersion, relativePath)), sha1(sourceFile));
@@ -209,10 +237,26 @@ async function testHashMismatchBlocksPublish() {
   });
 }
 
+async function testRequiredRootsAreVerified() {
+  await withServer({ omitRequiredRoots: true }, async ({ oracleBaseUrl }) => {
+    await assert.rejects(
+      () => downloadReleaseFromOracle({ oracleBaseUrl, outputRoot: path.join(tempRoot, "missing-roots") }),
+      (error) => error && error.code === "CLOUDBASE_RELEASE_FILE_MISSING"
+    );
+  });
+  await withServer({ rootHashMismatch: true }, async ({ oracleBaseUrl }) => {
+    await assert.rejects(
+      () => downloadReleaseFromOracle({ oracleBaseUrl, outputRoot: path.join(tempRoot, "root-hash-mismatch") }),
+      (error) => error && error.code === "ORACLE_RELEASE_HASH_MISMATCH"
+    );
+  });
+}
+
 async function run() {
   await testPullReleaseAndResumePart();
   await testTraversalIsBlocked();
   await testHashMismatchBlocksPublish();
+  await testRequiredRootsAreVerified();
   cleanup();
   console.log("test-oracle-release-source passed");
 }

@@ -147,11 +147,40 @@ async function finalizeChunkedUpload(input, job) {
   try {
     stagingData = stagingUploadService.normalizeStagingData(JSON.parse(fs.readFileSync(finalized.jsonPath, "utf-8")));
   } catch (error) {
+    if (finalized.manifest.source === "wyz-schedule-sample") {
+      stagingUploadService.markUploadFailed(uploadId, "SAMPLE_JSON_INVALID");
+      throw Object.assign(new Error("SAMPLE_JSON_INVALID"), { code: "SAMPLE_JSON_INVALID", statusCode: 400 });
+    }
     stagingUploadService.markUploadFailed(uploadId, `JSON parse failed: ${error.message}`);
     error.statusCode = 400;
     throw error;
   }
   stagingData.stagingUploadId = finalized.manifest.uploadId;
+
+  if (input.collectorRun) {
+    const collector = require("./scheduleCollectorService");
+    collector.load();
+    const run = collector.requireRun(input.collectorRun.runId, input.collectorRun.agentId, input.collectorRun.claimId);
+    if (run.mode === "sample") {
+      try {
+        const summary = require("../shared/sampleCollectionContract").assertSample(stagingData, run.term, run.samplePolicy, run.termConfig);
+        if (finalized.manifest.canonicalHash !== summary.canonicalHash) throw Object.assign(new Error("CANONICAL_HASH_MISMATCH"), { code: "CANONICAL_HASH_MISMATCH", statusCode: 400 });
+        Object.assign(summary, { stagingState: "sample-review", releaseState: "not-built", runtimeState: "inactive" });
+        // Private evidence only: return before active/staging fingerprint reads,
+        // duplicate handling, Staging writes and every publication path.
+        collector.load();
+        const live = collector.requireRun(run.id, input.collectorRun.agentId, input.collectorRun.claimId);
+        require("./sampleReviewService").saveReview(live, uploadId, summary);
+        const upload = stagingUploadService.markUploadPendingReview(uploadId, summary);
+        appendAudit(input.reqMeta, "sample-upload", "staging-upload", uploadId, "Sample validated; publication prohibited");
+        return { success: true, sampleOnly: true, canonicalHash: summary.canonicalHash, upload };
+      } catch (error) {
+        stagingUploadService.markUploadFailed(uploadId, error.code || "SAMPLE_VALIDATION_FAILED");
+        throw error;
+      }
+    }
+  }
+  if (stagingData.meta && stagingData.meta.sampleOnly) throw Object.assign(new Error("SAMPLE_NOT_PUBLISHABLE"), { code: "SAMPLE_NOT_PUBLISHABLE", statusCode: 400 });
 
   if (input.collectorRun) {
     const collector = require("./scheduleCollectorService");

@@ -3,6 +3,10 @@ name: Xiaofu Agent CI
 on:
   pull_request:
     paths:
+      - ".github/workflows/oracle-sample-ci.yml"
+      - "server/src/services/scheduleCollectorService.js"
+      - "server/src/services/sampleReviewService.js"
+      - "server/src/shared/sampleCollectionContract.js"
       - "server/src/services/ai/**"
       - "server/src/routes/ai.js"
       - "server/src/routes/admin.js"
@@ -78,6 +82,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -93,6 +100,11 @@ jobs:
 
       - name: Install server dependencies
         run: npm --prefix server ci
+
+      - name: Install collector browser dependencies
+        run: |
+          npm --prefix tools/fosu-sync-client ci
+          npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
 
       - name: Agent release gate
         run: npm run test:agent-release-gate

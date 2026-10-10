@@ -18,18 +18,28 @@ router.post("/heartbeat", requireAgent, (req, res) => {
   res.json(collector.heartbeat(req.fullSyncAgentId, Date.now(), req.body || {}));
 });
 
-router.post("/runs/claim", requireAgent, (req, res) => {
-  const run = collector.claim(req.fullSyncAgentId);
+router.get("/status", requireAgent, guarded((req, res) => {
+  res.json({ protocol: "collector-manual.v1", status: collector.snapshot() });
+}));
+router.get("/sample/readiness", requireAgent, guarded((req, res) => res.json(collector.sampleReadiness())));
+router.get("/runs/:runId/sample-review", requireAgent, guarded((req, res) => {
+  const run = collector.sampleRun(req.params.runId, req.fullSyncAgentId);
+  res.json({ protocol: "collector-manual.v1", review: require("../services/sampleReviewService").readReview(run) });
+}));
+router.post("/runs/claim", requireAgent, guarded((req, res) => {
+  const selector = req.body || {};
+  if (Object.keys(selector).some(key => !["runId", "mode"].includes(key)) || selector.runId && !/^sc-[A-Za-z0-9-]+$/.test(selector.runId) || selector.mode && !["sample", "routine", "full"].includes(selector.mode)) return res.status(400).end();
+  const run = collector.claim(req.fullSyncAgentId, undefined, selector);
   if (!run) return res.status(204).end();
   return res.json({ run });
-});
+}));
 
 router.post("/runs/:runId/report", requireAgent, (req, res) => {
   try {
     res.json({ run: collector.applyReport(req.params.runId, req.body || {}, req.fullSyncAgentId) });
   } catch (error) {
     const status = error.statusCode || 400;
-    res.status(status).end();
+    res.status(status).json({ success: false, code: error.code || "COLLECTOR_REPORT_REJECTED" });
   }
 });
 
@@ -47,6 +57,7 @@ router.post("/runs/:runId/upload/init", requireAgent, guarded((req, res) => {
   if (collector.findSensitive(body).length) throw Object.assign(new Error("STAGING_SENSITIVE"), { code: "STAGING_SENSITIVE", statusCode: 400 });
   for (const key of ["canonicalHash", "uploadSha256", "originalSha256"]) if (!/^[a-f0-9]{64}$/.test(body[key] || "")) throw new Error("hash");
   if (body.term !== run.term || body.contentEncoding !== "gzip" || !Number.isSafeInteger(body.originalSize) || body.originalSize < 1 || body.originalSize > 512 * 1024 * 1024 || !Number.isSafeInteger(body.uploadSize) || body.uploadSize > 256 * 1024 * 1024 || !Number.isSafeInteger(body.chunkSize) || body.chunkSize < 1 || body.chunkSize > 8 * 1024 * 1024) throw new Error("size-or-term");
+  if (run.mode === "sample" && (body.originalSize > require("../shared/sampleCollectionContract").MAX_ORIGINAL_BYTES || body.uploadSize > require("../shared/sampleCollectionContract").MAX_UPLOAD_BYTES)) throw Object.assign(new Error("SAMPLE_UPLOAD_SIZE_EXCEEDED"), { code: "SAMPLE_UPLOAD_SIZE_EXCEEDED", statusCode: 400 });
   if (run.uploadId) {
     const previous = uploads.getUploadStatus(run.uploadId, actor(run));
     if (["canonicalHash", "uploadSha256", "originalSha256", "originalSize", "uploadSize", "chunkSize", "totalChunks"].some((key) => previous[key] !== body[key])) throw Object.assign(new Error("UPLOAD_RESUME_MISMATCH"), { code: "UPLOAD_RESUME_MISMATCH", statusCode: 409 });
@@ -54,7 +65,7 @@ router.post("/runs/:runId/upload/init", requireAgent, guarded((req, res) => {
   }
   const input = {};
   for (const key of ["term", "canonicalHash", "uploadSha256", "originalSha256", "originalSize", "uploadSize", "chunkSize", "totalChunks"]) input[key] = body[key];
-  const upload = uploads.initUpload(Object.assign(input, { fileName: "staging.json", source: "wyz-schedule-collector", contentEncoding: "gzip", contentType: "application/json" }), actor(run));
+  const upload = uploads.initUpload(Object.assign(input, { fileName: run.mode === "sample" ? "sample.json" : "staging.json", source: run.mode === "sample" ? "wyz-schedule-sample" : "wyz-schedule-collector", contentEncoding: "gzip", contentType: "application/json" }), actor(run));
   collector.associateUpload(run, upload.uploadId);
   return res.json({ upload: uploadView(upload) });
 }));
@@ -80,7 +91,8 @@ router.get("/runs/:runId/upload/status/:claimId", requireAgent, guarded((req, re
   const run = ownedRun(req), job = run.finalizeJobId && jobs.readJob(run.finalizeJobId);
   if (!job) return res.json({ status: "pending" });
   const result = job.result || {};
-  res.json({ status: job.status, code: job.status === "failed" ? "STAGING_VALIDATION_FAILED" : undefined, result: job.status === "success" ? { uploadId: run.uploadId, unchanged: Boolean(result.unchanged), canonicalHash: result.canonicalHash || result.data && result.data.canonicalHash } : undefined });
+  const failureCode = run.mode === "sample" && /^(?:SAMPLE_[A-Z_]+|SCHOOL_REQUEST_BUDGET_EXCEEDED|CANONICAL_HASH_MISMATCH|STAGING_SENSITIVE|RUN_LEASE_REJECTED)$/.test(job.error && job.error.code || "") ? job.error.code : "STAGING_VALIDATION_FAILED";
+  res.json({ status: job.status, code: job.status === "failed" ? failureCode : undefined, result: job.status === "success" ? { uploadId: run.uploadId, unchanged: Boolean(result.unchanged), canonicalHash: result.canonicalHash || result.data && result.data.canonicalHash } : undefined });
 }));
 
 module.exports = router;
