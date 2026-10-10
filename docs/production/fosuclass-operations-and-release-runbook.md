@@ -237,11 +237,13 @@ npm run cloudbase:release:sync-active -- --execute --mirror-only
 
 已上线客户端读取公开 active 与同协议不可变 Release，不必为每次数据更新重新审核微信版本；但本轮代码中的刷新优化、TLS配置或域名变更要进入已安装正式客户端，必须发布新的微信构建。当前已上线包的精确 Git/buildId 和合法域名仍需微信控制台及真机诊断确认。
 
-源码基线：启动先显示缓存；app onLaunch/onShow、全校页 onLoad/onShow 已有刷新；索引 TTL 7 天、详情 TTL 30 天、runtime 熔断 45 秒。此前并行 pointer 请求等待所有源，Oracle 慢可阻塞 CloudBase。候选让 CloudBase 先返回、Oracle 后台对账，已观察较新 pointer 持久化为高水位；不把缺失时间伪造成当前时间；30 秒合并同类检查；前台 45 秒低频检查，后台/页面卸载停止计时器；manifest/index 仍按版本校验再激活，失败保留 last-good。
+源码基线：启动先显示缓存；app onLaunch/onShow、全校页 onLoad/onShow 已有刷新；索引 TTL 7 天、详情 TTL 30 天、runtime 熔断 45 秒。此前并行 pointer 请求等待所有源，Oracle 慢可阻塞 CloudBase。候选让 CloudBase 先返回、Oracle 后台对账，已观察较新 pointer 持久化为高水位；不把缺失时间伪造成当前时间；30 秒合并同类检查；前台每30秒检查、所有客户端共享20秒query bucket，后台/页面卸载停止计时器；manifest/index 仍按版本校验再激活，失败保留 last-good。先前45秒检查+60秒bucket可能超过60秒目标，已缩短这两项，不靠降低刷新频率节省额度。
 
 周次、筛选、个人课表和 UI 状态不因通用缓存清理被重置。版本清理只处理版本缓存；历史学期的 active/last-good 仍须额外完整引用审计。针对当前页面的首次/重新进入、后台返回、版本不变、慢 Oracle、坏 manifest、旧镜像、新学期和当前浏览周次都必须真机确认。
 
-本地新增测试证明：快 CloudBase 不等待未完成 Oracle、晚到较新 Oracle 可对账、持久化不降级、30 秒去重、坏主源回退。既有四类搜索、版本缓存切换、周次/空教室隔离和个人路径回归通过；60 秒检测、国内 P50/P95 和真机浏览状态仍是待验证 SLO。当前远端 `active.json` Cache-Control=120 秒，query bucket 是否改变实际 CDN cache key 未核实，不能保证现网 60 秒目标。
+本地新增测试证明：快 CloudBase 不等待未完成 Oracle、晚到较新 Oracle 可对账、持久化不降级、30 秒去重、坏主源回退；实际app onShow/onHide管理30秒timer，模拟CDN按query缓存时覆盖20个bucket相位，下次30秒检查能发现刚发布的版本。既有四类搜索、版本缓存切换、周次/空教室隔离和个人路径回归通过；这是受控fixture，不是现网60秒证明。当前远端 `active.json` Cache-Control=120秒，query是否改变实际CDN key、国内P50/P95和真机浏览状态仍待验证；正式构建未发布这些优化。
+
+首屏补测还发现b1基线的启动学期解析未读取已缓存runtime pointer，只有pointer+对应last-good、其它启动元数据缺失时无法立即显示缓存。原fixture失败已保留，本机隔离b1在补足合法pointer的fixture下也失败；候选启动先采用经过验证的cached pointer学期，再加载其last-good，避免按无关历史记录或旧bootstrap选择学期。保留立即显示和正确学期断言；网络失败仍使用本地数据，不重置用户浏览周次或筛选。
 
 ## E：个人版实际容量、流量与域名
 
@@ -266,22 +268,22 @@ node tools/cloudbase/production-budget.js
 
 | 行为 | 每人每日 CloudBase HTTP 请求 | 每人每日正文 | 假设 |
 | --- | --- | --- | --- |
-| weekly-class-cache | 6.429 | 158,397 bytes | 6次 pointer；每周1次 manifest+班级索引+详情 |
-| daily-class-update | 9 | 997,828 bytes | 6次pointer；每天发布变更版本，重新读取一份班级manifest+索引+详情 |
+| weekly-class-cache | 6.429 | 158,397 bytes | 仅底层班级链路：6次pointer；每周1次manifest+班级索引+详情，不含app四源预热 |
+| daily-class-update | 12 | 4,145,855 bytes | 6次pointer；每天发布变更版本，当前app预热四种索引，再读manifest和一份班级详情 |
 | cold-four-source-daily | 10 | 4,407,937 bytes | 每日全量下载本次测量的10项 |
 | heavy-search-cache | 20.714 | 1,479,063 bytes | 每日10次 pointer+10份未缓存详情；全索引每周一次 |
 
 | DAU | weekly-class-cache 月 GB | daily-class-update 月 GB | cold-four-source-daily 月 GB | heavy-search-cache 月 GB |
 | --- | ---: | ---: | ---: | ---: |
-| 500 | 2.376 | 14.967 | 66.119 | 22.186 |
-| 1,000 | 4.752 | 29.935 | 132.238 | 44.372 |
-| 2,000 | 9.504 | 59.870 | 264.476 | 88.744 |
-| 5,000 | 23.760 | 149.674 | 661.191 | 221.859 |
-| 10,000 | 47.519 | 299.348 | 1,322.381 | 443.719 |
+| 500 | 2.376 | 62.188 | 66.119 | 22.186 |
+| 1,000 | 4.752 | 124.376 | 132.238 | 44.372 |
+| 2,000 | 9.504 | 248.751 | 264.476 | 88.744 |
+| 5,000 | 23.760 | 621.878 | 661.191 | 221.859 |
+| 10,000 | 47.519 | 1,243.757 | 1,322.381 | 443.719 |
 
 monthly HTTP 数分别为 DAU×30×上述请求数。若回源率10%，weekly-class-cache/cold-four-source-daily/heavy-search-cache在500/1000/2000/5000/10000 DAU时的回源调用约：9,643/19,286/38,572/96,429/192,858；15,000/30,000/60,000/150,000/300,000；31,072/62,143/124,286/310,715/621,429。还需加动态 CloudBase API、上传、认证等调用。工具同时输出0%、10%、100%敏感性，真实回源率仍未知。
 
-daily-class-update更接近日更发布时的普通班级用户：500/1000/2000/5000/10000 DAU的月HTTP数为13.5万/27万/54万/135万/270万，10%回源假设下计费调用为1.35万/2.7万/5.4万/13.5万/27万。它在500 DAU已超过10GB流量，而按既有超额价格假设的流量超额约1.04元/月，10000 DAU约63.75元/月；必须有超限不停服，且不含套餐/其它API/发布校验，实际账单仍待核对。NO CHANGE时不发布，不能把每天采集等同每天发布；也不能用每周更新的行估计每天新版的消耗。每天6次pointer仅是表中假设，长时间前台浏览会增加检查，后续按真实前台时长重算；不为匹配该假设降低刷新频率。
+daily-class-update沿当前app的switchReleaseSafely(warmupTypes四种)计入新版预热，是模型而非真实微信账单：500/1000/2000/5000/10000 DAU的月HTTP数为18万/36万/72万/180万/360万，10%回源假设下计费调用为1.8万/3.6万/7.2万/18万/36万。它在500 DAU已超过10GB流量，而按既有超额价格假设的流量超额约10.96元/月，10000 DAU约276.25元/月；必须有超限不停服，且不含套餐/其它API/发布校验，实际账单仍待核对。单次班级冷读0.98MB不等于整个app换版下载量，后台预热同样计费；不能用weekly-class-cache的底层链路估计当前app完整日更消耗。NO CHANGE时不发布，不能把每天采集等同每天发布。每天6次pointer仅是表中假设，长时间前台浏览会增加检查，后续按真实前台时长重算；不为匹配该假设降低刷新频率。
 
 官方超额存储流量0.21元/GB、回源0.15元/GB，Hosting超额容量0.005元/GB/天；只有超限不停服已开启时才按超额计费，否则有服务限制风险。10%回源假设下，三行为的流量超额费在500 DAU约0/11.79/2.56元，10000 DAU约7.88/293.94/96.24元；这些不含套餐、调用、容量、计算或其他消费，不能视为账单报价。
 
@@ -294,6 +296,8 @@ daily-class-update更接近日更发布时的普通班级用户：500/1000/2000/
 [默认域名官方限制](https://docs.cloudbase.net/service/alias)和[静态 Hosting 文档](https://cloud.tencent.com/document/product/876/46900)说明默认域名仅适合开发测试。`wx.request` 目前能拿到 JSON 不等于符合长期正式分发要求。个人版允许1个自定义域名；上线前确认该环境已有域名额度使用、域名实际所有权与备案、Hosting给出的CNAME、证书、国内CDN节点、微信request合法域名和额外流量账单。需要可备案域名方案；当前域名是否具备备案条件未核实。
 
 实施门禁：先提供域名/备案/CNAME/证书/成本计划，等待审批；无需新建 Cloudflare 域名，不修改 agent-broker。绑定后先只读验源、gzip与缓存、TLS/合法域名，再生成微信候选配置；未完成不能宣称国内生产数据面已终验。
+
+2026-10-10再次核对[腾讯静态Hosting说明](https://cloud.tencent.cn/document/product/876/46900)：节点缓存与浏览器缓存分别配置，后匹配规则优先；缓存0会全回源，规则变更有1–3分钟生效窗口。待审批的最小缓存diff是不可变版本长缓存、仅runtime pointer短缓存（目标不超过20秒）并实测query key；先保留原规则作为回滚点，当前未修改。新[自定义域名接入说明](https://docs.cloudbase.net/service/custom-domain)区分边缘加速与其它接入，开启边缘加速有额外流量和请求费用；本项目不为缓存或备案默认启用它，也不把其费用套进现有固定配额模型。当前环境旧CDN/HTTP网关接入方式和JSON压缩能力仍需控制台核实。
 
 ## F：生命周期、监控与人工接管
 

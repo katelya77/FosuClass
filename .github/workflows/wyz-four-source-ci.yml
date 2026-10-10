@@ -29,6 +29,8 @@ jobs:
       - run: python3 tools/test-oracle-direct-diagnosis.py
       - run: sudo python3 tools/test-control-keepalive-runner.py
       - run: node tools/test-runtime-primary-fast.js
+      - run: npm run test:runtime-readiness
+      - run: node tools/test-miniprogram-cache-first-startup.js && node tools/test-startup-last-good-first.js && node tools/test-schedule-week-state-isolation.js
       - run: node tools/test-schedule-publication-policy.js
       - run: node tools/test-collector-retention-plan.js
       - run: node tools/test-publisher-retention-plan.js

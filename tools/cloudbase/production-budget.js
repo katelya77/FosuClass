@@ -18,7 +18,7 @@ function model(measurement,options={}){
   };
   const profiles=[
     {name:"weekly-class-cache",description:"6 pointer reads/day; one new class manifest/index/detail per week",requestsPerUserDay:6+3/7,bytesPerUserDay:6*pointer+(manifest+classIndex+classDetail)/7},
-    {name:"daily-class-update",description:"6 pointer reads/day; a changed release requires one class manifest/index/detail daily",requestsPerUserDay:9,bytesPerUserDay:6*pointer+manifest+classIndex+classDetail},
+    {name:"daily-class-update",description:"6 pointer reads/day; changed release warms four indexes in the current app, plus manifest and one class detail",requestsPerUserDay:12,bytesPerUserDay:6*pointer+manifest+indexes.reduce((sum,item)=>sum+item.httpBodyBytes,0)+classDetail},
     {name:"cold-four-source-daily",description:"Every day downloads pointer, manifest, all four indexes, four details",requestsPerUserDay:10,bytesPerUserDay:cloud.totalHttpBodyBytes},
     {name:"heavy-search-cache",description:"10 pointers + 10 uncached details/day; manifest + four indexes weekly",requestsPerUserDay:20+5/7,bytesPerUserDay:10*pointer+10*details.reduce((a,r)=>a+r.httpBodyBytes,0)/details.length+(manifest+indexes.reduce((a,r)=>a+r.httpBodyBytes,0))/7}
   ];

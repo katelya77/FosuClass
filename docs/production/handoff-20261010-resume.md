@@ -34,6 +34,8 @@ python3 apply-control-keepalive.py --rollback
 2. 双源发布执行适配：继承原鉴权/scope/质量审查，默认关闭；完整文件校验后有序切指针；CloudBase中断可对账恢复；旧任务及异步构建后的基线冲突拒绝。后台/Windows共用API和确认参数，原Windows默认payload保持一致。
 3. 修复准备阶段提前同步pointer的风险；ready-only不触碰runtime，不自动删历史。回滚epoch递增；激活故障恢复注册表/两份Oracle runtime及原兼容快照。
 4. 每源全文件校验计量进入审计及dry-run，发布验证流量需加入预算。~385MB是当前远端占用；已测冷查询一个班级约0.98MB，缓存不变时课表正文0，再按刷新时机读取约3KB指针。两者不是同一项费用；原四类冷读取情景不等于每位用户每日必需下载量。
+5. 当前app换版实际会预热四类索引；日更班级用户模型已经计入这部分，约4.15MB/人/日（仍不含公告/bootstrap等），而非把0.98MB单操作当完整app流量。按30天、500 DAU约62.19GB，仅为行为模型，实际账单/回源率仍未知。
+6. 前台检查30秒、共享query bucket20秒，20相位fixture通过；onHide停止timer。启动现优先采用已缓存合法pointer学期，修复pointer+last-good存在而其它元数据缺失时无法立即显示的基线问题。原失败及隔离b1失败已留本机证据；10个周次隔离用例、runtime-readiness、静态源/缓存首屏及security/architecture/preflight通过，真实微信60秒SLO仍待审批验证。
 
 16个排队fixture、15个执行适配fixture已通过（学校/生产请求0）；新政策的启用记录须有完整四源证据、qualityBlocked=false和不同run ID，不能用缺证据的历史完成记录解锁。独立只检查Session、隐藏输入拒绝回显和限期恢复授权已补齐本地测试。当前代码还须以本次提交对应全量门禁/CI为准，不能沿用昨晚结果。
 
@@ -46,3 +48,5 @@ ad2a8a2提交的四源/Linux及Public Security Gate通过，但Xiaofu CI 3798065
 未执行学校登录/采集、生产部署、active切换、timer启用、历史删除、个人Agent重启或微信正式发布。详见 `docs/production/fosuclass-operations-and-release-runbook.md`；断网恢复并不替代这些人工门禁。
 
 本次全部本地必跑验证已结束，`release:preflight` ok=true、blockers=[]。候选包只在本机生成并绑定Git commit与SHA256；未运行会向Oracle写入包的Prepare工作流，未安装到WYZ。CI终态和本机包receipt在PR交付记录中核对，下一次恢复先fetch并复查对应head，不根据本页历史状态直接部署。
+
+截至d7b0a7dc，Linux四源38022528015、Public Security Gate38022499829和完整Agent CI38022499833均通过；其后上述客户端/预算校正须使用最新提交的CI。学校Session/凭据交付、仅全校Collector安装与运行入口切换、真实登录、首次四源采集、审核发布、timer、微信正式构建各自停在人工门禁；本机不关机或网络恢复不代表批准这些操作。

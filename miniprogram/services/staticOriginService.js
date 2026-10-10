@@ -319,7 +319,7 @@ function selectNewestRuntimePointer(pointers) {
 }
 
 function fetchRuntimePointer(options = {}) {
-  const bucket = Math.floor(now() / 60000);
+  const bucket = Math.floor(now() / 20000);
   const origins = getOrigins().filter((origin) => isUsableUrl(origin.runtimeRoot));
   const buildUrl = (origin) => withQuery(joinUrl(origin.runtimeRoot, "active.json"), { bucket });
   const baseOptions = Object.assign({

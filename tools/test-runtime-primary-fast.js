@@ -28,6 +28,34 @@ async function main(){
   const oldIndex=packs.getIndexCacheKey("2025-2026-2","historical","class");wx.setStorageSync(oldIndex,{savedAt:1});
   wx.setStorageSync("user-browsing-week",7);wx.setStorageSync("school-filter",{college:"fixture"});
   packs.clearOldReleaseCaches({keepLatestN:1});assert.ok(wx.getStorageSync(oldIndex));assert.equal(wx.getStorageSync("user-browsing-week"),7);assert.deepEqual(wx.getStorageSync("school-filter"),{college:"fixture"});
-  console.log("runtime primary: fast CloudBase, late Oracle reconciliation, persistent no-regression, 30s dedupe, invalid primary fallback fixtures PASS; device SLO unverified");
+  // Exercise the actual pointer cache across all 20 CDN bucket phases. This
+  // fixture assumes the CDN keys on the URL query; real hosting must prove it.
+  const realNow=Date.now;
+  try {
+    for(let offset=0;offset<20000;offset+=1000){
+      setup();let stamp=1800000000000+offset,published=false;const cdn=new Map();
+      Date.now=()=>stamp;
+      request.get=url=>{
+        if(!url.includes("cloudbase"))return Promise.resolve(pointer("v1",stamp-100));
+        if(!cdn.has(url))cdn.set(url,pointer(published?"v2":"v1",published?stamp:stamp-100));
+        return Promise.resolve(cdn.get(url));
+      };
+      assert.equal((await packs.resolveRuntimePointer()).releaseVersion,"v1");
+      published=true;stamp+=30000;
+      assert.equal((await packs.resolveRuntimePointer()).releaseVersion,"v2","next 30s foreground check must use a new CDN key");
+    }
+  } finally {Date.now=realNow;}
+  require("../miniprogram/app");const app=mock.createAppInstance();
+  const realInterval=global.setInterval,realClearInterval=global.clearInterval,realTimeout=global.setTimeout;
+  let periodic,intervalMs,cleared=0,checks=0;
+  try {
+    global.setInterval=(callback,ms)=>{periodic=callback;intervalMs=ms;return 71;};
+    global.clearInterval=id=>{assert.equal(id,71);cleared++;};
+    global.setTimeout=()=>72; // Do not execute unrelated app startup work.
+    app.checkReleasePackForeground=()=>{checks++;return Promise.resolve(null);};
+    app.onShow();assert.equal(intervalMs,30000);await periodic();assert.equal(checks,1);
+    app.onHide();assert.equal(cleared,1);assert.equal(app._releaseForegroundTimer,null);
+  } finally {global.setInterval=realInterval;global.clearInterval=realClearInterval;global.setTimeout=realTimeout;}
+  console.log("runtime primary: fast CloudBase, late Oracle reconciliation, no-regression, 30s dedupe/foreground lifecycle and 20 CDN bucket-phase fixtures PASS; real hosting query-key and device SLO unverified");
 }
 main().finally(()=>{request.get=previous;origins.fetchManifest=previousManifest;origins.__resetForTest();packs.__resetForTest();mock.clearStorage();}).catch(e=>{console.error(e);process.exitCode=1;});
