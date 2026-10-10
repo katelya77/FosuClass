@@ -8,7 +8,7 @@ function write(file, content, mode = 0o600) { fs.mkdirSync(path.dirname(file), {
 try {
   const base = path.join(temp, "install"), state = path.join(temp, "state"), etc = path.join(temp, "etc"), bin = path.join(temp, "bin"), source = path.join(temp, "source");
   const root = path.resolve(__dirname, "..");
-  const script = fs.readFileSync(path.join(root, "deploy/wyz/install-schedule-collector.sh"), "utf8").replaceAll("/opt/fosuclass/schedule-collector", base).replaceAll("/var/lib/fosuclass/schedule-collector", state).replaceAll("/etc/fosuclass", etc).replaceAll("/etc/systemd/system", path.join(temp, "units"));
+  const script = fs.readFileSync(path.join(root, "deploy/wyz/install-schedule-collector.sh"), "utf8").replaceAll("/opt/fosuclass/schedule-collector", base).replaceAll("/var/lib/fosuclass/schedule-collector", state).replaceAll("/etc/fosuclass", etc).replaceAll("/etc/systemd/system", path.join(temp, "units")).replaceAll("/usr/local/bin/fosu-collector",path.join(bin,"fosu-collector"));
   write(path.join(temp, "install.sh"), script); fs.copyFileSync(path.join(root, "deploy/wyz/recover-release.py"), path.join(temp, "recover-release.py"));
   fs.mkdirSync(path.join(temp, "units")); fs.mkdirSync(etc);
   const envFile = path.join(etc, "full-sync.env"); write(envFile, "PRIVATE_FIXTURE_ENV_MUST_STAY\n");
@@ -17,6 +17,7 @@ try {
   write(path.join(bin, "npm"), '#!/bin/sh\nif [ -f "$MOCK_FAIL_FILE" ]; then exit 42; fi\nmkdir -p "$2/node_modules/.bin"\nprintf "#!/bin/sh\\nexit 0\\n" > "$2/node_modules/.bin/playwright"\nchmod 700 "$2/node_modules/.bin/playwright"\n', 0o700);
   write(path.join(source, "tools/fosu-sync-client/package.json"), '{}'); write(path.join(source, "server/package.json"), '{}');
   write(path.join(source, "deploy/wyz/repair-browser.sh"), '#!/bin/sh\necho BROWSER_FIXTURE_VERIFIED\n');
+  write(path.join(source,"deploy/wyz/fosu-collector.sh"),fs.readFileSync(path.join(root,"deploy/wyz/fosu-collector.sh"),"utf8"));
   write(path.join(source, "deploy/wyz/wyz-schedule-collector.service"), '[Service]\n'); write(path.join(source, "deploy/wyz/wyz-schedule-collector.timer"), '[Timer]\n');
   const revision = "a".repeat(40), bundle = path.join(temp, "wyz-schedule-collector-" + revision + ".tar.gz");
   const tar = spawnSync("tar", ["-czf", bundle, "-C", source, "tools", "server", "deploy"]); assert.equal(tar.status, 0);

@@ -9,22 +9,97 @@
 | GitHub main | fetch 后 `5c8db23e0bf209687a7e5086654dafe0adbc93f8` | 已核实 |
 | PR #82–#86 | GitHub 查询为 MERGED | 已核实 |
 | PR #79/#81 | GitHub 查询为 OPEN | 保留，未合并或修改 |
-| 生产祖先 | 只读源站审计 `37953247047` 再次确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 本轮真实指纹；未部署候选 |
-| 本轮候选基线 | `b1bc12f96692768d53004e2573e78e6bd5a62d5d` 同时包含 main 与生产祖先 | 防止丢失班级隔离及公告表情行为 |
+| 生产祖先 | 只读工作流 `38037091970` 确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 学校请求0、配置未改、未部署候选 |
+| Stage A 候选基线 | PR #87 Draft OPEN，HEAD `5e2473ecfa87cc0a2651cf49f105c415c64e7e1a`，base `codex/wyz-oracle-transport-package` | 从真实 #87 HEAD 继续，包含 main、已安装bff与生产祖先 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
-| WYZ 安装 | 用户 PAM 回传 `SOURCE_INTEGRITY=PASS`、`INSTALL_COMPLETE`、`TRANSPORT_SCHEMA_PASS`、`ORACLE_DIRECT_STARTED` | b1bc12f9 已人工安装 |
+| WYZ 当前安装 | 用户 PAM：B_STAGE_PREFLIGHT_PASS、SOURCE_INTEGRITY=PASS、NATIVE_BROWSER=PASS、INSTALL_COMPLETE、COLLECTOR_REVISION_PASS | `bff952bc9d2f214dba0c011c022ca12862829327`；本轮未安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
 | WYZ 首次观察（修复前） | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | 历史 NOT_PASSED，保留故障证据 |
-| WYZ 修复后 60 分钟观察 | 用户后台观察：3606.78 秒，119 成功/0 失败，100%，最长间隔 30.57 秒，TLS 通过、重启 0；结束时个人 Agent active | PASS，仅通信门禁通过；学校访问与 timer 仍关闭 |
+| 当前版本一小时观察 | 用户 PAM：3607.22秒、119成功/0失败、118复用、最长间隔30.58秒、TLS授权通过、实际地址146.235.201.244、重启0、学校请求0 | PASS；Collector及个人Agent active，timer disabled/inactive，execute=0 |
+| 学校阻断 | 用户 PAM：SESSION_FILE_MISSING、SCHOOL_AUTH_NOT_CONFIGURED；check-only为SESSION_EXPIRED、登录尝试0、Session未变 | 未配置，不是密码错误；下一步先批准仅登录 |
 | 正式微信构建版本/合法域名/真机刷新 | Git 配置和本地开发者工具配置不能证明已上线包 | 未核实，人工门禁 |
 
 当前常用工作区路径是指向 `D:\Dev\VScode\FosuClass` 的 junction，有用户未提交的两份 project 配置。本任务使用独立 worktree；不得用候选覆盖这些配置。main 尚不包含全部生产祖先；不能仅因“最新 main”而部署。
 
 生产门禁保持：学校访问未批准；`execute=0`；timer disabled；自动发布关闭；生产 pointer、DNS、防火墙、代理、个人 Agent、微信正式版、付费资源均不由本轮 Agent 自动修改。所有手册中的生产写命令由人工在对应门禁批准后执行。
 
-## A：现有包的 PAM 安装和持续通信验收
+## Stage A：统一交互式入口（候选，尚未部署）
 
-现有上传目录 `/root/fosu-collector-install/b1bc12f96692768d53004e2573e78e6bd5a62d5d/`。
+新分支 `codex/wyz-interactive-manual-sync` 延续PR #87。Windows登录、同步、应急上传保留；两端共用 `schoolLoginProfile.js`。WYZ mobile为Chromium的iPhone Safari UA、390×844 viewport/screen、isMobile/hasTouch=true、scale=3；desktop使用桌面配置。Windows默认微信iOS UA及自定义UA优先级保留。这是移动模拟，不是原生Safari或学校真实登录证据。实际CAS页面/权限仍待阶段B核实。
+
+安装后root-only `/usr/local/bin/fosu-collector` 指向current：
+
+```bash
+fosu-collector help
+fosu-collector status
+fosu-collector inspect
+# 仅在批准首次真实学校登录后：不采集、不上传
+fosu-collector login --login-profile=mobile --approve-school-access
+# 另行批准一次学校只读检查后：不提交密码、不改Session
+fosu-collector status --check-session --login-profile=mobile --approve-school-access
+```
+
+status默认只读本机/systemd和签名Oracle状态；缺文件为SESSION_FILE_MISSING，文件存在为PRESENT_UNVERIFIED，不假称认证成功。当前Oracle没有新 `collector-manual.v1` status/sample API，CLI保留本机结果并明确报告协议不可用；manual-sync在学校访问前以STAGING_SAMPLE_API_UNAVAILABLE停止。**login独立于Oracle，首次验收只登录；后端候选部署另行审批。**
+
+账号和密码均从PAM TTY隐藏输入，不接受密码参数/管道，不写history/日志/长期配置。无TTY、取消、控制字符/多行粘贴停止并恢复终端。此前在聊天披露的密码应更换，再只在PAM输入新密码。默认仅使用一次；root管理员仍可能读取进程和持久Session，文件权限不能防范root。长期凭据配置仍是独立门禁，此CLI不读取或生成school-auth.json。
+
+有效Session经受保护页验证后询问REUSE或LOGIN，其他回答停止。过期使用空上下文、既有官方CAS service/表单与一次密码提交；captcha预检、安全挑战、错误密码、页面/TLS/来源变化立即停止。Chromium请求/响应暂停检查每次来源和跳转，拒绝HTTP、其他域名及307/308密码POST重放，严格证书验证，不重试密码。
+
+Session保存在root-only 0700目录内0600文件；school-session.lock独立于心跳锁，覆盖登录与采集。候选Session再次访问受保护页成功后才原子替换，失败保留原件。非敏感认证状态持久化30分钟冷却、24小时最多2次尝试和人工阻断；人工解决后 `--acknowledge-auth-failure` 只解除阻断，不取消冷却/日限。取消关闭浏览器/worker，保留既有Session/checkpoint。
+
+### 受控样本：首次真实访问尚未批准
+
+先另行批准并受控部署后端，再由已鉴权管理员经现有后台API创建限期任务，遵守Session/CSRF、scope、审计；不能把管理员Token粘贴到终端：
+
+```text
+POST /api/admin/schedule-collector/actions/sample
+{"term":"2026-2027-1","sampleKind":"class","requestBudget":40}
+```
+
+任务30分钟有效、entityLimit=1、requestBudget≤120；只能按指定runId claim。class的一个实体是“专业/年级请求组”，可能含多个行政班，不能称单班。先验收class，再单独批准four（四类各一个请求实体）：
+
+```bash
+# 学校权限、范围和预算分别获批后；任务ID取自管理员返回
+fosu-collector manual-sync --mode=sample --sample-kind=class --run-id=sc-实际任务ID --approve-school-access
+fosu-collector manual-sync --mode=sample --sample-kind=four --run-id=sc-实际任务ID --approve-school-access
+```
+
+TTY需输入SAMPLE class/four确认范围。默认sample/class，routine/full在本阶段拒绝；后台既有routine/full保留原管理员门禁。常驻execute=0和timer不修改，manual-sync.lock不停止心跳。
+
+共用Windows syncPlan、正规化、canonical hash和四个独立network-direct接口，allowDerived=false。并发1、间隔900–1300ms；预算包含浏览器学校资源。达到预算、CAS跳转、未知来源/任何样本HTTP重定向或接口异常停止，不能借跳转增加未计数请求。样本目录仅选首个学院/年级/专业，跳过多余教师/教室/课程目录；无权限或未知结构不生成ID、不派生补齐。
+
+服务端按获批范围复验学期、来源、请求数、实体/事件数量和canonical hash；只进入私有不可变Oracle上传目录，PENDING SAMPLE REVIEW，coverageValid=false。sampleOnly硬拒绝普通finalize、staging-latest和publish（包括force）；不构建Release、不切active、不更新完整四源成功时间、不替换正式Staging。上传或复验失败非零退出，不能把登录成功称同步成功。
+
+### 安装与回滚
+
+候选包由已提交HEAD白名单git archive构建，receipt锁定commit/SHA256；含本手册/CLI/安装恢复脚本，不含本机配置、凭据、Session、raw或node_modules。**本轮未安装**。经PAM传入候选包和同commit的install-schedule-collector.sh、recover-release.py后，安装审批通过才执行，填入实际40位commit与64位SHA256：
+
+```bash
+cd /root/fosu-collector-install/交付commit
+umask 077
+backup=/var/lib/fosuclass/schedule-collector/stage-a-backup-$(date -u +%Y%m%dT%H%M%SZ)
+install -d -m 700 "$backup"
+readlink -f /opt/fosuclass/schedule-collector/current > "$backup/current.txt"
+cp -a /etc/systemd/system/wyz-schedule-collector.service "$backup/"
+cp -a /etc/systemd/system/wyz-schedule-collector.timer "$backup/"
+if test -d /etc/systemd/system/wyz-schedule-collector.service.d; then cp -a /etc/systemd/system/wyz-schedule-collector.service.d "$backup/"; fi
+systemctl stop wyz-schedule-collector.service
+bash install-schedule-collector.sh wyz-schedule-collector-交付commit.tar.gz 交付SHA256
+systemctl start wyz-schedule-collector.service
+systemctl is-active wyz-schedule-collector.service wyz-campus-agent.service
+systemctl is-enabled wyz-schedule-collector.timer
+fosu-collector status
+```
+
+必须核对timer disabled/inactive、ExecStart仍heartbeat-only/execute=0、current为交付commit及90-heartbeat-acceptance.conf保留；不要重复一小时链路验收来处理缺Session。现有安装器检查依赖/浏览器、复用缓存；未知CLI文件/symlink目标停止，不能覆盖用户命令。
+
+失败先停止全校Collector。安装完成时用 `rollback-schedule-collector.sh` 恢复previous-install；中断时以备份current.txt核对原bff路径后恢复managed symlink，并还原备份service/timer/dropins、daemon-reload后启动Collector。保留Session/checkpoint，不覆盖新数据、不删Release、不启动timer、不改个人Agent。wrapper在回滚到不含cli.js的bff时返回CLI_REVISION_REQUIRED，不影响旧心跳服务。root-only备份/凭据不得上传普通附件。
+
+自动证据是隐藏TTY/权限/失败、Session生命周期、原生Chromium移动模拟（本机拒绝代理与合成CDP响应）、签名localhost上传及真正本地worker、预算/目录边界、Windows/个人同步及Linux安装fixture。最初浏览器fixture发现普通route漏拦截跳转，保留失败记录并补上请求/响应层门禁。这不证明学校当前TLS、CAS页面、账号权限或线上上传可用。下一步依次独立审批：仅登录→Session只读检查→class请求组→四类各一个→低频私有Staging；首次全量/长期密码/timer/发布/微信正式版/删Release/费用另行批准。
+
+## 历史 A：此前安装和通信验收（已完成，无需重跑）
+
+以下记录属于此前b1过程；当前bff与最新PASS见基线表。历史上传目录 `/root/fosu-collector-install/b1bc12f96692768d53004e2573e78e6bd5a62d5d/`。
 包 SHA256：`44b893f7bddbc0aa08580b610fffd760955f07312de4ac7a9110ca307cf5498b`。
 
 把仓库的 `deploy/wyz/accept-oracle-direct.sh`、`deploy/wyz/observe-oracle-direct.py` 经受保护 PAM 传到这个目录。脚本执行前可审阅；不用再运行已经完成的短时探针。
@@ -150,14 +225,14 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 
 该模式不读取学校账号密码、不尝试登录、不修改Session或auth-state，无需停止Collector；结果为SESSION_VALID或SESSION_EXPIRED，挑战/结构/TLS异常立即退出，只输出允许的状态码。它仍会访问学校，当前不得自行执行。
 
-真实密码维护命令在另行批准、部署新包且停止全校 Collector 后运行，个人Agent不停止：
+长期凭据维护仅在独立批准长期储存后使用；本阶段优先上文一次性交互式login。学校锁独立于心跳锁，不需停止只做心跳的Collector，个人Agent不停止：
 
 ```bash
 cd /opt/fosuclass/schedule-collector/current
 node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-access
 ```
 
-命令与 Collector 共用本机锁，不并行登录。只维护 Session，不全校抓取，不启用自动恢复或定时器。原子替换、审批、限次、冷却、挑战停止等已有本地 fixture；实际 CAS 页面、checkNeedCaptcha 接口、学校 HTTPS 链路仍待小范围人工批准验证。容器浏览器的密码维护当前主动拒绝，不能把 native fixture 冒称容器支持；本次 WYZ 已回传 NATIVE_BROWSER=PASS。
+命令与Collector共用school-session.lock，不并行登录。只维护Session，不全校抓取，不启用恢复或timer。实际CAS页面、captcha接口、学校TLS仍待人工批准验证；容器浏览器密码维护主动拒绝。WYZ已回传NATIVE_BROWSER=PASS。
 
 正常登录通过后，自动恢复的独立授权文件可由root原子修改；审批有效期必须为未来且最多30天。获学校允许并由用户明确批准后才使用 `configure-school-recovery.py --approve-until <批准的UTC截止时间>`；`--disable`关闭恢复并移除有效期，保留凭据，不改Broker env、timer、Collector或个人Agent。Python3.6语法/到期边界在本地验证，root权限/原子保留/拒绝symlink须由Linux CI验证。Playwright DEBUG/PWDEBUG及网络NODE_DEBUG开启时拒绝凭据浏览器，防止调试输出包含账号或密码。
 

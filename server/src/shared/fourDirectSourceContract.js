@@ -24,6 +24,7 @@ function assertPublicData(value) {
 function validateFourSources(data, expectedTerm) {
   assertPublicData(data);
   const errors = [];
+  if (data && data.meta && data.meta.sampleOnly) errors.push("SAMPLE_NOT_PUBLISHABLE");
   const term = data && (data.term || data.semester);
   if (!term || (expectedTerm && term !== expectedTerm)) errors.push("TERM_MISMATCH");
   if (!data || !data.meta || data.meta.allowDerived !== false) errors.push("DERIVED_NOT_DISABLED");

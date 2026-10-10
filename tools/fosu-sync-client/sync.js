@@ -2295,6 +2295,18 @@ async function handleLocalCampusStaging(page, params) {
     snapshot = stripDirectRaw(snapshot);
     snapshot.directSourceSummary = global.DIRECT_SOURCE_SUMMARY || {};
     snapshot.meta = Object.assign({}, snapshot.meta, { directSourceSummary: snapshot.directSourceSummary, allowDerived: false, requireFourDirectSources: fourSourcePlan(), actualNetworkRequestCount: global.SCHOOL_REQUEST_COUNT || global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.actualNetworkRequestCount || 0 });
+    if (process.env.FOSU_COLLECTOR_SAMPLE_KIND) {
+      snapshot.meta.sampleOnly = true; snapshot.meta.sampleKind = process.env.FOSU_COLLECTOR_SAMPLE_KIND;
+      snapshot.meta.requireFourDirectSources = false;
+      // Only selected sample entities leave the school host, never the full directory.
+      for (const kind of ["teacher", "classroom", "course"]) {
+        const nameKey = { teacher:"teacherName", classroom:"roomName", course:"courseName" }[kind];
+        const indexKey = { teacher:"teachers", classroom:"classrooms", course:"courses" }[kind];
+        if (snapshot.resources) snapshot.resources[indexKey] = (snapshot.resources[kind + "Schedules"] || []).map(s => ({ id:s.id, [nameKey]:s[nameKey] }));
+      }
+      snapshot.catalog = { semesters: snapshot.catalog?.semesters || [] };
+      snapshot.majors = [];
+    }
     collectorProgress("normalize");
     if (fourSourcePlan() && !params.diagnostic) fourSources.assertFourSources(snapshot, snapshot.term || snapshot.semester);
   }
@@ -3710,8 +3722,10 @@ async function initBrowserContext() {
       throw error;
     }
     context = await browser.newContext({
+      ...(process.env.FOSU_COLLECTOR_MODE === "1" ? require("./schoolLoginProfile").contextOptions(process.env.FOSU_COLLECTOR_LOGIN_PROFILE || "mobile") : {}),
       storageState: SESSION_PATH,
       ignoreHTTPSErrors: false,
+      ...(process.env.FOSU_COLLECTOR_MODE === "1" ? { serviceWorkers:"block" } : {}),
     });
   } else if (FOSU_SYNC_AUTH_MODE === "manual-cookie") {
     if (!process.env.FOSU_MANUAL_COOKIE) {
@@ -3739,12 +3753,48 @@ async function initBrowserContext() {
   if (process.env.FOSU_COLLECTOR_MODE === "1") {
     const countFile = path.join(SYNC_DATA_DIR, "request-count.json");
     global.SCHOOL_REQUEST_COUNT = Number(syncCacheStore.readJson(countFile, {}).count || 0);
-    let schoolQueue = Promise.resolve(), lastSchoolRequest = 0;
+    let schoolQueue = Promise.resolve(), lastSchoolRequest = 0, requestFailure;
+    const sampleBudget = process.env.FOSU_COLLECTOR_SAMPLE_KIND ? Number(process.env.FOSU_COLLECTOR_REQUEST_BUDGET) : 0;
+    if (process.env.FOSU_COLLECTOR_SAMPLE_KIND && (!["class", "four"].includes(process.env.FOSU_COLLECTOR_SAMPLE_KIND) || !Number.isSafeInteger(sampleBudget) || sampleBudget < 1 || sampleBudget > 120)) throw directAcquisition.failure("SAMPLE_POLICY_REJECTED");
+    if (sampleBudget) {
+      // Routing skips HTTP redirect hops. Bounded samples fail closed at the
+      // response before a redirect can send a request outside the audited budget.
+      const createPage=context.newPage.bind(context);
+      context.newPage=async (...args)=>{
+        const page=await createPage(...args),guard=await context.newCDPSession(page);
+        guard.on("Fetch.requestPaused",event=>{
+          const redirect=[301,302,303,307,308].includes(event.responseStatusCode);
+          if(redirect){
+            const location=(event.responseHeaders||[]).find(h=>h.name.toLowerCase()==="location");
+            let next;try{next=new URL(location&&location.value,event.request.url);}catch(_){}
+            requestFailure=next&&next.origin==="https://authserver.fosu.edu.cn"?"SCHOOL_SESSION_EXPIRED":"SCHOOL_SAMPLE_REDIRECT_REJECTED";
+            global.SCHOOL_REQUEST_FAILURE=requestFailure;
+          }
+          guard.send(redirect?"Fetch.failRequest":"Fetch.continueRequest",redirect?{requestId:event.requestId,errorReason:"BlockedByClient"}:{requestId:event.requestId}).catch(()=>{
+            requestFailure="SCHOOL_TLS_OR_ORIGIN_REJECTED";global.SCHOOL_REQUEST_FAILURE=requestFailure;browser.close().catch(()=>{});
+          });
+        });
+        await guard.send("Fetch.enable",{patterns:[{urlPattern:"*",requestStage:"Response"}]});
+        return page;
+      };
+    }
     await context.route("**/*", async (route) => {
       const target=new URL(route.request().url());
+      if (sampleBudget && target.origin !== "https://100.fosu.edu.cn") {
+        if (target.origin === "https://authserver.fosu.edu.cn" || ["document","xhr","fetch"].includes(route.request().resourceType())) {
+          requestFailure = target.origin === "https://authserver.fosu.edu.cn" ? "SCHOOL_SESSION_EXPIRED" : "SCHOOL_TLS_OR_ORIGIN_REJECTED";
+          global.SCHOOL_REQUEST_FAILURE = requestFailure;
+        }
+        return route.abort("blockedbyclient");
+      }
       if (["100.fosu.edu.cn","authserver.fosu.edu.cn"].includes(target.hostname) && target.protocol!=="https:") return route.abort("blockedbyclient");
       if (new URL(route.request().url()).hostname !== "100.fosu.edu.cn") return route.continue();
       const task = schoolQueue.catch(() => {}).then(async () => {
+        if (sampleBudget && (requestFailure || global.SCHOOL_REQUEST_COUNT >= sampleBudget)) {
+          requestFailure = requestFailure || "SCHOOL_REQUEST_BUDGET_EXCEEDED";
+          global.SCHOOL_REQUEST_FAILURE = requestFailure;
+          return route.abort("blockedbyclient");
+        }
         const delay = Math.max(0, lastSchoolRequest + 900 + Math.floor(Math.random() * 401) - Date.now());
         if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
         global.SCHOOL_REQUEST_COUNT++;
@@ -4259,7 +4309,7 @@ async function syncCatalog(page) {
     { name: "课程课表", path: "/kbcx/kbxx_kc" }
   ];
 
-  for (const item of extraPages) {
+  for (const item of process.env.FOSU_COLLECTOR_SAMPLE_KIND ? [] : extraPages) {
     try {
       console.log(`   正在访问 ${item.name} (${item.path}) 补充院系选项...`);
       await gotoPage(page, item.path, { waitUntil: "networkidle" });
@@ -4388,7 +4438,9 @@ async function syncMajors(page, catalog) {
     }
   }
 
-  const { colleges, grades } = catalog;
+  const sampleMode = Boolean(process.env.FOSU_COLLECTOR_SAMPLE_KIND);
+  const { colleges: allColleges, grades } = catalog;
+  const colleges = sampleMode ? allColleges.slice(0, 1) : allColleges;
   // 打开页面以确保联动操作可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
@@ -4403,6 +4455,7 @@ async function syncMajors(page, catalog) {
   let filteredGrades = [];
   try {
     filteredGrades = getActiveGradesBySemester(activeSemester, { originalGrades: grades });
+    if (sampleMode) filteredGrades = filteredGrades.slice(0, 1);
   } catch (err) {
     console.error(`❌ 年级过滤失败: ${err.message}`);
     err.code = err.code || "GRADE_FILTER_FAILED";
@@ -4433,10 +4486,19 @@ async function syncMajors(page, catalog) {
       try {
         responseText = await page.evaluate(async (params) => {
           const res = await fetch(`/kbcx/getZyByAjax?skyx=${params.collegeCode}&sknj=${params.grade}`);
-          return res.text();
-        }, { collegeCode: college.code, grade });
+          const text = await res.text();
+          return params.sample ? { text, status:res.status } : text;
+        }, { collegeCode: college.code, grade, sample:sampleMode });
+        if (sampleMode) {
+          const response = responseText;
+          if ([401,403].includes(response.status) || /统一身份认证|密码登录|name\s*=\s*["']?password/i.test(response.text)) throw directAcquisition.failure("SESSION_EXPIRED");
+          if (/验证码|滑块|安全验证|captcha|风险|风控/i.test(response.text)) throw directAcquisition.failure("SCHOOL_SECURITY_CHALLENGE");
+          if (response.status >= 400) throw directAcquisition.failure("SCHOOL_REQUEST_FAILED");
+          responseText = response.text;
+        }
         success = true;
       } catch (ajaxErr) {
+        if (sampleMode) throw ajaxErr;
         console.warn(`      ⚠️  Ajax 抓取专业失败 (${ajaxErr.message})，尝试使用 DOM 联动 Fallback...`);
       }
 
@@ -4458,6 +4520,7 @@ async function syncMajors(page, catalog) {
 
       // 2. 如果 evaluate fetch 失败，采用页面级 DOM 操作联动
       if (!success || majors.length === 0) {
+        if (sampleMode) throw directAcquisition.failure("DIRECT_DIRECTORY_INCOMPLETE");
         try {
           // 选择学院
           await page.selectOption("select[name='skyx']", college.code);
@@ -4529,7 +4592,8 @@ async function syncMajors(page, catalog) {
   console.log(`📊 专业联动抓取完毕，共整理出 ${allMajors.length} 个原始专业数据。`);
   
   // 1. 进行数据清洗
-  const { cleaned, droppedEmpty, droppedPlaceholder, generatedCount } = cleanMajorsPayload(allMajors);
+  const { cleaned, droppedEmpty, droppedPlaceholder, generatedCount } = cleanMajorsPayload(sampleMode ? allMajors.slice(0,1) : allMajors);
+  if (sampleMode && generatedCount) throw directAcquisition.failure("DIRECT_DIRECTORY_INCOMPLETE");
   const sampleDroppedItems = [...droppedEmpty, ...droppedPlaceholder].slice(0, 10);
 
   console.log("\n🧹 === [专业清洗数据统计] ===");
@@ -5895,7 +5959,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().then(() => { if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
+  main().then(() => { if(global.SCHOOL_REQUEST_FAILURE)throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE); if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
+    if (global.SCHOOL_REQUEST_FAILURE) error.code = global.SCHOOL_REQUEST_FAILURE;
     process.exitCode = 1;
     if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: error.code || "SYNC_FAILED" });
     if (!error || !error.__syncLogged) {
@@ -5908,6 +5973,9 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    initBrowserContext,
+    syncCatalog,
+    syncMajors,
     selectSemester,
     crawlStrictClassSchedules,
     crawlStrictResources,

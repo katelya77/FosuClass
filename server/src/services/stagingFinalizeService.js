@@ -152,6 +152,21 @@ async function finalizeChunkedUpload(input, job) {
     throw error;
   }
   stagingData.stagingUploadId = finalized.manifest.uploadId;
+  if (input.collectorRun) {
+    const collector = require("./scheduleCollectorService");
+    collector.load();
+    const run = collector.requireRun(input.collectorRun.runId, input.collectorRun.agentId, input.collectorRun.claimId);
+    if (run.mode === "sample") {
+      const summary = require("../shared/sampleCollectionContract").assertSample(stagingData, run.term, run.samplePolicy);
+      // Immutable private upload only. Never touch staging-latest or active/Release.
+      summary.stagingState = "sample-review"; summary.releaseState = "not-built"; summary.runtimeState = "inactive";
+      collector.load(); collector.requireRun(run.id, input.collectorRun.agentId, input.collectorRun.claimId);
+      const upload = stagingUploadService.markUploadPendingReview(uploadId, summary);
+      appendAudit(input.reqMeta, "sample-upload", "staging-upload", uploadId, "Sample validated; publication prohibited");
+      return { success: true, sampleOnly: true, canonicalHash: summary.canonicalHash, upload };
+    }
+  }
+  if (stagingData.meta?.sampleOnly) throw Object.assign(new Error("SAMPLE_NOT_PUBLISHABLE"), { code: "SAMPLE_NOT_PUBLISHABLE", statusCode: 400 });
   // Windows and WYZ four-source plans share the server-side integrity gate.
   if (stagingData.meta && stagingData.meta.allowDerived === false && ["classSchedules","teacherSchedules","classroomSchedules","courseSchedules"].every(scope=>(stagingData.meta.includeScopes||[]).includes(scope))) {
     require("../shared/fourDirectSourceContract").assertFourSources(stagingData,stagingData.term || stagingData.semester);

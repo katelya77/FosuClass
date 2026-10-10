@@ -12,9 +12,10 @@ function runDirectory(root, term, runId) {
   return path.join(path.resolve(root), "runs", safeId(term), safeId(runId));
 }
 
-function acquireLock(root) {
+function acquireLock(root, name = "collector.lock") {
+  if (!["collector.lock", "school-session.lock", "manual-sync.lock"].includes(name)) throw Object.assign(new Error("LOCK_NAME_REJECTED"), { code: "LOCK_NAME_REJECTED" });
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-  const file = path.join(root, "collector.lock");
+  const file = path.join(root, name);
   if (fs.existsSync(file)) {
     const old = readJson(file, {});
     let alive = true;

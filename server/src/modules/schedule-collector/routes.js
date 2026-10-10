@@ -16,7 +16,7 @@ router.get("/schedule-collector/runs", adminAuth.verifyAdminAccess, (req, res) =
 function queue(req, res, mode) {
   try {
     const identity = adminAuth.getAuditIdentity(req);
-    const queued = collector.requestRun(mode, identity.operator || "admin", Date.now(), { term: req.body && req.body.term, runId: req.body && req.body.runId });
+    const queued = collector.requestRun(mode, identity.operator || "admin", Date.now(), { term: req.body && req.body.term, runId: req.body && req.body.runId, sampleKind: req.body && req.body.sampleKind, requestBudget: req.body && req.body.requestBudget });
     writeAuditLog(req, "schedule-collector-" + mode, "schedule-collector", mode, queued.skipped ? "skipped" : "queued");
     res.json({ success: true, queued });
   } catch (error) {
@@ -26,6 +26,7 @@ function queue(req, res, mode) {
 
 router.post("/schedule-collector/actions/routine", verifyAdminWriteAccess, (req, res) => queue(req, res, "routine"));
 router.post("/schedule-collector/actions/full", verifyAdminWriteAccess, (req, res) => queue(req, res, "full"));
+router.post("/schedule-collector/actions/sample", verifyAdminWriteAccess, (req, res) => queue(req, res, "sample"));
 router.post("/schedule-collector/actions/resume-run", verifyAdminWriteAccess, (req, res) => queue(req, res, "routine"));
 
 router.post("/schedule-collector/actions/pause", verifyAdminWriteAccess, (req, res) => {

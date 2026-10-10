@@ -47,7 +47,7 @@ function backoffFor(failureCount, code) {
 function publicRun(run) {
   if (!run) return null;
   const result = {};
-  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId", "scheduleKey", "schedulePolicy", "reviewClass", "qualityBlocked"]) if (run[key] !== undefined) result[key] = run[key];
+  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId", "scheduleKey", "schedulePolicy", "reviewClass", "qualityBlocked", "samplePolicy", "approvalExpiresAt"]) if (run[key] !== undefined) result[key] = run[key];
   return result;
 }
 function snapshot(now) {
@@ -56,12 +56,14 @@ function snapshot(now) {
 }
 function requestRun(mode, actor, now, options = {}) {
   ensureLoaded();
-  if (!["routine", "full"].includes(mode)) fail("COLLECTOR_MODE_REJECTED", 400);
+  if (!["sample", "routine", "full"].includes(mode)) fail("COLLECTOR_MODE_REJECTED", 400);
+  const samplePolicy = mode === "sample" ? require("../shared/sampleCollectionContract").policy(options.sampleKind ?? "class", options.requestBudget ?? 40) : null;
   if (state.current && !state.current.finishedAt) return { skipped: true, reason: "already-running", status: snapshot(now) };
   let run;
   if (options.runId) {
     run = state.runs.find((item) => item.id === options.runId);
     if (!run || run.result !== "FAILED" || run.failureCode === "CANCELLED") fail("RESUME_RUN_REJECTED");
+    if (run.mode === "sample") fail("SAMPLE_RESUME_NOT_ALLOWED");
     delete run.finishedAt; delete run.failureCode; delete run.result;
     run.stage = "idle";
   } else {
@@ -69,6 +71,7 @@ function requestRun(mode, actor, now, options = {}) {
     if (!record || !record.termStartDate || !Number.isInteger(record.totalWeeks)) fail("COLLECTOR_TERM_CONFIG_MISSING", 400);
     const termConfig = { term: record.term, semesterText: record.semesterText, termStartDate: record.termStartDate, totalWeeks: record.totalWeeks, weekStart: record.weekStart || "monday" };
     run = { id: "sc-" + crypto.randomBytes(12).toString("hex"), mode, term: termConfig.term, termConfig, stage: "idle", actor: String(actor || "admin").slice(0, 64), startedAt: new Date(Number(now || Date.now())).toISOString() };
+    if (samplePolicy) { run.samplePolicy = samplePolicy; run.approvalExpiresAt = new Date(Number(now || Date.now()) + 30 * 60 * 1000).toISOString(); }
     state.runs.unshift(run); state.runs = state.runs.slice(0, 20);
   }
   state.current = run; state.lock = null; state.lastRunAt = run.startedAt; state.stopForDay = false; state.sessionExpired = false;
@@ -102,9 +105,11 @@ function heartbeat(agentId, now, body = {}) {
   }
   persist(); return { ok: true, paused: state.paused, cancelled };
 }
-function claim(agentId, now) {
+function claim(agentId, now, selector = {}) {
   ensureLoaded(); const stamp = Number(now || Date.now());
   if (state.paused || state.stopForDay || !state.current || state.current.finishedAt || state.lock && state.lock.expiresAt > stamp) return null;
+  if (selector.runId && selector.runId !== state.current.id || selector.mode && selector.mode !== state.current.mode) return null;
+  if (state.current.mode === "sample" && (selector.mode !== "sample" || selector.runId !== state.current.id || !Number.isFinite(Date.parse(state.current.approvalExpiresAt)) || Date.parse(state.current.approvalExpiresAt) <= stamp)) return null;
   state.lock = { runId: state.current.id, agentId, claimId: crypto.randomBytes(24).toString("hex"), expiresAt: stamp + LEASE_TTL_MS };
   state.current.stage = "auth-check";
   state.current.baseline = activeBaseline();
@@ -137,6 +142,15 @@ function applyReport(runId, body, agentId, now = Date.now()) {
     run.result = "FAILED"; run.failureCode = body.failureCode; run.finishedAt = new Date(now).toISOString(); state.lock = null;
     if (plan.stop) { state.stopForDay = true; state.sessionExpired = ["SESSION_EXPIRED", "INVALID_CREDENTIALS", "SCHOOL_SECURITY_CHALLENGE"].includes(body.failureCode) || /^SCHOOL_(AUTH|LOGIN|SESSION|TLS|PAGE)_/.test(body.failureCode); }
   } else if (body.complete) {
+    if (run.mode === "sample") {
+      if (body.noChange || !run.uploadId || body.uploadId !== run.uploadId) fail("COLLECTOR_FINALIZE_REQUIRED");
+      const upload = require("./stagingUploadService").getUploadStatus(run.uploadId, { type: "full-sync", id: run.id });
+      if (upload.status !== "pending-review" || upload.summary?.sampleOnly !== true || upload.summary.canonicalHash !== body.canonicalHash) fail("SAMPLE_FINALIZE_REQUIRED");
+      run.directSourceSummary = upload.summary.directSourceSummary; run.schoolRequestCount = upload.summary.schoolRequestCount;
+      run.result = "PENDING SAMPLE REVIEW"; run.reviewClass = "sample"; run.qualityBlocked = true; run.reasons = ["sample-not-publishable"];
+      run.finishedAt = new Date(now).toISOString(); run.stage = "idle"; state.lock = null;
+      persist(); return publicRun(run);
+    }
     let verified;
     const baseline = activeBaseline();
     if (body.noChange && body.canonicalHash && body.canonicalHash === baseline.canonicalHash) {

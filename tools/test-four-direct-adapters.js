@@ -9,12 +9,18 @@ const { buildSyncPlan } = require("../shared/syncPlan");
 const html = "<table id='kbtable'><tr><td>班级</td><td>星期一</td></tr><tr><td>节次</td><td>[1-2]</td></tr><tr><td>26测试1班</td><td>测试课程<br>测试教师<br>1-2周<br>B1-101[1-2]节<br>26测试1班</td></tr></table>";
 async function main() {
   const requests = [];
+  const directoryRequests = [];
   const server = http.createServer(async (req, res) => {
     res.setHeader("content-type", "text/html; charset=utf-8");
     if (req.method === "POST") {
       let body = ""; for await (const chunk of req) body += chunk;
       requests.push({ path: req.url, method: req.method, body: new URLSearchParams(body) });
       res.end(html); return;
+    }
+    directoryRequests.push(req.url);
+    if(req.url.startsWith("/kbcx/getZyByAjax")) { res.end("<option value='fixture-major'>测试专业</option><option value='fixture-major-two'>第二专业</option>");return; }
+    if(req.url==="/kbcx/kbxx_xzb" && process.env.FOSU_COLLECTOR_SAMPLE_KIND) {
+      res.end("<select name='xnxqh'><option value='2026-2027-1'>2026-2027-1</option></select><select name='skyx'><option value='fixture-college'>测试学院</option><option value='other-college'>第二学院</option></select><select name='sknj'><option value='2026'>2026</option><option value='2025'>2025</option></select>");return;
     }
     const kind = /teacher/.test(req.url) ? "teacher" : /classroom/.test(req.url) ? "roomid" : "kcid";
     res.end("<select name='xnxqh'><option value='2026-2027-1'>2026-2027-1</option></select><select name='" + kind + "'><option value='fixture-one'>测试" + kind + "</option></select>");
@@ -42,6 +48,18 @@ async function main() {
     assert.equal(JSON.stringify(resources).includes("rawHtml"), false);
     await sync.crawlStrictResources(page, ["teacher", "classroom", "course"], "2026-2027-1");
     assert.equal(requests.length, 4, "resume must reuse only this run's successful entity checkpoint");
+    process.env.FOSU_COLLECTOR_SAMPLE_KIND="class";process.env.PREFERRED_SEMESTER="2026-2027-1";process.env.SYNC_LOCAL_STAGING_ONLY="true";
+    global.SYNC_PLAN=buildSyncPlan("crawl:scopes",{term:"2026-2027-1","run-id":"fixture-sample",include:"classSchedules","allow-derived":false},{});
+    global.CLI_PARAMS={"entity-limit":1};
+    const beforeDirectory=directoryRequests.length;
+    const catalog=await sync.syncCatalog(page);
+    assert.deepEqual([...new Set(directoryRequests.slice(beforeDirectory).filter(u=>u.startsWith("/kbcx/")).map(u=>u.split("?")[0]))],["/kbcx/kbxx_xzb"],"class sample cannot probe unrelated resource directories");
+    const majors=await sync.syncMajors(page,catalog);
+    const majorRequests=directoryRequests.filter(u=>u.startsWith("/kbcx/getZyByAjax"));
+    assert.equal(majorRequests.length,1,"sample must not enumerate colleges × grades");
+    assert.equal(majors.length,1);assert.equal(majors[0].collegeCode,"fixture-college");assert.equal(majors[0].grade,"2026");
+    await sync.crawlStrictClassSchedules(page,catalog,majors);
+    assert.equal(requests.length,5,"sample makes one independent class request group");
     console.log("four-direct-adapters: PASS (headless browser + local HTTP fixtures; four real adapter paths, no school traffic)");
   } finally { if (browser) await browser.close(); await new Promise((resolve) => server.close(resolve)); }
 }
