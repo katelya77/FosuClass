@@ -27,6 +27,7 @@ function classifyPage(url, text) {
 }
 async function createAdapter(cfg, deps = {}) {
   if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") throw fail("SCHOOL_TLS_OR_ORIGIN_REJECTED");
+  if ((process.env.DEBUG || "").trim() || process.env.PWDEBUG && process.env.PWDEBUG !== "0" || /http|https|tls|net|undici|\*/i.test(process.env.NODE_DEBUG || "")) throw fail("SCHOOL_AUTH_DEBUG_REJECTED");
   const chromium = deps.chromium || require("../fosu-sync-client/node_modules/playwright").chromium;
   // A container browser must be integrated separately; never pass credentials to a container command line.
   if (require("./browserRuntime").runtime(cfg.dataRoot).mode !== "native") throw fail("SCHOOL_AUTH_NATIVE_BROWSER_REQUIRED");
@@ -82,6 +83,21 @@ async function createAdapter(cfg, deps = {}) {
     async close() { if (deps.signal) deps.signal.removeEventListener("abort",abort); await browser.close(); }
   };
 }
+async function checkSession(cfg, deps = {}) {
+  // Explicit school access approval, even when no password is read or submitted.
+  if (deps.approved !== true) throw fail("SCHOOL_AUTH_APPROVAL_REQUIRED");
+  if (deps.signal && deps.signal.aborted) throw fail("COLLECTOR_STOPPED");
+  if (!fs.existsSync(cfg.sessionPath)) return { status:"SESSION_EXPIRED",schoolLoginAttempts:0,sessionChanged:false };
+  secureFile(cfg.sessionPath, deps.platform);
+  const adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
+  try {
+    const status = await adapter.check(cfg.sessionPath);
+    if (!["SESSION_VALID", "SESSION_EXPIRED"].includes(status)) throw fail(/^(INVALID_CREDENTIALS|SCHOOL_[A-Z_]+)$/.test(status || "") ? status : "SCHOOL_SESSION_INVALID");
+    return { status,schoolLoginAttempts:0,sessionChanged:false };
+  } catch (error) {
+    throw fail(/^(INVALID_CREDENTIALS|SCHOOL_[A-Z_]+|COLLECTOR_STOPPED)$/.test(error.code || "") ? error.code : "SCHOOL_AUTH_TRANSPORT_FAILED");
+  } finally { await adapter.close(); }
+}
 async function ensureSession(cfg, deps = {}) {
   const credentialsPath = cfg.schoolCredentialsPath || "/etc/fosuclass/school-auth.json";
   if (!fs.existsSync(credentialsPath)) return { status:"manual-session", schoolLoginAttempts:0 };
@@ -123,4 +139,4 @@ async function ensureSession(cfg, deps = {}) {
     throw fail(code);
   } finally { await adapter.close(); }
 }
-module.exports = { COOLDOWN_MS,allowedUrl,classifyPage,createAdapter,ensureSession,loadCredentials,secureFile };
+module.exports = { COOLDOWN_MS,allowedUrl,checkSession,classifyPage,createAdapter,ensureSession,loadCredentials,secureFile };

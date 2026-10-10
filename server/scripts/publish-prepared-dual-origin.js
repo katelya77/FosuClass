@@ -3,7 +3,10 @@
 const release = require("../src/services/releaseService");
 const runtime = require("../src/services/runtimePointerService");
 const adapter = require("../src/services/dualOriginReleaseService");
-const cloudbase = require("../../tools/cloudbase/release-pack-utils");
+const cloudbase = require("../src/shared/releasePackDistribution").createReleasePackUtils({
+  ENV_ID: process.env.FOSU_CLOUDBASE_ENV_ID,
+  CLOUDBASE_HOSTING_BASE_URL: process.env.FOSU_CLOUDBASE_HOSTING_BASE_URL,
+});
 const distribution = require("../src/shared/verifyImmutableDistribution");
 const { calculateFingerprint } = require("../src/utils/stagingFingerprint");
 

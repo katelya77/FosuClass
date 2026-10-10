@@ -1,6 +1,6 @@
 # 佛课小表生产运维与发布接力手册
 
-状态日期：2026-10-09，Asia/Shanghai。此文区分正在运行的生产系统、候选代码、本地 fixture 和人工验收；任何一项通过不能替代其他项。
+状态日期：2026-10-10，Asia/Shanghai。此文区分正在运行的生产系统、候选代码、本地 fixture 和人工验收；任何一项通过不能替代其他项。
 
 ## 生产基线和门禁
 
@@ -14,7 +14,8 @@
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
 | WYZ 安装 | 用户 PAM 回传 `SOURCE_INTEGRITY=PASS`、`INSTALL_COMPLETE`、`TRANSPORT_SCHEMA_PASS`、`ORACLE_DIRECT_STARTED` | b1bc12f9 已人工安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
-| WYZ 60 分钟观察 | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | NOT_PASSED，学校访问与 timer 门禁继续关闭 |
+| WYZ 首次观察（修复前） | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | 历史 NOT_PASSED，保留故障证据 |
+| WYZ 修复后 60 分钟观察 | 用户后台观察：3606.78 秒，119 成功/0 失败，100%，最长间隔 30.57 秒，TLS 通过、重启 0；结束时个人 Agent active | PASS，仅通信门禁通过；学校访问与 timer 仍关闭 |
 | 正式微信构建版本/合法域名/真机刷新 | Git 配置和本地开发者工具配置不能证明已上线包 | 未核实，人工门禁 |
 
 当前常用工作区路径是指向 `D:\Dev\VScode\FosuClass` 的 junction，有用户未提交的两份 project 配置。本任务使用独立 worktree；不得用候选覆盖这些配置。main 尚不包含全部生产祖先；不能仅因“最新 main”而部署。
@@ -75,9 +76,9 @@ python3 observe-oracle-direct.py
 python3 apply-control-keepalive.py --rollback
 ```
 
-更新后的观察器补充成功连接的复用/新建次数与失败阶段，不降低原验收门槛。2026-10-10用户已在WYZ执行apply，备份control-keepalive-20261009T190406Z-1757992；约1171.75秒的回传为39成功/0失败、38复用/1新建、最长间隔30.25秒、TLS授权通过、重启0、学校请求0。尚不足3600秒，因此NOT_PASSED是时长门禁，不能提前宣布通过。个人Agent在apply时active，结束后状态待确认；保持同一次观察，不重apply/重启。未获60分钟PASS前仍禁止学校访问/定时。若TCP建立依然不稳定，保留现有正式课表与Windows人工接管，先处理网络路径，不强行采集。
+更新后的观察器补充成功连接的复用/新建次数与失败阶段，不降低原验收门槛。2026-10-10用户已在WYZ执行apply，备份control-keepalive-20261009T190406Z-1757992。最终后台观察3606.78秒，119成功/0失败、118复用/1新建、最长间隔30.57秒、TLS授权通过、实际地址146.235.201.244、重启0、单一PID、学校请求0、acceptance PASS，结束时个人Agent active。通信门禁通过；不需重apply/重启。学校访问、自动恢复、真实采集、定时与发布分别另行审批。此一小时实测不能证明永久稳定；长时间断网后的新TCP恢复仍需持续监控。
 
-用户担心PAM自动退出时，可以只Ctrl+C停止前台观察器，再将它交给一次性systemd transient service；从后台启动时重新计满60分钟，不重启Collector/个人Agent、不重apply、也不发网络/学校请求。观察JSON本来已每30秒原子保存为root-only文件，旧部分样本保留。[systemd v239官方说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd-run.xml)确认transient service由服务管理器作为父进程，脱离调用终端；[RuntimeMaxSec说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd.service.xml)用于限制异常长运行。以下后台启动由用户执行，当前尚未收到启动确认：
+用户担心PAM自动退出时，可以只Ctrl+C停止前台观察器，再将它交给一次性systemd transient service；从后台启动时重新计满60分钟，不重启Collector/个人Agent、不重apply、也不发网络/学校请求。观察JSON本来已每30秒原子保存为root-only文件，旧部分样本保留。[systemd v239官方说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd-run.xml)确认transient service由服务管理器作为父进程，脱离调用终端；[RuntimeMaxSec说明](https://raw.githubusercontent.com/systemd/systemd/v239/man/systemd.service.xml)用于限制异常长运行。以下后台启动已由用户执行并回传完整PASS，仅为后续恢复参考，无需再次执行：
 
 ```bash
 systemd-run --unit=fosu-oracle-direct-acceptance \
@@ -134,13 +135,22 @@ PAM 安装输出的 10 项 server 依赖漏洞已用 npm 官方 registry 复核�
 python3 /opt/fosuclass/schedule-collector/current/deploy/wyz/provision-school-auth.py
 ```
 
-这是未来包含 B 代码的新包入口，b1bc12f9 **没有**该脚本。配置文件 0600、父目录 0700；已有文件不自动覆盖。密码不在参数、shell history 或输出中。WYZ 学校托管管理员拥有 root 时仍能读取文件和进程；600 不能对抗 root。应先确认学校同意长期托管学生凭据，优先使用经批准的最小权限专用账号；不在模型或普通聊天中交付凭据。
+这是未来包含 B 代码的新包入口，b1bc12f9 **没有**该脚本。配置文件 0600、父目录 0700；已有文件不自动覆盖。密码不在参数、shell history 或输出中；没有交互TTY或getpass无法关闭回显时停止。WYZ 学校托管管理员拥有 root 时仍能读取文件和进程；600 不能对抗 root。应先确认学校同意长期托管学生凭据，优先使用经批准的最小权限专用账号；不在模型或普通聊天中交付凭据。
 
 候选行为：启动校验现有 Session；正常页面确认后复用；过期时新建空浏览器上下文，正常 CAS 流程进行一次密码提交；pre-login 安全验证要求、滑块/风控/验证码立即停止；确切密码错误优先分类；选择器或页面标记变化停止；保存候选 Session 后再次校验才原子替换，不混用旧 Cookie。失败状态先持久化，30 分钟冷却、24 小时最多两次提交，密码错误/安全验证/结构/TLS 错误要求人工处理。禁止不确定 POST 自动重试。
 
 本轮已移除 login/sync/sessionVerifier 的浏览器 TLS 旁路和相应不安全启动参数，自动学校流程拒绝 HTTP 和非批准源。四源浏览器 fixture 仅允许显式 fixture 模式下的 127.0.0.1 HTTP；生产 worker 不继承此标志。无法验证学校 TLS 时停止，不降级。
 
-真实维护命令在另行批准、部署新包且停止 Collector 后运行：
+先另行批准并部署新包，进行一次只检查Session的学校访问：
+
+```bash
+cd /opt/fosuclass/schedule-collector/current
+node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-access --check-only
+```
+
+该模式不读取学校账号密码、不尝试登录、不修改Session或auth-state，无需停止Collector；结果为SESSION_VALID或SESSION_EXPIRED，挑战/结构/TLS异常立即退出，只输出允许的状态码。它仍会访问学校，当前不得自行执行。
+
+真实密码维护命令在另行批准、部署新包且停止全校 Collector 后运行，个人Agent不停止：
 
 ```bash
 cd /opt/fosuclass/schedule-collector/current
@@ -148,6 +158,10 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 ```
 
 命令与 Collector 共用本机锁，不并行登录。只维护 Session，不全校抓取，不启用自动恢复或定时器。原子替换、审批、限次、冷却、挑战停止等已有本地 fixture；实际 CAS 页面、checkNeedCaptcha 接口、学校 HTTPS 链路仍待小范围人工批准验证。容器浏览器的密码维护当前主动拒绝，不能把 native fixture 冒称容器支持；本次 WYZ 已回传 NATIVE_BROWSER=PASS。
+
+正常登录通过后，自动恢复的独立授权文件可由root原子修改；审批有效期必须为未来且最多30天。获学校允许并由用户明确批准后才使用 `configure-school-recovery.py --approve-until <批准的UTC截止时间>`；`--disable`关闭恢复并移除有效期，保留凭据，不改Broker env、timer、Collector或个人Agent。Python3.6语法/到期边界在本地验证，root权限/原子保留/拒绝symlink须由Linux CI验证。Playwright DEBUG/PWDEBUG及网络NODE_DEBUG开启时拒绝凭据浏览器，防止调试输出包含账号或密码。
+
+升级新包的实施计划：先提供commit、SHA256、CI、旧current和受保护备份；只停止全校Collector，使用既有安装器保留旧Release/浏览器/checkpoint/Broker env，timer仍disabled。当前`90-heartbeat-acceptance.conf`显式强制execute=0，其runner绑定b1；安装后必须核对实际ExecStart和运行代码，不能把current指向新包等同新Collector已经运行。先保留此门禁做独立Session检查，再另行审批将全校服务切到新代码的execute=0入口；首次试采与定时启用分别批准。安装失败恢复旧current/unit/dropin；全程不修改个人Agent，不启动真实学校采集或发布。
 
 人工处理后，只在核对账号、刷新 Session、确认已无挑战后，清理本机非敏感 auth-state 的阻断标记。不得清理标记来持续重试错误密码。学校试采始终先 `check-session`，再一实体诊断，最后首次完整四源；各门禁分开。
 
@@ -183,7 +197,7 @@ node tools/wyz-schedule-collector/maintain-school-session.js --approve-school-ac
 
 新适配在同一 Oracle 存储的发布锁内执行，锁凭据不可由 JSON 请求伪造。覆盖率/来源/下降门禁沿用同一 Staging safety；管理员 `release:publish` scope、现有写入鉴权仍必需。准备阶段 `prepareOnly` 不复制 runtime pointer、不删除历史文件；ready-only 新学期也采用此模式。按 manifest 对两个源的所有课表资源逐文件 HTTP 校验 hash/size，包含抽样遗漏的详情；TLS 必须验证，超时/重定向/缺失即停止激活。此校验只用于发布，不增加普通查询请求。
 
-启用前必须另行审批 `FOSU_DUAL_ORIGIN_PUBLICATION=1`，确认 Oracle 的 CloudBase CLI/部署身份、静态目录和唯一发布写入方已配置。后台现有发布按钮从受保护的 status 读取模式；只有管理员主动发布时才带 `CONFIRM_DUAL_ORIGIN_PUBLICATION`。Windows 原命令默认保持现有流程；获批的严格模式通过 `--publication-confirmation=CONFIRM_DUAL_ORIGIN_PUBLICATION` 共用同一接口，后台生成的 Windows 命令也会附带该参数。配置错误或确认值错误会拒绝，不隐式退回另一种发布方式。自动发布仍为 false。
+启用前必须另行审批 `FOSU_DUAL_ORIGIN_PUBLICATION=1`，并显式配置 `FOSU_CLOUDBASE_ENV_ID` 与 `FOSU_CLOUDBASE_HOSTING_BASE_URL`，确认 Oracle 的 CloudBase CLI/部署身份、静态目录和唯一发布写入方已配置。服务端不读取小程序配置或仓库tools，分发实现位于镜像已有的server/src/shared，旧CLI入口保留原配置默认值和函数契约。后台现有发布按钮从受保护的 status 读取模式；只有管理员主动发布时才带 `CONFIRM_DUAL_ORIGIN_PUBLICATION`。Windows 原命令默认保持现有流程；获批的严格模式通过 `--publication-confirmation=CONFIRM_DUAL_ORIGIN_PUBLICATION` 共用同一接口，后台生成的 Windows 命令也会附带该参数。配置错误或确认值错误会拒绝，不隐式退回另一种发布方式。自动发布仍为 false。
 
 异常事件写入受保护的 `ops/dual-origin-publication/<releaseVersion>.jsonl`，只包含版本/hash/epoch、阶段、错误码、每源校验数量/正文 bytes。Oracle 已提交但 CloudBase 未完成时标记 reconciliation-required；保留文件和旧版本，不删除、不重建同一提交 epoch。CloudBase 失败回退前检查指针仍为本次候选；未知或被其他任务改变时停止写入，避免回退覆盖较新任务。跨主机独立 CLI 写入仍无法取得腾讯侧原子 CAS，必须通过运维/权限约束唯一 Oracle 发布控制面；本机锁不是跨云原子保证。
 
@@ -272,6 +286,8 @@ monthly HTTP 数分别为 DAU×30×上述请求数。若回源率10%，同三种
 
 优先改进：版本不变不重复下载、索引合并请求和筛选分片、搜索防抖、详情按需、长缓存的不可变版本资源、active短缓存与可验证bust；验证 Hosting 真正压缩传输后重新计量。保留公开 JSON 协议，不能让旧客户端改读 .gz sidecar 而未经新构建验证。缓存/压缩配置都提供审批 diff 与回滚；不增云函数/数据库逐条课表，不购买固定费用服务。
 
+用实际操作理解额度：~385MB表示服务器现在存放的两份Release，不是每位用户每天下载385MB。当前未缓存班级查询约4个课表资源请求、0.98MB；已缓存且版本不变时无需再下载课表正文，按前台刷新频率检查约3KB的active。换教师/教室/课程需要相应索引和未缓存详情，不能套用班级大小。发布一次完整约197MB的新版本会增加Hosting容量，双源全文件校验另外读取正文；这些与用户查询分别计量。这里不包含公告、bootstrap和其它API，也不等同已核实月账单。CLI3.5.6的hosting deploy帮助未提供压缩/header开关，不能凭本地.gz副本声称腾讯已压缩响应。需要官方支持的Hosting配置与真实HTTP复测后才报告收益。
+
 [默认域名官方限制](https://docs.cloudbase.net/service/alias)和[静态 Hosting 文档](https://cloud.tencent.com/document/product/876/46900)说明默认域名仅适合开发测试。`wx.request` 目前能拿到 JSON 不等于符合长期正式分发要求。个人版允许1个自定义域名；上线前确认该环境已有域名额度使用、域名实际所有权与备案、Hosting给出的CNAME、证书、国内CDN节点、微信request合法域名和额外流量账单。需要可备案域名方案；当前域名是否具备备案条件未核实。
 
 实施门禁：先提供域名/备案/CNAME/证书/成本计划，等待审批；无需新建 Cloudflare 域名，不修改 agent-broker。绑定后先只读验源、gzip与缓存、TLS/合法域名，再生成微信候选配置；未完成不能宣称国内生产数据面已终验。
@@ -330,4 +346,6 @@ npm run sync:publish -- --help
 
 最终代码f5091282的[Linux四源/隔离浏览器CI](https://github.com/katelya77/FosuClass/actions/runs/37953237462)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37953062468)、[仅被动源站审计](https://github.com/katelya77/FosuClass/actions/runs/37953247047)全部通过，Linux补足POSIX ownership/SIGTERM及验收runner原子回滚。本地网络23、TLS20（含真实b1 factory兼容）、观察器10和被动诊断9通过；security-full/architecture/preflight再次通过。后续提交仅补写文档/公开验收证据。今晚生产冻结与明天恢复步骤见 `docs/production/handoff-20261009-night.md`。
 
-未完成的生产门禁：WYZ连接复用修复后同一次完整60分钟验收及个人Agent结束状态；学校长期凭据批准、真实Session与小范围四源试采；严格双源发布adapter的真实部署身份/验收及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。任务最终生产验收仍取决于这些证据，不能以“代码写完”代替。
+10月10日代码补充后，本地重新运行foundation41/41、regression196/196、competition/final-convergence、四源23套、个人同步51套、双源执行15个fixture、旧CloudBase CLI工具、Session/凭据语法与到期边界、security-full/architecture。Windows缺少Docker的PG/Redis段保持UNVERIFIED，root权限/原子写入/symlink/SIGTERM须以Linux CI补足。ad2a8a2的[四源CI](https://github.com/katelya77/FosuClass/actions/runs/37980654372)和[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37980656013)通过；[Xiaofu CI失败](https://github.com/katelya77/FosuClass/actions/runs/37980655992)是本轮adapter读取小程序配置所引入，对照[b1基线CI](https://github.com/katelya77/FosuClass/actions/runs/37981370913)通过。已经修复为server共享factory及显式部署env，不削弱架构检查；最新提交的完整CI状态从PR #87对应commit读取，不沿用历史绿色检查。
+
+未完成的生产门禁：学校长期凭据批准、真实Session与小范围四源试采；严格双源发布adapter的真实部署身份/验收及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。A通信验收已经通过，任务最终生产验收仍取决于这些后续证据，不能以“代码写完”代替。

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "evidenceSource": "human-pam-output",
-  "stage": "APPLIED_OBSERVATION_IN_PROGRESS",
+  "stage": "COMMUNICATION_ACCEPTANCE_PASSED",
   "collectorRevision": "b1bc12f96692768d53004e2573e78e6bd5a62d5d",
   "backupName": "control-keepalive-20261009T190406Z-1757992",
   "application": {
@@ -17,14 +17,14 @@
     "schoolRequests": 0
   },
   "latestReportedObservation": {
-    "durationSeconds": 1171.75,
-    "successfulHeartbeats": 39,
+    "durationSeconds": 3606.78,
+    "successfulHeartbeats": 119,
     "failedAttempts": 0,
-    "successfulReusedConnections": 38,
+    "successfulReusedConnections": 118,
     "successfulNewConnections": 1,
     "failedConnectionPhases": {},
     "successRate": 1,
-    "longestConfirmedHeartbeatGapSeconds": 30.25,
+    "longestConfirmedHeartbeatGapSeconds": 30.57,
     "longestObservedFailureWindowSeconds": 0,
     "tlsAuthorized": true,
     "actualAddresses": ["146.235.201.244"],
@@ -32,10 +32,11 @@
     "pidCount": 1,
     "collectorActive": true,
     "schoolRequests": 0,
-    "acceptance": "NOT_PASSED",
+    "acceptance": "PASS",
     "schoolAccessApproved": false,
     "timerApproved": false
   },
-  "interpretation": "No failures in the reported partial window. Acceptance remains pending because the complete 3600 second observation has not been supplied. Do not reapply or restart during this observation.",
-  "finalPersonalAgentState": "AWAITING_POST_OBSERVATION_CONFIRMATION"
+  "observationMode": "systemd-transient-passive-observer",
+  "interpretation": "The human supplied the complete 3606.78 second PASS report and post-observation personal Agent active state. This accepts communication only. School access, execute, timer and production publication remain unapproved.",
+  "finalPersonalAgentState": "active"
 }

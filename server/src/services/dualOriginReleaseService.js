@@ -6,8 +6,7 @@ const distribution = require("../shared/verifyImmutableDistribution");
 const release = require("./releaseService");
 const runtime = require("./runtimePointerService");
 const staticSync = require("./staticReleaseSyncService");
-const cloudbase = require("../../../tools/cloudbase/release-pack-utils");
-const cloudbaseConfig = require("../../../miniprogram/config/cloudbase");
+const { createReleasePackUtils } = require("../shared/releasePackDistribution");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
 
 const STORAGE = path.dirname(path.dirname(release.ACTIVE_RELEASE_PATH));
@@ -34,10 +33,13 @@ async function publishPrepared(plan, deps = {}) {
   try {
     const env = deps.env || process.env;
     const config = staticSync.getConfig(env);
-    const hostingBaseUrl = env.FOSU_CLOUDBASE_HOSTING_BASE_URL || cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL;
+    const hostingBaseUrl = env.FOSU_CLOUDBASE_HOSTING_BASE_URL;
+    const envId = env.FOSU_CLOUDBASE_ENV_ID;
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,159}$/.test(envId || "") || !hostingBaseUrl) throw fail("PUBLICATION_DISTRIBUTION_CONFIG_REQUIRED");
+    const cloudbase = createReleasePackUtils({ ENV_ID: envId, CLOUDBASE_HOSTING_BASE_URL: hostingBaseUrl });
     distribution.assertBaseUrl(config.publicBaseUrl, deps.fixtureOnly);
     distribution.assertBaseUrl(hostingBaseUrl, deps.fixtureOnly);
-    const common = { releaseVersion: plan.releaseVersion, publicRoot: release.PUBLIC_RELEASES_DIR, hostingBaseUrl, envId: cloudbaseConfig.ENV_ID, execute: true, dryRun: false };
+    const common = { releaseVersion: plan.releaseVersion, publicRoot: release.PUBLIC_RELEASES_DIR, hostingBaseUrl, envId, execute: true, dryRun: false };
     let local;
     const verifyAll = async base => distribution.verify({ releaseDir: local.releaseDir, manifest: local.manifest, releaseBaseUrl: base.replace(/\/+$/g, "") + "/" + plan.releaseVersion, fixtureOnly: deps.fixtureOnly === true });
     const readOracle = async () => {

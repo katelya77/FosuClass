@@ -46,6 +46,18 @@ async function main(){
     let aborted=false;await routes[0]({request:()=>({url:()=>"http://100.fosu.edu.cn"}),abort:async()=>{aborted=true;},continue:()=>assert.fail("HTTP school route")});assert.equal(aborted,true);await real.close();
   }
   await adapterFixture(false);await adapterFixture(true);
+  // Explicit, read-only check does not read credentials or attempt recovery.
+  clear();fs.writeFileSync(cfg.sessionPath,JSON.stringify({cookies:[],origins:[]}),{mode:0o600});
+  const before = fs.readFileSync(cfg.sessionPath);
+  const oldCredentialsPath = cfg.schoolCredentialsPath; cfg.schoolCredentialsPath = path.join(root,"must-not-read-credentials.json");
+  const checkDeps = { approved:true,createAdapter:async()=>({...adapter,check:async()=>"SESSION_VALID",login:()=>assert.fail("read-only check cannot login")}) };
+  await assert.rejects(auth.checkSession(cfg,{...checkDeps,approved:false}),/APPROVAL_REQUIRED/);
+  assert.deepEqual(await auth.checkSession(cfg,checkDeps),{status:"SESSION_VALID",schoolLoginAttempts:0,sessionChanged:false});
+  assert.equal((await auth.checkSession(cfg,{...checkDeps,createAdapter:async()=>({...adapter,check:async()=>"SESSION_EXPIRED",login:()=>assert.fail("expired check cannot recover")})})).status,"SESSION_EXPIRED");
+  await assert.rejects(auth.checkSession(cfg,{...checkDeps,createAdapter:async()=>({...adapter,check:async()=>"SCHOOL_SECURITY_CHALLENGE"})}),/SECURITY_CHALLENGE/);
+  assert.deepEqual(fs.readFileSync(cfg.sessionPath),before);assert.equal(fs.existsSync(path.join(root,"school-auth-state.json")),false); cfg.schoolCredentialsPath=oldCredentialsPath;
+  const previousDebug = process.env.DEBUG;
+  try { process.env.DEBUG="pw:api"; await assert.rejects(auth.createAdapter(cfg,{chromium:{launch:()=>assert.fail("debug mode cannot launch credential browser")}}),/DEBUG_REJECTED/); } finally { if(previousDebug===undefined)delete process.env.DEBUG;else process.env.DEBUG=previousDebug; }
   console.log("school session: approval, single submission, cooldown, manual challenge, atomic replacement, strict TLS fixtures PASS; schoolRequests=0");
 }
 main().finally(()=>fs.rmSync(root,{recursive:true,force:true})).catch(e=>{console.error(e);process.exitCode=1;});

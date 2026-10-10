@@ -44,7 +44,7 @@ async function commandRunner(localPath, remotePath) {
 async function main() {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = "http://127.0.0.1:" + server.address().port;
-  Object.assign(process.env, { PUBLIC_BASE_URL: origin + "/oracle/releases", FOSU_STATIC_RUNTIME_BASE_URL: origin + "/oracle/runtime", FOSU_CLOUDBASE_HOSTING_BASE_URL: origin + "/cloudbase", FOSU_DUAL_ORIGIN_PUBLICATION: "0" });
+  Object.assign(process.env, { PUBLIC_BASE_URL: origin + "/oracle/releases", FOSU_STATIC_RUNTIME_BASE_URL: origin + "/oracle/runtime", FOSU_CLOUDBASE_HOSTING_BASE_URL: origin + "/cloudbase", FOSU_CLOUDBASE_ENV_ID: "fixture-distribution-env", FOSU_DUAL_ORIGIN_PUBLICATION: "0" });
   fs.mkdirSync(oracleFiles, { recursive: true }); fs.mkdirSync(oracleRuntime, { recursive: true });
   registry.createPlannedTerm({ term: "2026-2027-1", semesterText: "2026-2027-1", termStartDate: "2026-09-07", weekStart: "monday", totalWeeks: 20 });
   const old = release.writeReleaseSnapshot(fixture("adapter-old", "Fixture Old Course"));
@@ -63,6 +63,26 @@ async function main() {
     await assert.rejects(adapter.publishPrepared(plan, deps), /DISABLED/); assert.equal(writes.length, 0);
   });
   process.env.FOSU_DUAL_ORIGIN_PUBLICATION = "1";
+  await test("server runtime loads without CLI or miniprogram files", async () => {
+    const script = `
+      const Module=require('module'),path=require('path'),assert=require('assert');
+      const original=Module._resolveFilename;
+      Module._resolveFilename=function(request,parent,...rest){
+        const resolved=original.call(this,request,parent,...rest);
+        if (typeof resolved==='string' && /[\\\\/](?:miniprogram|tools)[\\\\/]/.test(resolved)) throw Error('SERVER_RUNTIME_PACKAGE_ESCAPE');
+        return resolved;
+      };
+      const adapter=require(${JSON.stringify(path.resolve(__dirname,"../server/src/services/dualOriginReleaseService"))});
+      assert.throws(()=>adapter.assertApproval({},{}),/DISABLED/);
+    `;
+    const child = require("child_process").spawnSync(process.execPath,["-e",script],{encoding:"utf8"});
+    assert.equal(child.status,0,child.stderr);
+  });
+  await test("missing approved server distribution configuration blocks writes", async () => {
+    const env = { ...process.env }; delete env.FOSU_CLOUDBASE_ENV_ID;
+    await assert.rejects(adapter.publishPrepared(plan,{ ...deps,env }),/DISTRIBUTION_CONFIG_REQUIRED/);
+    assert.equal(writes.length,0);
+  });
   await test("explicit confirmation and immutable approval hash are enforced", async () => {
     await assert.rejects(adapter.publishPrepared({ ...plan, confirmation: "" }, deps), /APPROVAL_REQUIRED/);
     await assert.rejects(adapter.publishPrepared({ ...plan, canonicalHash: "a".repeat(64) }, deps), /IMMUTABLE_HASH_MISMATCH/);
