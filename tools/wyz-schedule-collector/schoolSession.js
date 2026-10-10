@@ -71,12 +71,13 @@ async function ensureSessionUnlocked(cfg, deps = {}) {
   const now = (deps.now || Date.now)();
   if (deps.approved !== true && !(credentials.recoveryEnabled && Date.parse(credentials.approvedUntil || "") > now)) throw fail("SCHOOL_AUTH_APPROVAL_REQUIRED");
   const lifecycle=require("./schoolAuthState").lifecycle(cfg,deps);
-  lifecycle.check();
+  lifecycle.check({budget:false});
   const adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
   try {
     const status = await adapter.check(cfg.sessionPath);
     if (status === "SESSION_VALID") return { status,schoolLoginAttempts:0 };
     if (status !== "SESSION_EXPIRED") throw fail(status);
+    lifecycle.check();
     const session = await adapter.login(credentials,lifecycle.hooks);
     if (deps.signal && deps.signal.aborted) throw fail("COLLECTOR_STOPPED");
     validateSession(session);

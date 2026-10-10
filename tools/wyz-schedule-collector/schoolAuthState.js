@@ -22,11 +22,11 @@ function lifecycle(cfg,deps={}){
   const file=path.join(cfg.dataRoot,'school-auth-state.json'),clock=deps.now||Date.now;
   let state=load(file,deps.platform),reserved=false,released=false;
   const save=fields=>{state={...state,...fields};persist(file,state);};
-  function check(){
+  function check({budget=true}={}){
     const now=clock();
     if(state.blocked&&deps.acknowledgeFailure!==true)throw fail('SCHOOL_AUTH_MANUAL_ACTION_REQUIRED');
     if(state.cooldownUntil>now)throw fail('SCHOOL_AUTH_COOLDOWN');
-    if(state.windowStart&&now-state.windowStart<DAY_MS&&state.attempts>=2)throw fail('SCHOOL_AUTH_DAILY_LIMIT');
+    if(budget&&state.windowStart&&now-state.windowStart<DAY_MS&&state.attempts>=2)throw fail('SCHOOL_AUTH_DAILY_LIMIT');
   }
   return {
     check,

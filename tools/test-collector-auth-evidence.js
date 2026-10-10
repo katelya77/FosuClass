@@ -52,6 +52,14 @@ async function main(){
       assert.ok(!fs.existsSync(path.join(root,'school-session.lock')));assert.equal(state.view(cfg).dailyBudgetUsed,0);
     }
   });
+  await test(async()=>{
+    const credentials=path.join(root,'fixture-auth.json');
+    fs.writeFileSync(credentials,JSON.stringify({schema:1,account:'fixture-user',password:'fixture-only-secret',recoveryEnabled:false}),{mode:0o600});
+    fs.writeFileSync(file,JSON.stringify({windowStart:Date.now(),attempts:2,cooldownUntil:0}),{mode:0o600});
+    const before=fs.readFileSync(file);
+    const result=await auth.ensureSession({...cfg,schoolCredentialsPath:credentials},{approved:true,manualRecovery:true,createAdapter:async()=>({check:async()=> 'SESSION_VALID',login:()=>assert.fail('daily limit does not prevent existing Session reuse'),close:async()=>{}})});
+    assert.equal(result.status,'SESSION_VALID');assert.equal(result.schoolLoginAttempts,0);assert.deepEqual(fs.readFileSync(file),before);
+  });
   console.log('collector-auth-evidence: '+cases+' PASS; local fixture only; schoolRequests=0');
 }
 main().catch(e=>{console.error(e.code||e.message);process.exitCode=1;}).finally(()=>fs.rmSync(root,{recursive:true,force:true}));
