@@ -221,7 +221,7 @@ Collector 是常驻心跳服务，Linux timer 对已经运行的服务不产生�
 
 候选 `FOSU_COLLECTOR_SCHEDULE_POLICY=four-source-v1` 为另行审批的排队政策：周一至周六04:30 routine，周日05:00 full，周日不先排第二个 routine。默认窗口30分钟，可批准30–180分钟的窗口内补采；窗口外不补请求，避免网络恢复后全天自动访问学校。未知配置停止排队。未选择新政策时保留已有每日 routine 行为，后台不再把尚未排队的 full 展示成已安排任务。
 
-排队任务和日期去重标记一起持久化，重复心跳及 Oracle 进程重载不重复排队；有未完成任务、暂停、会话/安全挑战阻断或失败冷却时不另起任务。质量blocked的完成记录不计入3次启用基线。失败冷却30分钟/2小时/6小时只作为限制，不表示已经实现无限自动重试；安全停止需人工恢复，不能在换日期时自动清除学校挑战。14项本地 fixture通过，生产 timer/学校频率未改变。
+排队任务和日期去重标记一起持久化，重复心跳及 Oracle 进程重载不重复排队；有未完成任务、暂停、会话/安全挑战阻断或失败冷却时不另起任务。新four-source-v1政策的3次启用基线必须有不同run ID、明确qualityBlocked=false和完整四源network-direct覆盖计数；缺证据的历史完成记录不能解锁新策略，legacy-daily原审批行为保留。失败冷却30分钟/2小时/6小时只作为限制，不表示已经实现无限自动重试；安全停止需人工恢复，不能在换日期时自动清除学校挑战。16项本地 fixture通过，生产 timer/学校频率未改变。
 7. 回滚先确认自身仍拥有对应 commit/epoch，再使用受控回滚流程；不可盲目恢复一份旧备份覆盖别的发布。
 
 现有工具的 mirror-only 不切 pointer：
@@ -267,18 +267,21 @@ node tools/cloudbase/production-budget.js
 | 行为 | 每人每日 CloudBase HTTP 请求 | 每人每日正文 | 假设 |
 | --- | --- | --- | --- |
 | weekly-class-cache | 6.429 | 158,397 bytes | 6次 pointer；每周1次 manifest+班级索引+详情 |
+| daily-class-update | 9 | 997,828 bytes | 6次pointer；每天发布变更版本，重新读取一份班级manifest+索引+详情 |
 | cold-four-source-daily | 10 | 4,407,937 bytes | 每日全量下载本次测量的10项 |
 | heavy-search-cache | 20.714 | 1,479,063 bytes | 每日10次 pointer+10份未缓存详情；全索引每周一次 |
 
-| DAU | weekly-class-cache 月 GB | cold-four-source-daily 月 GB | heavy-search-cache 月 GB |
-| --- | ---: | ---: | ---: |
-| 500 | 2.376 | 66.119 | 22.186 |
-| 1,000 | 4.752 | 132.238 | 44.372 |
-| 2,000 | 9.504 | 264.476 | 88.744 |
-| 5,000 | 23.760 | 661.191 | 221.859 |
-| 10,000 | 47.519 | 1,322.381 | 443.719 |
+| DAU | weekly-class-cache 月 GB | daily-class-update 月 GB | cold-four-source-daily 月 GB | heavy-search-cache 月 GB |
+| --- | ---: | ---: | ---: | ---: |
+| 500 | 2.376 | 14.967 | 66.119 | 22.186 |
+| 1,000 | 4.752 | 29.935 | 132.238 | 44.372 |
+| 2,000 | 9.504 | 59.870 | 264.476 | 88.744 |
+| 5,000 | 23.760 | 149.674 | 661.191 | 221.859 |
+| 10,000 | 47.519 | 299.348 | 1,322.381 | 443.719 |
 
-monthly HTTP 数分别为 DAU×30×上述请求数。若回源率10%，同三种行为在500/1000/2000/5000/10000 DAU时的回源调用约：9,643/19,286/38,572/96,429/192,858；15,000/30,000/60,000/150,000/300,000；31,072/62,143/124,286/310,715/621,429。还需加动态 CloudBase API、上传、认证等调用。工具同时输出0%、10%、100%敏感性，真实回源率仍未知。
+monthly HTTP 数分别为 DAU×30×上述请求数。若回源率10%，weekly-class-cache/cold-four-source-daily/heavy-search-cache在500/1000/2000/5000/10000 DAU时的回源调用约：9,643/19,286/38,572/96,429/192,858；15,000/30,000/60,000/150,000/300,000；31,072/62,143/124,286/310,715/621,429。还需加动态 CloudBase API、上传、认证等调用。工具同时输出0%、10%、100%敏感性，真实回源率仍未知。
+
+daily-class-update更接近日更发布时的普通班级用户：500/1000/2000/5000/10000 DAU的月HTTP数为13.5万/27万/54万/135万/270万，10%回源假设下计费调用为1.35万/2.7万/5.4万/13.5万/27万。它在500 DAU已超过10GB流量，而按既有超额价格假设的流量超额约1.04元/月，10000 DAU约63.75元/月；必须有超限不停服，且不含套餐/其它API/发布校验，实际账单仍待核对。NO CHANGE时不发布，不能把每天采集等同每天发布；也不能用每周更新的行估计每天新版的消耗。每天6次pointer仅是表中假设，长时间前台浏览会增加检查，后续按真实前台时长重算；不为匹配该假设降低刷新频率。
 
 官方超额存储流量0.21元/GB、回源0.15元/GB，Hosting超额容量0.005元/GB/天；只有超限不停服已开启时才按超额计费，否则有服务限制风险。10%回源假设下，三行为的流量超额费在500 DAU约0/11.79/2.56元，10000 DAU约7.88/293.94/96.24元；这些不含套餐、调用、容量、计算或其他消费，不能视为账单报价。
 
@@ -349,3 +352,5 @@ npm run sync:publish -- --help
 10月10日代码补充后，本地重新运行foundation41/41、regression196/196、competition/final-convergence、四源23套、个人同步51套、双源执行15个fixture、旧CloudBase CLI工具、Session/凭据语法与到期边界、security-full/architecture。Windows缺少Docker的PG/Redis段保持UNVERIFIED，root权限/原子写入/symlink/SIGTERM须以Linux CI补足。ad2a8a2的[四源CI](https://github.com/katelya77/FosuClass/actions/runs/37980654372)和[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/37980656013)通过；[Xiaofu CI失败](https://github.com/katelya77/FosuClass/actions/runs/37980655992)是本轮adapter读取小程序配置所引入，对照[b1基线CI](https://github.com/katelya77/FosuClass/actions/runs/37981370913)通过。已经修复为server共享factory及显式部署env，不削弱架构检查；最新提交的完整CI状态从PR #87对应commit读取，不沿用历史绿色检查。
 
 未完成的生产门禁：学校长期凭据批准、真实Session与小范围四源试采；严格双源发布adapter的真实部署身份/验收及跨主机唯一写入约束；CloudBase压缩/缓存/备案域名方案与实际月账单；正式微信构建指纹/合法域名及国内真机SLO；完整历史引用清理和告警接收者验证。A通信验收已经通过，任务最终生产验收仍取决于这些后续证据，不能以“代码写完”代替。
+
+68b4db73的[Linux四源/root凭据/隔离浏览器](https://github.com/katelya77/FosuClass/actions/runs/38022041766)、[完整Agent CI](https://github.com/katelya77/FosuClass/actions/runs/38022005677)、[Public Security Gate](https://github.com/katelya77/FosuClass/actions/runs/38022005686)已全部通过；[只读源站任务](https://github.com/katelya77/FosuClass/actions/runs/38022045693)再次确认a3dfd198且configurationChanged=false、schoolRequests=0、wanRequests=0。随后补充的新策略资格与日更预算需在最新PR head再次核对CI，旧检查不替代最新提交。

@@ -3,7 +3,8 @@ const assert = require("assert"), fs = require("fs"), os = require("os"), path =
 const policy = require("../server/src/shared/scheduleCollectorPolicy");
 const env = { FOSU_COLLECTOR_TIMER_VERIFIED: "1", FOSU_COLLECTOR_SCHEDULE_POLICY: policy.POLICY };
 const time = value => Date.parse(value);
-const successes = Array.from({ length: 3 }, (_, i) => ({ id: "accepted-" + i, finishedAt: "2026-10-09T00:00:00Z", result: "PENDING REVIEW" }));
+const directSourceSummary = Object.fromEntries(["class", "teacher", "classroom", "course"].map(kind => [kind, { sourceMode:"network-direct",coverageValid:true,discoveredEntities:1,requestedEntities:1,success:1,empty:0,failed:0,parserErrors:0,scheduleDocuments:1,courseEvents:1 }]));
+const successes = Array.from({ length: 3 }, (_, i) => ({ id: "accepted-" + i, term:"2026-2027-1", finishedAt: "2026-10-09T00:00:00Z", result: "PENDING REVIEW", qualityBlocked:false,directSourceSummary }));
 const healthy = () => ({ runs: successes });
 let passed = 0;
 function test(name, fn) { fn(); passed++; console.log("PASS " + name); }
@@ -29,6 +30,13 @@ test("session/challenge/day stop and pause cannot be bypassed by the next heartb
 test("three accepted real run records are required", () => assert.equal(policy.decision({ runs: successes.slice(0, 2).concat([{ finishedAt: "2026-10-09T00:00:00Z", result: "FAILED" }]) }, time("2026-10-10T04:31:00+08:00"), env).reason, "three-accepted-runs-required"));
 test("completed but quality-blocked runs do not unlock scheduled school access", () => {
   for (const extra of [{ qualityBlocked: true }, { reviewClass: "blocked" }, { reasons: ["teacher-drop"] }]) assert.equal(policy.decision({ runs: successes.map(run => ({ ...run, ...extra })) }, time("2026-10-10T04:31:00+08:00"), env).reason, "three-accepted-runs-required");
+});
+test("new policy requires complete four-source evidence and distinct run IDs", () => {
+  for (const extra of [{ directSourceSummary:undefined }, { qualityBlocked:undefined }, { finishedAt:"invalid" }, { id:"same-run" }, { directSourceSummary:{...directSourceSummary,teacher:{...directSourceSummary.teacher,requestedEntities:0}} }]) assert.equal(policy.decision({ runs:successes.map(run=>({...run,...extra})) },time("2026-10-10T04:31:00+08:00"),env).reason,"three-accepted-runs-required");
+});
+test("legacy daily approval behavior remains compatible", () => {
+  const legacy = successes.map(run=>({id:run.id,finishedAt:run.finishedAt,result:run.result}));
+  assert.equal(policy.decision({runs:legacy},time("2026-10-10T04:31:00+08:00"),{FOSU_COLLECTOR_TIMER_VERIFIED:"1"}).allowed,true);
 });
 test("unfinished tasks and failure cooldown prevent overlap", () => {
   assert.equal(policy.decision({ ...healthy(), current: { id: "busy" } }, time("2026-10-11T05:01:00+08:00"), env).reason, "already-running");

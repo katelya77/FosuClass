@@ -47,7 +47,9 @@ function decision(state, now, env = process.env) {
   if (state.paused) return reject("paused");
   if (state.sessionExpired) return reject("school-session-blocked");
   if (state.stopForDay) return reject("day-or-manual-stop");
-  if ((state.runs || []).filter(acceptedRun).length < 3) return reject("three-accepted-runs-required");
+  const accepted = (state.runs || []).filter(run => acceptedRun(run, policy.weeklyFull));
+  const count = policy.weeklyFull ? new Set(accepted.map(run => run.id)).size : accepted.length;
+  if (count < 3) return reject("three-accepted-runs-required");
   if (state.current && !state.current.finishedAt) return reject("already-running");
   if (state.retryNotBefore && now < state.retryNotBefore) return reject("failure-cooldown");
   if (now < slot.dueAt || now >= slot.expiresAt) return reject("outside-approved-window");
@@ -56,8 +58,17 @@ function decision(state, now, env = process.env) {
   if (state.lastScheduledKey === slot.key || state.lastScheduledDay === [legacyDay.year, legacyDay.month + 1, legacyDay.date].join("-")) return reject("already-scheduled");
   return { allowed: true, reason: "due", policy: policy.name, slot };
 }
-function acceptedRun(run) {
+function acceptedRun(run, requireDirectEvidence = false) {
   if (!run.finishedAt || !["PENDING REVIEW", "NO CHANGE"].includes(run.result) || run.qualityBlocked || run.reviewClass === "blocked") return false;
+  if (requireDirectEvidence) {
+    if (!run.id || !run.term || !Number.isFinite(Date.parse(run.finishedAt)) || run.qualityBlocked !== false) return false;
+    for (const kind of ["class", "teacher", "classroom", "course"]) {
+      const stat = run.directSourceSummary && run.directSourceSummary[kind];
+      if (!stat || stat.sourceMode !== "network-direct" || stat.coverageValid !== true || stat.failed || stat.parserErrors) return false;
+      if (["discoveredEntities", "requestedEntities", "success", "empty", "failed", "scheduleDocuments", "courseEvents"].some(key => !Number.isSafeInteger(stat[key]) || stat[key] < 0)) return false;
+      if (!stat.discoveredEntities || !stat.scheduleDocuments || stat.requestedEntities !== stat.discoveredEntities || stat.success + stat.empty !== stat.requestedEntities) return false;
+    }
+  }
   return !(run.reasons || []).some(reason => /^(coverage-invalid|(class|teacher|classroom|course)-(source-invalid|empty|empty-rate|drop))$/.test(reason));
 }
 

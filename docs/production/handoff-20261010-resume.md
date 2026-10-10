@@ -35,7 +35,7 @@ python3 apply-control-keepalive.py --rollback
 3. 修复准备阶段提前同步pointer的风险；ready-only不触碰runtime，不自动删历史。回滚epoch递增；激活故障恢复注册表/两份Oracle runtime及原兼容快照。
 4. 每源全文件校验计量进入审计及dry-run，发布验证流量需加入预算。~385MB是当前远端占用；已测冷查询一个班级约0.98MB，缓存不变时课表正文0，再按刷新时机读取约3KB指针。两者不是同一项费用；原四类冷读取情景不等于每位用户每日必需下载量。
 
-14个排队fixture、15个执行适配fixture已通过（学校/生产请求0）；独立只检查Session、隐藏输入拒绝回显和限期恢复授权已补齐本地测试。当前代码还须以本次提交对应全量门禁/CI为准，不能沿用昨晚结果。
+16个排队fixture、15个执行适配fixture已通过（学校/生产请求0）；新政策的启用记录须有完整四源证据、qualityBlocked=false和不同run ID，不能用缺证据的历史完成记录解锁。独立只检查Session、隐藏输入拒绝回显和限期恢复授权已补齐本地测试。当前代码还须以本次提交对应全量门禁/CI为准，不能沿用昨晚结果。
 
 ad2a8a2提交的四源/Linux及Public Security Gate通过，但Xiaofu CI 37980655992在174/196处失败，原因是新增adapter直接require小程序配置，属于本轮引入，不能算基线失败；对照b1的37981370913通过。现已把分发实现以factory共享到server/src/shared，CLI仍在原路径使用原客户端默认值，服务器用显式env配置，加入独立进程无tools/miniprogram依赖及缺配置拒绝写入测试。本地foundation41/41、regression196/196、competition/final-convergence、四源23套、个人51套、security-full/architecture已重新通过；Linux专有权限、PG/Redis/Docker及最新整套CI以PR相应提交检查为准。
 
