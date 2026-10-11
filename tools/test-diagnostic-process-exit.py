@@ -24,7 +24,13 @@ let timer,browser,context,cdp;
    cdp=await context.newCDPSession(page);await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*'}]});
   }
   if(mode==='timeout')timer=setTimeout(abort,150);
-  await prompt.readHidden('FIXTURE_INPUT_READY\\n',{signal:control.signal});
+  const input=prompt.readHidden('FIXTURE_INPUT_PROMPT\\n',{signal:control.signal});
+  // readHidden prints its prompt before arming raw mode. Announce readiness
+  // only after its synchronous setup returns; do not send Ctrl+C to Chromium
+  // through the still-canonical foreground PTY during that small interval.
+  if(!process.stdin.isRaw||process.stdin.listenerCount('data')!==1)throw new Error('FIXTURE_INPUT_NOT_ARMED');
+  console.log('FIXTURE_INPUT_READY');
+  await input;
   if(mode==='failure')throw Object.assign(new Error('fixture-only'),{code:'FIXTURE_FAILURE'});
   result={status:'BLOCKED',observationStatus:'REQUEST_SHAPE_OBSERVED'};process.exitCode=2;
  }catch(error){result={status:error.code==='FIXTURE_FAILURE'?'FAILED':'BLOCKED',code:error.code};process.exitCode=error.code==='FIXTURE_FAILURE'?1:2;}
