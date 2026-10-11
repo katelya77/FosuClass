@@ -4,7 +4,7 @@
 
 两个候选分别审批、分别回滚。CAS 候选基于 WYZ 已验收的 `6fe02a552e7511bc27a2f4751db302ebb7a8e001`；Oracle 候选基于生产祖先 `a3dfd1989705f51c921f13883bcde1cce4502883`。Oracle 不使用 PR #89/main 的整树覆盖现网。本文所有生产命令都是后续 PAM 操作说明，本轮未执行学校访问、生产部署或样本采集。
 
-当前真实证据已证明6fe安装、服务、heartbeat-only、execute=0、timer disabled、个人 Agent active、公开表单可识别。最新 WYZ 审计成功 PUBLIC_BOOTSTRAP_EVIDENCE：三次官方XHR均为空POST、无query/参数，凭据未读、密码提交0、认证历史/Session未变；两份公开脚本的回调只填充语言选择组件。真实空POST响应为200/JSON/无重定向，但脱敏结构不足以作为 required 成功契约。候选将精确语言UI请求保留阻断、最多三次计为noncritical；不放行后台POST。详见兼容审查。WYZ仍装6fe，公开网络仍REVIEW_REQUIRED、Session未建立，不能报告CAS_PUBLIC_READY。后续仅需一次获批最终候选升级及公开门禁、一次单独获批登录；无需重跑用途审计或一小时心跳观察。
+历史6fe公开审计成功PUBLIC_BOOTSTRAP_EVIDENCE：三次官方XHR为空POST、无query/参数，凭据未读、密码提交0；两份公开脚本只填充语言组件。215已将精确语言UI请求保留阻断、最多三次计为noncritical，公开CAS真实PASS。Session仍未建立；当前唯一已知登录阻断是页面/程序账号预检查冲突。后续仅需一次获批最终候选升级及公开门禁、一次单独获批protected-file登录；无需重跑用途审计或一小时心跳观察。最终候选未安装时不把215的PASS冒充新候选证据。
 
 已有 [公开审计脚本](../cas-sample-closure/PAM-PUBLIC-AUDIT.sh) 保留用于复核；本次证据已足够审查 optional 阻断分类，不再要求重复执行。规则和本轮准确CI结果见 [CAS兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md) 及交付 receipt。未知请求、第四次调用、变化的body/类型/query或challenge仍停止，不重置认证预算。
 
@@ -66,7 +66,7 @@ node "$ACCEPT" record --stage=public-cas --source=wyz-school --attest-live \
 
 允许 `COMPATIBLE`，或全部阻断 POST 均已审查为 optional 的 `COMPATIBLE_WITH_NONCRITICAL_BLOCKS`；后者必须 noncriticalPostsBlocked=backgroundPostsBlocked 且 requiredInitializationComplete=true。`REVIEW_REQUIRED` 一律停止；此时不输入凭据、不猜测验证码、不扩大整个 authserver 域名权限。
 
-公开阶段 PASS、用户单独批准一次账号登录后，在 PAM 隐藏输入；先检查既有保护状态。下面只将标准输出交给 tee，stdin/stderr 保持 TTY，隐藏输入不会落文件。不得给 login 加 `2>&1`、账号/密码参数、输入管道或 `echo` 凭据。认证失败停止，不自动再次登录或切 profile。
+公开阶段PASS、用户单独批准一次账号登录后，从已配置受保护文件读取；先检查既有保护状态。下面只将标准输出交给tee，保留原有隐藏输入模式的TTY兼容。不得给login加账号/密码参数、凭据输入管道或`echo`凭据。认证失败停止，不自动再次登录或切profile。
 
 ```bash
 fosu-collector auth-state

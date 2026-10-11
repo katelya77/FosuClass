@@ -1,6 +1,6 @@
 # WYZ CAS 移动端故障修复记录
 
-更新日期：2026-10-11。最新候选为PR #91、基于已安装6fe的语言初始化兼容增量；不部署、不访问学校、不采集、不改正式指针、timer或个人Agent。下方早期定位为历史证据，最新状态和执行命令以“本轮公开页 POST 修复与交付”及 [分层验收手册](cas-sample-closure-acceptance.md) 为准。
+更新日期：2026-10-11。WYZ 已安装215f7e54，安装、公开CAS、移动UA、语言初始化和表单均真实PASS。当前阻断是账号预检查的页面XHR与程序GET冲突，认证提交/预留均0；本轮增量整合预检查并增加受保护文件手动登录，升级前驱和回滚点均为215。准确行为及首次配置/单次登录见 [受保护文件登录手册](../cas-sample-closure/PROTECTED-FILE-LOGIN.md)。下方早期定位与验收记录保留为历史，当前执行以最终提交的交付receipt、本页升级/回滚命令及 [分层验收手册](cas-sample-closure-acceptance.md) 为准。本轮未操作生产。
 
 ## 已知事实与定位限度
 
@@ -38,7 +38,7 @@ school-auth-state.json 原有 attempts/windowStart/cooldownUntil/blocked 保留�
 
 只有 CDP 捕获即将放行的审核认证 POST 后才持久化预算预留，写入 mode 600、fsync、原子 rename、目录 fsync，再允许浏览器继续。崩溃发生在预留与放行间仍消耗预算；released 表示浏览器放行命令完成，不能证明学校收到了请求；response_received 是认证响应证据。旧计数标记 LEGACY_UNVERIFIED，绝不按错误码自动扣回。
 
-未提交时的本地识别失败不新增预算，但仍保留 30 分钟冷却和结构/安全/TLS blocked 保护。人工确认仅解除继续尝试的 blocked 门禁，不绕过冷却或 24 小时两次预算。既有成功 Session 可以显式复用；新会话在验证完成前不会覆盖旧会话。
+历史候选曾对本地识别失败新增30分钟冷却。本轮对未来已确认纯本地适配失败、不存在认证预留的情况不再新增密码冷却；已有冷却和历史完全保留，官方预检查未知结果、安全挑战、TLS错误或认证预留仍保守停止。人工确认不绕过冷却或24小时两次预算。新Session验证完成前不会覆盖旧会话。
 
 ## 验证与真实访问门禁
 
@@ -58,9 +58,9 @@ school-auth-state.json 原有 attempts/windowStart/cooldownUntil/blocked 保留�
 
 ## 本轮公开页 POST 修复与交付
 
-最新用户PAM证据：WYZ运行6fe02a552e7511bc27a2f4751db302ebb7a8e001，CAS_REPAIR_INSTALL_PASS、HEARTBEAT_GATE_PASS，Collector/个人Agent active、execute=0、timer disabled。mobile-wechat表单已识别；三次未知后台POST导致REVIEW_REQUIRED，密码提交0、Session未建立。公开审计和一次空POST探针已完成；两份官方脚本仅填充语言选项，现候选将精确空XHR语言请求最多三次归为optional并继续阻断。第四次、参数/类型变化或新请求仍停止。完整源码hash/控制流/响应结构及审查限度见 [CAS兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md)。无需再审计用途或重复Oracle网络验收。
+此前6fe的公开用途审计和空POST探针已完成，215已将精确语言XHR最多三次归为optional并阻断，公开CAS真实PASS。第四次、参数/类型变化或新请求仍停止；该规则本轮保留。完整源码hash/控制流/响应结构及审查限度见 [CAS兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md)。无需再审计语言用途、调整UA或重复Oracle网络验收。
 
-本地原生 Chromium 已复现旧错误；修复引入 schoolRequestPolicy，与浏览器调度/预算分开。没有增加任何生产后台 POST 规则，REVIEWED_PUBLIC_POSTS=[]；只有合成 fixture 提供已审查的固定公开参数规则。真实新增规则须先核实官方来源、端点、用途、固定非敏感参数和必要性，再独立代码审查，不能由运行参数任意添加。
+生产仅保留已审核的固定语言optional规则；required公开POST规则仍只用于合成fixture。此次新增的账号预检查只允许固定GET/XHR、同一账号、单次官方结果，见当前登录手册。新增后台POST必须独立审查，不能由运行参数任意添加。
 
 | 事件 | 处置与证据 | 错误/兼容性 |
 | --- | --- | --- |
@@ -119,11 +119,11 @@ fosu-collector diagnose-login --login-profile=mobile --approve-school-access
 
 回传白名单阶段/分类/计数即可。若 formReady=true、networkCompatibility=REVIEW_REQUIRED、loginReady=false，说明分类修复有效但实际端点兼容条件未满足，停止；不要输入凭据。未知请求用途需要另行批准的最小证据核查，不能自动扩大来源或 POST 范围。
 
-**兼容性满足、人工确认无安全挑战且单独批准一次真实登录后**：先更换聊天中披露的密码；新凭据只在 PAM 隐藏输入。auth-state 冷却=0、日预算<2 才可继续，blocked 历史不得删除。人工确认处理了旧失败后：
+**兼容性满足、人工确认无安全挑战且单独批准一次真实登录后**：首次先执行本地`fosu-collector configure-credentials`，账号和密码只在PAM隐藏输入一次；后续从固定受保护文件读取。auth-state 冷却=0、日预算<2才可继续，blocked历史不得删除。人工确认处理了旧失败后：
 
 ```bash
 fosu-collector auth-state
-fosu-collector login --login-profile=mobile --approve-school-access --acknowledge-auth-failure
+fosu-collector login --login-profile=mobile --credential-source=protected-file --approve-school-access --acknowledge-auth-failure
 ```
 
 acknowledge 不重置旧日预算，只有下一次审核认证请求预留时才解除 blocked，仍受冷却/两次日限。成功必须 SESSION_SAVED、passwordPersisted=false、protected-session-valid；失败停止，不自动重试、切 PC 或开始 sample。Oracle collector-manual.v1 尚未部署，后续受控计划见主 runbook 的“公开页 POST 分类与后续样本门禁”。
