@@ -95,6 +95,8 @@ for (const [name, mutate, code] of [
   ["underreported request count", d => d.meta.actualNetworkRequestCount = 1, "SAMPLE_REQUEST_COUNT_INVALID"],
   ["invalid weeks", d => d.classSchedules[0].courses[0].weeks = [999], "SAMPLE_DATA_INVALID"],
   ["invalid weekday", d => d.classSchedules[0].courses[0].weekday = 8, "SAMPLE_DATA_INVALID"],
+  ["section beyond school timetable", d => d.classSchedules[0].courses[0].endSection = 15, "SAMPLE_DATA_INVALID"],
+  ["duplicate course event", d => { const s=d.classSchedules[0];s.courses.push({...s.courses[0]}); }, "SAMPLE_DATA_INVALID"],
   ["parser errors", d => d.directSourceSummary.class.parserErrors = 1, "SAMPLE_SOURCE_INCOMPLETE"],
   ["failed source", d => d.directSourceSummary.course.failed = 1, "SAMPLE_SOURCE_INCOMPLETE"],
   ["full directory", d => d.resources.teachers.push({ id: "extra", teacherName: "第二测试教师" }), "SAMPLE_DIRECTORY_EXCEEDED"],

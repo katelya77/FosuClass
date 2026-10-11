@@ -6,6 +6,10 @@ const crypto = require("crypto");
 const config = require("../config");
 
 const SCOPES = Object.freeze({
+  COLLECTOR_SAMPLE: "collector:sample",
+  COLLECTOR_CONTROL: "collector:control",
+  COLLECTOR_REVIEW: "collector:review",
+  COLLECTOR_FULL: "collector:full",
   STAGING_INIT: "staging:init",
   STAGING_CHUNK: "staging:chunk",
   STAGING_FINALIZE: "staging:finalize",

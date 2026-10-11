@@ -36,8 +36,13 @@ class CandidateTests(unittest.TestCase):
                 candidate.collect(pathlib.Path("unused"))
 
     def test_environment_and_personal_routes_cannot_be_overlay_targets(self):
-        for target in ["server/.env", "server/src/routes/campusAgent.js", "server/docker-compose.yml", "server/src/routes/adminPages.js", "server/package-lock.json"]:
+        for target in ["server/.env", "server/src/routes/campusAgent.js", "server/docker-compose.yml", "server/src/routes/adminCampusSyncAssets.js", "server/src/services/adminAuth.js", "server/package-lock.json"]:
             self.assertNotIn(target, candidate.ALLOWED)
+
+    def test_requested_admin_integration_has_an_explicit_runtime_allowlist(self):
+        requested = {"server/src/routes/adminPages.js", "server/src/routes/adminScheduleCollectorAssets.js", "server/src/services/scheduleCollectorAdminService.js", "server/src/services/serviceTokenService.js", "server/src/security/adminRouteScopes.js"}
+        self.assertTrue(requested.issubset(candidate.ALLOWED))
+        self.assertNotIn("server/src/routes/admin.js", candidate.ALLOWED)
 
     def test_committed_artifact_rejects_uncommitted_operator_tools(self):
         head = "f" * 40

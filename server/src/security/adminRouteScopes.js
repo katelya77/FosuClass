@@ -12,6 +12,14 @@ const FULL = [SCOPES.ADMIN_FULL];
  * routePath uses Express-style params (:id).
  */
 const ROUTE_SCOPE_MAP = {
+  "POST /schedule-collector/actions/sample": [SCOPES.COLLECTOR_SAMPLE, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/review": [SCOPES.COLLECTOR_REVIEW, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/pause": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/resume": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/cancel": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/routine": [SCOPES.COLLECTOR_FULL, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/full": [SCOPES.COLLECTOR_FULL, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/resume-run": [SCOPES.COLLECTOR_FULL, SCOPES.ADMIN_FULL],
   // C1 domain writes
   "POST /catalog/meta": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
   "POST /catalog/import/preview": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],

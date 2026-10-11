@@ -2,7 +2,7 @@ const express = require("express");
 const adminAuth = require("../services/adminAuth");
 const { DAILY_KNOWLEDGE_BINDINGS, DAILY_KNOWLEDGE_SCRIPT, DAILY_KNOWLEDGE_SECTION, DAILY_KNOWLEDGE_STYLES } = require("./adminDailyKnowledgeAssets");
 const { CAMPUS_SYNC_SCRIPT, CAMPUS_SYNC_SECTION, CAMPUS_SYNC_STYLES } = require("./adminCampusSyncAssets");
-const { SCHEDULE_COLLECTOR_CARD, SCHEDULE_COLLECTOR_SCRIPT } = require("./adminScheduleCollectorAssets");
+const { SCHEDULE_COLLECTOR_CARD, SCHEDULE_COLLECTOR_SCRIPT, SCHEDULE_COLLECTOR_SECTION, SCHEDULE_COLLECTOR_STYLES } = require("./adminScheduleCollectorAssets");
 const router = express.Router();
 
 const ADMIN_LOGO_URL = "/assets/logo.png";
@@ -1677,6 +1677,7 @@ const adminConsoleHtml = `<!doctype html>
 
 ${DAILY_KNOWLEDGE_STYLES}
 ${CAMPUS_SYNC_STYLES}
+${SCHEDULE_COLLECTOR_STYLES}
     .mini-modal-mask {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -5829,6 +5830,7 @@ ${CAMPUS_SYNC_STYLES}
             <li class="nav-item" data-section="terms"><button type="button" title="学期管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm3 8h3m2 0h3m-8 4h3m2 0h3"/></svg><span class="nav-label">学期管理</span></button></li>
             <li class="nav-item" data-section="quality"><button type="button" title="数据质量"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm-3 9 2 2 4-4"/></svg><span class="nav-label">数据质量</span></button></li>
             <li class="nav-item" data-section="campus-sync"><button type="button" title="个人课表同步"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7h10v2H7V7Zm0 4h10v2H7v-2Zm0 4h6v2H7v-2ZM4 4h16v16H4V4Z"/></svg><span class="nav-label">个人课表同步</span></button></li>
+            <li class="nav-item" data-section="schedule-collector"><button type="button" title="全校课表采集"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4Zm3 3v3h3V7H7Zm7 0v3h3V7h-3ZM7 14v3h3v-3H7Zm7 0v3h3v-3h-3Z"/></svg><span class="nav-label">全校课表采集</span></button></li>
 
             <li class="nav-group-label" data-nav-group="发布与运维">发布与运维</li>
             <li class="nav-item" data-section="sync"><button type="button" title="同步中心"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7h-7a4 4 0 0 0-4 4v0M16 3l4 4-4 4M4 17h7a4 4 0 0 0 4-4v0m-7 8-4-4 4-4"/></svg><span class="nav-label">同步中心</span></button></li>
@@ -6026,6 +6028,7 @@ ${CAMPUS_SYNC_STYLES}
       </section>
 
 ${CAMPUS_SYNC_SECTION}
+${SCHEDULE_COLLECTOR_SECTION}
       <section id="section-sync" class="section">
 ${SCHEDULE_COLLECTOR_CARD}
         <!-- 1. sync-hero -->
@@ -7993,6 +7996,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         feedback: "/admin/feedback",
         security: "/admin/security",
         "campus-sync": "/admin/campus-sync",
+        "schedule-collector": "/admin/schedule-collector",
         "agent-platform": "/admin/agent",
         settings: "/admin/settings"
       };
@@ -8031,6 +8035,7 @@ ${DAILY_KNOWLEDGE_SECTION}
         "/admin/feedback": { section: "feedback" },
         "/admin/security": { section: "security" },
         "/admin/campus-sync": { section: "campus-sync" },
+        "/admin/schedule-collector": { section: "schedule-collector" },
         "/admin/agent": { section: "agent-platform" },
         "/admin/settings": { section: "settings" },
         "/admin/logs": { section: "settings" }
@@ -8682,6 +8687,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           feedback: "反馈管理",
           security: "安全状态",
           "campus-sync": "个人课表同步",
+          "schedule-collector": "全校课表采集",
           "agent-platform": "助手运行中心",
           settings: "系统设置与日志"
         };
@@ -8702,6 +8708,7 @@ ${DAILY_KNOWLEDGE_SECTION}
           "ai-provider": "系统与安全 / 查询服务",
           security: "系统与安全 / 安全状态",
           "campus-sync": "数据与课表 / 个人课表同步",
+          "schedule-collector": "数据与课表 / 全校课表采集",
           "agent-platform": "系统与安全 / 助手运行中心",
           settings: "系统与安全 / 设置与日志"
         };
@@ -8732,6 +8739,8 @@ ${DAILY_KNOWLEDGE_SECTION}
           ignoreLoadError(loadCatalog());
         } else if (targetSection === "sync") {
           ignoreLoadError(loadSyncStatus());
+        } else if (targetSection === "schedule-collector") {
+          if (window.loadScheduleCollector) window.loadScheduleCollector();
         } else if (targetSection === "terms") {
           ignoreLoadError(loadTerms());
         } else if (targetSection === "quality") {
@@ -17261,6 +17270,7 @@ router.get([
   "/version",
   "/security",
   "/campus-sync",
+  "/schedule-collector",
 ], (req, res) => {
   if (!adminAuth.isAdminCookieValid(req)) {
     return res.redirect(buildAdminLoginRedirect(req));

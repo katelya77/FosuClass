@@ -7,15 +7,25 @@ on:
       - 'server/src/services/sampleReviewService.js'
       - 'server/src/services/staging*.js'
       - 'server/src/routes/fullSyncAgent.js'
+      - 'server/src/routes/adminPages.js'
+      - 'server/src/routes/adminScheduleCollectorAssets.js'
+      - 'server/src/services/scheduleCollectorAdminService.js'
+      - 'server/src/services/serviceTokenService.js'
+      - 'server/src/security/adminRouteScopes.js'
       - 'server/src/modules/schedule-collector/**'
       - 'server/src/shared/*SourceContract.js'
       - 'server/src/shared/sampleCollectionContract.js'
       - 'tools/oracle-sample/**'
       - 'tools/test-oracle-sample-*.js'
+      - 'tools/test-collector-admin*.js'
+      - 'tools/test-helpers/collector-admin-harness.js'
+      - 'tools/test-pam-915.py'
+      - 'deploy/wyz/pam-915-install-or-accept.sh'
       - 'deploy/oracle-sample/**'
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   regression:
     runs-on: ubuntu-latest
@@ -34,13 +44,23 @@ jobs:
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - name: Reuse original fixed 915 delivery for isolated paste tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 38123560165 --repo katelya77/FosuClass -n cas-sample-source-candidate -D .local/verified-915-delivery
       - name: Fixture-only source and deployment gates
         run: |
           export NODE_OPTIONS="--require=$PWD/tools/fixture-network-only.js"
           failed=0
           run_check() { "$@" || { echo "FAILED: $*"; failed=1; }; }
           run_check node --test tools/test-oracle-sample-backend.js tools/test-oracle-sample-queue.js tools/test-oracle-sample-preflight.js
+          run_check node --test tools/test-collector-admin.js
+          run_check node tools/test-collector-admin-browser.js
+          run_check bash -n deploy/oracle-sample/operate.sh
+          run_check bash -n deploy/wyz/pam-915-install-or-accept.sh
+          run_check sudo env "PATH=$PATH" python3 tools/test-pam-915.py --zip=.local/verified-915-delivery/heartbeat-upgrade-9153876458df7b1dd6b4fae698851638b31c702e.zip
           run_check python3 tools/oracle-sample/test_build_candidate.py
+          run_check sudo env "PATH=$PATH" python3 tools/oracle-sample/test_operate.py
           run_check npm run test:production-baseline
           run_check npm run test:class-schedule-isolation
           run_check npm run test:notice-reactions

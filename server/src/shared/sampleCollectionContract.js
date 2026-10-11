@@ -1,6 +1,7 @@
 "use strict";
 const { KINDS, assertPublicData } = require("./fourDirectSourceContract");
 const { calculateFingerprint, stableStringify } = require("../utils/stagingFingerprint");
+const { MAX_SECTION } = require("./courseWeekRules");
 const APPROVAL_TTL_MS = 30 * 60 * 1000;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_ORIGINAL_BYTES = 32 * 1024 * 1024;
@@ -59,7 +60,7 @@ function assertSample(data, term, approved, termConfig) {
       for (const event of schedule.courses) {
         if(!event || typeof event.courseName!=="string" || !event.courseName.trim() ||
           !Number.isInteger(event.weekday) || event.weekday<1 || event.weekday>7 ||
-          !Number.isInteger(event.startSection) || event.startSection<1 || !Number.isInteger(event.endSection) || event.endSection<event.startSection ||
+          !Number.isInteger(event.startSection) || event.startSection<1 || !Number.isInteger(event.endSection) || event.endSection<event.startSection || event.endSection>MAX_SECTION ||
           !Array.isArray(event.weeks) || !event.weeks.length || new Set(event.weeks).size!==event.weeks.length || event.weeks.some(w=>!Number.isInteger(w)||w<1||w>totalWeeks) ||
           event.semester && event.semester!==term || event.term && event.term!==term)fail("SAMPLE_DATA_INVALID");
         const key = stableStringify(event);

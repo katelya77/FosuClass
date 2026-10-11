@@ -15,6 +15,11 @@ BASE = "a3dfd1989705f51c921f13883bcde1cce4502883"
 PR_HEAD = "6fe02a552e7511bc27a2f4751db302ebb7a8e001"
 CONTEXT = ["server", "packages", "plugins", "apps", "package.json", "package-lock.json", ".dockerignore"]
 ALLOWED = {
+    "server/src/routes/adminPages.js",
+    "server/src/routes/adminScheduleCollectorAssets.js",
+    "server/src/services/scheduleCollectorAdminService.js",
+    "server/src/services/serviceTokenService.js",
+    "server/src/security/adminRouteScopes.js",
     "server/src/services/scheduleCollectorService.js",
     "server/src/routes/fullSyncAgent.js",
     "server/src/modules/schedule-collector/routes.js",
@@ -80,7 +85,7 @@ def build(root, output, require_commit=False):
     members, overlay = collect(root)
     members = dict(members)
     head = git(root, "rev-parse", "HEAD").decode().strip()
-    packaged_tools = ["deploy/oracle-sample/preflight.js", "tools/oracle-sample/queue.js", "deploy/oracle-sample/README.md"]
+    packaged_tools = ["deploy/oracle-sample/preflight.js", "deploy/oracle-sample/operate.sh", "tools/oracle-sample/queue.js", "tools/oracle-sample/build_candidate.py", "deploy/oracle-sample/README.md"]
     bound_paths = CONTEXT + packaged_tools
     dirty = git(root, "diff", "HEAD", "--name-only", "--", *bound_paths).decode().splitlines()
     untracked = git(root, "ls-files", "--others", "--exclude-standard", "--", *bound_paths).decode().splitlines()
@@ -93,7 +98,7 @@ def build(root, output, require_commit=False):
                 "gitCommit": commit, "deploymentBoundary": "BLOCKED_PENDING_CI_LIVE_PREFLIGHT_AND_APPROVAL" if commit else "BLOCKED_PENDING_COMMIT_CI_AND_APPROVAL",
                 "overlay": overlay, "publishable": False, "timerEnabled": False,
                 "protectedRuntimeSha256": digest(json.dumps({k: digest(v[0]) for k, v in members.items() if k not in overlay}, sort_keys=True).encode())}
-    for name in ("deploy/oracle-sample/preflight.js", "deploy/oracle-sample/README.md"):
+    for name in ("deploy/oracle-sample/preflight.js", "deploy/oracle-sample/README.md", "deploy/oracle-sample/operate.sh"):
         p = root / name
         if p.exists():
             members[name] = (p.read_bytes().replace(b"\r\n", b"\n"), 0o644)

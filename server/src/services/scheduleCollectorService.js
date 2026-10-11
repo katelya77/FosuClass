@@ -75,7 +75,7 @@ function backoffFor(failureCount, code) {
 function publicRun(run) {
   if (!run) return null;
   const result = {};
-  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId", "samplePolicy", "approvalExpiresAt", "sampleOnly", "publishable", "coverageValid", "canonicalHash"]) if (run[key] !== undefined) result[key] = run[key];
+  for (const key of ["id", "mode", "term", "stage", "result", "startedAt", "finishedAt", "durationMs", "schoolRequestCount", "cacheHit", "uploadBytes", "canonicalHashChanged", "failureCode", "counts", "resourceCounts", "directSourceSummary", "stagingRawBytes", "stagingGzipBytes", "reasons", "uploadId", "samplePolicy", "approvalExpiresAt", "sampleOnly", "publishable", "coverageValid", "canonicalHash", "sampleHumanReview"]) if (run[key] !== undefined) result[key] = run[key];
   return result;
 }
 function snapshot(now) {
@@ -143,6 +143,15 @@ function requireRun(runId, agentId, claimId, now = Date.now()) {
 }
 function heartbeat(agentId, now, body = {}) {
   ensureLoaded(); const stamp = Number(now || Date.now());
+  if (findSensitive(body).length) fail("STAGING_SENSITIVE", 400);
+  if (body.observation) {
+    const value = body.observation;
+    if (Object.keys(value).some(key => !["schema", "revision", "executionMode", "session", "authBlocked"].includes(key)) || value.schema !== "collector-observation.v1" ||
+      value.revision !== null && !/^[a-f0-9]{40}$/.test(value.revision || "") ||
+      !["heartbeat-only", "queue"].includes(value.executionMode) ||
+      !["SESSION_FILE_MISSING", "PRESENT_UNVERIFIED"].includes(value.session) || typeof value.authBlocked !== "boolean") fail("COLLECTOR_OBSERVATION_REJECTED", 400);
+    state.observation = { schema:value.schema, revision:value.revision, executionMode:value.executionMode, session:value.session, authBlocked:value.authBlocked, observedAt:new Date(stamp).toISOString() };
+  }
   state.lastHeartbeat = new Date(stamp).toISOString(); state.agentId = String(agentId || "").slice(0, 64);
   let cancelled = false;
   if (body.runId) { try { requireRun(body.runId, agentId, body.claimId, stamp); state.lock.expiresAt = stamp + LEASE_TTL_MS; } catch (_) { cancelled = true; } }
@@ -242,4 +251,27 @@ function applyReport(runId, body, agentId, now = Date.now()) {
   }
   persist(); return publicRun(run);
 }
-module.exports = { BACKOFF_MS, SCHOOL_CONCURRENCY, LEASE_TTL_MS, applyReport, associateJob, associateUpload, backoffFor, cancelCurrent, claim, classifyRelease, collectorCommand, findSensitive, heartbeat, load, nextSchedule, publicRun, requestRun, requireRun, resetForTests, sampleRun, sampleReadiness, setPaused, snapshot };
+function observations() { ensureLoaded(); return state.observation ? { ...state.observation } : null; }
+function history() { ensureLoaded(); return state.runs.slice(0, 200).map(publicRun); }
+function adminRun(runId) { ensureLoaded(); const run = state.runs.find(item => item.id === runId); if (!run) fail("COLLECTOR_RUN_NOT_FOUND", 404); return run; }
+function recordSampleReview(input, actor) {
+  const run = adminRun(input.runId);
+  if (Object.keys(input).some(key => !["runId", "canonicalHash", "decision", "comparisonAttested", "confirmation", "idempotencyKey"].includes(key)) ||
+    run.mode !== "sample" || run.result !== "PENDING SAMPLE REVIEW" || input.canonicalHash !== run.canonicalHash ||
+    !["confirmed", "rejected"].includes(input.decision) || input.confirmation !== "REVIEW SAMPLE" ||
+    typeof input.comparisonAttested !== "boolean" || input.decision === "confirmed" && input.comparisonAttested !== true ||
+    !/^[A-Za-z0-9._:-]{8,80}$/.test(input.idempotencyKey || "")) fail("SAMPLE_HUMAN_REVIEW_REJECTED", 400);
+  const keyHash=crypto.createHash("sha256").update(input.idempotencyKey).digest("hex");
+  const requestHash=crypto.createHash("sha256").update(JSON.stringify({decision:input.decision,comparisonAttested:input.comparisonAttested,canonicalHash:input.canonicalHash})).digest("hex");
+  if (run.sampleReviewRequest) {
+    if (run.sampleReviewRequest.keyHash !== keyHash || run.sampleReviewRequest.requestHash !== requestHash) fail("SAMPLE_HUMAN_REVIEW_IMMUTABLE");
+    return publicRun(run);
+  }
+  // Recompute the uploaded normalized payload's fingerprint at approval time.
+  // A previously valid receipt alone cannot attest a changed/missing payload.
+  require("./scheduleCollectorAdminService").review(run.id);
+  run.sampleHumanReview={decision:input.decision,comparisonAttested:input.comparisonAttested,canonicalHash:run.canonicalHash,reviewedAt:new Date().toISOString()};
+  run.sampleReviewRequest={keyHash,requestHash,actorHash:crypto.createHash("sha256").update(String(actor || "admin")).digest("hex")};
+  persist(); return publicRun(run);
+}
+module.exports = { observations, history, adminRun, recordSampleReview, BACKOFF_MS, SCHOOL_CONCURRENCY, LEASE_TTL_MS, applyReport, associateJob, associateUpload, backoffFor, cancelCurrent, claim, classifyRelease, collectorCommand, findSensitive, heartbeat, load, nextSchedule, publicRun, requestRun, requireRun, resetForTests, sampleRun, sampleReadiness, setPaused, snapshot };

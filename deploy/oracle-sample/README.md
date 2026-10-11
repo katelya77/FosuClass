@@ -1,5 +1,21 @@
 # Oracle Sample 候选与独立回滚
 
+## 统一操作入口
+
+`operate.sh` 复用本目录原有 preflight、Compose、备份和代码回滚契约。参数必须完整传给同一子进程，不依赖终端之前定义的变量。`preflight` 只读；`deploy` 和 `rollback` 需要分别授权，且 `--approve-commit` 必须等于同一 receipt 的完整 Git SHA。SHA 不是审批本身，只有真实授权后才可传入。部署前还要求此前已获独立审批的个人任务准入维护门禁为 paused；脚本不会切换个人任务准入状态、WYZ 服务、timer、正式 Staging 或 active。
+
+操作员从主机既有配置提供 APP/RUNTIME 目录，不猜测路径。代码文件、receipt 和 ARM64 镜像必须来自同一已审核提交及对应 CI。一次只选一个操作：
+
+```text
+bash deploy/oracle-sample/operate.sh preflight --app-dir=<现有应用绝对目录> --runtime-dir=<现有runtime绝对目录> --manifest=<同提交receipt绝对路径>
+bash deploy/oracle-sample/operate.sh deploy --app-dir=<现有应用绝对目录> --runtime-dir=<现有runtime绝对目录> --manifest=<同提交receipt绝对路径> --image-dir=<同提交ARM64产物绝对目录> --backup-dir=<新的私有备份绝对目录> --approve-commit=<已独立批准的完整SHA>
+bash deploy/oracle-sample/operate.sh rollback --app-dir=<原应用绝对目录> --runtime-dir=<原runtime绝对目录> --manifest=<本次receipt绝对路径> --backup-dir=<本次已验证私有备份绝对目录> --approve-commit=<本次独立回滚批准的候选SHA>
+```
+
+每次操作输出 SUCCESS/BLOCKED/FAILED 与阶段。部署验收失败会使用同一备份、原 Compose 身份及旧镜像回滚代码；不覆盖数据。所有工作目录、失败日志、快照和 receipt 保留，不删除现场。回滚仍要求任务/租约为空，镜像及正式数据指纹可核查。下方保留原手动步骤供审阅该入口与故障接管。
+
+后台增量在 `c74a91bd` 基线上扩展明确白名单：已有 Admin Page/Collector 资产、后台观测/审核投影、现有 scoped token 和路由权限。未改个人同步 API、公开课表读取、小程序、CAS 认证核心、依赖锁、Dockerfile、Compose 或生产目录。新增权限为 `collector:sample`、`collector:control`、`collector:review`、`collector:full`；正式采集还需要独立范围审批配置与二次确认。人工样本审核只记录对照声明，不证明全校覆盖或授权发布。
+
 本目录只准备部署；本轮没有部署、学校请求、正式发布、timer 或 active 操作。
 
 候选从已点名的 Oracle 生产祖先 `a3dfd1989705f51c921f13883bcde1cce4502883` 构建。Git 已确认其为 PR #89 `6fe02a552e7511bc27a2f4751db302ebb7a8e001` 的祖先，且包含 PR #79 `ac2d480a`、PR #81 `50f8916b` 功能提交。两 PR 仍 OPEN，本轮不改变它们。当前服务器版本采用用户提供的验收及已有记录；部署前必须重新从受保护本机 API 与容器镜像标签同时核对，不能把 Git 祖先证明当成在线部署证明。
@@ -88,7 +104,7 @@ sudo node "$CANDIDATE_DIR/deploy/oracle-sample/preflight.js" \
 
 随后检查 `/api/health`、受保护 deployment SHA=a3dfd198、OCI image revision=a3dfd198、个人 Broker 与正式 active/四索引、公告/表情、Windows入口。只有确认状态损坏且获得单独恢复批准时，才停 API 并按既有备份恢复机制恢复 storage；不得自动把快照覆盖正常更新。保留失败现场和新 Sample 历史，备份/历史不删除。
 
-CAS 候选的 WYZ 回滚独立：使用既有 `rollback-schedule-collector.sh` 回到安装前的 `6fe02a55`，保留本地 Session 与认证预算，保持 execute=0/timer disabled/个人 Agent active；无需回滚 Oracle Sample 服务。详见另一候选的 CAS 手册。
+CAS 候选的 WYZ 回滚独立：本次215→915安装的前驱是 `215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a`，使用本次已验收backup及既有回滚入口，保留受保护凭据、Session与认证预算，保持execute=0/timer disabled/个人Agent active；无需回滚Oracle Sample服务。历史6fe不是本次回滚点，详见CAS候选手册。
 
 
 ## 审批后可复制的备份、部署与代码回滚
