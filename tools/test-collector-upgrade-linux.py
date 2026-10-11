@@ -15,8 +15,8 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-OLD = 'df4ed1e985630002f614d37db246a76dcaad65a8'
-NEW = '6eea0ec099930f40d16cd3f0ea641e3572f9c675'
+OLD = '9153876458df7b1dd6b4fae698851638b31c702e'
+NEW = 'ffffffffffffffffffffffffffffffffffffffff'  # fixture candidate only
 
 
 def write(file, data, mode=0o600):

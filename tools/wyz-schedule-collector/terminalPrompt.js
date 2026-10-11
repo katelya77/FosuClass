@@ -7,13 +7,15 @@ function readHidden(prompt, options = {}) {
   if (signal && signal.aborted) return Promise.reject(failure("COLLECTOR_STOPPED"));
   return new Promise((resolve, reject) => {
     let value = "", done = false;
-    const wasRaw = Boolean(input.isRaw), wasPaused = input.isPaused();
+    // A fresh TTY has readableFlowing=null, while isPaused() is false.
+    // Restoring only isPaused would leave our resume() holding Node alive.
+    const wasRaw = Boolean(input.isRaw), wasFlowing = input.readableFlowing === true;
     function finish(error) {
       if (done) return;
       done = true;
       input.removeListener("data", onData); input.removeListener("end", onEnd); input.removeListener("error", onError);
       if (signal) signal.removeEventListener("abort", onAbort);
-      try { input.setRawMode(wasRaw); if (wasPaused) input.pause(); output.write("\n"); } catch (_) { error = error || failure("SCHOOL_AUTH_INTERACTIVE_TTY_REQUIRED"); }
+      try { input.setRawMode(wasRaw); if (!wasFlowing) input.pause(); output.write("\n"); } catch (_) { error = error || failure("SCHOOL_AUTH_INTERACTIVE_TTY_REQUIRED"); }
       const result = value; value = "";
       error ? reject(error) : resolve(result);
     }
