@@ -9,10 +9,14 @@ const HELP = `佛课小表 WYZ 手动入口
   fosu-collector auth-state
   fosu-collector diagnose-login --approve-school-access [--login-profile=mobile]
   fosu-collector login [--login-profile=mobile|desktop] [--approve-school-access]
+      [--credential-source=protected-file|hidden-input]
+  fosu-collector configure-credentials
   fosu-collector manual-sync [--mode=sample] [--sample-kind=class|four] [--run-id=sc-…]
       [--login-profile=mobile|desktop] --approve-school-access
   fosu-collector inspect
-账号和密码只从 PAM TTY 隐藏输入。mobile 映射 mobile-wechat（与 Windows 默认一致）。
+configure-credentials 从 PAM TTY 隐藏输入一次，原子保存到 root-only school-credentials.json。
+protected-file 手动登录读取该文件，不启动恢复/定时登录；默认 hidden-input 保留。
+mobile 映射 mobile-wechat（与 Windows 默认一致）。
 可选 mobile-safari / mobile-wechat / desktop；均为 Chromium 配置，并非原生 iOS 验收。
 diagnose-login 只访问公开 CAS 页，不读取凭据、不执行账号预检查、不保存 Session。
 表单就绪与网络兼容性分别报告；未知后台 POST 会被阻断并返回待审核，不能继续登录。
@@ -32,6 +36,12 @@ const MESSAGES = {
   SCHOOL_LOGIN_SUBMIT_CHANGED:"登录按钮或表单提交方式未能安全确认；已停止。",
   SCHOOL_LOGIN_PRECHECK_CHANGED:"官方验证码预检查返回未知结构；密码未提交，需要检查接口适配。",
   SCHOOL_LOGIN_PRECHECK_FAILED:"官方验证码预检查未成功响应；密码未提交，已停止。",
+  SCHOOL_LOGIN_PRECHECK_REQUEST_REJECTED:"页面预检查的方法、账号参数或来源不符合本次绑定范围；已停止。",
+  SCHOOL_LOGIN_PRECHECK_BUDGET_EXHAUSTED:"页面重复发起账号预检查，超出单次批准范围；已停止。",
+  SCHOOL_CREDENTIALS_FILE_REQUIRED:"缺少受保护凭据文件；先在 PAM 使用 configure-credentials 本地配置。",
+  SCHOOL_CREDENTIALS_PERMISSIONS_REJECTED:"受保护凭据文件或父目录权限、所有者、链接状态异常；已拒绝读取。",
+  SCHOOL_CREDENTIALS_FORMAT_REJECTED:"受保护凭据格式不符合 schema 1 或 recoveryEnabled=false；已停止。",
+  SCHOOL_CREDENTIALS_WRITE_FAILED:"受保护凭据原子更新失败；未开始学校登录。",
   SCHOOL_LOGIN_PAGE_REJECTED:"公开 CAS 页面出现明确拒绝提示；尚未提交密码，不能据此判定凭据错误。",
   SCHOOL_LOGIN_RESOURCE_REJECTED:"CAS 所需脚本或样式来源未受信任；已拒绝加载，需要单独核实官方来源。",
   ["SCHOOL_PASSWORD_RESUBMISSION_BLOCKED"]:"已审核的 CAS 主认证请求出现重复提交；已阻止第二次放行。",
@@ -73,15 +83,15 @@ function errorCode(error) {
   return code;
 }
 function parse(args) {
-  const options = { command:args[0] || "help", mode:"sample", sampleKind:"class", loginProfile:"mobile" };
-  if (!["help","status","login","manual-sync","inspect","auth-state","diagnose-login"].includes(options.command)) throw fail("CLI_ARGUMENT_REJECTED");
+  const options = { command:args[0] || "help", mode:"sample", sampleKind:"class", loginProfile:"mobile",credentialSource:'hidden-input' };
+  if (!["help","status","login","configure-credentials","manual-sync","inspect","auth-state","diagnose-login"].includes(options.command)) throw fail("CLI_ARGUMENT_REJECTED");
   const seen = new Set();
   for (const arg of args.slice(1)) {
-    const match = arg.match(/^--(mode|sample-kind|login-profile|run-id)=(.+)$/);
+    const match = arg.match(/^--(mode|sample-kind|login-profile|run-id|credential-source)=(.+)$/);
     const key = match ? match[1] : arg;
     if (seen.has(key)) throw fail("CLI_ARGUMENT_REJECTED");
     seen.add(key);
-    if (match) options[{"mode":"mode","sample-kind":"sampleKind","login-profile":"loginProfile","run-id":"runId"}[key]] = match[2];
+    if (match) options[{"mode":"mode","sample-kind":"sampleKind","login-profile":"loginProfile","run-id":"runId","credential-source":"credentialSource"}[key]] = match[2];
     else if (arg === "--approve-school-access") options.approved = true;
     else if (arg === "--check-session") options.checkSession = true;
     else if (arg === "--acknowledge-auth-failure") options.acknowledgeFailure = true;
@@ -89,11 +99,14 @@ function parse(args) {
   }
   if (!["sample","routine","full"].includes(options.mode) || !["class","four"].includes(options.sampleKind) || !require('../fosu-sync-client/schoolLoginProfile').PROFILES.includes(options.loginProfile) || options.runId && !/^sc-[A-Za-z0-9-]+$/.test(options.runId)) throw fail("CLI_ARGUMENT_REJECTED");
   const allowed = {
+    'configure-credentials':[],
     help:[], inspect:[], "auth-state":[], "diagnose-login":["--approve-school-access","login-profile"], status:["--check-session","--approve-school-access","login-profile"],
-    login:["--approve-school-access","--acknowledge-auth-failure","login-profile"],
+    login:["--approve-school-access","--acknowledge-auth-failure","login-profile","credential-source"],
     "manual-sync":["mode","sample-kind","run-id","login-profile","--approve-school-access","--acknowledge-auth-failure"],
   }[options.command];
   if ([...seen].some(key => !allowed.includes(key))) throw fail("CLI_ARGUMENT_REJECTED");
+  if(!['protected-file','hidden-input'].includes(options.credentialSource))throw fail('CLI_ARGUMENT_REJECTED');
+  if(options.credentialSource==='protected-file'&&!options.approved)throw fail('SCHOOL_ACCESS_NOT_AUTHORIZED');
   if (options.checkSession && !options.approved) throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
   if (options.command==='diagnose-login'&&!options.approved)throw fail('SCHOOL_ACCESS_NOT_AUTHORIZED');
   return options;
@@ -169,15 +182,15 @@ async function authorize(options, deps, label) {
 }
 async function login(cfg, options, deps) {
   await authorize(options,deps,"即将检查/登录学校 CAS，仅本次使用密码");
-  deps.output("阶段 1/3：检查学校 Session；有效 Session 会询问是否复用。");
+  deps.output(options.credentialSource==='protected-file'?"阶段 1/3：检查学校 Session；有效时直接复用，不读取凭据或再次登录。":"阶段 1/3：检查学校 Session；有效 Session 会询问是否复用。");
   const result = await auth.interactiveSession(cfg,{
-    ...deps, approved:true, acknowledgeFailure:options.acknowledgeFailure,
+    ...deps, approved:true, acknowledgeFailure:options.acknowledgeFailure,credentialSource:options.credentialSource,
     onDiagnostic:value=>deps.output(value),
     readCredentials:()=>{deps.output("阶段 2/3：新建隔离 CAS 会话；账号和密码隐藏输入，仅提交一次。");return terminal.credentials({signal:deps.signal,...deps.terminal});},
-    confirmReuse:async()=> { const answer=await deps.ask("已有有效学校 Session。输入 REUSE 复用；输入 LOGIN 重新登录: "); if(!["REUSE","LOGIN"].includes(answer))throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");return answer==="REUSE"; },
+    confirmReuse:async()=> { if(options.credentialSource==='protected-file')return true;const answer=await deps.ask("已有有效学校 Session。输入 REUSE 复用；输入 LOGIN 重新登录: "); if(!["REUSE","LOGIN"].includes(answer))throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");return answer==="REUSE"; },
     ...(deps.authDeps || {}),
   });
-  deps.output("阶段 3/3：受保护页面与候选 Session 校验完成。密码未保存。");
+  deps.output("阶段 3/3：受保护页面与候选 Session 校验完成。未将密码写入 Session 或日志。");
   return result;
 }
 async function main(args = process.argv.slice(2), deps = {}) {
@@ -188,6 +201,9 @@ async function main(args = process.argv.slice(2), deps = {}) {
   auth.assertSafeRuntime();
   const cfg = { dataRoot:DATA_ROOT,sessionPath:path.join(DATA_ROOT,"session.json"),...(deps.cfg || {}),loginProfile:options.loginProfile };
   const ctx = { ...deps,output,ask:deps.ask || (prompt=>terminal.readHidden(prompt,{signal:deps.signal,...deps.terminal})) };
+  if(options.command==='configure-credentials'){
+    const result=await auth.configureCredentials(cfg,{...deps,readCredentials:()=>terminal.credentials({signal:deps.signal,...deps.terminal,persistProtectedFile:true})});output(result);return result;
+  }
   if(options.command==='auth-state'){
     auth.secureDirectory(cfg.dataRoot,deps.platform);
     const result=require('./schoolAuthState').view(cfg,deps);output(result);return result;
@@ -238,7 +254,7 @@ async function main(args = process.argv.slice(2), deps = {}) {
     return value;
   }
   if (options.command === "manual-sync" && options.mode !== "sample") throw fail("SCHOOL_SCOPE_REVIEW_REQUIRED");
-  if (!deps.ask && (!process.stdin.isTTY || !process.stderr.isTTY || typeof process.stdin.setRawMode !== "function")) throw fail("SCHOOL_AUTH_INTERACTIVE_TTY_REQUIRED");
+  if (!(options.command==='login'&&options.credentialSource==='protected-file'&&options.approved)&&!deps.ask && (!process.stdin.isTTY || !process.stderr.isTTY || typeof process.stdin.setRawMode !== "function")) throw fail("SCHOOL_AUTH_INTERACTIVE_TTY_REQUIRED");
   auth.secureDirectory(cfg.dataRoot, deps.platform);
   const unlock = acquireLock(cfg.dataRoot,"manual-sync.lock");
   let conn;

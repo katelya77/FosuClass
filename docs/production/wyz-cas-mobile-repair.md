@@ -82,7 +82,7 @@ request-classification 只输出 methodCategory、originCategory、endpointCateg
 
 ### 分开批准的 PAM 步骤
 
-候选前驱必须为6fe02a552e7511bc27a2f4751db302ebb7a8e001。交付ZIP与源码tar.gz各有SHA256，使用最新准确提交的Linux CI产物及外部receipt核对。新包尚未安装，本轮不执行部署。
+本轮最新候选前驱必须为215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a（用户已验收安装与公开CAS）。当前修复为账号预检查冲突、protected-file手动登录与本地适配冷却分类，见 [新手册](../cas-sample-closure/PROTECTED-FILE-LOGIN.md)。交付ZIP/源码SHA256取最新准确提交Linux CI receipt；新候选未安装，本轮不执行生产操作。
 
 **仅另行批准安装后**，把 ZIP 上传 root-only 目录，从该目录执行（ZIP_FILENAME/ZIP_SHA256 替换为交付的准确值）：
 
@@ -130,7 +130,7 @@ acknowledge 不重置旧日预算，只有下一次审核认证请求预留时�
 
 ### 另行批准的代码回滚命令
 
-从本次normalized-candidate目录开始；先核对rollback-backup.path是本次BACKUP_PATH、root-only目录、current.txt指向已验收6fe release，备份service/timer/drop-in完整且不含symlink。只恢复代码与unit，保留认证预算、Session和checkpoint。任一步失败保持Collector停止并审查：
+从本次normalized-candidate目录开始；先核对rollback-backup.path是本次BACKUP_PATH、root-only目录、current.txt指向已验收215f7e54 release，备份service/timer/drop-in完整且不含symlink。只恢复代码与unit，保留凭据文件、认证预算、Session和checkpoint。任一步失败保持Collector停止并审查：
 
 ```bash
 set -Eeuo pipefail
@@ -141,7 +141,7 @@ state=/var/lib/fosuclass/schedule-collector
 backup=$(cat rollback-backup.path)
 [[ $backup =~ ^/var/lib/fosuclass/schedule-collector/cas-mobile-backup-[0-9]{8}T[0-9]{6}Z$ ]]
 [[ -d $backup && ! -L $backup && $(stat -c %u:%a "$backup") == 0:700 ]]
-old=$base/releases/6fe02a552e7511bc27a2f4751db302ebb7a8e001
+old=$base/releases/215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a
 [[ $(cat "$backup/current.txt") == "$old" && -d $old && ! -L $old ]]
 [[ ! -L $state/upgrade.lock ]]
 exec 8>"$state/upgrade.lock"

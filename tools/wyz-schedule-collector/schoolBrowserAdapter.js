@@ -13,7 +13,7 @@ async function createAdapter(cfg,deps={}){
   const browser=await chromium.launch({headless:true,timeout:30000,args:['--no-proxy-server']});
   const stats={schoolRequests:0,passwordSubmissions:0,submissionReservations:0,authResponseReceived:false,blockedResources:0,
     backgroundPostsBlocked:0,noncriticalPostsBlocked:0,authenticationPostsBlocked:0,publicPostsReleased:0,requiredInitializationResponses:0,
-    networkReviewRequired:false,loginProfile,stage:'browser-start'};
+    networkReviewRequired:false,precheckRequests:0,precheckResponseReceived:false,precheckSource:null,loginProfile,stage:'browser-start'};
   let policyError,prepared,armed=false,credentialsPhase=false,submissionClaimed=false,hooks={};
   const emit=(stage,fields={})=>{stats.stage=stage;if(deps.onDiagnostic)deps.onDiagnostic({stage,...fields});};
   const abort=()=>browser.close().catch(()=>{});
@@ -23,13 +23,14 @@ async function createAdapter(cfg,deps={}){
     // A protected Session check and a later fresh CAS page use different
     // browser contexts. Each public page gets its own initialization budget.
     const publicPostCounts=new Map(),requiredResponses=new Map(),completedInitialization=new Set();
+    let precheck,precheckRequestId;
     const context=await browser.newContext({...contextOptions(cfg.loginProfile||'mobile'),serviceWorkers:'block',...(storageState?{storageState}:{})});
     const page=await context.newPage(),guard=await context.newCDPSession(page);
     // Every request and redirect hop is paused before release. No new origins
     // are trusted by this fix. Password-bearing requests are never inspected.
     guard.on('Fetch.requestPaused',async event=>{
       const responseStage=event.responseStatusCode!==undefined||event.responseErrorReason!==undefined;
-      const classification=requestPolicy.decision(event.request,event.resourceType,{armed,submissionClaimed,credentialsPhase,submissionReserved:stats.submissionReservations>0,publicPostCounts},reviewedPublicPosts);
+      const classification=requestPolicy.decision(event.request,event.resourceType,{armed,submissionClaimed,credentialsPhase,submissionReserved:stats.submissionReservations>0,publicPostCounts,precheck},reviewedPublicPosts);
       let allowed=responseStage?classification.trusted:classification.allowed;
       const requiredInitialization=responseStage&&requiredResponses.get(event.requestId);
       if(requiredInitialization){
@@ -60,6 +61,26 @@ async function createAdapter(cfg,deps={}){
       }
       try{
         if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED',stats.stage);
+        if(!responseStage&&classification.accountPrecheck){
+          const disposition=precheck.browser();
+          emit('request-classification',{...classification.evidence,blocked:false,reason:disposition==='cache'?'REUSE_VERIFIED_ACCOUNT_PRECHECK':'ONE_BOUND_ACCOUNT_PRECHECK',authenticationReleased:false});
+          if(disposition==='cache'){
+            const response=await precheck.wait();
+            if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED','precheck-response');
+            // Exact bounded official response, same account/context. No new
+            // school request, invented result, cookie forwarding or retry.
+            await guard.send('Fetch.fulfillRequest',{requestId:event.requestId,responseCode:200,
+              responseHeaders:response.type?[{name:'Content-Type',value:response.type}]:[],body:Buffer.from(response.body).toString('base64')});return;
+          }
+          precheckRequestId=event.requestId;
+        }
+        if(responseStage&&event.requestId===precheckRequestId){
+          if(!classification.trusted||event.responseErrorReason||event.responseStatusCode!==200)throw fail('SCHOOL_LOGIN_PRECHECK_FAILED','precheck-response');
+          const response=await Promise.race([guard.send('Fetch.getResponseBody',{requestId:event.requestId}),precheck.wait().then(()=>{throw fail('SCHOOL_LOGIN_PRECHECK_FAILED','precheck-response');})]);
+          const body=response.base64Encoded?Buffer.from(response.body,'base64').toString('utf8'):response.body;
+          const type=(event.responseHeaders||[]).find(h=>String(h.name).toLowerCase()==='content-type')?.value||'';
+          precheck.complete(event.responseStatusCode,type,body);precheckRequestId=null;
+        }
         if(!responseStage&&event.request.method==='POST'&&classification.rule?.purpose==='public-bootstrap'&&(allowed||classification.noncritical)){
           // Count even optional BLOCK classifications before any async CDP
           // operation. A fourth concurrent match must require a new review.
@@ -90,7 +111,7 @@ async function createAdapter(cfg,deps={}){
             stats.submissionReservations++;emit('authentication-request',{submissionReserved:true});
           }
         }
-        if(!responseStage&&(event.request.method==='POST'||classification.evidence.methodCategory==='OTHER'||classification.evidence.requestPurpose==='security-verification'))emit('request-classification',{
+        if(!responseStage&&!classification.accountPrecheck&&(event.request.method==='POST'||classification.evidence.methodCategory==='OTHER'||classification.evidence.requestPurpose==='security-verification'))emit('request-classification',{
           ...classification.evidence,blocked:!allowed,reason:classification.reason,reviewRequired:classification.reviewRequired===true,authenticationReleased:false});
         if(responseStage&&authenticationPost&&submissionClaimed&&stats.submissionReservations){
           stats.authResponseReceived=true;
@@ -107,10 +128,13 @@ async function createAdapter(cfg,deps={}){
           if(hooks.onAuthSubmitReleased)await hooks.onAuthSubmitReleased();
           emit('authentication-released',{passwordSubmissions:stats.passwordSubmissions,authenticationReleased:true});
         }
-      }catch(error){reject(auth.transportCode(error),error.diagnosticStage||'request-guard');await guard.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'}).catch(()=>{});abort();}
+      }catch(error){if(precheck)precheck.fail(error);reject(auth.transportCode(error),error.diagnosticStage||'request-guard');await guard.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'}).catch(()=>{});abort();}
     });
     await guard.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'},{urlPattern:'*',requestStage:'Response'}]});
-    return {context,page,policyState:{requiredResponses,completedInitialization}};
+    return {context,page,policyState:{requiredResponses,completedInitialization},beginPrecheck(account){
+      precheck=require('./schoolPrecheck').create(account,source=>{stats.precheckRequests++;stats.precheckSource=source;emit('precheck-request',{source});},(needed,source)=>{stats.precheckResponseReceived=true;emit('precheck-response',{challengeRequired:needed,source});});
+      return precheck;
+    }};
   }
   const inspect=async page=>{
     const state=await cas.scan(page);
@@ -177,14 +201,24 @@ async function createAdapter(cfg,deps={}){
     async login(credentials,submissionHooks={}){
       await adapter.prepare();hooks=submissionHooks;
       if(stats.networkReviewRequired)throw fail('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED','public-network-review');
-      const {context,page,form}=prepared;
+      const {context,page,form}=prepared,precheck=prepared.beginPrecheck(credentials.account);
+      try{
       await form.account.fill(credentials.account);
-      emit('precheck-request');stats.schoolRequests++;
-      emit('request-classification',{methodCategory:'GET',originCategory:'school-auth',endpointCategory:'account-captcha-precheck',resourceType:'Fetch',authenticationEndpoint:false,browserInitiated:false,blocked:false,reason:'APPROVED_ACCOUNT_PRECHECK',authenticationReleased:false});
-      const response=await context.request.get(AUTH_ORIGIN+'/authserver/checkNeedCaptcha.htl?username='+encodeURIComponent(credentials.account),{timeout:10000,maxRedirects:0});
-      if(!auth.allowedUrl(response.url())||new URL(response.url()).origin!==AUTH_ORIGIN)throw fail('SCHOOL_TLS_OR_ORIGIN_REJECTED','precheck-origin');
-      if(!response.ok())throw fail('SCHOOL_LOGIN_PRECHECK_FAILED','precheck-response');
-      const needed=cas.parseCaptcha(await response.text());emit('precheck-response',{challengeRequired:needed});
+      await form.account.blur(); // Trigger the page's account/change handler first.
+      if(await form.account.inputValue()!==precheck.account)throw fail('SCHOOL_LOGIN_ACCOUNT_FIELD_CHANGED','precheck-account-binding');
+      const discoveryDeadline=Date.now()+1000;
+      while(!precheck.source&&!policyError&&Date.now()<discoveryDeadline)await page.waitForTimeout(50);
+      if(policyError)throw policyError;
+      if(precheck.direct()){
+        stats.schoolRequests++;
+        emit('request-classification',{methodCategory:'GET',originCategory:'school-auth',endpointCategory:'account-captcha-precheck',resourceType:'Fetch',authenticationEndpoint:false,browserInitiated:false,blocked:false,reason:'APPROVED_ACCOUNT_PRECHECK',authenticationReleased:false});
+        const target=AUTH_ORIGIN+'/authserver/checkNeedCaptcha.htl?username='+encodeURIComponent(credentials.account);
+        const response=await context.request.get(target,{timeout:10000,maxRedirects:0});
+        if(response.url()!==target)throw fail('SCHOOL_TLS_OR_ORIGIN_REJECTED','precheck-origin');
+        precheck.complete(response.status(),response.headers()['content-type']||'',await response.text());
+      }
+      const {needed}=await precheck.wait();
+      if(await form.account.inputValue()!==precheck.account)throw fail('SCHOOL_LOGIN_ACCOUNT_FIELD_CHANGED','precheck-account-binding');
       if(needed||await inspect(page)==='SCHOOL_SECURITY_CHALLENGE')throw fail('SCHOOL_SECURITY_CHALLENGE','challenge-before-password');
       if(policyError)throw policyError;
       if(stats.networkReviewRequired)throw fail('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED','public-network-review');
@@ -207,6 +241,7 @@ async function createAdapter(cfg,deps={}){
       const protectedStatus=await protectedCheck(page);
       if(protectedStatus!=='SESSION_VALID')throw fail(protectedStatus==='SESSION_EXPIRED'?'SCHOOL_SESSION_EXPIRED':protectedStatus,'protected-session-check');
       emit('protected-session-valid',{protectedSessionValid:true});return context.storageState();
+      }catch(error){precheck.fail(error);throw error;}finally{precheck.close();}
     },
     async close(){if(deps.signal)deps.signal.removeEventListener('abort',abort);await browser.close();}
   };

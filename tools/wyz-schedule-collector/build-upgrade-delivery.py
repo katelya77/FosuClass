@@ -59,6 +59,7 @@ def build(previous):
     for name, committed_path in (
         ('cas-sample-closure-acceptance.md', 'docs/production/cas-sample-closure-acceptance.md'),
         ('CAS-COMPATIBILITY.md', 'docs/cas-sample-closure/CAS-COMPATIBILITY.md'),
+        ('PROTECTED-FILE-LOGIN.md', 'docs/cas-sample-closure/PROTECTED-FILE-LOGIN.md'),
         ('PAM-PUBLIC-AUDIT.sh', 'docs/cas-sample-closure/PAM-PUBLIC-AUDIT.sh'),
     ):
         (folder / name).write_bytes(source[committed_path])

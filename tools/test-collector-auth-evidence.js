@@ -11,7 +11,7 @@ async function main(){
     let closed=0,read=0;
     await assert.rejects(auth.interactiveSession(cfg,{approved:true,readCredentials:()=>{read++;},createAdapter:async()=>({prepare:async()=>{throw error('SCHOOL_LOGIN_ACCOUNT_FIELD_CHANGED');},close:async()=>closed++})}),/ACCOUNT_FIELD_CHANGED/);
     assert.equal(read,0);assert.equal(closed,1);assert.ok(!fs.existsSync(path.join(root,'school-session.lock')));
-    const s=state.view(cfg);assert.equal(s.dailyBudgetUsed,0);assert.equal(s.failureCategory,'local_preflight');assert.ok(s.cooldownRemainingSeconds>0);assert.equal(s.blocked,true);
+    const s=state.view(cfg);assert.equal(s.dailyBudgetUsed,0);assert.equal(s.failureCategory,'local_preflight');assert.equal(s.cooldownRemainingSeconds,0);assert.equal(s.failurePhase,'local_adaptation');assert.equal(s.blocked,true);
   });
   await test(async()=>{
     const old={windowStart:Date.now(),attempts:1,cooldownUntil:0};fs.writeFileSync(file,JSON.stringify(old),{mode:0o600});
@@ -60,6 +60,17 @@ async function main(){
     const result=await auth.ensureSession({...cfg,schoolCredentialsPath:credentials},{approved:true,manualRecovery:true,createAdapter:async()=>({check:async()=> 'SESSION_VALID',login:()=>assert.fail('daily limit does not prevent existing Session reuse'),close:async()=>{}})});
     assert.equal(result.status,'SESSION_VALID');assert.equal(result.schoolLoginAttempts,0);assert.deepEqual(fs.readFileSync(file),before);
   });
+  await test(async()=>{
+    const old={windowStart:Date.now(),attempts:1,cooldownUntil:Date.now()+50000,blocked:true};fs.writeFileSync(file,JSON.stringify(old),{mode:0o600});
+    state.lifecycle(cfg).failure('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED',{precheckRequests:1,precheckResponseReceived:true});
+    const after=JSON.parse(fs.readFileSync(file));assert.equal(after.cooldownUntil,old.cooldownUntil);assert.equal(after.attempts,1);assert.equal(after.windowStart,old.windowStart);assert.equal(after.blocked,true);
+  });
+  await test(async()=>{const life=state.lifecycle(cfg);life.failure('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED',{precheckRequests:1,precheckResponseReceived:true});assert.equal(state.view(cfg).dailyBudgetUsed,0);assert.equal(state.view(cfg).cooldownRemainingSeconds,0);assert.equal(state.view(cfg).blocked,true);});
+  await test(async()=>{const life=state.lifecycle(cfg);life.failure('SCHOOL_LOGIN_PRECHECK_FAILED',{precheckRequests:1});assert.equal(state.view(cfg).dailyBudgetUsed,0);assert.equal(state.view(cfg).failureCategory,'account_precheck');assert.ok(state.view(cfg).cooldownRemainingSeconds>0);});
+  await test(async()=>{const life=state.lifecycle(cfg);life.failure('SCHOOL_SECURITY_CHALLENGE',{precheckRequests:1});assert.equal(state.view(cfg).dailyBudgetUsed,0);assert.equal(state.view(cfg).failurePhase,'security_challenge');assert.ok(state.view(cfg).cooldownRemainingSeconds>0);assert.equal(state.view(cfg).blocked,true);});
+  await test(async()=>{const life=state.lifecycle(cfg);life.hooks.beforeAuthSubmit();life.failure('SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED',{passwordSubmissions:0,submissionReservations:0});assert.equal(state.view(cfg).dailyBudgetUsed,1);assert.equal(state.view(cfg).failurePhase,'reservation_without_release');assert.ok(state.view(cfg).cooldownRemainingSeconds>0);});
+  await test(async()=>{const life=state.lifecycle(cfg);life.hooks.beforeAuthSubmit();life.hooks.onAuthSubmitReleased();life.failure('SCHOOL_AUTH_TRANSPORT_FAILED');assert.equal(state.view(cfg).failurePhase,'released_without_result');assert.equal(state.view(cfg).dailyBudgetUsed,1);});
+  await test(async()=>{const life=state.lifecycle(cfg);life.hooks.beforeAuthSubmit();life.hooks.onAuthSubmitReleased();life.hooks.onAuthResponse();life.failure('INVALID_CREDENTIALS');assert.equal(state.view(cfg).failurePhase,'authentication_result');assert.equal(state.view(cfg).failureCategory,'authentication_rejected');});
   console.log('collector-auth-evidence: '+cases+' PASS; local fixture only; schoolRequests=0');
 }
 main().catch(e=>{console.error(e.code||e.message);process.exitCode=1;}).finally(()=>fs.rmSync(root,{recursive:true,force:true}));

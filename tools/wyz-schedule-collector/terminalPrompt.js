@@ -47,7 +47,7 @@ function readHidden(prompt, options = {}) {
 }
 async function credentials(options = {}) {
   const account = (await readHidden("学校账号（隐藏输入）: ", { ...options, maxLength: 256 })).trim();
-  const password = await readHidden("学校密码（隐藏输入，仅本次使用）: ", options);
+  const password = await readHidden(options.persistProtectedFile?"学校密码（隐藏输入，保存到 root 受保护文件）: ":"学校密码（隐藏输入，仅本次使用）: ", options);
   if (!account) throw failure("SCHOOL_AUTH_INPUT_REQUIRED");
   return { account, password };
 }

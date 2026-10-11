@@ -2,6 +2,9 @@
 const fs=require('fs'),path=require('path');
 const {readJson}=require('./runStore');
 const COOLDOWN_MS=30*60*1000,DAY_MS=24*60*60*1000;
+const LOCAL_ADAPTATION=new Set(['SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED','SCHOOL_LOGIN_FORM_CHANGED','SCHOOL_LOGIN_ACCOUNT_FIELD_CHANGED',
+  'SCHOOL_LOGIN_PASSWORD_FIELD_CHANGED','SCHOOL_LOGIN_SUBMIT_CHANGED','SCHOOL_LOGIN_RESOURCE_REJECTED','SCHOOL_LOGIN_PAGE_REJECTED',
+  'SCHOOL_PUBLIC_POST_RULE_REJECTED','SCHOOL_LOGIN_PRECHECK_REQUEST_REJECTED','SCHOOL_AUTH_INPUT_REQUIRED','COLLECTOR_STOPPED']);
 const fail=code=>Object.assign(new Error(code),{code});
 function load(file,platform){
   if(!fs.existsSync(file))return {};
@@ -20,7 +23,7 @@ function persist(file,state){
 }
 function lifecycle(cfg,deps={}){
   const file=path.join(cfg.dataRoot,'school-auth-state.json'),clock=deps.now||Date.now;
-  let state=load(file,deps.platform),reserved=false,released=false;
+  let state=load(file,deps.platform),reserved=false,released=false,responseReceived=false;
   const save=fields=>{state={...state,...fields};persist(file,state);};
   function check({budget=true}={}){
     const now=clock();
@@ -40,13 +43,20 @@ function lifecycle(cfg,deps={}){
         save({schema:2,windowStart:attempts?state.windowStart:now,attempts:attempts+1,cooldownUntil:now+COOLDOWN_MS,blocked:false,submissionState:'reserved_unknown',lastSubmissionReservedAt:now});reserved=true;
       },
       onAuthSubmitReleased(){released=true;save({submissionState:state.submissionState==='response_received'?'response_received':'released',lastSubmissionReleasedAt:clock()});},
-      onAuthResponse(){save({submissionState:'response_received',lastAuthResponseAt:clock()});},
+      onAuthResponse(){responseReceived=true;save({submissionState:'response_received',lastAuthResponseAt:clock()});},
     },
     success(profile){save({cooldownUntil:0,blocked:false,lastSuccessAt:clock(),lastFailureCode:null,lastFailureCategory:null,loginProfile:profile});},
     failure(code,diagnostic){
-      const blocked=/INVALID_CREDENTIALS|CHALLENGE|CHANGED|TLS|PAGE_REJECTED|RESOURCE_REJECTED|RESUBMISSION|SESSION_INVALID/.test(code);
-      save({cooldownUntil:clock()+COOLDOWN_MS,blocked:state.blocked===true||blocked,lastFailureCode:code,
-        lastFailureCategory:reserved?(released&&code==='INVALID_CREDENTIALS'?'authentication_rejected':'submission_outcome_unknown'):'local_preflight',
+      const blocked=/INVALID_CREDENTIALS|CHALLENGE|CHANGED|TLS|PAGE_REJECTED|RESOURCE_REJECTED|RESUBMISSION|SESSION_INVALID|PRECHECK_REQUEST_REJECTED|PRECHECK_BUDGET_EXHAUSTED/.test(code);
+      const local=!reserved&&(LOCAL_ADAPTATION.has(code)||/^SCHOOL_CREDENTIALS_/.test(code));
+      const precheck=!local&&!reserved&&(/^SCHOOL_LOGIN_PRECHECK_/.test(code)||diagnostic?.precheckRequests>0);
+      const phase=reserved?(responseReceived?'authentication_result':released?'released_without_result':'reservation_without_release'):
+        code==='SCHOOL_SECURITY_CHALLENGE'?'security_challenge':precheck?'account_precheck':local?'local_adaptation':'public_transport';
+      // Preserve every previous reservation/window/cooldown. Only future
+      // known local adaptation failures avoid adding a new password cooldown.
+      save({cooldownUntil:local?(state.cooldownUntil||0):Math.max(state.cooldownUntil||0,clock()+COOLDOWN_MS),blocked:state.blocked===true||blocked||code==='SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED',lastFailureCode:code,
+        lastFailureCategory:reserved?(released&&code==='INVALID_CREDENTIALS'?'authentication_rejected':'submission_outcome_unknown'):precheck?'account_precheck':'local_preflight',lastFailurePhase:phase,
+        lastPrecheckRequestCount:diagnostic?.precheckRequests===1?1:0,lastPrecheckResponseReceived:diagnostic?.precheckResponseReceived===true,
         lastDiagnosticStage:diagnostic?.stage||null});
     },
     attempts:()=>released?1:0,
@@ -60,7 +70,8 @@ function view(cfg,deps={}){
     dailyBudgetUsed:state.windowStart&&now-state.windowStart<DAY_MS?number(state.attempts):0,dailyLimit:2,
     cooldownRemainingSeconds:Math.max(0,Math.ceil((number(state.cooldownUntil)-now)/1000)),
     lastFailureCode:/^(SCHOOL_[A-Z_]+|INVALID_CREDENTIALS|COLLECTOR_STOPPED)$/.test(state.lastFailureCode||'')?state.lastFailureCode:null,
-    failureCategory:['local_preflight','authentication_rejected','submission_outcome_unknown'].includes(state.lastFailureCategory)?state.lastFailureCategory:null,
+    failureCategory:['local_preflight','account_precheck','authentication_rejected','submission_outcome_unknown'].includes(state.lastFailureCategory)?state.lastFailureCategory:null,
+    failurePhase:['local_adaptation','public_transport','account_precheck','security_challenge','reservation_without_release','released_without_result','authentication_result'].includes(state.lastFailurePhase)?state.lastFailurePhase:null,
     submissionState:['reserved_unknown','released','response_received'].includes(state.submissionState)?state.submissionState:'LEGACY_UNVERIFIED',
     schoolRequests:0,passwordSubmissions:0};
 }

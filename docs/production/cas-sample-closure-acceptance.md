@@ -1,5 +1,7 @@
 # CAS 与 Oracle Sample 分层验收
 
+最新WYZ已安装215f7e54，installation/public-cas真实PASS。一次登录在验证码预检查false之后被页面合法XHR与程序GET冲突阻断，密码提交/预留均0；Session仍未建立。本轮升级前驱/回滚点为215f7e54，新增manual protected-file选项，详见 [账号预检查与受保护凭据手册](../cas-sample-closure/PROTECTED-FILE-LOGIN.md)。下方语言用途取证与6fe安装为此前记录，不再重复取证；最终升级后只做一次公开门禁。
+
 两个候选分别审批、分别回滚。CAS 候选基于 WYZ 已验收的 `6fe02a552e7511bc27a2f4751db302ebb7a8e001`；Oracle 候选基于生产祖先 `a3dfd1989705f51c921f13883bcde1cce4502883`。Oracle 不使用 PR #89/main 的整树覆盖现网。本文所有生产命令都是后续 PAM 操作说明，本轮未执行学校访问、生产部署或样本采集。
 
 当前真实证据已证明6fe安装、服务、heartbeat-only、execute=0、timer disabled、个人 Agent active、公开表单可识别。最新 WYZ 审计成功 PUBLIC_BOOTSTRAP_EVIDENCE：三次官方XHR均为空POST、无query/参数，凭据未读、密码提交0、认证历史/Session未变；两份公开脚本的回调只填充语言选择组件。真实空POST响应为200/JSON/无重定向，但脱敏结构不足以作为 required 成功契约。候选将精确语言UI请求保留阻断、最多三次计为noncritical；不放行后台POST。详见兼容审查。WYZ仍装6fe，公开网络仍REVIEW_REQUIRED、Session未建立，不能报告CAS_PUBLIC_READY。后续仅需一次获批最终候选升级及公开门禁、一次单独获批登录；无需重跑用途审计或一小时心跳观察。
@@ -68,7 +70,7 @@ node "$ACCEPT" record --stage=public-cas --source=wyz-school --attest-live \
 
 ```bash
 fosu-collector auth-state
-if fosu-collector login --login-profile=mobile --approve-school-access \
+if fosu-collector login --login-profile=mobile --credential-source=protected-file --approve-school-access \
   | tee "$EVIDENCE/session.jsonl"; then
   printf 'LOGIN_COMMAND_COMPLETED\n'
 else
@@ -83,7 +85,7 @@ node "$ACCEPT" record --stage=session --source=wyz-school --attest-live \
   --output="$EVIDENCE/session.receipt.json"
 ```
 
-若此前 blocked，先人工处理真实问题；冷却为0、日预算允许且人工确认后，才在上述一次 login 添加 `--acknowledge-auth-failure`。该参数不重置预算、冷却或历史。复用已有效 Session 返回 `SESSION_REUSED` 时，验收不会冒充完成了“一次账号登录和新 Session 保存”；使用已保留的真实首次 SESSION_SAVED 证据配对当前 session-check，不为刷新验收计数再提交密码。session-check 需要当前受保护页访问批准；失败或挑战立即停止，不回到登录或自动重试。
+首次只需在PAM执行本地`fosu-collector configure-credentials`隐藏输入一次；更新密码同一命令原子替换。protected-file读取固定root-owned/0600文件且recoveryEnabled=false，后续无需再次输入，默认隐藏输入模式保留。若此前blocked，先处理真实问题；冷却0、预算允许且人工确认后才给上述一次login添加`--acknowledge-auth-failure`，它不清空历史或缩短旧冷却。passwordPersisted=false指Session/Trace未保存密码，操作者配置的受保护文件仍持久保存。SESSION_REUSED不冒充新登录；配对原始SESSION_SAVED和当前session-check。失败/挑战停止，不重试。
 
 ## Oracle 就绪（可独立推进）
 

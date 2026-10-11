@@ -103,9 +103,20 @@ function decision(request,resourceType,state,reviewed=REVIEWED_PUBLIC_POSTS){
     return {...result,allowed:true,reason:'ONE_REVIEWED_AUTHENTICATION_POST',fatalCode:null};
   }
   if(rule?.purpose==='security-verification')return {...result,reason:'SECURITY_VERIFICATION_REQUIRES_MANUAL_ACTION',fatalCode:'SCHOOL_SECURITY_CHALLENGE'};
-  // The only account precheck is the explicitly approved context.request GET
-  // in login(). A background browser request must not preempt that step.
-  if(evidence.endpointCategory==='account-captcha-precheck')return {...result,reason:'ACCOUNT_PRECHECK_NOT_AUTHORIZED',fatalCode:null,reviewRequired:true};
+  if(evidence.endpointCategory==='account-captcha-precheck'){
+    const check=state.precheck;
+    if(!check?.active)return {...result,reason:'ACCOUNT_PRECHECK_NOT_AUTHORIZED',fatalCode:null,reviewRequired:true};
+    // Account matching stays local. No account/query/body enters diagnostics.
+    const keys=[...url.searchParams.keys()];
+    if(request.method!=='GET'||resourceType!=='XHR'||request.url.split('?')[0]!==AUTH_ORIGIN+'/authserver/checkNeedCaptcha.htl'||url.hash||
+      keys.length!==1||keys[0]!=='username'||url.searchParams.get('username')!==check.account||!check.account||
+      request.postData!==undefined&&request.postData!==''||request.hasPostData===true||
+      request.postDataEntries!==undefined&&(!Array.isArray(request.postDataEntries)||request.postDataEntries.length!==0)||
+      Object.keys(request.headers||{}).some(key=>/^(?:proxy-)?authorization$/i.test(key)))
+      return {...result,reason:'ACCOUNT_PRECHECK_PARAMETERS_REJECTED',fatalCode:'SCHOOL_LOGIN_PRECHECK_REQUEST_REJECTED',reviewRequired:true};
+    if(check.browserRequests>=1)return {...result,reason:'ACCOUNT_PRECHECK_BUDGET_EXHAUSTED',fatalCode:'SCHOOL_LOGIN_PRECHECK_BUDGET_EXHAUSTED',reviewRequired:true};
+    return {...result,allowed:true,reason:'ONE_BOUND_ACCOUNT_PRECHECK',fatalCode:null,accountPrecheck:true};
+  }
   if(state.credentialsPhase&&!state.submissionReserved)return {...result,reason:'CREDENTIAL_PHASE_REQUEST_REJECTED',fatalCode:'SCHOOL_CREDENTIAL_REQUEST_BLOCKED'};
   if(rule&&request.method!=='POST')return {...result,reason:'PUBLIC_INITIALIZATION_METHOD_REJECTED',fatalCode:null,reviewRequired:true};
   if(request.method==='POST'){

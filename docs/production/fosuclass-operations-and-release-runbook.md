@@ -1,6 +1,6 @@
 # 佛课小表生产运维与发布接力手册
 
-更新日期：2026-10-11，Asia/Shanghai。最新CAS候选为PR #91，Oracle独立候选为PR #90；以 [分层验收手册](cas-sample-closure-acceptance.md) 和 [CAS兼容审查](../cas-sample-closure/CAS-COMPATIBILITY.md) 为当前操作事实源。下方PR #87–#89定位/网络/active观察为此前记录，本轮未重探生产。任何fixture、构建或CI不能代替真实验收。
+更新日期：2026-10-11，Asia/Shanghai。WYZ已安装215f7e54且安装/公开CAS真实PASS；新阻断是双账号预检查，主认证未提交。最新PR #91增量为 [预检查与受保护文件登录](../cas-sample-closure/PROTECTED-FILE-LOGIN.md)，升级fromRevision/回滚点215f7e54；Oracle #90/c74独立保留。以 [分层验收手册](cas-sample-closure-acceptance.md) 为当前操作事实源。下方PR #87–#89定位/网络/active观察为历史，本轮未重探生产；fixture、构建、CI不能替代真实验收。
 
 ## 生产基线和门禁
 
@@ -12,7 +12,7 @@
 | 生产祖先 | 只读工作流 `38037091970` 确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 学校请求0、配置未改、未部署候选 |
 | Stage A 候选基线 | PR #87 Draft OPEN，HEAD `5e2473ecfa87cc0a2651cf49f105c415c64e7e1a`，base `codex/wyz-oracle-transport-package` | 从真实 #87 HEAD 继续，包含 main、已安装bff与生产祖先 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
-| WYZ 当前安装 | 最新用户PAM：CAS_REPAIR_INSTALL_PASS、HEARTBEAT_GATE_PASS，Collector/个人Agent active、timer disabled、execute=0 | `6fe02a552e7511bc27a2f4751db302ebb7a8e001`；新候选未安装 |
+| WYZ 当前安装 | 最新用户PAM：installation/public-CAS PASS；主认证提交/预留0，双预检查导致local_preflight | `215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a`；新候选未安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
 | WYZ 首次观察（修复前） | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | 历史 NOT_PASSED，保留故障证据 |
 | 当前版本一小时观察 | 用户 PAM：3607.22秒、119成功/0失败、118复用、最长间隔30.58秒、TLS授权通过、实际地址146.235.201.244、重启0、学校请求0 | PASS；Collector及个人Agent active，timer disabled/inactive，execute=0 |
@@ -41,7 +41,7 @@
 
 ```text
 node tools/wyz-schedule-collector/build-package.js
-python tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision 6fe02a552e7511bc27a2f4751db302ebb7a8e001
+python tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision 215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a
 ```
 
 新包全部源码与Git HEAD逐字节比对，保留已修复安装机制。当前任务只交付包；未来批准后从已验收6fe仅升级一次，以同一heartbeat-only门禁核查，不重复一小时网络观察：

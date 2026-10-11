@@ -1,5 +1,7 @@
 # CAS 兼容候选与生产边界
 
+2026-10-11 后续真实状态：WYZ已安装215f7e54，安装和公开CAS验收PASS。最新阻断是账号填写后的页面GET预检查与独立程序GET冲突，密码提交/预留均0。本轮增量收敛预检查、增加手动protected-file登录和本地适配冷却分类；完整约束/操作见 [受保护文件登录](PROTECTED-FILE-LOGIN.md)。下方语言接口审查作为已完成历史证据保留，不再次审计UA、语言用途或一小时心跳。
+
 本候选基于 PR #89 的 `6fe02a552e7511bc27a2f4751db302ebb7a8e001`。修改仅涉及 Collector 的 CAS 请求策略、浏览器适配器及本地回归。Windows `tools/fosu-sync-client/login.js`、共享 UA/选择器、个人 Agent、认证历史、Session、LF checksum、ZIP 归一化和 heartbeat-only 门禁均沿用。
 
 ## 已知阻断与证据
@@ -76,7 +78,7 @@ Windows 登录链路导航官方 CAS 页后直接由浏览器加载资源，没�
 | 必要初始化响应 | HTTP 200 + JSON Content-Type 之后，还须符合审阅规则固定的公开应用成功字段、精确根字段和非空数组 item schema；200 应用错误也拒绝；body 上限 1–16 KB、读取最多 3 秒；错误/重定向/缺失/未完成均 REVIEW_REQUIRED，准备等待上限 10 秒 |
 | CAS 认证 POST | 既有固定 `/authserver/login`、官方 service、单次持久预算预留；重复 service 或第二次 POST 拒绝；不读取 body |
 | 已确认的安全验证端点/可见 challenge | 阻断并要求人工处理；不得作为公开初始化放行 |
-| 账户验证码预检查 | 仅获批登录中的既有显式 GET；公开页浏览器自动预检查不得提前运行 |
+| 账户验证码预检查 | 获批登录绑定同一账号/context，页面XHR优先；没有XHR才一次备用GET，晚到第一次XHR复用同次已验证官方响应；严格单次预算，公开页无绑定仍拒绝 |
 
 每条代码审阅规则包含 origin、path、purpose、criticality、resourceTypes、maxRequests 和证据 SHA256。bodyFormat=empty 时禁止 payload；既有 fixed-json 默认兼容且保留严格序列化匹配。required 必须提供固定公开应用成功 schema。规则启动校验并深冻结；每个隔离页面上下文独立记预算/完成状态，认证持久预算不改变。空正文与 opaque body 区分，不接受通配符、query、动态参数、敏感字段、任意 resource type 或超过3次的单路径预算。
 
