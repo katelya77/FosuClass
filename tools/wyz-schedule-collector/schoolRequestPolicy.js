@@ -107,9 +107,14 @@ function decision(request,resourceType,state,reviewed=REVIEWED_PUBLIC_POSTS){
     const check=state.precheck;
     if(!check?.active)return {...result,reason:'ACCOUNT_PRECHECK_NOT_AUTHORIZED',fatalCode:null,reviewRequired:true};
     // Account matching stays local. No account/query/body enters diagnostics.
-    const keys=[...url.searchParams.keys()];
+    // School jQuery adds exactly one 13-digit cache buster. Inspect wire keys
+    // too: URLSearchParams alone would silently accept encoded key aliases,
+    // malformed UTF-8 and encoded timestamp digits. Values stay local.
+    const parts=url.search.slice(1).split('&'),usernames=parts.filter(part=>part.startsWith('username='));
+    let queryAllowed=usernames.length===1&&(parts.length===1||parts.length===2&&parts.some(part=>/^_=\d{13}$/.test(part)));
+    if(queryAllowed){try{queryAllowed=decodeURIComponent(usernames[0].slice(9).replace(/\+/g,' '))===check.account;}catch{queryAllowed=false;}}
     if(request.method!=='GET'||resourceType!=='XHR'||request.url.split('?')[0]!==AUTH_ORIGIN+'/authserver/checkNeedCaptcha.htl'||url.hash||
-      keys.length!==1||keys[0]!=='username'||url.searchParams.get('username')!==check.account||!check.account||
+      !queryAllowed||url.searchParams.getAll('username').length!==1||url.searchParams.get('username')!==check.account||!check.account||
       request.postData!==undefined&&request.postData!==''||request.hasPostData===true||
       request.postDataEntries!==undefined&&(!Array.isArray(request.postDataEntries)||request.postDataEntries.length!==0)||
       Object.keys(request.headers||{}).some(key=>/^(?:proxy-)?authorization$/i.test(key)))

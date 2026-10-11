@@ -1,5 +1,9 @@
 # 账号预检查与受保护文件手动登录
 
+当前执行入口：WYZ 已安装完整 915，真实阻断已确认是 jQuery 的单个 13 位 `_` 参数。
+本次从 915 升级、两种精确查询形式、独立公开/Session 门禁与 915 回滚见
+[915 Cache-Buster 增量手册](../production/wyz-cas-cache-buster.md)。下方 215 交付记录保留为历史。
+
 当前 WYZ 已安装 `215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a`，安装和公开CAS验收PASS；移动UA、语言初始化、表单已通过。本轮增量从215继续，不重新开发这些机制。真实一次登录出现程序预检查false之后的页面GET XHR被ACCOUNT_PRECHECK_NOT_AUTHORIZED拒绝；密码提交/预留/认证响应均0，失败是local_preflight，不是密码错误。Agent本轮没有访问学校或操作生产。
 
 ## 一个官方账号预检查结果

@@ -107,6 +107,9 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
     const expectedSubmits=scenarioOptions.posts===undefined?(scenarioOptions.diagnose||challenge||scenarioOptions.error?0:1):scenarioOptions.posts;
     assert.equal(submits,expectedSubmits);assert.equal(reserved,expectedSubmits);assert.equal(released,expectedSubmits);
     assert.equal(captcha,scenarioOptions.captcha===undefined?(scenarioOptions.diagnose?0:1):scenarioOptions.captcha);
+    assert.ok(browserPrechecks+captcha<=1,'one official account precheck across both transports');
+    assert.equal(adapter.stats().passwordSubmissions,expectedSubmits);
+    assert.equal(adapter.stats().submissionReservations,expectedSubmits);
     if(scenarioOptions.expectedBrowserPrechecks!==undefined){assert.equal(browserPrechecks,scenarioOptions.expectedBrowserPrechecks);assert.equal(adapter.stats().precheckRequests,scenarioOptions.expectedPrecheckRequests===undefined?1:scenarioOptions.expectedPrecheckRequests);}
     assert.equal(backgroundReleased,scenarioOptions.backgroundReleased||0);
     if(scenarioOptions.expectedBlockedPosts!==undefined)assert.equal(adapter.stats().backgroundPostsBlocked,scenarioOptions.expectedBlockedPosts);
