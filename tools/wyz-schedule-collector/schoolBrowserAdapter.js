@@ -60,6 +60,12 @@ async function createAdapter(cfg,deps={}){
       }
       try{
         if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED',stats.stage);
+        if(!responseStage&&event.request.method==='POST'&&classification.rule?.purpose==='public-bootstrap'&&(allowed||classification.noncritical)){
+          // Count even optional BLOCK classifications before any async CDP
+          // operation. A fourth concurrent match must require a new review.
+          publicPostCounts.set(classification.rule.path,(publicPostCounts.get(classification.rule.path)||0)+1);
+          if(allowed)requiredResponses.set(event.requestId,classification.rule);
+        }
         if(!responseStage&&!allowed){
           if(classification.fatalCode)reject(!classification.trusted&&['Script','Stylesheet'].includes(event.resourceType)?'SCHOOL_LOGIN_RESOURCE_REJECTED':classification.fatalCode,'request-policy');
           if(classification.reviewRequired)stats.networkReviewRequired=true;
@@ -93,12 +99,6 @@ async function createAdapter(cfg,deps={}){
         }
         if(!allowed){await guard.send('Fetch.failRequest',{requestId:event.requestId,errorReason:'BlockedByClient'});return;}
         if(deps.signal?.aborted)throw fail('COLLECTOR_STOPPED',stats.stage);
-        if(!responseStage&&event.request.method==='POST'&&classification.rule?.purpose==='public-bootstrap'){
-          // Claim the fixed per-page request budget before an asynchronous CDP
-          // release, so concurrent browser fetches cannot exceed it.
-          publicPostCounts.set(classification.rule.path,(publicPostCounts.get(classification.rule.path)||0)+1);
-          requiredResponses.set(event.requestId,classification.rule);
-        }
         if(!responseStage)stats.schoolRequests++;
         await guard.send('Fetch.continueRequest',{requestId:event.requestId});
         if(!responseStage&&event.request.method==='POST'&&classification.rule?.purpose==='public-bootstrap')stats.publicPostsReleased++;

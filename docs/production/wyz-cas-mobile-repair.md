@@ -1,6 +1,6 @@
 # WYZ CAS 移动端故障修复记录
 
-日期：2026-10-10。范围：PR #89 基于 d2ef1758 的增量 CAS POST 修复，延续 PR #88 Stage A；不部署、不访问学校、不采集、不改正式指针、timer、个人 Agent 或付费资源。下方早期定位记录为历史证据；最新状态以“本轮公开页 POST 修复与交付”为准。
+更新日期：2026-10-11。最新候选为PR #91、基于已安装6fe的语言初始化兼容增量；不部署、不访问学校、不采集、不改正式指针、timer或个人Agent。下方早期定位为历史证据，最新状态和执行命令以“本轮公开页 POST 修复与交付”及 [分层验收手册](cas-sample-closure-acceptance.md) 为准。
 
 ## 已知事实与定位限度
 
@@ -58,7 +58,7 @@ school-auth-state.json 原有 attempts/windowStart/cooldownUntil/blocked 保留�
 
 ## 本轮公开页 POST 修复与交付
 
-最新用户 PAM 证据：WYZ 运行 6eea0ec0，服务已恢复，heartbeat-only/execute=0、timer disabled、个人 Agent active；无须重新诊断已通过的 Oracle 网络。公开 mobile-wechat CAS 导航、唯一表单和 JS 按钮均已识别；随后 PASSWORD_RESUBMISSION_BLOCKED，实际 passwordSubmissions=0、submissionReservations=0、authResponseReceived=false。可确认旧守卫将任何非主认证 POST 拒绝时都写入同一个致命 policyError，导致已完成 form-ready 仍报“重复密码”。真实 POST 的具体端点与用途未知，不能判为验证码或密码错误。
+最新用户PAM证据：WYZ运行6fe02a552e7511bc27a2f4751db302ebb7a8e001，CAS_REPAIR_INSTALL_PASS、HEARTBEAT_GATE_PASS，Collector/个人Agent active、execute=0、timer disabled。mobile-wechat表单已识别；三次未知后台POST导致REVIEW_REQUIRED，密码提交0、Session未建立。公开审计和一次空POST探针已完成；两份官方脚本仅填充语言选项，现候选将精确空XHR语言请求最多三次归为optional并继续阻断。第四次、参数/类型变化或新请求仍停止。完整源码hash/控制流/响应结构及审查限度见 [CAS兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md)。无需再审计用途或重复Oracle网络验收。
 
 本地原生 Chromium 已复现旧错误；修复引入 schoolRequestPolicy，与浏览器调度/预算分开。没有增加任何生产后台 POST 规则，REVIEWED_PUBLIC_POSTS=[]；只有合成 fixture 提供已审查的固定公开参数规则。真实新增规则须先核实官方来源、端点、用途、固定非敏感参数和必要性，再独立代码审查，不能由运行参数任意添加。
 
@@ -82,7 +82,7 @@ request-classification 只输出 methodCategory、originCategory、endpointCateg
 
 ### 分开批准的 PAM 步骤
 
-候选前驱必须为 6eea0ec099930f40d16cd3f0ea641e3572f9c675。交付的 ZIP 和源码 tar.gz 各有 SHA256，先核对最终交付 receipt 中的 ZIP 哈希。新包尚未安装，本轮不会自动部署。
+候选前驱必须为6fe02a552e7511bc27a2f4751db302ebb7a8e001。交付ZIP与源码tar.gz各有SHA256，使用最新准确提交的Linux CI产物及外部receipt核对。新包尚未安装，本轮不执行部署。
 
 **仅另行批准安装后**，把 ZIP 上传 root-only 目录，从该目录执行（ZIP_FILENAME/ZIP_SHA256 替换为交付的准确值）：
 
@@ -130,7 +130,7 @@ acknowledge 不重置旧日预算，只有下一次审核认证请求预留时�
 
 ### 另行批准的代码回滚命令
 
-从本次 normalized-candidate 目录开始；先人工核对 rollback-backup.path 是本次 BACKUP_PATH、root-only 目录、current.txt 指向 6ee release，备份 service/timer/drop-in 未变更且不含 symlink。只恢复代码和 unit，不恢复认证预算、Session 或 checkpoint。以下命令中任何一步失败即停止 Collector，交由人工检查：
+从本次normalized-candidate目录开始；先核对rollback-backup.path是本次BACKUP_PATH、root-only目录、current.txt指向已验收6fe release，备份service/timer/drop-in完整且不含symlink。只恢复代码与unit，保留认证预算、Session和checkpoint。任一步失败保持Collector停止并审查：
 
 ```bash
 set -Eeuo pipefail
@@ -141,7 +141,7 @@ state=/var/lib/fosuclass/schedule-collector
 backup=$(cat rollback-backup.path)
 [[ $backup =~ ^/var/lib/fosuclass/schedule-collector/cas-mobile-backup-[0-9]{8}T[0-9]{6}Z$ ]]
 [[ -d $backup && ! -L $backup && $(stat -c %u:%a "$backup") == 0:700 ]]
-old=$base/releases/6eea0ec099930f40d16cd3f0ea641e3572f9c675
+old=$base/releases/6fe02a552e7511bc27a2f4751db302ebb7a8e001
 [[ $(cat "$backup/current.txt") == "$old" && -d $old && ! -L $old ]]
 [[ ! -L $state/upgrade.lock ]]
 exec 8>"$state/upgrade.lock"

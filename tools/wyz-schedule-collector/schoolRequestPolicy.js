@@ -1,8 +1,16 @@
 "use strict";
 const {AUTH_ORIGIN,SCHOOL_ORIGIN,CAS_SERVICE_URL}=require('../fosu-sync-client/schoolLoginProfile');
-// No new school background POST has source/purpose/parameter approval. Keep
-// production empty until that evidence is reviewed in a separate code change.
-const REVIEWED_PUBLIC_POSTS=Object.freeze([]);
+// Reviewed WYZ public evidence: both callbacks only populate language UI;
+// the real form remained usable with these requests blocked. This is a
+// noncritical BLOCK rule, never permission to release a language POST or to
+// accept its partially redacted response as a required-success contract.
+// Source/caller/response evidence and limits: CAS-COMPATIBILITY.md.
+const REVIEWED_PUBLIC_POSTS=Object.freeze([Object.freeze({
+  origin:AUTH_ORIGIN,path:'/authserver/common/getLanguageTypes.htl',
+  purpose:'public-bootstrap',criticality:'optional',bodyFormat:'empty',
+  resourceTypes:Object.freeze(['XHR']),maxRequests:3,
+  evidenceSha256:'80e8b6d5e52cf763d9379a937f8640885b6aa5d3548e3a873eac0913ef1c96a6'
+})]);
 const RESOURCE_TYPES=new Set(['Document','Stylesheet','Image','Media','Font','Script','TextTrack','XHR','Fetch','EventSource','WebSocket','Manifest','SignedExchange','Ping','CSPViolationReport','Preflight','Other']);
 const sensitiveKey=key=>/user|account|pass|token|cookie|ticket|csrf|session|secret|authorization|captcha|execution/i.test(key);
 const fixedValues=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.entries(value).length<=8&&Object.entries(value).every(([key,item])=>
@@ -21,7 +29,7 @@ function validateRules(reviewed=REVIEWED_PUBLIC_POSTS){
   if(!Array.isArray(reviewed)||reviewed.length>8)invalid();
   const paths=new Set();
   return Object.freeze(reviewed.map(rule=>{
-    const keys=['origin','path','purpose','criticality','resourceTypes','payload','response','maxRequests','evidenceSha256'];
+    const keys=['origin','path','purpose','criticality','resourceTypes','bodyFormat','payload','response','maxRequests','evidenceSha256'];
     if(!rule||typeof rule!=='object'||Object.keys(rule).some(k=>!keys.includes(k))||rule.origin!==AUTH_ORIGIN||
       typeof rule.path!=='string'||rule.path.length>256||!/^\/authserver\/[A-Za-z0-9_/-]+(?:\.[A-Za-z0-9]+)?$/.test(rule.path)||rule.path.includes('//')||
       ['/authserver/login','/authserver/checkNeedCaptcha.htl'].includes(rule.path)||paths.has(rule.path)||
@@ -31,8 +39,10 @@ function validateRules(reviewed=REVIEWED_PUBLIC_POSTS){
       !Number.isSafeInteger(rule.maxRequests)||rule.maxRequests<1||rule.maxRequests>3||!/^[a-f0-9]{64}$/.test(rule.evidenceSha256||''))invalid();
     paths.add(rule.path);
     if(rule.purpose==='security-verification'){
-      if(rule.criticality!=='required'||rule.payload!==undefined||rule.response!==undefined)invalid();
-    }else if(!fixedValues(rule.payload)||
+      if(rule.criticality!=='required'||rule.bodyFormat!==undefined||rule.payload!==undefined||rule.response!==undefined)invalid();
+    }else if(rule.bodyFormat==='empty'){
+      if(rule.payload!==undefined)invalid(); // Empty is not JSON {}.
+    }else if((rule.bodyFormat!==undefined&&rule.bodyFormat!=='fixed-json')||!fixedValues(rule.payload)||
       Buffer.byteLength(JSON.stringify(rule.payload))>2048)invalid();
     if(rule.purpose==='public-bootstrap'&&(rule.criticality==='required'||rule.response!==undefined)&&!validResponse(rule))invalid();
     // Only code-reviewed rows may be installed. Freeze a copy so a caller
@@ -56,8 +66,19 @@ function describe(request,resourceType,reviewed=REVIEWED_PUBLIC_POSTS){
     criticality:authenticationEndpoint||precheck?'required':rule?.criticality||'unknown'}};
 }
 function publicPayloadAllowed(request,url,rule){
-  if(!rule||url.search||!rule.payload||typeof request.postData!=='string'||request.postData.length>2048||request.postData!==JSON.stringify(rule.payload))return false;
+  if(!rule||url.search)return false;
   const headers=Object.entries(request.headers||{}),type=headers.find(([key])=>key.toLowerCase()==='content-type')?.[1]||'';
+  if(headers.some(([key])=>/^(?:proxy-)?authorization$/i.test(key)))return false;
+  if(rule.bodyFormat==='empty'){
+    // Exact wire URL, no alias/query/fragment; never replace the browser body.
+    // Missing postData is empty only when CDP also reports no opaque body.
+    // Anonymous page cookies are not read: the production rule stays blocked.
+    return request.url===rule.origin+rule.path&&
+      (request.postData===''||request.postData===undefined&&(request.hasPostData===undefined||request.hasPostData===false))&&
+      (request.postDataEntries===undefined||Array.isArray(request.postDataEntries)&&request.postDataEntries.length===0)&&
+      (type===''||/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/i.test(type));
+  }
+  if(!rule.payload||typeof request.postData!=='string'||request.postData.length>2048||request.postData!==JSON.stringify(rule.payload))return false;
   if(!/^application\/json(?:\s*;|$)/i.test(type))return false;
   // This inspection stays local. Neither keys nor values are emitted. Only
   // fixed, reviewed public parameters and their exact JSON serialization can
@@ -90,9 +111,9 @@ function decision(request,resourceType,state,reviewed=REVIEWED_PUBLIC_POSTS){
   if(request.method==='POST'){
     if(rule&&state.credentialsPhase)return {...result,reason:'CREDENTIAL_PHASE_REQUEST_REJECTED',fatalCode:'SCHOOL_CREDENTIAL_REQUEST_BLOCKED'};
     if(rule&&(!rule.resourceTypes.includes(resourceType)||!publicPayloadAllowed(request,url,rule)))return {...result,reason:'PUBLIC_PARAMETERS_REJECTED',fatalCode:null,reviewRequired:true};
-    if(rule?.criticality==='optional')return {...result,reason:'OPTIONAL_INITIALIZATION_BLOCKED',fatalCode:null,noncritical:true};
     if(rule){
       if((state.publicPostCounts?.get(rule.path)||0)>=rule.maxRequests)return {...result,reason:'PUBLIC_INITIALIZATION_BUDGET_EXHAUSTED',fatalCode:null,reviewRequired:true};
+      if(rule.criticality==='optional')return {...result,reason:'OPTIONAL_INITIALIZATION_BLOCKED',fatalCode:null,noncritical:true};
       return {...result,allowed:true,reason:'REVIEWED_PUBLIC_PARAMETERS',fatalCode:null};
     }
     return {...result,reason:'BACKGROUND_POST_UNREVIEWED',fatalCode:null,reviewRequired:true};

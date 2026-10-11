@@ -2,7 +2,7 @@
 const fixture=require('./test-collector-login-browser-fixture');
 const assert=require('assert/strict'),policy=require('./wyz-schedule-collector/schoolRequestPolicy');
 const background="<script>fetch('/authserver/fixture-public-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:1})}).catch(()=>{});</script>";
-// Local-only synthetic approval evidence. Production has NO public POST rule.
+// Local-only synthetic required approval; production language UI stays blocked.
 const responseContract={expected:{success:true},arrays:{languages:['code','name']},maxBytes:8192};
 const responseBody=JSON.stringify({success:true,languages:[{code:'fixture',name:'fixture'}]});
 const rule={origin:'https://authserver.fosu.edu.cn',path:'/authserver/fixture-public-config',purpose:'public-bootstrap',criticality:'required',payload:{version:1},response:responseContract,resourceTypes:['XHR','Fetch'],maxRequests:1,evidenceSha256:'a'.repeat(64)};
@@ -69,7 +69,7 @@ function policyCases(){
   return cases.length+invalid.length+10+invalidBodies.length;
 }
 async function main(){
-  assert.deepEqual(policy.REVIEWED_PUBLIC_POSTS,[]);
+  const languageCount=languagePolicyCases();
   const unitCount=policyCases();
   const form=fixture.FORM.replace('</body>',background+'</body>');
   const variants=[
@@ -103,14 +103,70 @@ async function main(){
     {diagnose:true,form:form.replace('</body>',background+'</body>'),reviewedPublicPosts:[rule],backgroundReleased:1,blocked:true,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'PUBLIC_INITIALIZATION_BUDGET_EXHAUSTED'}},
     {diagnose:true,form,reviewedPublicPosts:[{...rule,purpose:'security-verification',payload:undefined,response:undefined}],blocked:true,error:'SCHOOL_SECURITY_CHALLENGE',postEvidence:{requestPurpose:'security-verification'}},
     {diagnose:true,form:form.replace("'/authserver/fixture-public-config'","'/authserver/checkNeedCaptcha.htl'").replace("method:'POST'","method:'GET'").replace(",body:JSON.stringify({version:1})",''),blocked:true,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'ACCOUNT_PRECHECK_NOT_AUTHORIZED'}},
-    // The user's real path audit establishes identity/repetition only. Its
-    // purpose and parameters are still unreviewed, so all three stay blocked.
-    {diagnose:true,form:fixture.FORM.replace('</body>',Array(3).fill(background.replace('/authserver/fixture-public-config','/authserver/common/getLanguageTypes.htl')).join('')+'</body>'),blocked:true,expectedBlockedPosts:3,networkStatus:'REVIEW_REQUIRED',postEvidence:{endpointCategory:'unknown-official-post',reason:'BACKGROUND_POST_UNREVIEWED'}},
+    // Preserve the earlier unreviewed-policy regression independently of the
+    // new production empty-body rule. No historical assertion is weakened.
+    {diagnose:true,reviewedPublicPosts:[],form:fixture.FORM.replace('</body>',Array(3).fill(background.replace('/authserver/fixture-public-config','/authserver/common/getLanguageTypes.htl')).join('')+'</body>'),blocked:true,expectedBlockedPosts:3,networkStatus:'REVIEW_REQUIRED',postEvidence:{endpointCategory:'unknown-official-post',reason:'BACKGROUND_POST_UNREVIEWED'}},
     {diagnose:true,form,reviewedPublicPosts:[rule],nativeInitializationResponse:true,backgroundReleased:1,networkStatus:'COMPATIBLE'},
     {diagnose:true,form,reviewedPublicPosts:[rule],nativeInitializationResponse:true,initializationBody:'{"success":false,"languages":[]}',backgroundReleased:1,blocked:true,networkStatus:'REVIEW_REQUIRED'},
     {form,reviewedPublicPosts:[rule],preLoginExpiredCheck:true,backgroundReleased:2},
   ];
   for(const [index,variant] of variants.entries()){await fixture.scenario(false,undefined,variant);console.log('POST fixture '+(index+1)+' PASS');}
-  console.log('cas-post-policy: '+unitCount+' policy checks + '+variants.length+' native Chromium scenarios PASS; no production POST allowlist expansion; public diagnosis preserves legacy auth history/Session; real schoolRequests=0');
+  const languageVariants=[
+    {diagnose:true,form:languageForm(3),blocked:true,expectedBlockedPosts:3,expectedNoncriticalPosts:3,networkStatus:'COMPATIBLE_WITH_NONCRITICAL_BLOCKS',postEvidence:{reason:'OPTIONAL_INITIALIZATION_BLOCKED'}},
+    {diagnose:true,form:languageForm(4),blocked:true,expectedBlockedPosts:4,expectedNoncriticalPosts:3,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'PUBLIC_INITIALIZATION_BUDGET_EXHAUSTED'}},
+    {diagnose:true,form:languageForm(4,true),blocked:true,expectedBlockedPosts:4,expectedNoncriticalPosts:3,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'PUBLIC_INITIALIZATION_BUDGET_EXHAUSTED'}},
+    {diagnose:true,form:languageForm(3).replace('getLanguageTypes.htl','getLanguageTypes.htl?locale=fixture'),blocked:true,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'PUBLIC_PARAMETERS_REJECTED'}},
+    {diagnose:true,form:languageForm(3).replace('x.send(null)','x.send("{}")'),blocked:true,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'PUBLIC_PARAMETERS_REJECTED'}},
+    {diagnose:true,form:languageForm(3).replace('getLanguageTypes.htl','unreviewed.htl'),blocked:true,networkStatus:'REVIEW_REQUIRED',postEvidence:{reason:'BACKGROUND_POST_UNREVIEWED'}},
+    {interactive:true,form:languageForm(3),blocked:true,expectedBlockedPosts:3,expectedNoncriticalPosts:3},
+    {form:languageForm(3),preLoginExpiredCheck:true,blocked:true,expectedBlockedPosts:6,expectedNoncriticalPosts:6},
+    {diagnose:true,form:languageForm(3).replace('</form>',"<input name='captcha'></form>"),blocked:true,error:'SCHOOL_SECURITY_CHALLENGE'},
+    {diagnose:true,form:languageForm(3),cancel:true,blocked:true,error:'COLLECTOR_STOPPED',captcha:0},
+    {diagnose:true,form:languageForm(3),browserExit:true,blocked:true,error:'SCHOOL_AUTH_BROWSER_CLOSED',captcha:0},
+    {form:languageForm(4),blocked:true,error:'SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED',captcha:0},
+  ];
+  for(const [index,variant] of languageVariants.entries()){await fixture.scenario(false,undefined,variant);console.log('Language BLOCK fixture '+(index+1)+' PASS');}
+  console.log('cas-post-policy: '+unitCount+' preserved policy checks + '+languageCount+' language checks; '+variants.length+' preserved + '+languageVariants.length+' new native Chromium scenarios PASS; production language requests remain blocked; public diagnosis preserves auth history/Session; real schoolRequests=0');
+}
+function languageForm(count,concurrent=false){
+  return fixture.FORM.replace('</body>',"<select id='language'></select><script>for(let i=0;i<"+count+";i++){const x=new XMLHttpRequest();x.open('POST','/authserver/common/getLanguageTypes.htl',"+concurrent+");try{x.send(null)}catch{}}</script></body>");
+}
+function languagePolicyCases(){
+  let count=0;const check=(actual,expected)=>{assert.deepEqual(actual,expected);count++;};
+  const reviewed=policy.validateRules(),row=reviewed[0];
+  check(reviewed.length,1);check(row.origin,'https://authserver.fosu.edu.cn');check(row.path,'/authserver/common/getLanguageTypes.htl');
+  check(row.resourceTypes,['XHR']);check(row.bodyFormat,'empty');check(row.maxRequests,3);check(row.criticality,'optional');
+  check(row.payload,undefined);check(row.response,undefined);check(Object.isFrozen(policy.REVIEWED_PUBLIC_POSTS[0].resourceTypes),true);
+  const request={url:row.origin+row.path,method:'POST',headers:{},postData:''};
+  const state={armed:false,credentialsPhase:false,submissionReserved:false,publicPostCounts:new Map()};
+  for(const change of [{},{postData:undefined},{postData:undefined,hasPostData:false},{postDataEntries:[]},{headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}}]){
+    const result=policy.decision({...request,...change},'XHR',state,reviewed);check([result.allowed,result.noncritical,result.reviewRequired,result.reason],[false,true,undefined,'OPTIONAL_INITIALIZATION_BLOCKED']);
+  }
+  for(const change of [
+    {postData:undefined,hasPostData:true},{postData:undefined,hasPostData:null},{postDataEntries:null},{postData:null},{postData:'{}'},{postData:' '},{postData:'locale=fixture'},
+    {postData:'account=fixture'},{postDataEntries:[{bytes:'Zml4dHVyZQ=='}]},
+    {url:request.url+'?locale=fixture'},{url:request.url+'?'},{url:request.url+'#fixture'},
+    {url:row.origin+'/authserver/fixture/../common/getLanguageTypes.htl'},
+    {headers:{'Content-Type':'application/json'}},{headers:{'Content-Type':'multipart/form-data'}},{headers:{Authorization:'fixture'}},
+  ]){
+    const result=policy.decision({...request,...change},'XHR',state,reviewed);check([result.allowed,result.noncritical,result.reviewRequired,result.reason],[false,undefined,true,'PUBLIC_PARAMETERS_REJECTED']);
+  }
+  for(const type of ['Fetch','Document','Other'])check(policy.decision(request,type,state,reviewed).reason,'PUBLIC_PARAMETERS_REJECTED');
+  for(const method of ['GET','HEAD','PUT'])check(policy.decision({...request,method},'XHR',state,reviewed).reason,'PUBLIC_INITIALIZATION_METHOD_REJECTED');
+  for(let consumed=0;consumed<=3;consumed++){
+    const result=policy.decision(request,'XHR',{...state,publicPostCounts:new Map([[row.path,consumed]])},reviewed);
+    check(result.reason,consumed===3?'PUBLIC_INITIALIZATION_BUDGET_EXHAUSTED':'OPTIONAL_INITIALIZATION_BLOCKED');
+  }
+  const privateRequest={...request,get postData(){assert.fail('must not inspect credential-phase body');}};
+  check(policy.decision(privateRequest,'XHR',{...state,credentialsPhase:true,submissionReserved:true},reviewed).fatalCode,'SCHOOL_CREDENTIAL_REQUEST_BLOCKED');
+  for(const invalid of [{...row,payload:{}},{...row,bodyFormat:'form'},{...row,criticality:'required'},{...row,maxRequests:4}]){
+    assert.throws(()=>policy.validateRules([invalid]),/SCHOOL_PUBLIC_POST_RULE_REJECTED/);count++;
+  }
+  // A 200 JSON language response with partially redacted/mixed-type fields
+  // cannot be promoted to required success. There is no such production rule.
+  check(policy.publicResponseAllowed({responseStatusCode:200,responseHeaders:[{name:'content-type',value:'application/json'}]},JSON.stringify({languageTypeList:[{wid:'fixture',languageKey:'fixture',languageName:'fixture',isChoose:1,isDefault:null}]}),row),false);
+  const previous=process.env.FOSU_PUBLIC_POST_RULES;
+  try{process.env.FOSU_PUBLIC_POST_RULES='fixture-unreviewed';check(policy.validateRules(),reviewed);}finally{if(previous===undefined)delete process.env.FOSU_PUBLIC_POST_RULES;else process.env.FOSU_PUBLIC_POST_RULES=previous;}
+  return count;
 }
 main().catch(e=>{console.error('cas-post-policy: FAIL '+(e.code||e.message));if(e.code==='ERR_ASSERTION')console.error(e.message);process.exitCode=1;}).finally(fixture.cleanup);

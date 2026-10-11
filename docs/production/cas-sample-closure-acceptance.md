@@ -2,9 +2,9 @@
 
 两个候选分别审批、分别回滚。CAS 候选基于 WYZ 已验收的 `6fe02a552e7511bc27a2f4751db302ebb7a8e001`；Oracle 候选基于生产祖先 `a3dfd1989705f51c921f13883bcde1cce4502883`。Oracle 不使用 PR #89/main 的整树覆盖现网。本文所有生产命令都是后续 PAM 操作说明，本轮未执行学校访问、生产部署或样本采集。
 
-当前用户真实证据已证明安装、服务、heartbeat-only、execute=0、timer disabled、个人 Agent active，以及公开 CAS 表单可识别。`formReady=true` 与 `networkCompatibility=REVIEW_REQUIRED` 同时成立；三次官方 XHR POST 已定位为同一 `/authserver/common/getLanguageTypes.htl`，用途尚未确认，继续阻断。`passwordSubmissions=0`、Session 未建立，不能归因于 UA、ZIP、密码错误或重复密码。2026-10-11 最新公开审计为 `BLOCKED/SCHOOL_PUBLIC_AUDIT_FAILED`，endpointAudit/sourceEvidence 为空；它没有补齐请求参数及调用用途，也不能给出 CAS_PUBLIC_READY。修复审计执行问题后再收集公开证据，不能仅按接口名字推断安全性。已通过的安装/心跳不要求重复安装或再跑一小时观察。
+当前真实证据已证明6fe安装、服务、heartbeat-only、execute=0、timer disabled、个人 Agent active、公开表单可识别。最新 WYZ 审计成功 PUBLIC_BOOTSTRAP_EVIDENCE：三次官方XHR均为空POST、无query/参数，凭据未读、密码提交0、认证历史/Session未变；两份公开脚本的回调只填充语言选择组件。真实空POST响应为200/JSON/无重定向，但脱敏结构不足以作为 required 成功契约。候选将精确语言UI请求保留阻断、最多三次计为noncritical；不放行后台POST。详见兼容审查。WYZ仍装6fe，公开网络仍REVIEW_REQUIRED、Session未建立，不能报告CAS_PUBLIC_READY。后续仅需一次获批最终候选升级及公开门禁、一次单独获批登录；无需重跑用途审计或一小时心跳观察。
 
-现有 6fe 安装可使用 [一次公开调用证据审计脚本](../cas-sample-closure/PAM-PUBLIC-AUDIT.sh)，操作说明见 [CAS 兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md)。这一段无需重新安装，不读凭据、不放行未知 POST、不重置认证预算；应先审查其中公开调用的用途，再固定最终候选规则。
+已有 [公开审计脚本](../cas-sample-closure/PAM-PUBLIC-AUDIT.sh) 保留用于复核；本次证据已足够审查 optional 阻断分类，不再要求重复执行。规则和本轮准确CI结果见 [CAS兼容策略](../cas-sample-closure/CAS-COMPATIBILITY.md) 及交付 receipt。未知请求、第四次调用、变化的body/类型/query或challenge仍停止，不重置认证预算。
 
 ## 阶段与判据
 

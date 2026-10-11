@@ -102,6 +102,7 @@ async function scenario(challenge,rejectedTarget,scenarioOptions={}){
     assert.equal(captcha,scenarioOptions.captcha===undefined?(scenarioOptions.diagnose?0:1):scenarioOptions.captcha);
     assert.equal(backgroundReleased,scenarioOptions.backgroundReleased||0);
     if(scenarioOptions.expectedBlockedPosts!==undefined)assert.equal(adapter.stats().backgroundPostsBlocked,scenarioOptions.expectedBlockedPosts);
+    if(scenarioOptions.expectedNoncriticalPosts!==undefined){assert.equal(adapter.stats().noncriticalPostsBlocked,scenarioOptions.expectedNoncriticalPosts);assert.equal(adapter.stats().publicPostsReleased,0);}
     if(scenarioOptions.interactive){assert.equal(credentialsRead,scenarioOptions.captcha===0?0:1);assert.ok(!fs.existsSync(cfg.sessionPath+'.candidate'));assert.ok(!fs.existsSync(path.join(root,'school-session.lock')));if(scenarioOptions.candidateRejected)assert.ok(!fs.existsSync(cfg.sessionPath));assert.equal(JSON.parse(fs.readFileSync(path.join(root,'school-auth-state.json'))).attempts||0,expectedSubmits);}
     const output=JSON.stringify(diagnostics);
     for(const secret of ['fixture-user','fixture-only-secret','fixture_session','synthetic','fixture-csrf','?service=','?username='])assert.ok(!output.includes(secret),'diagnostics leaked fixture secret');

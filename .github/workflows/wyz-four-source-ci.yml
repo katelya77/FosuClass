@@ -108,3 +108,10 @@ jobs:
           docker build --build-arg "PLAYWRIGHT_VERSION=$version" -f deploy/wyz/Collector.Dockerfile -t fosu-collector-test .
       - name: Real local browser lifecycle with no network
         run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test
+      - name: CAS POST and language BLOCK regression with no network
+        run: |
+          docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --mount "type=bind,source=$PWD/tools/test-collector-cas-post-policy.js,target=/collector/tools/test-collector-cas-post-policy.js,readonly" \
+            --mount "type=bind,source=$PWD/tools/test-collector-login-browser-fixture.js,target=/collector/tools/test-collector-login-browser-fixture.js,readonly" \
+            fosu-collector-test node tools/test-collector-cas-post-policy.js
