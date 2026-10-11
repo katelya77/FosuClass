@@ -23,7 +23,7 @@ def require(condition):
 
 
 def build(previous):
-    require(re.fullmatch(r'[a-f0-9]{40}', previous))
+    require(previous == '9153876458df7b1dd6b4fae698851638b31c702e')
     revision = git('rev-parse', 'HEAD').decode().strip()
     require(previous != revision)
     git('cat-file', '-e', previous + '^{commit}')
@@ -44,7 +44,8 @@ def build(previous):
         committed = {m.name: tar.extractfile(m).read() for m in tar.getmembers() if m.isfile()}
     require(source == committed)
     helpers = ['upgrade-candidate.sh', 'check-heartbeat-service.py', 'install-schedule-collector.sh',
-               'recover-release.py', 'rollback-schedule-collector.sh', 'unpack-candidate.py']
+               'recover-release.py', 'rollback-schedule-collector.sh', 'unpack-candidate.py',
+               'pam-cache-buster-upgrade.sh', 'verify-installed-candidate.py', 'rollback-cache-buster.sh', 'cas-session-gates.sh']
     folder = parent / ('heartbeat-upgrade-' + revision)
     folder.mkdir(exist_ok=False)
     for name in helpers:
@@ -56,6 +57,7 @@ def build(previous):
     (folder / (archive.name + '.receipt.json')).write_text(json.dumps(receipt, indent=2), encoding='utf8')
     (folder / 'fosuclass-operations-and-release-runbook.md').write_bytes(source['docs/production/fosuclass-operations-and-release-runbook.md'])
     (folder / 'wyz-cas-mobile-repair.md').write_bytes(source['docs/production/wyz-cas-mobile-repair.md'])
+    (folder / 'wyz-cas-cache-buster.md').write_bytes(source['docs/production/wyz-cas-cache-buster.md'])
     for name, committed_path in (
         ('cas-sample-closure-acceptance.md', 'docs/production/cas-sample-closure-acceptance.md'),
         ('CAS-COMPATIBILITY.md', 'docs/cas-sample-closure/CAS-COMPATIBILITY.md'),
@@ -63,7 +65,7 @@ def build(previous):
         ('PAM-PUBLIC-AUDIT.sh', 'docs/cas-sample-closure/PAM-PUBLIC-AUDIT.sh'),
     ):
         (folder / name).write_bytes(source[committed_path])
-    (folder / 'PAM-HANDOFF.md').write_text('''# CAS POST classification candidate
+    (folder / 'PAM-HANDOFF.md').write_text('''# CAS jQuery cache-buster increment from installed 915
 
 Commit: {revision}
 Expected installed predecessor: {previous}
@@ -81,7 +83,7 @@ Only after installation approval, from this unpacked root-only directory:
 
 ```bash
 sha256sum -c source.sha256
-bash upgrade-candidate.sh --approve-install
+bash pam-cache-buster-upgrade.sh --approve-install
 ```
 
 After an approved installation, this independent read-only check
@@ -98,7 +100,7 @@ approved rollback commands using that exact backup, preserving auth history.
 The first school step needs its own approval and is PUBLIC DIAGNOSIS ONLY:
 
 ```bash
-fosu-collector diagnose-login --login-profile=mobile --approve-school-access
+bash cas-session-gates.sh --approve-public-cas
 ```
 
 Unknown official POST remains blocked: formReady=true can coexist with
@@ -107,6 +109,9 @@ That outcome is not a password resubmission or permission to log in.
 Do not send credentials until endpoint compatibility is reviewed and one real
 login separately approved. No sample/full, Oracle deployment, CloudBase active
 switch, timer, personal Agent or paid resource change is included.
+Follow wyz-cas-cache-buster.md for separate one-login approval, protected-file
+reuse, verified Session outcomes and exact 915 rollback. No account-shape
+diagnostic is included in the Collector. Existing targets are read-only.
 '''.format(revision=revision, previous=previous, digest=digest), encoding='utf8')
     target = folder.with_suffix('.zip')
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive_zip:

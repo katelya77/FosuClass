@@ -57,7 +57,9 @@ def unpack(bundle, digest, destination):
     require(files['source.sha256'] == (manifest['sha256'] + '  ' + manifest['bundle'] + '\n').encode('ascii'))
     with tarfile.open(fileobj=io.BytesIO(source), mode='r:gz') as tar:
         for name in ('upgrade-candidate.sh', 'check-heartbeat-service.py', 'install-schedule-collector.sh',
-                     'recover-release.py', 'rollback-schedule-collector.sh', 'unpack-candidate.py'):
+                     'recover-release.py', 'rollback-schedule-collector.sh', 'unpack-candidate.py',
+                     *[name for name in ('pam-cache-buster-upgrade.sh', 'verify-installed-candidate.py',
+                       'rollback-cache-buster.sh', 'cas-session-gates.sh') if name in files]):
             matches = [m for m in tar.getmembers() if m.name == 'deploy/wyz/' + name]
             require(len(matches) == 1 and matches[0].isfile())
             require(files[name] == tar.extractfile(matches[0]).read())

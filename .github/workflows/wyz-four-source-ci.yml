@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,6 +35,8 @@ jobs:
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-mobile.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-post-policy.js
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-account-precheck.js
+      - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" --test tools/test-collector-cache-buster.js
+      - run: sudo env PATH="$PATH" PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" python3 tools/test-diagnostic-process-exit.py --real-browser
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-cas-public-audit.js
       - run: sudo python3 tools/test-school-recovery-consent.py
       - run: python3 tools/test-oracle-direct-observation.py
@@ -56,6 +58,8 @@ jobs:
       - run: python3 tools/test-collector-delivery.py
       - run: sudo "$(command -v node)" tools/test-collector-install-linux.js
       - run: sudo python3 tools/test-collector-upgrade-linux.py
+      - run: sudo env PATH="$PATH" python3 tools/test-cache-buster-handoff.py
+      - run: bash -n deploy/wyz/pam-cache-buster-upgrade.sh deploy/wyz/rollback-cache-buster.sh deploy/wyz/cas-session-gates.sh
       - run: sudo python3 tools/test-heartbeat-systemd.py
       - run: bash -n deploy/wyz/upgrade-candidate.sh deploy/wyz/install-schedule-collector.sh deploy/wyz/repair-browser.sh deploy/wyz/rollback-schedule-collector.sh deploy/wyz/accept-oracle-direct.sh deploy/wyz/audit-oracle-origin-security.sh deploy/wyz/audit-oracle-control-sockets.sh
       - run: node tools/wyz-schedule-collector/browser-smoke.js
@@ -64,17 +68,7 @@ jobs:
       - run: npm run test:security-full
       - run: npm run test:architecture-guards
       - run: npm run release:preflight
-      - name: Package the exact committed CAS candidate
-        run: |
-          node tools/wyz-schedule-collector/build-package.js
-          python3 tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision=215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cas-sample-source-candidate
-          path: |
-            .local/collector-packages/wyz-schedule-collector-*.tar.gz*
-            .local/collector-packages/heartbeat-upgrade-*.zip*
-          if-no-files-found: error
+      # Build the single delivery only after all exact-head CI gates pass.
   windows-compatibility:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -94,6 +88,7 @@ jobs:
       - run: node tools/test-collector-cas-mobile.js
       - run: node tools/test-collector-cas-post-policy.js
       - run: node tools/test-collector-account-precheck.js
+      - run: node --test tools/test-collector-cache-buster.js
       - run: node tools/test-collector-protected-credentials.js
       - run: node tools/test-collector-auth-evidence.js
       - run: node tools/test-collector-cas-public-audit.js
@@ -127,3 +122,10 @@ jobs:
             --mount "type=bind,source=$PWD/tools/test-collector-account-precheck.js,target=/collector/tools/test-collector-account-precheck.js,readonly" \
             --mount "type=bind,source=$PWD/tools/test-collector-login-browser-fixture.js,target=/collector/tools/test-collector-login-browser-fixture.js,readonly" \
             fosu-collector-test node tools/test-collector-account-precheck.js
+      - name: Observed jQuery query regression with no network
+        run: |
+          docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --mount "type=bind,source=$PWD/tools/test-collector-cache-buster.js,target=/collector/tools/test-collector-cache-buster.js,readonly" \
+            --mount "type=bind,source=$PWD/tools/test-collector-login-browser-fixture.js,target=/collector/tools/test-collector-login-browser-fixture.js,readonly" \
+            fosu-collector-test node --test tools/test-collector-cache-buster.js
