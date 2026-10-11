@@ -3,9 +3,15 @@ const assert=require("assert/strict"),fs=require("fs"),os=require("os"),path=req
 const root=fs.mkdtempSync(path.join(os.tmpdir(),"fosu-sample-fixture-"));
 process.env.FOSU_STORAGE_DIR=path.join(root,"oracle");process.env.FOSU_DATA_DIR=path.join(root,"data");process.env.SCHEDULE_COLLECTOR_DIR=path.join(root,"control");
 process.env.FULL_SYNC_AGENT_TOKEN=crypto.randomBytes(32).toString("hex");process.env.FULL_SYNC_SIGNING_SECRET=crypto.randomBytes(32).toString("hex");process.env.FULL_SYNC_AGENT_ID="wyz-schedule-collector";
-const contract=require("../server/src/shared/sampleCollectionContract"),control=require("../server/src/services/scheduleCollectorService");
-const collector=require("./wyz-schedule-collector/collector"),fingerprint=require("../server/src/utils/stagingFingerprint").calculateFingerprint;
-const four=require("../server/src/shared/fourDirectSourceContract"),express=require("../server/node_modules/express");
+// The Oracle candidate is based on its deployed ancestor, independently of the
+// WYZ CAS candidate. Cross-tree mode runs the actual Oracle routes and worker,
+// signed by the unchanged WYZ client; it never substitutes a review response.
+const crossTree=Boolean(process.env.FOSU_SAMPLE_ORACLE_ROOT);
+const backendRoot=path.resolve(process.env.FOSU_SAMPLE_ORACLE_ROOT||path.join(__dirname,".."));
+const backend=file=>require(path.join(backendRoot,"server/src",file));
+const contract=backend("shared/sampleCollectionContract"),control=backend("services/scheduleCollectorService");
+const collector=require("./wyz-schedule-collector/collector"),fingerprint=backend("utils/stagingFingerprint").calculateFingerprint;
+const four=backend("shared/fourDirectSourceContract"),express=require(path.join(backendRoot,"server/node_modules/express"));
 const term="2026-2027-1";let cases=0;
 function check(fn){fn();cases++;}
 function sample(kind="four"){
@@ -21,13 +27,13 @@ async function main(){
   for(const kind of ["class","four"]){
     check(()=>assert.equal(contract.assertSample(sample(kind),term,{kind,requestBudget:40}).publishable,false));
     check(()=>assert.throws(()=>four.assertFourSources(sample(kind),term),/FOUR_DIRECT_SOURCE_INVALID/));
-    check(()=>assert.equal(require("../server/src/services/stagingSafetyService").validateStagingData(sample(kind)).valid,false));
+    check(()=>assert.equal(backend("services/stagingSafetyService").validateStagingData(sample(kind)).valid,false));
   }
   for(const mutate of [v=>v.meta.actualNetworkRequestCount=41,v=>v.directSourceSummary.teacher.sourceMode="derived-current-run",v=>v.directSourceSummary.class.requestedEntities=2,v=>v.resources.teacherSchedules[0].password="synthetic",v=>v.resources.courseSchedules=[],v=>v.classSchedules[0].courses[0].weekday=8,v=>v.classSchedules[0].courses[0].weeks=[999],v=>v.classSchedules[0].courses[0].endSection=0,v=>{v.directSourceSummary.class.success=2;v.directSourceSummary.class.empty=-1;}]){
     const value=sample();mutate(value);check(()=>assert.throws(()=>contract.assertSample(value,term,{kind:"four",requestBudget:40})));
   }
-  require("../server/src/services/termRegistryService").createPlannedTerm({term,semesterText:term,termStartDate:"2026-09-07",totalWeeks:20,weekStart:"monday"});
-  const app=express();app.use(express.json({verify(req,res,buf){req.rawBody=buf;}}));app.use("/api/full-sync/v1",require("../server/src/routes/fullSyncAgent"));
+  backend("services/termRegistryService").createPlannedTerm({term,semesterText:term,termStartDate:"2026-09-07",totalWeeks:20,weekStart:"monday"});
+  const app=express();app.use(express.json({verify(req,res,buf){req.rawBody=buf;}}));app.use("/api/full-sync/v1",backend("routes/fullSyncAgent"));
   const server=await new Promise(resolve=>{const s=app.listen(0,"127.0.0.1",()=>resolve(s));});
   try{
     const cfg={...collector.config(process.env),oracle:"http://127.0.0.1:"+server.address().port,dataRoot:path.join(root,"campus"),sessionPath:path.join(root,"campus","session.json"),execute:true};
@@ -37,7 +43,7 @@ async function main(){
     check(()=>assert.equal(control.snapshot().lastSuccessAt,null));
     for(const kind of ["class","four"]){
       control.resetForTests();
-      const queued=control.requestRun("sample","fixture-approved",Date.now(),{term,sampleKind:kind,requestBudget:40}).run;
+      const queued=control.requestRun("sample","fixture-approved",Date.now(),{term,sampleKind:kind,requestBudget:40,idempotencyKey:"sample-acceptance-"+kind}).run;
       let command;
       const runtime=require("./wyz-schedule-collector/browserRuntime"),originalCommand=runtime.workerCommand;
       runtime.workerCommand=(executable,args,env)=>{command={args,env};throw Object.assign(new Error("FIXTURE_CAPTURE"),{code:"FIXTURE_CAPTURE"});};
@@ -71,13 +77,27 @@ async function main(){
       check(()=>assert.equal(control.snapshot().lastSuccessAt,null));
       check(()=>assert.equal(fs.existsSync(path.join(cfg.dataRoot,"last-success.json")),false));
       check(()=>assert.equal(fs.existsSync(path.join(process.env.FOSU_STORAGE_DIR,"active-release.json")),false));
-      const upload=require("../server/src/services/stagingUploadService").getUploadStatus(result.uploadId,{type:"full-sync",id:result.runId});
+      const upload=backend("services/stagingUploadService").getUploadStatus(result.uploadId,{type:"full-sync",id:result.runId});
       check(()=>assert.equal(upload.summary.sampleOnly,true));check(()=>assert.equal(upload.summary.coverageValid,false));
       const cli=require("./wyz-schedule-collector/cli");
       let view;const inspection=await cli.main(["inspect"],{skipRootCheck:true,cfg,output:value=>view=value,connection:()=>({cfg,request:api,close:()=>{}})});check(()=>assert.equal(inspection.result,"PENDING SAMPLE REVIEW"));
-      check(()=>{assert.equal(view.oracleStagingStatus,"PENDING SAMPLE REVIEW");assert.equal(view.uploadMatches,true);assert.equal(view.lastSample.directSourceSummary.class.sourceMode,"network-direct");});
+      check(()=>assert.equal(view.lastSample.directSourceSummary.class.sourceMode,"network-direct"));
+      if(crossTree){
+        check(()=>assert.equal(view.oracleStagingStatus,"PENDING SAMPLE REVIEW"));
+        check(()=>assert.equal(view.uploadMatches,true));
+        check(()=>assert.equal(view.canonicalHashMatches,true));
+        check(()=>assert.equal(view.oracleSampleReview.ownershipConfirmed,true));
+        check(()=>assert.equal(view.oracleSampleReview.requestBudget,40));
+        const ready=await api("GET","/api/full-sync/v1/sample/readiness");check(()=>assert.equal(ready.ready,true));
+      }else{
+        // PR #89's backend is not the Oracle candidate; an absent review API
+        // must keep genuine private verification blocked, despite local success.
+        check(()=>assert.equal(view.oracleStagingStatus,"UNVERIFIED"));
+        check(()=>assert.equal(view.oracleCode,"STAGING_SAMPLE_API_UNAVAILABLE"));
+        check(()=>assert.notEqual(view.uploadMatches,true));
+      }
     }
   }finally{await new Promise(resolve=>server.close(resolve));}
-  console.log("collector-sample-contract: "+cases+" PASS; signed localhost upload + real local worker; schoolRequests=0; active unchanged");
+  console.log("collector-sample-contract: "+cases+" PASS; "+(crossTree?"cross-candidate signed localhost + actual Oracle local worker":"PR89 backend review unavailable remains BLOCKED")+"; schoolRequests=0; productionOracleRequests=0; active unchanged");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>fs.rmSync(root,{recursive:true,force:true}));

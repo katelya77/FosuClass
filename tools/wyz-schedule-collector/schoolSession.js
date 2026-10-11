@@ -120,13 +120,14 @@ async function interactiveSession(cfg, deps = {}) {
     if (checked.status === "SESSION_VALID" && await deps.confirmReuse()) return { ...checked, status: "SESSION_REUSED", loginProfile: cfg.loginProfile || "mobile" };
     const lifecycle=require("./schoolAuthState").lifecycle(cfg,deps);
     lifecycle.check();
-    // No school-auth.json is read/written. Credentials exist only in this process.
+    // Protected-file is manual-only; it never enables legacy recovery.
     let credentials, adapter;
     try {
+      if(deps.credentialSource==='protected-file')require('./protectedSchoolCredentials').available(cfg,deps.platform);
       adapter = await (deps.createAdapter || createAdapter)(cfg, deps);
       // Detect local page adaptation failures before requesting credentials.
       if(adapter.prepare)await adapter.prepare();
-      credentials = await deps.readCredentials();
+      credentials = deps.credentialSource==='protected-file'?require('./protectedSchoolCredentials').read(cfg,deps.platform):await deps.readCredentials();
       if (!credentials || typeof credentials.account !== "string" || !credentials.account.trim() || typeof credentials.password !== "string" || !credentials.password) throw fail("SCHOOL_AUTH_INPUT_REQUIRED");
       const session = validateSession(await adapter.login(credentials,lifecycle.hooks));
       credentials.account = ""; credentials.password = ""; credentials = null;
@@ -149,7 +150,7 @@ async function interactiveSession(cfg, deps = {}) {
         }
       } finally { if (fs.existsSync(candidate)) fs.unlinkSync(candidate); }
       lifecycle.success(cfg.loginProfile || "mobile");
-      return { status: "SESSION_SAVED", schoolLoginAttempts: lifecycle.attempts(), schoolAuthRequests: adapter.stats ? adapter.stats().schoolRequests : null, sessionChanged: true, passwordPersisted: false, loginProfile: cfg.loginProfile || "mobile" };
+      return { status: "SESSION_SAVED", schoolLoginAttempts: lifecycle.attempts(), schoolAuthRequests: adapter.stats ? adapter.stats().schoolRequests : null, sessionChanged: true, passwordPersisted: false, loginProfile: cfg.loginProfile || "mobile",...(deps.credentialSource==='protected-file'?{credentialSource:'protected-file',recoveryEnabled:false}:{}) };
     } catch (error) {
       const code = transportCode(error);
       if (adapter) lifecycle.failure(code,error.diagnostic);
@@ -160,4 +161,11 @@ async function interactiveSession(cfg, deps = {}) {
     }
   });
 }
-module.exports = { COOLDOWN_MS,allowedUrl,checkSession,classifyPage,createAdapter,ensureSession,interactiveSession,loadCredentials,secureFile,secureDirectory,transportCode,validateSession,assertSafeRuntime };
+async function configureCredentials(cfg,deps={}){
+  return withSessionLock(cfg,deps,async()=>{
+    let credentials;
+    try{credentials=await deps.readCredentials();return require('./protectedSchoolCredentials').write(cfg,credentials,deps.platform);}
+    finally{if(credentials){credentials.account='';credentials.password='';}}
+  });
+}
+module.exports = { COOLDOWN_MS,allowedUrl,checkSession,classifyPage,createAdapter,ensureSession,interactiveSession,configureCredentials,loadCredentials,secureFile,secureDirectory,transportCode,validateSession,assertSafeRuntime };

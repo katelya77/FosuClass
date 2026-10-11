@@ -1,6 +1,6 @@
 # 佛课小表生产运维与发布接力手册
 
-状态日期：2026-10-10，Asia/Shanghai。此文区分正在运行的生产系统、候选代码、本地 fixture 和人工验收；任何一项通过不能替代其他项。
+更新日期：2026-10-11，Asia/Shanghai。WYZ已安装215f7e54且安装/公开CAS真实PASS；新阻断是双账号预检查，主认证未提交。最新PR #91增量为 [预检查与受保护文件登录](../cas-sample-closure/PROTECTED-FILE-LOGIN.md)，升级fromRevision/回滚点215f7e54；Oracle #90/c74独立保留。以 [分层验收手册](cas-sample-closure-acceptance.md) 为当前操作事实源。下方PR #87–#89定位/网络/active观察为历史，本轮未重探生产；fixture、构建、CI不能替代真实验收。
 
 ## 生产基线和门禁
 
@@ -12,11 +12,11 @@
 | 生产祖先 | 只读工作流 `38037091970` 确认 `a3dfd1989705f51c921f13883bcde1cce4502883` | 学校请求0、配置未改、未部署候选 |
 | Stage A 候选基线 | PR #87 Draft OPEN，HEAD `5e2473ecfa87cc0a2651cf49f105c415c64e7e1a`，base `codex/wyz-oracle-transport-package` | 从真实 #87 HEAD 继续，包含 main、已安装bff与生产祖先 |
 | Oracle / CloudBase active | 两个正确公开路径均返回 `2026-10-07T19-12-39`，学期 `2026-2027-1`、相同 epoch | 本轮只读核实 |
-| WYZ 当前安装 | 用户 PAM：CAS_REPAIR_SERVICE_RECOVERED、Collector active/running、NRestarts=0、个人 Agent active、timer disabled、execute=0 | `6eea0ec099930f40d16cd3f0ea641e3572f9c675`；本轮未安装 |
+| WYZ 当前安装 | 最新用户PAM：installation/public-CAS PASS；主认证提交/预留0，双预检查导致local_preflight | `215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a`；新候选未安装 |
 | WYZ 原版本 | 用户 status 回传 `2b80222e9cf4846a1545aecbb7975359e7a37707` | 旧目录与 checkpoint 已保留 |
 | WYZ 首次观察（修复前） | 用户 PAM：3605.86 秒，51 成功/19 失败，72.86%，最大确认间隔 459.96 秒 | 历史 NOT_PASSED，保留故障证据 |
 | 当前版本一小时观察 | 用户 PAM：3607.22秒、119成功/0失败、118复用、最长间隔30.58秒、TLS授权通过、实际地址146.235.201.244、重启0、学校请求0 | PASS；Collector及个人Agent active，timer disabled/inactive，execute=0 |
-| 学校阻断 | 用户 PAM：公开移动页 form-ready 后 POST 守卫报 PASSWORD_RESUBMISSION_BLOCKED，但 passwordSubmissions/reservations=0 | 表单已识别，后台 POST 用途未知；先修复分类再单独批准公开诊断，不能判为密码错误 |
+| 学校阻断 | 最新用户PAM：公开审计成功，三次语言接口空XHR，表单ready、REVIEW_REQUIRED，密码提交0、Session未建立 | PR #91精确optional阻断分类候选；待一次获批升级和独立登录验收 |
 | 正式微信构建版本/合法域名/真机刷新 | Git 配置和本地开发者工具配置不能证明已上线包 | 未核实，人工门禁 |
 
 当前常用工作区路径是指向 `D:\Dev\VScode\FosuClass` 的 junction，有用户未提交的两份 project 配置。本任务使用独立 worktree；不得用候选覆盖这些配置。main 尚不包含全部生产祖先；不能仅因“最新 main”而部署。
@@ -41,10 +41,10 @@
 
 ```text
 node tools/wyz-schedule-collector/build-package.js
-python tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision 6eea0ec099930f40d16cd3f0ea641e3572f9c675
+python tools/wyz-schedule-collector/build-upgrade-delivery.py --from-revision 215f7e54ee08bcf1a9478e8f4d81b9fcff364a5a
 ```
 
-新包全部源码与 Git HEAD 逐字节比对；不再从本地未跟踪的 Python 字符串生成升级脚本。当前任务不要求再次安装。用户已按原 heartbeat-only 门禁恢复 6ee 后，可经 PAM 传入已审查的新校验器，仅做只读核查（无学校访问/凭据输入/服务变更）：
+新包全部源码与Git HEAD逐字节比对，保留已修复安装机制。当前任务只交付包；未来批准后从已验收6fe仅升级一次，以同一heartbeat-only门禁核查，不重复一小时网络观察：
 
 ```bash
 python3 check-heartbeat-service.py --state active --health
@@ -62,13 +62,13 @@ python3 check-heartbeat-service.py --state active --health
 
 表单/资源检查先于凭据提示，官方预检查保留、未知响应停止；独立阶段诊断不含正文或认证参数。认证 POST 预留预算后才放行，崩溃未确认的预留也消耗预算。30 分钟冷却、24 小时两次及 blocked 保护继续有效，不删除或重置历史记录。
 
-安装、公开页诊断、一次真实登录是三个独立人工门禁。本轮升级前驱/回滚版本为 6eea0ec0；PAM-HANDOFF 固定提交与哈希，保留现有认证预算和 Session。新凭据只在 PAM 隐藏输入，聊天披露密码应先更换。登录成功不批准 sample/full、后端部署、timer 或发布。
+安装、公开页诊断、一次真实登录是三个独立人工门禁。本轮前驱/回滚版本是6fe02a552e7511bc27a2f4751db302ebb7a8e001；PAM-HANDOFF固定提交/哈希，保留认证预算和Session。新凭据只在PAM隐藏输入。登录成功不批准sample/full、后端部署、timer或发布。
 
 ### PR #89：公开页 POST 分类与后续样本门禁
 
 最新 WYZ 公开诊断已经 navigationComplete、formPresent/三个输入按钮计数唯一、jsSubmit=true、无可见挑战、无来源阻断；随后错误来自旧守卫把所有非主认证 POST 归为密码重复提交。不能由 schoolRequests=24 推断后台 POST 的端点、用途或学校认证失败；实际放行密码次数为 0。
 
-新守卫将未知官方后台 POST 阻断并标为 BACKGROUND_POST_UNREVIEWED，独立于认证预算/致命 policyError。公开诊断输出 formReady 与 networkCompatibility 两个状态：未知请求只能 REVIEW_REQUIRED、loginReady=false，并以 SCHOOL_LOGIN_NETWORK_REVIEW_REQUIRED 非零退出。只有已有审查证据明确为 optional 的公开端点才允许“非关键请求被阻断但兼容”；生产 REVIEWED_PUBLIC_POSTS 目前为空，不新增端点、域名或校验绕过。账号预检查仍由获批登录显式调用既有 GET，不允许公开页自动执行账户预检查。详见 [分类、升级、回滚及验收命令](wyz-cas-mobile-repair.md#本轮公开页-post-修复与交付)。
+未知官方POST仍BACKGROUND_POST_UNREVIEWED/REVIEW_REQUIRED。最新PR #91规则只依据已审查真实语言UI调用将精确空XHR最多三次保持阻断并计为noncritical；生产无新增POST放行权限。第四次/参数或类型变化、新类别、挑战停止。账户预检查仍仅由获批登录显式调用既有GET。详见 [最新兼容审查](../cas-sample-closure/CAS-COMPATIBILITY.md) 与 [升级/回滚命令](wyz-cas-mobile-repair.md#本轮公开页-post-修复与交付)。
 
 当前 auth-state 的 LEGACY_UNVERIFIED/blocked=true/预算1/日限2/冷却0 作为用户回传保留。diagnose-login 不读取凭据或 Session，也不写历史。解除 blocked 只能在问题修复、网络兼容性确认、无学校挑战且单独批准真实登录后，通过 --acknowledge-auth-failure；不删除状态文件，不退还旧预算，不越过冷却和日限。
 
