@@ -1,8 +1,8 @@
 {
-  "revision": "0af13014d4e937e3395a2e7d35ac2b32b3d7deff",
+  "revision": "f076eac3b28ff4b03bd05c642672918a0d699376",
   "files": {
     "tools/wyz-schedule-collector/cli.js": "005c89b7976e28318c3661e400cc415795948f74c5d02099642c62ebc64a114c",
-    "tools/wyz-schedule-collector/collector.js": "934aab88740cccc3416288f1495d1344dd806a44c595e387c6b413923dcac1d0",
+    "tools/wyz-schedule-collector/collector.js": "8bae76909d96f03d397ea3e3f73e47f58bd0b0d49b97f7d68fecdac452227318",
     "tools/wyz-schedule-collector/schoolSession.js": "61d8abb1acf6a8655bf47dec6782734d7ed38ad7ee950364dfef793a2954ac13",
     "tools/wyz-schedule-collector/schoolAuthState.js": "a5511c8bd37d1ca8cf629e460f1c4aca9987433e3aabe991b85389659f8ae0f1",
     "tools/wyz-schedule-collector/protectedSchoolCredentials.js": "77c875a96c372b910329b9117693f07cc4675b2db872943d3c8799f19b3586b3",
@@ -15,13 +15,17 @@
     "tools/wyz-schedule-collector/runStore.js": "bb18b828bc59f168eb2eb5ace6f1879822f0243f3eaccea9cef060f41fc358b8",
     "tools/wyz-schedule-collector/container-worker.js": "c04bfd96f55e5b05c1e8944d157ba53e0f2beb666b3038ae01eebc368340c73b",
     "tools/wyz-schedule-collector/heartbeatRecovery.js": "9f86bcba7050fcf0c3aae4c11a801dc3250e307cf429286d9e05e09d2538cf37",
-    "tools/fosu-sync-client/sync.js": "bda4228f9461afff59ec620954208bade9a80498ea191fcde3e998fef6e6b8d9",
-    "tools/fosu-sync-client/directAcquisition.js": "951adf9a92b9067210b5a2d88b42e68470513aa783dcfb43fa1a09bbebfa25b0",
+    "tools/fosu-sync-client/sync.js": "72a69ce843837d2a6bbd22c38a550153dde92fc141f97beedbebfbc29aa97d58",
+    "tools/fosu-sync-client/directAcquisition.js": "890b4c719a30888b3c57a280a512c2f475245201ed8f0988dff0c4b454728ab4",
     "tools/fosu-sync-client/schoolLoginProfile.js": "18ba9dcb079f2f9ac7542c33a037d14e6d443545b74d8b9d9cfdb2e29be7e4a3",
     "tools/fosu-sync-client/schoolCasPage.js": "d9b7ae9e22c1cb2e4b56ac181cf711831e8ef5c1da4cc7e01559b4dccc4ce83d",
     "server/src/shared/sampleCollectionContract.js": "4a1aa5049bcbf7ab5c32acc51a0752bdb268b13c7d4c5b201afe31179ce99ef1",
     "server/src/shared/fourDirectSourceContract.js": "d1729b63db79ac0aece8f2ee84b7d5ea90701d64aaafd0296b97a27ba4d8bc03",
     "server/src/security/fullSyncSignature.js": "ee5231dfef4211167af7cd3d4c46b20b36cb53bc84f9fa01cfcf23f9d7a492e9",
-    "deploy/wyz/check-heartbeat-service.py": "243c7e3565117e426d32d4261a9dbbadddc003ce31cf1867cd058d9eb16f7ffe"
-  }
+    "deploy/wyz/check-heartbeat-service.py": "243c7e3565117e426d32d4261a9dbbadddc003ce31cf1867cd058d9eb16f7ffe",
+    "tools/wyz-schedule-collector/workerReceipt.js": "3cc74fe1c7ad6eb0f66faa76e096113401fc075d20b2108fae1256261ff33da9",
+    "tools/wyz-schedule-collector/requestLedger.js": "69b236e754a8e0cfbe3cd0b2c0dedca84b3695c92171b823873751f8d1491885",
+    "tools/wyz-schedule-collector/worker-offline-smoke.js": "67996ccef1aa71cd6e731d2ba0bb3aee7664aa7816d8c0397e97b683e1dbad20"
+  },
+  "bundleSha256": "ae7279b6ada816333221cbc6f3fa032ad97233797ae9eed1356a0aed1235d59f"
 }
