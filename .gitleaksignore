@@ -1,0 +1,6 @@
+# Exact historical findings are SHA256 digests of public source at 0af13014.
+# Verified against git show; credential-related file names triggered the rule.
+# These entries do not exempt a path, a rule, or any future finding.
+0327b254466699360283817ae428e7ea52ba7e70:deploy/collector-closure/installed-source-pins.json:generic-api-key:7
+0327b254466699360283817ae428e7ea52ba7e70:deploy/collector-closure/installed-source-pins.json:generic-api-key:8
+0327b254466699360283817ae428e7ea52ba7e70:deploy/collector-closure/installed-source-pins.json:generic-api-key:14
