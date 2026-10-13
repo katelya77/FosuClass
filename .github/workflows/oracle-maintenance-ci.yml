@@ -21,6 +21,8 @@ on:
       - 'tools/test-oracle-sample-maintenance.js'
       - 'tools/test-oracle-sample-deploy-maintenance.js'
       - 'tools/test-collector-closure-window.js'
+      - 'tools/test-collector-next-window.js'
+      - 'tools/test-collector-next-sample-queue.js'
       - 'tools/test-oracle-orphan-job.js'
   workflow_dispatch:
 permissions:
@@ -48,6 +50,9 @@ jobs:
           sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-persistence-acceptance.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js tools/test-oracle-sample-preflight-adapter.js
           node --test tools/test-oracle-loopback-http.js
           node tools/test-collector-closure-window.js
+          sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" node --test tools/test-collector-next-window.js
+          node --test tools/test-collector-next-sample-queue.js
+          python3 -m py_compile deploy/collector-closure/build-next-delivery.py
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py
           python3 tools/oracle-sample/test_verify_image.py

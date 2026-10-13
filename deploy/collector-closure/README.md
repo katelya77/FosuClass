@@ -1,6 +1,6 @@
 # Installed WYZ Sample closure
 
-This host-local wrapper reuses installed revision `0af13014d4e937e3395a2e7d35ac2b32b3d7deff` and the signed Oracle Sample protocol at `7ad3b2708ce553e6fff099fd881a4b9c86ebea39`. It does not install a Collector, change credentials, enable its timer, or publish data.
+This host-local wrapper reuses installed revision `f076eac3b28ff4b03bd05c642672918a0d699376` and the signed Oracle Sample protocol at `7ad3b2708ce553e6fff099fd881a4b9c86ebea39`. It does not install a Collector, change credentials, enable its timer, or publish data. It requires the exact successful source-upgrade receipt, completed transaction, bundle SHA and current critical source-file hashes. The retired run `sc-506d1f4bea522471cf93edc6` is always rejected.
 
 Before each independently approved Sample, transfer the current successful Oracle **production** preflight JSON into a root-only WYZ file. It expires after 30 minutes. Create the exact Sample in the protected Oracle admin page, noting its run ID, term and request budget. The wrapper verifies the signed queued task before any school request and again immediately after login.
 
@@ -20,7 +20,9 @@ Private receipts are stored under `/root/fosu-collector-closure/<runId>/`. Read 
 
 Every selected source is independently requested with `sourceMode=network-direct`. A class target is one professional/grade request group and can contain several administrative classes. The four selected targets are independent and need not share a course. Upload checks bind run ID, term, private upload ID, canonical hash, request budget and shared integer metrics to Oracle's signed receipt. Samples remain `sampleOnly=true`, `publishable=false`, `coverageValid=false` and cannot publish.
 
-The installed CLI reports collection requests separately from login requests; its Session probes do not expose an exact request counter. Reports retain `NOT_COUNTED_BY_EXISTING_CLI` for that gap. The installed revision strips original HTML/text before upload and does not retain a raw response digest plus original layout. Therefore normalized data and matching upload hashes alone do not establish original-layout fidelity, two/three-period correctness or cross-source consistency. Those checks remain pending actual private review and a separately tested minimal evidence-retention change if needed. Never attest them from fixtures.
+The installed CLI reports collection requests separately from login requests; its Session probes do not expose an exact request counter. Reports retain `NOT_COUNTED_BY_EXISTING_CLI` for that gap. PR97 retains decoded-response digests and parsed checkpoints, but no complete original HTML layout. Therefore normalized data, response digests and matching upload hashes alone do not establish original-layout fidelity, two/three-period correctness or cross-source consistency. Those checks remain pending actual private review. Never attest them from fixtures.
+
+Failures retain the worker phase, typed code, numeric exit/signal and scope-bound request-ledger totals. Missing evidence stays UNKNOWN; an interrupted reservation is counted as consumed, never replayed. `ExecStopPost` records a bounded interruption receipt after timeout or SIGKILL, without school access. The CLI's real protected-file path `school-credentials.json` is fingerprinted privately before/after this task; legacy `credentialsConfigured=false` is not evidence it is absent. The launcher does not reset credentials, Session or authentication history. Rebooted Sample tasks are never resumed automatically.
 
 ## Formal collection remains locked
 

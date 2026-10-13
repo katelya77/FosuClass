@@ -17,5 +17,6 @@ systemd-run --quiet --unit="$unit" --property=Type=exec --property=Restart=no \
   --property="WorkingDirectory=$script_dir" \
   --property="StandardOutput=append:$evidence_dir/executor.log" \
   --property="StandardError=append:$evidence_dir/executor.log" \
+  --property="ExecStopPost=/usr/bin/node $script_dir/finalize-wyz.js $approval" \
   /usr/bin/node "$script_dir/wyz-sample.js" run "$approval"
 printf 'WYZ_SAMPLE_STARTED unit=%s run=%s evidence=%s restart=NO timer=UNCHANGED\n' "$unit" "$run_id" "$evidence_dir"
