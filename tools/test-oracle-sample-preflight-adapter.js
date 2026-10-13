@@ -62,16 +62,36 @@ test("another protected file difference is blocked before stage exception", asyn
 test("missing full before object is explicitly blocked rather than invented", async () => {
   const f = fixture(); try { const report = f.report(); host.durable(f.beforeFile, report); f.change(s => { s.meta.reconciledAt = new Date().toISOString(); }); await assert.rejects(adapter.main(f.afterArgs(), f.deps), { code: "STAGING_PRESTATE_OBJECT_UNAVAILABLE" }); } finally { f.close(); }
 });
-test("controlled operate has exactly three reviewed substitutions and original candidate bytes stay intact", () => {
+test("controlled operate has four reviewed substitutions and original candidate bytes stay intact", () => {
   const f = fixture(); try {
     const originalPath = path.resolve(__dirname, "../deploy/oracle-sample/operate.sh"), original = fs.readFileSync(originalPath, "utf8"), target = path.join(f.c.candidateDir, "deploy/oracle-sample/operate.sh");
     fs.writeFileSync(target, original); fs.writeFileSync(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js"), "fixture preflight bytes");
-    const evidence = adapter.setup(f.c, { operateSha256: digest(target), preflightSha256: digest(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js")) });
+    const imageId = "sha256:" + "a".repeat(64);
+    const evidence = adapter.setup(f.c, { imageId, operateSha256: digest(target), preflightSha256: digest(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js")) });
     const copy = fs.readFileSync(evidence.operateFile, "utf8"); assert.equal(fs.readFileSync(target, "utf8"), original); assert.equal(evidence.originalCallsiteCount, 1); assert.equal(evidence.compressionCallsiteCount, 2);
     assert.match(copy, /\/usr\/bin\/pigz -p 2 -1 -n/); assert.match(copy, /tar --use-compress-program="\/usr\/bin\/pigz -p 2 -1" -cf/);
     const reverted = copy.replace(`preflight() { node "${path.resolve(__dirname, "../deploy/oracle-sample/preflight-adapter.js")}" --guard-config="${evidence.configFile}"`, 'preflight() { node "$candidate_dir/deploy/oracle-sample/preflight.js"')
       .replace('docker image save "$old_image" | /usr/bin/pigz -p 2 -1 -n > "$backup/previous-image.tar.gz"', 'docker image save "$old_image" | gzip -n > "$backup/previous-image.tar.gz"')
-      .replace('tar --use-compress-program="/usr/bin/pigz -p 2 -1" -cf "$backup/state.tar.gz" -C "$app_dir/server" storage .env', 'tar -czf "$backup/state.tar.gz" -C "$app_dir/server" storage .env');
+      .replace('tar --use-compress-program="/usr/bin/pigz -p 2 -1" -cf "$backup/state.tar.gz" -C "$app_dir/server" storage .env', 'tar -czf "$backup/state.tar.gz" -C "$app_dir/server" storage .env')
+      .replace(`[[ $image_id == "${imageId}" ]]`, '[[ $image_id == $(node -p \'JSON.parse(require("fs").readFileSync(process.argv[1]))[0].Id\' "$image_dir/image-inspect.json") ]]');
     assert.equal(reverted, original, "every other byte and original safety gate must be preserved");
+  } finally { f.close(); }
+});
+test("existing image reuse remains bound to the exact validated runtime digest", () => {
+  const f = fixture(); try {
+    const original = fs.readFileSync(path.resolve(__dirname, "../deploy/oracle-sample/operate.sh"), "utf8"), target = path.join(f.c.candidateDir, "deploy/oracle-sample/operate.sh");
+    fs.writeFileSync(target, original); fs.writeFileSync(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js"), "fixture preflight bytes");
+    const imageId = "sha256:" + "a".repeat(64), evidence = adapter.setup(f.c, { imageId, loadedCandidateVerified: true, operateSha256: digest(target), preflightSha256: digest(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js")) });
+    const copy = fs.readFileSync(evidence.operateFile, "utf8");
+    assert.equal(evidence.reusedImage, true); assert.ok(copy.includes(`--format '{{.Id}}' "fosu-oracle-sample:$candidate_sha" 2>/dev/null) == "${imageId}"`));
+    assert.ok(copy.includes('else docker load -i "$image_archive" > "$backup/candidate-image-load.txt"; fi'));
+  } finally { f.close(); }
+});
+test("recovery reports live reaction changes as unproved history while deployment still rejects them", async () => {
+  const f = fixture(); try {
+    const before = await f.before(), after = { ...before, protectedFiles: { ...before.protectedFiles, reactions: "new votes" } };
+    assert.throws(() => adapter.compareProtected(before, after, f.c), { code: "PROTECTED_STATE_CHANGED" });
+    const recovered = adapter.compareProtected(before, after, f.c, { allowLiveReactions: true });
+    assert.equal(recovered.historicalReactionsUnchanged, "PENDING"); assert.deepEqual(recovered.reactionHashes, { before: "reactions", observed: "new votes" });
   } finally { f.close(); }
 });

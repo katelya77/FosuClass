@@ -10,7 +10,8 @@ const PIN = Object.freeze({
   base: "a3dfd1989705f51c921f13883bcde1cce4502883",
   commit: "7ad3b2708ce553e6fff099fd881a4b9c86ebea39",
   oldImage: "sha256:d864c4d92d063a3abc907fe89d3973c33eab8611b03b1caf1d78568bb20ead93",
-  image: "sha256:b8f6dccc936b161f5b19c8bc583959980ad2b23f54682d9b94b50de7eb3dcafe",
+  configImage: "sha256:b8f6dccc936b161f5b19c8bc583959980ad2b23f54682d9b94b50de7eb3dcafe",
+  image: "sha256:23203e0efefc63728baabbc99c3349c48b34761711f75f6cc2365ae55a053fce",
   sourceSha256: "b549aaaa9a759efd164c1de4d3909473c560f7c8f17f896c618a91a8e79911fb",
   imageSha256: "d2831cb98be9c6f5a07130934990db3c0e4ebaeec1755ee1f9444fa67dba2868",
   receiptSha256: "f6339c20e44f5207a42a1bade1598e41f02e95d1c1744effd3577064609ffbe6",
@@ -56,7 +57,22 @@ function artifactEvidence(c) {
   if (manifest.schema !== "oracle-sample-candidate.v1" || manifest.gitCommit !== PIN.commit || manifest.baseSha !== PIN.base || manifest.expectedProductionSha !== PIN.base || manifest.archiveSha256 !== PIN.sourceSha256 || manifest.publishable !== false || manifest.timerEnabled !== false) fail("PINNED_RECEIPT_CONTRACT_MISMATCH");
   if (fs.readFileSync(path.join(c.imageDir, "commit.txt"), "utf8").trim() !== PIN.commit) fail("PINNED_IMAGE_COMMIT_MISMATCH");
   const img = read(path.join(c.imageDir, "image-inspect.json"))[0];
-  if (img?.Id !== PIN.image || img.Architecture !== "arm64" || img.Config?.Labels?.["org.opencontainers.image.revision"] !== PIN.commit) fail("PINNED_IMAGE_IDENTITY_MISMATCH");
+  if (img?.Id !== PIN.configImage || img.Architecture !== "arm64" || img.Config?.Labels?.["org.opencontainers.image.revision"] !== PIN.commit) fail("PINNED_IMAGE_IDENTITY_MISMATCH");
+  const imageVerifier = path.join(__dirname, "verify-image.py");
+  cutover.safePath(imageVerifier, { regular: true });
+  const imageIdentity = command(c, "python3", [imageVerifier, "--archive", archive, "--inspect", path.join(c.imageDir, "image-inspect.json"), "--revision", PIN.commit, "--config-digest", PIN.configImage, "--manifest-digest", PIN.image], { name: "image-graph", timeout: 120000, json: true });
+  if (imageIdentity.status !== "PASS" || imageIdentity.rootFsMatchesCi !== true) fail("PINNED_IMAGE_GRAPH_REJECTED");
+  let loadedCandidateVerified = false;
+  const existing = spawnSync("docker", ["image", "inspect", "fosu-oracle-sample:" + PIN.commit], { encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+  if (existing.status === 0) {
+    const actual = JSON.parse(existing.stdout)[0], normalize = config => {
+      const out = { ...config };
+      for (const key of ["OpenStdin", "Tty", "AttachStderr", "Hostname", "StdinOnce", "AttachStdout", "Domainname", "AttachStdin", "Image", "User"]) if ([undefined, null, false, ""].includes(out[key])) delete out[key];
+      return out;
+    };
+    if (actual.Id !== PIN.image || actual.Architecture !== "arm64" || !cutover.equal(actual.RootFS, img.RootFS) || !cutover.equal(normalize(actual.Config), normalize(img.Config))) fail("LOADED_CANDIDATE_IDENTITY_MISMATCH");
+    loadedCandidateVerified = true;
+  }
   // Match every path/type/size/content digest and reject all extra files. Modes
   // remain root-private; archived 0644 metadata is not a content difference.
   const verifier = path.join(__dirname, "verify-source.py");
@@ -67,7 +83,7 @@ function artifactEvidence(c) {
   const operate = path.join(c.candidateDir, "deploy/oracle-sample/operate.sh"), pf = path.join(c.candidateDir, "deploy/oracle-sample/preflight.js");
   for (const f of [operate, pf]) cutover.safePath(f, { regular: true });
   command(c, "bash", ["-n", operate], { name: "operate-syntax" });
-  return { commit: PIN.commit, sourceSha256: PIN.sourceSha256, imageSha256: PIN.imageSha256, receiptSha256: PIN.receiptSha256, imageId: PIN.image, operateSha256: fileHash(operate), preflightSha256: fileHash(pf), verifierSha256: fileHash(verifier), sourceContent, nativeAppBlob: PIN.appBlob, nativeLifecycleBlob: PIN.lifecycleBlob };
+  return { commit: PIN.commit, sourceSha256: PIN.sourceSha256, imageSha256: PIN.imageSha256, receiptSha256: PIN.receiptSha256, imageId: PIN.image, configImageId: PIN.configImage, imageIdentity, imageVerifierSha256: fileHash(imageVerifier), loadedCandidateVerified, operateSha256: fileHash(operate), preflightSha256: fileHash(pf), verifierSha256: fileHash(verifier), sourceContent, nativeAppBlob: PIN.appBlob, nativeLifecycleBlob: PIN.lifecycleBlob };
 }
 async function get(route, headers = {}) {
   const r = await fetch("http://127.0.0.1:18318" + route, { headers, redirect: "error", signal: AbortSignal.timeout(10000) });
@@ -170,6 +186,7 @@ function verifyPrepared(c) {
   const s = read(statePath(c)), b = read(path.join(c.stateDir, "baseline.private.json"));
   if (s.configSha256 !== fileHash(c.configFile) || s.baselineSha256 !== fileHash(path.join(c.stateDir, "baseline.private.json")) || s.rollbackSha256 !== fileHash(path.join(c.stateDir, "rollback.compose.json"))) fail("PREPARED_INPUT_CHANGED");
   if (fileHash(path.join(__dirname, "verify-source.py")) !== b.artifacts.verifierSha256) fail("PREPARED_SOURCE_VERIFIER_CHANGED");
+  if (fileHash(path.join(__dirname, "verify-image.py")) !== b.artifacts.imageVerifierSha256) fail("PREPARED_IMAGE_VERIFIER_CHANGED");
   const controlled = b.artifacts.controlledOperation;
   if (!controlled || fileHash(controlled.configFile) !== controlled.configSha256 || fileHash(controlled.operateFile) !== controlled.operateSha256 || fileHash(path.join(__dirname, "preflight-adapter.js")) !== controlled.adapterSha256 || fileHash(path.resolve(__dirname, "../oracle-runtime-cutover/lifecycle-guard.js")) !== controlled.lifecycleGuardSha256) fail("PREPARED_LIFECYCLE_ADAPTER_CHANGED");
   for (const row of b.sourceHashes) if (fileHash(row.file) !== row.sha256) fail("PRODUCTION_CONFIGURATION_CHANGED");
@@ -233,7 +250,9 @@ function compareRecovery(c, b, after, override) {
   const file = path.join(c.stateDir, "deploy-before.json");
   if (!override && fs.existsSync(file)) {
     const adapter = require("./preflight-adapter"), config = adapter.config(path.join(c.stateDir, "staging-guard.private.json"));
-    return adapter.compareProtected(read(file), after, config, { allowAdmissionControl: true });
+    const result = adapter.compareProtected(read(file), after, config, { allowAdmissionControl: true, allowLiveReactions: true });
+    cutover.durable(path.join(c.stateDir, "recovery-protected-comparison.private.json"), result);
+    return result;
   }
   const expectedProtected = fs.existsSync(file) ? read(file).protectedFiles : b.protectedFiles;
   const protectedContent = files => Object.fromEntries(Object.entries(files).filter(([key]) => key !== "ops/campus-sync/control.json"));

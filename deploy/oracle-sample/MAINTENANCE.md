@@ -4,7 +4,7 @@
 
 将以下文件按仓库相对目录上传到独立私有工具目录，保留已校验的候选目录：
 
-- `deploy/oracle-sample/maintenance.js`、`preflight.js`、`verify-source.py`、`preflight-adapter.js`
+- `deploy/oracle-sample/maintenance.js`、`preflight.js`、`verify-source.py`、`verify-image.py`、`preflight-adapter.js`
 - `deploy/oracle-runtime-cutover/execute.js`、`lifecycle-guard.js`
 - `tools/oracle-sample/maintenance-admin.js`
 - 候选包已有的 `server/src/security/campusAgentSignature.js`、`fullSyncSignature.js` 及其依赖
@@ -30,7 +30,7 @@
 
 `credentialsFile` 仅引用主机已有的受保护配置。读取用 `ADMIN_API_TOKEN`；维护写入必须使用已有 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN` 经真实 `/api/admin/login` 获得 cookie/CSRF，核验 RBAC、Origin 及审计。工具不会将 API Token 当作网页登录凭据，也不会将 cookie/密码写入日志。
 
-原程序启动会更新 Staging 的生命周期元数据。私有受控操作副本只有三处经过指纹绑定的替换：原 preflight 调用改为 adapter，以及两处备份压缩改为 `/usr/bin/pigz -p 2 -1`（镜像归档另保留 `-n`）。备份数据范围和其他操作字节不变。Adapter 先执行完整原 preflight；仅原字节比较返回 `PROTECTED_STATE_CHANGED` 时，重新执行原全部门禁并验证完整私有 before/after 对象。只允许源码确定的六个根 meta 字段按真实 Active/时间更新；课表正文、hash、来源、指针、其他 protected 文件、环境及容器配置仍严格相等。
+原程序启动会更新 Staging 的生命周期元数据。私有受控操作副本包含经过指纹绑定的 preflight 调用、两处压缩调用及精确镜像 ID 校验替换；两处备份压缩采用 `/usr/bin/pigz -p 2 -1`（镜像归档另保留 `-n`）。备份数据范围和其他操作字节不变。Adapter 先执行完整原 preflight；仅原字节比较返回 `PROTECTED_STATE_CHANGED` 时，重新执行原全部门禁并验证完整私有 before/after 对象。只允许源码确定的六个根 meta 字段按真实 Active/时间更新；课表正文、hash、来源、指针、其他 protected 文件、环境及容器配置仍严格相等。
 
 已恢复的 P0 事务可以保持 `RECOVERED_PERSISTENT`，由 `execute.js accept` 作独立只读持久化验收；P1 将其证据绑定到实际容器、旧状态 SHA、迁移归档、marker 和 bootstrap receipt。不得把历史缺失的 Staging 前对象或恢复流量后的点赞字节变动描述为历史未变。它们不替代下一窗口的完整 before 快照和严格部署门禁。
 
@@ -59,3 +59,7 @@ node /root/private-stage/operations/deploy/oracle-sample/maintenance.js recover 
 ```
 
 `worker.private.log`、`recovery.private.log`、`deployment-backup/`、部署前后指纹、后台验收和恢复结果保留在 `stateDir`。它们含私有部署配置，只在服务器 root 权限内审阅。`PASS` 表示后端真实验收和原准入恢复完成；移动设备布局、真实学校 Sample、四源审核和正式覆盖仍独立验收。`RECOVERED` 表示旧程序已恢复服务，Sample 部署未成功。
+
+Docker 29 的 containerd image store 用 manifest digest 表示镜像 ID；原交付 inspect 使用 config digest。verify-image.py 流式验证归档内每个 blob、单一 index、manifest→config→全部层关联及 CI RootFS。源码、镜像归档和原 inspect 均保持原字节；操作副本用已证明关联的精确 runtime digest 验证，不扩大到其他镜像。已加载镜像仅在 tag 的 ID 精确一致且准备阶段的 Config/RootFS 核验通过后复用。
+
+回滚恢复优先验证实际旧代码、当前持久化数据及原准入。流量恢复后的点赞变化保留前后 hash 并标为历史 PENDING；此许可只用于恢复，正常部署的点赞字节门禁仍严格生效。

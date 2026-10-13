@@ -27,10 +27,12 @@ on:
       - '!deploy/oracle-sample/maintenance.js'
       - '!deploy/oracle-sample/MAINTENANCE.md'
       - '!deploy/oracle-sample/verify-source.py'
+      - '!deploy/oracle-sample/verify-image.py'
       - '!deploy/oracle-sample/preflight-adapter.js'
       - '!tools/oracle-sample/maintenance-admin.js'
       - '!tools/oracle-sample/recover-orphan-job.js'
       - '!tools/oracle-sample/test_verify_source.py'
+      - '!tools/oracle-sample/test_verify_image.py'
       - '!tools/test-oracle-sample-maintenance.js'
       - '!tools/test-oracle-sample-deploy-maintenance.js'
       - '!tools/test-oracle-sample-preflight-adapter.js'
@@ -59,7 +61,7 @@ jobs:
             runtime_changed=false
             while IFS= read -r -d '' file; do
               case "$file" in
-                .gitleaksignore|.github/workflows/oracle-maintenance-ci.yml|.github/workflows/oracle-sample-ci.yml|deploy/oracle-runtime-cutover/*|deploy/collector-closure/*|deploy/oracle-sample/maintenance.js|deploy/oracle-sample/MAINTENANCE.md|deploy/oracle-sample/verify-source.py|deploy/oracle-sample/preflight-adapter.js|tools/oracle-sample/maintenance-admin.js|tools/oracle-sample/recover-orphan-job.js|tools/oracle-sample/test_verify_source.py|tools/test-oracle-runtime-cutover.js|tools/test-oracle-persistence-acceptance.js|tools/test-oracle-orphan-job.js|tools/test-oracle-sample-maintenance.js|tools/test-oracle-sample-deploy-maintenance.js|tools/test-oracle-sample-preflight-adapter.js|tools/test-collector-closure-window.js) ;;
+                .gitleaksignore|.github/workflows/oracle-maintenance-ci.yml|.github/workflows/oracle-sample-ci.yml|deploy/oracle-runtime-cutover/*|deploy/collector-closure/*|deploy/oracle-sample/maintenance.js|deploy/oracle-sample/MAINTENANCE.md|deploy/oracle-sample/verify-source.py|deploy/oracle-sample/verify-image.py|deploy/oracle-sample/preflight-adapter.js|tools/oracle-sample/maintenance-admin.js|tools/oracle-sample/recover-orphan-job.js|tools/oracle-sample/test_verify_source.py|tools/oracle-sample/test_verify_image.py|tools/test-oracle-runtime-cutover.js|tools/test-oracle-persistence-acceptance.js|tools/test-oracle-orphan-job.js|tools/test-oracle-sample-maintenance.js|tools/test-oracle-sample-deploy-maintenance.js|tools/test-oracle-sample-preflight-adapter.js|tools/test-collector-closure-window.js) ;;
                 *) runtime_changed=true ;;
               esac
             done < <(git diff --name-only -z "$BASE_SHA" HEAD)

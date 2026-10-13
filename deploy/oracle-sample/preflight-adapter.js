@@ -22,11 +22,19 @@ function setup(c, artifacts) {
   const imageCompression = 'docker image save "$old_image" | gzip -n > "$backup/previous-image.tar.gz"';
   const storageCompression = 'tar -czf "$backup/state.tar.gz" -C "$app_dir/server" storage .env';
   if (original.split(imageCompression).length !== 2 || original.split(storageCompression).length !== 2) fail("CONTROLLED_OPERATE_COMPRESSION_CALLSITE_CHANGED");
+  const identity = '[[ $image_id == $(node -p \'JSON.parse(require("fs").readFileSync(process.argv[1]))[0].Id\' "$image_dir/image-inspect.json") ]]';
+  const load = 'docker load -i "$image_archive" > "$backup/candidate-image-load.txt"';
+  if (!/^sha256:[a-f0-9]{64}$/.test(artifacts.imageId || "") || original.split(identity).length !== 2 || original.split(load).length !== 2) fail("CONTROLLED_IMAGE_IDENTITY_CALLSITE_CHANGED");
+  const reusableLoad = artifacts.loadedCandidateVerified === true
+    ? `if [[ $(docker image inspect --format '{{.Id}}' "fosu-oracle-sample:$candidate_sha" 2>/dev/null) == "${artifacts.imageId}" ]]; then printf 'VERIFIED_EXISTING_IMAGE\\n' > "$backup/candidate-image-load.txt"; else ${load}; fi`
+    : load;
   const controlled = original.replace(marker, `preflight() { node "${adapter}" --guard-config="${configFile}"`)
     .replace(imageCompression, 'docker image save "$old_image" | /usr/bin/pigz -p 2 -1 -n > "$backup/previous-image.tar.gz"')
-    .replace(storageCompression, 'tar --use-compress-program="/usr/bin/pigz -p 2 -1" -cf "$backup/state.tar.gz" -C "$app_dir/server" storage .env');
+    .replace(storageCompression, 'tar --use-compress-program="/usr/bin/pigz -p 2 -1" -cf "$backup/state.tar.gz" -C "$app_dir/server" storage .env')
+    .replace(identity, `[[ $image_id == "${artifacts.imageId}" ]]`)
+    .replace(load, reusableLoad);
   const operateFile = path.join(controlledDir, "operate.sh"); host.durable(operateFile, controlled);
-  return { configFile, configSha256: host.fileHash(configFile), operateFile, operateSha256: host.fileHash(operateFile), adapterSha256: host.fileHash(adapter), lifecycleGuardSha256: config.lifecycleGuardSha256, originalOperateSha256: artifacts.operateSha256, originalCallsiteCount: 1, compressionCallsiteCount: 2, compression: "/usr/bin/pigz -p 2 -1", backupDataScope: "UNCHANGED" };
+  return { configFile, configSha256: host.fileHash(configFile), operateFile, operateSha256: host.fileHash(operateFile), adapterSha256: host.fileHash(adapter), lifecycleGuardSha256: config.lifecycleGuardSha256, originalOperateSha256: artifacts.operateSha256, originalCallsiteCount: 1, compressionCallsiteCount: 2, identityCallsiteCount: 1, reusedImage: artifacts.loadedCandidateVerified === true, runtimeImageId: artifacts.imageId, compression: "/usr/bin/pigz -p 2 -1", backupDataScope: "UNCHANGED" };
 }
 function config(file) {
   host.safePath(file, { regular: true, privateFile: true });
@@ -62,17 +70,19 @@ function readCapture(c, hash) {
   if (path.dirname(cap.path) !== c.captureDir || host.fileHash(cap.path) !== hash) fail("ADAPTER_CAPTURE_CONFLICT");
   return { capture: cap, object: read(cap.path) };
 }
-function compareProtected(before, after, c, { guard = lifecycle(), allowAdmissionControl = false } = {}) {
+function compareProtected(before, after, c, { guard = lifecycle(), allowAdmissionControl = false, allowLiveReactions = false } = {}) {
   if (before.schema !== "oracle-sample-preflight.v1" || before.liveBaseSha !== "a3dfd1989705f51c921f13883bcde1cce4502883" || before.status !== "PASS" || after.status !== "PASS" || before.envSha256 !== after.envSha256 || before.containerContractSha256 !== after.containerContractSha256) fail("PROTECTED_STATE_CHANGED");
   const expected = { ...before.protectedFiles }, current = { ...after.protectedFiles };
   if (allowAdmissionControl) { delete expected["ops/campus-sync/control.json"]; delete current["ops/campus-sync/control.json"]; }
+  const reactions = { before: expected.reactions, observed: current.reactions };
+  if (allowLiveReactions) { delete expected.reactions; delete current.reactions; }
   delete expected["staging-latest.json"]; delete current["staging-latest.json"];
   if (!host.equal(expected, current)) fail("PROTECTED_STATE_CHANGED");
   const old = readCapture(c, before.protectedFiles["staging-latest.json"]), fresh = capture(c, after, guard), freshObject = fresh.exists ? read(fresh.path) : null;
   const authority = guard.readActiveAuthority(path.join(c.appDir, "server/storage"));
   const proof = guard.compareStaging(old.object, freshObject, authority, { earliest: old.capture.capturedAt, latest: new Date().toISOString() });
   if (proof.status !== "PASS") fail("STAGING_LIFECYCLE_CONTRACT_FAILED");
-  return { ...proof, beforeSha256: old.capture.sha256, afterSha256: fresh.sha256, historicalP0PreState: "SEPARATE_EVIDENCE" };
+  return { ...proof, beforeSha256: old.capture.sha256, afterSha256: fresh.sha256, historicalP0PreState: "SEPARATE_EVIDENCE", ...(allowLiveReactions ? { historicalReactionsUnchanged: reactions.before === reactions.observed ? "PASS" : "PENDING", reactionHashes: reactions } : {}) };
 }
 async function main(args = process.argv.slice(2), deps = {}) {
   const matches = args.filter(a => a.startsWith("--guard-config="));

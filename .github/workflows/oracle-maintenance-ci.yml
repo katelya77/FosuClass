@@ -8,9 +8,11 @@ on:
       - 'deploy/oracle-sample/maintenance.js'
       - 'deploy/oracle-sample/preflight-adapter.js'
       - 'deploy/oracle-sample/verify-source.py'
+      - 'deploy/oracle-sample/verify-image.py'
       - 'tools/oracle-sample/maintenance-admin.js'
       - 'tools/oracle-sample/recover-orphan-job.js'
       - 'tools/oracle-sample/test_verify_source.py'
+      - 'tools/oracle-sample/test_verify_image.py'
       - 'tools/test-oracle-runtime-cutover.js'
       - 'tools/test-oracle-persistence-acceptance.js'
       - 'tools/test-oracle-sample-preflight-adapter.js'
@@ -45,6 +47,7 @@ jobs:
           node tools/test-collector-closure-window.js
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py
+          python3 tools/oracle-sample/test_verify_image.py
           node --check deploy/oracle-runtime-cutover/execute.js
           node --check deploy/oracle-sample/maintenance.js
           node --check deploy/oracle-sample/preflight-adapter.js
