@@ -25,6 +25,10 @@ function queue(req, res, mode) {
   try {
     const body = req.body || {};
     if (mode !== "sample" && (process.env.FOSU_COLLECTOR_SCOPE_APPROVED !== "1" || body.confirmation !== "RUN " + mode.toUpperCase())) throw Object.assign(new Error("SCHOOL_SCOPE_REVIEW_REQUIRED"), { code:"SCHOOL_SCOPE_REVIEW_REQUIRED", statusCode:403 });
+    if(mode!=="sample") {const term=body.term||require("../../services/termRegistryService").getActiveTerm()?.term;
+      const acceptance=require("../../services/collectorIncrementalPlanService").acceptance(collector.history(),term);
+      if(!acceptance.ready)throw Object.assign(new Error(acceptance.code),{code:acceptance.code,statusCode:403});
+      if(acceptance.executionLocked)throw Object.assign(new Error("FORMAL_EXECUTOR_NOT_READY"),{code:"FORMAL_EXECUTOR_NOT_READY",statusCode:403});}
     if (mode === "sample" && (Object.keys(body).some(key => !["term", "sampleKind", "requestBudget", "idempotencyKey"].includes(key)) || typeof body.idempotencyKey !== "string" || !/^[A-Za-z0-9._:-]{8,80}$/.test(body.idempotencyKey))) throw Object.assign(new Error("SAMPLE_REQUEST_REJECTED"), { code: "SAMPLE_REQUEST_REJECTED", statusCode: 400 });
     const identity = adminAuth.getAuditIdentity(req);
     const queued = collector.requestRun(mode, identity.operator || "admin", Date.now(), { term: body.term, runId: body.runId, sampleKind: body.sampleKind, requestBudget: body.requestBudget, idempotencyKey: body.idempotencyKey });
@@ -44,6 +48,13 @@ router.post("/schedule-collector/actions/review", verifyAdminWriteAccess, (req, 
     writeAuditLog(req, "schedule-collector-sample-review", "schedule-collector", run.id, run.sampleHumanReview.decision);
     res.json({success:true, run});
   } catch (error) { res.status(error.statusCode || 400).json({success:false, code:error.code || "SAMPLE_HUMAN_REVIEW_REJECTED", message:"审核未保存；请核对样本指纹、权限与确认内容。"}); }
+});
+
+router.post("/schedule-collector/actions/preview-incremental", verifyAdminWriteAccess, (req,res)=>{
+  try {const preview=require("../../services/collectorIncrementalPlanService").preview(req.body,collector.history());
+    writeAuditLog(req,"schedule-collector-incremental-preview","schedule-collector",preview.scopeHash,preview.status.toLowerCase());
+    res.json({success:true,preview});
+  }catch(error){res.status(error.statusCode||400).json({success:false,code:error.code||"INCREMENTAL_PREVIEW_FAILED",message:"增量范围无法预览，请核对目录与预算。"});}
 });
 router.post("/schedule-collector/actions/resume-run", verifyAdminWriteAccess, (req, res) => queue(req, res, "routine"));
 

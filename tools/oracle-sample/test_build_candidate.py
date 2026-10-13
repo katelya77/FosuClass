@@ -44,6 +44,27 @@ class CandidateTests(unittest.TestCase):
         self.assertTrue(requested.issubset(candidate.ALLOWED))
         self.assertNotIn("server/src/routes/admin.js", candidate.ALLOWED)
 
+    def test_incremental_preview_binds_deployed_base_and_keeps_execution_locked(self):
+        head = "f" * 40
+        members = {"server/src/app.js": (b"unchanged-sample-base\n", 0o644)}
+        overlay = {"server/src/services/collectorIncrementalPlanService.js": {"beforeSha256": None, "sha256": "a" * 64}}
+        with tempfile.TemporaryDirectory() as directory, patch.object(candidate, "collect", return_value=(members, overlay)) as collect, patch.object(candidate, "git", side_effect=lambda root, *args: head.encode() if args[:2] == ("rev-parse", "HEAD") else b""):
+            root = pathlib.Path(directory)
+            result = candidate.build(root, root / "output", require_commit=True, incremental_preview=True)
+            collect.assert_called_once_with(root, candidate.INCREMENTAL_BASE, candidate.INCREMENTAL_ALLOWED)
+            self.assertEqual(result["baseSha"], "7ad3b2708ce553e6fff099fd881a4b9c86ebea39")
+            self.assertEqual(result["expectedProductionSha"], result["baseSha"])
+            self.assertEqual(result["deploymentBoundary"], "BLOCKED_PENDING_NEW_PRODUCTION_APPROVAL")
+            self.assertTrue(result["executionLocked"])
+            self.assertFalse(result["fullCollectionApproved"])
+            with tarfile.open(root / "output" / result["archive"]) as archive:
+                self.assertEqual(archive.extractfile("server/src/app.js").read(), b"unchanged-sample-base\n")
+
+    def test_incremental_preview_does_not_widen_personal_or_sample_ingress_scope(self):
+        self.assertEqual(len(candidate.INCREMENTAL_ALLOWED), 5)
+        for target in ["server/.env", "server/src/routes/campusAgent.js", "server/docker-compose.yml", "server/src/routes/fullSyncAgent.js", "server/src/services/stagingUploadService.js", "server/package-lock.json"]:
+            self.assertNotIn(target, candidate.INCREMENTAL_ALLOWED)
+
     def test_committed_artifact_rejects_uncommitted_operator_tools(self):
         head = "f" * 40
         members = {"server/src/shared/sampleCollectionContract.js": (b"candidate\n", 0o644)}

@@ -14,6 +14,7 @@ const FULL = [SCOPES.ADMIN_FULL];
 const ROUTE_SCOPE_MAP = {
   "POST /schedule-collector/actions/sample": [SCOPES.COLLECTOR_SAMPLE, SCOPES.ADMIN_FULL],
   "POST /schedule-collector/actions/review": [SCOPES.COLLECTOR_REVIEW, SCOPES.ADMIN_FULL],
+  "POST /schedule-collector/actions/preview-incremental": [SCOPES.COLLECTOR_REVIEW, SCOPES.ADMIN_FULL],
   "POST /schedule-collector/actions/pause": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],
   "POST /schedule-collector/actions/resume": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],
   "POST /schedule-collector/actions/cancel": [SCOPES.COLLECTOR_CONTROL, SCOPES.ADMIN_FULL],

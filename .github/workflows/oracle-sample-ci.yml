@@ -10,6 +10,7 @@ on:
       - 'server/src/routes/adminPages.js'
       - 'server/src/routes/adminScheduleCollectorAssets.js'
       - 'server/src/services/scheduleCollectorAdminService.js'
+      - 'server/src/services/collectorIncrementalPlanService.js'
       - 'server/src/services/serviceTokenService.js'
       - 'server/src/security/adminRouteScopes.js'
       - 'server/src/modules/schedule-collector/**'
@@ -18,6 +19,7 @@ on:
       - 'tools/oracle-sample/**'
       - 'tools/test-oracle-sample-*.js'
       - 'tools/test-collector-admin*.js'
+      - 'tools/test-collector-incremental-plan.js'
       - 'tools/test-helpers/collector-admin-harness.js'
       - 'tools/test-pam-915.py'
       - 'deploy/wyz/pam-915-install-or-accept.sh'
@@ -55,6 +57,9 @@ jobs:
           run_check() { "$@" || { echo "FAILED: $*"; failed=1; }; }
           run_check node --test tools/test-oracle-sample-backend.js tools/test-oracle-sample-queue.js tools/test-oracle-sample-preflight.js
           run_check node --test tools/test-collector-admin.js
+          if test -f tools/test-collector-incremental-plan.js; then
+            run_check node --test tools/test-collector-incremental-plan.js
+          fi
           run_check node tools/test-collector-admin-browser.js
           run_check bash -n deploy/oracle-sample/operate.sh
           run_check bash -n deploy/wyz/pam-915-install-or-accept.sh
@@ -89,7 +94,11 @@ jobs:
           # fixture outputs. Restore them before the committed-source gate;
           # any other changed runtime file is still rejected by the builder.
           git restore -- output/admin-campus-sync-acceptance output/agent-config-plane-browser server/data/admin-audit-log.jsonl
-          python3 tools/oracle-sample/build_candidate.py --require-commit
+          if test -f server/src/services/collectorIncrementalPlanService.js; then
+            python3 tools/oracle-sample/build_candidate.py --require-commit --incremental-preview
+          else
+            python3 tools/oracle-sample/build_candidate.py --require-commit
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: oracle-sample-source-candidate
@@ -107,7 +116,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: python3 tools/oracle-sample/build_candidate.py --require-commit
+      - run: |
+          if test -f server/src/services/collectorIncrementalPlanService.js; then
+            python3 tools/oracle-sample/build_candidate.py --require-commit --incremental-preview
+          else
+            python3 tools/oracle-sample/build_candidate.py --require-commit
+          fi
       - name: Build without publishing or deploying
         run: |
           mkdir -p .local/oracle-build-context

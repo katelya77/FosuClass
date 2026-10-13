@@ -18,6 +18,7 @@ function overview(identity) {
   const sourceRun = current?.directSourceSummary ? current : collector.history().find(run => run.directSourceSummary);
   const revision = process.env.FOSU_DEPLOY_COMMIT_SHA;
   return { generatedAt:new Date().toISOString(), status, permissions:permissions(identity), readiness,
+    formalPlanning:require("./collectorIncrementalPlanService").acceptance(collector.history(), active.term),
     health:{ collector:status.collectorOnline ? "HEARTBEAT_RECENT" : status.lastHeartbeat ? "HEARTBEAT_STALE" : "UNKNOWN", observationFresh:status.collectorOnline && observation?.observedAt === status.lastHeartbeat,
       observation, oracleRevision:/^[a-f0-9]{40}$/.test(revision || "") ? revision : null,
       oracleApi:"RESPONDED", signatureConfigured:Boolean(require("../security/fullSyncSignature").secretsConfigured()),

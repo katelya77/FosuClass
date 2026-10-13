@@ -12,6 +12,14 @@ import subprocess
 import tarfile
 
 BASE = "a3dfd1989705f51c921f13883bcde1cce4502883"
+INCREMENTAL_BASE = "7ad3b2708ce553e6fff099fd881a4b9c86ebea39"
+INCREMENTAL_ALLOWED = {
+    "server/src/services/collectorIncrementalPlanService.js",
+    "server/src/services/scheduleCollectorAdminService.js",
+    "server/src/modules/schedule-collector/routes.js",
+    "server/src/routes/adminScheduleCollectorAssets.js",
+    "server/src/security/adminRouteScopes.js",
+}
 PR_HEAD = "6fe02a552e7511bc27a2f4751db302ebb7a8e001"
 CONTEXT = ["server", "packages", "plugins", "apps", "package.json", "package-lock.json", ".dockerignore"]
 ALLOWED = {
@@ -42,23 +50,24 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def collect(root):
+def collect(root, base=BASE, allowed=None):
+    allowed = ALLOWED if allowed is None else allowed
     head = git(root, "rev-parse", "HEAD").decode().strip()
     try:
-        subprocess.run(["git", "merge-base", "--is-ancestor", BASE, head], cwd=root, check=True, capture_output=True)
+        subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=root, check=True, capture_output=True)
         subprocess.run(["git", "merge-base", "--is-ancestor", BASE, PR_HEAD], cwd=root, check=True, capture_output=True)
     except subprocess.CalledProcessError:
         raise ValueError("ORACLE_BASE_MISMATCH")
-    tracked = git(root, "diff", "--name-only", BASE).decode().splitlines()
+    tracked = git(root, "diff", "--name-only", base).decode().splitlines()
     new = git(root, "ls-files", "--others", "--exclude-standard").decode().splitlines()
     changed = sorted(set(tracked + new))
     runtime = [name for name in changed if name.startswith(("server/", "packages/", "plugins/", "apps/")) or name in CONTEXT]
-    if any(name not in ALLOWED for name in runtime):
+    if any(name not in allowed for name in runtime):
         raise ValueError("UNREVIEWED_RUNTIME_CHANGE")
     if not runtime:
         raise ValueError("SAMPLE_OVERLAY_MISSING")
     members = {}
-    with tarfile.open(fileobj=io.BytesIO(git(root, "archive", "--format=tar", BASE, "--", *CONTEXT))) as archive:
+    with tarfile.open(fileobj=io.BytesIO(git(root, "archive", "--format=tar", base, "--", *CONTEXT))) as archive:
         for item in archive:
             if item.isdir():
                 continue
@@ -81,23 +90,26 @@ def collect(root):
     return members, overlay
 
 
-def build(root, output, require_commit=False):
-    members, overlay = collect(root)
+def build(root, output, require_commit=False, incremental_preview=False):
+    base = INCREMENTAL_BASE if incremental_preview else BASE
+    members, overlay = collect(root, base, INCREMENTAL_ALLOWED) if incremental_preview else collect(root)
     members = dict(members)
     head = git(root, "rev-parse", "HEAD").decode().strip()
     packaged_tools = ["deploy/oracle-sample/preflight.js", "deploy/oracle-sample/operate.sh", "tools/oracle-sample/queue.js", "tools/oracle-sample/build_candidate.py", "deploy/oracle-sample/README.md"]
     bound_paths = CONTEXT + packaged_tools
     dirty = git(root, "diff", "HEAD", "--name-only", "--", *bound_paths).decode().splitlines()
     untracked = git(root, "ls-files", "--others", "--exclude-standard", "--", *bound_paths).decode().splitlines()
-    commit = head if head != BASE and not dirty and not untracked else None
+    commit = head if head != base and not dirty and not untracked else None
     if require_commit and not commit:
         raise ValueError("CANDIDATE_COMMIT_REQUIRED")
-    candidate = "oracle-sample-" + digest(json.dumps(overlay, sort_keys=True).encode())[:16]
+    candidate = ("oracle-collector-preview-" if incremental_preview else "oracle-sample-") + digest(json.dumps(overlay, sort_keys=True).encode())[:16]
     manifest = {"schema": "oracle-sample-candidate.v1", "candidateId": candidate,
-                "baseSha": BASE, "expectedProductionSha": BASE, "referencePrSha": PR_HEAD,
+                "baseSha": base, "expectedProductionSha": base, "referencePrSha": PR_HEAD,
                 "gitCommit": commit, "deploymentBoundary": "BLOCKED_PENDING_CI_LIVE_PREFLIGHT_AND_APPROVAL" if commit else "BLOCKED_PENDING_COMMIT_CI_AND_APPROVAL",
                 "overlay": overlay, "publishable": False, "timerEnabled": False,
                 "protectedRuntimeSha256": digest(json.dumps({k: digest(v[0]) for k, v in members.items() if k not in overlay}, sort_keys=True).encode())}
+    if incremental_preview:
+        manifest.update(deploymentBoundary="BLOCKED_PENDING_NEW_PRODUCTION_APPROVAL", executionLocked=True, fullCollectionApproved=False)
     for name in ("deploy/oracle-sample/preflight.js", "deploy/oracle-sample/README.md", "deploy/oracle-sample/operate.sh"):
         p = root / name
         if p.exists():
@@ -127,10 +139,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--require-commit", action="store_true")
+    parser.add_argument("--incremental-preview", action="store_true", help="Only the reviewed planner overlay on the fixed deployed Sample ancestor")
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[2]
     try:
-        result = build(root, args.output or root / ".local/oracle-sample-candidates", args.require_commit)
+        result = build(root, args.output or root / ".local/oracle-sample-candidates", args.require_commit, args.incremental_preview)
         print(json.dumps(result, indent=2))
     except (ValueError, subprocess.CalledProcessError):
         raise SystemExit("ORACLE_SAMPLE_BUILD_BLOCKED")

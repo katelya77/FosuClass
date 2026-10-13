@@ -37,6 +37,8 @@ const SCHEDULE_COLLECTOR_SECTION = `
     <button id="scRoutineBtn" type="button" class="secondary" hidden>执行日常采集</button><button id="scFullBtn" type="button" class="secondary" hidden>执行完整采集</button></div>
    <p id="scApprovalBoundary" class="muted">正式采集待独立范围审批；定时任务未获验收时保持禁用。</p>
   </div>
+  <div class="card"><h3>增量范围预览</h3><p class="muted">使用 WYZ 导出的目录范围及已审核摘要预览预算。此操作不采集、不入队、不发布；不要粘贴账号、密码或 Session。</p>
+   <details><summary>查看目录范围预览</summary><label for="scIncrementalInput">目录范围 JSON（学期、目录指纹、目标和预算）</label><textarea id="scIncrementalInput" rows="6" style="width:100%;max-width:100%;box-sizing:border-box" aria-label="待预览的目录范围"></textarea><button id="scIncrementalPreview" type="button" class="secondary" disabled>预览请求预算</button></details><p id="scIncrementalNotice" role="status"></p><div id="scIncrementalFacts"></div></div>
   <div class="card"><h3>运行记录与审核</h3><div class="sc-table"><table><thead><tr><th>任务</th><th>范围 / 阶段</th><th>状态</th><th>请求 / 预算</th><th>开始 / 结束</th><th>错误 / 审核</th><th>详情</th></tr></thead><tbody id="scRuns"></tbody></table></div><p id="scHistoryNote" class="muted"></p></div>
   <div class="card"><h3>数据质量与审核</h3><p id="scActive" class="muted">正式版本证据加载中</p>
    <p class="muted">Sample 校验周次、节次、重复课程、行政班与来源身份；有界目标之间的跨源一致性和学校人工对照仍需审核。正式 Staging 沿用现有差异、下降与发布门禁。</p>
@@ -62,7 +64,8 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
   function controls(){var p=latest&&latest.permissions||{},r=latest&&latest.readiness||{},s=latest&&latest.status||{};
    node('scSampleBtn').disabled=busy||!p.sample||!r.ready||Boolean(s.current&&!s.current.finishedAt);
    ['scPauseBtn','scResumeBtn','scCancelBtn'].forEach(function(id){node(id).disabled=busy||!p.control;});
-   ['scRoutineBtn','scFullBtn'].forEach(function(id){node(id).hidden=!p.full;node(id).disabled=busy;});
+   ['scRoutineBtn','scFullBtn'].forEach(function(id){node(id).hidden=!p.full;node(id).disabled=busy||!(latest&&latest.formalPlanning&&latest.formalPlanning.ready)||latest.formalPlanning.executionLocked;});
+   node('scIncrementalPreview').disabled=busy||!p.review;
    node('scNewApprovalBtn').disabled=busy||Boolean(s.current&&!s.current.finishedAt);
   }
   function paint(value){latest=value;var s=value.status,h=value.health,r=value.readiness;var health=node('scHealth');clear(health);
@@ -70,7 +73,7 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
    var source=node('scSources');clear(source);Object.keys(labels).forEach(function(kind){var stat=value.sources.summary[kind],row=document.createElement('tr');cell(row,labels[kind]);cell(row,!stat?'无证据':stat.failed||stat.parserErrors?'存在异常':stat.sourceMode==='network-direct'?'直接采集证据':'来源待核实');['discoveredEntities','requestedEntities','success','empty','failed','scheduleDocuments','courseEvents','parserErrors'].forEach(function(key){cell(row,count(stat&&stat[key]));});source.appendChild(row);});
    text('scSourceScope',value.sources.runId?(value.sources.sampleOnly?'有界 Sample · 覆盖率未验证 · ':'')+value.sources.runId:'尚无采集证据');
    text('scReadiness',(r.ready?'Sample API 可用':'Sample API 阻断')+' · '+r.code+' · '+(s.enabled?'队列准入开启':'队列暂停'));
-   text('scApprovalBoundary',value.fullCollectionApproved?'正式采集范围审批标记存在，执行仍需权限与二次确认；发布单独审核。':'正式采集待独立范围审批；网页只申请有界 Sample，发布单独审核。');
+   var formal=value.formalPlanning; text('scApprovalBoundary',formal?'正式采集锁定 · 班级人工审核：'+(formal.classReviewed?'已确认':'待完成')+' · 四源人工审核：'+(formal.fourReviewed?'已确认':'待完成')+'；增量预览不执行采集，范围及发布分别审批。':value.fullCollectionApproved?'正式采集范围审批标记存在，执行仍需权限与二次确认；发布单独审核。':'正式采集待独立范围审批；网页只申请有界 Sample，发布单独审核。');
    text('scActive','正式版本：'+(value.active.version||'未验证')+' · 学期 '+(value.active.term||'未验证'));
    var runs=node('scRuns');clear(runs);value.runs.forEach(function(run){var row=document.createElement('tr');cell(row,run.id);cell(row,run.mode+(run.samplePolicy?' / '+run.samplePolicy.kind:'')+' / '+label(run.stage));cell(row,run.result?label(run.result):run.finishedAt?'已结束':'待完成');cell(row,count(run.schoolRequestCount)+' / '+(run.samplePolicy?count(run.samplePolicy.requestBudget):'以审批为准'));cell(row,run.startedAt+' / '+(run.finishedAt||'未结束'));cell(row,run.failureCode||(run.sampleHumanReview?run.sampleHumanReview.decision==='confirmed'?'人工对照已确认':'人工审核拒绝':(run.reasons||[]).join('、'))||'未审核');var td=cell(row,'');if(value.permissions.review){var button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='查看审核';button.addEventListener('click',function(){showReview(run.id);});td.appendChild(button);}else td.textContent='需要审核权限';runs.appendChild(row);});
    text('scHistoryNote',value.runs.length?'显示最近 '+value.runs.length+' 条持久化记录；未结束任务不自动视为成功。':'尚无持久化运行记录');controls();
@@ -85,6 +88,7 @@ const SCHEDULE_COLLECTOR_SCRIPT = `
   node('scCompared').addEventListener('change',function(){node('scApproveReview').disabled=!node('scCompared').checked||busy;});
   [['scApproveReview','confirmed'],['scRejectReview','rejected']].forEach(function(item){node(item[0]).addEventListener('click',function(){if(!selectedReview||busy||node(item[0]).disabled)return;if(window.prompt('记录此样本审核，输入 REVIEW SAMPLE 二次确认')!=='REVIEW SAMPLE')return;var run=selectedReview.run;mutate('review',{runId:run.id,canonicalHash:run.canonicalHash,decision:item[1],comparisonAttested:node('scCompared').checked,confirmation:'REVIEW SAMPLE',idempotencyKey:'review-'+run.id}).then(function(){showReview(run.id);});});});
   node('scRefreshBtn').addEventListener('click',refresh);
+  node('scIncrementalPreview').addEventListener('click',function(){if(busy||node('scIncrementalPreview').disabled)return;var body;try{body=JSON.parse(node('scIncrementalInput').value);}catch(_){text('scIncrementalNotice','目录范围格式无法读取，请使用 WYZ 导出的范围文件。');return;}busy=true;controls();api('/api/admin/schedule-collector/actions/preview-incremental',{method:'POST',body:JSON.stringify(body)}).then(function(value){var p=value.preview;clear(node('scIncrementalFacts'));text('scIncrementalNotice',(p.status==='DRAFT'?'范围草稿已生成':'前置条件未完成')+' · 预计请求 '+p.requiredBudget+' / 预算 '+p.requestBudget+'；未执行采集，待独立审批。');Object.keys(labels).forEach(function(kind){var s=p.sources[kind],row=document.createElement('p');row.textContent=labels[kind]+'：选定 '+s.selected+'，需请求 '+s.needsRequest+'，近期审核候选 '+s.reusableReviewed+'；只代表本范围，全校覆盖未验证。';node('scIncrementalFacts').appendChild(row);});}).catch(function(error){clear(node('scIncrementalFacts'));text('scIncrementalNotice','无法生成范围预览 · '+safeError(error));}).finally(function(){busy=false;controls();});});
   node('scSampleForm').addEventListener('submit',function(event){event.preventDefault();if(node('scSampleBtn').disabled)return;var body={sampleKind:node('scSampleKind').value,requestBudget:Number(node('scBudget').value)};var term=node('scTerm').value.trim();if(term)body.term=term;if(!Number.isSafeInteger(body.requestBudget)||body.requestBudget<1||body.requestBudget>120)return;
    if(!window.confirm('仅申请 '+(body.sampleKind==='four'?'四源各一个目标':'一个班级请求组')+' 的 Sample，预算 '+body.requestBudget+' 次。学校访问和发布分别审批。确认申请？'))return;
    var intent=JSON.stringify(body),saved=null;try{saved=JSON.parse(sessionStorage.getItem('fosu-collector-sample-request'));}catch(_){}
