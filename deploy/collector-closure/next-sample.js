@@ -12,15 +12,15 @@ function validateScope(s,now=Date.now()) {
 async function queue(scope,deps) {
   validateScope(scope,deps.now?.()||Date.now());
   const before=await deps.probe();c.validateOracleEvidence(before,deps.now?.()||Date.now());
-  const view=await deps.wire("GET","/api/admin/schedule-collector/overview");
-  if(view.success!==true||view.overview?.health?.oracleRevision!==c.ORACLE_REVISION||view.overview?.permissions?.sample!==true)fail("NEXT_SAMPLE_ADMIN_RBAC_REQUIRED");
-  c.validateReadiness(view.overview.readiness);
-  if(view.overview.status.current&&!view.overview.status.current.finishedAt)fail("NEXT_SAMPLE_EXISTING_RUN_IN_FLIGHT");
-  // Persist a stable key before POST. Retry only this idempotent Oracle operation,
-  // never a school call. An uncertain response keeps the exact same key.
   let state=await deps.load();
   const scopeHash=crypto.createHash("sha256").update(JSON.stringify(scope)).digest("hex");
   if(state&&state.scopeHash!==scopeHash)fail("NEXT_SAMPLE_SCOPE_CHANGED");
+  const view=await deps.wire("GET","/api/admin/schedule-collector/overview");
+  if(view.success!==true||view.overview?.health?.oracleRevision!==c.ORACLE_REVISION||view.overview?.permissions?.sample!==true)fail("NEXT_SAMPLE_ADMIN_RBAC_REQUIRED");
+  c.validateReadiness(view.overview.readiness);
+  if(view.overview.status.current&&!view.overview.status.current.finishedAt&&!state)fail("NEXT_SAMPLE_EXISTING_RUN_IN_FLIGHT");
+  // Persist a stable key before POST. Retry only this idempotent Oracle operation,
+  // never a school call. An uncertain response keeps the exact same key.
   if(!state){state={schema:"collector-next-sample-queue.v1",scopeHash,idempotencyKey:"sample-f076-"+crypto.randomBytes(16).toString("hex"),phase:"PREPARED"};await deps.save(state);}
   if(state.phase==="QUEUED")return state;
   const requestId=state.idempotencyKey;
