@@ -31,6 +31,6 @@ async function queue(scope,deps) {
   const audit=await deps.wire("GET","/api/admin/audit-logs");
   const entry=audit.items?.find(v=>v.requestId===requestId&&v.action==="schedule-collector-sample"&&v.authMethod==="admin-cookie"&&v.scopes?.includes("admin:full"));
   if(audit.success!==true||!entry)fail("NEXT_SAMPLE_NATIVE_AUDIT_REQUIRED");
-  state={...state,phase:"QUEUED",runId:r.id,term:r.term,requestBudget:40,entityLimit:1,allowOneLogin:scope.allowOneLogin,approvalExpiresAt:r.approvalExpiresAt,audited:true,authMethod:"admin-cookie",oraclePreflight:before,schoolRequests:0,sampleOnly:true,publishable:false,coverageValid:false};await deps.save(state);return state;
+  state={...state,phase:"QUEUED",runId:r.id,term:r.term,requestBudget:40,entityLimit:1,allowOneLogin:scope.allowOneLogin,schoolWindowExpiresAt:scope.expiresAt,approvalExpiresAt:r.approvalExpiresAt,audited:true,authMethod:"admin-cookie",oraclePreflight:before,schoolRequests:0,sampleOnly:true,publishable:false,coverageValid:false};await deps.save(state);return state;
 }
 module.exports={validateScope,queue};

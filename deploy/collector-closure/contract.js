@@ -9,10 +9,11 @@ const runId = value => /^sc-[A-Za-z0-9-]{1,100}$/.test(value || "");
 const hash = value => /^[a-f0-9]{64}$/.test(value || "");
 function validateApproval(value, now = Date.now()) {
   if (value?.runId === RETIRED_RUN) fail("CLOSURE_PREVIOUS_ATTEMPT_REVIEW_REQUIRED");
-  const keys = ["schema", "runId", "kind", "term", "requestBudget", "entityLimit", "allowOneLogin", "approvedAt", "expiresAt", "wyzRevision", "oracleRevision", "oraclePreflightSha256", "classRunId", "classCanonicalHash"];
+  const keys = ["schema", "runId", "kind", "term", "requestBudget", "entityLimit", "allowOneLogin", "approvedAt", "expiresAt", "oracleApprovalExpiresAt", "wyzRevision", "oracleRevision", "oraclePreflightSha256", "classRunId", "classCanonicalHash"];
   if (!value || Object.keys(value).some(key => !keys.includes(key)) || value.schema !== "collector-school-window.v1" || !runId(value.runId) || !["class", "four"].includes(value.kind) || !/^\d{4}-\d{4}-[12]$/.test(value.term || "") || !Number.isInteger(value.requestBudget) || value.requestBudget < 1 || value.requestBudget > 120 || value.entityLimit !== 1 || typeof value.allowOneLogin !== "boolean" || value.wyzRevision !== WYZ_REVISION || value.oracleRevision !== ORACLE_REVISION || !hash(value.oraclePreflightSha256)) fail("CLOSURE_APPROVAL_INVALID");
   const approved = Date.parse(value.approvedAt), expires = Date.parse(value.expiresAt);
   if (!Number.isFinite(approved) || !Number.isFinite(expires) || approved > now + 60000 || expires <= now || expires - approved > 1800000 || expires <= approved) fail("CLOSURE_APPROVAL_EXPIRED");
+  if (value.oracleApprovalExpiresAt !== undefined && (!Number.isFinite(Date.parse(value.oracleApprovalExpiresAt)) || Date.parse(value.oracleApprovalExpiresAt) < expires)) fail("CLOSURE_APPROVAL_INVALID");
   if (value.kind === "four" && (value.allowOneLogin || !runId(value.classRunId) || !hash(value.classCanonicalHash) || value.classRunId === value.runId)) fail("CLOSURE_CLASS_REVIEW_REQUIRED");
   if (value.kind === "class" && (value.classRunId !== undefined || value.classCanonicalHash !== undefined)) fail("CLOSURE_APPROVAL_INVALID");
   return value;

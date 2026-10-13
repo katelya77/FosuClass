@@ -8,12 +8,13 @@ def build(directory,receipt_file,output):
     require(receipt.get('phase')=='QUEUED' and receipt.get('audited') is True and receipt.get('authMethod')=='admin-cookie')
     run=receipt.get('runId','');require(re.fullmatch('sc-[a-f0-9]{24}',run) and run!='sc-506d1f4bea522471cf93edc6')
     require(receipt.get('term')=='2026-2027-1' and receipt.get('requestBudget')==40 and receipt.get('entityLimit')==1 and type(receipt.get('allowOneLogin')) is bool and receipt.get('sampleOnly') is True and receipt.get('publishable') is False and receipt.get('coverageValid') is False)
+    expiry=receipt.get('schoolWindowExpiresAt','');require(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z',expiry))
     proof=receipt['oraclePreflight'];require(proof.get('schema')=='oracle-sample-preflight.v1' and proof.get('status')=='PASS' and proof.get('liveBaseSha')=='7ad3b2708ce553e6fff099fd881a4b9c86ebea39' and proof.get('schoolRequests')==0)
     minimal={k:proof[k] for k in ('schema','status','liveBaseSha','personalBrokerReady','schoolRequests','configurationChanged','at')}
     payload=io.BytesIO()
     with tarfile.open(fileobj=payload,mode='w:gz') as tar:
         for name in ('contract.js','wyz-sample.js','worker-diagnostics.js','finalize-wyz.js','start-wyz.sh','installed-source-pins.json'):
-            data=(directory/name).read_bytes();info=tarfile.TarInfo(name);info.mode=0o600;info.size=len(data);tar.addfile(info,io.BytesIO(data))
+            data=(directory/name).read_bytes().replace(b'\r\n',b'\n');info=tarfile.TarInfo(name);info.mode=0o600;info.size=len(data);tar.addfile(info,io.BytesIO(data))
         data=(json.dumps(minimal)+'\n').encode();info=tarfile.TarInfo('oracle-preflight.json');info.mode=0o600;info.size=len(data);tar.addfile(info,io.BytesIO(data))
     raw=payload.getvalue();digest=hashlib.sha256(raw).hexdigest();blob=base64.b64encode(raw).decode()
     folder='/root/fosu-collector-closure-packets/'+run
@@ -42,11 +43,11 @@ with tarfile.open(fileobj=io.BytesIO(data),mode='r:gz') as tar:
         path.chmod(0o600)
 print('WYZ_PACKET_PREPARED source_install=NO school_access=NO')
 PY_PACKET
-bash FOLDER/start-wyz.sh --approve-school-window --kind=class --run-id=RUN --term=2026-2027-1 --request-budget=40 --oracle-preflight=FOLDER/oracle-preflight.json LOGIN
+bash FOLDER/start-wyz.sh --approve-school-window --kind=class --run-id=RUN --term=2026-2027-1 --request-budget=40 --oracle-preflight=FOLDER/oracle-preflight.json --scope-expires-at=EXPIRY LOGIN
 # The transaction is already detached. This bounded read-only wait is optional;
 # disconnecting or Ctrl+C here cannot replay/stop the school executor.
 python3 - <<'PY_RESULT'
-import json,pathlib,time
+import json,pathlib,time,sys
 file=pathlib.Path('/root/fosu-collector-closure/RUN/result.json')
 deadline=time.monotonic()+950
 while not file.exists() and time.monotonic()<deadline:time.sleep(3)
@@ -55,10 +56,13 @@ if file.exists():
     data=json.loads(file.read_text())
     keys=('status','code','runId','term','sampleKind','uploadId','canonicalHash','collectionSchoolRequests','requestBudget','directSourceSummary','signedOracleReceiptMatched','sampleOnly','publishable','coverageValid','passwordSubmissions','authenticationSchoolRequests','sessionProbeSchoolRequests','failurePhase','workerFailureCode','workerExitCode','workerSignal','requestLedger','requestEvidence','replayAllowed','evidenceRetained','schoolAccessReserved','workerReceipts')
     print(json.dumps({k:data[k] for k in keys if k in data},ensure_ascii=False))
-else:print(json.dumps({'status':'BLOCKED','code':'CLOSURE_TERMINAL_RECEIPT_MISSING','runId':'RUN','replayAllowed':False}))
+    sys.exit(2 if data.get('status')=='BLOCKED' else 0)
+else:
+    print(json.dumps({'status':'BLOCKED','code':'CLOSURE_TERMINAL_RECEIPT_MISSING','runId':'RUN','replayAllowed':False}))
+    sys.exit(2)
 PY_RESULT
 '''
-    for key,value in [('PAYLOAD_SHA',digest),('PAYLOAD',blob),('FOLDER',folder),('RUN',run),('LOGIN','--one-login' if receipt['allowOneLogin'] else '')]:script=script.replace(key,value)
+    for key,value in [('PAYLOAD_SHA',digest),('PAYLOAD',blob),('FOLDER',folder),('RUN',run),('EXPIRY',expiry),('LOGIN','--one-login' if receipt['allowOneLogin'] else '')]:script=script.replace(key,value)
     output=pathlib.Path(output);require(not output.exists());output.write_bytes(script.encode())
     result={'runId':run,'sha256':hashlib.sha256(script.encode()).hexdigest(),'payloadSha256':digest,'sourceInstall':False,'schoolAccessExecuted':False,'publication':'NOT_APPROVED'}
     pathlib.Path(str(output)+'.receipt.json').write_text(json.dumps(result,indent=2));return result

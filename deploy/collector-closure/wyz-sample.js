@@ -66,7 +66,7 @@ function parsePrepare(args) {
   for (const arg of args) {
     if (arg === "--approve-school-window") { if (options.approved) fail("CLOSURE_ARGUMENT_REJECTED"); options.approved = true; continue; }
     if (arg === "--one-login") { if (options.oneLogin) fail("CLOSURE_ARGUMENT_REJECTED"); options.oneLogin = true; continue; }
-    const match = arg.match(/^--(kind|run-id|term|request-budget|oracle-preflight|class-run-id|class-canonical-hash)=(.+)$/);
+    const match = arg.match(/^--(kind|run-id|term|request-budget|oracle-preflight|scope-expires-at|class-run-id|class-canonical-hash)=(.+)$/);
     if (!match || options[match[1]] !== undefined) fail("CLOSURE_ARGUMENT_REJECTED");
     options[match[1]] = match[2];
   }
@@ -86,7 +86,9 @@ async function prepare(args) {
   try {
     contract.validateReadiness(await connection.request("GET", "/api/full-sync/v1/sample/readiness"));
     const status = await connection.request("GET", "/api/full-sync/v1/status"), queued = status.status?.current;
-    base.expiresAt = queued?.approvalExpiresAt;
+    base.oracleApprovalExpiresAt = queued?.approvalExpiresAt;
+    if (opts["scope-expires-at"] && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(opts["scope-expires-at"])) fail("CLOSURE_ARGUMENT_REJECTED");
+    base.expiresAt = new Date(Math.min(Date.parse(queued?.approvalExpiresAt), opts["scope-expires-at"] ? Date.parse(opts["scope-expires-at"]) : Infinity)).toISOString();
     contract.validateApproval(base); contract.validateQueued(status, base);
   } finally { connection.close(); }
   if (!fs.existsSync(ROOT)) fs.mkdirSync(ROOT, { mode: 0o700 }); privatePath(ROOT, true);
@@ -114,6 +116,7 @@ async function run(file) {
   contract.validateOracleEvidence(JSON.parse(oracleBytes));
   const release = installed(), cli = require(path.join(release, "tools/wyz-schedule-collector/cli"));
   const control = new AbortController(), stop = () => control.abort();
+  const deadlineTimer = setTimeout(stop, Math.max(0, Date.parse(approval.expiresAt) - Date.now()));
   process.once("SIGTERM", stop); process.once("SIGINT", stop);
   process.env.PLAYWRIGHT_BROWSERS_PATH = STATE + "/browsers";
   const connection = connect(release, control.signal);
@@ -142,7 +145,7 @@ async function run(file) {
     try { Object.assign(safe, require("./worker-diagnostics").read(path.join(STATE, "runs", approval.term, approval.runId), approval, pins.files["tools/fosu-sync-client/sync.js"])); } catch { safe.workerDiagnostics = "UNAVAILABLE"; }
     if (!fs.existsSync(path.join(evidenceDir, "result.json"))) writeExclusive(path.join(evidenceDir, "result.json"), safe);
     return safe;
-  } finally { connection.close(); process.removeListener("SIGTERM", stop); process.removeListener("SIGINT", stop); }
+  } finally { clearTimeout(deadlineTimer); connection.close(); process.removeListener("SIGTERM", stop); process.removeListener("SIGINT", stop); }
 }
 async function main(args = process.argv.slice(2)) {
   if (process.platform !== "linux" || process.geteuid() !== 0) fail("CLOSURE_LINUX_ROOT_REQUIRED");
