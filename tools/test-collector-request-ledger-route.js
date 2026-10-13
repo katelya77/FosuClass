@@ -1,0 +1,28 @@
+"use strict";
+const assert = require("node:assert/strict"), fs = require("fs"), crypto = require("crypto"), os = require("os"), path = require("path");
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-ledger-route-"));
+Object.assign(process.env, { FOSU_COLLECTOR_MODE: "1", FOSU_COLLECTOR_SAMPLE_KIND: "class", FOSU_COLLECTOR_REQUEST_BUDGET: "2", FOSU_COLLECTOR_RUN_ID: "sc-ledger-route-fixture", FOSU_COLLECTOR_TERM: "2026-2027-1", FOSU_COLLECTOR_APPROVAL_EXPIRES_AT: new Date(Date.now() + 60000).toISOString(), FOSU_SYNC_DATA_DIR: root, FOSU_COLLECTOR_SESSION: path.join(root, "session.json"), FOSU_COLLECTOR_WORKER_SOURCE_HASH: crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname, "fosu-sync-client/sync.js"))).digest("hex") });
+fs.writeFileSync(process.env.FOSU_COLLECTOR_SESSION, JSON.stringify({ cookies: [], origins: [] }));
+const runtime = require("./wyz-schedule-collector/browserRuntime"), original = runtime.launch;
+let handler, closed = 0, passed = 0, aborted = 0;
+runtime.launch = async () => ({ close: async () => closed++, newContext: async () => ({ close: async () => {}, newPage: async () => ({}), newCDPSession: async () => ({ on: () => {}, send: async () => {} }), route: async (_, value) => handler = value }) });
+const sync = require("./fosu-sync-client/sync");
+function route(response) { return { request: () => ({ url: () => "https://100.fosu.edu.cn/fixture-only", method: () => "POST", resourceType: () => "xhr", response: async () => response }), continue: async () => { const saved = JSON.parse(fs.readFileSync(path.join(root, "request-ledger.json"))); assert.equal(saved.pending.ordinal, saved.reserved); passed++; }, abort: async () => aborted++ }; }
+(async () => {
+  await sync.initBrowserContext();
+  await handler(route({ finished: async () => null, status: () => 200 }));
+  assert.equal(passed, 1); assert.equal(global.SCHOOL_REQUEST_COUNT, 1);
+  await handler(route(null));
+  assert.equal(passed, 2); assert.equal(global.SCHOOL_REQUEST_FAILURE, "COLLECTOR_REQUEST_OUTCOME_UNKNOWN");
+  const ledger = JSON.parse(fs.readFileSync(path.join(root, "request-ledger.json")));
+  assert.equal(ledger.reserved, 2); assert.equal(ledger.pending.ordinal, 2);
+  assert.equal(global.SCHOOL_REQUEST_COUNT_KNOWN, false);
+  await handler(route(null)); assert.equal(passed, 2); assert.equal(aborted, 2);
+  const before = closed;
+  await assert.rejects(sync.initBrowserContext(), /OUTCOME_UNKNOWN/);
+  assert.equal(closed, before + 1);
+  process.env.FOSU_COLLECTOR_WORKER_SOURCE_HASH = "b".repeat(64);
+  await assert.rejects(sync.initBrowserContext(), /WORKER_SOURCE_CHANGED/);
+  assert.equal(passed, 2);
+  console.log("collector-request-ledger-route: PASS; actual route reservation, unknown-outcome stop, cleanup and source fence; schoolRequests=0");
+})().catch(e => { console.error(e.code || e.message); process.exitCode = 1; }).finally(() => { runtime.launch = original; fs.rmSync(root, { recursive: true, force: true }); });
