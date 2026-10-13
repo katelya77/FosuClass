@@ -22,7 +22,7 @@
   <block wx:elif="{{dataLoadState === 'timeout'}}">
     <view class="error-retry-card card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
       <view class="error-retry-title" style="font-size: 32rpx; font-weight: bold; color: #333; margin-bottom: 16rpx;">网络请求超时</view>
-      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">由于服务器距离较远或网络波动，加载时间较长。</view>
+      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">课表数据暂时未能加载，请检查网络后重新加载。</view>
       <button class="error-retry-btn" bindtap="onRetryLoading" style="background: #1890ff; color: #fff; border-radius: 8rpx; font-size: 28rpx; width: 240rpx;">重新加载</button>
     </view>
   </block>
@@ -31,7 +31,7 @@
   <block wx:elif="{{dataLoadState === 'networkError'}}">
     <view class="error-retry-card card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
       <view class="error-retry-title" style="font-size: 32rpx; font-weight: bold; color: #333; margin-bottom: 16rpx;">课表索引加载失败</view>
-      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">无法连接到教务服务，请检查网络后重试。</view>
+      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">暂时无法连接课表服务，请检查网络后重新加载。</view>
       <button class="error-retry-btn" bindtap="onRetryLoading" style="background: #1890ff; color: #fff; border-radius: 8rpx; font-size: 28rpx; width: 240rpx;">重新加载</button>
     </view>
   </block>
@@ -235,6 +235,11 @@
             <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
           </view>
         </block>
+
+        <view class="error-retry-card card" wx:if="{{classFilterError}}">
+          <view class="error-retry-desc">{{classFilterError}}</view>
+          <button class="error-retry-btn" bindtap="retryClassFilters" loading="{{loading}}">重新加载列表</button>
+        </view>
 
         <view class="class-result-notice" wx:if="{{classNoticeText}}">
           {{classNoticeText}}

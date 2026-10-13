@@ -292,6 +292,7 @@ Page({
     classEmptyTitle: "请选择上方筛选并查询",
     classEmptyDesc: "查询后将展示行政班级课表，结果仅供参考。",
     classNoticeText: "",
+    classFilterError: "",
     restoreHint: "",
     catalogVersion: "",
     catalogUpdatedAt: "",
@@ -1370,9 +1371,9 @@ Page({
                 this.openSharedClassByName(query);
               }
             });
-          });
+          }).catch(() => {});
         });
-      });
+      }).catch(() => {});
     });
   },
 
@@ -1572,6 +1573,7 @@ Page({
       classAdminResults: [],
       classAggregateResults: [],
       classNoticeText: "",
+      classFilterError: "",
       restoreHint: ""
     });
     wx.showToast({
@@ -1604,7 +1606,7 @@ Page({
       classNoticeText: "",
     }, () => {
       if (this.data.selectedCollegeIndex >= 0 && this.data.selectedGradeIndex >= 0 && this.data.selectedMajorIndex >= 0) {
-        this.fetchClasses();
+        this.fetchClasses().catch(() => {});
       }
       this.saveFilterCache();
     });
@@ -1625,6 +1627,7 @@ Page({
       classAdminResults: [],
       classAggregateResults: [],
       classNoticeText: "",
+      classFilterError: "",
     }, () => {
       this.saveFilterCache();
     });
@@ -1664,7 +1667,7 @@ Page({
       classAggregateResults: [],
       classNoticeText: "",
     }, () => {
-      this.fetchMajors();
+      this.fetchMajors().catch(() => {});
       this.saveFilterCache();
     });
   },
@@ -1680,22 +1683,30 @@ Page({
     const grade = grades[selectedGradeIndex];
     const selectedSemester = semesters[selectedSemesterIndex];
     const term = selectedSemester && selectedSemester.value || getFallbackTerm();
-    const localMajors = (this.originalCatalogData && Array.isArray(this.originalCatalogData.majors))
-      ? this.originalCatalogData.majors.filter((major) => {
-        return String(major.collegeCode || "") === String(collegeCode || "") &&
-          String(major.grade || "") === String(grade || "");
-      })
-      : [];
+    const matchesFilter = (major) => String(major.collegeCode || "") === String(collegeCode || "")
+      && String(major.grade || "") === String(grade || "");
+    const catalogMajors = this.originalCatalogData && this.originalCatalogData.majors;
+    let localMajors = Array.isArray(catalogMajors) ? catalogMajors.filter(matchesFilter) : [];
+    if (!localMajors.length) {
+      const snapshot = { term, releaseVersion: this.getReleaseVersionForCache() };
+      const cachedClassIndex = releasePackService.readCachedIndex("class", snapshot);
+      const cachedCatalog = cachedClassIndex && this.buildCatalogFromClassIndex(Object.assign({}, cachedClassIndex, {
+        // A code alone is not a usable major label; let the existing API resolve it.
+        items: cachedClassIndex.items.filter((item) => String(item.majorName || "").trim()),
+      }), snapshot);
+      localMajors = cachedCatalog ? cachedCatalog.majors.filter(matchesFilter) : [];
+    }
     if (localMajors.length) {
       this.setData({
         majors: localMajors,
         loading: false,
+        classFilterError: "",
       });
       return Promise.resolve(localMajors);
     }
 
-    this.setData({ loading: true });
-    return request.get("/api/fosu/majors", { term, collegeCode, grade }, { showLoading: false, timeout: SCHOOL_REQUEST_TIMEOUT })
+    this.setData({ loading: true, classFilterError: "" });
+    return request.get("/api/fosu/majors", { term, collegeCode, grade }, { showLoading: false, silentError: true, timeout: SCHOOL_REQUEST_TIMEOUT })
       .then((data) => {
         const majors = data.majors || [];
         this.setData({
@@ -1705,7 +1716,7 @@ Page({
         return majors;
       })
       .catch((err) => {
-        this.setData({ loading: false });
+        this.setData({ loading: false, classFilterError: "专业列表暂时加载失败，请检查网络后重试。已缓存的课表仍可查看。" });
         console.error("fetchMajors fail", err);
         throw err;
       });
@@ -1723,7 +1734,7 @@ Page({
       classAggregateResults: [],
       classNoticeText: "",
     }, () => {
-      this.fetchClasses();
+      this.fetchClasses().catch(() => {});
       this.saveFilterCache();
     });
   },
@@ -1740,7 +1751,7 @@ Page({
     const grade = grades[selectedGradeIndex];
     const majorCode = majors[selectedMajorIndex].code;
 
-    this.setData({ loading: true });
+    this.setData({ loading: true, classFilterError: "" });
     return this.fetchSearchIndex("class", { semester, collegeCode, grade, majorCode, limit: 100 })
       .then((res) => {
         const classesOptions = [];
@@ -1798,7 +1809,7 @@ Page({
           return [];
         }
         console.warn("fetch class index fail, fallback to /api/fosu/classes", err);
-        return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
+        return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false, silentError: true })
           .then((res) => {
             const classesOptions = [];
             if (res && res.success) {
@@ -1825,11 +1836,16 @@ Page({
             return classesOptions;
           })
           .catch((fallbackErr) => {
-            this.setData({ loading: false });
+            this.setData({ loading: false, classFilterError: "班级列表暂时加载失败，请检查网络后重试。已缓存的课表仍可查看。" });
             console.error("fetchClasses fail", fallbackErr);
             throw fallbackErr;
           });
       });
+  },
+
+  retryClassFilters() {
+    const task = this.data.selectedMajorIndex >= 0 ? this.fetchClasses() : this.fetchMajors();
+    return task.catch(() => {});
   },
 
   // 6.6. 班级选择改变
@@ -3342,6 +3358,10 @@ Page({
     const normalizeCatalog = (payload) => {
       const data = payload && payload.catalog ? payload.catalog : payload;
       if (!data || !Array.isArray(data.colleges) || data.colleges.length === 0) return null;
+      const payloadTerm = payload.term || payload.semester || data.term || data.semester;
+      const payloadVersion = payload.releaseVersion || payload.version || (payload.versions && payload.versions.snapshot) || data.releaseVersion || data.version;
+      if (payloadTerm && payloadTerm !== term) return null;
+      if (payloadVersion && payloadVersion !== releaseVersion) return null;
       return Object.assign({}, data, {
         semesters: term ? [{ value: term, label: term }] : [],
         dataSource: payload.dataSource || data.dataSource || "cache",
@@ -3350,6 +3370,8 @@ Page({
         success: true,
       });
     };
+    cachedCatalog = normalizeCatalog(cachedCatalog);
+    let renderedCatalog = false;
 
     const writeCatalogCache = (catalogData) => {
       try {
@@ -3361,6 +3383,7 @@ Page({
 
     const renderCatalog = (catalogData, fromCache) => {
       if (seq !== this._activeInitSeq) return;
+      renderedCatalog = true;
       this.originalCatalogData = catalogData;
       this.applyCatalogFilter();
       this.clearLoadingStateTimer();
@@ -3391,11 +3414,11 @@ Page({
     const handleCatalogError = (error) => {
       if (seq !== this._activeInitSeq) return;
       console.warn("[school] catalog refresh failed", error);
-      if (cachedCatalog) {
+      if (renderedCatalog) {
         this.clearLoadingStateTimer();
         this.setData({
           dataLoadState: "success",
-          restoreHint: "已显示本地缓存，正在校验更新",
+          restoreHint: "更新暂未完成，当前继续使用本地缓存",
         });
         return;
       }
@@ -3673,7 +3696,7 @@ Page({
             this.setData({
               loadingState: "none",
               dataLoadState: "success",
-              restoreHint: "已显示本地缓存，正在校验更新",
+              restoreHint: "更新暂未完成，当前继续使用本地缓存",
             });
             console.warn("[school] search-index refresh failed; keeping cache", error);
             return;
