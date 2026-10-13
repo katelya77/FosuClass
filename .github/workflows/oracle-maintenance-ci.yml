@@ -39,7 +39,9 @@ jobs:
         env:
           NODE_OPTIONS: --require=./tools/fixture-network-only.js
         run: |
-          node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-persistence-acceptance.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js tools/test-oracle-sample-preflight-adapter.js
+          # Root-only evidence ownership is part of the production contract.
+          # Exercise it with real root-owned offline fixtures, never weaken it.
+          sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-persistence-acceptance.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js tools/test-oracle-sample-preflight-adapter.js
           node tools/test-collector-closure-window.js
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py
