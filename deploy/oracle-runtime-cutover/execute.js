@@ -11,6 +11,7 @@ const RECOVERY_SECONDS = 1200;
 const TERMINAL = new Set(["PREPARED", "PASS", "RECOVERED_ORIGINAL", "RECOVERED_PERSISTENT"]);
 const POST_SWITCH = new Set(["SWITCH_INTENT", "STARTED", "VERIFYING", "PASS", "RECOVERED_PERSISTENT"]);
 const preflight = require("../oracle-sample/preflight");
+const lifecycle = require("./lifecycle-guard");
 function fail(code) { throw Object.assign(new Error(code), { code }); }
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -157,7 +158,8 @@ async function probes(c, { requireIdle = false } = {}) {
   if (broker.ok !== true) fail("PERSONAL_BROKER_HEALTH_FAILED");
   const snapshot = await get("/api/admin/campus-sync/snapshot", { "X-Admin-Token": env.ADMIN_API_TOKEN });
   if (requireIdle) { preflight.requirePersonalIdle(snapshot); if (snapshot.snapshot.service.maintenance.paused !== true) fail("PERSONAL_ADMISSION_NOT_PAUSED"); }
-  return { health: true, ready: true, revision: BASE, personalBrokerReady: true, activeReleaseVersion: ready.activeReleaseVersion };
+  const queue = require("../../tools/oracle-sample/maintenance-admin").safeQueue(snapshot);
+  return { health: true, ready: true, revision: BASE, personalBrokerReady: true, activeReleaseVersion: ready.activeReleaseVersion, personalAdmissionPaused: queue.paused, personalAgentOnline: queue.agentOnline };
 }
 function helper(c, mode) {
   const file = path.resolve(__dirname, "../../tools/oracle-sample/maintenance-admin.js");
@@ -209,6 +211,7 @@ async function prepare(c) {
   info.preparationInventory = prepareInventory(path.join(c.appDir, "server/storage"));
   const free = fs.statfsSync(c.stateDir); if (Number(free.bavail) * Number(free.bsize) < Number(img.Size || 0) + 1024 ** 3) fail("PRIVATE_BACKUP_CAPACITY_INSUFFICIENT");
   info.probes = await probes(c); info.protectedFiles = protectedState(c, info.releaseRoot);
+  info.stagingCapture = lifecycle.captureStaging({ storageDir: path.join(c.appDir, "server/storage"), stateDir: c.stateDir, label: "prepare", expectedHash: info.protectedFiles["staging-latest.json"] });
   for (let i = 0; i < info.configFiles.length; i++) durable(path.join(c.stateDir, `compose-source-${i}.yml`), fs.readFileSync(info.configFiles[i], "utf8"));
   for (let i = 0; i < info.envFiles.length; i++) durable(path.join(c.stateDir, `compose-env-${i}.env`), fs.readFileSync(info.envFiles[i], "utf8"));
   durable(path.join(c.stateDir, "original-inspect.json"), record); durable(path.join(c.stateDir, "original-image.json"), img);
@@ -310,7 +313,10 @@ async function run(c) {
     helper(c, "acquire"); saveState(c, { phase: "ADMISSION_PAUSED" });
     await probes(c, { requireIdle: true }); preflight.inventory(path.join(c.appDir, "server/storage"));
     ensureBaseline(c, info);
-    durable(path.join(c.stateDir, "protected.before.json"), protectedState(c, info.releaseRoot));
+    const protectedBefore = protectedState(c, info.releaseRoot);
+    const stagingBefore = lifecycle.captureStaging({ storageDir: path.join(c.appDir, "server/storage"), stateDir: c.stateDir, label: "before", expectedHash: protectedBefore["staging-latest.json"] });
+    durable(path.join(c.stateDir, "protected.before.json"), protectedBefore);
+    durable(path.join(c.stateDir, "staging.before-capture.private.json"), stagingBefore);
     if (fs.existsSync(c.targetDir)) fail("TARGET_EXISTS_NO_MIGRATION_REPLAY");
     saveState(c, { phase: "STOP_INTENT" });
     docker(["stop", "--time", "30", info.originalId], { timeout: 45000 });
@@ -344,7 +350,17 @@ async function run(c) {
     const liveDataEvidence = assertPostSwitchData(c, result.files);
     saveState(c, { liveDataEvidence });
     if (directories.some(relative => !fs.existsSync(path.join(c.targetDir, ...relative.split("/"))) || !fs.lstatSync(path.join(c.targetDir, ...relative.split("/"))).isDirectory())) fail("RUNTIME_DIRECTORY_MISSING");
-    if (!equal(read(path.join(c.stateDir, "protected.before.json")), protectedState(c, info.releaseRoot))) fail("PROTECTED_BUSINESS_STATE_CHANGED");
+    const protectedAfter = protectedState(c, info.releaseRoot);
+    const exactBefore = { ...protectedBefore }, exactAfter = { ...protectedAfter };
+    if (exactBefore["staging-latest.json"] !== exactAfter["staging-latest.json"]) {
+      const beforeObject = stagingBefore.exists ? read(stagingBefore.path) : null;
+      if (stagingBefore.exists && fileHash(stagingBefore.path) !== protectedBefore["staging-latest.json"]) fail("STAGING_CAPTURE_HASH_CHANGED");
+      const stagingAcceptance = lifecycle.compareStaging(beforeObject, fs.existsSync(path.join(c.appDir, "server/storage/staging-latest.json")) ? read(path.join(c.appDir, "server/storage/staging-latest.json")) : null,
+        lifecycle.readActiveAuthority(path.join(c.appDir, "server/storage")), { earliest: stagingBefore.capturedAt, latest: new Date().toISOString() });
+      durable(path.join(c.stateDir, "staging.lifecycle-acceptance.private.json"), stagingAcceptance);
+      delete exactBefore["staging-latest.json"]; delete exactAfter["staging-latest.json"];
+    }
+    if (!equal(exactBefore, exactAfter)) fail("PROTECTED_BUSINESS_STATE_CHANGED");
     await probes(c, { requireIdle: true });
     helper(c, "restore");
     await probes(c);
@@ -457,19 +473,103 @@ function publicStatus(c) {
     failureCode: s.failureCode || s.recoveryFailure || null, preparationBlocker: s.preparationInventory?.verified === false ? s.preparationInventory.code : null,
     targetGenerationStale: !!s.targetGenerationStale, migrationEvidence: s.migrationEvidence || null, schoolRequests: 0 };
 }
+function pythonJsonHash(value) {
+  // Matches the already captured Python probe convention: sorted object keys,
+  // original array order, compact separators and ensure_ascii=True.
+  // Serialize keys directly: JSON.stringify reorders integer-like object keys,
+  // even when insertion order was sorted ("11" would precede "01").
+  const encode = v => Array.isArray(v) ? "[" + v.map(encode).join(",") + "]"
+    : v && typeof v === "object" ? "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + encode(v[k])).join(",") + "}"
+    : JSON.stringify(v);
+  return hash(encode(value).replace(/[^\x00-\x7f]/g, c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")));
+}
+async function liveBusinessAcceptance(c, evidenceFile, request = get) {
+  safePath(evidenceFile, { regular: true, privateFile: true });
+  const evidence = read(evidenceFile), expected = evidence.probes;
+  if (expected?.schema !== "oracle-business-probes.v1" || !/^[A-Za-z0-9._-]+$/.test(expected.activeReleaseVersion || "") || typeof expected.term !== "string") fail("BUSINESS_EVIDENCE_INVALID");
+  const query = "?releaseVersion=" + encodeURIComponent(expected.activeReleaseVersion) + "&term=" + encodeURIComponent(expected.term);
+  const manifest = await request("/api/fosu/release-pack/manifest" + query);
+  if (manifest.success !== true || pythonJsonHash(manifest) !== expected.manifestSha256) fail("BUSINESS_MANIFEST_CHANGED");
+  const sources = {};
+  for (const kind of ["class", "teacher", "classroom", "course"]) {
+    const value = await request("/api/fosu/release-pack/index/" + kind + query), original = expected.sources?.[kind];
+    if (value.success !== true || !Array.isArray(value.items) || original?.success !== true || value.items.length !== original.items || pythonJsonHash(value.items) !== original.itemsSha256) fail("BUSINESS_INDEX_CHANGED");
+    sources[kind] = { success: true, items: value.items.length, itemsSha256: pythonJsonHash(value.items) };
+  }
+  const env = preflight.parseEnv(fs.readFileSync(path.join(c.appDir, "server/.env")));
+  const notices = await request("/api/admin/notices", { "X-Admin-Token": env.ADMIN_API_TOKEN });
+  if (notices.success !== true || !Array.isArray(notices.items)) fail("BUSINESS_NOTICES_INVALID");
+  const content = notices.items.map(item => Object.fromEntries(Object.entries(item).filter(([key]) => key !== "reactions"))), noticeHash = pythonJsonHash(content);
+  if (expected.notices?.success !== true || content.length !== expected.notices.count || noticeHash !== expected.notices.contentSha256) fail("BUSINESS_NOTICES_CHANGED");
+  return { activeReleaseVersion: expected.activeReleaseVersion, manifestSha256: expected.manifestSha256, sources, notices: { success: true, count: content.length, contentSha256: noticeHash }, evidenceSha256: fileHash(evidenceFile), liveRequests: 6 };
+}
+async function accept(c, options, deps = {}) {
+  const ops = { inspect, image, probes, protectedState, ...deps }, s = read(stateFile(c)), info = read(path.join(c.stateDir, "baseline.json"));
+  if (!["RECOVERED_PERSISTENT", "PASS"].includes(s.phase) || s.persistenceValidated !== true || s.migrationEvidence?.fingerprint === undefined) fail("PERSISTENCE_ACCEPTANCE_STATE_REQUIRED");
+  validatePrepared(c, info);
+  const originalStateSha256 = fileHash(stateFile(c)), current = ops.inspect(NAME);
+  if (current.Image !== info.originalImage || !current.State.Running || current.State.Paused || current.State.Health?.Status !== "healthy" || !equal(containerContract(current, true), info.contract)) fail("PERSISTENCE_ACCEPTANCE_RUNTIME_CHANGED");
+  const mount = current.Mounts.find(m => m.Destination === "/app/data");
+  if (!mount || mount.Type !== "bind" || !mount.RW || mount.Source !== c.targetDir) fail("LIVE_PERSISTENCE_MISMATCH");
+  if (ops.image(info.originalImage).Config?.Labels?.["org.opencontainers.image.revision"] !== BASE) fail("ORIGINAL_IMAGE_CHANGED");
+  const migration = read(path.join(c.stateDir, "migration.private.json")), markerFile = path.join(c.targetDir, ".fosu-runtime-migration.json"), receiptFile = path.join(c.targetDir, ".fosu-runtime-bootstrap.json"), marker = read(markerFile), receipt = read(receiptFile);
+  if (migration.archiveVerified !== true || migration.sourceConsistency?.sourceState !== "stopped" || migration.sourceConsistency?.sourceIdentity?.containerId !== info.originalId || migration.dataFingerprint !== s.migrationEvidence.fingerprint || fileHash(migration.archivePath) !== migration.archiveSha256 || migration.archiveSha256 !== s.migrationEvidence.archiveSha256 || marker.dataFingerprint !== migration.dataFingerprint
+    || receipt.state !== "migration-accepted" || receipt.migrationVerified !== true || receipt.migrationMarkerSha256 !== fileHash(markerFile) || receipt.migrationDataFingerprint !== migration.dataFingerprint || receipt.migrationArchiveSha256 !== migration.archiveSha256) fail("PERSISTENCE_ACCEPTANCE_MIGRATION_PROOF_INVALID");
+  const liveDataEvidence = assertPostSwitchData(c, migration.files), directories = read(path.join(c.stateDir, "directories.private.json"));
+  if (directories.some(relative => !fs.existsSync(path.join(c.targetDir, ...relative.split("/"))) || !fs.lstatSync(path.join(c.targetDir, ...relative.split("/"))).isDirectory())) fail("RUNTIME_DIRECTORY_MISSING");
+  const before = read(path.join(c.stateDir, "protected.before.json")), after = ops.protectedState(c, info.releaseRoot), protectedBefore = { ...before }, protectedAfter = { ...after };
+  delete protectedBefore["staging-latest.json"]; delete protectedAfter["staging-latest.json"];
+  delete protectedBefore["ops/campus-sync/control.json"]; delete protectedAfter["ops/campus-sync/control.json"];
+  // This independent acceptance runs after normal traffic was restored. Votes
+  // may have legitimately changed since the window. Preserve the old hashes
+  // and report the missing historical proof; deployment preflight stays strict.
+  const historicalReactionsUnchanged = before.reactions === after.reactions ? "PASS" : "PENDING";
+  delete protectedBefore.reactions; delete protectedAfter.reactions;
+  if (!equal(protectedBefore, protectedAfter)) fail("PROTECTED_BUSINESS_STATE_CHANGED");
+  const health = await ops.probes(c), maintenance = read(path.join(c.stateDir, "maintenance.json"));
+  if (maintenance.phase !== "RESTORED" || health.personalAdmissionPaused !== maintenance.originalPaused || health.personalAgentOnline !== true || health.activeReleaseVersion === undefined) fail("PERSONAL_ADMISSION_ACCEPTANCE_FAILED");
+  const business = await liveBusinessAcceptance(c, options["business-evidence"], deps.get || get);
+  if (business.activeReleaseVersion !== health.activeReleaseVersion) fail("BUSINESS_ACTIVE_CHANGED");
+  const storageDir = path.join(c.appDir, "server/storage"), capture = lifecycle.captureStaging({ storageDir, stateDir: c.stateDir, label: "accepted", expectedHash: after["staging-latest.json"] });
+  const staging = capture.exists ? read(capture.path) : null, authority = lifecycle.readActiveAuthority(storageDir);
+  let historicalStagingUnchanged = "PENDING", preStateObjectAvailable = false, stagingLifecycle = null;
+  const captureBeforeFile = path.join(c.stateDir, "staging.before-capture.private.json");
+  if (fs.existsSync(captureBeforeFile)) {
+    const oldCapture = read(captureBeforeFile);
+    if (oldCapture.sha256 !== before["staging-latest.json"] || oldCapture.exists && fileHash(oldCapture.path) !== oldCapture.sha256) fail("STAGING_CAPTURE_HASH_CHANGED");
+    stagingLifecycle = lifecycle.compareStaging(oldCapture.exists ? read(oldCapture.path) : null, staging, authority, { earliest: oldCapture.capturedAt, latest: new Date().toISOString() });
+    historicalStagingUnchanged = "PASS"; preStateObjectAvailable = true;
+  } else if (before["staging-latest.json"] === after["staging-latest.json"]) historicalStagingUnchanged = "PASS";
+  let sourceEvidence = null;
+  if (options["source-evidence"]) {
+    const file = safePath(options["source-evidence"], { regular: true, privateFile: true }), witness = read(file), uploadId = staging?.stagingUploadId || staging?.meta?.stagingUploadId;
+    if (witness.schema !== "oracle-current-staging-source-proof.v1" || witness.payloadOriginalShaMatch !== true || witness.termMatch !== true || witness.versionMatch !== true || witness.payloadCanonicalHash !== authority.canonicalHash || witness.stagingCanonicalHash !== authority.canonicalHash || !/^[A-Za-z0-9_-]+$/.test(uploadId || "")) fail("STAGING_SOURCE_EVIDENCE_INVALID");
+    const uploadDir = path.join(storageDir, "staging-uploads", uploadId), originalManifest = read(safePath(path.join(uploadDir, "manifest.json"), { regular: true })), payload = safePath(path.join(uploadDir, "payload.json"), { regular: true });
+    if (fileHash(payload) !== originalManifest.originalSha256 || originalManifest.originalSha256 !== witness.payloadSha256 || (staging.canonicalHash || staging.meta?.canonicalHash) !== authority.canonicalHash) fail("STAGING_SOURCE_ORIGINAL_HASH_CHANGED");
+    sourceEvidence = { schema: witness.schema, evidenceSha256: fileHash(file), payloadSha256: witness.payloadSha256, originalUploadHashCheckedLive: true, sourceDataComparison: "ATTACHED_PRIVATE_EVIDENCE", historicalPrestateProved: false };
+  }
+  if (fileHash(path.join(c.stateDir, "original-image.tar")) !== info.imageArchiveSha256 || fileHash(stateFile(c)) !== originalStateSha256) fail("ROLLBACK_OR_OPERATION_STATE_CHANGED");
+  const result = { schema: "oracle-runtime-persistence-acceptance.v1", observedAt: new Date().toISOString(), operationPhase: s.phase, originalStateSha256, baselineSha256: fileHash(path.join(c.stateDir, "baseline.json")), originalImageId: info.originalImage, liveContainerId: current.Id, liveImageId: current.Image,
+    migrationDataFingerprint: migration.dataFingerprint, migrationArchiveSha256: migration.archiveSha256, markerSha256: fileHash(markerFile), bootstrapReceiptSha256: fileHash(receiptFile), runtimePersistence: "PASS", runtimeDataPreserved: "YES", productionApi: "HEALTHY", personalAgent: "UNCHANGED", personalAgentOnline: true, personalAdmissionRestored: true, activeReleaseUnchanged: true, rollbackReady: true,
+    historicalStagingUnchanged, historicalReactionsUnchanged, reactionHashes: { before: before.reactions, observed: after.reactions }, preStateObjectAvailable, stagingLifecycle, stagingCapture: capture.path, stagingCaptureSha256: capture.sha256, sourceEvidence, liveDataEvidence, business,
+    readOnly: true, containerMutation: false, dataCopy: false, schoolRequests: 0 };
+  durable(path.join(c.stateDir, "readonly-acceptance.private.json"), result);
+  return result;
+}
 async function main(argv = process.argv.slice(2)) {
   const mode = argv.shift() || "prepare", options = {};
-  for (const arg of argv) { if (arg === "--force") { options.force = true; continue; } const m = arg.match(/^--(config|approve)=(.+)$/); if (!m || options[m[1]]) fail("ARGUMENT_REJECTED"); options[m[1]] = m[2]; }
+  for (const arg of argv) { if (arg === "--force") { options.force = true; continue; } const m = arg.match(/^--(config|approve|business-evidence|source-evidence)=(.+)$/); if (!m || options[m[1]]) fail("ARGUMENT_REJECTED"); options[m[1]] = m[2]; }
   if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() !== 0) fail("LINUX_ROOT_REQUIRED");
   if (Number(process.versions.node.split(".")[0]) < 20) fail("NODE_20_REQUIRED");
-  if (!["prepare", "start", "run", "recover", "recover-inner", "status"].includes(mode) || !options.config || options.approve && mode !== "start" || options.force && mode !== "recover") fail("ARGUMENT_REJECTED");
+  if (!["prepare", "start", "run", "recover", "recover-inner", "status", "accept"].includes(mode) || !options.config || options.approve && mode !== "start" || options.force && mode !== "recover" || (options["business-evidence"] || options["source-evidence"]) && mode !== "accept" || mode === "accept" && !options["business-evidence"]) fail("ARGUMENT_REJECTED");
   process.umask(0o077); const c = loadConfig(options.config);
   if (mode === "prepare") return prepare(c);
   if (mode === "start") return start(c, options.approve);
   if (mode === "run") return run(c);
   if (mode === "recover") return recover(c, options.force);
   if (mode === "recover-inner") return recoverInner(c);
+  if (mode === "accept") return accept(c, options);
   return publicStatus(c);
 }
 if (require.main === module) main().then(result => process.stdout.write(JSON.stringify(result) + "\n")).catch(error => { process.stderr.write(JSON.stringify({ status: "BLOCKED", code: /^[A-Z_]+$/.test(error.code || "") ? error.code : "CUTOVER_FAILED", productionVerified: false }) + "\n"); process.exitCode = 2; });
-module.exports = { BASE, MIGRATOR_BLOB, RECOVERY_SECONDS, canonical, equal, fileHash, blobHash, durable, safePath, envMap, containerContract, assertRuntimeMatchesCompose, escapeInterpolation, persistenceCompose, assertOnlyPersistenceDelta, recoveryPolicy, unitText, migrationEvidence, liveFilePolicy, assertPostSwitchData, recoverInner, directoryInventory, preserveDirectories, prepareInventory };
+module.exports = { BASE, MIGRATOR_BLOB, RECOVERY_SECONDS, canonical, equal, fileHash, blobHash, durable, safePath, envMap, containerContract, assertRuntimeMatchesCompose, escapeInterpolation, persistenceCompose, assertOnlyPersistenceDelta, recoveryPolicy, unitText, migrationEvidence, liveFilePolicy, assertPostSwitchData, recoverInner, directoryInventory, preserveDirectories, prepareInventory, pythonJsonHash, liveBusinessAcceptance, accept };

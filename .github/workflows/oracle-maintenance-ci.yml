@@ -6,11 +6,14 @@ on:
       - 'deploy/oracle-runtime-cutover/**'
       - 'deploy/collector-closure/**'
       - 'deploy/oracle-sample/maintenance.js'
+      - 'deploy/oracle-sample/preflight-adapter.js'
       - 'deploy/oracle-sample/verify-source.py'
       - 'tools/oracle-sample/maintenance-admin.js'
       - 'tools/oracle-sample/recover-orphan-job.js'
       - 'tools/oracle-sample/test_verify_source.py'
       - 'tools/test-oracle-runtime-cutover.js'
+      - 'tools/test-oracle-persistence-acceptance.js'
+      - 'tools/test-oracle-sample-preflight-adapter.js'
       - 'tools/test-oracle-sample-maintenance.js'
       - 'tools/test-oracle-sample-deploy-maintenance.js'
       - 'tools/test-collector-closure-window.js'
@@ -36,11 +39,13 @@ jobs:
         env:
           NODE_OPTIONS: --require=./tools/fixture-network-only.js
         run: |
-          node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js
+          node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-persistence-acceptance.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js tools/test-oracle-sample-preflight-adapter.js
           node tools/test-collector-closure-window.js
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py
           node --check deploy/oracle-runtime-cutover/execute.js
           node --check deploy/oracle-sample/maintenance.js
+          node --check deploy/oracle-sample/preflight-adapter.js
+          node --check deploy/oracle-runtime-cutover/lifecycle-guard.js
           bash -n deploy/collector-closure/start-wyz.sh
           git diff --check

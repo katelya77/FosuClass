@@ -54,6 +54,16 @@ the unchanged strict inventory gate before any maintenance action**. An old
 timestamp alone does not prove a task is orphaned. All other inventory failures
 remain fatal. The fixed Sample preflight and operate tools are unchanged.
 
+New preparation/maintenance generations also capture the **complete original
+Staging bytes**, privately bound to the protected SHA. Startup lifecycle
+reconciliation may change only the six root `meta` fields established by the
+pinned source: `stagingUploadStatus`, `releaseStatus`,
+`publishedReleaseVersion`, `publishedAt`, `active`, and `reconciledAt`. Each new
+value must match the existing Active authority and actual execution time window.
+Every other field, including hashes, schedule rows, sources, upload references,
+counts, previous hashes and nested metadata, stays strictly equal. `reason` is
+not a permitted Staging field. No runtime lifecycle source is modified.
+
 **Review that concrete preparation result and obtain the maintenance-window
 approval before starting.** The digest is an execution guard, not human approval.
 
@@ -119,6 +129,39 @@ A healthy successful generation is an idempotent no-op for recovery. After
 terminal verification, its watchdog may be disabled by the operator; retain the
 private configuration and data/image recovery artifacts for the next release.
 
+## Independent read-only acceptance after safe recovery
+
+When the persistent original-image container is already healthy, use this entry
+instead of repeating a migration or container switch:
+
+```sh
+node deploy/oracle-runtime-cutover/execute.js accept --config=/root/cutover.json --business-evidence=/root/private-business-probes.json --source-evidence=/root/private-current-staging-source-proof.json
+```
+
+It rechecks the real image/container contract, data bind, archive and migration
+fingerprints, bound bootstrap receipt, files/directories, health response bodies,
+revision, signed personal Broker, restored admission and online Agent. It calls
+the actual API again for the manifest, all four complete source indexes and
+notice content, and compares them to the private business probe evidence. Notice
+reactions are excluded only from that content comparison; all other notice
+fields remain protected. The probe hash convention matches compact sorted
+Python JSON with `ensure_ascii=True` and original array order. Optional source
+evidence is bound by SHA and the real original upload SHA is checked again.
+The recorded source-field comparison is explicitly **attached private evidence**,
+not a claim that the helper recomputed a missing historical object.
+
+The result is `readonly-acceptance.private.json` with schema
+`oracle-runtime-persistence-acceptance.v1`, bound to the original state, baseline,
+image, migration, markers and current captured Staging. The original transaction
+phase remains `RECOVERED_PERSISTENT`; it is not rewritten as historical `PASS`.
+If that generation recorded only an old Staging byte hash and no original JSON,
+`historicalStagingUnchanged=PENDING` and `preStateObjectAvailable=false` remain
+visible. Current runtime/data/health/business preservation can independently
+pass without inventing the missing historical Staging metadata proof.
+`staging.accepted.private.json` is a complete fresh baseline for the next
+approved deployment, not a reconstruction of the previous one. Acceptance
+performs no admission write, stop, Compose switch, data copy or publication.
+
 ## Independently approved orphan metadata recovery
 
 The original job service ignores locks older than its configured stale interval
@@ -171,6 +214,7 @@ job ID. Then rerun ordinary P0 preparation; strict inventory must now truly pass
 ```sh
 node --test tools/test-oracle-runtime-cutover.js
 node --test tools/test-oracle-orphan-job.js
+node --test tools/test-oracle-persistence-acceptance.js
 ```
 
 The fixture-only suite exercises the unchanged native migrator/archive and

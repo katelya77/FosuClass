@@ -14,6 +14,8 @@ const PIN = Object.freeze({
   sourceSha256: "b549aaaa9a759efd164c1de4d3909473c560f7c8f17f896c618a91a8e79911fb",
   imageSha256: "d2831cb98be9c6f5a07130934990db3c0e4ebaeec1755ee1f9444fa67dba2868",
   receiptSha256: "f6339c20e44f5207a42a1bade1598e41f02e95d1c1744effd3577064609ffbe6",
+  appBlob: "0157720e46ed1c12dc8c0fe5d844b0e4d8a45367",
+  lifecycleBlob: "076189024d9a801f365e6094207c44a71f94f1c5",
 });
 const NAME = "fosuclass-api", SERVICE = "fosu-api", UNIT = "fosu-oracle-sample-maintenance";
 const RECOVERY_SECONDS = 1200, RECOVERY_UNIT_SECONDS = RECOVERY_SECONDS + 30;
@@ -61,10 +63,11 @@ function artifactEvidence(c) {
   cutover.safePath(verifier, { regular: true });
   const sourceContent = command(c, "python3", [verifier, "--archive", c.sourceArchive, "--candidate-dir", c.candidateDir], { name: "candidate-source", timeout: 120000, json: true });
   if (sourceContent.status !== "PASS" || sourceContent.exactFileSet !== true || sourceContent.writes !== 0) fail("SOURCE_CONTENT_VERIFICATION_FAILED");
+  if (cutover.blobHash(path.join(c.candidateDir, "server/src/app.js")) !== PIN.appBlob || cutover.blobHash(path.join(c.candidateDir, "server/src/services/releaseLifecycleService.js")) !== PIN.lifecycleBlob) fail("NATIVE_LIFECYCLE_SOURCE_CHANGED");
   const operate = path.join(c.candidateDir, "deploy/oracle-sample/operate.sh"), pf = path.join(c.candidateDir, "deploy/oracle-sample/preflight.js");
   for (const f of [operate, pf]) cutover.safePath(f, { regular: true });
   command(c, "bash", ["-n", operate], { name: "operate-syntax" });
-  return { commit: PIN.commit, sourceSha256: PIN.sourceSha256, imageSha256: PIN.imageSha256, receiptSha256: PIN.receiptSha256, imageId: PIN.image, operateSha256: fileHash(operate), preflightSha256: fileHash(pf), verifierSha256: fileHash(verifier), sourceContent };
+  return { commit: PIN.commit, sourceSha256: PIN.sourceSha256, imageSha256: PIN.imageSha256, receiptSha256: PIN.receiptSha256, imageId: PIN.image, operateSha256: fileHash(operate), preflightSha256: fileHash(pf), verifierSha256: fileHash(verifier), sourceContent, nativeAppBlob: PIN.appBlob, nativeLifecycleBlob: PIN.lifecycleBlob };
 }
 async function get(route, headers = {}) {
   const r = await fetch("http://127.0.0.1:18318" + route, { headers, redirect: "error", signal: AbortSignal.timeout(10000) });
@@ -101,7 +104,16 @@ function validatePersistence(c, record) {
 }
 function assertP0(c, record) {
   const s = read(c.p0StateFile);
-  if (s.schema !== "oracle-runtime-cutover.v1" || s.phase !== "PASS" || s.persistenceValidated !== true || !validatePersistence(c, record)) fail("P0_PERSISTENCE_PASS_REQUIRED");
+  if (s.schema !== "oracle-runtime-cutover.v1" || s.persistenceValidated !== true || !validatePersistence(c, record)) fail("P0_PERSISTENCE_PASS_REQUIRED");
+  if (s.phase === "PASS") return;
+  if (s.phase !== "RECOVERED_PERSISTENT") fail("P0_PERSISTENCE_PASS_REQUIRED");
+  const dir = path.dirname(c.p0StateFile), accepted = path.join(dir, "readonly-acceptance.private.json");
+  cutover.safePath(accepted, { regular: true, privateFile: true });
+  const a = read(accepted), target = path.join(c.appDir, "server/storage/runtime-data");
+  const requiredTrue = ["personalAgentOnline", "personalAdmissionRestored", "activeReleaseUnchanged", "rollbackReady", "readOnly"];
+  if (a.schema !== "oracle-runtime-persistence-acceptance.v1" || a.operationPhase !== "RECOVERED_PERSISTENT" || a.runtimePersistence !== "PASS" || a.runtimeDataPreserved !== "YES" || a.productionApi !== "HEALTHY" || a.personalAgent !== "UNCHANGED" || requiredTrue.some(k => a[k] !== true) || a.containerMutation !== false || a.dataCopy !== false || a.originalStateSha256 !== fileHash(c.p0StateFile) || a.baselineSha256 !== fileHash(path.join(dir, "baseline.json")) || a.originalImageId !== PIN.oldImage || a.liveImageId !== record.Image || a.liveContainerId !== record.Id || a.markerSha256 !== fileHash(path.join(target, ".fosu-runtime-migration.json")) || a.bootstrapReceiptSha256 !== fileHash(path.join(target, ".fosu-runtime-bootstrap.json"))) fail("P0_READONLY_ACCEPTANCE_NOT_BOUND");
+  const marker = read(path.join(target, ".fosu-runtime-migration.json")), receipt = read(path.join(target, ".fosu-runtime-bootstrap.json")), migration = read(path.join(dir, "migration.private.json"));
+  if (a.migrationDataFingerprint !== marker.dataFingerprint || a.migrationDataFingerprint !== migration.dataFingerprint || a.migrationArchiveSha256 !== marker.archiveSha256 || a.migrationArchiveSha256 !== migration.archiveSha256 || receipt.state !== "migration-accepted" || receipt.migrationVerified !== true || receipt.migrationMarkerSha256 !== a.markerSha256 || receipt.migrationDataFingerprint !== a.migrationDataFingerprint || receipt.migrationArchiveSha256 !== a.migrationArchiveSha256 || typeof marker.archive !== "string" || path.basename(marker.archive) !== marker.archive || a.migrationArchiveSha256 !== fileHash(path.join(dir, "final-runtime-backup", marker.archive))) fail("P0_READONLY_ACCEPTANCE_NOT_BOUND");
 }
 function pinnedBaseline(record, img) {
   if (record.Image !== PIN.oldImage || img.Id !== PIN.oldImage || img.Architecture !== "arm64" || record.Config?.Labels?.["org.opencontainers.image.revision"] !== PIN.base || img.Config?.Labels?.["org.opencontainers.image.revision"] !== PIN.base || record.State?.Running !== true || record.State?.Paused !== false || record.State?.Health?.Status !== "healthy") fail("LIVE_BASE_IDENTITY_REJECTED");
@@ -119,6 +131,8 @@ async function prepare(c) {
   const previous = fs.existsSync(statePath(c)) ? read(statePath(c)) : null;
   if (previous && !["PREPARED", "PREPARED_PERSISTENCE_PENDING", "PREPARED_JOB_RECONCILIATION_REQUIRED"].includes(previous.phase)) fail("MAINTENANCE_STATE_ALREADY_USED");
   const artifacts = artifactEvidence(c), record = inspect(c), img = image(c, record.Image);
+  command(c, "/usr/bin/pigz", ["--version"], { name: "compression-tool" });
+  artifacts.controlledOperation = require("./preflight-adapter").setup(c, artifacts);
   pinnedBaseline(record, img);
   const info = composeInfo(record), resolved = docker(c, [...composeArgs(info), "config", "--format", "json"], { json: true });
   cutover.assertRuntimeMatchesCompose(record, img, resolved);
@@ -156,6 +170,8 @@ function verifyPrepared(c) {
   const s = read(statePath(c)), b = read(path.join(c.stateDir, "baseline.private.json"));
   if (s.configSha256 !== fileHash(c.configFile) || s.baselineSha256 !== fileHash(path.join(c.stateDir, "baseline.private.json")) || s.rollbackSha256 !== fileHash(path.join(c.stateDir, "rollback.compose.json"))) fail("PREPARED_INPUT_CHANGED");
   if (fileHash(path.join(__dirname, "verify-source.py")) !== b.artifacts.verifierSha256) fail("PREPARED_SOURCE_VERIFIER_CHANGED");
+  const controlled = b.artifacts.controlledOperation;
+  if (!controlled || fileHash(controlled.configFile) !== controlled.configSha256 || fileHash(controlled.operateFile) !== controlled.operateSha256 || fileHash(path.join(__dirname, "preflight-adapter.js")) !== controlled.adapterSha256 || fileHash(path.resolve(__dirname, "../oracle-runtime-cutover/lifecycle-guard.js")) !== controlled.lifecycleGuardSha256) fail("PREPARED_LIFECYCLE_ADAPTER_CHANGED");
   for (const row of b.sourceHashes) if (fileHash(row.file) !== row.sha256) fail("PRODUCTION_CONFIGURATION_CHANGED");
   if (!s.persistence || !b.persistence) fail("P0_PERSISTENCE_PASS_REQUIRED");
   return b;
@@ -167,7 +183,8 @@ async function restore(c) {
   if (fs.existsSync(path.join(c.stateDir, "admission.private.json"))) return helper(c, "restore");
   return { originalAdmissionRestored: true, admissionMutation: false };
 }
-function operateArgs(c) { return [path.join(c.candidateDir, "deploy/oracle-sample/operate.sh"), "deploy", `--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, `--image-dir=${c.imageDir}`, `--backup-dir=${path.join(c.stateDir, "deployment-backup")}`, `--approve-commit=${PIN.commit}`]; }
+function operateArgs(c) { return [path.join(c.stateDir, "controlled-tools/deploy/oracle-sample/operate.sh"), "deploy", `--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, `--image-dir=${c.imageDir}`, `--backup-dir=${path.join(c.stateDir, "deployment-backup")}`, `--approve-commit=${PIN.commit}`]; }
+async function guardedPreflight(c, args) { return require("./preflight-adapter").main([`--guard-config=${path.join(c.stateDir, "staging-guard.private.json")}`, ...args]); }
 async function run(c) {
   const s = read(statePath(c));
   if (s.phase !== "START_REQUESTED") fail("DETACHED_APPROVED_START_REQUIRED");
@@ -178,7 +195,7 @@ async function run(c) {
   try {
     save(c, { phase: "DRAINING" });
     await helper(c, "acquire");
-    const before = await preflight.main([`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`]);
+    const before = await guardedPreflight(c, [`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`]);
     if (before.personalAdmissionPaused !== true) fail("PERSONAL_ADMISSION_NOT_PAUSED");
     cutover.durable(path.join(c.stateDir, "deploy-before.json"), before);
     save(c, { phase: "DEPLOYING", composeMayHaveChanged: true });
@@ -187,7 +204,7 @@ async function run(c) {
     // Compose or tar racing the recovery process. systemd is the outer budget.
     command(c, "timeout", ["--signal=TERM", "--kill-after=5s", String(remaining) + "s", "bash", ...operateArgs(c)], { name: "operate-deploy", timeout: (remaining + 10) * 1000 });
     save(c, { phase: "VERIFYING" });
-    const after = await preflight.main([`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, `--verify-after=${PIN.commit}`, `--before=${path.join(c.stateDir, "deploy-before.json")}`]);
+    const after = await guardedPreflight(c, [`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, `--verify-after=${PIN.commit}`, `--before=${path.join(c.stateDir, "deploy-before.json")}`]);
     if (after.rollbackImage !== PIN.image) fail("LIVE_CANDIDATE_IMAGE_MISMATCH");
     cutover.durable(path.join(c.stateDir, "deploy-after.json"), after);
     const accepted = await helper(c, "accept", [`--expected-sha=${PIN.commit}`]);
@@ -212,6 +229,17 @@ async function waitHealthy(c, expected, seconds = 180) {
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
+function compareRecovery(c, b, after, override) {
+  const file = path.join(c.stateDir, "deploy-before.json");
+  if (!override && fs.existsSync(file)) {
+    const adapter = require("./preflight-adapter"), config = adapter.config(path.join(c.stateDir, "staging-guard.private.json"));
+    return adapter.compareProtected(read(file), after, config, { allowAdmissionControl: true });
+  }
+  const expectedProtected = fs.existsSync(file) ? read(file).protectedFiles : b.protectedFiles;
+  const protectedContent = files => Object.fromEntries(Object.entries(files).filter(([key]) => key !== "ops/campus-sync/control.json"));
+  if (after.envSha256 !== b.envSha256 || !cutover.equal(protectedContent(after.protectedFiles), protectedContent(expectedProtected))) fail("RECOVERY_PROTECTED_STATE_CHANGED");
+  return { status: "PASS", exact: true };
+}
 async function recoverInner(c, deps = {}) {
   const op = deps || {}, s = read(statePath(c)), b = read(path.join(c.stateDir, "baseline.private.json"));
   const invoke = op.command || ((bin, args, options) => command(c, bin, args, options));
@@ -231,7 +259,7 @@ async function recoverInner(c, deps = {}) {
       await (op.waitHealthy || waitHealthy)(c, PIN.image);
       await (op.probes || probes)(c, PIN.commit);
       const after = op.preflight ? await op.preflight() : await preflight.main([`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, `--expected-sha=${PIN.commit}`]);
-      if (after.envSha256 !== b.envSha256) fail("RECOVERY_PROTECTED_STATE_CHANGED");
+      compareRecovery(c, b, after, op.preflight);
       await (op.restore || restore)(c);
       save(c, { phase: "PASS", productionApi: "HEALTHY", personalAgent: "UNCHANGED", originalAdmissionRestored: true, rollback: "READY_CURRENT_PERSISTENT_DATA" });
       return publicStatus(c);
@@ -240,18 +268,16 @@ async function recoverInner(c, deps = {}) {
       // Frozen original configuration includes P0's bind. No snapshot extract,
       // docker rm, image pruning, data replacement or old-container export.
       if (!b.persistence || fileHash(path.join(c.stateDir, "rollback.compose.json")) !== s.rollbackSha256) fail("RECOVERY_PERSISTENCE_NOT_VERIFIED");
-      const p0 = read(c.p0StateFile); if (p0.phase !== "PASS" || p0.persistenceValidated !== true) fail("RECOVERY_P0_EVIDENCE_REQUIRED");
+      const p0 = read(c.p0StateFile);
+      if (p0.persistenceValidated !== true || !["PASS", "RECOVERED_PERSISTENT"].includes(p0.phase)) fail("RECOVERY_P0_EVIDENCE_REQUIRED");
+      if (p0.phase === "RECOVERED_PERSISTENT") assertP0(c, read(path.join(c.stateDir, "original-inspect.private.json")));
       invoke("docker", ["image", "inspect", PIN.oldImage], { name: "recovery-image" });
       invoke("docker", [...composeArgs(b.compose, path.join(c.stateDir, "rollback.compose.json")), "up", "-d", "--no-build", "--pull", "never", "--no-deps", SERVICE], { name: "recovery-compose", timeout: 120000 });
     }
     await (op.waitHealthy || waitHealthy)(c, PIN.oldImage);
     const healthy = await (op.probes || probes)(c, PIN.base);
     const after = op.preflight ? await op.preflight() : await preflight.main([`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`]);
-    const expectedProtected = fs.existsSync(path.join(c.stateDir, "deploy-before.json")) ? read(path.join(c.stateDir, "deploy-before.json")).protectedFiles : b.protectedFiles;
-    // Admission is intentionally audited and mutated. Its bytes cannot equal
-    // the pre-acquire record; the helper verifies/restores its actual state.
-    const protectedContent = files => Object.fromEntries(Object.entries(files).filter(([key]) => key !== "ops/campus-sync/control.json"));
-    if (after.envSha256 !== b.envSha256 || !cutover.equal(protectedContent(after.protectedFiles), protectedContent(expectedProtected))) fail("RECOVERY_PROTECTED_STATE_CHANGED");
+    compareRecovery(c, b, after, op.preflight);
     await (op.restore || restore)(c);
     cutover.durable(path.join(c.stateDir, "recovery-after.json"), { ...after, health: healthy, dataRestored: false });
     save(c, { phase: "RECOVERED", productionApi: "HEALTHY", personalAgent: "UNCHANGED", originalAdmissionRestored: true, recoveredImage: PIN.oldImage, rollback: "READY_CURRENT_PERSISTENT_DATA" });

@@ -1,11 +1,11 @@
 # Oracle Sample 集中维护入口
 
-`maintenance.js` 编排同提交的 `operate.sh` 和 `preflight.js`，不修改候选程序。它只部署固定的 PR #92 候选，保留正式 Active、Staging、Release 及个人 Agent；学校认证、Sample 任务创建/审核和正式发布仍分别批准。
+`maintenance.js` 编排固定候选的 `operate.sh` 和 `preflight.js`，不修改候选目录或镜像。它只部署固定的 PR #92 候选，保留正式 Active、Staging 正文、Release 及个人 Agent；学校认证、Sample 任务创建/审核和正式发布仍分别批准。
 
 将以下文件按仓库相对目录上传到独立私有工具目录，保留已校验的候选目录：
 
-- `deploy/oracle-sample/maintenance.js`、`preflight.js`、`verify-source.py`
-- `deploy/oracle-runtime-cutover/execute.js`
+- `deploy/oracle-sample/maintenance.js`、`preflight.js`、`verify-source.py`、`preflight-adapter.js`
+- `deploy/oracle-runtime-cutover/execute.js`、`lifecycle-guard.js`
 - `tools/oracle-sample/maintenance-admin.js`
 - 候选包已有的 `server/src/security/campusAgentSignature.js`、`fullSyncSignature.js` 及其依赖
 
@@ -29,6 +29,10 @@
 ```
 
 `credentialsFile` 仅引用主机已有的受保护配置。读取用 `ADMIN_API_TOKEN`；维护写入必须使用已有 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN` 经真实 `/api/admin/login` 获得 cookie/CSRF，核验 RBAC、Origin 及审计。工具不会将 API Token 当作网页登录凭据，也不会将 cookie/密码写入日志。
+
+原程序启动会更新 Staging 的生命周期元数据。私有受控操作副本只有三处经过指纹绑定的替换：原 preflight 调用改为 adapter，以及两处备份压缩改为 `/usr/bin/pigz -p 2 -1`（镜像归档另保留 `-n`）。备份数据范围和其他操作字节不变。Adapter 先执行完整原 preflight；仅原字节比较返回 `PROTECTED_STATE_CHANGED` 时，重新执行原全部门禁并验证完整私有 before/after 对象。只允许源码确定的六个根 meta 字段按真实 Active/时间更新；课表正文、hash、来源、指针、其他 protected 文件、环境及容器配置仍严格相等。
+
+已恢复的 P0 事务可以保持 `RECOVERED_PERSISTENT`，由 `execute.js accept` 作独立只读持久化验收；P1 将其证据绑定到实际容器、旧状态 SHA、迁移归档、marker 和 bootstrap receipt。不得把历史缺失的 Staging 前对象或恢复流量后的点赞字节变动描述为历史未变。它们不替代下一窗口的完整 before 快照和严格部署门禁。
 
 ```bash
 node /root/private-stage/operations/deploy/oracle-sample/maintenance.js prepare --config=/root/private-p1-config.json

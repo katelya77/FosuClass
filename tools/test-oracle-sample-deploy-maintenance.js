@@ -124,3 +124,28 @@ test("job reconciliation preparation cannot start or trigger recovery mutations"
     assert.equal((await m.recoverInner(f.c, f.deps)).status, "PREPARED_JOB_RECONCILIATION_REQUIRED"); assert.deepEqual(f.commands, []);
   } finally { f.close(); }
 });
+function persistenceFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-p0-readonly-binding-"));
+  const c = { appDir: path.join(root, "app"), p0StateFile: path.join(root, "p0", "state.json") }, dir = path.dirname(c.p0StateFile), data = path.join(c.appDir, "server/storage/runtime-data");
+  fs.mkdirSync(path.join(dir, "final-runtime-backup"), { recursive: true, mode: 0o700 }); fs.mkdirSync(data, { recursive: true, mode: 0o700 });
+  const archive = path.join(dir, "final-runtime-backup/fosu-runtime-data-fixture.tar.gz"); fs.writeFileSync(archive, "fixture immutable archive"); const archiveSha = cutover.fileHash(archive), fingerprint = "d".repeat(64);
+  cutover.durable(c.p0StateFile, { schema: "oracle-runtime-cutover.v1", phase: "RECOVERED_PERSISTENT", persistenceValidated: true }); cutover.durable(path.join(dir, "baseline.json"), { fixture: "immutable" });
+  cutover.durable(path.join(dir, "migration.private.json"), { dataFingerprint: fingerprint, archiveSha256: archiveSha });
+  const markerFile = path.join(data, ".fosu-runtime-migration.json"), receiptFile = path.join(data, ".fosu-runtime-bootstrap.json");
+  cutover.durable(markerFile, { archive: path.basename(archive), dataFingerprint: fingerprint, archiveSha256: archiveSha });
+  cutover.durable(receiptFile, { state: "migration-accepted", migrationVerified: true, migrationMarkerSha256: cutover.fileHash(markerFile), migrationDataFingerprint: fingerprint, migrationArchiveSha256: archiveSha });
+  const record = { Id: "f".repeat(64), Image: m.PIN.oldImage, Config: { Env: ["FOSU_DATA_DIR=/app/data"] }, Mounts: [{ Type: "bind", Source: data, Destination: "/app/data", RW: true }] };
+  const acceptedFile = path.join(dir, "readonly-acceptance.private.json");
+  const accepted = { schema: "oracle-runtime-persistence-acceptance.v1", operationPhase: "RECOVERED_PERSISTENT", runtimePersistence: "PASS", runtimeDataPreserved: "YES", productionApi: "HEALTHY", personalAgent: "UNCHANGED", personalAgentOnline: true, personalAdmissionRestored: true, activeReleaseUnchanged: true, rollbackReady: true, readOnly: true, containerMutation: false, dataCopy: false, originalStateSha256: cutover.fileHash(c.p0StateFile), baselineSha256: cutover.fileHash(path.join(dir, "baseline.json")), originalImageId: m.PIN.oldImage, liveImageId: record.Image, liveContainerId: record.Id, markerSha256: cutover.fileHash(markerFile), bootstrapReceiptSha256: cutover.fileHash(receiptFile), migrationDataFingerprint: fingerprint, migrationArchiveSha256: archiveSha, historicalStagingUnchanged: "PENDING" };
+  cutover.durable(acceptedFile, accepted);
+  return { c, record, accepted, acceptedFile, archive, close() { fs.rmSync(root, { recursive: true, force: true }); } };
+}
+test("independent readonly P0 acceptance proves persistence without rewriting recovered operation phase", () => {
+  const f = persistenceFixture(); try { const stateSha = cutover.fileHash(f.c.p0StateFile); m.assertP0(f.c, f.record); assert.equal(cutover.fileHash(f.c.p0StateFile), stateSha); assert.equal(JSON.parse(fs.readFileSync(f.c.p0StateFile)).phase, "RECOVERED_PERSISTENT"); } finally { f.close(); }
+});
+test("P0 acceptance bound to a different live container is rejected", () => {
+  const f = persistenceFixture(); try { assert.throws(() => m.assertP0(f.c, { ...f.record, Id: "e".repeat(64) }), { code: "P0_READONLY_ACCEPTANCE_NOT_BOUND" }); } finally { f.close(); }
+});
+test("changed authoritative runtime archive cannot pass readonly P0 binding", () => {
+  const f = persistenceFixture(); try { fs.appendFileSync(f.archive, "changed"); assert.throws(() => m.assertP0(f.c, f.record), { code: "P0_READONLY_ACCEPTANCE_NOT_BOUND" }); } finally { f.close(); }
+});
