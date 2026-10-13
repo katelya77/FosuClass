@@ -22,6 +22,16 @@ on:
       - 'tools/test-pam-915.py'
       - 'deploy/wyz/pam-915-install-or-accept.sh'
       - 'deploy/oracle-sample/**'
+      # Host-only maintenance has its own fixture gate; reuse the delivered
+      # pinned runtime image when only these operational files change.
+      - '!deploy/oracle-sample/maintenance.js'
+      - '!deploy/oracle-sample/MAINTENANCE.md'
+      - '!deploy/oracle-sample/verify-source.py'
+      - '!tools/oracle-sample/maintenance-admin.js'
+      - '!tools/oracle-sample/recover-orphan-job.js'
+      - '!tools/oracle-sample/test_verify_source.py'
+      - '!tools/test-oracle-sample-maintenance.js'
+      - '!tools/test-oracle-sample-deploy-maintenance.js'
   workflow_dispatch:
 permissions:
   contents: read
