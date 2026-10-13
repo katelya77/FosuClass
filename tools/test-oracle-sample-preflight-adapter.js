@@ -62,7 +62,7 @@ test("another protected file difference is blocked before stage exception", asyn
 test("missing full before object is explicitly blocked rather than invented", async () => {
   const f = fixture(); try { const report = f.report(); host.durable(f.beforeFile, report); f.change(s => { s.meta.reconciledAt = new Date().toISOString(); }); await assert.rejects(adapter.main(f.afterArgs(), f.deps), { code: "STAGING_PRESTATE_OBJECT_UNAVAILABLE" }); } finally { f.close(); }
 });
-test("controlled operate has four reviewed substitutions and original candidate bytes stay intact", () => {
+test("controlled operate preserves original gates and waits for resumed container health", () => {
   const f = fixture(); try {
     const originalPath = path.resolve(__dirname, "../deploy/oracle-sample/operate.sh"), original = fs.readFileSync(originalPath, "utf8"), target = path.join(f.c.candidateDir, "deploy/oracle-sample/operate.sh");
     fs.writeFileSync(target, original); fs.writeFileSync(path.join(f.c.candidateDir, "deploy/oracle-sample/preflight.js"), "fixture preflight bytes");
@@ -73,9 +73,27 @@ test("controlled operate has four reviewed substitutions and original candidate 
     const reverted = copy.replace(`preflight() { node "${path.resolve(__dirname, "../deploy/oracle-sample/preflight-adapter.js")}" --guard-config="${evidence.configFile}"`, 'preflight() { node "$candidate_dir/deploy/oracle-sample/preflight.js"')
       .replace('docker image save "$old_image" | /usr/bin/pigz -p 2 -1 -n > "$backup/previous-image.tar.gz"', 'docker image save "$old_image" | gzip -n > "$backup/previous-image.tar.gz"')
       .replace('tar --use-compress-program="/usr/bin/pigz -p 2 -1" -cf "$backup/state.tar.gz" -C "$app_dir/server" storage .env', 'tar -czf "$backup/state.tar.gz" -C "$app_dir/server" storage .env')
-      .replace(`[[ $image_id == "${imageId}" ]]`, '[[ $image_id == $(node -p \'JSON.parse(require("fs").readFileSync(process.argv[1]))[0].Id\' "$image_dir/image-inspect.json") ]]');
+      .replace(`[[ $image_id == "${imageId}" ]]`, '[[ $image_id == $(node -p \'JSON.parse(require("fs").readFileSync(process.argv[1]))[0].Id\' "$image_dir/image-inspect.json") ]]')
+      .replace("resume_container_id=$(docker inspect --format '{{.Id}}' fosuclass-api)\n", "")
+      .replace(`node "${path.resolve(__dirname, "../deploy/oracle-sample/preflight-adapter.js")}" --guard-config="${evidence.configFile}" --wait-resumed-container="$resume_container_id" >/dev/null\n`, "");
     assert.equal(reverted, original, "every other byte and original safety gate must be preserved");
   } finally { f.close(); }
+});
+test("pause recovery health lag waits without accepting deployment or changing state", async () => {
+  const id = "a".repeat(64), image = "sha256:d864c4d92d063a3abc907fe89d3973c33eab8611b03b1caf1d78568bb20ead93";
+  let elapsed = 0, reads = 0;
+  const result = await adapter.waitResumed(id, { now: () => elapsed, sleep: async ms => { elapsed += ms; }, inspect: () => ({ Id: id, Image: image, State: { Running: true, Paused: false, Health: { Status: ++reads < 3 ? "unhealthy" : "healthy" } } }) });
+  assert.equal(reads, 3); assert.equal(elapsed, 4000); assert.equal(result.fullPreflight, "STILL_REQUIRED"); assert.equal(result.writes, 0);
+});
+test("resumed wrong image, identity, paused state or missing health is rejected", async () => {
+  const id = "a".repeat(64), image = "sha256:d864c4d92d063a3abc907fe89d3973c33eab8611b03b1caf1d78568bb20ead93";
+  for (const r of [{ Id: "b".repeat(64), Image: image, State: { Running: true, Paused: false } }, { Id: id, Image: "wrong", State: { Running: true, Paused: false } }, { Id: id, Image: image, State: { Running: true, Paused: true } }]) await assert.rejects(adapter.waitResumed(id, { inspect: () => r }), { code: "RESUMED_CONTAINER_IDENTITY_CHANGED" });
+  await assert.rejects(adapter.waitResumed(id, { inspect: () => ({ Id: id, Image: image, State: { Running: true, Paused: false } }) }), { code: "RESUMED_CONTAINER_HEALTH_UNVERIFIABLE" });
+});
+test("resumed unhealthy container times out and cannot pass the original gate", async () => {
+  const id = "a".repeat(64); let elapsed = 0;
+  await assert.rejects(adapter.waitResumed(id, { now: () => elapsed, sleep: async ms => { elapsed += ms; }, inspect: () => ({ Id: id, Image: "sha256:d864c4d92d063a3abc907fe89d3973c33eab8611b03b1caf1d78568bb20ead93", State: { Running: true, Paused: false, Health: { Status: "unhealthy" } } }) }), { code: "RESUMED_CONTAINER_HEALTH_TIMEOUT" });
+  assert.equal(elapsed, 90000);
 });
 test("existing image reuse remains bound to the exact validated runtime digest", () => {
   const f = fixture(); try {

@@ -101,6 +101,14 @@ Inspect root-only `state.json`, `baseline.json`, `migration.private.json`,
 
 ## Failure and recovery
 
+The Sample host wrapper waits up to 90 seconds for the same original container
+to return to Docker `healthy` after its consistent backup pause. Pause can make
+health probes time out even though unpause restores the API. The wait rejects a
+changed container ID, image, stopped/paused state or absent health check; timeout
+enters the existing recovery path. The unchanged full preflight still runs after
+this wait and before any candidate switch. This is a host operation fix and does
+not rebuild or modify the pinned candidate.
+
 The worker deadline is bounded by `windowSeconds` (120–1800 seconds). Its
 `ExecStopPost` recovery and the independently enabled watchdog/boot service also
 cover lost SSH, Ctrl+C, SIGKILL and reboot. Recovery is serialized by a kernel
