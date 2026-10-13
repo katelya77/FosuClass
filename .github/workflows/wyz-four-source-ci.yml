@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915]
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,9 @@ jobs:
       - run: npm ci
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
+      - run: node --test tools/test-collector-worker-receipt.js tools/test-collector-request-ledger.js tools/test-collector-target-checkpoint.js
+      - run: node tools/test-collector-request-ledger-route.js
+      - run: python3 tools/test-collector-readonly-inspect.py
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
       - run: sudo "$(command -v node)" tools/test-collector-network-recovery.js
       - run: sudo "$(command -v node)" tools/test-collector-oracle-transport.js
@@ -84,6 +87,9 @@ jobs:
       - run: npm ci
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
+      - run: node --test tools/test-collector-worker-receipt.js tools/test-collector-request-ledger.js tools/test-collector-target-checkpoint.js
+      - run: node tools/test-collector-request-ledger-route.js
+      - run: python tools/test-collector-readonly-inspect.py
       - run: npx --prefix tools/fosu-sync-client playwright install chromium
       - run: node tools/test-collector-cas-mobile.js
       - run: node tools/test-collector-cas-post-policy.js
@@ -108,6 +114,8 @@ jobs:
           docker build --build-arg "PLAYWRIGHT_VERSION=$version" -f deploy/wyz/Collector.Dockerfile -t fosu-collector-test .
       - name: Real local browser lifecycle with no network
         run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test
+      - name: Actual sync worker import and context lifecycle with no network
+        run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test node tools/wyz-schedule-collector/worker-offline-smoke.js
       - name: CAS POST and language BLOCK regression with no network
         run: |
           docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \

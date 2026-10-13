@@ -29,6 +29,7 @@ const {
   printablePlan,
 } = require("../../shared/syncPlan");
 const syncCacheStore = require("../../shared/syncCacheStore");
+const workerReceipt = process.env.FOSU_COLLECTOR_MODE === "1" ? require("../wyz-schedule-collector/workerReceipt") : { setPhase: () => {}, durable: syncCacheStore.writeJsonAtomic, normalizeCode: error => error.code || "SYNC_FAILED", getPhase: () => undefined };
 const { isFreshNetworkSidecar } = require("../../shared/syncProvenance");
 
 console.log(`[env] .env path: ${envPath}`);
@@ -120,6 +121,7 @@ function finishSyncStage(token, patch = {}) {
 }
 
 async function withSyncStage(stage, fn) {
+  workerReceipt.setPhase(stage);
   const token = beginSyncStage(stage);
   try {
     const result = await fn();
@@ -259,7 +261,7 @@ function fourSourcePlan() { const plan = getActiveSyncPlan(); return strictDirec
 function collectorProgress(stage, kind, summary) {
   global.DIRECT_SOURCE_SUMMARY = global.DIRECT_SOURCE_SUMMARY || {};
   if (kind && summary) global.DIRECT_SOURCE_SUMMARY[kind] = summary;
-  if (process.env.FOSU_COLLECTOR_PROGRESS_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_PROGRESS_FILE, { stage, schoolRequestCount: global.SCHOOL_REQUEST_COUNT || 0, directSourceSummary: global.DIRECT_SOURCE_SUMMARY });
+  if (process.env.FOSU_COLLECTOR_PROGRESS_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_PROGRESS_FILE, { stage, ...(global.SCHOOL_REQUEST_COUNT_KNOWN === false ? {} : { schoolRequestCount: global.SCHOOL_REQUEST_COUNT || 0 }), directSourceSummary: global.DIRECT_SOURCE_SUMMARY });
 }
 
 function getEnvFlag(name, defaultValue) {
@@ -3711,7 +3713,7 @@ async function initBrowserContext() {
   }
 
   let context;
-
+  try {
   if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
     if (!fs.existsSync(SESSION_PATH)) {
       console.error("❌ 本地未找到 session.json 登录会话文件！");
@@ -3756,6 +3758,17 @@ async function initBrowserContext() {
     let schoolQueue = Promise.resolve(), lastSchoolRequest = 0, requestFailure;
     const sampleBudget = process.env.FOSU_COLLECTOR_SAMPLE_KIND ? Number(process.env.FOSU_COLLECTOR_REQUEST_BUDGET) : 0;
     if (process.env.FOSU_COLLECTOR_SAMPLE_KIND && (!["class", "four"].includes(process.env.FOSU_COLLECTOR_SAMPLE_KIND) || !Number.isSafeInteger(sampleBudget) || sampleBudget < 1 || sampleBudget > 120)) throw directAcquisition.failure("SAMPLE_POLICY_REJECTED");
+    let requestLedger;
+    if (sampleBudget && process.env.FOSU_COLLECTOR_RUN_ID) {
+      fs.mkdirSync(SYNC_DATA_DIR, { recursive: true, mode: 0o700 });
+      const sourceHash = crypto.createHash("sha256").update(fs.readFileSync(__filename)).digest("hex");
+      if (sourceHash !== process.env.FOSU_COLLECTOR_WORKER_SOURCE_HASH) throw directAcquisition.failure("COLLECTOR_WORKER_SOURCE_CHANGED");
+      const ledgerFile = path.join(SYNC_DATA_DIR, "request-ledger.json");
+      if (!fs.existsSync(ledgerFile) && global.SCHOOL_REQUEST_COUNT) throw directAcquisition.failure("COLLECTOR_LEGACY_REQUEST_STATE_REVIEW_REQUIRED");
+      requestLedger = require("../wyz-schedule-collector/requestLedger").open(ledgerFile, { runId: process.env.FOSU_COLLECTOR_RUN_ID, term: process.env.FOSU_COLLECTOR_TERM, workerSourceHash: sourceHash, requestBudget: sampleBudget, expiresAt: process.env.FOSU_COLLECTOR_APPROVAL_EXPIRES_AT });
+      global.SCHOOL_REQUEST_COUNT = requestLedger.snapshot().reserved;
+      global.COLLECTOR_REQUEST_LEDGER = requestLedger;
+    }
     if (sampleBudget) {
       // Routing skips HTTP redirect hops. Bounded samples fail closed at the
       // response before a redirect can send a request outside the audited budget.
@@ -3797,18 +3810,41 @@ async function initBrowserContext() {
         }
         const delay = Math.max(0, lastSchoolRequest + 900 + Math.floor(Math.random() * 401) - Date.now());
         if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-        global.SCHOOL_REQUEST_COUNT++;
-        syncCacheStore.writeJsonAtomic(countFile, { count: global.SCHOOL_REQUEST_COUNT });
-        lastSchoolRequest = Date.now();
-        await route.continue();
-        const response = await route.request().response();
-        if (response) await response.finished();
+        let ordinal;
+        try {
+          if (requestLedger) ordinal = requestLedger.reserve(route.request().method(), route.request().resourceType());
+          global.SCHOOL_REQUEST_COUNT = requestLedger ? requestLedger.snapshot().reserved : global.SCHOOL_REQUEST_COUNT + 1;
+          if (requestLedger) global.SCHOOL_REQUEST_COUNT_KNOWN = false;
+          syncCacheStore.writeJsonAtomic(countFile, { count: global.SCHOOL_REQUEST_COUNT });
+          lastSchoolRequest = Date.now();
+          await route.continue();
+          const response = await route.request().response();
+          if (!response && requestLedger) throw directAcquisition.failure("COLLECTOR_REQUEST_OUTCOME_UNKNOWN");
+          if (response) {
+            const responseError = await response.finished();
+            if (responseError && requestLedger) throw directAcquisition.failure("COLLECTOR_REQUEST_OUTCOME_UNKNOWN");
+            if (requestLedger) requestLedger.complete(ordinal, response.status());
+            if (requestLedger) global.SCHOOL_REQUEST_COUNT_KNOWN = true;
+          }
+        } catch (error) {
+          if (!requestLedger) throw error;
+          global.SCHOOL_REQUEST_COUNT_KNOWN = !requestLedger.snapshot().pending;
+          requestFailure = workerReceipt.normalizeCode(error);
+          global.SCHOOL_REQUEST_FAILURE = requestFailure;
+          await route.abort("blockedbyclient").catch(() => {});
+          browser.close().catch(() => {});
+        }
       });
       schoolQueue = task;
       return task;
     });
   }
   return { browser, context };
+  } catch (error) {
+    if (context && typeof context.close === "function") await context.close().catch(() => {});
+    if (browser && typeof browser.close === "function") await browser.close().catch(() => {});
+    throw error;
+  }
 }
 
 /**
@@ -5720,6 +5756,7 @@ async function main() {
     "scopes", "new-term", "crawl:daily", "crawl:scopes", "resume",
   ].includes(action);
   if (requiresTermConfigBeforeCrawl) {
+    workerReceipt.setPhase("term-config");
     const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
     global.TERM_CONFIG = await assertTermConfigBeforeCrawl(activeSemester, params);
     console.log("[term-config] resolved");
@@ -5739,6 +5776,7 @@ async function main() {
 
   // 如果是一键同步任务，则强制执行环境预检
   if (requiresTermConfigBeforeCrawl) {
+    workerReceipt.setPhase("preflight");
     runPreflight();
   }
 
@@ -5773,6 +5811,7 @@ async function main() {
   }
 
   // 2. 网络连接检测
+  workerReceipt.setPhase("campus-diagnosis");
   if (process.env.FOSU_SKIP_CAMPUS_NETWORK_CHECK === "1") {
     console.log("ℹ️ Publisher 已完成校园网检查，本次抓取跳过重复 diagnose。");
   } else {
@@ -5797,11 +5836,13 @@ async function main() {
   let browser = null;
   let context = null;
   let page = null;
+  workerReceipt.setPhase("browser-launch");
   ({ browser, context } = await initBrowserContext());
   page = await context.newPage();
 
   try {
     // 4. 校验 Session 状态
+    workerReceipt.setPhase("session-check");
     const isSessionOk = await checkSession(page);
     if (!isSessionOk) {
       const error = new Error("session 已过期，请执行 npm run sync:login 后重试");
@@ -5962,7 +6003,7 @@ if (require.main === module) {
   main().then(() => { if(global.SCHOOL_REQUEST_FAILURE)throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE); if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
     if (global.SCHOOL_REQUEST_FAILURE) error.code = global.SCHOOL_REQUEST_FAILURE;
     process.exitCode = 1;
-    if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: error.code || "SYNC_FAILED" });
+    if (process.env.FOSU_COLLECTOR_RESULT_FILE) workerReceipt.durable(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: workerReceipt.normalizeCode(error), failurePhase: workerReceipt.getPhase(), schoolRequestCountKnown: Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false, ...(Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false ? { schoolRequestCount: global.SCHOOL_REQUEST_COUNT } : {}), ...(global.COLLECTOR_REQUEST_LEDGER ? { workerRequestBudget: global.COLLECTOR_REQUEST_LEDGER.snapshot() } : {}) });
     if (!error || !error.__syncLogged) {
       console.error(JSON.stringify({
         success: false,

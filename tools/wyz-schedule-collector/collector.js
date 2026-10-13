@@ -72,6 +72,10 @@ function executeSync(run, cfg, dir, onChild) {
   for (const key of ["PATH", "Path", "HOME", "USERPROFILE", "SystemRoot", "TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH", "NODE_PATH"]) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { FOSU_COLLECTOR_MODE: "1", FOSU_SYNC_HEADLESS: "1", FOSU_COLLECTOR_SESSION: cfg.sessionPath, FOSU_SYNC_DATA_DIR: path.join(dir, "client"), FOSU_SYNC_CATALOG_CACHE: path.join(cfg.dataRoot, "catalog"), FOSU_COLLECTOR_PROGRESS_FILE: path.join(dir, "progress.json"), FOSU_COLLECTOR_RESULT_FILE: path.join(dir, "sync-result.json"), SYNC_LOCAL_STAGING_ONLY: "true", SYNC_CLASS_CRAWL_ONLY: "true", SYNC_RESOURCE_DELAY_MIN_MS: "900", SYNC_RESOURCE_DELAY_MAX_MS: "1300", FOSU_API_BASE: cfg.oracle });
   env.FOSU_COLLECTOR_LOGIN_PROFILE = cfg.loginProfile || "mobile";
+  env.FOSU_COLLECTOR_RUN_ID = run.id;
+  env.FOSU_COLLECTOR_TERM = run.term;
+  env.FOSU_COLLECTOR_APPROVAL_EXPIRES_AT = run.approvalExpiresAt || "";
+  env.FOSU_COLLECTOR_WORKER_SOURCE_HASH = crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, "tools/fosu-sync-client/sync.js"))).digest("hex");
   const args = ["tools/fosu-sync-client/sync.js", "crawl:daily", "--term=" + run.term, "--run-id=" + run.id, "--output=" + path.join(dir, "staging.json"), "--catalog-policy=" + (run.mode === "full" ? "network-only" : "reuse-validated"), "--schedule-policy=network-only", "--progress-policy=resume", "--negative-cache-policy=ignore", "--allow-derived=false", "--resource-source=direct", "--class-scope=all", "--concurrency=" + cfg.concurrency, "--delay-ms=900", "--term-start-date=" + run.termConfig.termStartDate, "--total-weeks=" + run.termConfig.totalWeeks, "--week-start=" + run.termConfig.weekStart];
   if (run.mode === "sample") {
     const policy = require("../../server/src/shared/sampleCollectionContract").policy(run.samplePolicy.kind, run.samplePolicy.requestBudget);
@@ -85,12 +89,17 @@ function executeSync(run, cfg, dir, onChild) {
   }
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.join(cfg.dataRoot, "catalog"), { recursive: true, mode: 0o700 });
-    const command = require("./browserRuntime").workerCommand(process.execPath, args, env, cfg, dir, ROOT);
+    const command = require("./browserRuntime").workerCommand(process.execPath, ["--require", "./tools/wyz-schedule-collector/workerReceipt.js", ...args], env, cfg, dir, ROOT);
     writeJsonAtomic(path.join(dir, "worker-lease.json"), { deadline: Date.now() + 90000 });
     const child = spawn(command.executable, command.args, { cwd: command.cwd, env: command.env, stdio: "ignore", windowsHide: true });
     onChild(child);
     child.once("error", () => reject(failure("SYNC_LAUNCH_FAILED")));
-    child.once("exit", (code) => { const result = readJson(path.join(dir, "sync-result.json"), {}); code === 0 ? resolve() : reject(failure(code === 65 ? "COLLECTOR_LEASE_EXPIRED" : result.code || "SYNC_FAILED")); });
+    child.once("exit", (code, signal) => {
+      const result = readJson(path.join(dir, "sync-result.json"), {});
+      const failureCode = code === 65 ? "COLLECTOR_LEASE_EXPIRED" : result.code || "COLLECTOR_WORKER_RESULT_MISSING";
+      writeJsonAtomic(path.join(dir, "worker-exit.json"), { workerExitCode: code, signal: ["SIGTERM", "SIGKILL", "SIGABRT", "SIGSEGV"].includes(signal) ? signal : null, resultExists: fs.existsSync(path.join(dir, "sync-result.json")), code: code === 0 ? null : failureCode });
+      code === 0 ? resolve() : reject(failure(failureCode));
+    });
   });
 }
 async function upload(request, run, dir, data, hooks = {}) {
