@@ -13,7 +13,7 @@ function open(file, scope, now = Date.now) {
   if (fs.existsSync(file)) {
     if (!fs.lstatSync(file).isFile() || fs.statSync(file).size > 65536) fail("COLLECTOR_REQUEST_CHECKPOINT_INVALID");
     try { state = JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) { fail("COLLECTOR_REQUEST_CHECKPOINT_INVALID"); }
-    if (state.schema !== "collector-worker-request-ledger.v1" || state.scopeHash !== scopeHash || digest(state.scope) !== scopeHash || ["reserved", "completed", "failed"].some(k => !Number.isSafeInteger(state[k]) || state[k] < 0) || state.reserved > scope.requestBudget || state.completed + state.failed > state.reserved || typeof state.stopped !== "boolean" || (state.pending === null ? state.completed + state.failed !== state.reserved : !state.pending || state.pending.ordinal !== state.reserved || state.completed + state.failed !== state.reserved - 1)) fail("COLLECTOR_REQUEST_CHECKPOINT_INVALID");
+    if (state.schema !== "collector-worker-request-ledger.v1" || state.scopeHash !== scopeHash || digest(state.scope) !== scopeHash || ["reserved", "completed", "failed"].some(k => !Number.isSafeInteger(state[k]) || state[k] < 0) || state.reserved > frozen.requestBudget || state.completed + state.failed > state.reserved || typeof state.stopped !== "boolean" || (state.pending === null ? state.completed + state.failed !== state.reserved : !state.pending || state.pending.ordinal !== state.reserved || state.completed + state.failed !== state.reserved - 1)) fail("COLLECTOR_REQUEST_CHECKPOINT_INVALID");
     if (state.pending !== null) fail("COLLECTOR_REQUEST_OUTCOME_UNKNOWN");
     if (state.stopped) fail("COLLECTOR_REQUEST_STOPPED_FOR_REVIEW");
   }
@@ -21,12 +21,12 @@ function open(file, scope, now = Date.now) {
   check();
   if (!fs.existsSync(file)) durable(file, state);
   return {
-    snapshot: () => ({ reserved: state.reserved, completed: state.completed, failed: state.failed, pending: state.pending !== null, remaining: scope.requestBudget - state.reserved }),
+    snapshot: () => ({ reserved: state.reserved, completed: state.completed, failed: state.failed, pending: state.pending !== null, remaining: frozen.requestBudget - state.reserved }),
     reserve(method, resourceType) {
       check();
       if (state.stopped) fail("COLLECTOR_REQUEST_STOPPED_FOR_REVIEW");
       if (state.pending !== null) fail("COLLECTOR_REQUEST_OUTCOME_UNKNOWN");
-      if (state.reserved >= scope.requestBudget) fail("SCHOOL_REQUEST_BUDGET_EXCEEDED");
+      if (state.reserved >= frozen.requestBudget) fail("SCHOOL_REQUEST_BUDGET_EXCEEDED");
       if (!["GET", "POST", "HEAD"].includes(method)) fail("SCHOOL_REQUEST_METHOD_REJECTED");
       const ordinal = ++state.reserved;
       state.pending = { ordinal, method, resourceType: ["document", "xhr", "fetch", "script", "stylesheet", "image", "font", "other"].includes(resourceType) ? resourceType : "other" };

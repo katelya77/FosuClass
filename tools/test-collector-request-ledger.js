@@ -53,3 +53,10 @@ test("corrupted counters fail closed", () => fixture(file => {
   fs.writeFileSync(file, JSON.stringify(saved));
   assert.throws(() => open(file, s), /CHECKPOINT_INVALID/);
 }));
+test("mutating caller options cannot enlarge the approved budget", () => fixture(file => {
+  const s = { ...scope(), requestBudget: 1 }, ledger = open(file, s);
+  s.requestBudget = 120;
+  ledger.complete(ledger.reserve("POST", "xhr"), 200);
+  assert.equal(ledger.snapshot().remaining, 0);
+  assert.throws(() => ledger.reserve("POST", "xhr"), /BUDGET_EXCEEDED/);
+}));
