@@ -48,32 +48,18 @@ function resolveCode(error) {
 function formatBeijing(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) return "";
-  const parts = {};
-  new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date).forEach((part) => {
-    parts[part.type] = part.value;
-  });
-  return parts.year + "-" + parts.month + "-" + parts.day + " " + parts.hour + ":" + parts.minute;
+  // Mini Program engines need not provide Intl.DateTimeFormat / formatToParts.
+  const beijing = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  const pad = (part) => String(part).padStart(2, "0");
+  return beijing.getUTCFullYear() + "-" + pad(beijing.getUTCMonth() + 1) + "-" + pad(beijing.getUTCDate())
+    + " " + pad(beijing.getUTCHours()) + ":" + pad(beijing.getUTCMinutes());
 }
 
 function humanWait(seconds) {
-  const value = Math.round(Number(seconds));
+  const value = Math.ceil(Number(seconds));
   if (!Number.isFinite(value) || value <= 0) return "";
   if (value < 60) return value + " 秒后";
   return Math.ceil(value / 60) + " 分钟后";
-}
-
-function problemId(error) {
-  const raw = String(error && (error.requestId || (error.payload && error.payload.requestId)) || "");
-  if (/^[a-f0-9]{4,16}$/i.test(raw)) return raw.slice(0, 8).toUpperCase();
-  return Math.random().toString(16).slice(2, 6).toUpperCase();
 }
 
 function present(code, error) {
@@ -94,7 +80,7 @@ function present(code, error) {
     const quotaSentence = limitText
       ? "为保护学校系统，个人课表每天最多同步 " + limitText + " 次。"
       : "为保护学校系统，个人课表今天的同步次数已用完。";
-    const resetSentence = reset ? "下次可在 " + reset + "（北京时间）后再次同步。" : "明天 00:00 后可再次同步。";
+    const resetSentence = reset ? "下次可在 " + reset + "（北京时间）后再次同步。" : "请在同步次数恢复后再试。";
     return {
       title: "今日同步次数已用完",
       content: quotaSentence + resetSentence,
@@ -106,8 +92,17 @@ function present(code, error) {
   if (code === "CAMPUS_SYNC_RATE_LIMITED" || code === "IMPORT_RATE_LIMITED") {
     const wait = humanWait(details.retryAfterSeconds || details.retryAfter);
     return {
-      title: "操作有些频繁",
+      title: "请求过于频繁",
       content: wait ? "同步请求过于频繁，请在 " + wait + "再试。" : "同步请求过于频繁，请稍后再试。",
+      confirmText: "我知道了",
+      cancelText: "",
+      action: "acknowledge",
+    };
+  }
+  if (["NETWORK_OFFLINE", "WECHAT_NETWORK_REQUEST_FAILED", "DNS_FAILED", "TLS_FAILED", "CONNECT_TIMEOUT"].includes(code)) {
+    return {
+      title: "暂时无法连接同步服务",
+      content: "请检查网络连接后重新同步。已保存的课表仍可正常使用。",
       confirmText: "我知道了",
       cancelText: "",
       action: "acknowledge",
@@ -245,7 +240,7 @@ function present(code, error) {
   }
   return {
     title: "同步没有完成",
-    content: "本次个人课表同步没有完成，请稍后再试。\n问题编号：" + problemId(error),
+    content: "本次个人课表同步未完成，已保存的课表仍可正常使用。请稍后再试；如果持续失败，可在设置中反馈问题。",
     confirmText: "我知道了",
     cancelText: "",
     action: "acknowledge",

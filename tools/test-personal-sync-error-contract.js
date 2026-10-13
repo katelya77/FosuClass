@@ -1,7 +1,7 @@
 const assert = require("assert");
 const { classifyTimetableDocument } = require("../miniprogram/services/fosuDirectHtml");
 const { classifyTimetableDocument: classifyOnServer } = require("../server/src/services/personalSchedulePageAssertion");
-const { presentPersonalSyncError } = require("../miniprogram/services/personalSyncErrorPresenter");
+const { presentPersonalSyncError, formatBeijing, humanWait } = require("../miniprogram/services/personalSyncErrorPresenter");
 const { assertPersonalSyncRenderableState } = require("../miniprogram/services/personalSyncRenderableState");
 const { applyPersonalSyncFailure } = require("../miniprogram/services/personalSyncFailureTransition");
 const { createFosuDirectClient } = require("../miniprogram/services/fosuDirectClient");
@@ -27,7 +27,7 @@ assert.strictEqual(same(TIMETABLE, "https://100.fosu.edu.cn/xskb/xskb_list.do"),
 const cases = {
   INVALID_CREDENTIALS: ["学号或密码错误", "学校账号验证未通过，请检查学号和密码后重新尝试。", "重新输入"],
   CAMPUS_SYNC_DAILY_LIMIT: ["今日同步次数已用完", "3", "我知道了"],
-  CAMPUS_SYNC_RATE_LIMITED: ["操作有些频繁", "45 秒后", "我知道了"],
+  CAMPUS_SYNC_RATE_LIMITED: ["请求过于频繁", "45 秒后", "我知道了"],
   CAMPUS_SYNC_CONCURRENT_LIMIT: ["正在同步课表", "当前已有一次个人课表同步正在进行", "我知道了"],
   CAMPUS_SYNC_BUSY: ["当前同步人数较多", "当前同步任务较多", "我知道了"],
   CAMPUS_SYNC_MAINTENANCE: ["同步服务维护中", "已保存的课表仍可正常使用", "我知道了"],
@@ -37,7 +37,7 @@ const cases = {
   PROFILE_ID_MISMATCH: ["账号身份校验未通过", "读取到的学校账号身份与当前输入不一致", "重新输入"],
   STRUCTURE_CHANGED: ["暂时无法识别课表", "本次没有修改你的现有课表", "我知道了"],
   EMPTY_PERSONAL_SCHEDULE: ["暂未读取到课程", "你的现有课表不会被修改", "我知道了"],
-  UNKNOWN_SYNC_ERROR: ["同步没有完成", "问题编号：", "我知道了"],
+  UNKNOWN_SYNC_ERROR: ["同步没有完成", "请稍后再试", "我知道了"],
 };
 
 Object.keys(cases).forEach((code) => {
@@ -51,6 +51,7 @@ Object.keys(cases).forEach((code) => {
   const view = presentPersonalSyncError(Object.assign({ code: code }, extra));
   cases[code].forEach((needle) => assert.ok(view.title.includes(needle) || view.content.includes(needle) || view.confirmText === needle, code + " missing " + needle));
   assert.ok(!view.title.includes(code) && !view.content.includes(code), code);
+  assert.ok(!/问题编号|AB12CD34/.test(view.content), code + " must not expose a meaningless identifier");
   assert.ok(!/HTTP status|CAS response|password|openid/i.test(view.title + view.content), code);
 });
 
@@ -63,6 +64,34 @@ assert.ok(!rate.content.includes("429"));
 const mismatch = presentPersonalSyncError({ code: "PROFILE_ID_MISMATCH", payload: { studentId: "202500009999", studentName: "不应出现" } });
 assert.ok(!mismatch.content.includes("202500009999"));
 assert.ok(!mismatch.content.includes("不应出现"));
+
+const intl = global.Intl;
+try {
+  global.Intl = undefined;
+  assert.strictEqual(formatBeijing("2026-12-31T16:00:00Z"), "2027-01-01 00:00");
+  assert.strictEqual(formatBeijing("2026-09-27T00:00:00+08:00"), "2026-09-27 00:00");
+  assert.ok(presentPersonalSyncError({ code: "CAMPUS_SYNC_DAILY_LIMIT", payload: { quota: { dailyLimit: 3, resetAt: "2026-09-26T16:00:00Z" } } }).content.includes("2026-09-27 00:00"));
+} finally {
+  global.Intl = intl;
+}
+assert.strictEqual(formatBeijing("invalid-date"), "");
+const unknownReset = presentPersonalSyncError({ code: "CAMPUS_SYNC_DAILY_LIMIT" });
+assert.ok(!unknownReset.content.includes("00:00"), "missing reset metadata must not invent a reset time");
+assert.strictEqual(humanWait(0.2), "1 秒后", "never suggest retrying before the server wait expires");
+assert.strictEqual(humanWait(60.2), "2 分钟后");
+const nestedWait = presentPersonalSyncError({ code: "CAMPUS_SYNC_RATE_LIMITED", payload: { retryAfterSeconds: 90 } });
+assert.ok(nestedWait.content.includes("2 分钟后"));
+["NETWORK_OFFLINE", "WECHAT_NETWORK_REQUEST_FAILED", "DNS_FAILED", "TLS_FAILED", "CONNECT_TIMEOUT"].forEach((code) => {
+  const view = presentPersonalSyncError({ code, requestId: "ab12cd34", message: "internal-url-and-secret" });
+  assert.strictEqual(view.code, code, "transport code remains available to diagnostics");
+  assert.ok(view.content.includes("请检查网络连接"));
+  assert.ok(!/编号|ab12|internal-url|连接诊断/i.test(view.content));
+});
+assert.strictEqual(
+  presentPersonalSyncError({ code: "NEW_FAILURE" }).content,
+  presentPersonalSyncError({ code: "NEW_FAILURE", requestId: "ab12cd34", payload: { message: "private detail" } }).content,
+  "unknown errors have stable, useful copy without invented identifiers"
+);
 
 assert.strictEqual(assertPersonalSyncRenderableState({ activeImportMethod: "method", studentImportStage: "form", studentImportLoading: false }).ok, true);
 assert.strictEqual(assertPersonalSyncRenderableState({ activeImportMethod: "student", studentImportStage: "loading", studentImportLoading: true }).ok, true);
