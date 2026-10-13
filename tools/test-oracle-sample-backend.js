@@ -273,3 +273,12 @@ test("corrupt existing state fails closed without overwriting it; baseline state
   fs.writeFileSync(file, JSON.stringify({ paused: false, runs: [], current: null, lock: null, failureCount: 2, sessionExpired: false, stopForDay: false }));
   assert.equal(control.load().failureCount, 2); assert.equal(control.sampleReadiness().ready, true);
 });
+
+test("incremental preview is scoped without queue or school writes", async () => {
+  const body={term,sourceRevision:"f076eac3b28ff4b03bd05c642672918a0d699376",catalogHash:"a".repeat(64),requestBudget:40,overheadBudget:5,freshnessMs:0,targets:[{kind:"class",targetId:"fixture-preview-group",reviewedHash:null,reviewedAt:null}]};
+  async function preview(token){const r=await fetch(origin+"/api/admin/schedule-collector/actions/preview-incremental",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"application/json","x-fosu-client":"service"},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
+  assert.equal((await preview("wrong-fixture-token")).status,401);
+  assert.equal((await preview("fixture-read-token-01234567890123456789")).status,403);
+  const before=control.history().map(r=>r.id),out=await preview(process.env.ADMIN_API_TOKEN);
+  assert.equal(out.status,200);assert.equal(out.body.preview.schoolRequests,0);assert.equal(out.body.preview.executionLocked,true);assert.equal(out.body.preview.publishable,false);assert.deepEqual(control.history().map(r=>r.id),before);
+});
