@@ -10,10 +10,12 @@ on:
       - 'deploy/oracle-sample/verify-source.py'
       - 'deploy/oracle-sample/verify-image.py'
       - 'tools/oracle-sample/maintenance-admin.js'
+      - 'tools/oracle-sample/loopback-http.js'
       - 'tools/oracle-sample/recover-orphan-job.js'
       - 'tools/oracle-sample/test_verify_source.py'
       - 'tools/oracle-sample/test_verify_image.py'
       - 'tools/test-oracle-runtime-cutover.js'
+      - 'tools/test-oracle-loopback-http.js'
       - 'tools/test-oracle-persistence-acceptance.js'
       - 'tools/test-oracle-sample-preflight-adapter.js'
       - 'tools/test-oracle-sample-maintenance.js'
@@ -44,6 +46,7 @@ jobs:
           # Root-only evidence ownership is part of the production contract.
           # Exercise it with real root-owned offline fixtures, never weaken it.
           sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" node --test tools/test-oracle-runtime-cutover.js tools/test-oracle-persistence-acceptance.js tools/test-oracle-sample-maintenance.js tools/test-oracle-sample-deploy-maintenance.js tools/test-oracle-sample-preflight-adapter.js
+          node --test tools/test-oracle-loopback-http.js
           node tools/test-collector-closure-window.js
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py

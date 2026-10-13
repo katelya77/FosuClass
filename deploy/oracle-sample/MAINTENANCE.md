@@ -6,7 +6,7 @@
 
 - `deploy/oracle-sample/maintenance.js`、`preflight.js`、`verify-source.py`、`verify-image.py`、`preflight-adapter.js`
 - `deploy/oracle-runtime-cutover/execute.js`、`lifecycle-guard.js`
-- `tools/oracle-sample/maintenance-admin.js`
+- `tools/oracle-sample/maintenance-admin.js`、`loopback-http.js`
 - 候选包已有的 `server/src/security/campusAgentSignature.js`、`fullSyncSignature.js` 及其依赖
 
 工具目录必须位于候选目录之外；候选目录的文件集合严格匹配固定源码归档。`verify-source.py` 流式核验所有源码的路径、类型、大小及 SHA256，拒绝任何额外文件；不会解包或把私有权限改成归档里的公开权限。入口自身不是镜像构建输入，不重新构建固定镜像。所有配置、状态和日志置于 root 私有目录。配置文件采用 0600，目录 0700，示例中的占位符由实际服务器路径替换：
@@ -63,3 +63,5 @@ node /root/private-stage/operations/deploy/oracle-sample/maintenance.js recover 
 Docker 29 的 containerd image store 用 manifest digest 表示镜像 ID；原交付 inspect 使用 config digest。verify-image.py 流式验证归档内每个 blob、单一 index、manifest→config→全部层关联及 CI RootFS。源码、镜像归档和原 inspect 均保持原字节；操作副本用已证明关联的精确 runtime digest 验证，不扩大到其他镜像。已加载镜像仅在 tag 的 ID 精确一致且准备阶段的 Config/RootFS 核验通过后复用。
 
 回滚恢复优先验证实际旧代码、当前持久化数据及原准入。流量恢复后的点赞变化保留前后 hash 并标为历史 PENDING；此许可只用于恢复，正常部署的点赞字节门禁仍严格生效。
+
+维护 API 请求使用独立的本机 HTTP 连接，禁止非 loopback 目标及 URL 内凭据；大文件同步校验不会把过期连接复用于认证 POST。相同 Staging SHA 仍核验原始捕获文件的完整 SHA，但不重复解析课表正文；不同 SHA 必须通过完整六字段契约校验。

@@ -2,6 +2,7 @@
 // Oracle maintenance admission only. Credentials never leave host-local requests.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { parseEnv } = require("../../deploy/oracle-sample/preflight");
+const { fetchLoopback } = require("./loopback-http");
 const BASE = "http://127.0.0.1:18318";
 const ORIGIN = "https://class.katelya.eu.org";
 function fail(code) { throw Object.assign(new Error(code), { code }); }
@@ -45,7 +46,7 @@ function safeQueue(value) {
   return { paused: s.maintenance.paused, queued: q.queued, processing: q.processing, active: q.active, agentOnline: s.agent?.online === true };
 }
 async function wire(method, route, session, body, requestId, deps = {}) {
-  const response = await (deps.fetch || fetch)((deps.base || BASE) + route, {
+  const response = await (deps.fetch || fetchLoopback)((deps.base || BASE) + route, {
     method, redirect: "manual", signal: AbortSignal.timeout(10000),
     headers: { accept: "application/json", origin: ORIGIN, "content-type": "application/json", ...(session?.cookie ? { cookie: session.cookie, "x-fosu-csrf": session.csrf } : {}), ...(session?.token ? { "x-admin-token": session.token } : {}), ...(requestId ? { "x-request-id": requestId } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),

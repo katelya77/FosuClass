@@ -6,6 +6,7 @@ const fs = require("node:fs"), path = require("node:path"), crypto = require("no
 const { execFileSync, spawnSync } = require("node:child_process");
 const preflight = require("./preflight"), admin = require("../../tools/oracle-sample/maintenance-admin");
 const cutover = require("../oracle-runtime-cutover/execute");
+const { fetchLoopback } = require("../../tools/oracle-sample/loopback-http");
 const PIN = Object.freeze({
   base: "a3dfd1989705f51c921f13883bcde1cce4502883",
   commit: "7ad3b2708ce553e6fff099fd881a4b9c86ebea39",
@@ -86,7 +87,7 @@ function artifactEvidence(c) {
   return { commit: PIN.commit, sourceSha256: PIN.sourceSha256, imageSha256: PIN.imageSha256, receiptSha256: PIN.receiptSha256, imageId: PIN.image, configImageId: PIN.configImage, imageIdentity, imageVerifierSha256: fileHash(imageVerifier), loadedCandidateVerified, operateSha256: fileHash(operate), preflightSha256: fileHash(pf), verifierSha256: fileHash(verifier), sourceContent, nativeAppBlob: PIN.appBlob, nativeLifecycleBlob: PIN.lifecycleBlob };
 }
 async function get(route, headers = {}) {
-  const r = await fetch("http://127.0.0.1:18318" + route, { headers, redirect: "error", signal: AbortSignal.timeout(10000) });
+  const r = await fetchLoopback("http://127.0.0.1:18318" + route, { headers, redirect: "error", signal: AbortSignal.timeout(10000) });
   if (!r.ok) fail("LIVE_API_STATUS_REJECTED");
   return r.json();
 }

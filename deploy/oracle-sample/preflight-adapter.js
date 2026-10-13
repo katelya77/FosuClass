@@ -4,6 +4,12 @@
 // Only a proven native lifecycle metadata difference can replace byte equality.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const host = require("../oracle-runtime-cutover/execute");
+const { fetchLoopback } = require("../../tools/oracle-sample/loopback-http");
+async function liveRequest(route, headers = {}) {
+  const r = await fetchLoopback("http://127.0.0.1:18318" + route, { headers, signal: AbortSignal.timeout(10000) });
+  if (!r.ok) fail("LOOPBACK_HEALTH_OR_AUTH_FAILED");
+  return r.json();
+}
 function fail(code) { throw Object.assign(new Error(code), { code }); }
 const read = file => JSON.parse(fs.readFileSync(file, "utf8"));
 function lifecycle() { return require("../oracle-runtime-cutover/lifecycle-guard"); }
@@ -54,12 +60,12 @@ function capture(c, report, guard = lifecycle()) {
   const hash = report.protectedFiles?.["staging-latest.json"];
   if (hash !== null && !/^[a-f0-9]{64}$/.test(hash || "")) fail("ADAPTER_STAGING_HASH_REJECTED");
   const record = path.join(c.captureDir, `${hash || "absent"}.capture.json`);
-  if (fs.existsSync(record)) return readCapture(c, hash).capture;
+  if (fs.existsSync(record)) return readCapture(c, hash, false).capture;
   const capture = guard.captureStaging({ storageDir: path.join(c.appDir, "server/storage"), stateDir: c.captureDir, label: "capture-" + crypto.randomBytes(16).toString("hex"), expectedHash: hash });
   host.durable(record, capture);
   return capture;
 }
-function readCapture(c, hash) {
+function readCapture(c, hash, parseObject = true) {
   const file = path.join(c.captureDir, `${hash || "absent"}.capture.json`);
   if (!fs.existsSync(file)) fail("STAGING_PRESTATE_OBJECT_UNAVAILABLE");
   host.safePath(file, { regular: true, privateFile: true });
@@ -68,7 +74,7 @@ function readCapture(c, hash) {
   if (!cap.exists) { if (hash !== null) fail("ADAPTER_CAPTURE_CONFLICT"); return { capture: cap, object: null }; }
   host.safePath(cap.path, { regular: true, privateFile: true });
   if (path.dirname(cap.path) !== c.captureDir || host.fileHash(cap.path) !== hash) fail("ADAPTER_CAPTURE_CONFLICT");
-  return { capture: cap, object: read(cap.path) };
+  return { capture: cap, object: parseObject ? read(cap.path) : undefined };
 }
 function compareProtected(before, after, c, { guard = lifecycle(), allowAdmissionControl = false, allowLiveReactions = false } = {}) {
   if (before.schema !== "oracle-sample-preflight.v1" || before.liveBaseSha !== "a3dfd1989705f51c921f13883bcde1cce4502883" || before.status !== "PASS" || after.status !== "PASS" || before.envSha256 !== after.envSha256 || before.containerContractSha256 !== after.containerContractSha256) fail("PROTECTED_STATE_CHANGED");
@@ -78,6 +84,10 @@ function compareProtected(before, after, c, { guard = lifecycle(), allowAdmissio
   if (allowLiveReactions) { delete expected.reactions; delete current.reactions; }
   delete expected["staging-latest.json"]; delete current["staging-latest.json"];
   if (!host.equal(expected, current)) fail("PROTECTED_STATE_CHANGED");
+  if (before.protectedFiles["staging-latest.json"] === after.protectedFiles["staging-latest.json"]) {
+    const original = readCapture(c, before.protectedFiles["staging-latest.json"], false);
+    return { status: "PASS", exact: true, metadataOnly: false, changedPaths: [], beforeSha256: original.capture.sha256, afterSha256: original.capture.sha256, ...(allowLiveReactions ? { historicalReactionsUnchanged: reactions.before === reactions.observed ? "PASS" : "PENDING", reactionHashes: reactions } : {}) };
+  }
   const old = readCapture(c, before.protectedFiles["staging-latest.json"]), fresh = capture(c, after, guard), freshObject = fresh.exists ? read(fresh.path) : null;
   const authority = guard.readActiveAuthority(path.join(c.appDir, "server/storage"));
   const proof = guard.compareStaging(old.object, freshObject, authority, { earliest: old.capture.capturedAt, latest: new Date().toISOString() });
@@ -91,14 +101,14 @@ async function main(args = process.argv.slice(2), deps = {}) {
   if (o["app-dir"] !== c.appDir || o["runtime-dir"] !== c.runtimeDir || o.manifest !== c.manifest) fail("ADAPTER_OPERATION_SCOPE_CHANGED");
   const original = deps.preflight || require(path.join(c.candidateDir, "deploy/oracle-sample/preflight.js")), guard = deps.guard || lifecycle();
   try {
-    const report = await original.main(originalArgs); capture(c, report, guard); return report;
+    const report = await original.main(originalArgs, { request: deps.request || liveRequest }); capture(c, report, guard); return report;
   } catch (error) {
     if (error.code !== "PROTECTED_STATE_CHANGED" || !(o.before || o["compare-before"])) throw error;
   }
   // Original rejected only its comparison. Run its entire current-state gate
   // again, including signed Sample readiness, inventory and Compose identity.
   const fullArgs = [`--app-dir=${c.appDir}`, `--runtime-dir=${c.runtimeDir}`, `--manifest=${c.manifest}`, ...(o["verify-after"] ? [`--expected-sha=${o["verify-after"]}`] : [])];
-  const after = await original.main(fullArgs), beforeFile = o.before || o["compare-before"];
+  const after = await original.main(fullArgs, { request: deps.request || liveRequest }), beforeFile = o.before || o["compare-before"];
   host.safePath(beforeFile, { regular: true, privateFile: true });
   const before = read(beforeFile), proof = compareProtected(before, after, c, { guard });
   host.durable(path.join(c.stateDir, `staging-guard.${Date.now()}.${process.pid}.private.json`), { beforeFile, beforeReport: before, afterReport: after, proof });
