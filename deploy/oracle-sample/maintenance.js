@@ -39,6 +39,12 @@ function command(c, bin, args, { name = "command", timeout = 30000, json = false
 function docker(c, args, opts) { return command(c, "docker", args, opts); }
 function inspect(c) { return docker(c, ["inspect", NAME], { json: true })[0]; }
 function image(c, id) { return docker(c, ["image", "inspect", id], { json: true })[0]; }
+function normalizeImageConfig(config) {
+  const out = { ...config };
+  for (const key of ["OpenStdin", "Tty", "AttachStderr", "Hostname", "StdinOnce", "AttachStdout", "Domainname", "AttachStdin", "Image", "User"]) if ([undefined, null, false, ""].includes(out[key])) delete out[key];
+  for (const key of ["OnBuild", "Volumes"]) if (out[key] === undefined || out[key] === null) delete out[key];
+  return out;
+}
 function loadConfig(file) {
   cutover.safePath(file, { regular: true, privateFile: true });
   const c = read(file), fields = ["appDir", "runtimeDir", "candidateDir", "sourceArchive", "manifest", "imageDir", "p0StateFile", "credentialsFile", "stateDir"];
@@ -66,12 +72,8 @@ function artifactEvidence(c) {
   let loadedCandidateVerified = false;
   const existing = spawnSync("docker", ["image", "inspect", "fosu-oracle-sample:" + PIN.commit], { encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
   if (existing.status === 0) {
-    const actual = JSON.parse(existing.stdout)[0], normalize = config => {
-      const out = { ...config };
-      for (const key of ["OpenStdin", "Tty", "AttachStderr", "Hostname", "StdinOnce", "AttachStdout", "Domainname", "AttachStdin", "Image", "User"]) if ([undefined, null, false, ""].includes(out[key])) delete out[key];
-      return out;
-    };
-    if (actual.Id !== PIN.image || actual.Architecture !== "arm64" || !cutover.equal(actual.RootFS, img.RootFS) || !cutover.equal(normalize(actual.Config), normalize(img.Config))) fail("LOADED_CANDIDATE_IDENTITY_MISMATCH");
+    const actual = JSON.parse(existing.stdout)[0];
+    if (actual.Id !== PIN.image || actual.Architecture !== "arm64" || !cutover.equal(actual.RootFS, img.RootFS) || !cutover.equal(normalizeImageConfig(actual.Config), normalizeImageConfig(img.Config))) fail("LOADED_CANDIDATE_IDENTITY_MISMATCH");
     loadedCandidateVerified = true;
   }
   // Match every path/type/size/content digest and reject all extra files. Modes
@@ -371,4 +373,4 @@ async function main(args = process.argv.slice(2)) {
   return publicStatus(c);
 }
 if (require.main === module) main().then(r => { console.log(JSON.stringify(r)); if (process.argv[2] === "run" && ["RECOVERED", "RECOVERY_BLOCKED"].includes(r.status)) process.exitCode = 2; }).catch(e => { console.error(JSON.stringify({ status: "BLOCKED", code: /^[A-Z0-9_]+$/.test(e.code || "") ? e.code : "SAMPLE_MAINTENANCE_FAILED", schoolRequests: 0 })); process.exitCode = 2; });
-module.exports = { PIN, RECOVERY_SECONDS, RECOVERY_UNIT_SECONDS, loadConfig, artifactEvidence, probes, composeInfo, composeArgs, validatePersistence, assertP0, pinnedBaseline, preparationInventory, unitText, recoverInner, publicStatus, operateArgs, start, main };
+module.exports = { PIN, RECOVERY_SECONDS, RECOVERY_UNIT_SECONDS, normalizeImageConfig, loadConfig, artifactEvidence, probes, composeInfo, composeArgs, validatePersistence, assertP0, pinnedBaseline, preparationInventory, unitText, recoverInner, publicStatus, operateArgs, start, main };

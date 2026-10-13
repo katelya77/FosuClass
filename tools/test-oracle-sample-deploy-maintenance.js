@@ -149,3 +149,9 @@ test("P0 acceptance bound to a different live container is rejected", () => {
 test("changed authoritative runtime archive cannot pass readonly P0 binding", () => {
   const f = persistenceFixture(); try { fs.appendFileSync(f.archive, "changed"); assert.throws(() => m.assertP0(f.c, f.record), { code: "P0_READONLY_ACCEPTANCE_NOT_BOUND" }); } finally { f.close(); }
 });
+test("Docker omitted empty defaults preserve identity but real Config changes do not", () => {
+  const image = { Env: ["FIXTURE=one"], Cmd: ["node", "fixture.js"], Labels: { fixture: "revision" } };
+  const legacy = { ...image, User: "", OpenStdin: false, Volumes: null, OnBuild: null };
+  assert.deepEqual(m.normalizeImageConfig(legacy), image);
+  for (const changed of [{ ...legacy, Env: ["FIXTURE=changed"] }, { ...legacy, Volumes: { "/fixture": {} } }, { ...legacy, OnBuild: ["RUN fixture"] }, { ...legacy, User: "different" }]) assert.notDeepEqual(m.normalizeImageConfig(changed), image);
+});
