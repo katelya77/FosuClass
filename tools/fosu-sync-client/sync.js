@@ -29,7 +29,7 @@ const {
   printablePlan,
 } = require("../../shared/syncPlan");
 const syncCacheStore = require("../../shared/syncCacheStore");
-const workerReceipt = process.env.FOSU_COLLECTOR_MODE === "1" ? require("../wyz-schedule-collector/workerReceipt") : { setPhase: () => {}, durable: syncCacheStore.writeJsonAtomic, normalizeCode: error => error.code || "SYNC_FAILED", getPhase: () => undefined };
+const workerReceipt = process.env.FOSU_COLLECTOR_MODE === "1" ? require("../wyz-schedule-collector/workerReceipt") : { setPhase: () => {}, durable: syncCacheStore.writeJsonAtomic, normalizeCode: error => error.code || "SYNC_FAILED", diagnostic: () => undefined, getPhase: () => undefined };
 const { isFreshNetworkSidecar } = require("../../shared/syncProvenance");
 
 console.log(`[env] .env path: ${envPath}`);
@@ -3882,6 +3882,10 @@ async function checkSession(page) {
   try {
     await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
   } catch (error) {
+    if (process.env.FOSU_COLLECTOR_MODE === "1") {
+      error.code = workerReceipt.normalizeCode(error, "session-check");
+      throw error; // Transport failure is not proof of an expired Session.
+    }
     console.error(`❌ 导航至教务页失败，可能未连内网或握手彻底失败: ${error.message}`);
     console.error(getExpiredSessionTip());
     return false;
@@ -3894,7 +3898,12 @@ async function checkSession(page) {
     return false;
   }
   
-  const content = await page.content();
+  let content;
+  try { content = await page.content(); }
+  catch (error) {
+    if (process.env.FOSU_COLLECTOR_MODE === "1") error.code = workerReceipt.normalizeCode(error, "session-check");
+    throw error;
+  }
   if (content.includes("统一身份认证") || content.includes("密码登录")) {
     console.error("❌ 会话已过期！页面包含登录标识。");
     console.error(getExpiredSessionTip());
@@ -6003,7 +6012,7 @@ if (require.main === module) {
   main().then(() => { if(global.SCHOOL_REQUEST_FAILURE)throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE); if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
     if (global.SCHOOL_REQUEST_FAILURE) error.code = global.SCHOOL_REQUEST_FAILURE;
     process.exitCode = 1;
-    if (process.env.FOSU_COLLECTOR_RESULT_FILE) workerReceipt.durable(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: workerReceipt.normalizeCode(error), failurePhase: workerReceipt.getPhase(), schoolRequestCountKnown: Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false, ...(Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false ? { schoolRequestCount: global.SCHOOL_REQUEST_COUNT } : {}), ...(global.COLLECTOR_REQUEST_LEDGER ? { workerRequestBudget: global.COLLECTOR_REQUEST_LEDGER.snapshot() } : {}) });
+    if (process.env.FOSU_COLLECTOR_RESULT_FILE) workerReceipt.durable(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: workerReceipt.normalizeCode(error), diagnostic: workerReceipt.diagnostic(error), failurePhase: workerReceipt.getPhase(), schoolRequestCountKnown: Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false, ...(Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false ? { schoolRequestCount: global.SCHOOL_REQUEST_COUNT } : {}), ...(global.COLLECTOR_REQUEST_LEDGER ? { workerRequestBudget: global.COLLECTOR_REQUEST_LEDGER.snapshot() } : {}) });
     if (!error || !error.__syncLogged) {
       console.error(JSON.stringify({
         success: false,
@@ -6015,6 +6024,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     initBrowserContext,
+    checkSession,
     syncCatalog,
     syncMajors,
     selectSemester,

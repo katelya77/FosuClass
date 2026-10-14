@@ -4,12 +4,40 @@
 const fs = require("fs"), path = require("path");
 const PHASES = new Set(["bootstrap", "term-config", "preflight", "campus-diagnosis", "browser-launch", "session-check", "directory-fetch", "schedule-fetch", "resource-build", "validate"]);
 let phase = "bootstrap";
+const EXCEPTIONS = new Set(["Error", "TimeoutError", "TypeError", "ReferenceError", "SyntaxError", "RangeError", "URIError", "EvalError"]);
+const TRANSPORT = new Map([
+  ["ERR_CONNECTION_RESET", "SCHOOL_CONNECTION_RESET"], ["ERR_CONNECTION_CLOSED", "SCHOOL_CONNECTION_CLOSED"],
+  ["ERR_CONNECTION_REFUSED", "SCHOOL_CONNECTION_REFUSED"], ["ERR_CONNECTION_TIMED_OUT", "SCHOOL_NETWORK_TIMEOUT"],
+  ["ERR_TIMED_OUT", "SCHOOL_NETWORK_TIMEOUT"], ["ERR_NAME_NOT_RESOLVED", "SCHOOL_DNS_FAILED"],
+  ["ERR_ADDRESS_UNREACHABLE", "SCHOOL_NETWORK_UNREACHABLE"], ["ERR_NETWORK_CHANGED", "SCHOOL_NETWORK_CHANGED"],
+  ["ERR_CERT_AUTHORITY_INVALID", "SCHOOL_TLS_CERTIFICATE_REJECTED"], ["ERR_CERT_DATE_INVALID", "SCHOOL_TLS_CERTIFICATE_REJECTED"],
+  ["ERR_CERT_COMMON_NAME_INVALID", "SCHOOL_TLS_CERTIFICATE_REJECTED"], ["ERR_SSL_PROTOCOL_ERROR", "SCHOOL_TLS_HANDSHAKE_FAILED"],
+  ["ERR_ABORTED", "SCHOOL_BROWSER_REQUEST_ABORTED"], ["ERR_FAILED", "SCHOOL_BROWSER_REQUEST_FAILED"],
+]);
+function diagnostic(error) {
+  // Inspect bounded strings locally; never retain an exception message or stack.
+  const name = error && error.name, message = typeof error?.message === "string" ? error.message.slice(0, 8192) : "";
+  let browserFailure = null;
+  if (message.includes("Unable to retrieve content because the page is navigating and changing the content")) browserFailure = "PAGE_NAVIGATION_IN_PROGRESS";
+  else if (message.includes("Target page, context or browser has been closed") || message.includes("Target closed")) browserFailure = "TARGET_CLOSED";
+  else { const found = message.match(/\bnet::(ERR_[A-Z_]+)\b/); if (found && TRANSPORT.has(found[1])) browserFailure = found[1]; }
+  const stack = typeof error?.stack === "string" ? error.stack.slice(0, 16384) : "";
+  // Only a static module identifier and numeric source position may leave here.
+  const site = stack.match(/(?:^|[\s(])[^\r\n]*[\\/]tools[\\/](fosu-sync-client[\\/]sync\.js|wyz-schedule-collector[\\/]workerReceipt\.js):(\d{1,7}):(\d{1,5})(?:\)|\s|$)/m);
+  return { exceptionType: EXCEPTIONS.has(name) ? name : "UNKNOWN", browserFailure,
+    sourceSite: site ? { module: site[1].startsWith("fosu-sync-client") ? "sync" : "worker-receipt", line: Number(site[2]), column: Number(site[3]) } : null };
+}
 function normalizeCode(error, current = phase) {
   const code = error && error.code;
   if (["MODULE_NOT_FOUND", "ERR_MODULE_NOT_FOUND"].includes(code)) return "COLLECTOR_WORKER_MODULE_MISSING";
   if (["EROFS", "EACCES", "EPERM", "ENOSPC"].includes(code)) return "COLLECTOR_WORKER_" + code;
   if (error && error.name === "TimeoutError") return ["session-check", "directory-fetch", "schedule-fetch"].includes(current) ? "SCHOOL_NETWORK_TIMEOUT" : "COLLECTOR_WORKER_TIMEOUT";
-  if (/^(?:SCHOOL|SESSION|COLLECTOR|SYNC|PLAYWRIGHT|BROWSER|DIRECT|TERM|RUN|SAMPLE|CHECKPOINT|ORACLE)_[A-Z0-9_]{1,60}$/.test(code || "") || code === "INVALID_CREDENTIALS") return code;
+  if (/^(?:SCHOOL|SESSION|COLLECTOR|SYNC|PLAYWRIGHT|BROWSER|DIRECT|TERM|RUN|SAMPLE|CHECKPOINT|ORACLE|CAMPUS)_[A-Z0-9_]{1,60}$/.test(code || "") || code === "INVALID_CREDENTIALS") return code;
+  const detail = diagnostic(error);
+  if (detail.browserFailure === "PAGE_NAVIGATION_IN_PROGRESS") return "SCHOOL_SESSION_PAGE_UNSTABLE";
+  if (detail.browserFailure === "TARGET_CLOSED") return "COLLECTOR_BROWSER_TARGET_CLOSED";
+  if (TRANSPORT.has(detail.browserFailure)) return TRANSPORT.get(detail.browserFailure);
+  if (["TypeError", "ReferenceError", "SyntaxError", "RangeError", "URIError", "EvalError"].includes(detail.exceptionType)) return "COLLECTOR_WORKER_" + detail.exceptionType.replace(/Error$/, "_ERROR").toUpperCase();
   return "COLLECTOR_WORKER_UNTYPED_FAILURE";
 }
 function durable(file, value) {
@@ -35,7 +63,7 @@ function failureReceipt(error, exitCode, env = process.env) {
   const f = files(env);
   if (!f) return;
   const code = error ? normalizeCode(error) : "COLLECTOR_WORKER_RESULT_MISSING";
-  const receipt = { success: false, code, failurePhase: phase, workerExitCode: Number.isInteger(exitCode) ? exitCode : 1 };
+  const receipt = { success: false, code, failurePhase: phase, workerExitCode: Number.isInteger(exitCode) ? exitCode : 1, ...(error ? { diagnostic: diagnostic(error) } : {}) };
   if (!fs.existsSync(f.result)) durable(f.result, receipt);
   durable(f.status, { schema: "collector-worker-status.v1", status: "FAILED", ...receipt });
 }
@@ -54,5 +82,5 @@ function install(env = process.env, proc = process) {
     } catch (_) { /* The parent retains the numeric exit. */ }
   });
 }
-module.exports = { durable, failureReceipt, getPhase, install, normalizeCode, setPhase };
+module.exports = { diagnostic, durable, failureReceipt, getPhase, install, normalizeCode, setPhase };
 if (process.execArgv.some(arg => arg.endsWith("/workerReceipt.js"))) install();
