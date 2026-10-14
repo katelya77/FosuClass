@@ -1,24 +1,27 @@
 "use strict";
-const WYZ_REVISION = "f076eac3b28ff4b03bd05c642672918a0d699376";
-const SOURCE_SHA256 = "ae7279b6ada816333221cbc6f3fa032ad97233797ae9eed1356a0aed1235d59f";
-const CANDIDATE_ZIP_SHA256 = "3d4494d76b23fc5e8dc989fdbeea5948dd7ad00b07921e935ac78049765f3e0e";
+const WYZ_REVISION = "7e8dfb24b2ce1b1e55313c7fcf9f9ba8edfb249f";
+const SOURCE_SHA256 = "9a22cc9d673c8ba6493624f9e75ebfb55cdaec7c5d0582a50f8089018841a5da";
+const CANDIDATE_ZIP_SHA256 = "97d4def84a80824568b1e2323f51776bb936713c8f696a3ca71c72cc6b4797fa";
 const RETIRED_RUN = "sc-506d1f4bea522471cf93edc6";
+const RETIRED_RUNS = Object.freeze([RETIRED_RUN, "sc-2e93227bd8502bde7c08c88c"]);
+const isRetiredRun = value => RETIRED_RUNS.includes(value);
 const ORACLE_REVISION = "7ad3b2708ce553e6fff099fd881a4b9c86ebea39";
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const runId = value => /^sc-[A-Za-z0-9-]{1,100}$/.test(value || "");
 const hash = value => /^[a-f0-9]{64}$/.test(value || "");
 function validateApproval(value, now = Date.now()) {
-  if (value?.runId === RETIRED_RUN) fail("CLOSURE_PREVIOUS_ATTEMPT_REVIEW_REQUIRED");
+  if (isRetiredRun(value?.runId)) fail("CLOSURE_PREVIOUS_ATTEMPT_REVIEW_REQUIRED");
   const keys = ["schema", "runId", "kind", "term", "requestBudget", "entityLimit", "allowOneLogin", "approvedAt", "expiresAt", "oracleApprovalExpiresAt", "wyzRevision", "oracleRevision", "oraclePreflightSha256", "classRunId", "classCanonicalHash"];
   if (!value || Object.keys(value).some(key => !keys.includes(key)) || value.schema !== "collector-school-window.v1" || !runId(value.runId) || !["class", "four"].includes(value.kind) || !/^\d{4}-\d{4}-[12]$/.test(value.term || "") || !Number.isInteger(value.requestBudget) || value.requestBudget < 1 || value.requestBudget > 120 || value.entityLimit !== 1 || typeof value.allowOneLogin !== "boolean" || value.wyzRevision !== WYZ_REVISION || value.oracleRevision !== ORACLE_REVISION || !hash(value.oraclePreflightSha256)) fail("CLOSURE_APPROVAL_INVALID");
   const approved = Date.parse(value.approvedAt), expires = Date.parse(value.expiresAt);
   if (!Number.isFinite(approved) || !Number.isFinite(expires) || approved > now + 60000 || expires <= now || expires - approved > 1800000 || expires <= approved) fail("CLOSURE_APPROVAL_EXPIRED");
   if (value.oracleApprovalExpiresAt !== undefined && (!Number.isFinite(Date.parse(value.oracleApprovalExpiresAt)) || Date.parse(value.oracleApprovalExpiresAt) < expires)) fail("CLOSURE_APPROVAL_INVALID");
-  if (value.kind === "four" && (value.allowOneLogin || !runId(value.classRunId) || !hash(value.classCanonicalHash) || value.classRunId === value.runId)) fail("CLOSURE_CLASS_REVIEW_REQUIRED");
+  if (value.kind === "four" && (value.allowOneLogin || !runId(value.classRunId) || isRetiredRun(value.classRunId) || !hash(value.classCanonicalHash) || value.classRunId === value.runId)) fail("CLOSURE_CLASS_REVIEW_REQUIRED");
   if (value.kind === "class" && (value.classRunId !== undefined || value.classCanonicalHash !== undefined)) fail("CLOSURE_APPROVAL_INVALID");
   return value;
 }
 function validateInstallProof(value) {
+  if (value?.offlineSessionReadiness !== "PASS" || value?.offlineScheduleReadiness !== "PASS") fail("CLOSURE_INSTALL_ACCEPTANCE_REQUIRED");
   if (!value || value.status !== "PASS" || value.code !== "SOURCE_UPGRADE_OFFLINE_ACCEPTED" || value.revision !== WYZ_REVISION || value.targetRevision !== WYZ_REVISION || value.sourceSha256 !== SOURCE_SHA256 || value.candidateZipSha256 !== CANDIDATE_ZIP_SHA256 || value.installedSourceFiles !== 433 || value.offlineBrowser !== "PASS" || value.offlineSyncImport !== "PASS" || value.protectedStateUnchanged !== true || value.personalAgent !== "PASS" || value.collector !== "active" || value.execute !== 0 || value.timer !== "disabled/inactive" || value.rollback !== "READY" || value.sourceOnly !== true || value.schoolAccessInvoked !== false || value.schoolRequests !== 0 || value.passwordSubmissions !== 0 || value.originalSampleReplayed !== false || value.publication !== "NOT_APPROVED") fail("CLOSURE_INSTALL_ACCEPTANCE_REQUIRED");
 }
 function validateOracleEvidence(evidence, now = Date.now()) {
@@ -77,4 +80,4 @@ async function execute(approval, deps) {
     return result;
   } finally { await deps.localGate("after"); }
 }
-module.exports = { WYZ_REVISION, ORACLE_REVISION, SOURCE_SHA256, CANDIDATE_ZIP_SHA256, RETIRED_RUN, validateApproval, validateInstallProof, validateOracleEvidence, validateReadiness, validateQueued, validateResult, execute };
+module.exports = { WYZ_REVISION, ORACLE_REVISION, SOURCE_SHA256, CANDIDATE_ZIP_SHA256, RETIRED_RUN, RETIRED_RUNS, isRetiredRun, validateApproval, validateInstallProof, validateOracleEvidence, validateReadiness, validateQueued, validateResult, execute };

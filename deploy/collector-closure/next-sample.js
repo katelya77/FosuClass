@@ -21,12 +21,12 @@ async function queue(scope,deps) {
   if(view.overview.status.current&&!view.overview.status.current.finishedAt&&!state)fail("NEXT_SAMPLE_EXISTING_RUN_IN_FLIGHT");
   // Persist a stable key before POST. Retry only this idempotent Oracle operation,
   // never a school call. An uncertain response keeps the exact same key.
-  if(!state){state={schema:"collector-next-sample-queue.v1",scopeHash,idempotencyKey:"sample-f076-"+crypto.randomBytes(16).toString("hex"),phase:"PREPARED"};await deps.save(state);}
+  if(!state){state={schema:"collector-next-sample-queue.v1",scopeHash,idempotencyKey:"sample-"+c.WYZ_REVISION.slice(0,8)+"-"+crypto.randomBytes(16).toString("hex"),phase:"PREPARED"};await deps.save(state);}
   if(state.phase==="QUEUED")return state;
   const requestId=state.idempotencyKey;
   const response=await deps.wire("POST","/api/admin/schedule-collector/actions/sample",{term:scope.term,sampleKind:"class",requestBudget:40,idempotencyKey:state.idempotencyKey},requestId);
   const r=response?.queued?.run;
-  if(response.success!==true||!r||r.id===c.RETIRED_RUN||r.mode!=="sample"||r.term!==scope.term||r.samplePolicy?.kind!=="class"||r.samplePolicy.entityLimit!==1||r.samplePolicy.requestBudget!==40||r.sampleOnly!==true||r.publishable!==false||r.coverageValid!==false||r.finishedAt||r.stage!=="idle")fail("NEXT_SAMPLE_QUEUE_RECEIPT_INVALID");
+  if(response.success!==true||!r||c.isRetiredRun(r.id)||r.mode!=="sample"||r.term!==scope.term||r.samplePolicy?.kind!=="class"||r.samplePolicy.entityLimit!==1||r.samplePolicy.requestBudget!==40||r.sampleOnly!==true||r.publishable!==false||r.coverageValid!==false||r.finishedAt||r.stage!=="idle")fail("NEXT_SAMPLE_QUEUE_RECEIPT_INVALID");
   if(Date.parse(r.approvalExpiresAt)<Date.parse(scope.expiresAt))fail("NEXT_SAMPLE_QUEUE_WINDOW_TOO_SHORT");
   const audit=await deps.wire("GET","/api/admin/audit-logs");
   const entry=audit.items?.find(v=>v.requestId===requestId&&v.action==="schedule-collector-sample"&&v.authMethod==="admin-cookie"&&v.scopes?.includes("admin:full"));

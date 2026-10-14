@@ -1,6 +1,8 @@
 # Installed WYZ Sample closure
 
-This host-local wrapper reuses installed revision `f076eac3b28ff4b03bd05c642672918a0d699376` and the signed Oracle Sample protocol at `7ad3b2708ce553e6fff099fd881a4b9c86ebea39`. It does not install a Collector, change credentials, enable its timer, or publish data. It requires the exact successful source-upgrade receipt, completed transaction, bundle SHA and current critical source-file hashes. The retired run `sc-506d1f4bea522471cf93edc6` is always rejected.
+This host-local wrapper requires timetable-ready Collector candidate `7e8dfb24b2ce1b1e55313c7fcf9f9ba8edfb249f` (PR #101, a narrow increment from accepted PR #100) and the signed Oracle Sample protocol at `7ad3b2708ce553e6fff099fd881a4b9c86ebea39`. It does not install a Collector, change credentials, enable its timer, or publish data. It requires the exact successful source-upgrade receipt, both offline Session and timetable readiness, completed transaction, bundle SHA and current critical source-file hashes. Retired runs `sc-506d1f4bea522471cf93edc6` and `sc-2e93227bd8502bde7c08c88c` are always rejected.
+
+PR #100's supplied installation receipt is accepted as the prior installed baseline. Candidate #101 still requires independent source-upgrade approval and its real offline acceptance before this entry may access the school. This operational branch descends from PR #98 and does not merge or deploy other Oracle branches.
 
 Before each independently approved Sample, transfer the current successful Oracle **production** preflight JSON into a root-only WYZ file. It expires after 30 minutes. Create the exact Sample in the protected Oracle admin page, noting its run ID, term and request budget. The wrapper verifies the signed queued task before any school request and again immediately after login.
 
