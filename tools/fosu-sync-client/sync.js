@@ -29,7 +29,7 @@ const {
   printablePlan,
 } = require("../../shared/syncPlan");
 const syncCacheStore = require("../../shared/syncCacheStore");
-const workerReceipt = process.env.FOSU_COLLECTOR_MODE === "1" ? require("../wyz-schedule-collector/workerReceipt") : { setPhase: () => {}, durable: syncCacheStore.writeJsonAtomic, normalizeCode: error => error.code || "SYNC_FAILED", getPhase: () => undefined };
+const workerReceipt = process.env.FOSU_COLLECTOR_MODE === "1" ? require("../wyz-schedule-collector/workerReceipt") : { setPhase: () => {}, durable: syncCacheStore.writeJsonAtomic, normalizeCode: error => error.code || "SYNC_FAILED", diagnostic: () => undefined, getPhase: () => undefined };
 const { isFreshNetworkSidecar } = require("../../shared/syncProvenance");
 
 console.log(`[env] .env path: ${envPath}`);
@@ -3801,6 +3801,10 @@ async function initBrowserContext() {
         return route.abort("blockedbyclient");
       }
       if (["100.fosu.edu.cn","authserver.fosu.edu.cn"].includes(target.hostname) && target.protocol!=="https:") return route.abort("blockedbyclient");
+      // Timetable facts come from documents/XHR/fetch, never decorative assets.
+      // Drop these before reservation/release: a hung image cannot hold the
+      // serial school queue, consume budget or block protected-page readiness.
+      if (["image", "font", "media"].includes(route.request().resourceType())) return route.abort("blockedbyclient");
       if (new URL(route.request().url()).hostname !== "100.fosu.edu.cn") return route.continue();
       const task = schoolQueue.catch(() => {}).then(async () => {
         if (sampleBudget && (requestFailure || global.SCHOOL_REQUEST_COUNT >= sampleBudget)) {
@@ -3879,6 +3883,30 @@ function getExpiredSessionTip() {
  */
 async function checkSession(page) {
   console.log("🔒 正在校验会话有效性...");
+  if (process.env.FOSU_COLLECTOR_MODE === "1") {
+    try {
+      const response = await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "domcontentloaded", timeout: 20000 });
+      if (!response || typeof response.status !== "function" || typeof response.url !== "function" || typeof response.text !== "function") throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      const status = response.status();
+      if ([401, 403].includes(status)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+      if (status === 429) throw directAcquisition.failure("SCHOOL_RATE_LIMITED");
+      if (status >= 500) throw directAcquisition.failure("SCHOOL_UPSTREAM_UNAVAILABLE");
+      if (status !== 200) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      // The immutable HTTP document avoids page.content() navigation races and
+      // does not require all UI resources to reach networkidle. Reuse the
+      // installed protected-page/challenge classifier; never infer validity
+      // merely from the absence of a login form.
+      const content = await response.text();
+      if (Buffer.byteLength(content) > 2 * 1024 * 1024) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      const result = require("../wyz-schedule-collector/schoolSession").classifyPage(response.url(), content);
+      if (result === "SESSION_EXPIRED") return false;
+      if (result !== "SESSION_VALID") throw directAcquisition.failure(result);
+      const current = new URL(page.url());
+      if (current.origin === "https://authserver.fosu.edu.cn" || /login/i.test(current.pathname)) return false;
+      if (current.origin !== "https://100.fosu.edu.cn") throw directAcquisition.failure("SCHOOL_TLS_OR_ORIGIN_REJECTED");
+      return true;
+    } catch (error) { error.code = workerReceipt.normalizeCode(error, "session-check"); throw error; }
+  }
   try {
     await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
   } catch (error) {
@@ -6003,7 +6031,7 @@ if (require.main === module) {
   main().then(() => { if(global.SCHOOL_REQUEST_FAILURE)throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE); if (process.env.FOSU_COLLECTOR_RESULT_FILE) syncCacheStore.writeJsonAtomic(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: true }); }).catch((error) => {
     if (global.SCHOOL_REQUEST_FAILURE) error.code = global.SCHOOL_REQUEST_FAILURE;
     process.exitCode = 1;
-    if (process.env.FOSU_COLLECTOR_RESULT_FILE) workerReceipt.durable(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: workerReceipt.normalizeCode(error), failurePhase: workerReceipt.getPhase(), schoolRequestCountKnown: Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false, ...(Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false ? { schoolRequestCount: global.SCHOOL_REQUEST_COUNT } : {}), ...(global.COLLECTOR_REQUEST_LEDGER ? { workerRequestBudget: global.COLLECTOR_REQUEST_LEDGER.snapshot() } : {}) });
+    if (process.env.FOSU_COLLECTOR_RESULT_FILE) workerReceipt.durable(process.env.FOSU_COLLECTOR_RESULT_FILE, { success: false, code: workerReceipt.normalizeCode(error), diagnostic: workerReceipt.diagnostic(error), failurePhase: workerReceipt.getPhase(), schoolRequestCountKnown: Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false, ...(Number.isSafeInteger(global.SCHOOL_REQUEST_COUNT) && global.SCHOOL_REQUEST_COUNT_KNOWN !== false ? { schoolRequestCount: global.SCHOOL_REQUEST_COUNT } : {}), ...(global.COLLECTOR_REQUEST_LEDGER ? { workerRequestBudget: global.COLLECTOR_REQUEST_LEDGER.snapshot() } : {}) });
     if (!error || !error.__syncLogged) {
       console.error(JSON.stringify({
         success: false,
@@ -6015,6 +6043,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     initBrowserContext,
+    checkSession,
     syncCatalog,
     syncMajors,
     selectSemester,

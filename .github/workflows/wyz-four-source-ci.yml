@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915, codex/collector-bounded-progress-20261013]
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,9 +22,12 @@ jobs:
       - run: npm --prefix server ci
       - run: npm --prefix tools/fosu-sync-client ci
       - run: node --test tools/test-collector-worker-receipt.js tools/test-collector-request-ledger.js tools/test-collector-target-checkpoint.js
+      - run: node --test tools/test-collector-session-check.js
       - run: node tools/test-collector-request-ledger-route.js
       - run: python3 tools/test-collector-readonly-inspect.py
+      - run: python3 tools/test-collector-failed-inspect.py
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
+      - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-session-browser.js
       - run: sudo "$(command -v node)" tools/test-collector-network-recovery.js
       - run: sudo "$(command -v node)" tools/test-collector-oracle-transport.js
       - run: sudo "$(command -v node)" tools/test-school-session-lifecycle.js
@@ -116,6 +119,12 @@ jobs:
         run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test
       - name: Actual sync worker import and context lifecycle with no network
         run: docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m fosu-collector-test node tools/wyz-schedule-collector/worker-offline-smoke.js
+      - name: Actual protected-page readiness and stalled image with no network
+        run: |
+          docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --mount "type=bind,source=$PWD/tools/test-collector-session-browser.js,target=/collector/tools/test-collector-session-browser.js,readonly" \
+            fosu-collector-test node tools/test-collector-session-browser.js
       - name: CAS POST and language BLOCK regression with no network
         run: |
           docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \

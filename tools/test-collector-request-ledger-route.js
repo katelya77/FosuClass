@@ -7,9 +7,13 @@ const runtime = require("./wyz-schedule-collector/browserRuntime"), original = r
 let handler, closed = 0, passed = 0, aborted = 0;
 runtime.launch = async () => ({ close: async () => closed++, newContext: async () => ({ close: async () => {}, newPage: async () => ({}), newCDPSession: async () => ({ on: () => {}, send: async () => {} }), route: async (_, value) => handler = value }) });
 const sync = require("./fosu-sync-client/sync");
-function route(response) { return { request: () => ({ url: () => "https://100.fosu.edu.cn/fixture-only", method: () => "POST", resourceType: () => "xhr", response: async () => response }), continue: async () => { const saved = JSON.parse(fs.readFileSync(path.join(root, "request-ledger.json"))); assert.equal(saved.pending.ordinal, saved.reserved); passed++; }, abort: async () => aborted++ }; }
+function route(response, type="xhr") { return { request: () => ({ url: () => "https://100.fosu.edu.cn/fixture-only", method: () => type==="xhr"?"POST":"GET", resourceType: () => type, response: async () => response }), continue: async () => { const saved = JSON.parse(fs.readFileSync(path.join(root, "request-ledger.json"))); assert.equal(saved.pending.ordinal, saved.reserved); passed++; }, abort: async () => aborted++ }; }
 (async () => {
   await sync.initBrowserContext();
+  for(const kind of ["image","font","media"])await handler(route({finished:async()=>null,status:()=>200},kind));
+  assert.equal(passed,0,"non-data assets must be blocked before network release");
+  assert.equal(global.SCHOOL_REQUEST_COUNT,0,"blocked assets must not reserve or consume request budget");
+  assert.equal(aborted,3);
   await handler(route({ finished: async () => null, status: () => 200 }));
   assert.equal(passed, 1); assert.equal(global.SCHOOL_REQUEST_COUNT, 1);
   await handler(route(null));
@@ -17,7 +21,7 @@ function route(response) { return { request: () => ({ url: () => "https://100.fo
   const ledger = JSON.parse(fs.readFileSync(path.join(root, "request-ledger.json")));
   assert.equal(ledger.reserved, 2); assert.equal(ledger.pending.ordinal, 2);
   assert.equal(global.SCHOOL_REQUEST_COUNT_KNOWN, false);
-  await handler(route(null)); assert.equal(passed, 2); assert.equal(aborted, 2);
+  await handler(route(null)); assert.equal(passed, 2); assert.equal(aborted, 5);
   const before = closed;
   await assert.rejects(sync.initBrowserContext(), /OUTCOME_UNKNOWN/);
   assert.equal(closed, before + 1);
