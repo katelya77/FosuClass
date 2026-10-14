@@ -74,4 +74,4 @@ jobs:
           NODE_OPTIONS: --require=./tools/fixture-network-only.js
         run: |
           npm --prefix .local/timetable-client ci --no-audit --no-fund
-          FOSU_SAMPLE_ORACLE_ROOT="$PWD" node .local/timetable-client/tools/test-collector-sample-contract.js
+          sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" "FOSU_SAMPLE_ORACLE_ROOT=$PWD" node .local/timetable-client/tools/test-collector-sample-contract.js
