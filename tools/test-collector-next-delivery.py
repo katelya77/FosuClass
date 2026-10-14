@@ -1,5 +1,5 @@
 """Offline packet preparation and retired-run gates; never executes a packet."""
-import importlib.util,json,pathlib,tempfile,unittest
+import base64,hashlib,importlib.util,io,json,pathlib,re,tarfile,tempfile,unittest
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('packet',str(ROOT/'deploy/collector-closure/build-next-delivery.py'))
@@ -27,5 +27,29 @@ class DeliveryTests(unittest.TestCase):
   self.assertIn(b'--request-budget=40',script);self.assertIn(b'--one-login',script)
   if __import__('os').name!='nt':
    subprocess.run(['bash','-n'],input=script,check=True)
+ def four_receipt(self):
+  return dict(self.receipt('sc-'+'c'*24),sampleKind='four',requestBudget=120,allowOneLogin=False,classRunId='sc-'+'e'*24,classCanonicalHash='a'*64,classReviewConfirmed=True)
+ def test_four_packet_binds_review_and_never_submits_password(self):
+  result,script=self.build(self.four_receipt())
+  self.assertEqual(result['sampleKind'],'four');self.assertEqual(result['requestBudget'],120)
+  self.assertIn(b'--kind=four',script);self.assertIn(b'--request-budget=120',script)
+  self.assertIn(('--class-run-id=sc-'+'e'*24).encode(),script)
+  self.assertIn(('--class-canonical-hash='+'a'*64).encode(),script)
+  self.assertNotIn(b'--one-login',script);self.assertNotIn(b'__PACKET_',script)
+  payload=base64.b64decode(re.search(rb"data=base64.b64decode\('([^']+)'\)",script).group(1))
+  self.assertEqual(hashlib.sha256(payload).hexdigest(),result['payloadSha256'])
+  with tarfile.open(fileobj=io.BytesIO(payload),mode='r:gz') as tar:
+   self.assertEqual(len(tar.getmembers()),7)
+   self.assertEqual(tar.extractfile('contract.js').read(),(ROOT/'deploy/collector-closure/contract.js').read_bytes().replace(b'\r\n',b'\n'))
+  if __import__('os').name!='nt':
+   __import__('subprocess').run(['bash','-n'],input=script,check=True)
+ def test_four_rejects_missing_review_wrong_budget_login_or_retired_class(self):
+  for field,value in [('allowOneLogin',True),('requestBudget',40),('classReviewConfirmed',False),('classCanonicalHash','b'*63),('classRunId','sc-506d1f4bea522471cf93edc6'),('classRunId','sc-2e93227bd8502bde7c08c88c'),('classRunId','sc-'+'c'*24)]:
+   with self.subTest(field=field,value=value):
+    receipt=self.four_receipt();receipt[field]=value
+    with self.assertRaisesRegex(ValueError,'APPROVED_QUEUE_REQUIRED'):self.build(receipt)
+ def test_class_packet_cannot_smuggle_four_review_binding(self):
+  value=self.receipt('sc-'+'b'*24);value['classRunId']='sc-'+'e'*24
+  with self.assertRaisesRegex(ValueError,'APPROVED_QUEUE_REQUIRED'):self.build(value)
 
 if __name__=='__main__':unittest.main()

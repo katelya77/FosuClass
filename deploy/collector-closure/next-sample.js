@@ -4,8 +4,10 @@
 const crypto=require("node:crypto"), c=require("./contract");
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 function validateScope(s,now=Date.now()) {
-  const keys=["schema","kind","term","requestBudget","entityLimit","concurrency","delayMinMs","delayMaxMs","allowOneLogin","schoolWindowApproved","approvedAt","expiresAt","wyzRevision","oracleRevision","publication"];
-  if(!s||Object.keys(s).some(k=>!keys.includes(k))||s.schema!=="collector-next-sample-scope.v1"||s.kind!=="class"||s.term!=="2026-2027-1"||s.requestBudget!==40||s.entityLimit!==1||s.concurrency!==1||s.delayMinMs!==900||s.delayMaxMs!==1300||typeof s.allowOneLogin!=="boolean"||s.schoolWindowApproved!==true||s.wyzRevision!==c.WYZ_REVISION||s.oracleRevision!==c.ORACLE_REVISION||s.publication!=="NOT_APPROVED")fail("NEXT_SAMPLE_EXPLICIT_SCOPE_REQUIRED");
+  const keys=["schema","kind","term","requestBudget","entityLimit","concurrency","delayMinMs","delayMaxMs","allowOneLogin","schoolWindowApproved","approvedAt","expiresAt","wyzRevision","oracleRevision","publication","classRunId","classCanonicalHash"];
+  if(!s||Object.keys(s).some(k=>!keys.includes(k))||s.schema!=="collector-next-sample-scope.v1"||!["class","four"].includes(s.kind)||s.term!=="2026-2027-1"||s.requestBudget!==(s.kind==="class"?40:120)||s.entityLimit!==1||s.concurrency!==1||s.delayMinMs!==900||s.delayMaxMs!==1300||typeof s.allowOneLogin!=="boolean"||s.schoolWindowApproved!==true||s.wyzRevision!==c.WYZ_REVISION||s.oracleRevision!==c.ORACLE_REVISION||s.publication!=="NOT_APPROVED")fail("NEXT_SAMPLE_EXPLICIT_SCOPE_REQUIRED");
+  if(s.kind==="four"&&(s.allowOneLogin||!/^sc-[A-Za-z0-9-]{1,100}$/.test(s.classRunId||"")||c.isRetiredRun(s.classRunId)||!/^[a-f0-9]{64}$/.test(s.classCanonicalHash||"")))fail("CLOSURE_CLASS_REVIEW_REQUIRED");
+  if(s.kind==="class"&&(s.classRunId!==undefined||s.classCanonicalHash!==undefined))fail("NEXT_SAMPLE_EXPLICIT_SCOPE_REQUIRED");
   if(!Number.isFinite(Date.parse(s.approvedAt))||Date.parse(s.approvedAt)>now+60000||!Number.isFinite(Date.parse(s.expiresAt))||Date.parse(s.expiresAt)<=now||Date.parse(s.expiresAt)<=Date.parse(s.approvedAt)||Date.parse(s.expiresAt)-Date.parse(s.approvedAt)>1800000)fail("NEXT_SAMPLE_SCOPE_EXPIRED");
   return s;
 }
@@ -19,18 +21,23 @@ async function queue(scope,deps) {
   if(view.success!==true||view.overview?.health?.oracleRevision!==c.ORACLE_REVISION||view.overview?.permissions?.sample!==true)fail("NEXT_SAMPLE_ADMIN_RBAC_REQUIRED");
   c.validateReadiness(view.overview.readiness);
   if(view.overview.status.current&&!view.overview.status.current.finishedAt&&!state)fail("NEXT_SAMPLE_EXISTING_RUN_IN_FLIGHT");
+  if(scope.kind==="four") {
+    const reviewed=await deps.wire("GET","/api/admin/schedule-collector/runs/"+scope.classRunId+"/review"),prior=reviewed.review?.run,receipt=reviewed.review?.receipt,human=prior?.sampleHumanReview;
+    if(reviewed.success!==true||prior?.id!==scope.classRunId||prior.mode!=="sample"||prior.term!==scope.term||prior.samplePolicy?.kind!=="class"||!prior.finishedAt||prior.result!=="PENDING SAMPLE REVIEW"||prior.canonicalHash!==scope.classCanonicalHash||human?.decision!=="confirmed"||human.comparisonAttested!==true||human.canonicalHash!==scope.classCanonicalHash||receipt?.runId!==scope.classRunId||receipt.canonicalHash!==scope.classCanonicalHash||receipt.ownershipConfirmed!==true||receipt.sampleOnly!==true||receipt.publishable!==false||receipt.coverageValid!==false||reviewed.review.validation?.normalizedSample!=="PASS")fail("CLOSURE_CLASS_REVIEW_REQUIRED");
+  }
   // Persist a stable key before POST. Retry only this idempotent Oracle operation,
   // never a school call. An uncertain response keeps the exact same key.
   if(!state){state={schema:"collector-next-sample-queue.v1",scopeHash,idempotencyKey:"sample-"+c.WYZ_REVISION.slice(0,8)+"-"+crypto.randomBytes(16).toString("hex"),phase:"PREPARED"};await deps.save(state);}
   if(state.phase==="QUEUED")return state;
   const requestId=state.idempotencyKey;
-  const response=await deps.wire("POST","/api/admin/schedule-collector/actions/sample",{term:scope.term,sampleKind:"class",requestBudget:40,idempotencyKey:state.idempotencyKey},requestId);
+  validateScope(scope,deps.now?.()||Date.now());
+  const response=await deps.wire("POST","/api/admin/schedule-collector/actions/sample",{term:scope.term,sampleKind:scope.kind,requestBudget:scope.requestBudget,idempotencyKey:state.idempotencyKey},requestId);
   const r=response?.queued?.run;
-  if(response.success!==true||!r||c.isRetiredRun(r.id)||r.mode!=="sample"||r.term!==scope.term||r.samplePolicy?.kind!=="class"||r.samplePolicy.entityLimit!==1||r.samplePolicy.requestBudget!==40||r.sampleOnly!==true||r.publishable!==false||r.coverageValid!==false||r.finishedAt||r.stage!=="idle")fail("NEXT_SAMPLE_QUEUE_RECEIPT_INVALID");
+  if(response.success!==true||!r||c.isRetiredRun(r.id)||r.id===scope.classRunId||r.mode!=="sample"||r.term!==scope.term||r.samplePolicy?.kind!==scope.kind||r.samplePolicy.entityLimit!==1||r.samplePolicy.requestBudget!==scope.requestBudget||r.sampleOnly!==true||r.publishable!==false||r.coverageValid!==false||r.finishedAt||r.stage!=="idle")fail("NEXT_SAMPLE_QUEUE_RECEIPT_INVALID");
   if(Date.parse(r.approvalExpiresAt)<Date.parse(scope.expiresAt))fail("NEXT_SAMPLE_QUEUE_WINDOW_TOO_SHORT");
   const audit=await deps.wire("GET","/api/admin/audit-logs");
   const entry=audit.items?.find(v=>v.requestId===requestId&&v.action==="schedule-collector-sample"&&v.authMethod==="admin-cookie"&&v.scopes?.includes("admin:full"));
   if(audit.success!==true||!entry)fail("NEXT_SAMPLE_NATIVE_AUDIT_REQUIRED");
-  state={...state,phase:"QUEUED",runId:r.id,term:r.term,requestBudget:40,entityLimit:1,allowOneLogin:scope.allowOneLogin,schoolWindowExpiresAt:scope.expiresAt,approvalExpiresAt:r.approvalExpiresAt,audited:true,authMethod:"admin-cookie",oraclePreflight:before,schoolRequests:0,sampleOnly:true,publishable:false,coverageValid:false};await deps.save(state);return state;
+  state={...state,phase:"QUEUED",runId:r.id,term:r.term,sampleKind:scope.kind,requestBudget:scope.requestBudget,entityLimit:1,allowOneLogin:scope.allowOneLogin,schoolWindowExpiresAt:scope.expiresAt,approvalExpiresAt:r.approvalExpiresAt,audited:true,authMethod:"admin-cookie",oraclePreflight:before,schoolRequests:0,sampleOnly:true,publishable:false,coverageValid:false,...(scope.kind==="four"?{classRunId:scope.classRunId,classCanonicalHash:scope.classCanonicalHash,classReviewConfirmed:true}:{})};await deps.save(state);return state;
 }
 module.exports={validateScope,queue};

@@ -13,3 +13,30 @@ test("missing real Cookie audit cannot mark queue acknowledged",async()=>{const 
 test("personal Broker unready prevents queue",async()=>{const f=fixture(),probe=f.deps.probe;f.deps.probe=async()=>({...await probe(),personalBrokerReady:false});await assert.rejects(next.queue(scope(),f.deps),{code:"CLOSURE_ORACLE_LIVE_EVIDENCE_REQUIRED"});assert.equal(f.getWrites(),0);});
 test("uncertain Oracle response retains stable idempotency key",async()=>{const f=fixture(),wire=f.deps.wire;let once=true;f.deps.wire=async(...args)=>{if(args[0]==="POST"&&once){once=false;throw new Error("fixture disconnected");}return wire(...args);};await assert.rejects(next.queue(scope(),f.deps));const key=f.getState().idempotencyKey;await next.queue(scope(),f.deps);assert.equal(f.getState().idempotencyKey,key);});
 test("lost response after server created current run can reconcile same Oracle key",async()=>{const f=fixture(),wire=f.deps.wire;let once=true;f.deps.wire=async(...a)=>{const out=await wire(...a);if(a[1].endsWith("overview")&&f.getWrites())out.overview.status.current=f.run;if(a[0]==="POST"&&once){once=false;throw new Error("fixture lost response after commit");}return out;};await assert.rejects(next.queue(scope(),f.deps));const key=f.getState().idempotencyKey;const out=await next.queue(scope(),f.deps);assert.equal(out.runId,f.run.id);assert.equal(out.idempotencyKey,key);});
+
+const fourScope=()=>({...scope(),kind:"four",requestBudget:120,classRunId:"sc-"+"e".repeat(24),classCanonicalHash:"a".repeat(64)});
+function fourFixture(){
+  const f=fixture(),s=fourScope(),wire=f.deps.wire;
+  f.run.samplePolicy={kind:"four",entityLimit:1,requestBudget:120};
+  f.prior={success:true,review:{run:{id:s.classRunId,mode:"sample",term:s.term,samplePolicy:{kind:"class"},finishedAt:new Date(now-1000).toISOString(),result:"PENDING SAMPLE REVIEW",canonicalHash:s.classCanonicalHash,sampleHumanReview:{decision:"confirmed",comparisonAttested:true,canonicalHash:s.classCanonicalHash}},receipt:{runId:s.classRunId,canonicalHash:s.classCanonicalHash,ownershipConfirmed:true,sampleOnly:true,publishable:false,coverageValid:false},validation:{normalizedSample:"PASS"}}};
+  f.deps.wire=async(method,url,body,id)=>{
+    if(url.endsWith("/review"))return f.prior;
+    if(method==="POST"){assert.equal(body.sampleKind,"four");assert.equal(body.requestBudget,120);}
+    return wire(method,url,body,id);
+  };
+  return f;
+}
+test("four queues a fresh audited task bound to a revalidated confirmed class hash",async()=>{const f=fourFixture(),s=fourScope(),out=await next.queue(s,f.deps);assert.equal(out.sampleKind,"four");assert.equal(out.requestBudget,120);assert.equal(out.classRunId,s.classRunId);assert.equal(out.classCanonicalHash,s.classCanonicalHash);assert.equal(out.classReviewConfirmed,true);assert.equal(out.allowOneLogin,false);assert.equal(f.getWrites(),1);});
+for(const [name,change]of [
+  ["pending human comparison",f=>f.prior.review.run.sampleHumanReview.decision="pending"],
+  ["unattested comparison",f=>f.prior.review.run.sampleHumanReview.comparisonAttested=false],
+  ["different reviewed hash",f=>f.prior.review.run.sampleHumanReview.canonicalHash="b".repeat(64)],
+  ["changed payload hash",f=>f.prior.review.receipt.canonicalHash="b".repeat(64)],
+  ["missing payload validation",f=>f.prior.review.validation.normalizedSample="PENDING"],
+  ["different term",f=>f.prior.review.run.term="2025-2026-1"],
+  ["publishable prior upload",f=>f.prior.review.receipt.publishable=true]
+])test("four cannot POST before class gate: "+name,async()=>{const f=fourFixture();change(f);await assert.rejects(next.queue(fourScope(),f.deps),{code:"CLOSURE_CLASS_REVIEW_REQUIRED"});assert.equal(f.getWrites(),0);});
+test("four refuses a new password submission authorization",async()=>{const f=fourFixture();await assert.rejects(next.queue({...fourScope(),allowOneLogin:true},f.deps),{code:"CLOSURE_CLASS_REVIEW_REQUIRED"});assert.equal(f.getWrites(),0);});
+test("four rejects either retired class task",async()=>{for(const classRunId of c.RETIRED_RUNS){const f=fourFixture();await assert.rejects(next.queue({...fourScope(),classRunId},f.deps),{code:"CLOSURE_CLASS_REVIEW_REQUIRED"});assert.equal(f.getWrites(),0);}});
+test("four cannot reuse the confirmed class task as new ID",async()=>{const f=fourFixture();f.run.id=fourScope().classRunId;await assert.rejects(next.queue(fourScope(),f.deps),{code:"NEXT_SAMPLE_QUEUE_RECEIPT_INVALID"});});
+test("approval expiring during preflight prevents the task POST",async()=>{const f=fourFixture(),probe=f.deps.probe;f.deps.probe=async()=>{const out=await probe();f.deps.now=()=>now+700000;return {...out,at:new Date(now+700000).toISOString()};};await assert.rejects(next.queue(fourScope(),f.deps),{code:"NEXT_SAMPLE_SCOPE_EXPIRED"});assert.equal(f.getWrites(),0);});
