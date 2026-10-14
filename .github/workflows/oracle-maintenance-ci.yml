@@ -23,6 +23,7 @@ on:
       - 'tools/test-collector-closure-window.js'
       - 'tools/test-collector-next-window.js'
       - 'tools/test-collector-next-sample-queue.js'
+      - 'tools/test-collector-next-delivery.py'
       - 'tools/test-oracle-orphan-job.js'
   workflow_dispatch:
 permissions:
@@ -53,6 +54,7 @@ jobs:
           sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" node --test tools/test-collector-next-window.js
           node --test tools/test-collector-next-sample-queue.js
           python3 -m py_compile deploy/collector-closure/build-next-delivery.py
+          python3 tools/test-collector-next-delivery.py
           node --test tools/test-oracle-orphan-job.js
           python3 tools/oracle-sample/test_verify_source.py
           python3 tools/oracle-sample/test_verify_image.py
@@ -62,3 +64,14 @@ jobs:
           node --check deploy/oracle-runtime-cutover/lifecycle-guard.js
           bash -n deploy/collector-closure/start-wyz.sh
           git diff --check
+      - name: Checkout the exact timetable-ready client for cross-runtime compatibility
+        uses: actions/checkout@v4
+        with:
+          ref: 7e8dfb24b2ce1b1e55313c7fcf9f9ba8edfb249f
+          path: .local/timetable-client
+      - name: Signed client against the unchanged Oracle Sample backend
+        env:
+          NODE_OPTIONS: --require=./tools/fixture-network-only.js
+        run: |
+          npm --prefix .local/timetable-client ci --no-audit --no-fund
+          sudo env "PATH=$PATH" "NODE_OPTIONS=--require=$PWD/tools/fixture-network-only.js" "FOSU_SAMPLE_ORACLE_ROOT=$PWD" node .local/timetable-client/tools/test-collector-sample-contract.js

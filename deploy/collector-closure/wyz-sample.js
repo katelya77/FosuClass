@@ -22,7 +22,7 @@ function writeExclusive(file, value) {
   const parent = fs.openSync(path.dirname(file), "r"); try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); }
 }
 function installed() {
-  const proofRoot = "/root/fosu-collector-source-f076eac3";
+  const proofRoot = "/root/fosu-collector-source-" + contract.WYZ_REVISION.slice(0, 8);
   if (!fs.existsSync(path.join(proofRoot, "result.json"))) fail("CLOSURE_INSTALL_ACCEPTANCE_REQUIRED");
   privatePath(path.join(proofRoot, "result.json"));
   contract.validateInstallProof(JSON.parse(fs.readFileSync(path.join(proofRoot, "result.json"), "utf8")));

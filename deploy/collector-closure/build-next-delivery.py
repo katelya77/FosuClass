@@ -6,7 +6,7 @@ def build(directory,receipt_file,output):
     directory=pathlib.Path(directory);receipt=json.loads(pathlib.Path(receipt_file).read_text())
     require=lambda ok: None if ok else (_ for _ in ()).throw(ValueError('NEXT_SAMPLE_APPROVED_QUEUE_REQUIRED'))
     require(receipt.get('phase')=='QUEUED' and receipt.get('audited') is True and receipt.get('authMethod')=='admin-cookie')
-    run=receipt.get('runId','');require(re.fullmatch('sc-[a-f0-9]{24}',run) and run!='sc-506d1f4bea522471cf93edc6')
+    run=receipt.get('runId','');require(re.fullmatch('sc-[a-f0-9]{24}',run) and run not in ('sc-506d1f4bea522471cf93edc6','sc-2e93227bd8502bde7c08c88c'))
     require(receipt.get('term')=='2026-2027-1' and receipt.get('requestBudget')==40 and receipt.get('entityLimit')==1 and type(receipt.get('allowOneLogin')) is bool and receipt.get('sampleOnly') is True and receipt.get('publishable') is False and receipt.get('coverageValid') is False)
     expiry=receipt.get('schoolWindowExpiresAt','');require(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z',expiry))
     proof=receipt['oraclePreflight'];require(proof.get('schema')=='oracle-sample-preflight.v1' and proof.get('status')=='PASS' and proof.get('liveBaseSha')=='7ad3b2708ce553e6fff099fd881a4b9c86ebea39' and proof.get('schoolRequests')==0)
