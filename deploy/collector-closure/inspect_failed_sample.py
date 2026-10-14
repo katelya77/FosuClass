@@ -44,7 +44,7 @@ def iso_ms(value):
 def inspect(run,term,revision,worker_sha,state,closure,current,execute=command,enforce=True):
     if not re.fullmatch(r'sc-[a-f0-9]{24}',run) or not re.fullmatch(r'\d{4}-\d{4}-[12]',term) or not re.fullmatch(r'[a-f0-9]{40}',revision) or not re.fullmatch(r'[a-f0-9]{64}',worker_sha):raise ValueError('INSPECT_SCOPE_REJECTED')
     state=pathlib.Path(state);root=pathlib.Path(closure)/run;worker=state/'runs'/term/run
-    out={'schema':'collector-failed-sample-inspection.v1','runId':run,'term':term,'readOnly':True,'schoolRequests':0,'passwordSubmissions':0,'replayAllowed':False,'schoolSessionProbed':False,'originalExceptionRetained':'UNKNOWN'}
+    out={'schema':'collector-failed-sample-inspection.v1','runId':run,'term':term,'readOnly':True,'counterScope':'THIS_READ_ONLY_INSPECTION_ONLY','schoolRequests':0,'passwordSubmissions':0,'replayAllowed':False,'schoolSessionProbed':False,'originalExceptionRetained':'UNKNOWN'}
     try:
         release=pathlib.Path(current).resolve();out['installedRevisionMatch']=release.name==revision
         source=release/'tools/fosu-sync-client/sync.js'
