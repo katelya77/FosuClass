@@ -689,6 +689,46 @@ function formatElapsedMs(ms) {
   return `${minutes}m${String(rest).padStart(2, "0")}s`;
 }
 
+// Only the Collector's four timetable entry pages use business readiness.
+// The separate authentication adapter and Windows/manual waits keep their contract.
+async function gotoCollectorSchedulePage(page, url, relativePath, options) {
+  try {
+    const response = await page.goto(url, { ...options, waitUntil: "domcontentloaded", timeout: 20000 });
+    if (!response) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+    const status = response.status();
+    if ([401, 403].includes(status)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+    if (status === 429) throw directAcquisition.failure("SCHOOL_RATE_LIMITED");
+    if (status >= 500) throw directAcquisition.failure("SCHOOL_UPSTREAM_UNAVAILABLE");
+    if (status !== 200) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+    const text = await response.text();
+    if (Buffer.byteLength(text) > 2 * 1024 * 1024) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+    const cas = require("./schoolCasPage");
+    const assertPage = (currentUrl, body) => {
+      const current = new URL(currentUrl), expected = new URL(url);
+      if (current.origin === "https://authserver.fosu.edu.cn" || /login/i.test(current.pathname) || /统一身份认证|密码登录|name\s*=\s*["']?password/i.test(body)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+      if (current.origin !== expected.origin || current.pathname !== relativePath) throw directAcquisition.failure("SCHOOL_TLS_OR_ORIGIN_REJECTED");
+      if (cas.explicitChallenge(body)) throw directAcquisition.failure("SCHOOL_SECURITY_CHALLENGE");
+    };
+    assertPage(response.url(), text);
+    // DOM readiness is about the controls used by the native API, not all
+    // browser connections. Data completion remains responseGuard + strict parser.
+    const kind = ({ "/kbcx/kbxx_xzb": "class", "/kbcx/kbxx_teacher": "teacher", "/kbcx/kbxx_classroom": "classroom", "/kbcx/kbxx_kc": "course" })[relativePath];
+    try { await page.waitForFunction((kind) => {
+      const usable = select => select && Array.from(select.options || []).some(o => o.value && !/请选择|^全部|^--/.test(o.textContent || ""));
+      if (!usable(document.querySelector('select[name="xnxqh"]'))) return false;
+      if (kind === "class") return ["skyx", "sknj"].every(name => usable(document.querySelector('select[name="' + name + '"]')));
+      const names = kind === "teacher" ? /^(js|skjs|teacher|jzg|jzgid|gh|jsid)$/i : kind === "classroom" ? /^(jsid|js|room|roomid|classroom|classroomid)$/i : /^(kc|kcid|course|courseid)$/i;
+      return Array.from(document.querySelectorAll("select[name]")).some(select => names.test(select.name) && usable(select));
+    }, kind, { timeout: 10000 }); } catch (error) {
+      if (error.name === "TimeoutError") throw directAcquisition.failure("SCHOOL_PAGE_CHANGED");
+      throw error;
+    }
+    assertPage(page.url(), await page.evaluate(() => document.body?.innerText || ""));
+    if (global.SCHOOL_REQUEST_FAILURE) throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE);
+    return response;
+  } catch (error) { error.code = workerReceipt.normalizeCode(error); throw error; }
+}
+
 /**
  * 兼容 HTTP/HTTPS 的 Playwright 导航辅助函数
  */
@@ -699,8 +739,9 @@ async function gotoPage(page, relativePath, options = { waitUntil: "networkidle"
   const httpsUrl = `${FOSU_BASE_URL}${cleanPath}`;
   if (process.env.FOSU_COLLECTOR_MODE === "1") {
     const fixture=new URL(httpsUrl);
-    if (process.env.FOSU_SYNC_FIXTURE_ONLY === "1" && fixture.protocol==="http:" && fixture.hostname==="127.0.0.1") return page.goto(httpsUrl,options);
-    if (new URL(httpsUrl).origin !== "https://100.fosu.edu.cn") throw Object.assign(new Error("SCHOOL_TLS_OR_ORIGIN_REJECTED"), { code:"SCHOOL_TLS_OR_ORIGIN_REJECTED" });
+    const localFixture = process.env.FOSU_SYNC_FIXTURE_ONLY === "1" && fixture.protocol === "http:" && fixture.hostname === "127.0.0.1";
+    if (!localFixture && fixture.origin !== "https://100.fosu.edu.cn") throw Object.assign(new Error("SCHOOL_TLS_OR_ORIGIN_REJECTED"), { code:"SCHOOL_TLS_OR_ORIGIN_REJECTED" });
+    if (["/kbcx/kbxx_xzb", "/kbcx/kbxx_teacher", "/kbcx/kbxx_classroom", "/kbcx/kbxx_kc"].includes(cleanPath)) return gotoCollectorSchedulePage(page, httpsUrl, cleanPath, options);
     return page.goto(httpsUrl, options);
   }
   
