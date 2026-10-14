@@ -3801,6 +3801,10 @@ async function initBrowserContext() {
         return route.abort("blockedbyclient");
       }
       if (["100.fosu.edu.cn","authserver.fosu.edu.cn"].includes(target.hostname) && target.protocol!=="https:") return route.abort("blockedbyclient");
+      // Timetable facts come from documents/XHR/fetch, never decorative assets.
+      // Drop these before reservation/release: a hung image cannot hold the
+      // serial school queue, consume budget or block protected-page readiness.
+      if (["image", "font", "media"].includes(route.request().resourceType())) return route.abort("blockedbyclient");
       if (new URL(route.request().url()).hostname !== "100.fosu.edu.cn") return route.continue();
       const task = schoolQueue.catch(() => {}).then(async () => {
         if (sampleBudget && (requestFailure || global.SCHOOL_REQUEST_COUNT >= sampleBudget)) {
@@ -3879,13 +3883,33 @@ function getExpiredSessionTip() {
  */
 async function checkSession(page) {
   console.log("🔒 正在校验会话有效性...");
+  if (process.env.FOSU_COLLECTOR_MODE === "1") {
+    try {
+      const response = await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "domcontentloaded", timeout: 20000 });
+      if (!response || typeof response.status !== "function" || typeof response.url !== "function" || typeof response.text !== "function") throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      const status = response.status();
+      if ([401, 403].includes(status)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+      if (status === 429) throw directAcquisition.failure("SCHOOL_RATE_LIMITED");
+      if (status >= 500) throw directAcquisition.failure("SCHOOL_UPSTREAM_UNAVAILABLE");
+      if (status !== 200) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      // The immutable HTTP document avoids page.content() navigation races and
+      // does not require all UI resources to reach networkidle. Reuse the
+      // installed protected-page/challenge classifier; never infer validity
+      // merely from the absence of a login form.
+      const content = await response.text();
+      if (Buffer.byteLength(content) > 2 * 1024 * 1024) throw directAcquisition.failure("SCHOOL_PROTECTED_RESPONSE_REJECTED");
+      const result = require("../wyz-schedule-collector/schoolSession").classifyPage(response.url(), content);
+      if (result === "SESSION_EXPIRED") return false;
+      if (result !== "SESSION_VALID") throw directAcquisition.failure(result);
+      const current = new URL(page.url());
+      if (current.origin === "https://authserver.fosu.edu.cn" || /login/i.test(current.pathname)) return false;
+      if (current.origin !== "https://100.fosu.edu.cn") throw directAcquisition.failure("SCHOOL_TLS_OR_ORIGIN_REJECTED");
+      return true;
+    } catch (error) { error.code = workerReceipt.normalizeCode(error, "session-check"); throw error; }
+  }
   try {
     await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
   } catch (error) {
-    if (process.env.FOSU_COLLECTOR_MODE === "1") {
-      error.code = workerReceipt.normalizeCode(error, "session-check");
-      throw error; // Transport failure is not proof of an expired Session.
-    }
     console.error(`❌ 导航至教务页失败，可能未连内网或握手彻底失败: ${error.message}`);
     console.error(getExpiredSessionTip());
     return false;
@@ -3898,12 +3922,7 @@ async function checkSession(page) {
     return false;
   }
   
-  let content;
-  try { content = await page.content(); }
-  catch (error) {
-    if (process.env.FOSU_COLLECTOR_MODE === "1") error.code = workerReceipt.normalizeCode(error, "session-check");
-    throw error;
-  }
+  const content = await page.content();
   if (content.includes("统一身份认证") || content.includes("密码登录")) {
     console.error("❌ 会话已过期！页面包含登录标识。");
     console.error(getExpiredSessionTip());
