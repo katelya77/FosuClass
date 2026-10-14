@@ -19,7 +19,7 @@ async function main() {
     }
     directoryRequests.push(req.url);
     if(req.url.startsWith("/kbcx/getZyByAjax")) { res.end("<option value='fixture-major'>测试专业</option><option value='fixture-major-two'>第二专业</option>");return; }
-    if(req.url==="/kbcx/kbxx_xzb" && process.env.FOSU_COLLECTOR_SAMPLE_KIND) {
+    if(req.url==="/kbcx/kbxx_xzb") {
       res.end("<select name='xnxqh'><option value='2026-2027-1'>2026-2027-1</option></select><select name='skyx'><option value='fixture-college'>测试学院</option><option value='other-college'>第二学院</option></select><select name='sknj'><option value='2026'>2026</option><option value='2025'>2025</option></select>");return;
     }
     const kind = /teacher/.test(req.url) ? "teacher" : /classroom/.test(req.url) ? "roomid" : "kcid";

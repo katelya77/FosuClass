@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915, codex/collector-bounded-progress-20261013]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915, codex/collector-bounded-progress-20261013, codex/collector-session-outcome-20261014]
   workflow_dispatch:
 permissions:
   contents: read
@@ -125,6 +125,12 @@ jobs:
             --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
             --mount "type=bind,source=$PWD/tools/test-collector-session-browser.js,target=/collector/tools/test-collector-session-browser.js,readonly" \
             fosu-collector-test node tools/test-collector-session-browser.js
+      - name: Actual timetable controls and four adapters with background requests
+        run: |
+          docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --mount "type=bind,source=$PWD/tools/test-collector-schedule-browser.js,target=/collector/tools/test-collector-schedule-browser.js,readonly" \
+            fosu-collector-test node tools/test-collector-schedule-browser.js
       - name: CAS POST and language BLOCK regression with no network
         run: |
           docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
