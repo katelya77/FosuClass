@@ -1,7 +1,7 @@
 name: WYZ Four Source CI
 on:
   pull_request:
-    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915, codex/collector-bounded-progress-20261013, codex/collector-session-outcome-20261014]
+    branches: [main, codex/wyz-interactive-manual-sync, codex/wyz-verified-6fe02a55, codex/cas-sample-candidate, codex/cas-cache-buster-final-915, codex/collector-bounded-progress-20261013, codex/collector-session-outcome-20261014, codex/collector-schedule-readiness-20261014]
   workflow_dispatch:
 permissions:
   contents: read

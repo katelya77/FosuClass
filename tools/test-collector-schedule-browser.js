@@ -16,7 +16,16 @@ const controls=kind=>"<select name='xnxqh'><option value='"+term+"'>"+term+"</op
   if(req.url==="/fixture-background"){setTimeout(()=>res.end("ok"),160);return;}
   if(req.method==="POST"){posts.push(req.url);res.end(scenario==="data-login"?"统一身份认证 密码登录":table);return;}
   const kind=/teacher/.test(req.url)?"teacher":/classroom/.test(req.url)?"classroom":/kbxx_kc/.test(req.url)?"course":"class";
-  const content=scenario==="login"?"统一身份认证 密码登录":scenario==="challenge"?"请完成安全验证":scenario==="missing-controls"||scenario==="delayed-controls"?"学期理论课表":controls(kind);
+  let content=scenario==="login"?"统一身份认证 密码登录":scenario==="challenge"?"请完成安全验证":scenario==="missing-controls"||scenario==="delayed-controls"?"学期理论课表":controls(kind);
+  if(scenario==="term-populates-target") content="<select name='xnxqh'><option value='2025-2026-2'>旧学期</option><option value='"+term+"'>"+term+"</option></select><select name='teacher'></select><script>document.querySelector('[name=xnxqh]').onchange=()=>setTimeout(()=>document.querySelector('[name=teacher]').innerHTML=\"<option value='fixture-new'>新学期教师</option>\",150)</script>";
+  if(scenario==="filtered-target") content+="<select name='skyx'><option value='fixture-college'>测试学院</option></select>";
+  if(scenario==="ambiguous-target") content+="<select name='skjs'><option value='fixture-two'>另一目标</option></select>";
+  if(scenario==="missing-target") content="<select name='xnxqh'><option value='"+term+"'>"+term+"</option></select><input name='jsxm' value='PRIVATE-NAME'><input name='token' value='PRIVATE-TOKEN'><select name='SECRET-CONTROL'><option value='PRIVATE-ID'>PRIVATE-LABEL</option></select>";
+  if(scenario==="empty-target") content=controls(kind).replace("<option value='fixture-one'>测试目标</option>","");
+  if(scenario==="disabled-target") content=controls(kind).replace("name='teacher'","name='teacher' disabled");
+  if(scenario==="unavailable-term") content=controls(kind).replaceAll(term,"2025-2026-2");
+  if(scenario==="stale-term-target") content=controls(kind).replace("<select name='xnxqh'>","<select name='xnxqh'><option value='2025-2026-2'>旧学期</option>");
+  if(scenario==="permission-denied") content="您没有权限访问此页面"+controls(kind);
   const delayed=scenario==="delayed-controls"?"setTimeout(()=>document.body.insertAdjacentHTML('afterbegin',"+JSON.stringify(controls(kind))+"),150);":"";
   res.end("<!doctype html><html><body>"+content+"<script>"+delayed+"setInterval(()=>fetch('/fixture-background'),100)</script></body></html>");
  });
@@ -30,7 +39,7 @@ const controls=kind=>"<select name='xnxqh'><option value='"+term+"'>"+term+"</op
  const page=await context.newPage(),goto=page.goto.bind(page),wait=page.waitForFunction.bind(page);
  // Bound the reproduction, preserving the production wait condition.
  page.goto=(url,options)=>goto(url,{...options,timeout:1200});
- page.waitForFunction=(fn,arg,options)=>wait(fn,arg,{...options,timeout:500});
+ page.waitForFunction=(fn,arg,options)=>wait(fn,arg,{...options,polling:25,timeout:1200});
  const catalog={colleges:[{code:"fixture-college",name:"测试学院"}],grades:["2026"]},majors=[{collegeCode:"fixture-college",grade:"2026",code:"fixture-major",name:"测试专业"}];
  const result=await sync.crawlStrictClassSchedules(page,catalog,majors);
  assert(result.some(s=>s.className==="26测试1班"));
@@ -46,10 +55,28 @@ const controls=kind=>"<select name='xnxqh'><option value='"+term+"'>"+term+"</op
  }
  scenario="data-login";global.SYNC_PLAN={...global.SYNC_PLAN,runId:"fixture-login-data"};
  await assert.rejects(sync.crawlStrictClassSchedules(page,catalog,majors),e=>e.code==="SESSION_EXPIRED");
+ const resultFile=path.join(root,"result.json");process.env.FOSU_COLLECTOR_RESULT_FILE=resultFile;
+ process.env.FOSU_COLLECTOR_SAMPLE_KIND="four";global.SYNC_PLAN={...global.SYNC_PLAN,runId:"fixture-resource-sample"};
+ scenario="term-populates-target";let targets=await sync.discoverStrictDirectory(page,"teacher",term);
+ assert.equal(targets[0].key,"fixture-new","target must come from requested term, after its asynchronous change");
+ scenario="filtered-target";const sample=await sync.crawlStrictResources(page,["teacher"],term);
+ assert.equal(sample.teacherSchedules.length,1);assert.equal(global.DIRECT_SOURCE_SUMMARY.teacher.coverageValid,false,"Sample must not attest full directory coverage");
+ let detail=JSON.parse(fs.readFileSync(path.join(root,"resource-directory.json")));assert.equal(detail.filteredScope,true);assert.equal(detail.catalogComplete,false);
+ process.env.FOSU_COLLECTOR_SAMPLE_KIND="class";
+ await assert.rejects(sync.discoverStrictDirectory(page,"teacher",term),e=>e.code==="DIRECT_TEACHER_DIRECTORY_INCOMPLETE","formal catalog remains strict");
+ for(const [value,code] of [["ambiguous-target","DIRECT_DIRECTORY_AMBIGUOUS"],["missing-target","SCHOOL_DIRECTORY_CONTROL_MISSING"],["empty-target","SCHOOL_DIRECTORY_EMPTY"],["disabled-target","SCHOOL_DIRECTORY_NOT_READY"],["unavailable-term","DIRECT_TERM_UNAVAILABLE"],["stale-term-target","SCHOOL_DIRECTORY_TERM_REBIND_UNVERIFIED"],["permission-denied","SCHOOL_ACCESS_DENIED"]]){
+  scenario=value;const count=posts.length;await assert.rejects(sync.discoverStrictDirectory(page,"teacher",term),e=>e.code===code);assert.equal(posts.length,count,"directory failure cannot fetch a timetable");
+  if(value==="missing-target") {const raw=fs.readFileSync(path.join(root,"resource-directory.json"),"utf8");for(const value of ["PRIVATE-NAME","PRIVATE-TOKEN","SECRET-CONTROL","PRIVATE-ID","PRIVATE-LABEL"])assert(!raw.includes(value));}
+ }
+ scenario="unavailable-term";
+ await assert.rejects(sync.discoverStrictDirectory(page,"classroom",term),e=>e.code==="DIRECT_TERM_UNAVAILABLE");
+ detail=JSON.parse(fs.readFileSync(path.join(root,"resource-directory.json")));assert.equal(detail.source,"classroom");assert.equal(detail.stage,"term-unavailable","failure must replace previous source diagnostic");
+ assert(fs.existsSync(path.join(root,"resource-directory-teacher.json")),"previous source evidence remains independently available");
+ delete process.env.FOSU_COLLECTOR_RESULT_FILE;
  process.env.FOSU_COLLECTOR_MODE="0";let calls=0;
  await assert.rejects(sync.crawlStrictClassSchedules({goto:async(url,options)=>{calls++;assert.equal(options.waitUntil,"networkidle");throw new Error("fixture-manual-stop");}},catalog,majors),/fixture-manual-stop/);
  assert.equal(calls,2,"manual HTTP/HTTPS compatibility remains unchanged");
- console.log("collector-schedule-browser: PASS; four adapter POSTs, controls readiness despite background fetches, page/data auth stops; schoolRequests=0");
-})().catch(e=>{console.error("collector-schedule-browser: FAIL "+(e.code||e.name));process.exitCode=1;}).finally(async()=>{
+ console.log("collector-schedule-browser: PASS; four adapters, term-triggered targets, scoped Sample, 7 directory stop classes, sanitized evidence; schoolRequests=0");
+})().catch(e=>{console.error("collector-schedule-browser: FAIL "+(e.code||e.name));if(e.code==="ERR_ASSERTION")console.error(e.message);process.exitCode=1;}).finally(async()=>{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));fs.rmSync(root,{recursive:true,force:true});
 });
