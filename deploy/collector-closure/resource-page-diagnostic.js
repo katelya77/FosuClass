@@ -44,6 +44,17 @@ async function observe(context, options) {
   const { origin, classify, settle = ms => new Promise(resolve => setTimeout(resolve, ms)) } = options;
   const observations = [], blocked = []; let documents = 0, relevantBlocked = false, fatal;
   const onPopup = page => { fatal = "SCHOOL_RESOURCE_DIAGNOSTIC_POPUP_BLOCKED"; page.close().catch(() => {}); };
+  // Chromium may resolve a redirect before HTTP routing, especially offline.
+  // Classify the original allowed response; never follow it for auth evidence.
+  const onResponse = response => {
+    try {
+      const url=new URL(response.url());
+      if(url.origin!==origin || url.pathname!==PAGE || response.status()<300 || response.status()>=400) return;
+      const location=response.headers().location;
+      if(location && new URL(location,url).origin==="https://authserver.fosu.edu.cn") fatal="SCHOOL_SESSION_EXPIRED";
+    } catch (_) { fatal="SCHOOL_PROTECTED_RESPONSE_REJECTED"; }
+  };
+  context.on("response",onResponse);
   // RTC/STUN and worker-owned transports can bypass HTTP routing/ledger.
   // Diagnose the document in a restricted context, never silently release them.
   await context.addInitScript(() => {
@@ -112,7 +123,7 @@ async function observe(context, options) {
     if(code==="SCHOOL_SESSION_EXPIRED") throw fail("AUTH_REQUIRED");
     if(fatal) throw fail(fatal); throw error;
   }
-  finally { context.off("page", onPopup); }
+  finally { context.off("page", onPopup); context.off("response",onResponse); }
 }
 function installed(root) {
   const real = fs.realpathSync(root), source = path.join(real, "tools/fosu-sync-client/sync.js");
