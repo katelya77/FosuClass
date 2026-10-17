@@ -47,8 +47,8 @@ def main():
  if any((state/name).exists() for name in ['collector.lock','school-session.lock']):denied('COLLECTOR_LOCKED')
  if ROOT.exists() or ROOT.is_symlink():denied('SCHOOL_RESOURCE_DIAGNOSTIC_ALREADY_RESERVED')
  private(pathlib.Path('/root'),True)
- node=shutil.which('node');systemd=shutil.which('systemd-run')
- if not node or not systemd:denied('SCHOOL_RESOURCE_DIAGNOSTIC_RUNTIME_MISSING')
+ node=shutil.which('node');systemd=shutil.which('systemd-run');timeout=shutil.which('timeout')
+ if not node or not systemd or not timeout:denied('SCHOOL_RESOURCE_DIAGNOSTIC_RUNTIME_MISSING')
  version=subprocess.run([node,'--version'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,universal_newlines=True,timeout=5)
  if version.returncode!=0 or not version.stdout.startswith(('v20.','v22.','v24.')):denied('SCHOOL_RESOURCE_DIAGNOSTIC_NODE_VERSION')
  ROOT.mkdir(mode=0o700)
@@ -59,7 +59,8 @@ def main():
  if check.returncode!=0:denied('SCHOOL_RESOURCE_DIAGNOSTIC_SYNTAX_REJECTED')
  unit='fosu-teacher-diagnostic-'+RUN[8:]
  # The unit owns its locks; PAM disconnect cannot release an active Worker lock.
- args=[systemd,'--quiet','--unit='+unit,'--property=Type=exec','--property=RuntimeMaxSec=110','--property=UMask=0077','--property=StandardOutput=null','--property=StandardError=null','/usr/bin/env','-i','PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin','PLAYWRIGHT_BROWSERS_PATH='+str(state/'browsers'),node,str(ROOT/'worker.js')]
+ # Type=simple + GNU timeout also work on older WYZ systemd releases.
+ args=[systemd,'--quiet','--unit='+unit,'--property=Type=simple','--property=UMask=0077','--property=StandardOutput=null','--property=StandardError=null',timeout,'--signal=TERM','--kill-after=20s','90s','/usr/bin/env','-i','PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin','PLAYWRIGHT_BROWSERS_PATH='+str(state/'browsers'),node,str(ROOT/'worker.js')]
  DISPATCHED=True
  result=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15)
  if result.returncode!=0:denied('SCHOOL_RESOURCE_DIAGNOSTIC_UNIT_START_FAILED')

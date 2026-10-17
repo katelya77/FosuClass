@@ -45,7 +45,7 @@
 
 现已准备免安装的独立候选：复用已安装 Worker 的 initBrowserContext、RequestLedger、串行间隔与 TLS/redirect 限制；只允许一次 GET /kbcx/kbxx_teacher 及同源 JS/CSS 静态依赖。XHR/fetch、全部 POST、第二个文档和课表 iframe 一律在发出前拦截，仅保留安全路径与参数名用于后续审核，不读取其返回数据。目标学期不可选时仅报告结构；只有初始化未出现需审核的业务调用时，才允许设置一次学期控件，设置引发的业务请求仍受上述拦截。
 
-诊断总请求上限 40，执行起 10 分钟审批窗口，90 秒触发浏览器停止，systemd 强制上限 110 秒；认证、密码、独立 Session 探测和课表请求均为 0。默认命令不带 --approve-school-access 即拒绝，执行目录一旦保留则禁止再次运行。旧失败 Sample ID 不被构建器接受。Node/systemd 使用已安装环境，不重启已有服务、不修改 current/timer 或 Oracle。systemd Worker 自持锁，PAM 断连不会释放活跃锁；缺失终态按 UNKNOWN 保留，不自动重放。
+诊断总请求上限 40，执行起 10 分钟审批窗口，90 秒触发浏览器停止，systemd 单元内 GNU timeout 强制上限 110 秒；认证、密码、独立 Session 探测和课表请求均为 0。使用兼容旧版 systemd 的 Type=simple，不依赖 Type=exec/RuntimeMaxSec。默认命令不带 --approve-school-access 即拒绝，执行目录一旦保留则禁止再次运行。旧失败 Sample ID 不被构建器接受。Node/systemd 使用已安装环境，不重启已有服务、不修改 current/timer 或 Oracle。systemd Worker 自持锁，PAM 断连不会释放活跃锁；缺失终态按 UNKNOWN 保留，不自动重放。
 
 上下文在建页前拒绝所有 WebSocket，并禁用 RTC、WebTransport、Worker/SharedWorker 等可能绕开 HTTP 账本的传输。页面触发这些能力时只记录固定能力名并要求审核，不继续学期动作。loopback fixture 验证没有 WebSocket 握手、STUN UDP 或 Worker 额外请求。
 

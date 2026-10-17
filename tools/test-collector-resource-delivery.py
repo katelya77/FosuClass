@@ -13,7 +13,8 @@ class ResourceDeliveryTests(unittest.TestCase):
    file,value,wrapper=self.package(root);ast.parse(wrapper,feature_version=(3,6))
    self.assertEqual(value['requestBudget'],40);self.assertEqual(value['passwordSubmissionLimit'],0)
    self.assertFalse(value['sourceInstall']);self.assertFalse(value['schoolAccessExecuted'])
-   self.assertIn('RuntimeMaxSec=110',wrapper);self.assertIn('StandardOutput=null',wrapper);self.assertIn("'PLAYWRIGHT_BROWSERS_PATH='",wrapper)
+   self.assertIn('Type=simple',wrapper);self.assertIn('--kill-after=20s',wrapper);self.assertIn("'90s'",wrapper)
+   self.assertNotIn('RuntimeMaxSec',wrapper);self.assertIn('StandardOutput=null',wrapper);self.assertIn("'PLAYWRIGHT_BROWSERS_PATH='",wrapper)
  def test_default_and_wrong_flags_deny_before_private_state_access(self):
   with tempfile.TemporaryDirectory() as root:
    file,value,wrapper=self.package(root)
