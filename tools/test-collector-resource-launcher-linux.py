@@ -117,6 +117,11 @@ class LauncherLinuxTests(unittest.TestCase):
  def test_0700(self):
   _,value=self.launch();self.assertEqual(value['status'],'OBSERVED',value)
 
+ def test_previously_passed_state_runtime_contract_is_unchanged(self):
+  self.state.chmod(0o500);(self.state/'browser-runtime.json').chmod(0o400)
+  _,value=self.launch();self.assertEqual(value['status'],'OBSERVED',value)
+  self.assertEqual(self.reservation.stat().st_mode&0o777,0o700)
+
  def test_parent_permissions_and_ownership(self):
   for uid,gid,mode in [(12345,0,0o550),(0,12345,0o550),(0,0,0o770),(0,0,0o755)]:
    with self.subTest(uid=uid,gid=gid,mode=oct(mode)):

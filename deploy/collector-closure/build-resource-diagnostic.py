@@ -29,7 +29,10 @@ def denied(code,category='policy'):
  print(json.dumps(dict(status='BLOCKED',code=code,runId=RUN,failureStage=STAGE,errorCategory=category,schoolAccessExecuted='UNKNOWN' if DISPATCHED else False,replayAllowed=False)));raise SystemExit(2)
 def private(path,directory=False):
  s=path.lstat()
- if s.st_uid!=0 or stat.S_IMODE(s.st_mode)!=(0o700 if directory else 0o600) or stat.S_ISLNK(s.st_mode) or (not stat.S_ISDIR(s.st_mode) if directory else not stat.S_ISREG(s.st_mode) or s.st_nlink!=1):raise LocalReject('SCHOOL_RESOURCE_DIAGNOSTIC_PRIVATE_PATH_REJECTED')
+ if s.st_uid!=0 or s.st_mode&0o077 or stat.S_ISLNK(s.st_mode) or (not stat.S_ISDIR(s.st_mode) if directory else not stat.S_ISREG(s.st_mode) or s.st_nlink!=1):raise LocalReject('SCHOOL_RESOURCE_DIAGNOSTIC_PRIVATE_PATH_REJECTED')
+def diagnostic_private(path,directory=False):
+ private(path,directory)
+ if stat.S_IMODE(path.lstat().st_mode)!=(0o700 if directory else 0o600):raise LocalReject('SCHOOL_RESOURCE_DIAGNOSTIC_PRIVATE_PATH_REJECTED')
 def parent_directory(path):
  s=path.lstat()
  if not stat.S_ISDIR(s.st_mode) or stat.S_ISLNK(s.st_mode):raise LocalReject('SCHOOL_RESOURCE_DIAGNOSTIC_PARENT_TYPE_REJECTED')
@@ -43,7 +46,7 @@ def save(path,value):
  data=value.encode('utf8') if isinstance(value,str) else json.dumps(value,separators=(',',':')).encode('utf8')
  fd=os.open(str(path),os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
  with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
- private(path)
+ diagnostic_private(path)
 def main():
  global DISPATCHED,STAGE
  if sys.argv[1:]!=['--approve-school-access']:denied('FRESH_TEACHER_DIAGNOSTIC_APPROVAL_REQUIRED')
@@ -70,14 +73,14 @@ def main():
  parent_directory(pathlib.Path('/root'))
  STAGE='reservation'
  if ROOT.exists() or ROOT.is_symlink():
-  private(ROOT,True);denied('SCHOOL_RESOURCE_DIAGNOSTIC_ALREADY_RESERVED')
+  diagnostic_private(ROOT,True);denied('SCHOOL_RESOURCE_DIAGNOSTIC_ALREADY_RESERVED')
  STAGE='runtime-tools'
  node=shutil.which('node');systemd=shutil.which('systemd-run');timeout=shutil.which('timeout')
  if not node or not systemd or not timeout:denied('SCHOOL_RESOURCE_DIAGNOSTIC_RUNTIME_MISSING')
  version=subprocess.run([node,'--version'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,universal_newlines=True,timeout=5)
  if version.returncode!=0 or not version.stdout.startswith(('v20.','v22.','v24.')):denied('SCHOOL_RESOURCE_DIAGNOSTIC_NODE_VERSION')
  STAGE='reservation-create'
- ROOT.mkdir(mode=0o700);private(ROOT,True)
+ ROOT.mkdir(mode=0o700);diagnostic_private(ROOT,True)
  STAGE='evidence-write'
  now=datetime.datetime.now(datetime.timezone.utc)
  approval=dict(runId=RUN,approved=True,source='teacher',term='2026-2027-1',requestBudget=40,passwordSubmissionLimit=0,startedAt=now.isoformat(),expiresAt=(now+datetime.timedelta(minutes=10)).isoformat())
@@ -98,7 +101,7 @@ def main():
  while time.monotonic()<deadline:
   file=ROOT/'result.json'
   if file.exists():
-   private(file)
+   diagnostic_private(file)
    if file.stat().st_size>65536:denied('SCHOOL_RESOURCE_DIAGNOSTIC_RESULT_REJECTED')
    value=json.loads(file.read_text())
    if value.get('schema')!='collector-resource-page-diagnostic.v1' or value.get('runId')!=RUN:denied('SCHOOL_RESOURCE_DIAGNOSTIC_RESULT_REJECTED')
