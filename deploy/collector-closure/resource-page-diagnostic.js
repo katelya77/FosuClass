@@ -74,6 +74,7 @@ async function observe(context, options) {
       return route.abort("blockedbyclient");
     }
     if (document) documents++;
+    if (options.checkAccess) { try { options.checkAccess(); } catch(error) { fatal=error.code; return route.abort("blockedbyclient"); } }
     return route.fallback();
   });
   const page = await context.newPage();
@@ -106,13 +107,19 @@ async function observe(context, options) {
       await settle(1500); await capture("after-term-selection");
     }
     return { status: relevantBlocked ? "REVIEW_REQUIRED" : "OBSERVED", code: relevantBlocked ? "SCHOOL_RESOURCE_REQUEST_SCOPE_REVIEW" : "SCHOOL_RESOURCE_PAGE_STRUCTURE_OBSERVED", observations, blockedRequests: blocked, pageDocuments: documents };
-  } finally { context.off("page", onPopup); }
+  } catch(error) {
+    const code=fatal || error.code;
+    if(code==="SCHOOL_SESSION_EXPIRED") throw fail("AUTH_REQUIRED");
+    if(fatal) throw fail(fatal); throw error;
+  }
+  finally { context.off("page", onPopup); }
 }
 function installed(root) {
   const real = fs.realpathSync(root), source = path.join(real, "tools/fosu-sync-client/sync.js");
   if (path.basename(real) !== REVISION || fs.lstatSync(source).isSymbolicLink() || crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex") !== WORKER_SHA) throw fail("SCHOOL_RESOURCE_DIAGNOSTIC_SOURCE_CHANGED");
   return real;
 }
+const {acquireDiagnosticLocks} = require("./resource-diagnostic-locks");
 async function main() {
   const directory = path.dirname(__filename), approval = JSON.parse(fs.readFileSync(path.join(directory, "approval.json"), "utf8"));
   if (process.platform !== "linux" || process.geteuid() !== 0 || approval.approved !== true || approval.source !== "teacher" || approval.term !== TERM || approval.requestBudget !== 40 || approval.passwordSubmissionLimit !== 0 || !/^sc-diag-[a-f0-9]{16}$/.test(approval.runId) || !Number.isFinite(Date.parse(approval.expiresAt)) || Date.parse(approval.expiresAt) <= Date.now()) throw fail("SCHOOL_ACCESS_NOT_AUTHORIZED");
@@ -125,23 +132,27 @@ async function main() {
   if (runtime.runtime(state).mode !== "native") throw fail("SCHOOL_AUTH_NATIVE_BROWSER_REQUIRED");
   const store = require(root + "/tools/wyz-schedule-collector/runStore"), receipt = require(root + "/tools/wyz-schedule-collector/workerReceipt"), auth = require(root + "/tools/wyz-schedule-collector/schoolSession");
   const releases = []; let browser, timer, evidence, protectedStateUnchanged = "UNKNOWN";
+  let stopping=false;
+  const stop=()=>{ stopping=true; if(browser) browser.close().catch(()=>{}); };
+  process.once("SIGTERM",stop); process.once("SIGINT",stop);
   const protectedFiles = [state + "/session.json", state + "/school-credentials.json", state + "/school-auth-state.json"];
   const metadata = () => protectedFiles.map(file => { const s = fs.lstatSync(file); return [s.ino, s.size, s.mtimeMs, s.mode, s.uid]; });
   try {
     // Leave preexisting locks intact, including stale locks requiring review.
-    for (const lock of ["collector.lock", "school-session.lock"]) {
-      if (fs.existsSync(path.join(state, lock))) throw fail("COLLECTOR_LOCKED");
-      releases.push(store.acquireLock(state, lock));
-    }
+    const unlock=acquireDiagnosticLocks(state, store); releases.push(unlock);
+    if (!fs.existsSync(state + "/session.json")) throw fail("AUTH_REQUIRED");
     auth.secureFile(state + "/session.json");
+    try { auth.validateSession(JSON.parse(fs.readFileSync(state + "/session.json","utf8"))); }
+    catch (_) { throw fail("AUTH_REQUIRED"); }
     const before = JSON.stringify(metadata()), sessionHash = crypto.createHash("sha256").update(fs.readFileSync(state + "/session.json")).digest("hex");
     auth.assertSafeRuntime();
     Object.assign(process.env, { FOSU_BASE_URL: "https://100.fosu.edu.cn", FOSU_COLLECTOR_MODE: "1", FOSU_SYNC_HEADLESS: "1", FOSU_SYNC_AUTH_MODE: "playwright-manual", FOSU_COLLECTOR_SESSION: state + "/session.json", FOSU_SYNC_DATA_DIR: directory, FOSU_COLLECTOR_SAMPLE_KIND: "four", FOSU_COLLECTOR_RUN_ID: approval.runId, FOSU_COLLECTOR_TERM: TERM, FOSU_COLLECTOR_REQUEST_BUDGET: "40", FOSU_COLLECTOR_APPROVAL_EXPIRES_AT: approval.expiresAt, FOSU_COLLECTOR_WORKER_SOURCE_HASH: WORKER_SHA, FOSU_COLLECTOR_LOGIN_PROFILE: "mobile-wechat" });
     const sync = require(root + "/tools/fosu-sync-client/sync"), cas = require(root + "/tools/fosu-sync-client/schoolCasPage");
     const active = await sync.initBrowserContext(); browser = active.browser;
+    if(stopping) throw fail("COLLECTOR_STOPPED");
     timer = setTimeout(() => browser.close().catch(() => {}), Math.max(1, Date.parse(approval.startedAt) + 90000 - Date.now()));
     try {
-      evidence = await observe(active.context, { origin: "https://100.fosu.edu.cn", classify: body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_SESSION_EXPIRED" : cas.explicitChallenge(body) ? "SCHOOL_SECURITY_CHALLENGE" : /没有(?:访问)?权限|无权访问|权限不足|访问被拒绝/.test(body) ? "SCHOOL_ACCESS_DENIED" : null });
+      evidence = await observe(active.context, { origin: "https://100.fosu.edu.cn", checkAccess:unlock.check, classify: body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_SESSION_EXPIRED" : cas.explicitChallenge(body) ? "SCHOOL_SECURITY_CHALLENGE" : /没有(?:访问)?权限|无权访问|权限不足|访问被拒绝/.test(body) ? "SCHOOL_ACCESS_DENIED" : null });
       // Allow already released assets to settle; never issue another request.
       const deadline = Date.now() + 3000;
       while (global.COLLECTOR_REQUEST_LEDGER.snapshot().pending && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
@@ -149,15 +160,16 @@ async function main() {
       protectedStateUnchanged = before === JSON.stringify(metadata()) && sessionHash === crypto.createHash("sha256").update(fs.readFileSync(state + "/session.json")).digest("hex");
       if (!protectedStateUnchanged) throw fail("SCHOOL_RESOURCE_PROTECTED_STATE_CHANGED");
     }
-  } catch (error) { evidence = { status: "BLOCKED", code: /^(SCHOOL|COLLECTOR)_[A-Z0-9_]{1,60}$/.test(error.code || "") ? error.code : "SCHOOL_RESOURCE_DIAGNOSTIC_FAILED" }; }
+  } catch (error) { evidence = { status: "BLOCKED", code: stopping ? "COLLECTOR_STOPPED" : error.code==="AUTH_REQUIRED" || /^(SCHOOL|COLLECTOR)_[A-Z0-9_]{1,60}$/.test(error.code || "") ? error.code : "SCHOOL_RESOURCE_DIAGNOSTIC_FAILED" }; }
   finally {
     clearTimeout(timer); if (browser) await browser.close().catch(() => {});
     const ledger = global.COLLECTOR_REQUEST_LEDGER?.snapshot();
     if (global.SCHOOL_REQUEST_FAILURE) evidence = { ...evidence, status: "BLOCKED", code: receipt.normalizeCode({ code: global.SCHOOL_REQUEST_FAILURE }) };
     if (ledger?.pending) evidence = { ...evidence, status: "BLOCKED", code: "COLLECTOR_REQUEST_OUTCOME_UNKNOWN" };
-    try { receipt.durable(path.join(directory, "result.json"), { schema: "collector-resource-page-diagnostic.v1", runId: approval.runId, term: TERM, source: "teacher", ...evidence, ...(ledger ? { requestLedger: { ...ledger, unknown: ledger.pending ? 1 : 0 } } : {}), authenticationSchoolRequests: 0, passwordSubmissions: 0, sessionProbeSchoolRequests: 0, protectedStateUnchanged, sourceUpgrade: false, sessionSaved: false, scheduleRequests: 0, oracleTaskCreated: false, replayAllowed: false }); }
-    finally { while (releases.length) releases.pop()(); }
+    if (["AUTH_REQUIRED","SCHOOL_SESSION_EXPIRED","SCHOOL_SESSION_INVALID","SESSION_EXPIRED"].includes(evidence?.code)) evidence={...evidence,status:"AUTH_REQUIRED",code:"AUTH_REQUIRED"};
+    try { receipt.durable(path.join(directory, "result.json"), { schema: "collector-resource-page-diagnostic.v1", runId: approval.runId, term: TERM, source: "teacher", ...evidence, schoolAccessExecuted:Boolean(ledger?.reserved), ...(ledger ? { requestLedger: { ...ledger, unknown: ledger.pending ? 1 : 0 } } : {}), authenticationSchoolRequests: 0, passwordSubmissions: 0, sessionProbeSchoolRequests: 0, protectedStateUnchanged, sourceUpgrade: false, sessionSaved: false, scheduleRequests: 0, oracleTaskCreated: false, replayAllowed: false }); }
+    finally { while (releases.length) releases.pop()(); process.removeListener("SIGTERM",stop); process.removeListener("SIGINT",stop); }
   }
 }
-module.exports = { observe, inspectPage, requestShape, installed, REVISION, WORKER_SHA };
+module.exports = { observe, inspectPage, requestShape, installed, acquireDiagnosticLocks, REVISION, WORKER_SHA };
 if (require.main === module) main().catch(() => { process.exitCode = 2; });

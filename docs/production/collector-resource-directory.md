@@ -51,6 +51,20 @@
 
 输出只含控件名称/类型/数量、学期匹配布尔和被拦截请求的安全结构，不含 option/输入值、原 HTML、Cookie、原始 URL 或认证正文。候选仍待新的学校访问授权；代码与 fixture 通过不等于学校诊断已执行。
 
+## 教师诊断启动锁修复（PR #104）
+
+用户回执证实上一诊断因 COLLECTOR_LOCKED 在学校访问前终止，未取得 DOM。该身份已退役，不重放；旧授权不迁移到新身份。
+
+collector.js 的 main() 在 heartbeat-only 模式也持有 collector.lock。它是服务实例锁，不能作为学校忙碌的判断。本次仅修改免安装诊断，不升级 Collector/runStore：只读核验 systemd 的活跃 MainPID、已知 heartbeat runner 指纹、/proc 的 argv 与 execute=0、PID 启动时间/boot identity、对应 collector.lock 和新鲜 heartbeat-only 状态。在取得操作锁后及每个允许请求发出前重复核验；未知、旧 PID/旧心跳和 execute 模式均停止。
+
+学校访问依次以 O_EXCL 原子创建 manual-sync.lock、school-session.lock，保留 runStore 的 pid 字段兼容，另绑定 nonce、启动身份、inode/device。诊断从不取得、删除或回收 collector.lock，也不回收任何已有操作锁；释放只针对自身 inode 和完整所有权内容。TERM/有界 timeout 正常清理，KILL 或未知现场保留待审，不自动清锁；PAM 断连不释放执行单元持有的锁。
+
+Linux 回归使用真实 collector.main()、runStore.acquireLock() 和两个独立诊断进程，覆盖 A–E：健康 heartbeat 持锁共存、Session/认证/采集占用、手动运行占用、未知/旧锁/PID 身份变化、实际 GNU timeout、通道断开、TERM/KILL 和同时竞争。所有请求为零。它是本地生产条件模拟，不是 WYZ 现场成功证明。
+
+浏览器 fixture 额外覆盖静态教师 select、动态 GET XHR/POST 与认证跳转。动态请求保持拦截，报告 SCHOOL_RESOURCE_REQUEST_SCOPE_REVIEW，记录安全路径、方法、参数名及控件结构；不保留值、凭据或原页面。Session 缺失/失效或认证跳转报告 AUTH_REQUIRED，密码提交为零。
+
+下一步若取得真实 AJAX 契约：先绑定证据里的单个固定 path/method、参数名与来源身份；另行批准最小业务请求后，沿用原 ledger/间隔/Session 锁读取响应，确认目标身份及解析器。当前不添加推测的接口、不放行任何业务 XHR/POST，也不生成四源学校任务。
+
 ## 增量执行器边界
 
 PR #99 的 21 项规划器测试通过，但 routine/full 尚不能执行。它与当前 WYZ Worker 分叉，必须显式整合。

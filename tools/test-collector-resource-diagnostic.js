@@ -16,6 +16,9 @@ const classify = body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_
     res.setHeader("content-type", "text/html; charset=utf-8");
     let html = "<select name='xnxqh'>"+(scenario === "term-post" ? "<option value='2025-2026-2'>旧学期</option>" : "")+"<option value='2026-2027-1'>2026-2027-1</option></select><input name='jsmc' value='PRIVATE-NAME'><input name='jsid' type='hidden' value='PRIVATE-ID'><input name='token' value='PRIVATE-TOKEN'><input name='account' value='PRIVATE-ACCOUNT'><script src='/assets/page.js'></script>";
     if (scenario === "post") html += "<script>fetch('/kbcx/getTeacherByAjax',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'xnxqh=PRIVATE-TERM&jsid=PRIVATE-ID&token=PRIVATE-TOKEN'}).catch(()=>{})</script>";
+    if (scenario === "xhr") html += "<select name='js0101id'><option value=''>请选择</option></select><script>const r=new XMLHttpRequest();r.open('GET','/kbcx/getTeacherByAjax?xnxqh=PRIVATE-TERM&jsid=PRIVATE-ID&token=PRIVATE-TOKEN');r.send()</script>";
+    if (scenario === "select") html += "<select name='js0101id'><option value='PRIVATE-ID'>PRIVATE-NAME</option></select>";
+    if (scenario === "redirect-login") { res.statusCode=302;res.setHeader('location','https://authserver.fosu.edu.cn/authserver/login?ticket=PRIVATE-TOKEN');html=""; }
     if (scenario === "term-post") html += "<script>document.querySelector('[name=xnxqh]').onchange=()=>fetch('/kbcx/getTeacherByAjax',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'xnxqh=PRIVATE-TERM'}).catch(()=>{})</script>";
     if (scenario === "schedule-script") html += "<script src='/kbcx/kbxx_teacher_ifr'></script>";
     if (scenario === "websocket") html += "<script>new WebSocket('ws://'+location.host+'/kbcx/unapproved_socket')</script>";
@@ -32,7 +35,7 @@ const classify = body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = "http://127.0.0.1:" + server.address().port;
   browser = await chromium.launch({ headless: true, args: ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"] });
-  for (const value of ["normal", "post", "term-post", "schedule-script", "websocket", "rtc", "worker", "login", "password-only", "challenge", "permission", "status-403", "status-429"]) {
+  for (const value of ["normal", "select", "xhr", "post", "term-post", "schedule-script", "websocket", "rtc", "worker", "login", "redirect-login", "password-only", "challenge", "permission", "status-403", "status-429"]) {
     scenario = value; received = []; cases++;
     const context = await browser.newContext({ serviceWorkers: "block" });
     const ledger = ledgerModule.open(path.join(root, "ledger-"+cases+".json"), { runId: "sc-diag-fixture-"+cases, term: "2026-2027-1", workerSourceHash: "a".repeat(64), requestBudget: 40, expiresAt: new Date(Date.now()+60000).toISOString() });
@@ -47,7 +50,7 @@ const classify = body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_
       queue = task.catch(error => { if (!["SCHOOL_SESSION_EXPIRED", "SCHOOL_RATE_LIMITED"].includes(error.code)) throw error; }); return queue;
     });
     try {
-      const codes = { login: "SCHOOL_SESSION_EXPIRED", "password-only": "SCHOOL_SESSION_EXPIRED", challenge: "SCHOOL_SECURITY_CHALLENGE", permission: "SCHOOL_ACCESS_DENIED", "status-403": "SCHOOL_ACCESS_DENIED", "status-429": "SCHOOL_RATE_LIMITED" };
+      const codes = { login: "AUTH_REQUIRED", "redirect-login":"AUTH_REQUIRED", "password-only": "AUTH_REQUIRED", challenge: "SCHOOL_SECURITY_CHALLENGE", permission: "SCHOOL_ACCESS_DENIED", "status-403": "SCHOOL_ACCESS_DENIED", "status-429": "SCHOOL_RATE_LIMITED" };
       if (codes[value]) await assert.rejects(diagnostic.observe(context, { origin, classify, settle: () => new Promise(r => setTimeout(r, 50)) }), e => e.code === codes[value]);
       else {
         const result = await diagnostic.observe(context, { origin, classify, settle: () => new Promise(r => setTimeout(r, 50)) });
@@ -55,8 +58,10 @@ const classify = body => /统一身份认证|密码登录/.test(body) ? "SCHOOL_
         for (const secret of ["PRIVATE-NAME", "PRIVATE-ID", "PRIVATE-PASSWORD", "PRIVATE-ACCOUNT", "PRIVATE-TOKEN", "PRIVATE-TERM"]) assert(!raw.includes(secret));
         assert(result.observations[0].controls.some(c => c.name === "jsmc" && c.type === "text"), "actual text-control identity is retained without its value");
         assert(!result.observations[0].controls.some(c => /password|account/.test(c.name)));
-        if (value === "post" || value === "term-post") {
+        if (value === "select") assert(result.observations[0].controls.some(c=>c.name==="js0101id"&&c.usableOptionCount===1));
+        if (["post","term-post","xhr"].includes(value)) {
           assert.equal(result.status, "REVIEW_REQUIRED");
+          assert.equal(result.code,"SCHOOL_RESOURCE_REQUEST_SCOPE_REVIEW");
           assert(result.blockedRequests.some(r => r.businessPath === "/kbcx/getTeacherByAjax" && r.parameterNames.includes("xnxqh") && !r.parameterNames.includes("token")));
         } else if (["schedule-script", "websocket", "rtc", "worker"].includes(value)) assert.equal(result.status, "REVIEW_REQUIRED");
         else assert.equal(result.status, "OBSERVED");

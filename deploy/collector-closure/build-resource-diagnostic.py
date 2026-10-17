@@ -11,12 +11,14 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REVISION = '7e8dfb24b2ce1b1e55313c7fcf9f9ba8edfb249f'
 FILES = ['tools/fosu-sync-client/'+name+'.js' for name in ['sync','syncEnv','networkProbe','schoolCasPage','schoolLoginProfile']]+['tools/wyz-schedule-collector/'+name+'.js' for name in ['requestLedger','workerReceipt','browserRuntime','runStore','schoolSession','schoolAuthState','schoolBrowserAdapter','schoolRequestPolicy','schoolPrecheck']]+['shared/syncCacheStore.js','shared/syncPlan.js','shared/syncProvenance.js']
+FILES += ['tools/wyz-schedule-collector/'+name+'.js' for name in ['collector','heartbeatRecovery','oracleTransport']]
 
 WRAPPER = r'''
 import datetime,hashlib,json,os,pathlib,shutil,stat,subprocess,sys,time
 RUN = __RUN__
 REVISION = __REVISION__
 NODE_SOURCE = __NODE_SOURCE__
+LOCK_SOURCE = __LOCK_SOURCE__
 PINS = __PINS__
 ROOT = pathlib.Path('/root/fosu-resource-diagnostic-'+RUN[8:])
 DISPATCHED = False
@@ -44,7 +46,8 @@ def main():
   private(runtime)
   if json.loads(runtime.read_text()).get('mode')!='native':denied('SCHOOL_AUTH_NATIVE_BROWSER_REQUIRED')
  # Session/credentials contents are not opened by the launcher.
- if any((state/name).exists() for name in ['collector.lock','school-session.lock']):denied('COLLECTOR_LOCKED')
+ # collector.lock belongs to the daemon, not school access. The Worker verifies
+ # the live heartbeat process and atomically acquires manual/session locks.
  if ROOT.exists() or ROOT.is_symlink():denied('SCHOOL_RESOURCE_DIAGNOSTIC_ALREADY_RESERVED')
  private(pathlib.Path('/root'),True)
  node=shutil.which('node');systemd=shutil.which('systemd-run');timeout=shutil.which('timeout')
@@ -55,6 +58,7 @@ def main():
  now=datetime.datetime.now(datetime.timezone.utc)
  approval=dict(runId=RUN,approved=True,source='teacher',term='2026-2027-1',requestBudget=40,passwordSubmissionLimit=0,startedAt=now.isoformat(),expiresAt=(now+datetime.timedelta(minutes=10)).isoformat())
  save(ROOT/'approval.json',approval);save(ROOT/'worker.js',NODE_SOURCE);save(ROOT/'source-pins.json',PINS)
+ save(ROOT/'resource-diagnostic-locks.js',LOCK_SOURCE)
  check=subprocess.run([node,'--check',str(ROOT/'worker.js')],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
  if check.returncode!=0:denied('SCHOOL_RESOURCE_DIAGNOSTIC_SYNTAX_REJECTED')
  unit='fosu-teacher-diagnostic-'+RUN[8:]
@@ -81,9 +85,11 @@ except Exception:denied('SCHOOL_RESOURCE_DIAGNOSTIC_LAUNCH_REJECTED')
 
 def build(output,run_id):
  if not re.fullmatch(r'sc-diag-[a-f0-9]{16}',run_id):raise ValueError('DIAGNOSTIC_RUN_ID_REJECTED')
+ if run_id=='sc-diag-e756876eaaafb174':raise ValueError('DIAGNOSTIC_RUN_ID_RETIRED')
  source=(ROOT/'deploy/collector-closure/resource-page-diagnostic.js').read_text(encoding='utf8')
+ locks=(ROOT/'deploy/collector-closure/resource-diagnostic-locks.js').read_text(encoding='utf8')
  pins=[[hashlib.sha256(subprocess.check_output(['git','show',REVISION+':'+relative],cwd=str(ROOT))).hexdigest(),relative] for relative in FILES]
- wrapper=WRAPPER.replace('__RUN__',repr(run_id)).replace('__REVISION__',repr(REVISION)).replace('__NODE_SOURCE__',repr(source)).replace('__PINS__',repr(pins))
+ wrapper=WRAPPER.replace('__RUN__',repr(run_id)).replace('__REVISION__',repr(REVISION)).replace('__NODE_SOURCE__',repr(source)).replace('__LOCK_SOURCE__',repr(locks)).replace('__PINS__',repr(pins))
  ast.parse(wrapper,feature_version=(3,6))
  body="#!/usr/bin/env bash\nset -Eeuo pipefail\nexec python3 - \"$@\" <<'FOSU_DIAGNOSTIC_PY'\n"+wrapper+"\nFOSU_DIAGNOSTIC_PY\n"
  output=pathlib.Path(output);output.parent.mkdir(parents=True,exist_ok=True)

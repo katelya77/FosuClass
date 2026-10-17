@@ -15,6 +15,8 @@ class ResourceDeliveryTests(unittest.TestCase):
    self.assertFalse(value['sourceInstall']);self.assertFalse(value['schoolAccessExecuted'])
    self.assertIn('Type=simple',wrapper);self.assertIn('--kill-after=20s',wrapper);self.assertIn("'90s'",wrapper)
    self.assertNotIn('RuntimeMaxSec',wrapper);self.assertIn('StandardOutput=null',wrapper);self.assertIn("'PLAYWRIGHT_BROWSERS_PATH='",wrapper)
+   self.assertIn("save(ROOT/'resource-diagnostic-locks.js',LOCK_SOURCE)",wrapper)
+   self.assertNotIn("['collector.lock','school-session.lock']):denied",wrapper)
  def test_default_and_wrong_flags_deny_before_private_state_access(self):
   with tempfile.TemporaryDirectory() as root:
    file,value,wrapper=self.package(root)
@@ -28,4 +30,5 @@ class ResourceDeliveryTests(unittest.TestCase):
    with self.assertRaises(ValueError):m.build(file,RUN)
    self.assertEqual(file.read_bytes(),before)
    with self.assertRaises(ValueError):m.build(pathlib.Path(root)/'bad.sh','sc-9611df5c90c4dc800e7e2c14')
+   with self.assertRaises(ValueError):m.build(pathlib.Path(root)/'retired.sh','sc-diag-e756876eaaafb174')
 if __name__=='__main__':unittest.main()
