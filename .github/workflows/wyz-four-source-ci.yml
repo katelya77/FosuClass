@@ -26,6 +26,7 @@ jobs:
       - run: node tools/test-collector-request-ledger-route.js
       - run: python3 tools/test-collector-readonly-inspect.py
       - run: python3 tools/test-collector-failed-inspect.py
+      - run: python3 tools/test-collector-resource-delivery.py
       - run: npx --prefix tools/fosu-sync-client playwright install --with-deps chromium
       - run: sudo env PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" "$(command -v node)" tools/test-collector-session-browser.js
       - run: sudo "$(command -v node)" tools/test-collector-network-recovery.js
@@ -94,6 +95,8 @@ jobs:
       - run: node tools/test-collector-request-ledger-route.js
       - run: python tools/test-collector-readonly-inspect.py
       - run: npx --prefix tools/fosu-sync-client playwright install chromium
+      - run: node tools/test-collector-resource-diagnostic.js
+      - run: python tools/test-collector-resource-delivery.py
       - run: node tools/test-collector-cas-mobile.js
       - run: node tools/test-collector-cas-post-policy.js
       - run: node tools/test-collector-account-precheck.js
@@ -131,6 +134,12 @@ jobs:
             --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
             --mount "type=bind,source=$PWD/tools/test-collector-schedule-browser.js,target=/collector/tools/test-collector-schedule-browser.js,readonly" \
             fosu-collector-test node tools/test-collector-schedule-browser.js
+      - name: One-page resource diagnosis with no external network
+        run: |
+          docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --shm-size=256m --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --mount "type=bind,source=$PWD/tools/test-collector-resource-diagnostic.js,target=/collector/tools/test-collector-resource-diagnostic.js,readonly" \
+            fosu-collector-test node tools/test-collector-resource-diagnostic.js
       - name: CAS POST and language BLOCK regression with no network
         run: |
           docker run --rm --init --network=none --cap-drop=ALL --security-opt=no-new-privileges \

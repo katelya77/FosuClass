@@ -10,7 +10,9 @@
 
 ## 确定性定位及其限度
 
-资源执行顺序为 teacher、classroom、course。结合只存在 class 摘要与上述失败码，代码路径指向 teacher 入口的业务控件等待；这是一项基于代码和已留存进度的推断。原 gate 在选择目标学期前要求资源目标 select 非空，10 秒等待失败统一改写为 SCHOOL_PAGE_CHANGED。它既不能证明网页改版，也不能区别目录未加载、空目录或其他控件契约。
+2026-10-17 用户返回了校验和匹配的 WYZ 离线回执：installedRevisionMatch/workerSourceMatch/approvalBound 均为 true；原错误准确为 sync.js:723:66；本地账本 45/45 全部完成、unknown=0；只有 class 成功摘要；resourceDirectory=DOM_NOT_RETAINED；timer=disabled/inactive；原密码提交、认证请求和 Session 探测次数仍为 UNKNOWN。回执中的历史认证成功信号不能替代独立计数。
+
+资源执行顺序为 teacher、classroom、course。结合只存在 class 摘要，阻断来源可收窄至 teacher 入口；精确行号对应旧 gate 的控件等待超时。该 gate 同时依赖学期控件和目标 select，因此仍不能确定是哪个字段缺失或尚未加载。原 gate 在选择目标学期前要求资源目标 select 非空，10 秒等待失败统一改写为 SCHOOL_PAGE_CHANGED。它既不能证明网页改版，也不能区别目录未加载、空目录或其他控件契约。
 
 原目录发现还要求全部 scope 未过滤；单目标 Sample 因此被全校目录门槛阻断。两项逻辑缺陷已用本地真实 Chromium 重现和修复，但尚无当前教师页 DOM/业务接口现场证据，不能宣称已解决真实学校的全部四源适配。
 
@@ -40,6 +42,14 @@
 一次性 .sh 在本机 ignored 交付目录生成，校验 Bash 与 Python 3.6 语法。它只读本地文件与 systemd 状态，不访问学校/Oracle、不重放、不改 timer/active。旧 Worker 未留存 DOM 时应明确 DOM_NOT_RETAINED；不能编造控件结论。
 
 如仍无目录现场证据，下一步应单独批准一次 teacher 页面只读诊断：新执行身份、仅已知页面、Session 复用、禁止密码提交、明确时间窗和请求上限；不读课表、不扫描全校、不升级后直接重放旧 Sample。新的四源任务仍需另行批准新 ID 与范围。
+
+现已准备免安装的独立候选：复用已安装 Worker 的 initBrowserContext、RequestLedger、串行间隔与 TLS/redirect 限制；只允许一次 GET /kbcx/kbxx_teacher 及同源 JS/CSS 静态依赖。XHR/fetch、全部 POST、第二个文档和课表 iframe 一律在发出前拦截，仅保留安全路径与参数名用于后续审核，不读取其返回数据。目标学期不可选时仅报告结构；只有初始化未出现需审核的业务调用时，才允许设置一次学期控件，设置引发的业务请求仍受上述拦截。
+
+诊断总请求上限 40，执行起 10 分钟审批窗口，90 秒触发浏览器停止，systemd 强制上限 110 秒；认证、密码、独立 Session 探测和课表请求均为 0。默认命令不带 --approve-school-access 即拒绝，执行目录一旦保留则禁止再次运行。旧失败 Sample ID 不被构建器接受。Node/systemd 使用已安装环境，不重启已有服务、不修改 current/timer 或 Oracle。systemd Worker 自持锁，PAM 断连不会释放活跃锁；缺失终态按 UNKNOWN 保留，不自动重放。
+
+上下文在建页前拒绝所有 WebSocket，并禁用 RTC、WebTransport、Worker/SharedWorker 等可能绕开 HTTP 账本的传输。页面触发这些能力时只记录固定能力名并要求审核，不继续学期动作。loopback fixture 验证没有 WebSocket 握手、STUN UDP 或 Worker 额外请求。
+
+输出只含控件名称/类型/数量、学期匹配布尔和被拦截请求的安全结构，不含 option/输入值、原 HTML、Cookie、原始 URL 或认证正文。候选仍待新的学校访问授权；代码与 fixture 通过不等于学校诊断已执行。
 
 ## 增量执行器边界
 
