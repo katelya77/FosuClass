@@ -67,6 +67,12 @@ Linux 回归使用真实 collector.main()、runStore.acquireLock() 和两个独�
 
 ## 增量执行器边界
 
+### WYZ `/root=0550` 启动兼容修复
+
+用户的只读预检证实第二次诊断在父目录权限检查终止，学校请求/密码提交均为 0，未创建预约目录。该诊断身份退役，不复用旧授权。修复只调整免安装启动器：`/root` 必须是 root 所有的真实目录，所属组验证为 root/GID 0，禁止 group 写入及任何 other 访问，允许已知 0550 和通常的 0700；不修改服务器目录权限。诊断子目录仍必须严格为 0700，证据文件为 0600，原子创建与禁止重放保持有效。
+
+Linux root 的隔离 chroot 回归运行完整发出的 Python 启动器，只替换学校 Worker 与 systemd 管理器为本地测试进程；真实 0550/0700 下走完预检、预约目录创建、Node Worker 启动及退出结果读取。非 root owner、未验证 group、group 可写、other 可访问、私有目录错误模式、symlink、Worker 非零退出及启动失败均有验证。宿主 `/root` 和生产环境不变。通用本地错误输出固定 failureStage/errorCategory 和分类错误码，不暴露原始异常、路径或文件内容。已有 heartbeat/操作锁回归复用原测试，不增加另一套锁实现。
+
 PR #99 的 21 项规划器测试通过，但 routine/full 尚不能执行。它与当前 WYZ Worker 分叉，必须显式整合。
 
 已确认缺口：服务端完整目录/审核权威绑定；正式任务向 RequestLedger 传预算；按批准目标选择而非 ALL_SCOPES 全扫；逐目标签名 Staging 与持久化幂等回执；恢复读取真实检查点且不清除未知结果；服务层统一调度/claim 门禁；保护待审核失败现场。

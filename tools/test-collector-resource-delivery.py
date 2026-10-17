@@ -31,4 +31,5 @@ class ResourceDeliveryTests(unittest.TestCase):
    self.assertEqual(file.read_bytes(),before)
    with self.assertRaises(ValueError):m.build(pathlib.Path(root)/'bad.sh','sc-9611df5c90c4dc800e7e2c14')
    with self.assertRaises(ValueError):m.build(pathlib.Path(root)/'retired.sh','sc-diag-e756876eaaafb174')
+   with self.assertRaises(ValueError):m.build(pathlib.Path(root)/'retired-second.sh','sc-diag-1d2a7a349d7c1902')
 if __name__=='__main__':unittest.main()
