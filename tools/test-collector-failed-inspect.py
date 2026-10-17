@@ -6,6 +6,26 @@ spec=importlib.util.spec_from_file_location('failed_inspect',str(FILE));m=import
 RUN='sc-'+'a'*24;TERM='2026-2027-1';REV='b'*40
 
 class FailedInspectTests(unittest.TestCase):
+ def test_four_source_budget_progress_and_diagnostic_projection(self):
+  with tempfile.TemporaryDirectory() as temp:
+   root=pathlib.Path(temp);state=root/'state';closure=root/'closure';release=root/REV
+   worker=state/'runs'/TERM/RUN;evidence=closure/RUN;worker.mkdir(parents=True);evidence.mkdir(parents=True)
+   def save(p,d):p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(d))
+   digest='c'*64;expiry='2026-10-15T04:37:48.447Z'
+   save(evidence/'approval.json',dict(runId=RUN,term=TERM,wyzRevision=REV,requestBudget=120,expiresAt=expiry))
+   scope=dict(runId=RUN,term=TERM,workerSourceHash=digest,requestBudget=120,expiresAt=expiry)
+   save(worker/'client/request-ledger.json',dict(scope=scope,scopeHash=hashlib.sha256(json.dumps(scope,separators=(',',':')).encode()).hexdigest(),reserved=45,completed=45,failed=0,pending=None))
+   save(worker/'progress.json',{'directSourceSummary':{'class':{'courseEvents':33,'requestedEntities':1,'password':'SECRET'},'SECRET':{'courseEvents':1}}})
+   save(worker/'sync-result.json',{'diagnostic':{'sourceSite':dict(module='sync',line=723,column=54),'message':'SECRET'}})
+   save(worker/'resource-directory.json',dict(schema='collector-resource-directory.v1',runId=RUN,term=TERM,source='teacher',targetControlCount=0,targetOptionCount=0,termMatches=True,rawHtml='SECRET'))
+   result=m.inspect(RUN,TERM,REV,digest,state,closure,release,lambda args:(0,'disabled\n'),False,request_budget=120)
+   self.assertTrue(result['approvalBound']);self.assertEqual(result['requestLedger']['remaining'],75)
+   self.assertEqual(result['sourceProgress'],{'class':{'courseEvents':33,'requestedEntities':1}})
+   self.assertEqual(result['worker']['sync-result.json']['sourceSite'],dict(module='sync',line=723,column=54))
+   self.assertEqual(result['resourceDirectory']['source'],'teacher');self.assertNotIn('SECRET',json.dumps(result))
+   self.assertEqual(result['authenticationEvidence']['originalPasswordSubmissionCount'],'UNKNOWN')
+   bad=m.inspect(RUN,TERM,REV,digest,state,closure,release,lambda args:(0,''),False)
+   self.assertFalse(bad['approvalBound']);self.assertEqual(bad['requestLedger'],'INVALID_SCOPE_OR_COUNTERS')
  def test_python36_syntax(self):ast.parse(FILE.read_text(),feature_version=(3,6))
  def test_realistic_unknown_reservation_stays_unknown_and_contains_no_sensitive_values(self):
   with tempfile.TemporaryDirectory() as temp:

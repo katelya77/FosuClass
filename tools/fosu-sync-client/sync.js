@@ -708,6 +708,7 @@ async function gotoCollectorSchedulePage(page, url, relativePath, options) {
       if (current.origin === "https://authserver.fosu.edu.cn" || /login/i.test(current.pathname) || /统一身份认证|密码登录|name\s*=\s*["']?password/i.test(body)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
       if (current.origin !== expected.origin || current.pathname !== relativePath) throw directAcquisition.failure("SCHOOL_TLS_OR_ORIGIN_REJECTED");
       if (cas.explicitChallenge(body)) throw directAcquisition.failure("SCHOOL_SECURITY_CHALLENGE");
+      if (require("./resourceDirectory").permissionDenied(body)) throw directAcquisition.failure("SCHOOL_ACCESS_DENIED");
     };
     assertPage(response.url(), text);
     // DOM readiness is about the controls used by the native API, not all
@@ -717,10 +718,11 @@ async function gotoCollectorSchedulePage(page, url, relativePath, options) {
       const usable = select => select && Array.from(select.options || []).some(o => o.value && !/请选择|^全部|^--/.test(o.textContent || ""));
       if (!usable(document.querySelector('select[name="xnxqh"]'))) return false;
       if (kind === "class") return ["skyx", "sknj"].every(name => usable(document.querySelector('select[name="' + name + '"]')));
-      const names = kind === "teacher" ? /^(js|skjs|teacher|jzg|jzgid|gh|jsid)$/i : kind === "classroom" ? /^(jsid|js|room|roomid|classroom|classroomid)$/i : /^(kc|kcid|course|courseid)$/i;
-      return Array.from(document.querySelectorAll("select[name]")).some(select => names.test(select.name) && usable(select));
+      // Resource targets may be populated by the term change below. Navigation
+      // proves the protected page + term control, not a complete target catalog.
+      return true;
     }, kind, { timeout: 10000 }); } catch (error) {
-      if (error.name === "TimeoutError") throw directAcquisition.failure("SCHOOL_PAGE_CHANGED");
+      if (error.name === "TimeoutError") throw directAcquisition.failure(kind === "class" ? "SCHOOL_PAGE_CHANGED" : "SCHOOL_TERM_CONTROL_NOT_READY");
       throw error;
     }
     assertPage(page.url(), await page.evaluate(() => document.body?.innerText || ""));
@@ -2592,37 +2594,60 @@ async function crawlStrictClassSchedules(page, catalog, majors) {
   return result.schedules;
 }
 async function discoverStrictDirectory(page, type, semester) {
+  const { CONTRACTS, inspectDirectory, directoryFailure } = require("./resourceDirectory");
+  if (!CONTRACTS[type]) throw directAcquisition.failure("DIRECT_SOURCE_INVALID");
+  const persistDiagnostic = diagnostic => {
+    if (process.env.FOSU_COLLECTOR_MODE !== "1" || !process.env.FOSU_COLLECTOR_RESULT_FILE) return;
+    const root = path.dirname(process.env.FOSU_COLLECTOR_RESULT_FILE);
+    const detail = { schema: "collector-resource-directory.v1", runId: getActiveSyncPlan().runId, term: semester, source: type, catalogComplete: false, ...diagnostic };
+    workerReceipt.durable(path.join(root, "resource-directory-" + type + ".json"), detail);
+    workerReceipt.durable(path.join(root, "resource-directory.json"), detail);
+  };
+  persistDiagnostic({ stage: "navigation" });
   const config = type === "teacher" ? { pagePath: "/kbcx/kbxx_teacher" } : getGenericDirectResourceConfig(type);
   if (!page) throw directAcquisition.failure("RESOURCE_DIRECT_CRAWL_REQUIRED");
   await gotoPage(page, config.pagePath, { waitUntil: "networkidle", timeout: 20000 });
-  await selectSemester(page, semester);
-  const directory = await page.evaluate((kind) => {
-    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-    const controls = {};
-    const allowed = /^(xnxqh|skyx|kkyx|jszc|xqid|jzwid|zc1|zc2|jc1|jc2|zzdKcSX)$/i;
-    for (const input of document.querySelectorAll("input[name],select[name]")) {
-      const name = input.getAttribute("name");
-      if (allowed.test(name)) controls[name] = input.value || "";
-    }
-    const selects = Array.from(document.querySelectorAll("select[name]"));
-    const scopeFields = kind === "teacher" ? ["skyx", "kkyx", "jszc"] : kind === "classroom" ? ["xqid", "jzwid"] : ["skyx", "kkyx", "zzdKcSX"];
-    if (selects.some((select) => scopeFields.includes(select.name) && select.value && !/全部|不限|所有|请选择|^--/.test(select.selectedOptions[0] && select.selectedOptions[0].textContent || ""))) return { targets: [], controls, scopeIncomplete: true };
-    const match = selects.find((select) => {
-      const marker = String(select.name || "").toLowerCase();
-      if (kind === "teacher") return /^(js|skjs|teacher|jzg|jzgid|gh|jsid)$/.test(marker);
-      if (kind === "classroom") return /^(jsid|js|room|roomid|classroom|classroomid)$/.test(marker);
-      return /^(kc|kcid|course|courseid)$/.test(marker);
-    });
-    if (!match) return { targets: [], controls };
-    const targets = Array.from(match.options || []).map((option) => ({ key: clean(option.value), name: clean(option.textContent), field: match.name })).filter((item) => item.key && item.name && !/^请选择|^全部|^--/.test(item.name));
-    return { targets, controls };
-  }, type);
-  if (directory.scopeIncomplete || !directory.targets.length) throw directAcquisition.failure("DIRECT_" + type.toUpperCase() + "_DIRECTORY_INCOMPLETE");
+  const spec = { ...CONTRACTS[type], source: type, term: semester };
+  const allowScopedSample = process.env.FOSU_COLLECTOR_MODE === "1" && process.env.FOSU_COLLECTOR_SAMPLE_KIND === "four" && Number((global.CLI_PARAMS || {})["entity-limit"]) === 1;
+  const before = await page.evaluate(inspectDirectory, spec);
+  if (!before.diagnostic.termAvailable) {
+    persistDiagnostic({ ...before.diagnostic, stage: "term-unavailable" });
+    throw directAcquisition.failure("DIRECT_TERM_UNAVAILABLE");
+  }
+  const termChanged = before.controls.xnxqh !== semester;
+  const previousTargets = JSON.stringify(before.targets);
+  await page.selectOption('select[name="xnxqh"]', semester);
+  // Only the selected term's target controls matter. No networkidle, timeout
+  // extension, alternate endpoint, derived identity or automatic retry.
+  try {
+    await page.waitForFunction(({ fields, term, termChanged, previousTargets }) => {
+      const select = document.querySelector('select[name="xnxqh"]');
+      if (!select || select.value !== term || document.querySelector('[aria-busy="true"]')) return false;
+      const targets = Array.from(document.querySelectorAll("select[name]")).filter(s => fields.includes(s.name.toLowerCase()));
+      if (targets.length !== 1 || targets[0].disabled) return false;
+      const options = Array.from(targets[0].options || []).filter(o => o.value && !/^(?:请选择|全部|不限|所有|--)/.test(String(o.textContent || "").trim()));
+      const currentTargets = JSON.stringify(options.map(o => ({ key: String(o.value).replace(/\s+/g, " ").trim(), name: String(o.textContent || "").replace(/\s+/g, " ").trim(), field: targets[0].name })));
+      return options.length > 0 && (!termChanged || previousTargets !== currentTargets);
+    }, { ...spec, termChanged, previousTargets }, { timeout: 10000 });
+  } catch (error) { if (error.name !== "TimeoutError") throw error; }
+  if (global.SCHOOL_REQUEST_FAILURE) throw directAcquisition.failure(global.SCHOOL_REQUEST_FAILURE);
+  const actualUrl = new URL(page.url()), expectedUrl = new URL(FOSU_BASE_URL);
+  if (actualUrl.origin === "https://authserver.fosu.edu.cn" || /login/i.test(actualUrl.pathname)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+  if (actualUrl.origin !== expectedUrl.origin || actualUrl.pathname !== config.pagePath) throw directAcquisition.failure("SCHOOL_TLS_OR_ORIGIN_REJECTED");
+  const body = await page.evaluate(() => document.body?.innerText || "");
+  if (/统一身份认证|密码登录/.test(body)) throw directAcquisition.failure("SCHOOL_SESSION_EXPIRED");
+  if (require("./schoolCasPage").explicitChallenge(body)) throw directAcquisition.failure("SCHOOL_SECURITY_CHALLENGE");
+  if (require("./resourceDirectory").permissionDenied(body)) throw directAcquisition.failure("SCHOOL_ACCESS_DENIED");
+  const directory = await page.evaluate(inspectDirectory, spec);
+  directory.diagnostic.termRebound = !termChanged || previousTargets !== JSON.stringify(directory.targets);
+  persistDiagnostic({ ...directory.diagnostic, stage: "target-check", singleTargetSample: allowScopedSample });
+  const code = directoryFailure(directory, allowScopedSample);
+  if (code) throw directAcquisition.failure(code);
   const seen = new Set();
   for (const target of directory.targets) {
     if (seen.has(target.key) || !isUsableResourceName(target.name) || type === "teacher" && isInvalidTeacherName(target.name)) throw directAcquisition.failure("DIRECT_DIRECTORY_INVALID");
     seen.add(target.key);
-    if (!directory.controls.xnxqh) throw directAcquisition.failure("DIRECT_TERM_PARAMETER_MISSING");
+    if (directory.controls.xnxqh !== semester) throw directAcquisition.failure("DIRECT_TERM_PARAMETER_MISMATCH");
     target.controls = Object.assign({}, directory.controls, { [target.field]: target.key });
   }
   return directory.targets;
@@ -2633,7 +2658,7 @@ async function crawlStrictResources(page, types, semester) {
     const config = RESOURCE_SYNC_CONFIGS[type];
     const targets = await discoverStrictDirectory(page, type, semester);
     const generic = type === "teacher" ? { ifrPath: "/kbcx/kbxx_teacher_ifr", parse: parser.parseTeacherScheduleIfrHtml, targetKey: "teacherName" } : getGenericDirectResourceConfig(type);
-    const result = await directAcquisition.collectEntities(Object.assign(strictResultOptions(type, targets), {
+    const result = await directAcquisition.collectEntities(Object.assign(strictResultOptions(type, targets, process.env.FOSU_COLLECTOR_SAMPLE_KIND !== "four"), {
       request: (target) => page.evaluate(async (input) => {
         const response = await fetch(input.ifrPath, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" }, credentials: "include", body: new URLSearchParams(input.target.controls).toString() });
         return { ok: response.ok, status: response.status, text: await response.text() };
